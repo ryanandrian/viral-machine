@@ -1,0 +1,15 @@
+[project]
+name = "viral-machine"
+version = "0.1.0"
+description = "Viral Video Automation Machine"
+authors = [
+    {name = "rad"}
+]
+requires-python = "^3.11"
+dependencies = [
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
