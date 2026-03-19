@@ -6,3 +6,5 @@ logs/
 *.log
 .venv/
 dist/
+youtube_credentials.json
+token_youtube.json
