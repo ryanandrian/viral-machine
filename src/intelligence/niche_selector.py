@@ -1,5 +1,6 @@
 import os
 import json
+import re
 from datetime import datetime
 from loguru import logger
 from openai import OpenAI
@@ -12,14 +13,26 @@ class NicheSelector:
     """
     Menganalisis sinyal tren dan memilih topik terbaik untuk diproduksi.
     Multi-tenant ready — setiap analisis menerima TenantConfig + signals.
+
+    Fix v0.2:
+    - Retry logic 3x jika JSON parse gagal
+    - response_format=json_object untuk paksa GPT return valid JSON
+    - JSON extraction fallback — cari array [...] dari response apapun
+    - Tidak pernah return [] tanpa mencoba ulang
     """
+
+    MAX_RETRIES = 3
 
     def __init__(self):
         self.client = OpenAI(api_key=system_config.openai_api_key)
 
     def _prepare_signals_summary(self, signals: dict, tenant_config: TenantConfig) -> str:
         niche_data = NICHES[tenant_config.niche]
-        lines = [f"NICHE: {niche_data['name']}", f"TARGET EMOTION: {niche_data['target_emotion']}", ""]
+        lines = [
+            f"NICHE: {niche_data['name']}",
+            f"TARGET EMOTION: {niche_data['target_emotion']}",
+            ""
+        ]
 
         if signals.get("google_trends"):
             lines.append("=== GOOGLE TRENDS (7 days) ===")
@@ -43,6 +56,41 @@ class NicheSelector:
 
         return "\n".join(lines)
 
+    def _clean_json_response(self, raw: str) -> str:
+        """
+        Bersihkan response GPT sebelum di-parse:
+        1. Hapus markdown code fences
+        2. Cari JSON array [...] jika ada teks lain di luar
+        3. Hapus trailing comma sebelum ] atau }
+        4. Hapus control characters yang tidak valid di JSON
+        """
+        # Step 1: hapus markdown fences
+        raw = raw.replace("```json", "").replace("```", "").strip()
+
+        # Step 2: cari array JSON [...] — ambil dari [ pertama hingga ] terakhir
+        match = re.search(r'\[.*\]', raw, re.DOTALL)
+        if match:
+            raw = match.group(0)
+
+        # Step 3: hapus trailing comma sebelum ] atau }
+        raw = re.sub(r',\s*([}\]])', r'\1', raw)
+
+        # Step 4: hapus control characters tidak valid (kecuali \n \t \r)
+        raw = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', raw)
+
+        return raw.strip()
+
+    def _calculate_viral_score(self, topic: dict) -> float:
+        weights = VIRAL_SCORE_WEIGHTS
+        return round(
+            topic.get("search_volume", 0)       * weights["search_volume"] +
+            topic.get("trend_momentum", 0)      * weights["trend_momentum"] +
+            topic.get("emotional_trigger", 0)   * weights["emotional_trigger"] +
+            topic.get("competition_gap", 0)     * weights["competition_gap"] +
+            topic.get("evergreen_potential", 0) * weights["evergreen_potential"],
+            1
+        )
+
     def _analyze_with_ai(self, signals_summary: str, tenant_config: TenantConfig) -> list:
         niche_data = NICHES[tenant_config.niche]
 
@@ -64,7 +112,7 @@ For each topic, score these dimensions (0-100):
 4. competition_gap: Is there a lack of quality short-form content on this?
 5. evergreen_potential: Will this topic stay relevant for months?
 
-Return ONLY a valid JSON array, no other text:
+Return ONLY a valid JSON array with exactly 5 items, no other text:
 [
   {{
     "topic": "specific video topic title",
@@ -84,57 +132,105 @@ Return ONLY a valid JSON array, no other text:
 ]
 
 Be specific with topics — not "space facts" but "The object NASA found that defies physics".
-The hook must be irresistible. The angle must be unique."""
+The hook must be irresistible. The angle must be unique.
+IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra text."""
 
-        try:
-            response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You are a viral content strategist. Return only valid JSON."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=2000,
-                temperature=0.8
-            )
-            raw = response.choices[0].message.content.strip()
-            raw = raw.replace("```json", "").replace("```", "").strip()
-            topics = json.loads(raw)
+        last_error = None
 
-            weights = VIRAL_SCORE_WEIGHTS
-            for t in topics:
-                calculated = (
-                    t.get("search_volume", 0) * weights["search_volume"] +
-                    t.get("trend_momentum", 0) * weights["trend_momentum"] +
-                    t.get("emotional_trigger", 0) * weights["emotional_trigger"] +
-                    t.get("competition_gap", 0) * weights["competition_gap"] +
-                    t.get("evergreen_potential", 0) * weights["evergreen_potential"]
+        for attempt in range(1, self.MAX_RETRIES + 1):
+            try:
+                logger.info(f"AI analysis attempt {attempt}/{self.MAX_RETRIES}...")
+
+                response = self.client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": (
+                                "You are a viral content strategist. "
+                                "You MUST return only a valid JSON array. "
+                                "No markdown, no explanation, no text outside the JSON array."
+                            )
+                        },
+                        {"role": "user", "content": prompt}
+                    ],
+                    max_tokens=2000,
+                    temperature=0.8,
+                    # Paksa GPT return JSON valid — eliminasi mayoritas parse error
+                    response_format={"type": "json_object"}
                 )
-                t["viral_score"] = round(calculated, 1)
 
-            return sorted(topics, key=lambda x: x["viral_score"], reverse=True)
+                raw = response.choices[0].message.content.strip()
+                logger.debug(f"Raw response (first 200 chars): {raw[:200]}")
 
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON parse error: {e}")
-            return []
-        except Exception as e:
-            logger.error(f"AI analysis error: {e}")
-            return []
+                cleaned = self._clean_json_response(raw)
+
+                # Jika response_format=json_object return {"topics": [...]}
+                # kita perlu extract array-nya
+                parsed = json.loads(cleaned)
+                if isinstance(parsed, dict):
+                    # Cari key yang valuenya list
+                    topics = None
+                    for key in ["topics", "results", "data", "items"]:
+                        if key in parsed and isinstance(parsed[key], list):
+                            topics = parsed[key]
+                            break
+                    # Fallback: ambil value pertama yang berupa list
+                    if topics is None:
+                        for val in parsed.values():
+                            if isinstance(val, list) and len(val) > 0:
+                                topics = val
+                                break
+                    if topics is None:
+                        raise ValueError(f"Tidak menemukan array topics di response: {list(parsed.keys())}")
+                elif isinstance(parsed, list):
+                    topics = parsed
+                else:
+                    raise ValueError(f"Response bukan dict atau list: {type(parsed)}")
+
+                if not topics:
+                    raise ValueError("Topics array kosong")
+
+                # Hitung ulang viral score untuk konsistensi
+                for t in topics:
+                    t["viral_score"] = self._calculate_viral_score(t)
+
+                logger.info(f"AI analysis success on attempt {attempt}: {len(topics)} topics")
+                return sorted(topics, key=lambda x: x["viral_score"], reverse=True)
+
+            except (json.JSONDecodeError, ValueError) as e:
+                last_error = e
+                logger.warning(f"Attempt {attempt} failed — parse error: {e}")
+                if attempt < self.MAX_RETRIES:
+                    logger.info("Retrying...")
+                continue
+
+            except Exception as e:
+                last_error = e
+                logger.error(f"Attempt {attempt} failed — unexpected error: {e}")
+                if attempt < self.MAX_RETRIES:
+                    logger.info("Retrying...")
+                continue
+
+        logger.error(f"All {self.MAX_RETRIES} attempts failed. Last error: {last_error}")
+        return []
 
     def select(self, signals: dict, tenant_config: TenantConfig) -> list:
         """
         Analisis sinyal dan pilih top 5 topik viral.
         Returns: list of topic dicts sorted by viral_score desc.
         """
-        logger.info(f"Analyzing {sum(len(v) for v in signals.values() if isinstance(v, list))} signals...")
+        total_signals = sum(len(v) for v in signals.values() if isinstance(v, list))
+        logger.info(f"Analyzing {total_signals} signals...")
 
         summary = self._prepare_signals_summary(signals, tenant_config)
-        topics = self._analyze_with_ai(summary, tenant_config)
+        topics  = self._analyze_with_ai(summary, tenant_config)
 
         result = {
             "tenant_id": tenant_config.tenant_id,
-            "niche": tenant_config.niche,
+            "niche":     tenant_config.niche,
             "timestamp": datetime.now().isoformat(),
-            "topics": topics
+            "topics":    topics
         }
 
         os.makedirs("logs", exist_ok=True)
@@ -151,12 +247,10 @@ if __name__ == "__main__":
     tenant = TenantConfig(tenant_id="ryan_andrian", niche="universe_mysteries")
 
     logger.info("Step 1: Scanning trends...")
-    radar = TrendRadar()
-    signals = radar.scan(tenant)
+    signals = TrendRadar().scan(tenant)
 
     logger.info("Step 2: Selecting best topics with AI...")
-    selector = NicheSelector()
-    topics = selector.select(signals, tenant)
+    topics = NicheSelector().select(signals, tenant)
 
     print(f"\n{'='*60}")
     print(f"TOP {len(topics)} VIRAL TOPICS FOR: {tenant.tenant_id}")
