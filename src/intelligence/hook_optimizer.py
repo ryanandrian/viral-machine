@@ -1,5 +1,6 @@
 import os
 import json
+import re
 from datetime import datetime
 from loguru import logger
 from openai import OpenAI
@@ -9,22 +10,29 @@ from src.intelligence.config import TenantConfig, NICHES, system_config
 load_dotenv()
 
 class HookOptimizer:
+    """
+    Mengoptimalkan hook video menggunakan 5 formula viral.
+    Fix v0.2: retry 3x + response_format json_object.
+    """
+
+    MAX_RETRIES = 3
+
+    HOOK_FORMULAS = {
+        "question":        "Opens with a provocative question that viewer MUST answer",
+        "impossible_claim":"States something that sounds impossible but is true",
+        "you_dont_know":   "Implies viewer is missing crucial information",
+        "number_shock":    "Leads with a specific shocking number or statistic",
+        "story_open":      "Opens mid-action, like a story already happening",
+    }
+
     def __init__(self):
         self.client = OpenAI(api_key=system_config.openai_api_key)
 
-    HOOK_FORMULAS = {
-        "question": "Opens with a provocative question that viewer MUST answer",
-        "impossible_claim": "States something that sounds impossible but is true",
-        "you_dont_know": "Implies viewer is missing crucial information",
-        "number_shock": "Leads with a specific shocking number or statistic",
-        "story_open": "Opens mid-action, like a story already happening",
-    }
+    def _build_prompt(self, script: dict, tenant_config: TenantConfig) -> str:
+        niche_data     = NICHES[tenant_config.niche]
+        formulas_text  = "\n".join([f"- {k}: {v}" for k, v in self.HOOK_FORMULAS.items()])
 
-    def _generate_hooks(self, script: dict, tenant_config: TenantConfig) -> dict:
-        niche_data = NICHES[tenant_config.niche]
-        formulas_text = "\n".join([f"- {k}: {v}" for k, v in self.HOOK_FORMULAS.items()])
-
-        prompt = f"""You are an expert at writing viral hooks for short-form video.
+        return f"""You are an expert at writing viral hooks for short-form video.
 
 TOPIC: {script['topic']}
 CURRENT HOOK: {script['hook']}
@@ -47,7 +55,7 @@ Rate each hook:
 - clarity: 0-100
 - scroll_stop_power: 0-100
 
-Return ONLY valid JSON:
+Return ONLY a valid JSON object, no other text:
 {{
   "hooks": [
     {{
@@ -68,24 +76,74 @@ Return ONLY valid JSON:
     "scroll_stop_power": 90,
     "reason": "one sentence explaining why this hook wins"
   }}
-}}"""
+}}
 
-        try:
-            response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You are a viral hook specialist. Return only valid JSON."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=1000,
-                temperature=0.9
-            )
-            raw = response.choices[0].message.content.strip()
-            raw = raw.replace("```json", "").replace("```", "").strip()
-            return json.loads(raw)
-        except Exception as e:
-            logger.error(f"Hook generation error: {e}")
-            return {}
+IMPORTANT: Return ONLY the JSON object. No markdown, no explanation, no extra text."""
+
+    def _clean_json_response(self, raw: str) -> str:
+        raw   = raw.replace("```json", "").replace("```", "").strip()
+        match = re.search(r'\{.*\}', raw, re.DOTALL)
+        if match:
+            raw = match.group(0)
+        raw = re.sub(r',\s*([}\]])', r'\1', raw)
+        raw = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', raw)
+        return raw.strip()
+
+    def _generate_hooks(self, script: dict, tenant_config: TenantConfig) -> dict:
+        last_error = None
+
+        for attempt in range(1, self.MAX_RETRIES + 1):
+            try:
+                logger.info(f"Hook generation attempt {attempt}/{self.MAX_RETRIES}...")
+
+                response = self.client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": (
+                                "You are a viral hook specialist. "
+                                "You MUST return only a valid JSON object. "
+                                "No markdown, no explanation, no text outside the JSON."
+                            )
+                        },
+                        {"role": "user", "content": self._build_prompt(script, tenant_config)}
+                    ],
+                    max_tokens=1000,
+                    temperature=0.9,
+                    response_format={"type": "json_object"}
+                )
+
+                raw     = response.choices[0].message.content.strip()
+                cleaned = self._clean_json_response(raw)
+                data    = json.loads(cleaned)
+
+                if not isinstance(data, dict):
+                    raise ValueError(f"Response bukan dict: {type(data)}")
+                if "winner" not in data:
+                    raise ValueError("Field 'winner' tidak ada di response")
+                if "text" not in data.get("winner", {}):
+                    raise ValueError("Field 'winner.text' tidak ada di response")
+
+                logger.info(f"Hook generation success on attempt {attempt}")
+                return data
+
+            except (json.JSONDecodeError, ValueError) as e:
+                last_error = e
+                logger.warning(f"Attempt {attempt} failed — parse error: {e}")
+                if attempt < self.MAX_RETRIES:
+                    logger.info("Retrying...")
+                continue
+
+            except Exception as e:
+                last_error = e
+                logger.error(f"Attempt {attempt} failed — unexpected error: {e}")
+                if attempt < self.MAX_RETRIES:
+                    logger.info("Retrying...")
+                continue
+
+        logger.error(f"All {self.MAX_RETRIES} attempts failed. Last error: {last_error}")
+        return {}
 
     def optimize(self, script: dict, tenant_config: TenantConfig) -> dict:
         logger.info(f"Optimizing hooks for: {script.get('topic', '')[:50]}...")
@@ -96,12 +154,12 @@ Return ONLY valid JSON:
             return script
 
         winner = hook_data["winner"]
-        script["original_hook"] = script.get("hook", "")
+        script["original_hook"]  = script.get("hook", "")
         script["optimized_hook"] = winner["text"]
-        script["hook"] = winner["text"]
-        script["hook_data"] = {
-            "winner": winner,
-            "all_hooks": hook_data.get("hooks", []),
+        script["hook"]           = winner["text"]
+        script["hook_data"]      = {
+            "winner":       winner,
+            "all_hooks":    hook_data.get("hooks", []),
             "optimized_at": datetime.now().isoformat()
         }
         logger.info(f"Winner [{winner['scroll_stop_power']}/100]: {winner['text'][:60]}")
@@ -129,38 +187,28 @@ if __name__ == "__main__":
 
     logger.info("Step 1: Scanning trends...")
     signals = TrendRadar().scan(tenant)
-
     logger.info("Step 2: Selecting best topic...")
-    topics = NicheSelector().select(signals, tenant)
-
+    topics  = NicheSelector().select(signals, tenant)
     logger.info("Step 3: Generating script...")
     scripts = ScriptEngine().generate_batch(topics, tenant, count=1)
-
     logger.info("Step 4: Optimizing hooks...")
-    optimizer = HookOptimizer()
-    optimized = optimizer.optimize_batch(scripts, tenant)
+    optimized = HookOptimizer().optimize_batch(scripts, tenant)
 
     if optimized:
-        s = optimized[0]
-        hooks = s.get("hook_data", {})
+        s      = optimized[0]
+        hooks  = s.get("hook_data", {})
         winner = hooks.get("winner", {})
-        all_hooks = hooks.get("all_hooks", [])
+        all_h  = hooks.get("all_hooks", [])
 
         print(f"\n{'='*60}")
         print(f"HOOK OPTIMIZATION REPORT")
         print(f"Topic: {s.get('topic', '')}")
         print(f"{'='*60}")
-        print(f"\nOriginal hook:")
-        print(f"  -> {s.get('original_hook', '')}")
+        print(f"\nOriginal hook:\n  -> {s.get('original_hook', '')}")
         print(f"\nAll 5 hook variations:")
-        for i, h in enumerate(all_hooks, 1):
-            score = h.get('scroll_stop_power', 0)
-            curiosity = h.get('curiosity_score', 0)
-            shock = h.get('shock_factor', 0)
-            formula = h.get('formula', '').upper()
-            text = h.get('text', '')
-            print(f"\n  #{i} [{formula}] score={score}/100 curiosity={curiosity} shock={shock}")
-            print(f"     {text}")
+        for i, h in enumerate(all_h, 1):
+            print(f"\n  #{i} [{h.get('formula','').upper()}] score={h.get('scroll_stop_power',0)}/100")
+            print(f"     {h.get('text', '')}")
         print(f"\n{'='*40}")
         print(f"WINNER [{winner.get('scroll_stop_power', 0)}/100]:")
         print(f"  -> {winner.get('text', '')}")
