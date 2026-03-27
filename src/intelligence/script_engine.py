@@ -86,7 +86,7 @@ Return ONLY a valid JSON object, no other text:
   "full_script": "complete script as one flowing text",
   "word_count": 135,
   "estimated_duration_seconds": 54,
-  "visual_suggestions": ["suggestion 1", "suggestion 2", "suggestion 3"],
+  "visual_suggestions": ["suggestion 1", "suggestion 2", "suggestion 3", "suggestion 4", "suggestion 5", "suggestion 6"],
   "background_music_mood": "tense and mysterious",
   "hashtags": ["#space", "#universe", "#facts", "#mindblowing", "#shorts"],
   "thumbnail_concept": "description of ideal thumbnail"
