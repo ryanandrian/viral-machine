@@ -1,0 +1,30 @@
+# MesinViral.com — Python Dependencies
+# Last updated: 27 Maret 2026
+
+# Core
+python-dotenv==1.2.2
+loguru==0.7.3
+tenacity==9.1.4
+
+# HTTP & Feeds
+httpx==0.28.1
+requests==2.32.5
+urllib3==2.6.3
+chardet>=3.0.2,<6.0
+charset-normalizer==3.4.6
+feedparser==6.0.12
+
+# AI & LLM
+openai==2.29.0
+
+# TTS
+edge-tts==7.2.8
+
+# Trends
+pytrends==4.9.2
+
+# Database & Storage
+supabase==2.28.3
+
+# OAuth
+requests-oauthlib==2.0.0
