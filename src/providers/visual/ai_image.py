@@ -166,15 +166,67 @@ class AIImageProvider(VisualProvider):
     def extract_keywords_from_script(self, script: dict, niche: str) -> list[str]:
         """
         Untuk AI Image, keywords = subject untuk generate gambar.
-        Ambil dari visual_suggestions script (sudah digenerate AI dari narasi).
+        Selalu return 6 keywords untuk 6 clips.
         """
+        keywords = []
+
+        # Priority 1: visual_suggestions dari script (paling relevan)
         suggestions = script.get("visual_suggestions", [])
         if suggestions:
-            return [s for s in suggestions if s][:6]
+            keywords.extend([s for s in suggestions if s])
 
-        # Fallback: gunakan judul + hook sebagai subject
-        title = script.get("title", "")
-        return [title] if title else ["cosmic space scene"]
+        # Priority 2: derive dari title + hook jika kurang dari 6
+        if len(keywords) < 6:
+            title = script.get("title", "")
+            hook  = script.get("hook", "")
+            if title and title not in keywords:
+                keywords.append(title)
+            if hook and len(hook) > 5 and hook not in keywords:
+                keywords.append(hook[:80])
+
+        # Priority 3: niche fallback keywords
+        niche_fallbacks = {
+            "universe_mysteries": [
+                "deep space nebula cinematic",
+                "spiral galaxy dramatic lighting",
+                "astronaut floating in space",
+                "cosmic explosion supernova",
+                "black hole visualization art",
+                "earth from orbit at night"
+            ],
+            "fun_facts": [
+                "colorful world landmarks aerial",
+                "science experiment lab",
+                "nature timelapse dramatic",
+                "human brain neural art",
+                "microscopic world colorful",
+                "city aerial drone view"
+            ],
+            "dark_history": [
+                "ancient ruins dramatic fog",
+                "medieval castle stormy night",
+                "historical war scene epic",
+                "old treasure map discovery",
+                "archaeological excavation",
+                "dark gothic monument"
+            ],
+            "ocean_mysteries": [
+                "deep ocean bioluminescent creatures",
+                "whale underwater dramatic",
+                "coral reef colorful vibrant",
+                "shipwreck underwater eerie",
+                "ocean surface stormy waves",
+                "submarine deep dive dark"
+            ],
+        }
+        fallbacks = niche_fallbacks.get(niche, niche_fallbacks["universe_mysteries"])
+        for fb in fallbacks:
+            if len(keywords) >= 6:
+                break
+            if fb not in keywords:
+                keywords.append(fb)
+
+        return keywords[:6]
 
     @property
     def provider_name(self) -> str:
