@@ -154,11 +154,16 @@ class Pipeline:
 
             # ── STEP 5: TTS Audio ───────────────────────────────────
             logger.info("STEP 5/7 | Generating TTS audio...")
-            audio_path = self.tts_engine.generate(script, tenant_config)
+            tts_result = self.tts_engine.generate(script, tenant_config)
+            audio_path, word_timestamps = (
+                tts_result if isinstance(tts_result, tuple)
+                else (tts_result, [])
+            )
             if not audio_path:
                 raise Exception("TTS generation failed")
-            result["steps"]["tts"] = {"status": "ok", "path": audio_path}
-            logger.info(f"STEP 5 DONE | Audio: {audio_path}")
+            ts_info = f"{len(word_timestamps)} word timestamps" if word_timestamps else "no timestamps (estimasi)"
+            result["steps"]["tts"] = {"status": "ok", "path": audio_path, "timestamps": len(word_timestamps)}
+            logger.info(f"STEP 5 DONE | Audio: {audio_path} | {ts_info}")
 
             # ── STEP 6: Visual Assembly ─────────────────────────────
             logger.info("STEP 6/7 | Assembling visuals...")
@@ -170,7 +175,10 @@ class Pipeline:
 
             # ── STEP 7: Video Render ────────────────────────────────
             logger.info("STEP 7/7 | Rendering final video...")
-            video_path = self.video_renderer.render(script, audio_path, clips, tenant_config)
+            video_path = self.video_renderer.render(
+                script, audio_path, clips, tenant_config,
+                word_timestamps=word_timestamps
+            )
             if not video_path:
                 raise Exception("Video rendering failed")
             size_mb = os.path.getsize(video_path) / (1024 * 1024)

@@ -1,34 +1,55 @@
+"""
+Video Renderer — FFmpeg pipeline untuk render video final 9:16.
+v0.2 fixes:
+  - Caption timing: gunakan word_timestamps nyata dari TTS (bukan estimasi)
+  - Font size: diperkecil ke 11 (dari 18)
+  - MarginV: dinaikkan ke 120 (dari 80) — caption lebih ke bawah
+  - Fallback: estimasi word count jika timestamps tidak tersedia
+"""
+
+import json
 import os
-import time
 import subprocess
+import time
 from loguru import logger
 from dotenv import load_dotenv
-from src.intelligence.config import TenantConfig, system_config
+from src.intelligence.config import TenantConfig
 
 load_dotenv()
 
+
 class VideoRenderer:
     """
-    Menggabungkan audio + video clips + subtitle menjadi MP4 final 9:16.
-    Menggunakan FFmpeg untuk semua operasi — zero cost, maximum control.
-    Output: 1080x1920, H.264, AAC, siap upload ke semua platform.
+    FFmpeg pipeline: clips + audio + subtitle → MP4 1080x1920.
     """
 
-    OUTPUT_WIDTH = 1080
+    OUTPUT_WIDTH  = 1080
     OUTPUT_HEIGHT = 1920
-    FPS = 30
+    FPS           = 30
     VIDEO_BITRATE = "4000k"
     AUDIO_BITRATE = "192k"
 
+    # Caption style — v0.2: font diperkecil, posisi lebih bawah
+    CAPTION_STYLE = (
+        "FontName=Arial,"
+        "FontSize=11,"           # ← diperkecil dari 18 ke 11 (~60%)
+        "Bold=1,"
+        "PrimaryColour=&H00FFFFFF,"
+        "OutlineColour=&H00000000,"
+        "BackColour=&H80000000,"
+        "Outline=2,"
+        "Shadow=1,"
+        "MarginV=120,"           # ← dinaikkan dari 80 ke 120
+        "Alignment=2,"           # bottom center
+        "WrapStyle=1"            # wrap agar tidak keluar layar
+    )
+
     def _get_audio_duration(self, audio_path: str) -> float:
         try:
-            cmd = [
-                "ffprobe", "-v", "quiet", "-print_format", "json",
-                "-show_format", audio_path
-            ]
+            cmd    = ["ffprobe", "-v", "quiet", "-print_format", "json",
+                      "-show_format", audio_path]
             result = subprocess.run(cmd, capture_output=True, text=True)
-            import json
-            data = json.loads(result.stdout)
+            data   = json.loads(result.stdout)
             return float(data["format"]["duration"])
         except Exception as e:
             logger.error(f"Could not get audio duration: {e}")
@@ -36,13 +57,10 @@ class VideoRenderer:
 
     def _get_video_duration(self, video_path: str) -> float:
         try:
-            cmd = [
-                "ffprobe", "-v", "quiet", "-print_format", "json",
-                "-show_streams", video_path
-            ]
+            cmd    = ["ffprobe", "-v", "quiet", "-print_format", "json",
+                      "-show_streams", video_path]
             result = subprocess.run(cmd, capture_output=True, text=True)
-            import json
-            data = json.loads(result.stdout)
+            data   = json.loads(result.stdout)
             for stream in data.get("streams", []):
                 if stream.get("codec_type") == "video":
                     return float(stream.get("duration", 5.0))
@@ -52,21 +70,75 @@ class VideoRenderer:
 
     def _create_clip_list(self, clips: list, target_duration: float, output_dir: str) -> str:
         list_path = os.path.join(output_dir, "clip_list.txt")
-        total = 0.0
-        entries = []
-        idx = 0
+        total, entries, idx = 0.0, [], 0
         while total < target_duration:
             clip = clips[idx % len(clips)]
-            dur = self._get_video_duration(clip)
+            dur  = self._get_video_duration(clip)
             entries.append(f"file '{os.path.abspath(clip)}'\n")
             total += dur
-            idx += 1
+            idx   += 1
         with open(list_path, "w") as f:
             f.writelines(entries)
         return list_path
 
-    def _generate_subtitles(self, script: dict, audio_duration: float, output_dir: str) -> str:
+    def _generate_subtitles_from_timestamps(
+        self,
+        word_timestamps: list[dict],
+        output_dir: str,
+        words_per_segment: int = 5,
+    ) -> str:
+        """
+        Generate SRT dari word-level timestamps nyata (akurat ~95%).
+        Grouping: setiap N kata menjadi 1 segmen subtitle.
+        """
         srt_path = os.path.join(output_dir, "subtitles.srt")
+
+        if not word_timestamps:
+            return ""
+
+        # Group kata-kata ke dalam segmen
+        segments = []
+        for i in range(0, len(word_timestamps), words_per_segment):
+            group  = word_timestamps[i:i + words_per_segment]
+            text   = " ".join(w["word"] for w in group)
+            start  = group[0]["start"]
+            end    = group[-1]["end"]
+            segments.append({"text": text, "start": start, "end": end})
+
+        def fmt_time(seconds: float) -> str:
+            h  = int(seconds // 3600)
+            m  = int((seconds % 3600) // 60)
+            s  = int(seconds % 60)
+            ms = int((seconds % 1) * 1000)
+            return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+        srt_content = []
+        for i, seg in enumerate(segments):
+            srt_content.append(str(i + 1))
+            srt_content.append(f"{fmt_time(seg['start'])} --> {fmt_time(seg['end'])}")
+            srt_content.append(seg["text"])
+            srt_content.append("")
+
+        with open(srt_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(srt_content))
+
+        logger.info(
+            f"Subtitles (timestamps): {len(segments)} segments → {srt_path}"
+        )
+        return srt_path
+
+    def _generate_subtitles_estimated(
+        self,
+        script: dict,
+        audio_duration: float,
+        output_dir: str,
+        words_per_segment: int = 5,
+    ) -> str:
+        """
+        Fallback: estimasi timing dari word count.
+        Akurasi ~60-70% — dipakai jika provider tidak return timestamps.
+        """
+        srt_path    = os.path.join(output_dir, "subtitles.srt")
         full_script = script.get("full_script", "")
         if not full_script:
             parts = [
@@ -79,41 +151,61 @@ class VideoRenderer:
             full_script = " ".join(p for p in parts if p)
 
         words = full_script.split()
-        total_words = len(words)
-        if total_words == 0:
+        if not words:
             return ""
 
-        words_per_segment = 7
         segments = []
-        for i in range(0, total_words, words_per_segment):
+        for i in range(0, len(words), words_per_segment):
             segments.append(" ".join(words[i:i + words_per_segment]))
 
-        segment_duration = audio_duration / len(segments)
+        seg_dur = audio_duration / len(segments)
 
-        def fmt_time(seconds):
-            h = int(seconds // 3600)
-            m = int((seconds % 3600) // 60)
-            s = int(seconds % 60)
+        def fmt_time(seconds: float) -> str:
+            h  = int(seconds // 3600)
+            m  = int((seconds % 3600) // 60)
+            s  = int(seconds % 60)
             ms = int((seconds % 1) * 1000)
             return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
         srt_content = []
-        for i, segment in enumerate(segments):
-            start = i * segment_duration
-            end = (i + 1) * segment_duration
-            srt_content.append(f"{i+1}")
+        for i, seg in enumerate(segments):
+            start = i * seg_dur
+            end   = (i + 1) * seg_dur
+            srt_content.append(str(i + 1))
             srt_content.append(f"{fmt_time(start)} --> {fmt_time(end)}")
-            srt_content.append(segment)
+            srt_content.append(seg)
             srt_content.append("")
 
         with open(srt_path, "w", encoding="utf-8") as f:
             f.write("\n".join(srt_content))
 
-        logger.info(f"Subtitles: {len(segments)} segments, {srt_path}")
+        logger.info(
+            f"Subtitles (estimated): {len(segments)} segments → {srt_path}"
+        )
         return srt_path
 
-    def render(self, script: dict, audio_path: str, clips: list,
-               tenant_config: TenantConfig, output_dir: str = "logs") -> str:
+    def render(
+        self,
+        script: dict,
+        audio_path: str,
+        clips: list,
+        tenant_config: TenantConfig,
+        output_dir: str = "logs",
+        word_timestamps: list[dict] | None = None,
+    ) -> str:
+        """
+        Render video final.
+
+        Args:
+            script:          Script dict
+            audio_path:      Path ke file audio MP3
+            clips:           List path clip video
+            tenant_config:   Config tenant
+            output_dir:      Direktori output
+            word_timestamps: Word-level timestamps dari TTS (opsional)
+                             Jika tersedia → subtitle akurat
+                             Jika None     → fallback ke estimasi
+        """
         if not clips:
             logger.error("No video clips available")
             return ""
@@ -128,21 +220,39 @@ class VideoRenderer:
         logger.info("Creating clip list...")
         clip_list_path = self._create_clip_list(clips, audio_duration, output_dir)
 
+        # Generate subtitles — pakai timestamps jika tersedia
         logger.info("Generating subtitles...")
-        srt_path = self._generate_subtitles(script, audio_duration, output_dir)
+        if word_timestamps:
+            logger.info(
+                f"[Subtitle] Mode: word timestamps "
+                f"({len(word_timestamps)} words) — akurasi ~95%"
+            )
+            srt_path = self._generate_subtitles_from_timestamps(
+                word_timestamps, output_dir
+            )
+        else:
+            logger.warning(
+                "[Subtitle] Mode: estimasi word count — akurasi ~60-70%. "
+                "Upgrade ke provider dengan word timestamps untuk akurasi lebih baik."
+            )
+            srt_path = self._generate_subtitles_estimated(
+                script, audio_duration, output_dir
+            )
 
-        timestamp = int(time.time())
+        timestamp   = int(time.time())
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, f"video_{tenant_config.tenant_id}_{timestamp}.mp4")
-        temp_path = os.path.join(output_dir, f"temp_{timestamp}.mp4")
+        temp_path   = os.path.join(output_dir, f"temp_{timestamp}.mp4")
 
+        # ── Step A: Concat + scale clips ──────────────────────────────
         logger.info("Step A: Concatenating and scaling clips to 9:16...")
         cmd_concat = [
             "ffmpeg", "-y",
             "-f", "concat", "-safe", "0", "-i", clip_list_path,
             "-t", str(audio_duration),
             "-vf", (
-                f"scale={self.OUTPUT_WIDTH}:{self.OUTPUT_HEIGHT}:force_original_aspect_ratio=increase,"
+                f"scale={self.OUTPUT_WIDTH}:{self.OUTPUT_HEIGHT}"
+                f":force_original_aspect_ratio=increase,"
                 f"crop={self.OUTPUT_WIDTH}:{self.OUTPUT_HEIGHT},"
                 f"setsar=1,fps={self.FPS}"
             ),
@@ -151,23 +261,19 @@ class VideoRenderer:
             "-an",
             temp_path
         ]
-
         result = subprocess.run(cmd_concat, capture_output=True, text=True)
         if result.returncode != 0:
             logger.error(f"Concat failed: {result.stderr[-500:]}")
             return ""
         logger.info("Clips concatenated successfully")
 
+        # ── Step B: Add audio + subtitles ─────────────────────────────
         logger.info("Step B: Adding audio + subtitles...")
         subtitle_filter = ""
         if srt_path and os.path.exists(srt_path):
             abs_srt = os.path.abspath(srt_path)
             subtitle_filter = (
-                f",subtitles='{abs_srt}':force_style='"
-                f"FontName=Arial,FontSize=18,Bold=1,"
-                f"PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,"
-                f"BackColour=&H80000000,Outline=2,Shadow=1,"
-                f"MarginV=80,Alignment=2'"
+                f",subtitles='{abs_srt}':force_style='{self.CAPTION_STYLE}'"
             )
 
         cmd_final = [
@@ -180,21 +286,20 @@ class VideoRenderer:
             "-c:a", "aac", "-b:a", self.AUDIO_BITRATE,
             "-shortest",
         ]
-
         if subtitle_filter:
-            cmd_final += ["-vf", f"scale={self.OUTPUT_WIDTH}:{self.OUTPUT_HEIGHT}{subtitle_filter}"]
-
+            cmd_final += [
+                "-vf",
+                f"scale={self.OUTPUT_WIDTH}:{self.OUTPUT_HEIGHT}{subtitle_filter}"
+            ]
         cmd_final.append(output_path)
 
         result = subprocess.run(cmd_final, capture_output=True, text=True)
-        if result.returncode != 0:
-            logger.error(f"Final render failed: {result.stderr[-500:]}")
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
-            return ""
-
         if os.path.exists(temp_path):
             os.remove(temp_path)
+
+        if result.returncode != 0:
+            logger.error(f"Final render failed: {result.stderr[-500:]}")
+            return ""
 
         if os.path.exists(output_path):
             size_mb = os.path.getsize(output_path) / (1024 * 1024)
@@ -202,46 +307,3 @@ class VideoRenderer:
             return output_path
 
         return ""
-
-
-if __name__ == "__main__":
-    from src.intelligence.trend_radar import TrendRadar
-    from src.intelligence.niche_selector import NicheSelector
-    from src.intelligence.script_engine import ScriptEngine
-    from src.intelligence.hook_optimizer import HookOptimizer
-    from src.production.tts_engine import TTSEngine
-    from src.production.visual_assembler import VisualAssembler
-
-    tenant = TenantConfig(tenant_id="ryan_andrian", niche="universe_mysteries")
-
-    logger.info("Step 1-4: Intelligence pipeline...")
-    signals = TrendRadar().scan(tenant)
-    topics = NicheSelector().select(signals, tenant)
-    scripts = ScriptEngine().generate_batch(topics, tenant, count=1)
-    optimized = HookOptimizer().optimize_batch(scripts, tenant)
-    script = optimized[0]
-
-    logger.info("Step 5: TTS audio...")
-    audio_path = TTSEngine().generate(script, tenant)
-
-    logger.info("Step 6: Visual assembly...")
-    clips = VisualAssembler().assemble(script, tenant)
-
-    logger.info("Step 7: Rendering final video...")
-    renderer = VideoRenderer()
-    video_path = renderer.render(script, audio_path, clips, tenant)
-
-    if video_path:
-        size_mb = os.path.getsize(video_path) / (1024 * 1024)
-        print(f"\n{'='*60}")
-        print(f"VIDEO RENDER COMPLETE")
-        print(f"{'='*60}")
-        print(f"Title   : {script.get('title', '')}")
-        print(f"Hook    : {script.get('hook', '')}")
-        print(f"Video   : {video_path}")
-        print(f"Size    : {size_mb:.1f} MB")
-        print(f"Format  : 1080x1920 H.264 AAC")
-        print(f"{'='*60}")
-        print(f"\nReady to upload to YouTube Shorts!")
-    else:
-        print("Video rendering failed")

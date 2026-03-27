@@ -72,6 +72,17 @@ class TenantRunConfig:
     publish_slots:      list  = field(default_factory=lambda: ["13:00"])
     production_cron:    str   = "0 13 * * *"
     analytics_cron:     str   = "0 13 * * *"
+
+    # Visual mode
+    visual_mode:        str   = "video"
+    # 'video'              → stock footage (Pexels/Getty/dll)
+    # 'ai_image:dall-e-3'  → AI generated image + motion
+    # 'ai_image:flux-schnell' → AI generated image + motion (cheaper)
+    # 'ai_video:*'         → AI video generation (DISABLED v0.2)
+
+    # Developer tenant
+    is_developer:       bool  = False
+    discount_pct:       int   = 0
     auto_schedule:      bool  = True
     peak_region:        str   = "us"
 
@@ -122,6 +133,9 @@ class TenantRunConfig:
             # LLM
             "llm_provider": self.llm_provider,
             "llm_model":    self.llm_model,
+            "visual_mode":  self.visual_mode,
+            "is_developer":  self.is_developer,
+            "discount_pct":  self.discount_pct,
             "llm_api_key":  (
                 self.llm_api_key
                 or os.getenv("OPENAI_API_KEY")
@@ -309,6 +323,9 @@ class TenantConfigManager:
                 llm_provider=row.get("llm_provider", "openai"),
                 llm_model=row.get("llm_model", "gpt-4o-mini"),
                 llm_api_key=row.get("llm_api_key"),
+                visual_mode=row.get("visual_mode", "video"),
+                is_developer=row.get("is_developer", False),
+                discount_pct=row.get("discount_pct", 0),
             )
 
         except Exception as e:

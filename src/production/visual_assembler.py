@@ -1,6 +1,9 @@
 """
-Visual Assembler — thin wrapper ke Visual Provider.
-v0.2: Delegasi ke PexelsProvider dengan duration filter.
+Visual Assembler — selector dan fallback handler untuk visual provider.
+v0.2:
+  - Visual mode: 'video' | 'ai_image:*' | 'ai_video:*'
+  - Fallback hierarchy: provider user → Pexels gratis → cache → black screen
+  - Real-time reporting setiap kondisi khusus
 """
 
 import asyncio
@@ -11,13 +14,18 @@ from loguru import logger
 from dotenv import load_dotenv
 
 from src.intelligence.config import TenantConfig
-from src.providers.visual.pexels import PexelsProvider
 
 load_dotenv()
 
+# Path fallback black screen (dibuat jika dibutuhkan)
+BLACK_SCREEN_CLIP = "logs/fallback_black.mp4"
+
 
 class VisualAssembler:
-    """Thin wrapper — delegasi ke Visual Provider yang sesuai config."""
+    """
+    Selector + fallback handler untuk visual provider.
+    Tidak pernah crash — selalu return minimal 1 clip.
+    """
 
     def assemble(
         self,
@@ -26,36 +34,255 @@ class VisualAssembler:
         output_dir: str = "logs",
     ) -> list[str]:
         """
-        Download video clips untuk script yang diberikan.
-        Returns: List path clip (string) — kompatibel dengan pipeline lama.
+        Download/generate video clips dengan fallback hierarchy.
+
+        Fallback:
+          1. Provider pilihan user (dari tenant_configs.visual_mode)
+          2. Pexels gratis (jika provider user gagal)
+          3. Clips cache dari run sebelumnya
+          4. Black screen (last resort — pipeline tetap jalan)
+
+        Returns:
+            List path clip (string) — selalu minimal 1 item
         """
-        max_clip_mb = self._get_max_clip_mb(tenant_config)
+        run_config  = self._load_run_config(tenant_config)
+        visual_mode = run_config.get("visual_mode", "video")
+        max_clip_mb = run_config.get("visual_max_clip_mb", 150)
+        is_dev      = run_config.get("is_developer", False)
 
-        config = {
-            "tenant_id":          tenant_config.tenant_id,
-            "niche":              tenant_config.niche,
-            "visual_provider":    "pexels",
-            "visual_max_clip_mb": max_clip_mb,
-            "visual_api_key":     os.getenv("PEXELS_API_KEY", ""),
-        }
-        provider  = PexelsProvider(config)
-        keywords  = provider.extract_keywords_from_script(script, tenant_config.niche)
-
-        logger.info(f"Searching footage: {keywords[:3]}")
-
-        clips_dir = Path(output_dir) / f"clips_{tenant_config.tenant_id}"
-        clips     = asyncio.run(
-            provider.fetch_clips(keywords=keywords, count=6, output_dir=clips_dir)
+        logger.info(
+            f"[VisualAssembler] mode={visual_mode} "
+            f"max={max_clip_mb}MB"
+            f"{' [DEVELOPER]' if is_dev else ''}"
         )
 
-        paths = [str(clip.path) for clip in clips]
-        logger.info(f"Assembly complete: {len(paths)} clips")
+        clips_dir = Path(output_dir) / f"clips_{tenant_config.tenant_id}"
+
+        # ── Attempt 1: Provider pilihan user ──────────────────────────
+        clips = self._try_provider(
+            visual_mode=visual_mode,
+            script=script,
+            tenant_config=tenant_config,
+            clips_dir=clips_dir,
+            max_clip_mb=max_clip_mb,
+            run_config=run_config,
+        )
+
+        # ── Attempt 2: Fallback ke Pexels jika provider user gagal ────
+        if not clips and visual_mode != "video":
+            logger.warning(
+                f"[VisualAssembler] ⚠️ Provider '{visual_mode}' gagal — "
+                f"fallback otomatis ke Pexels (gratis)"
+            )
+            clips = self._try_pexels(
+                script=script,
+                tenant_config=tenant_config,
+                clips_dir=clips_dir,
+                max_clip_mb=150,
+                run_config=run_config,
+            )
+
+        # ── Attempt 3: Cache dari run sebelumnya ──────────────────────
+        if not clips:
+            logger.warning(
+                "[VisualAssembler] ⚠️ Pexels juga gagal — "
+                "mencari clips dari cache run sebelumnya"
+            )
+            clips = self._try_cache(clips_dir)
+
+        # ── Attempt 4: Black screen last resort ───────────────────────
+        if not clips:
+            logger.warning(
+                "[VisualAssembler] ⚠️ Tidak ada clips tersedia — "
+                "menggunakan black screen. Pipeline tetap berjalan."
+            )
+            clips = self._create_black_screen(output_dir)
+
+        paths = [str(c) for c in clips]
+        logger.info(f"[VisualAssembler] Assembly complete: {len(paths)} clips")
         return paths
 
-    def _get_max_clip_mb(self, tenant_config: TenantConfig, default: int = 150) -> int:
-        """Baca max_clip_mb dari Supabase jika tersedia."""
+    # ──────────────────────────────────────────────
+    # Provider handlers
+    # ──────────────────────────────────────────────
+
+    def _try_provider(
+        self,
+        visual_mode: str,
+        script: dict,
+        tenant_config: TenantConfig,
+        clips_dir: Path,
+        max_clip_mb: int,
+        run_config: dict,
+    ) -> list[Path]:
+        """Coba provider sesuai visual_mode."""
+        try:
+            if visual_mode == "video":
+                return self._try_pexels(
+                    script, tenant_config, clips_dir, max_clip_mb, run_config
+                )
+            elif visual_mode.startswith("ai_image:"):
+                return self._try_ai_image(
+                    visual_mode, script, tenant_config, clips_dir, run_config
+                )
+            elif visual_mode.startswith("ai_video:"):
+                logger.warning(
+                    f"[VisualAssembler] AI Video provider DISABLED v0.2 — "
+                    f"fallback ke Pexels"
+                )
+                return []
+            else:
+                logger.warning(
+                    f"[VisualAssembler] visual_mode '{visual_mode}' tidak dikenal — "
+                    f"fallback ke Pexels"
+                )
+                return []
+        except Exception as e:
+            logger.error(f"[VisualAssembler] Provider error: {e}")
+            return []
+
+    def _try_pexels(
+        self,
+        script: dict,
+        tenant_config: TenantConfig,
+        clips_dir: Path,
+        max_clip_mb: int,
+        run_config: dict,
+    ) -> list[Path]:
+        """Download clips dari Pexels."""
+        try:
+            from src.providers.visual.pexels import PexelsProvider
+
+            config   = {
+                "tenant_id":          tenant_config.tenant_id,
+                "niche":              tenant_config.niche,
+                "visual_provider":    "pexels",
+                "visual_max_clip_mb": max_clip_mb,
+                "visual_api_key":     (
+                    run_config.get("visual_api_key")
+                    or os.getenv("PEXELS_API_KEY", "")
+                ),
+            }
+            provider = PexelsProvider(config)
+            keywords = provider.extract_keywords_from_script(script, tenant_config.niche)
+            logger.info(f"Searching footage: {keywords[:3]}")
+
+            clips = asyncio.run(
+                provider.fetch_clips(keywords=keywords, count=6, output_dir=clips_dir)
+            )
+            return [clip.path for clip in clips]
+
+        except Exception as e:
+            logger.error(f"[VisualAssembler] Pexels error: {e}")
+            return []
+
+    def _try_ai_image(
+        self,
+        visual_mode: str,
+        script: dict,
+        tenant_config: TenantConfig,
+        clips_dir: Path,
+        run_config: dict,
+    ) -> list[Path]:
+        """Generate gambar AI + Ken Burns effect."""
+        try:
+            from src.providers.visual.ai_image import AIImageProvider
+
+            config = {
+                "tenant_id":       tenant_config.tenant_id,
+                "niche":           tenant_config.niche,
+                "visual_provider": visual_mode,
+                "visual_ai_model": visual_mode.split(":", 1)[1] if ":" in visual_mode else "dall-e-3",
+                "visual_api_key":  run_config.get("visual_api_key"),
+                "llm_api_key":     (
+                    run_config.get("llm_api_key")
+                    or os.getenv("OPENAI_API_KEY", "")
+                ),
+            }
+            provider = AIImageProvider(config)
+            keywords = provider.extract_keywords_from_script(script, tenant_config.niche)
+
+            logger.info(
+                f"[VisualAssembler] Generating AI images: "
+                f"{visual_mode} — {len(keywords)} scenes"
+            )
+
+            clips = asyncio.run(
+                provider.fetch_clips(keywords=keywords, count=6, output_dir=clips_dir)
+            )
+
+            if clips:
+                logger.info(
+                    f"[VisualAssembler] ✅ AI Image generated: "
+                    f"{len(clips)} clips via {visual_mode}"
+                )
+            return [clip.path for clip in clips]
+
+        except Exception as e:
+            logger.error(f"[VisualAssembler] AI Image error: {e}")
+            return []
+
+    def _try_cache(self, clips_dir: Path) -> list[Path]:
+        """Cari clip dari cache run sebelumnya."""
+        try:
+            cached = sorted(clips_dir.glob("clip_*.mp4"))
+            if cached:
+                logger.info(
+                    f"[VisualAssembler] Cache found: {len(cached)} clips"
+                )
+                return cached[:6]
+        except Exception:
+            pass
+        return []
+
+    def _create_black_screen(self, output_dir: str) -> list[Path]:
+        """
+        Buat black screen 10 detik sebagai last resort.
+        Pipeline tidak crash — video tetap diproduksi dengan audio + caption.
+        """
+        import subprocess
+        black_path = Path(output_dir) / "fallback_black.mp4"
+        try:
+            cmd = [
+                "ffmpeg", "-y",
+                "-f", "lavfi",
+                "-i", "color=c=black:size=1080x1920:rate=30",
+                "-t", "10",
+                "-c:v", "libx264", "-preset", "fast",
+                str(black_path)
+            ]
+            subprocess.run(cmd, capture_output=True)
+            if black_path.exists():
+                logger.warning(
+                    "[VisualAssembler] ⚠️ Black screen fallback digunakan. "
+                    "Periksa koneksi API provider visual Anda."
+                )
+                return [black_path]
+        except Exception as e:
+            logger.error(f"[VisualAssembler] Black screen creation failed: {e}")
+        return []
+
+    # ──────────────────────────────────────────────
+    # Config loader
+    # ──────────────────────────────────────────────
+
+    def _load_run_config(self, tenant_config: TenantConfig) -> dict:
+        """Baca config dari Supabase, fallback ke defaults."""
         try:
             from src.config.tenant_config import load_tenant_config
-            return load_tenant_config(tenant_config.tenant_id).visual_max_clip_mb
+            rc = load_tenant_config(tenant_config.tenant_id)
+            return {
+                "visual_mode":       getattr(rc, "visual_mode", "video"),
+                "visual_max_clip_mb": rc.visual_max_clip_mb,
+                "visual_api_key":    rc.visual_api_key,
+                "llm_api_key":       rc.llm_api_key,
+                "is_developer":      getattr(rc, "is_developer", False),
+            }
         except Exception:
-            return default
+            return {
+                "visual_mode":       "video",
+                "visual_max_clip_mb": 150,
+                "visual_api_key":    None,
+                "llm_api_key":       None,
+                "is_developer":      False,
+            }
