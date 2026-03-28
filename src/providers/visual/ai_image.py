@@ -1,22 +1,18 @@
 """
-AI Image Visual Provider — generate gambar via AI + tambahkan motion effect.
-Gambar digenerate per scene dari narasi, lalu dibuat video dengan Ken Burns effect.
+AI Image Visual Provider — generate gambar via AI + motion effect.
+Fase 6C s6c5: Cinematic prompt engineering per section type.
 
-Provider yang didukung:
-  - flux-schnell (default) — via Replicate, ~$0.003/gambar, tercepat
-  - dall-e-3               — via OpenAI, ~$0.040/gambar, kualitas tinggi
-  - stable-diffusion       — via Replicate, ~$0.001/gambar, paling murah
-
-Cara aktifkan via dashboard (nanti):
-  visual_provider = 'ai_image:flux-schnell'
-  visual_api_key  = 'r8_xxx...' (Replicate) atau pakai llm_api_key (DALL-E 3)
+Upgrade dari versi sebelumnya:
+  - Section-aware prompts: Hook=dramatic, Climax=epic, Core=informative
+  - visual_suggestions dari script langsung dipakai tanpa dilusi template generik
+  - DALL-E 3 optimized: natural language yang kaya, bukan template robotik
+  - Niche style modifier: universe=cosmic, dark_history=ominous, dll
+  - Negative prompt support untuk Replicate models
 """
 
 import asyncio
 import os
 import subprocess
-import tempfile
-import time
 from pathlib import Path
 
 import httpx
@@ -25,7 +21,7 @@ from loguru import logger
 from src.providers.visual.base import VisualProvider, VideoClip, VisualError
 
 
-# Model registry — tambah model baru di sini
+# Model registry
 AI_IMAGE_MODELS = {
     "flux-schnell": {
         "platform":     "replicate",
@@ -37,8 +33,8 @@ AI_IMAGE_MODELS = {
         "platform":     "openai",
         "model_id":     "dall-e-3",
         "cost_per_img": 0.040,
-        "description":  "Kualitas tertinggi OpenAI",
-        "size":         "1024x1792",  # Portrait untuk 9:16
+        "description":  "Kualitas tertinggi, DALL-E 3 memahami natural language",
+        "size":         "1024x1792",
     },
     "stable-diffusion": {
         "platform":     "replicate",
@@ -48,41 +44,178 @@ AI_IMAGE_MODELS = {
     },
 }
 
-# Prompt template per niche untuk hasil visual yang lebih relevan
-NICHE_PROMPT_TEMPLATES = {
-    "universe_mysteries": (
-        "Cinematic 9:16 vertical photo of {subject}. "
-        "Deep space atmosphere, dramatic lighting, photorealistic, "
-        "ultra high quality, 4K, dark background with stars"
-    ),
-    "fun_facts": (
-        "Vibrant 9:16 vertical photo of {subject}. "
-        "Colorful, dynamic, engaging, photorealistic, high quality"
-    ),
-    "dark_history": (
-        "Moody 9:16 vertical photo of {subject}. "
-        "Dark atmosphere, historical setting, dramatic shadows, "
-        "cinematic, photorealistic, high quality"
-    ),
-    "ocean_mysteries": (
-        "Underwater 9:16 vertical photo of {subject}. "
-        "Deep ocean atmosphere, bioluminescent light, "
-        "photorealistic, cinematic, ultra high quality"
-    ),
+# ── Section type enhancer ─────────────────────────────────────────────────────
+# Dipilih berdasarkan posisi clip dalam 6-clip sequence
+# Mapping: clip index → section character
+SECTION_ENHANCERS = {
+    0: {  # Hook — harus stop scroll dalam 1 detik
+        "character":  "dramatic, tension-filled, scroll-stopping",
+        "lighting":   "high contrast dramatic lighting, sharp shadows",
+        "camera":     "extreme close-up or extreme wide establishing shot",
+        "mood":       "immediate visual impact, creates instant question",
+        "technical":  "cinematic 9:16 vertical, photorealistic, 8K sharp",
+    },
+    1: {  # Mystery Drop — menambah lapisan misteri
+        "character":  "mysterious, unsettling, raises more questions",
+        "lighting":   "low key lighting, mysterious shadows, ambient glow",
+        "camera":     "slow reveal composition, partially obscured subject",
+        "mood":       "eerie beauty, something unknown lurking",
+        "technical":  "cinematic 9:16 vertical, photorealistic, atmospheric depth",
+    },
+    2: {  # Build Up — membangun konteks dan skala
+        "character":  "epic scale, awe-inspiring, informative yet beautiful",
+        "lighting":   "natural dramatic lighting, golden hour or cosmic light",
+        "camera":     "wide establishing shot showing full scale and context",
+        "mood":       "sense of vast scale, weight of information lands visually",
+        "technical":  "cinematic 9:16 vertical, photorealistic, ultra detailed",
+    },
+    3: {  # Core Facts — informasi padat, visual yang kuat
+        "character":  "visually striking, information-rich, unexpected angle",
+        "lighting":   "clinical precision or dramatic chiaroscuro",
+        "camera":     "detail shot revealing something specific and surprising",
+        "mood":       "this is the proof, the evidence, the undeniable visual",
+        "technical":  "cinematic 9:16 vertical, photorealistic, razor sharp detail",
+    },
+    4: {  # Core Facts 2 — building to climax
+        "character":  "tension building, anticipation, something about to change",
+        "lighting":   "darkening atmosphere, spotlight on key element",
+        "camera":     "medium shot with leading lines pointing to climax",
+        "mood":       "the viewer feels they are approaching something enormous",
+        "technical":  "cinematic 9:16 vertical, photorealistic, dramatic composition",
+    },
+    5: {  # Climax — emotional peak, most memorable frame
+        "character":  "overwhelming, emotionally peak, unforgettable visual impact",
+        "lighting":   "dramatic peak lighting — could be total darkness or blinding light",
+        "camera":     "the single most powerful composition of the entire video",
+        "mood":       "this is the moment — awe, shock, revelation, or profound emotion",
+        "technical":  "cinematic 9:16 vertical, photorealistic, masterpiece composition, 8K",
+    },
+}
+
+# ── Niche style modifier ──────────────────────────────────────────────────────
+# Menambahkan karakter visual konsisten per niche
+NICHE_STYLE = {
+    "universe_mysteries": {
+        "base_style":    "NASA documentary photography style, cosmic scale",
+        "color_palette": "deep blacks, cold blues, nebula purples, star whites",
+        "atmosphere":    "infinite void of space, cosmic loneliness, vast scale",
+        "avoid":         "cartoon, illustration, warm colors, Earth-bound settings",
+    },
+    "dark_history": {
+        "base_style":    "historical documentary photography, period-accurate",
+        "color_palette": "desaturated, sepia undertones, deep shadows, blood reds",
+        "atmosphere":    "weight of history, moral gravity, ominous inevitability",
+        "avoid":         "bright colors, modern elements, cheerful lighting",
+    },
+    "ocean_mysteries": {
+        "base_style":    "deep sea documentary photography, National Geographic quality",
+        "color_palette": "deep ocean blues and blacks, bioluminescent greens and blues",
+        "atmosphere":    "crushing depth, alien beauty, ancient and unknowable",
+        "avoid":         "shallow water, bright sunlight, tropical colors",
+    },
+    "fun_facts": {
+        "base_style":    "vibrant documentary photography, engaging and dynamic",
+        "color_palette": "bold saturated colors, energetic, eye-catching",
+        "atmosphere":    "surprising discovery, playful wonder, instant delight",
+        "avoid":         "dark moody lighting, horror elements, dull colors",
+    },
+}
+
+
+def _build_cinematic_prompt(
+    visual_suggestion: str,
+    section_index: int,
+    niche: str,
+    model: str,
+) -> str:
+    """
+    Build prompt sinematik dari visual_suggestion script.
+
+    Prinsip:
+    - visual_suggestion dari script sudah detail — gunakan sebagai INTI prompt
+    - Perkaya dengan section enhancer (karakter per posisi)
+    - Tambahkan niche style (konsistensi visual per niche)
+    - Format sesuai model (DALL-E 3 vs Flux)
+    """
+    enhancer   = SECTION_ENHANCERS.get(section_index, SECTION_ENHANCERS[2])
+    niche_cfg  = NICHE_STYLE.get(niche, NICHE_STYLE["universe_mysteries"])
+
+    if model == "dall-e-3":
+        # DALL-E 3: natural language yang kaya, instruksi eksplisit
+        # Tidak butuh magic words seperti "8K" — DALL-E 3 lebih memahami konteks
+        prompt = (
+            f"{visual_suggestion}. "
+            f"Shot in {niche_cfg['base_style']}. "
+            f"The image should feel {enhancer['character']}. "
+            f"{enhancer['lighting']}. "
+            f"Framed as {enhancer['camera']}. "
+            f"Color palette: {niche_cfg['color_palette']}. "
+            f"Atmosphere: {niche_cfg['atmosphere']}. "
+            f"Vertical 9:16 format optimized for mobile full-screen viewing. "
+            f"Photorealistic, not illustrated or painted."
+        )
+    else:
+        # Flux/SD: lebih baik dengan keyword-style prompts
+        prompt = (
+            f"{visual_suggestion}, "
+            f"{niche_cfg['base_style']}, "
+            f"{enhancer['character']}, "
+            f"{enhancer['lighting']}, "
+            f"{enhancer['camera']}, "
+            f"color palette {niche_cfg['color_palette']}, "
+            f"{enhancer['technical']}, "
+            f"not {niche_cfg['avoid']}"
+        )
+
+    return prompt
+
+
+# ── Fallback keywords per niche jika visual_suggestions kosong ───────────────
+NICHE_FALLBACKS = {
+    "universe_mysteries": [
+        "A single star sharpening into focus against absolute black void, cold blue light",
+        "Radio telescope dish rotating under star-dense night sky, amber warning lights",
+        "Milky Way galaxy arching overhead, time-lapse compression, infinite scale",
+        "Deep field Hubble imagery showing galaxy after galaxy, overwhelming scale",
+        "Primordial Earth teeming with microbial oceans, cold dead exoplanet contrast",
+        "Human silhouette beneath infinite star field, camera pulling back at speed",
+    ],
+    "dark_history": [
+        "Ancient ruins emerging from fog at dawn, weight of centuries visible",
+        "Medieval castle silhouette against stormy sky, lightning in distance",
+        "Candlelit map table with battle plans, shadows concealing dark intent",
+        "Archaeological excavation revealing buried artifacts, earth and mystery",
+        "Desaturated crowd scene at pivotal historical moment, moral weight",
+        "Single torch illuminating dark corridor leading to hidden chamber",
+    ],
+    "ocean_mysteries": [
+        "Bioluminescent creatures in absolute ocean darkness, alien beauty",
+        "Massive whale silhouette emerging from deep ocean murk, scale overwhelming",
+        "Coral reef ecosystem at the boundary of light and darkness",
+        "Shipwreck resting on ocean floor, encrusted with decades of silence",
+        "Looking up from ocean floor at distant surface light, crushing depth",
+        "Deep sea creature with impossible anatomy, alien and ancient",
+    ],
+    "fun_facts": [
+        "Colorful world landmark from unexpected aerial perspective, vibrant",
+        "Science laboratory experiment with dramatic visual result, surprising",
+        "Nature phenomenon captured at peak moment, visually astonishing",
+        "Human brain visualization with neural activity, colorful and dynamic",
+        "Extreme microscopic world revealing hidden beauty, unexpected scale",
+        "Urban aerial view revealing geometric patterns invisible from ground",
+    ],
 }
 
 
 class AIImageProvider(VisualProvider):
     """
-    AI Image Generation + Motion Effect (Ken Burns) → Video clip.
-    Menghasilkan visual yang 100% relevan dengan narasi karena
-    prompt digenerate dari script.
+    AI Image Generation + Motion Effect → Video clip.
+    Fase 6C: Cinematic prompts per section type, niche-aware styling.
     """
 
     def __init__(self, config: dict):
         super().__init__(config)
 
-        # Parse model dari visual_provider: 'ai_image:flux-schnell'
         provider_str  = config.get("visual_provider", "ai_image:flux-schnell")
         parts         = provider_str.split(":", 1)
         self.ai_model = parts[1] if len(parts) > 1 else "flux-schnell"
@@ -96,13 +229,12 @@ class AIImageProvider(VisualProvider):
         self.model_config = AI_IMAGE_MODELS[self.ai_model]
         self.niche        = config.get("niche", "universe_mysteries")
 
-        # API key: Replicate pakai visual_api_key, DALL-E 3 pakai llm_api_key
         if self.model_config["platform"] == "replicate":
             self.api_key = (
                 config.get("visual_api_key")
                 or os.getenv("REPLICATE_API_TOKEN", "")
             )
-        else:  # openai
+        else:
             self.api_key = (
                 config.get("llm_api_key")
                 or os.getenv("OPENAI_API_KEY", "")
@@ -114,6 +246,12 @@ class AIImageProvider(VisualProvider):
                 f"Platform: {self.model_config['platform']}"
             )
 
+        logger.info(
+            f"[AIImage] Initialized: model={self.ai_model} "
+            f"niche={self.niche} "
+            f"cost=${self.model_config['cost_per_img']:.3f}/img"
+        )
+
     async def fetch_clips(
         self,
         keywords: list[str],
@@ -121,31 +259,45 @@ class AIImageProvider(VisualProvider):
         output_dir: Path,
     ) -> list[VideoClip]:
         """
-        Generate gambar AI per keyword → convert ke video clip dengan motion.
+        Generate gambar AI per section → convert ke video dengan motion.
+        keywords = visual_suggestions dari script (sudah sinematik dari s6c6).
         """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
         clips: list[VideoClip] = []
-        template = NICHE_PROMPT_TEMPLATES.get(
-            self.niche, NICHE_PROMPT_TEMPLATES["universe_mysteries"]
-        )
+        total_cost = 0.0
 
         for i, keyword in enumerate(keywords[:count]):
             try:
-                prompt = template.format(subject=keyword)
-                logger.info(f"[AIImage:{self.ai_model}] Generating: '{keyword}'")
+                # Build cinematic prompt — section-aware
+                prompt = _build_cinematic_prompt(
+                    visual_suggestion=keyword,
+                    section_index=i,
+                    niche=self.niche,
+                    model=self.ai_model,
+                )
 
-                # Generate gambar
-                img_path = output_dir / f"ai_img_{i+1:02d}.jpg"
+                logger.info(
+                    f"[AIImage:{self.ai_model}] Scene {i+1}/{count} "
+                    f"| section_enhancer={list(SECTION_ENHANCERS.keys())[min(i,5)]}"
+                )
+                logger.debug(f"[AIImage] Prompt: {prompt[:120]}...")
+
+                img_path  = output_dir / f"ai_img_{i+1:02d}.jpg"
+                clip_path = output_dir / f"clip_{i+1:02d}_ai.mp4"
+
                 await self._generate_image(prompt, img_path)
 
-                # Konversi gambar → video dengan Ken Burns motion effect
-                clip_path = output_dir / f"clip_{i+1:02d}_ai.mp4"
-                duration  = 5.0  # detik per clip
+                # Durasi 5.0 detik default
+                # s6c2 akan override ini dengan durasi per section
+                duration = 5.0
                 self._image_to_video(img_path, clip_path, duration=duration)
 
                 size_mb = clip_path.stat().st_size / (1024 * 1024)
+                cost    = self.model_config["cost_per_img"]
+                total_cost += cost
+
                 clips.append(VideoClip(
                     path=clip_path,
                     duration=duration,
@@ -155,76 +307,52 @@ class AIImageProvider(VisualProvider):
                     source_url=f"ai_generated:{self.ai_model}",
                     provider=self.provider_name,
                 ))
-                logger.info(f"[AIImage] Clip {i+1}: {clip_path.name} ({size_mb:.1f}MB)")
+                logger.info(
+                    f"[AIImage] ✓ Scene {i+1}: {clip_path.name} "
+                    f"({size_mb:.1f}MB) ~${cost:.3f}"
+                )
 
             except Exception as e:
-                logger.error(f"[AIImage] Failed for '{keyword}': {e}")
+                logger.error(f"[AIImage] Scene {i+1} failed for '{keyword[:50]}': {e}")
                 continue
 
+        logger.info(
+            f"[AIImage] Complete: {len(clips)}/{count} clips "
+            f"| total cost ~${total_cost:.3f}"
+        )
         return clips
 
     def extract_keywords_from_script(self, script: dict, niche: str) -> list[str]:
         """
-        Untuk AI Image, keywords = subject untuk generate gambar.
-        Selalu return 6 keywords untuk 6 clips.
+        Extract visual subjects dari script.
+        Priority: visual_suggestions dari script (sudah sinematik dari s6c6).
+        Selalu return tepat 6 items untuk 6 section clips.
         """
         keywords = []
 
-        # Priority 1: visual_suggestions dari script (paling relevan)
+        # Priority 1: visual_suggestions dari script engine
+        # Script engine v0.3.1 sudah menghasilkan suggestions yang sinematik
         suggestions = script.get("visual_suggestions", [])
-        if suggestions:
-            keywords.extend([s for s in suggestions if s])
+        if isinstance(suggestions, list):
+            for s in suggestions:
+                if s and isinstance(s, str) and len(s) > 5:
+                    keywords.append(s.strip())
 
-        # Priority 2: derive dari title + hook jika kurang dari 6
+        logger.info(
+            f"[AIImage] visual_suggestions dari script: {len(keywords)} items"
+        )
+
+        # Priority 2: fallback ke niche defaults jika kurang dari 6
         if len(keywords) < 6:
-            title = script.get("title", "")
-            hook  = script.get("hook", "")
-            if title and title not in keywords:
-                keywords.append(title)
-            if hook and len(hook) > 5 and hook not in keywords:
-                keywords.append(hook[:80])
-
-        # Priority 3: niche fallback keywords
-        niche_fallbacks = {
-            "universe_mysteries": [
-                "deep space nebula cinematic",
-                "spiral galaxy dramatic lighting",
-                "astronaut floating in space",
-                "cosmic explosion supernova",
-                "black hole visualization art",
-                "earth from orbit at night"
-            ],
-            "fun_facts": [
-                "colorful world landmarks aerial",
-                "science experiment lab",
-                "nature timelapse dramatic",
-                "human brain neural art",
-                "microscopic world colorful",
-                "city aerial drone view"
-            ],
-            "dark_history": [
-                "ancient ruins dramatic fog",
-                "medieval castle stormy night",
-                "historical war scene epic",
-                "old treasure map discovery",
-                "archaeological excavation",
-                "dark gothic monument"
-            ],
-            "ocean_mysteries": [
-                "deep ocean bioluminescent creatures",
-                "whale underwater dramatic",
-                "coral reef colorful vibrant",
-                "shipwreck underwater eerie",
-                "ocean surface stormy waves",
-                "submarine deep dive dark"
-            ],
-        }
-        fallbacks = niche_fallbacks.get(niche, niche_fallbacks["universe_mysteries"])
-        for fb in fallbacks:
-            if len(keywords) >= 6:
-                break
-            if fb not in keywords:
-                keywords.append(fb)
+            fallbacks = NICHE_FALLBACKS.get(niche, NICHE_FALLBACKS["universe_mysteries"])
+            for fb in fallbacks:
+                if len(keywords) >= 6:
+                    break
+                if fb not in keywords:
+                    keywords.append(fb)
+            logger.info(
+                f"[AIImage] Setelah fallback: {len(keywords)} items"
+            )
 
         return keywords[:6]
 
@@ -245,7 +373,6 @@ class AIImageProvider(VisualProvider):
     # ──────────────────────────────────────────────
 
     async def _generate_image(self, prompt: str, output_path: Path) -> None:
-        """Route ke platform yang sesuai berdasarkan model config."""
         platform = self.model_config["platform"]
         if platform == "replicate":
             await self._generate_replicate(prompt, output_path)
@@ -266,9 +393,8 @@ class AIImageProvider(VisualProvider):
             self.model_config["model_id"],
             input={"prompt": prompt, "aspect_ratio": "9:16"}
         )
-        # Output adalah URL atau file-like — download ke disk
         img_url = output[0] if isinstance(output, list) else str(output)
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=60) as client:
             r = await client.get(img_url)
             output_path.write_bytes(r.content)
 
@@ -278,17 +404,19 @@ class AIImageProvider(VisualProvider):
         except ImportError:
             raise VisualError("openai tidak terinstall. Jalankan: pip install openai")
 
-        client   = AsyncOpenAI(api_key=self.api_key)
-        size     = self.model_config.get("size", "1024x1792")
+        client = AsyncOpenAI(api_key=self.api_key)
+        size   = self.model_config.get("size", "1024x1792")
+
         response = await client.images.generate(
             model=self.model_config["model_id"],
             prompt=prompt,
             size=size,
-            quality="standard",
+            quality="hd",       # Upgrade dari 'standard' ke 'hd' untuk kualitas terbaik
+            style="vivid",      # 'vivid' lebih dramatic vs 'natural' — sesuai konten viral
             n=1,
         )
         img_url = response.data[0].url
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=60) as client:
             r = await client.get(img_url)
             output_path.write_bytes(r.content)
 
@@ -304,7 +432,7 @@ class AIImageProvider(VisualProvider):
     ) -> None:
         """
         Konversi gambar statis → video 9:16 dengan Ken Burns zoom effect.
-        Menggunakan FFmpeg zoompan filter.
+        duration: dikontrol dari luar — s6c2 akan pass durasi per section.
         """
         fps    = 30
         frames = int(duration * fps)
@@ -315,16 +443,20 @@ class AIImageProvider(VisualProvider):
             "-i", str(img_path),
             "-vf", (
                 f"scale=8000:-1,"
-                f"zoompan=z='min(zoom+0.0015,1.5)':d={frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920,"
+                f"zoompan=z='min(zoom+0.0015,1.5)':d={frames}"
+                f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920,"
                 f"setsar=1"
             ),
             "-t", str(duration),
             "-c:v", "libx264",
             "-pix_fmt", "yuv420p",
             "-r", str(fps),
+            "-preset", "fast",
             str(output_path),
         ]
 
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
-            raise VisualError(f"FFmpeg image-to-video failed: {result.stderr[-500:]}")
+            raise VisualError(
+                f"FFmpeg image-to-video failed: {result.stderr[-500:]}"
+            )
