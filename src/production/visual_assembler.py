@@ -257,11 +257,112 @@ class VisualAssembler:
                     f"[VisualAssembler] ✅ AI Image generated: "
                     f"{len(clips)} clips via {visual_mode}"
                 )
+
+                # ── s6c7: Hook frame optimization ─────────────────────
+                # Replace clips[0] dengan hero image khusus dari hook text
+                # Lebih scroll-stopping dari visual_suggestion generik
+                hook_clip = self._generate_hook_frame(
+                    script=script,
+                    clips_dir=clips_dir,
+                    config=config,
+                    clip_durs=clip_durs,
+                )
+                if hook_clip:
+                    clips[0] = hook_clip
+                    logger.info(f"[VisualAssembler] s6c7 ✅ Hook frame replaced clips[0]")
+
             return [clip.path for clip in clips]
 
         except Exception as e:
             logger.error(f"[VisualAssembler] AI Image error: {e}")
             return []
+
+    def _generate_hook_frame(
+        self,
+        script: dict,
+        clips_dir: Path,
+        config: dict,
+        clip_durs: list[float],
+    ):
+        """
+        Fase 6C s6c7: Generate hero image khusus untuk frame pertama.
+        Prompt dibangun dari hook text aktual — bukan visual_suggestion generik.
+        Hanya aktif saat visual_mode = ai_image:*.
+        """
+        try:
+            from src.providers.visual.ai_image import AIImageProvider, VideoClip
+
+            hook_text = script.get("hook", "").strip()
+            niche     = config.get("niche", "universe_mysteries")
+
+            if not hook_text:
+                return None
+
+            # Niche-specific hook frame style
+            HOOK_FRAME_STYLE = {
+                "universe_mysteries": (
+                    f"Cinematic vertical 9:16 hero image. "
+                    f"Visually represents: '{hook_text}'. "
+                    f"Style: NASA documentary, dramatic cosmic scale, "
+                    f"extreme high contrast, cold blue-black palette, "
+                    f"single striking focal point that stops the scroll instantly. "
+                    f"Photorealistic, 8K, no text, no people."
+                ),
+                "dark_history": (
+                    f"Cinematic vertical 9:16 hero image. "
+                    f"Visually represents: '{hook_text}'. "
+                    f"Style: dark historical documentary, ominous atmosphere, "
+                    f"desaturated with deep shadows, single haunting focal point. "
+                    f"Photorealistic, no text, no people."
+                ),
+                "ocean_mysteries": (
+                    f"Cinematic vertical 9:16 hero image. "
+                    f"Visually represents: '{hook_text}'. "
+                    f"Style: deep ocean documentary, bioluminescent darkness, "
+                    f"eerie yet beautiful, single creature or phenomenon as focal point. "
+                    f"Photorealistic, no text."
+                ),
+                "fun_facts": (
+                    f"Cinematic vertical 9:16 hero image. "
+                    f"Visually represents: '{hook_text}'. "
+                    f"Style: vibrant, high-energy, bold colors, "
+                    f"single surprising visual that demands attention. "
+                    f"Photorealistic, no text."
+                ),
+            }
+
+            prompt    = HOOK_FRAME_STYLE.get(niche, HOOK_FRAME_STYLE["universe_mysteries"])
+            provider  = AIImageProvider(config)
+            img_path  = clips_dir / "hook_frame_img.jpg"
+            clip_path = clips_dir / "clip_01_hook.mp4"
+
+            # Durasi = durasi section hook (default 3 detik)
+            hook_duration = clip_durs[0] if clip_durs else 3.0
+
+            import asyncio
+            asyncio.run(provider._generate_image(prompt, img_path))
+            provider._image_to_video(img_path, clip_path, duration=hook_duration)
+
+            from src.providers.visual.base import VideoClip
+            size_mb = clip_path.stat().st_size / (1024 * 1024)
+            logger.info(
+                f"[s6c7] Hook frame: {clip_path.name} ({size_mb:.1f}MB) "
+                f"{hook_duration}s | prompt: '{hook_text[:60]}...'"
+            )
+
+            return VideoClip(
+                path=clip_path,
+                duration=hook_duration,
+                width=1080,
+                height=1920,
+                file_size_mb=round(size_mb, 1),
+                source_url="ai_generated:hook_frame",
+                provider=config.get("visual_provider", "ai_image"),
+            )
+
+        except Exception as e:
+            logger.warning(f"[s6c7] Hook frame generation failed ({e}) — keeping original clips[0]")
+            return None
 
     def _try_cache(self, clips_dir: Path) -> list[Path]:
         """Cari clip dari cache run sebelumnya."""
