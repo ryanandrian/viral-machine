@@ -176,6 +176,41 @@ class VisualAssembler:
             logger.error(f"[VisualAssembler] Pexels error: {e}")
             return []
 
+    def _compute_clip_durations(self, script: dict, n_clips: int = 6) -> list[float]:
+        """
+        Fase 6C s6c2: hitung durasi per clip dari section_durations script.
+        Mapping 6 clips ke 8 sections — sections pendek digabung.
+        """
+        sd = script.get("section_durations", {})
+        if not sd or len(sd) < 6:
+            return []  # Fallback ke pembagian rata di renderer
+
+        hook      = float(sd.get("hook", 3))
+        mystery   = float(sd.get("mystery_drop", 5))
+        buildup   = float(sd.get("build_up", 12))
+        interrupt = float(sd.get("pattern_interrupt", 2))
+        core      = float(sd.get("core_facts", 15))
+        bridge    = float(sd.get("curiosity_bridge", 3))
+        climax    = float(sd.get("climax", 8))
+        cta       = float(sd.get("cta", 3))
+
+        # Mapping 6 clips: gabung sections pendek agar tiap clip punya durasi wajar
+        durations = [
+            hook,                          # Clip 1: hook
+            mystery,                       # Clip 2: mystery drop
+            buildup,                       # Clip 3: build up
+            round(interrupt + core / 2, 2),# Clip 4: interrupt + core awal
+            round(core / 2 + bridge, 2),   # Clip 5: core akhir + bridge
+            round(climax + cta, 2),        # Clip 6: climax + cta
+        ]
+
+        total = sum(durations)
+        logger.info(
+            f"[VisualAssembler] section_durations → clip_durations: "
+            f"{durations} = {total:.1f}s"
+        )
+        return durations
+
     def _try_ai_image(
         self,
         visual_mode: str,
@@ -199,8 +234,9 @@ class VisualAssembler:
                     or os.getenv("OPENAI_API_KEY", "")
                 ),
             }
-            provider = AIImageProvider(config)
-            keywords = provider.extract_keywords_from_script(script, tenant_config.niche)
+            provider  = AIImageProvider(config)
+            keywords  = provider.extract_keywords_from_script(script, tenant_config.niche)
+            clip_durs = self._compute_clip_durations(script, n_clips=6)
 
             logger.info(
                 f"[VisualAssembler] Generating AI images: "
@@ -208,7 +244,12 @@ class VisualAssembler:
             )
 
             clips = asyncio.run(
-                provider.fetch_clips(keywords=keywords, count=6, output_dir=clips_dir)
+                provider.fetch_clips(
+                    keywords=keywords,
+                    count=6,
+                    output_dir=clips_dir,
+                    clip_durations=clip_durs,
+                )
             )
 
             if clips:

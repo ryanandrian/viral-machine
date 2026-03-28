@@ -257,10 +257,13 @@ class AIImageProvider(VisualProvider):
         keywords: list[str],
         count: int,
         output_dir: Path,
+        clip_durations: list[float] | None = None,
     ) -> list[VideoClip]:
         """
         Generate gambar AI per section → convert ke video dengan motion.
-        keywords = visual_suggestions dari script (sudah sinematik dari s6c6).
+        keywords       = visual_suggestions dari script (sinematik dari s6c6).
+        clip_durations = durasi per clip dari section_durations script (s6c2).
+                         Jika None → fallback ke 5.0 detik per clip.
         """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -278,9 +281,17 @@ class AIImageProvider(VisualProvider):
                     model=self.ai_model,
                 )
 
+                # Durasi per clip dari section_durations (s6c2)
+                # Fallback ke 5.0 jika tidak tersedia
+                if clip_durations and i < len(clip_durations):
+                    duration = clip_durations[i]
+                else:
+                    duration = 5.0
+
                 logger.info(
                     f"[AIImage:{self.ai_model}] Scene {i+1}/{count} "
-                    f"| section_enhancer={list(SECTION_ENHANCERS.keys())[min(i,5)]}"
+                    f"| duration={duration}s "
+                    f"| section={list(SECTION_ENHANCERS.keys())[min(i,5)]}"
                 )
                 logger.debug(f"[AIImage] Prompt: {prompt[:120]}...")
 
@@ -289,9 +300,6 @@ class AIImageProvider(VisualProvider):
 
                 await self._generate_image(prompt, img_path)
 
-                # Durasi 5.0 detik default
-                # s6c2 akan override ini dengan durasi per section
-                duration = 5.0
                 self._image_to_video(img_path, clip_path, duration=duration)
 
                 size_mb = clip_path.stat().st_size / (1024 * 1024)
@@ -309,7 +317,7 @@ class AIImageProvider(VisualProvider):
                 ))
                 logger.info(
                     f"[AIImage] ✓ Scene {i+1}: {clip_path.name} "
-                    f"({size_mb:.1f}MB) ~${cost:.3f}"
+                    f"({size_mb:.1f}MB) {duration}s ~${cost:.3f}"
                 )
 
             except Exception as e:

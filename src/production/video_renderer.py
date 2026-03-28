@@ -68,18 +68,40 @@ class VideoRenderer:
         except Exception:
             return 5.0
 
-    def _create_clip_list(self, clips: list, target_duration: float, output_dir: str) -> str:
+    def _create_clip_list(
+        self,
+        clips: list,
+        target_duration: float,
+        output_dir: str,
+        clip_durations: list[float] | None = None,
+    ) -> str:
         """
-        Fase 6C s6c1: durasi per clip = audio_duration / n_clips.
-        Clip terakhir = sisa waktu — tidak ada loop/repeat.
+        Fase 6C s6c1+s6c2: durasi per clip presisi, tidak ada loop/repeat.
+
+        clip_durations: dari section_durations script (s6c2).
+          - Jika ada → tiap clip punya durasi sesuai section narasi
+          - Jika None → bagi rata audio_duration / n_clips (fallback s6c1)
         """
         list_path = os.path.join(output_dir, "clip_list.txt")
         n         = len(clips)
-        dur_each  = round(target_duration / n, 4)
         entries   = []
 
-        for i, clip in enumerate(clips):
-            dur      = dur_each if i < n - 1 else round(target_duration - dur_each * (n - 1), 4)
+        if clip_durations and len(clip_durations) == n:
+            # s6c2: gunakan durasi per section dari script
+            # Normalisasi agar total = target_duration
+            total_raw = sum(clip_durations)
+            scale     = target_duration / total_raw if total_raw > 0 else 1.0
+            durations = [round(d * scale, 4) for d in clip_durations[:-1]]
+            durations.append(round(target_duration - sum(durations), 4))
+            mode = "section-synced"
+        else:
+            # s6c1 fallback: bagi rata
+            dur_each  = round(target_duration / n, 4)
+            durations = [dur_each] * (n - 1)
+            durations.append(round(target_duration - sum(durations), 4))
+            mode = "equal-split"
+
+        for clip, dur in zip(clips, durations):
             abs_path = os.path.abspath(clip)
             entries.append(f"file '{abs_path}'\n")
             entries.append(f"duration {dur}\n")
@@ -87,9 +109,8 @@ class VideoRenderer:
         with open(list_path, "w") as f:
             f.writelines(entries)
 
-        total_actual = dur_each * (n - 1) + round(target_duration - dur_each * (n - 1), 4)
         logger.info(
-            f"[Renderer] clip_list: {n} clips x {dur_each}s = {total_actual:.3f}s"
+            f"[Renderer] clip_list ({mode}): {n} clips = {sum(durations):.3f}s"
             f" (target: {target_duration:.3f}s) — no repeat"
         )
         return list_path
@@ -231,7 +252,29 @@ class VideoRenderer:
         logger.info(f"Audio duration: {audio_duration:.1f}s")
 
         logger.info("Creating clip list...")
-        clip_list_path = self._create_clip_list(clips, audio_duration, output_dir)
+        # s6c2: ambil section_durations dari script jika ada
+        section_durs   = script.get("section_durations", {})
+        clip_durations = None
+        if section_durs and len(section_durs) >= 6:
+            sd = section_durs
+            hook      = float(sd.get("hook", 3))
+            mystery   = float(sd.get("mystery_drop", 5))
+            buildup   = float(sd.get("build_up", 12))
+            interrupt = float(sd.get("pattern_interrupt", 2))
+            core      = float(sd.get("core_facts", 15))
+            bridge    = float(sd.get("curiosity_bridge", 3))
+            climax    = float(sd.get("climax", 8))
+            cta       = float(sd.get("cta", 3))
+            clip_durations = [
+                hook,
+                mystery,
+                buildup,
+                round(interrupt + core / 2, 2),
+                round(core / 2 + bridge, 2),
+                round(climax + cta, 2),
+            ]
+            logger.info(f"[Renderer] section_durations detected: {clip_durations}")
+        clip_list_path = self._create_clip_list(clips, audio_duration, output_dir, clip_durations)
 
         # Generate subtitles — pakai timestamps jika tersedia
         logger.info("Generating subtitles...")
