@@ -1,10 +1,10 @@
 """
 Video Renderer — FFmpeg pipeline untuk render video final 9:16.
-v0.2 fixes:
-  - Caption timing: gunakan word_timestamps nyata dari TTS (bukan estimasi)
-  - Font size: diperkecil ke 11 (dari 18)
-  - MarginV: dinaikkan ke 120 (dari 80) — caption lebih ke bawah
-  - Fallback: estimasi word count jika timestamps tidak tersedia
+Fase 6C s6c3 upgrade:
+  - Karaoke ASS caption: kata aktif kuning, kata lain putih (ElevenLabs ~98%)
+  - Caption style dari tenant_configs.caption_style — multi-tenant configurable
+  - Fallback SRT estimasi jika word timestamps tidak tersedia
+  - Fix: fallback full_script cover 8 section (bukan 5 section lama)
 """
 
 import json
@@ -16,6 +16,29 @@ from dotenv import load_dotenv
 from src.intelligence.config import TenantConfig
 
 load_dotenv()
+
+# Default caption style — override via tenant_configs.caption_style
+DEFAULT_CAPTION_STYLE = {
+    "active_word_color":   "#FFD700",  # Kuning — kata yang sedang diucapkan
+    "inactive_word_color": "#FFFFFF",  # Putih — kata lain
+    "font_size":           14,
+    "max_words_per_line":  4,
+    "max_lines":           2,
+    "margin_v":            150,
+    "bold_keywords":       True,
+}
+
+
+def _hex_to_ass_color(hex_color: str) -> str:
+    """
+    Konversi hex color (#RRGGBB) ke format ASS (&HBBGGRR&).
+    ASS menggunakan format BGR bukan RGB.
+    """
+    hex_color = hex_color.lstrip("#")
+    if len(hex_color) == 6:
+        r, g, b = hex_color[0:2], hex_color[2:4], hex_color[4:6]
+        return f"&H00{b}{g}{r}&"
+    return "&H00FFFFFF&"  # fallback putih
 
 
 class VideoRenderer:
@@ -29,19 +52,19 @@ class VideoRenderer:
     VIDEO_BITRATE = "4000k"
     AUDIO_BITRATE = "192k"
 
-    # Caption style — v0.2: font diperkecil, posisi lebih bawah
-    CAPTION_STYLE = (
+    # SRT fallback style — dipakai jika tidak ada word timestamps
+    SRT_CAPTION_STYLE = (
         "FontName=Arial,"
-        "FontSize=11,"           # ← diperkecil dari 18 ke 11 (~60%)
+        "FontSize=14,"
         "Bold=1,"
         "PrimaryColour=&H00FFFFFF,"
         "OutlineColour=&H00000000,"
         "BackColour=&H80000000,"
         "Outline=2,"
         "Shadow=1,"
-        "MarginV=120,"           # ← dinaikkan dari 80 ke 120
-        "Alignment=2,"           # bottom center
-        "WrapStyle=1"            # wrap agar tidak keluar layar
+        "MarginV=150,"
+        "Alignment=2,"
+        "WrapStyle=1"
     )
 
     def _get_audio_duration(self, audio_path: str) -> float:
@@ -68,6 +91,19 @@ class VideoRenderer:
         except Exception:
             return 5.0
 
+    def _load_caption_style(self, tenant_config: TenantConfig) -> dict:
+        """Load caption style dari Supabase tenant_configs. Fallback ke default."""
+        try:
+            from src.config.tenant_config import load_tenant_config
+            rc = load_tenant_config(tenant_config.tenant_id)
+            if rc.caption_style and isinstance(rc.caption_style, dict):
+                style = DEFAULT_CAPTION_STYLE.copy()
+                style.update(rc.caption_style)
+                return style
+        except Exception:
+            pass
+        return DEFAULT_CAPTION_STYLE.copy()
+
     def _create_clip_list(
         self,
         clips: list,
@@ -77,25 +113,18 @@ class VideoRenderer:
     ) -> str:
         """
         Fase 6C s6c1+s6c2: durasi per clip presisi, tidak ada loop/repeat.
-
-        clip_durations: dari section_durations script (s6c2).
-          - Jika ada → tiap clip punya durasi sesuai section narasi
-          - Jika None → bagi rata audio_duration / n_clips (fallback s6c1)
         """
         list_path = os.path.join(output_dir, "clip_list.txt")
         n         = len(clips)
         entries   = []
 
         if clip_durations and len(clip_durations) == n:
-            # s6c2: gunakan durasi per section dari script
-            # Normalisasi agar total = target_duration
             total_raw = sum(clip_durations)
             scale     = target_duration / total_raw if total_raw > 0 else 1.0
             durations = [round(d * scale, 4) for d in clip_durations[:-1]]
             durations.append(round(target_duration - sum(durations), 4))
             mode = "section-synced"
         else:
-            # s6c1 fallback: bagi rata
             dur_each  = round(target_duration / n, 4)
             durations = [dur_each] * (n - 1)
             durations.append(round(target_duration - sum(durations), 4))
@@ -115,74 +144,125 @@ class VideoRenderer:
         )
         return list_path
 
-    def _generate_subtitles_from_timestamps(
+    def _generate_karaoke_ass(
         self,
         word_timestamps: list[dict],
         output_dir: str,
-        words_per_segment: int = 5,
+        style: dict,
     ) -> str:
         """
-        Generate SRT dari word-level timestamps nyata (akurat ~95%).
-        Grouping: setiap N kata menjadi 1 segmen subtitle.
-        """
-        srt_path = os.path.join(output_dir, "subtitles.srt")
+        Fase 6C s6c3: Generate ASS subtitle dengan karaoke word highlight.
 
+        Setiap event ASS = satu kata aktif + konteks baris.
+        Kata aktif: warna active_word_color (default kuning #FFD700)
+        Kata lain di baris: warna inactive_word_color (default putih #FFFFFF)
+        Max 4 kata per baris, 1-2 baris.
+        """
         if not word_timestamps:
             return ""
 
-        # Group kata-kata ke dalam segmen
-        segments = []
-        for i in range(0, len(word_timestamps), words_per_segment):
-            group  = word_timestamps[i:i + words_per_segment]
-            text   = " ".join(w["word"] for w in group)
-            start  = group[0]["start"]
-            end    = group[-1]["end"]
-            segments.append({"text": text, "start": start, "end": end})
+        ass_path     = os.path.join(output_dir, "subtitles.ass")
+        max_per_line = style.get("max_words_per_line", 4)
+        font_size    = style.get("font_size", 14)
+        margin_v     = style.get("margin_v", 150)
+        active_color   = _hex_to_ass_color(style.get("active_word_color",   "#FFD700"))
+        inactive_color = _hex_to_ass_color(style.get("inactive_word_color", "#FFFFFF"))
+        active_size    = int(font_size * 1.15)  # Kata aktif sedikit lebih besar
 
-        def fmt_time(seconds: float) -> str:
-            h  = int(seconds // 3600)
-            m  = int((seconds % 3600) // 60)
-            s  = int(seconds % 60)
-            ms = int((seconds % 1) * 1000)
-            return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+        def fmt_ass_time(seconds: float) -> str:
+            h   = int(seconds // 3600)
+            m   = int((seconds % 3600) // 60)
+            s   = int(seconds % 60)
+            cs  = int((seconds % 1) * 100)  # centiseconds (ASS pakai H:MM:SS.cc)
+            return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
 
-        srt_content = []
-        for i, seg in enumerate(segments):
-            srt_content.append(str(i + 1))
-            srt_content.append(f"{fmt_time(seg['start'])} --> {fmt_time(seg['end'])}")
-            srt_content.append(seg["text"])
-            srt_content.append("")
+        # ASS header
+        ass_header = f"""[Script Info]
+ScriptType: v4.00+
+PlayResX: {self.OUTPUT_WIDTH}
+PlayResY: {self.OUTPUT_HEIGHT}
+ScaledBorderAndShadow: yes
 
-        with open(srt_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(srt_content))
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,{font_size},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,2,1,2,10,10,{margin_v},1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+
+        events = []
+        n = len(word_timestamps)
+
+        for i, word_data in enumerate(word_timestamps):
+            word_start = word_data["start"]
+            word_end   = word_data["end"]
+
+            # Tentukan window kata yang ditampilkan di baris
+            # Ambil konteks: beberapa kata sebelum dan sesudah kata aktif
+            half     = max_per_line // 2
+            win_start = max(0, i - half)
+            win_end   = min(n, win_start + max_per_line)
+            if win_end - win_start < max_per_line:
+                win_start = max(0, win_end - max_per_line)
+
+            window = word_timestamps[win_start:win_end]
+
+            # Build teks dengan color tag per kata
+            parts = []
+            for j, w in enumerate(window):
+                global_idx = win_start + j
+                word_text  = w["word"]
+                if global_idx == i:
+                    # Kata aktif — kuning, sedikit lebih besar
+                    parts.append(
+                        f"{{\\c{active_color}\\fs{active_size}}}{word_text}"
+                        f"{{\\c{inactive_color}\\fs{font_size}}}"
+                    )
+                else:
+                    parts.append(f"{{\\c{inactive_color}}}{word_text}")
+
+            line_text = " ".join(parts)
+
+            events.append(
+                f"Dialogue: 0,{fmt_ass_time(word_start)},{fmt_ass_time(word_end)},"
+                f"Default,,0,0,0,,{line_text}"
+            )
+
+        ass_content = ass_header + "\n".join(events)
+        with open(ass_path, "w", encoding="utf-8") as f:
+            f.write(ass_content)
 
         logger.info(
-            f"Subtitles (timestamps): {len(segments)} segments → {srt_path}"
+            f"[Caption] Karaoke ASS: {len(events)} events → {ass_path} "
+            f"(active={style.get('active_word_color')}, "
+            f"inactive={style.get('inactive_word_color')})"
         )
-        return srt_path
+        return ass_path
 
     def _generate_subtitles_estimated(
         self,
         script: dict,
         audio_duration: float,
         output_dir: str,
-        words_per_segment: int = 5,
+        words_per_segment: int = 4,
     ) -> str:
         """
-        Fallback: estimasi timing dari word count.
-        Akurasi ~60-70% — dipakai jika provider tidak return timestamps.
+        Fallback SRT: estimasi timing dari word count.
+        Fix: cover 8 section (bukan 5 section lama).
+        Akurasi ~60-70%.
         """
         srt_path    = os.path.join(output_dir, "subtitles.srt")
+
+        # Cover 8 section — fix dari versi lama yang hanya 5 section
         full_script = script.get("full_script", "")
         if not full_script:
-            parts = [
-                script.get("hook", ""),
-                script.get("build_up", ""),
-                script.get("core_facts", ""),
-                script.get("climax", ""),
-                script.get("cta", "")
+            sections = [
+                "hook", "mystery_drop", "build_up", "pattern_interrupt",
+                "core_facts", "curiosity_bridge", "climax", "cta"
             ]
-            full_script = " ".join(p for p in parts if p)
+            parts = [script.get(s, "").strip() for s in sections if script.get(s)]
+            full_script = " ".join(parts)
 
         words = full_script.split()
         if not words:
@@ -213,8 +293,9 @@ class VideoRenderer:
         with open(srt_path, "w", encoding="utf-8") as f:
             f.write("\n".join(srt_content))
 
-        logger.info(
-            f"Subtitles (estimated): {len(segments)} segments → {srt_path}"
+        logger.warning(
+            f"[Caption] SRT estimasi (fallback): {len(segments)} segments "
+            f"— akurasi ~60-70%. Gunakan ElevenLabs untuk karaoke akurat."
         )
         return srt_path
 
@@ -230,15 +311,10 @@ class VideoRenderer:
         """
         Render video final.
 
-        Args:
-            script:          Script dict
-            audio_path:      Path ke file audio MP3
-            clips:           List path clip video
-            tenant_config:   Config tenant
-            output_dir:      Direktori output
-            word_timestamps: Word-level timestamps dari TTS (opsional)
-                             Jika tersedia → subtitle akurat
-                             Jika None     → fallback ke estimasi
+        Caption mode (otomatis dipilih):
+          - word_timestamps tersedia (ElevenLabs) → ASS karaoke (~98% akurasi)
+          - word_timestamps kosong                → SRT estimasi (~60-70%)
+        Caption style dibaca dari tenant_configs.caption_style — multi-tenant.
         """
         if not clips:
             logger.error("No video clips available")
@@ -252,11 +328,10 @@ class VideoRenderer:
         logger.info(f"Audio duration: {audio_duration:.1f}s")
 
         logger.info("Creating clip list...")
-        # s6c2: ambil section_durations dari script jika ada
         section_durs   = script.get("section_durations", {})
         clip_durations = None
         if section_durs and len(section_durs) >= 6:
-            sd = section_durs
+            sd        = section_durs
             hook      = float(sd.get("hook", 3))
             mystery   = float(sd.get("mystery_drop", 5))
             buildup   = float(sd.get("build_up", 12))
@@ -273,32 +348,40 @@ class VideoRenderer:
                 round(core / 2 + bridge, 2),
                 round(climax + cta, 2),
             ]
-            logger.info(f"[Renderer] section_durations detected: {clip_durations}")
+            logger.info(f"[Renderer] section_durations: {clip_durations}")
         clip_list_path = self._create_clip_list(clips, audio_duration, output_dir, clip_durations)
 
-        # Generate subtitles — pakai timestamps jika tersedia
-        logger.info("Generating subtitles...")
-        if word_timestamps:
+        # Load caption style dari tenant_configs
+        caption_style = self._load_caption_style(tenant_config)
+
+        # Generate subtitle — pilih mode berdasarkan ketersediaan timestamps
+        logger.info("Generating captions...")
+        use_ass = False
+        if word_timestamps and len(word_timestamps) > 0:
             logger.info(
-                f"[Subtitle] Mode: word timestamps "
-                f"({len(word_timestamps)} words) — akurasi ~95%"
+                f"[Caption] Mode: KARAOKE ASS "
+                f"({len(word_timestamps)} words, ~98% akurasi)"
             )
-            srt_path = self._generate_subtitles_from_timestamps(
-                word_timestamps, output_dir
+            sub_path = self._generate_karaoke_ass(
+                word_timestamps, output_dir, caption_style
             )
+            use_ass = True
         else:
             logger.warning(
-                "[Subtitle] Mode: estimasi word count — akurasi ~60-70%. "
-                "Upgrade ke provider dengan word timestamps untuk akurasi lebih baik."
+                "[Caption] Mode: SRT estimasi (~60-70%) — "
+                "aktifkan ElevenLabs untuk karaoke akurat"
             )
-            srt_path = self._generate_subtitles_estimated(
+            sub_path = self._generate_subtitles_estimated(
                 script, audio_duration, output_dir
             )
+            use_ass = False
 
         timestamp   = int(time.time())
         os.makedirs(output_dir, exist_ok=True)
-        output_path = os.path.join(output_dir, f"video_{tenant_config.tenant_id}_{timestamp}.mp4")
-        temp_path   = os.path.join(output_dir, f"temp_{timestamp}.mp4")
+        output_path = os.path.join(
+            output_dir, f"video_{tenant_config.tenant_id}_{timestamp}.mp4"
+        )
+        temp_path = os.path.join(output_dir, f"temp_{timestamp}.mp4")
 
         # ── Step A: Concat + scale clips ──────────────────────────────
         logger.info("Step A: Concatenating and scaling clips to 9:16...")
@@ -324,13 +407,19 @@ class VideoRenderer:
         logger.info("Clips concatenated successfully")
 
         # ── Step B: Add audio + subtitles ─────────────────────────────
-        logger.info("Step B: Adding audio + subtitles...")
+        logger.info("Step B: Adding audio + captions...")
+
         subtitle_filter = ""
-        if srt_path and os.path.exists(srt_path):
-            abs_srt = os.path.abspath(srt_path)
-            subtitle_filter = (
-                f",subtitles='{abs_srt}':force_style='{self.CAPTION_STYLE}'"
-            )
+        if sub_path and os.path.exists(sub_path):
+            abs_sub = os.path.abspath(sub_path)
+            if use_ass:
+                # ASS karaoke — gunakan filter 'ass='
+                subtitle_filter = f",ass='{abs_sub}'"
+            else:
+                # SRT fallback — gunakan filter 'subtitles=' dengan force_style
+                subtitle_filter = (
+                    f",subtitles='{abs_sub}':force_style='{self.SRT_CAPTION_STYLE}'"
+                )
 
         cmd_final = [
             "ffmpeg", "-y",
@@ -359,7 +448,11 @@ class VideoRenderer:
 
         if os.path.exists(output_path):
             size_mb = os.path.getsize(output_path) / (1024 * 1024)
-            logger.info(f"Video rendered: {output_path} ({size_mb:.1f} MB)")
+            caption_mode = "karaoke ASS" if use_ass else "SRT estimasi"
+            logger.info(
+                f"Video rendered: {output_path} ({size_mb:.1f} MB) "
+                f"| caption: {caption_mode}"
+            )
             return output_path
 
         return ""
