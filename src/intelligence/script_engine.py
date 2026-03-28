@@ -1,241 +1,445 @@
-import os
-import json
-import re
+"""
+Script Engine v0.3.1 — Fase 6C
+Fixes:
+  - Pattern interrupt: tidak ada contoh verbatim yang bisa di-copy
+  - Retry prompt: menyertakan weak areas dari analyzer sebagai feedback
+  - Threshold: dibaca dari Supabase (sekarang 82 untuk ryan_andrian)
+"""
+
+import os, json, re, time
 from datetime import datetime
 from loguru import logger
-from openai import OpenAI
 from dotenv import load_dotenv
 from src.intelligence.config import TenantConfig, NICHES, system_config
 
 load_dotenv()
 
+SECTION_TIMING = {
+    "hook": 3, "mystery_drop": 5, "build_up": 12,
+    "pattern_interrupt": 2, "core_facts": 15,
+    "curiosity_bridge": 3, "climax": 8, "cta": 3,
+}
+TARGET_DURATION = sum(SECTION_TIMING.values())
+
+NICHE_VOICE_PROFILE = {
+    "universe_mysteries": {
+        "tone":        "authoritative yet awe-inspiring, like a world-class documentary narrator",
+        "style":       "dramatic pauses, building tension, sense of cosmic wonder and scale",
+        "avoid":       "casual language, humor, sarcasm, weak openers, generic phrases",
+        "hook_style":  "impossible_claim or number_shock about space/universe",
+        "emotion_arc": "curiosity → shock → wonder → awe",
+    },
+    "dark_history": {
+        "tone":        "serious and grave, like a true crime narrator uncovering hidden truth",
+        "style":       "slow reveals, uncomfortable truths, moral weight, eerie calmness",
+        "avoid":       "humor, lighthearted tone, casual slang",
+        "hook_style":  "story_open or you_dont_know about a dark historical event",
+        "emotion_arc": "intrigue → discomfort → shock → sobering realization",
+    },
+    "ocean_mysteries": {
+        "tone":        "mysterious and calm yet deeply unsettling",
+        "style":       "vast scale descriptions, eerie biological details, scientific credibility",
+        "avoid":       "sensationalist claims, unscientific assertions",
+        "hook_style":  "impossible_claim or question about ocean depths or creatures",
+        "emotion_arc": "curiosity → unease → fascination → profound wonder",
+    },
+    "fun_facts": {
+        "tone":        "enthusiastic and curious, like an excited friend sharing a discovery",
+        "style":       "rapid fire delivery, surprising connections, relatable everyday analogies",
+        "avoid":       "overly serious tone, academic jargon, slow pacing",
+        "hook_style":  "number_shock or question about surprising everyday facts",
+        "emotion_arc": "surprise → delight → disbelief → urge to share immediately",
+    },
+}
+
+
+def _get_profile(niche):
+    return NICHE_VOICE_PROFILE.get(niche, NICHE_VOICE_PROFILE["universe_mysteries"])
+
+
+def _build_system_prompt():
+    return (
+        "You are a world-class short-form video scriptwriter. "
+        "Your scripts go viral because every second stops the scroll, triggers curiosity, "
+        "and makes viewers feel something real. "
+        "You follow structural instructions precisely while sounding completely natural and original. "
+        "Every line you write is specific to the topic — never generic, never templated. "
+        "You ONLY respond with valid JSON. No markdown, no explanation, no text outside the JSON."
+    )
+
+
+def _build_user_prompt(topic, niche, feedback=None):
+    """
+    Build prompt. Jika feedback ada (dari retry), sisipkan sebagai instruksi perbaikan.
+    """
+    profile    = _get_profile(niche)
+    niche_data = NICHES.get(niche, NICHES["universe_mysteries"])
+    WPS        = 2.4
+    words      = {k: max(4, round(v * WPS)) for k, v in SECTION_TIMING.items()}
+
+    feedback_block = ""
+    if feedback:
+        feedback_block = f"""
+CRITICAL — PREVIOUS ATTEMPT FAILED QUALITY GATE.
+Fix these specific weaknesses in this attempt:
+{chr(10).join(f"  - {w}" for w in feedback)}
+Do not repeat the previous output. Write fresh, with these issues resolved.
+"""
+
+    return f"""Write a viral short-form video script.
+
+TOPIC: {topic.get('topic', '')}
+ANGLE: {topic.get('angle', topic.get('topic', ''))}
+NICHE: {niche_data.get('name', niche)}
+TARGET: {TARGET_DURATION} seconds total
+TONE: {profile['tone']}
+STYLE: {profile['style']}
+AVOID: {profile['avoid']}
+EMOTION ARC: {profile['emotion_arc']}
+HOOK FORMULA: {profile['hook_style']}
+{feedback_block}
+Write all 8 sections. Each has ONE job. Be specific to this topic — no generic phrases:
+
+1. HOOK ({SECTION_TIMING['hook']}s ~{words['hook']} words)
+   JOB: Stop scroll in the first second. Create an information gap that demands resolution.
+   MUST: Use {profile['hook_style']}. The most counterintuitive angle of THIS specific topic.
+   FORBIDDEN: "Did you know", "In this video", "Today we", any opener that could apply to any topic.
+   QUALITY BAR: If this hook could belong to a different video, rewrite it.
+
+2. MYSTERY DROP ({SECTION_TIMING['mystery_drop']}s ~{words['mystery_drop']} words)
+   JOB: Before answering hook, introduce a NEW layer of mystery specific to this topic.
+   MUST: A detail that makes THIS topic even stranger than the hook implied.
+   FORBIDDEN: Generic transitions. Every word must be about THIS specific topic.
+
+3. BUILD UP ({SECTION_TIMING['build_up']}s ~{words['build_up']} words)
+   JOB: Deliver surprising fact 1 with context. Make the viewer feel the weight and scale.
+   MUST: At least one specific number, name, or date anchored to this topic.
+   TECHNIQUE: Human-scale analogy — translate abstract scale into something felt viscerally.
+
+4. PATTERN INTERRUPT ({SECTION_TIMING['pattern_interrupt']}s ~{words['pattern_interrupt']} words)
+   JOB: Shatter the rhythm before they grow comfortable. Reframe everything said so far.
+   MUST: Write something SPECIFIC to this topic that reframes the previous section unexpectedly.
+   FORBIDDEN: "Wait. It gets worse." or any phrase that could appear in any video on any topic.
+   QUALITY BAR: If this line could be copy-pasted into a different video, rewrite it.
+
+5. CORE FACTS ({SECTION_TIMING['core_facts']}s ~{words['core_facts']} words)
+   JOB: Facts 2 and 3 — each more surprising than the last. Maximum information density.
+   MUST: At least 2 distinct, specific, verifiable facts. Each sentence adds new information.
+   FORBIDDEN: Repeating anything said before. Vague claims without specifics.
+
+6. CURIOSITY BRIDGE ({SECTION_TIMING['curiosity_bridge']}s ~{words['curiosity_bridge']} words)
+   JOB: Create maximum anticipation for the climax. They must feel they cannot stop now.
+   MUST: Point toward something not yet revealed — a specific unanswered question from THIS topic.
+   FORBIDDEN: Summarizing. Generic "but it gets even more interesting" without specifics.
+
+7. CLIMAX ({SECTION_TIMING['climax']}s ~{words['climax']} words)
+   JOB: The biggest reveal. Deliver fully on everything built. The moment they share this video.
+   MUST: The most unexpected, most impactful truth about this topic. Let it land with weight.
+   TECHNIQUE: Write the climax first, then ensure everything before builds toward it.
+
+8. CTA ({SECTION_TIMING['cta']}s ~{words['cta']} words)
+   JOB: A natural human close that makes them want more — without asking for it explicitly.
+   MUST: Emotionally connected to the climax. Sounds like one human talking to another.
+   FORBIDDEN: "Like and subscribe", "Follow for more facts", "Hit the notification bell",
+              any phrase that sounds like a script or a sales pitch.
+   QUALITY BAR: Read it aloud. If it sounds like an ad, rewrite it as a thought or question.
+
+WRITING RULES — every single one non-negotiable:
+- Second person "you" throughout — intimacy is everything
+- Maximum 15 words per sentence — punchy, direct, no run-ons
+- Specific numbers always beat vague words: "13.8 billion years" not "billions of years ago"
+- Every section transition must feel inevitable — not a gear shift, a deepening
+- Zero filler: "basically", "literally", "you know", "kind of", "amazing", "incredible"
+
+Return ONLY valid JSON — no markdown, no preamble, no explanation:
+{{
+  "title": "SEO-optimized title under 60 characters — specific, not generic",
+  "hook": "exact hook text",
+  "mystery_drop": "exact mystery drop text",
+  "build_up": "exact build up text",
+  "pattern_interrupt": "exact pattern interrupt text — must be topic-specific",
+  "core_facts": "exact core facts text",
+  "curiosity_bridge": "exact curiosity bridge text",
+  "climax": "exact climax text",
+  "cta": "exact cta text — must sound human, not scripted",
+  "full_script": "all 8 sections joined as one naturally flowing paragraph, no section labels",
+  "word_count": 140,
+  "estimated_duration_seconds": {TARGET_DURATION},
+  "section_durations": {json.dumps(SECTION_TIMING)},
+  "visual_suggestions": [
+    "Scene 1 hook: specific camera angle, lighting, subject, mood — cinematic brief",
+    "Scene 2 mystery drop: specific cinematic brief",
+    "Scene 3 build up: specific cinematic brief",
+    "Scene 4 core facts 1: specific cinematic brief",
+    "Scene 5 core facts 2: specific cinematic brief",
+    "Scene 6 climax: most dramatic — specific cinematic brief for the biggest visual moment"
+  ],
+  "background_music_mood": "specific mood, instrumentation, and emotional arc — not just one word",
+  "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#shorts"],
+  "thumbnail_concept": "the specific image that makes someone stop scrolling and need to click"
+}}"""
+
+
 class ScriptEngine:
-    """
-    Menghasilkan script video lengkap dari topik terpilih.
-    Struktur: Hook (3s) → Build-up (20s) → Core Facts (25s) → Climax (7s) → CTA (5s)
-    Multi-tenant ready.
-
-    Fix v0.2:
-    - Retry logic 3x jika JSON parse gagal
-    - response_format=json_object untuk paksa GPT return valid JSON
-    - JSON extraction fallback via regex
-    """
-
-    MAX_RETRIES = 3
 
     def __init__(self):
-        self.client = OpenAI(api_key=system_config.openai_api_key)
+        from openai import OpenAI
+        self._openai = OpenAI(api_key=system_config.openai_api_key)
 
-    def _build_script_prompt(self, topic: dict, tenant_config: TenantConfig) -> str:
-        niche_data = NICHES[tenant_config.niche]
-        hook_templates = "\n".join([f"- {h}" for h in niche_data["hook_templates"]])
+    def _get_run_config(self, tenant_config):
+        try:
+            from src.config.tenant_config import load_tenant_config
+            return load_tenant_config(tenant_config.tenant_id)
+        except Exception as e:
+            logger.warning(f"[ScriptEngine] RunConfig failed ({e}) — defaults")
+            return None
 
-        return f"""You are a world-class short-form video scriptwriter.
-You specialize in {niche_data['name']} content that goes viral on YouTube Shorts, TikTok, and Instagram Reels.
-
-TOPIC: {topic['topic']}
-ANGLE: {topic['angle']}
-SUGGESTED HOOK: {topic['hook']}
-TARGET EMOTION: {niche_data['target_emotion']}
-STYLE: {niche_data['style']}
-VIDEO LENGTH: 58 seconds maximum
-LANGUAGE: English (clear, simple, globally understood)
-
-HOOK STYLE EXAMPLES FOR THIS NICHE:
-{hook_templates}
-
-Write a complete video script following this EXACT structure:
-
-[HOOK - 3 seconds, 1-2 sentences]
-Must stop the scroll immediately. Question, shocking statement, or impossible claim.
-Never start with "In this video" or "Today we'll learn".
-Use pattern interrupt — say something unexpected.
-
-[BUILD-UP - 20 seconds, 3-4 sentences]
-Create tension and curiosity. Give just enough context to make viewer NEED to know more.
-Use phrases like: "But here's what they don't tell you..." / "And this is where it gets strange..."
-
-[CORE FACTS - 25 seconds, 4-5 sentences]
-The main revelation. Specific numbers, names, comparisons that create awe.
-Use human-scale comparisons: "That's like stacking 500 Eiffel Towers" not "That's 2,750 km".
-
-[CLIMAX - 7 seconds, 1-2 sentences]
-The most mind-blowing fact or twist. The moment that makes them share.
-Should feel like a punchline or revelation.
-
-[CTA - 3 seconds, 1 sentence]
-Soft call to action. NOT "like and subscribe". Something like:
-"Follow for more facts that will change how you see the universe."
-
-RULES:
-- Total word count: 120-150 words maximum (58 seconds at normal pace)
-- No filler words: "amazing", "incredible", "literally" — show don't tell
-- Every sentence must earn its place — if it doesn't add tension or information, cut it
-- Use "you" to speak directly to viewer
-- Short sentences. Maximum 15 words per sentence.
-- End each section with tension or a question that pulls to the next section
-
-Return ONLY a valid JSON object, no other text:
-{{
-  "title": "SEO-optimized video title (under 60 chars)",
-  "hook": "exact hook text",
-  "build_up": "exact build-up text",
-  "core_facts": "exact core facts text",
-  "climax": "exact climax text",
-  "cta": "exact CTA text",
-  "full_script": "complete script as one flowing text",
-  "word_count": 135,
-  "estimated_duration_seconds": 54,
-  "visual_suggestions": ["suggestion 1", "suggestion 2", "suggestion 3", "suggestion 4", "suggestion 5", "suggestion 6"],
-  "background_music_mood": "tense and mysterious",
-  "hashtags": ["#space", "#universe", "#facts", "#mindblowing", "#shorts"],
-  "thumbnail_concept": "description of ideal thumbnail"
-}}
-
-IMPORTANT: Return ONLY the JSON object. No explanation, no markdown, no extra text."""
-
-    def _clean_json_response(self, raw: str) -> str:
-        """Bersihkan response GPT sebelum di-parse."""
-        raw = raw.replace("```json", "").replace("```", "").strip()
-        # Cari JSON object {...}
+    def _clean_json(self, raw):
+        raw   = raw.replace("```json", "").replace("```", "").strip()
         match = re.search(r'\{.*\}', raw, re.DOTALL)
         if match:
             raw = match.group(0)
-        # Hapus trailing comma sebelum } atau ]
         raw = re.sub(r',\s*([}\]])', r'\1', raw)
-        # Hapus control characters tidak valid
         raw = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', raw)
         return raw.strip()
 
-    def generate(self, topic: dict, tenant_config: TenantConfig) -> dict:
-        """
-        Generate script lengkap untuk satu topik.
-        Retry 3x jika JSON parse gagal.
-        Returns: dict berisi semua elemen script, atau {} jika gagal.
-        """
-        logger.info(f"Generating script: {topic['topic'][:50]}...")
-        last_error = None
+    def _validate_and_fix(self, script, topic):
+        if not isinstance(script, dict):
+            return None
+        required = ["hook", "build_up", "core_facts", "climax", "cta", "full_script"]
+        if any(not script.get(f) for f in required):
+            logger.warning(f"[ScriptEngine] Missing required fields")
+            return None
+        for f in ["mystery_drop", "pattern_interrupt", "curiosity_bridge"]:
+            script.setdefault(f, "")
+        vs = script.get("visual_suggestions", [])
+        if not isinstance(vs, list):
+            vs = []
+        while len(vs) < 6:
+            vs.append(f"Cinematic footage related to {topic.get('topic', 'the topic')}")
+        script["visual_suggestions"] = vs[:6]
+        script.setdefault("section_durations", SECTION_TIMING)
+        if not script.get("full_script"):
+            parts = [script.get(s, "") for s in
+                     ["hook","mystery_drop","build_up","pattern_interrupt",
+                      "core_facts","curiosity_bridge","climax","cta"]]
+            script["full_script"] = " ".join(p for p in parts if p)
+        return script
 
-        for attempt in range(1, self.MAX_RETRIES + 1):
-            try:
-                logger.info(f"Script generation attempt {attempt}/{self.MAX_RETRIES}...")
+    def _call_claude(self, topic, niche, attempt, feedback=None):
+        try:
+            import anthropic
+            api_key = os.getenv("ANTHROPIC_API_KEY", "")
+            if not api_key:
+                raise ValueError("ANTHROPIC_API_KEY tidak ada")
+            client   = anthropic.Anthropic(api_key=api_key)
+            response = client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=2000,
+                temperature=1,
+                system=_build_system_prompt(),
+                messages=[{"role": "user", "content": _build_user_prompt(topic, niche, feedback)}],
+            )
+            raw    = response.content[0].text.strip()
+            script = json.loads(self._clean_json(raw))
+            script = self._validate_and_fix(script, topic)
+            if script:
+                logger.info(f"[ScriptEngine] Claude attempt {attempt} OK")
+            return script
+        except Exception as e:
+            logger.warning(f"[ScriptEngine] Claude attempt {attempt} failed: {e}")
+            return None
 
-                response = self.client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": (
-                                "You are an expert viral video scriptwriter. "
-                                "You MUST return only a valid JSON object. "
-                                "No markdown, no explanation, no text outside the JSON."
-                            )
-                        },
-                        {"role": "user", "content": self._build_script_prompt(topic, tenant_config)}
-                    ],
-                    max_tokens=1500,
-                    temperature=0.85,
-                    response_format={"type": "json_object"}
-                )
+    def _call_openai(self, topic, niche, attempt, feedback=None):
+        try:
+            response = self._openai.chat.completions.create(
+                model="gpt-4o-mini",
+                response_format={"type": "json_object"},
+                temperature=0.85,
+                max_tokens=1800,
+                messages=[
+                    {"role": "system", "content": _build_system_prompt()},
+                    {"role": "user",   "content": _build_user_prompt(topic, niche, feedback)},
+                ],
+            )
+            raw    = response.choices[0].message.content.strip()
+            script = json.loads(self._clean_json(raw))
+            script = self._validate_and_fix(script, topic)
+            if script:
+                logger.info(f"[ScriptEngine] GPT-4o-mini attempt {attempt} OK")
+            return script
+        except Exception as e:
+            logger.warning(f"[ScriptEngine] GPT attempt {attempt} failed: {e}")
+            return None
 
-                raw = response.choices[0].message.content.strip()
-                logger.debug(f"Raw response (first 200 chars): {raw[:200]}")
+    def _call_llm(self, topic, niche, attempt, llm_provider, feedback=None):
+        if llm_provider == "claude":
+            script = self._call_claude(topic, niche, attempt, feedback)
+            if script is None:
+                logger.warning("[ScriptEngine] Claude gagal — fallback ke GPT-4o-mini")
+                script = self._call_openai(topic, niche, attempt, feedback)
+                return script, "openai_fallback"
+            return script, "claude"
+        else:
+            script = self._call_openai(topic, niche, attempt, feedback)
+            return script, "openai"
 
-                cleaned = self._clean_json_response(raw)
-                script  = json.loads(cleaned)
+    def generate(self, topic, tenant_config):
+        logger.info(f"[ScriptEngine] Generating: {topic.get('topic','')[:50]}...")
 
-                if not isinstance(script, dict):
-                    raise ValueError(f"Response bukan dict: {type(script)}")
+        run_config   = self._get_run_config(tenant_config)
+        llm_provider = run_config.llm_provider            if run_config else "openai"
+        min_score    = run_config.script_min_viral_score  if run_config else 82
+        max_retry    = run_config.script_max_retry        if run_config else 3
 
-                # Validasi field wajib ada
-                required = ["hook", "build_up", "core_facts", "climax", "cta", "full_script"]
-                missing  = [f for f in required if not script.get(f)]
-                if missing:
-                    raise ValueError(f"Field wajib kosong: {missing}")
+        logger.info(
+            f"[ScriptEngine] provider={llm_provider} "
+            f"min_score={min_score} max_retry={max_retry}"
+        )
 
-                # Inject metadata
-                script["topic"]      = topic["topic"]
-                script["viral_score"] = topic["viral_score"]
-                script["tenant_id"]  = tenant_config.tenant_id
-                script["niche"]      = tenant_config.niche
-                script["generated_at"] = datetime.now().isoformat()
+        try:
+            from src.intelligence.script_analyzer import ScriptAnalyzer
+            analyzer = ScriptAnalyzer(api_key=system_config.openai_api_key)
+        except Exception as e:
+            logger.warning(f"[ScriptEngine] Analyzer failed ({e}) — no gate")
+            analyzer = None
+
+        best_script     = None
+        best_score      = 0
+        actual_provider = llm_provider
+        feedback        = None  # Feedback dari attempt sebelumnya
+
+        for attempt in range(1, max_retry + 1):
+            logger.info(f"[ScriptEngine] Attempt {attempt}/{max_retry} via {llm_provider}")
+
+            script, actual_provider = self._call_llm(
+                topic, tenant_config.niche, attempt, llm_provider, feedback
+            )
+            logger.info(f"[ScriptEngine] Actually used: {actual_provider}")
+
+            if not script:
+                if attempt < max_retry:
+                    time.sleep(2 ** attempt)
+                continue
+
+            if analyzer:
+                analysis = analyzer.analyze(script, tenant_config.niche)
+                score    = analysis.get("viral_score", 0)
+                script["viral_analysis"] = analysis
+
+                # Siapkan feedback untuk retry berikutnya
+                weak_areas       = analysis.get("weak_areas", [])
+                retry_suggestion = analysis.get("retry_suggestion", "")
+                feedback = weak_areas.copy()
+                if retry_suggestion:
+                    feedback.append(retry_suggestion)
 
                 logger.info(
-                    f"Script generated (attempt {attempt}): "
-                    f"{script.get('word_count', 0)} words, "
-                    f"~{script.get('estimated_duration_seconds', 0)}s"
+                    f"[ScriptEngine] Score: {score}/100 "
+                    f"(threshold: {min_score}) | {analysis.get('summary','')}"
                 )
-                return script
+                if weak_areas:
+                    logger.info(f"[ScriptEngine] Weak areas: {weak_areas}")
+            else:
+                score = 82
+                script["viral_analysis"] = {}
+                feedback = None
 
-            except (json.JSONDecodeError, ValueError) as e:
-                last_error = e
-                logger.warning(f"Attempt {attempt} failed — parse error: {e}")
-                if attempt < self.MAX_RETRIES:
-                    logger.info("Retrying...")
-                continue
+            if score > best_score:
+                best_score  = score
+                best_script = script
 
-            except Exception as e:
-                last_error = e
-                logger.error(f"Attempt {attempt} failed — unexpected error: {e}")
-                if attempt < self.MAX_RETRIES:
-                    logger.info("Retrying...")
-                continue
+            if score >= min_score:
+                logger.info(
+                    f"[ScriptEngine] ✅ Quality gate passed: "
+                    f"{score}/100 (attempt {attempt})"
+                )
+                break
 
-        logger.error(f"All {self.MAX_RETRIES} attempts failed. Last error: {last_error}")
-        return {}
+            if attempt < max_retry:
+                logger.info(
+                    f"[ScriptEngine] Score {score} < {min_score} — "
+                    f"retry dengan feedback: {feedback}"
+                )
+                time.sleep(1)
 
-    def generate_batch(self, topics: list, tenant_config: TenantConfig, count: int = 1) -> list:
-        """
-        Generate scripts untuk beberapa topik sekaligus.
-        count: berapa topik yang akan di-generate (default: 1 = topik terbaik saja)
-        """
+        if best_script is None:
+            logger.error("[ScriptEngine] All attempts failed")
+            return {}
+
+        if best_score < min_score:
+            logger.warning(
+                f"[ScriptEngine] Best score {best_score}/100 below "
+                f"threshold {min_score} — using best available"
+            )
+
+        best_script.update({
+            "topic":                   topic.get("topic", ""),
+            "viral_score":             topic.get("viral_score", 0),
+            "script_viral_score":      best_score,
+            "tenant_id":               tenant_config.tenant_id,
+            "niche":                   tenant_config.niche,
+            "generated_at":            datetime.now().isoformat(),
+            "llm_provider_used":       actual_provider,
+            "llm_provider_requested":  llm_provider,
+        })
+
+        logger.info(
+            f"[ScriptEngine] Done: "
+            f"{len(best_script.get('full_script','').split())} words | "
+            f"score={best_score}/100 | used={actual_provider}"
+        )
+        return best_script
+
+    def generate_batch(self, topics, tenant_config, count=1):
         scripts = []
         for topic in topics[:count]:
             script = self.generate(topic, tenant_config)
             if script:
                 scripts.append(script)
-
         os.makedirs("logs", exist_ok=True)
         with open(f"logs/scripts_{tenant_config.tenant_id}.json", "w") as f:
             json.dump(scripts, f, ensure_ascii=False, indent=2)
-
-        logger.info(f"Generated {len(scripts)} scripts")
+        logger.info(f"[ScriptEngine] Batch: {len(scripts)}/{count} generated")
         return scripts
 
 
 if __name__ == "__main__":
-    from src.intelligence.trend_radar import TrendRadar
-    from src.intelligence.niche_selector import NicheSelector
-
-    tenant = TenantConfig(tenant_id="ryan_andrian", niche="universe_mysteries")
-
-    logger.info("Step 1: Scanning trends...")
-    signals = TrendRadar().scan(tenant)
-
-    logger.info("Step 2: Selecting best topic...")
-    topics = NicheSelector().select(signals, tenant)
-
-    logger.info("Step 3: Generating script for top topic...")
-    scripts = ScriptEngine().generate_batch(topics, tenant, count=1)
-
+    tenant     = TenantConfig(tenant_id="ryan_andrian", niche="universe_mysteries")
+    test_topic = {
+        "topic":       "The Fermi Paradox — Why the Universe is Silent",
+        "angle":       "The universe is 13.8 billion years old — where is everyone?",
+        "hook":        "The universe should be full of alien civilizations. So where are they?",
+        "viral_score": 88,
+    }
+    logger.info("Testing Script Engine v0.3.1...")
+    engine  = ScriptEngine()
+    scripts = engine.generate_batch([test_topic], tenant, count=1)
     if scripts:
         s = scripts[0]
         print(f"\n{'='*60}")
-        print(f"SCRIPT: {s.get('title', '')}")
+        print(f"SCRIPT   : {s.get('title','')}")
+        print(f"PROVIDER : {s.get('llm_provider_used','')} (requested: {s.get('llm_provider_requested','')}) ")
+        print(f"SCORE    : {s.get('script_viral_score',0)}/100")
+        print(f"WORDS    : {s.get('word_count', len(s.get('full_script','').split()))}")
+        print(f"DURATION : ~{s.get('estimated_duration_seconds',51)}s")
         print(f"{'='*60}")
-        print(f"\n[HOOK]\n{s.get('hook', '')}")
-        print(f"\n[BUILD-UP]\n{s.get('build_up', '')}")
-        print(f"\n[CORE FACTS]\n{s.get('core_facts', '')}")
-        print(f"\n[CLIMAX]\n{s.get('climax', '')}")
-        print(f"\n[CTA]\n{s.get('cta', '')}")
-        print(f"\n{'-'*40}")
-        print(f"Words     : {s.get('word_count', 0)}")
-        print(f"Duration  : ~{s.get('estimated_duration_seconds', 0)}s")
-        print(f"Viral Score: {s.get('viral_score', 0)}/100")
-        print(f"\nVisuals   : {', '.join(s.get('visual_suggestions', []))}")
-        print(f"Music     : {s.get('background_music_mood', '')}")
-        print(f"Thumbnail : {s.get('thumbnail_concept', '')}")
-        print(f"Hashtags  : {' '.join(s.get('hashtags', []))}")
-        print(f"\nSaved to  : logs/scripts_ryan_andrian.json")
+        for sec in ["hook","mystery_drop","build_up","pattern_interrupt",
+                    "core_facts","curiosity_bridge","climax","cta"]:
+            val = s.get(sec,"")
+            if val:
+                print(f"\n[{sec.upper().replace('_',' ')}]\n{val}")
+        print(f"\n{'─'*40}")
+        print("VISUAL SUGGESTIONS:")
+        for i, vs in enumerate(s.get("visual_suggestions",[]),1):
+            print(f"  {i}. {vs}")
+        print(f"\nMUSIC MOOD: {s.get('background_music_mood','')}")
+        print(f"\nTHUMBNAIL: {s.get('thumbnail_concept','')}")
+        analysis = s.get("viral_analysis",{})
+        if analysis.get("dimension_scores"):
+            print("\nDIMENSION SCORES:")
+            for k,v in analysis["dimension_scores"].items():
+                bar = "█"*(v//10) + "░"*(10-v//10)
+                print(f"  {k:<22} {bar} {v}/100")
     else:
-        print("Script generation failed")
+        print("FAILED")

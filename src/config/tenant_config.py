@@ -80,6 +80,13 @@ class TenantRunConfig:
     # 'ai_image:flux-schnell' → AI generated image + motion (cheaper)
     # 'ai_video:*'         → AI video generation (DISABLED v0.2)
 
+    # Fase 6C fields
+    script_min_viral_score: int            = 75
+    script_max_retry:       int            = 3
+    tts_voice_per_niche:    Optional[dict] = None
+    music_enabled:          bool           = False
+    caption_style:          Optional[dict] = None
+
     # Developer tenant
     is_developer:       bool  = False
     discount_pct:       int   = 0
@@ -326,6 +333,11 @@ class TenantConfigManager:
                 visual_mode=row.get("visual_mode", "video"),
                 is_developer=row.get("is_developer", False),
                 discount_pct=row.get("discount_pct", 0),
+                script_min_viral_score=row.get("script_min_viral_score", 75),
+                script_max_retry=row.get("script_max_retry", 3),
+                tts_voice_per_niche=row.get("tts_voice_per_niche") if isinstance(row.get("tts_voice_per_niche"), dict) else None,
+                music_enabled=row.get("music_enabled", False),
+                caption_style=row.get("caption_style") if isinstance(row.get("caption_style"), dict) else None,
             )
 
         except Exception as e:
@@ -345,6 +357,11 @@ class TenantConfigManager:
             publish_slots=["13:00"],
             production_cron="0 13 * * *",
             analytics_cron="0 13 * * *",
+            script_min_viral_score=75,
+            script_max_retry=3,
+            music_enabled=False,
+            tts_voice_per_niche=None,
+            caption_style=None,
         )
 
     def invalidate_cache(self, tenant_id: str) -> None:
