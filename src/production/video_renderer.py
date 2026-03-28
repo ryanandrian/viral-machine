@@ -69,16 +69,29 @@ class VideoRenderer:
             return 5.0
 
     def _create_clip_list(self, clips: list, target_duration: float, output_dir: str) -> str:
+        """
+        Fase 6C s6c1: durasi per clip = audio_duration / n_clips.
+        Clip terakhir = sisa waktu — tidak ada loop/repeat.
+        """
         list_path = os.path.join(output_dir, "clip_list.txt")
-        total, entries, idx = 0.0, [], 0
-        while total < target_duration:
-            clip = clips[idx % len(clips)]
-            dur  = self._get_video_duration(clip)
-            entries.append(f"file '{os.path.abspath(clip)}'\n")
-            total += dur
-            idx   += 1
+        n         = len(clips)
+        dur_each  = round(target_duration / n, 4)
+        entries   = []
+
+        for i, clip in enumerate(clips):
+            dur      = dur_each if i < n - 1 else round(target_duration - dur_each * (n - 1), 4)
+            abs_path = os.path.abspath(clip)
+            entries.append(f"file '{abs_path}'\n")
+            entries.append(f"duration {dur}\n")
+
         with open(list_path, "w") as f:
             f.writelines(entries)
+
+        total_actual = dur_each * (n - 1) + round(target_duration - dur_each * (n - 1), 4)
+        logger.info(
+            f"[Renderer] clip_list: {n} clips x {dur_each}s = {total_actual:.3f}s"
+            f" (target: {target_duration:.3f}s) — no repeat"
+        )
         return list_path
 
     def _generate_subtitles_from_timestamps(
