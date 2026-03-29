@@ -106,12 +106,23 @@ class ElevenLabsProvider(TTSProvider):
         logger.info(f"[ElevenLabs] voice={self.voice} chars={len(text)}")
 
         try:
-            client   = AsyncElevenLabs(api_key=self.api_key)
+            from elevenlabs import VoiceSettings
+            client = AsyncElevenLabs(api_key=self.api_key)
+            niche  = self.config.get("niche", "universe_mysteries")
+            NICHE_VS = {
+                "universe_mysteries": VoiceSettings(stability=0.40, similarity_boost=0.75, style=0.50, speed=0.82),
+                "dark_history":       VoiceSettings(stability=0.35, similarity_boost=0.75, style=0.55, speed=0.80),
+                "ocean_mysteries":    VoiceSettings(stability=0.45, similarity_boost=0.75, style=0.40, speed=0.83),
+                "fun_facts":          VoiceSettings(stability=0.50, similarity_boost=0.80, style=0.35, speed=0.90),
+            }
+            voice_settings = NICHE_VS.get(niche, NICHE_VS["universe_mysteries"])
+            logger.info(f"[ElevenLabs] speed={voice_settings.speed} style={voice_settings.style}")
             response = await client.text_to_speech.convert_with_timestamps(
                 voice_id=self.voice,
                 text=text,
                 model_id="eleven_turbo_v2_5",
                 output_format="mp3_44100_128",
+                voice_settings=voice_settings,
             )
 
             # Decode audio dari base64 (SDK v2.40.0)

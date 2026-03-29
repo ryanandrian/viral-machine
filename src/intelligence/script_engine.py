@@ -138,16 +138,17 @@ Write all 8 sections. Each has ONE job. Be specific to this topic — no generic
    TECHNIQUE: Write the climax first, then ensure everything before builds toward it.
 
 8. CTA ({SECTION_TIMING['cta']}s ~{words['cta']} words)
-   JOB: A natural human close that makes them want more — without asking for it explicitly.
-   MUST: Emotionally connected to the climax. Sounds like one human talking to another.
-   FORBIDDEN: "Like and subscribe", "Follow for more facts", "Hit the notification bell",
-              any phrase that sounds like a script or a sales pitch.
-   QUALITY BAR: Read it aloud. If it sounds like an ad, rewrite it as a thought or question.
+   JOB: Make them follow without asking directly. Emotional + curiosity hook to next video.
+   MUST: End with ONE of these — a question they must answer, a teaser for what comes next,
+         or a statement so intriguing they NEED to follow to find out more.
+   EXAMPLE PATTERNS (adapt to topic, never copy verbatim):
+     - 'Follow — tomorrow we reveal what [specific next mystery] means for you.'
+     - 'The answer changes everything. Follow to find out what scientists discovered next.'
+     - 'That question has one answer. Follow this channel — it drops tomorrow.'
+   FORBIDDEN: 'Like and subscribe', 'Hit the bell', generic phrases unrelated to topic.
+   QUALITY BAR: Must contain implicit or explicit reason to follow. Topic-specific always.
 
 WRITING RULES — every single one non-negotiable:
-- Second person "you" throughout — intimacy is everything
-- Maximum 15 words per sentence — punchy, direct, no run-ons
-- Specific numbers always beat vague words: "13.8 billion years" not "billions of years ago"
 - Every section transition must feel inevitable — not a gear shift, a deepening
 - Zero filler: "basically", "literally", "you know", "kind of", "amazing", "incredible"
 
@@ -167,13 +168,12 @@ Return ONLY valid JSON — no markdown, no preamble, no explanation:
   "estimated_duration_seconds": {TARGET_DURATION},
   "section_durations": {json.dumps(SECTION_TIMING)},
   "visual_suggestions": [
-    "Scene 1 hook: specific camera angle, lighting, subject, mood — cinematic brief",
-    "Scene 2 mystery drop: specific cinematic brief",
-    "Scene 3 build up: specific cinematic brief",
-    "Scene 4 core facts 1: specific cinematic brief",
-    "Scene 5 core facts 2: specific cinematic brief",
-    "Scene 6 climax: most dramatic — specific cinematic brief for the biggest visual moment"
-  ],
+    "Scene 1 hook: [SUBJECT dari hook] — dramatic still photo, single striking focal point, photorealistic, NASA/National Geographic quality, vertical 9:16, no text, no split-screen",
+    "Scene 2 mystery drop: [SUBJECT dari mystery_drop] — mysterious atmosphere, low-key lighting, single subject, photorealistic, cinematic vertical 9:16, no text",
+    "Scene 3 build up: [SUBJECT dari build_up] — epic scale, wide establishing shot, dramatic lighting, photorealistic, NASA documentary style, vertical 9:16, no text",
+    "Scene 4 core facts 1: [SUBJECT spesifik dari core_facts] — detail shot, unexpected angle, photorealistic, high contrast, vertical 9:16, no text",
+    "Scene 5 core facts 2: [SUBJECT spesifik dari core_facts lanjutan] — tension building, dramatic composition, photorealistic, vertical 9:16, no text",
+    "Scene 6 climax: [SUBJECT dari climax] — most powerful composition, overwhelming scale or emotion, photorealistic masterpiece, vertical 9:16, no text, no people unless essential"
   "background_music_mood": "specific mood, instrumentation, and emotional arc — not just one word",
   "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#shorts"],
   "thumbnail_concept": "the specific image that makes someone stop scrolling and need to click"

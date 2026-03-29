@@ -167,7 +167,9 @@ class Pipeline:
 
             # ── STEP 6: Visual Assembly ─────────────────────────────
             logger.info("STEP 6/7 | Assembling visuals...")
-            clips = self.visual_assembler.assemble(script, tenant_config)
+            audio_duration = self.tts_engine.get_duration(audio_path)
+            logger.info(f"[Pipeline] Audio duration: {audio_duration:.1f}s — scaling clips")
+            clips = self.visual_assembler.assemble(script, tenant_config, audio_duration=audio_duration)
             if not clips:
                 raise Exception("Visual assembly failed — no clips downloaded")
             result["steps"]["visuals"] = {"status": "ok", "clips": len(clips)}

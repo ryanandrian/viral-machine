@@ -383,28 +383,127 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         )
         temp_path = os.path.join(output_dir, f"temp_{timestamp}.mp4")
 
-        # ── Step A: Concat + scale clips ──────────────────────────────
-        logger.info("Step A: Concatenating and scaling clips to 9:16...")
-        cmd_concat = [
-            "ffmpeg", "-y",
-            "-f", "concat", "-safe", "0", "-i", clip_list_path,
-            "-t", str(audio_duration),
-            "-vf", (
+        # ── Step A: Concat + scale clips dengan crossfade transition ────
+        logger.info("Step A: Concatenating clips with crossfade transition...")
+
+        # Baca durasi per clip dari clip_list.txt
+        clip_durations_actual = []
+        try:
+            with open(clip_list_path) as f:
+                lines_cl = f.readlines()
+            for cl_line in lines_cl:
+                cl_line = cl_line.strip()
+                if cl_line.startswith("duration"):
+                    clip_durations_actual.append(float(cl_line.split()[1]))
+        except Exception as e:
+            logger.warning(f"[Renderer] Could not read clip durations: {e}")
+            clip_durations_actual = [audio_duration / len(clips)] * len(clips)
+
+        # Jika hanya 1 clip atau gagal baca durasi — fallback ke concat biasa
+        if len(clips) < 2 or len(clip_durations_actual) != len(clips):
+            logger.warning("[Renderer] Fallback to simple concat")
+            cmd_concat = [
+                "ffmpeg", "-y",
+                "-f", "concat", "-safe", "0", "-i", clip_list_path,
+                "-t", str(audio_duration),
+                "-vf", (
+                    f"scale={self.OUTPUT_WIDTH}:{self.OUTPUT_HEIGHT}"
+                    f":force_original_aspect_ratio=increase,"
+                    f"crop={self.OUTPUT_WIDTH}:{self.OUTPUT_HEIGHT},"
+                    f"setsar=1,fps={self.FPS}"
+                ),
+                "-c:v", "libx264", "-preset", "fast",
+                "-b:v", self.VIDEO_BITRATE,
+                "-an", temp_path
+            ]
+            result = subprocess.run(cmd_concat, capture_output=True, text=True)
+            if result.returncode != 0:
+                logger.error(f"Concat failed: {result.stderr[-500:]}")
+                return ""
+        else:
+            # Xfade crossfade 0.5 detik antar clip
+            XFADE_DUR = 0.4  # detik crossfade
+            XFADE_TRANSITION = "fade"
+
+            # Build FFmpeg command dengan xfade filter chain
+            cmd_xfade = ["ffmpeg", "-y"]
+
+            # Input: setiap clip sebagai input terpisah
+            for clip_path in clips:
+                cmd_xfade += ["-i", str(clip_path)]
+
+            # Scale filter untuk setiap input
+            scale_filter = (
                 f"scale={self.OUTPUT_WIDTH}:{self.OUTPUT_HEIGHT}"
                 f":force_original_aspect_ratio=increase,"
                 f"crop={self.OUTPUT_WIDTH}:{self.OUTPUT_HEIGHT},"
                 f"setsar=1,fps={self.FPS}"
-            ),
-            "-c:v", "libx264", "-preset", "fast",
-            "-b:v", self.VIDEO_BITRATE,
-            "-an",
-            temp_path
-        ]
-        result = subprocess.run(cmd_concat, capture_output=True, text=True)
-        if result.returncode != 0:
-            logger.error(f"Concat failed: {result.stderr[-500:]}")
-            return ""
+            )
+
+            # Build xfade filter chain
+            filter_parts = []
+
+            # Scale semua input dulu
+            for idx in range(len(clips)):
+                filter_parts.append(f"[{idx}:v]{scale_filter}[v{idx}]")
+
+            # Chain xfade antar clip
+            # offset = durasi_clip_sebelumnya - xfade_duration
+            offset    = 0.0
+            prev_label = "v0"
+            for idx in range(1, len(clips)):
+                offset += clip_durations_actual[idx-1] - XFADE_DUR
+                offset  = max(0, round(offset, 3))
+                if idx < len(clips) - 1:
+                    out_label = f"xf{idx}"
+                else:
+                    out_label = "vout"
+                filter_parts.append(
+                    f"[{prev_label}][v{idx}]xfade=transition={XFADE_TRANSITION}"
+                    f":duration={XFADE_DUR}:offset={offset}[{out_label}]"
+                )
+                prev_label = out_label
+
+            filter_complex = ";".join(filter_parts)
+
+            cmd_xfade += [
+                "-filter_complex", filter_complex,
+                "-map", "[vout]",
+                "-t", str(audio_duration),
+                "-c:v", "libx264", "-preset", "fast",
+                "-b:v", self.VIDEO_BITRATE,
+                "-an", temp_path
+            ]
+
+            logger.info(
+                f"[Renderer] Xfade: {len(clips)} clips, "
+                f"{XFADE_DUR}s crossfade, transition={XFADE_TRANSITION}"
+            )
+            result = subprocess.run(cmd_xfade, capture_output=True, text=True)
+            if result.returncode != 0:
+                logger.warning(f"[Renderer] Xfade failed — fallback to concat: {result.stderr[-300:]}")
+                # Fallback ke concat biasa jika xfade gagal
+                cmd_concat = [
+                    "ffmpeg", "-y",
+                    "-f", "concat", "-safe", "0", "-i", clip_list_path,
+                    "-t", str(audio_duration),
+                    "-vf", (
+                        f"scale={self.OUTPUT_WIDTH}:{self.OUTPUT_HEIGHT}"
+                        f":force_original_aspect_ratio=increase,"
+                        f"crop={self.OUTPUT_WIDTH}:{self.OUTPUT_HEIGHT},"
+                        f"setsar=1,fps={self.FPS}"
+                    ),
+                    "-c:v", "libx264", "-preset", "fast",
+                    "-b:v", self.VIDEO_BITRATE,
+                    "-an", temp_path
+                ]
+                result = subprocess.run(cmd_concat, capture_output=True, text=True)
+                if result.returncode != 0:
+                    logger.error(f"Concat fallback failed: {result.stderr[-500:]}")
+                    return ""
+
         logger.info("Clips concatenated successfully")
+
 
         # ── Step B: Add audio + subtitles ─────────────────────────────
         logger.info("Step B: Adding audio + captions...")

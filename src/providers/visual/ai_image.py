@@ -300,7 +300,7 @@ class AIImageProvider(VisualProvider):
 
                 await self._generate_image(prompt, img_path)
 
-                self._image_to_video(img_path, clip_path, duration=duration)
+                self._image_to_video(img_path, clip_path, duration=duration, clip_index=i)
 
                 size_mb = clip_path.stat().st_size / (1024 * 1024)
                 cost    = self.model_config["cost_per_img"]
@@ -433,28 +433,73 @@ class AIImageProvider(VisualProvider):
     # ──────────────────────────────────────────────
 
     @staticmethod
+    @staticmethod
     def _image_to_video(
         img_path: Path,
         output_path: Path,
         duration: float = 5.0,
+        clip_index: int = 0,
     ) -> None:
         """
-        Konversi gambar statis → video 9:16 dengan Ken Burns zoom effect.
-        duration: dikontrol dari luar — s6c2 akan pass durasi per section.
+        Konversi gambar → video 9:16 dengan Ken Burns effect.
+        Fix G: section-aware motion — setiap clip punya karakter gerakan
+        sesuai posisi dalam narasi agar terasa dinamis seperti footage video.
         """
         fps    = 30
         frames = int(duration * fps)
+        idx    = clip_index % 6
+
+        # Section-aware Ken Burns motions
+        # Kecepatan disesuaikan dengan durasi — clip pendek lebih agresif
+        speed_zoom_in  = round(0.5 / frames, 6)   # zoom in speed
+        speed_zoom_out = round(0.5 / frames, 6)   # zoom out speed
+
+        SECTION_MOTIONS = {
+            0: (  # Hook — zoom in agresif, langsung grab attention
+                f"scale=8000:-1,"
+                f"zoompan=z='min(zoom+{speed_zoom_in*2:.6f},1.5)':d={frames}"
+                f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920,"
+                f"setsar=1"
+            ),
+            1: (  # Mystery Drop — zoom out perlahan, reveal skala misteri
+                f"scale=8000:-1,"
+                f"zoompan=z='if(eq(on,1),1.5,max(zoom-{speed_zoom_out:.6f},1.0))':d={frames}"
+                f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920,"
+                f"setsar=1"
+            ),
+            2: (  # Build Up — diagonal pan, kesan perjalanan dan eksplorasi
+                f"scale=8000:-1,"
+                f"zoompan=z='1.3':d={frames}"
+                f":x='(iw-iw/zoom)*on/{frames}':y='(ih-ih/zoom)*on/{frames}':s=1080x1920,"
+                f"setsar=1"
+            ),
+            3: (  # Core Facts — zoom in presisi ke detail
+                f"scale=8000:-1,"
+                f"zoompan=z='min(zoom+{speed_zoom_in:.6f},1.4)':d={frames}"
+                f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920,"
+                f"setsar=1"
+            ),
+            4: (  # Core Facts 2 — pan horizontal, menjelajahi konteks
+                f"scale=8000:-1,"
+                f"zoompan=z='1.3':d={frames}"
+                f":x='(iw-iw/zoom)*on/{frames}':y='ih/2-(ih/zoom/2)':s=1080x1920,"
+                f"setsar=1"
+            ),
+            5: (  # Climax — zoom out dramatis dari dekat ke jauh
+                f"scale=8000:-1,"
+                f"zoompan=z='if(eq(on,1),1.8,max(zoom-{speed_zoom_out*1.5:.6f},1.0))':d={frames}"
+                f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920,"
+                f"setsar=1"
+            ),
+        }
+
+        vf = SECTION_MOTIONS[idx]
 
         cmd = [
             "ffmpeg", "-y",
             "-loop", "1",
             "-i", str(img_path),
-            "-vf", (
-                f"scale=8000:-1,"
-                f"zoompan=z='min(zoom+0.0015,1.5)':d={frames}"
-                f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920,"
-                f"setsar=1"
-            ),
+            "-vf", vf,
             "-t", str(duration),
             "-c:v", "libx264",
             "-pix_fmt", "yuv420p",
@@ -462,9 +507,9 @@ class AIImageProvider(VisualProvider):
             "-preset", "fast",
             str(output_path),
         ]
-
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
             raise VisualError(
                 f"FFmpeg image-to-video failed: {result.stderr[-500:]}"
             )
+

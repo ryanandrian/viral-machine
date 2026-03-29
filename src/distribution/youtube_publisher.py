@@ -52,48 +52,80 @@ class YouTubePublisher:
 
         return creds
 
+    # Category ID per niche
+    NICHE_CATEGORY = {
+        "universe_mysteries": "28",
+        "dark_history":       "27",
+        "ocean_mysteries":    "28",
+        "fun_facts":          "27",
+    }
+
+    NICHE_BASE_TAGS = {
+        "universe_mysteries": ["universe","space","NASA","astronomy","cosmos","space facts","galaxy","black hole","universe mysteries","space shorts"],
+        "dark_history":       ["history","dark history","historical facts","history shorts","ancient history","world history","untold history","shocking history"],
+        "ocean_mysteries":    ["ocean","deep sea","ocean mysteries","marine life","underwater","sea creatures","ocean facts","deep ocean","sea mystery"],
+        "fun_facts":          ["fun facts","did you know","amazing facts","mind blowing","interesting facts","science facts","random facts","cool facts"],
+    }
+
+    NICHE_CTA = {
+        "universe_mysteries": "Follow for more mind-blowing universe mysteries every day!",
+        "dark_history":       "Follow for more shocking history facts you were never taught!",
+        "ocean_mysteries":    "Follow for more terrifying ocean mysteries from the deep!",
+        "fun_facts":          "Follow for more amazing facts that will blow your mind!",
+    }
+
     def _build_metadata(self, script: dict, tenant_config: TenantConfig) -> dict:
-        title = script.get("title", script.get("topic", "Amazing Facts"))
+        niche    = tenant_config.niche
+        title    = script.get("title", script.get("topic", "Amazing Facts"))
         if len(title) > 100:
             title = title[:97] + "..."
-
-        hook = script.get("hook", "")
-        build_up = script.get("build_up", "")
-        hashtags = script.get("hashtags", ["#shorts", "#facts", "#universe"])
-
-        description_parts = [
-            hook,
-            "",
-            build_up[:200] if build_up else "",
-            "",
-            "Follow for more mind-blowing facts about the universe!",
-            "",
-            " ".join(hashtags[:10])
-        ]
-        description = "\n".join(description_parts)[:5000]
-
-        tags = []
+        hook       = script.get("hook", "")
+        mystery    = script.get("mystery_drop", "")
+        build_up   = script.get("build_up", "")
+        core_facts = script.get("core_facts", "")
+        climax     = script.get("climax", "")
+        hashtags   = script.get("hashtags", ["#shorts", "#facts"])
+        cta        = self.NICHE_CTA.get(niche, self.NICHE_CTA["fun_facts"])
+        desc_parts = []
+        if hook:
+            desc_parts.extend([hook, ""])
+        preview = " ".join(filter(None, [
+            mystery[:150] if mystery else "",
+            build_up[:150] if build_up else "",
+            core_facts[:200] if core_facts else "",
+            climax[:150] if climax else "",
+        ]))
+        if preview.strip():
+            desc_parts.extend([preview.strip(), ""])
+        desc_parts.extend([cta, "", " ".join(hashtags[:15])])
+        description = "\n".join(desc_parts)[:5000]
+        tags = list(self.NICHE_BASE_TAGS.get(niche, []))
         for tag in hashtags:
-            clean = tag.replace("#", "").strip()
-            if clean:
+            clean = tag.replace("#", "").strip().lower()
+            if clean and clean not in tags:
                 tags.append(clean)
-        tags.extend(["shorts", "facts", "universe", "space", "mindblowing"])
-
+        for word in [w.strip(".,!?").lower() for w in title.split() if len(w) > 4]:
+            if word not in tags:
+                tags.append(word)
+        for t in ["shorts", "youtubeshorts", "viral", "facts"]:
+            if t not in tags:
+                tags.append(t)
         return {
             "snippet": {
-                "title": title,
-                "description": description,
-                "tags": tags[:500],
-                "categoryId": "28",
-                "defaultLanguage": "en",
+                "title":                title,
+                "description":          description,
+                "tags":                 tags[:500],
+                "categoryId":           self.NICHE_CATEGORY.get(niche, "28"),
+                "defaultLanguage":      "en",
                 "defaultAudioLanguage": "en"
             },
             "status": {
-                "privacyStatus": "public",
+                "privacyStatus":           "public",
                 "selfDeclaredMadeForKids": False,
-                "madeForKids": False
+                "madeForKids":             False
             }
         }
+
 
     def publish(self, video_path: str, script: dict,
                 tenant_config: TenantConfig) -> dict:

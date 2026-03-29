@@ -32,6 +32,7 @@ class VisualAssembler:
         script: dict,
         tenant_config: TenantConfig,
         output_dir: str = "logs",
+        audio_duration: float = 0.0,
     ) -> list[str]:
         """
         Download/generate video clips dengan fallback hierarchy.
@@ -47,6 +48,7 @@ class VisualAssembler:
         """
         run_config  = self._load_run_config(tenant_config)
         visual_mode = run_config.get("visual_mode", "video")
+        self._current_audio_duration = audio_duration
         max_clip_mb = run_config.get("visual_max_clip_mb", 150)
         is_dev      = run_config.get("is_developer", False)
 
@@ -176,7 +178,7 @@ class VisualAssembler:
             logger.error(f"[VisualAssembler] Pexels error: {e}")
             return []
 
-    def _compute_clip_durations(self, script: dict, n_clips: int = 6) -> list[float]:
+    def _compute_clip_durations(self, script: dict, n_clips: int = 6, audio_duration: float = 0.0) -> list[float]:
         """
         Fase 6C s6c2: hitung durasi per clip dari section_durations script.
         Mapping 6 clips ke 8 sections — sections pendek digabung.
@@ -209,6 +211,15 @@ class VisualAssembler:
             f"[VisualAssembler] section_durations → clip_durations: "
             f"{durations} = {total:.1f}s"
         )
+        # Scale clip durations agar total = audio_duration aktual
+        if audio_duration > 0:
+            total_raw = sum(durations)
+            scale     = audio_duration / total_raw if total_raw > 0 else 1.0
+            durations = [round(d * scale, 4) for d in durations]
+            logger.info(
+                f"[VisualAssembler] Scaled durations: {durations} "
+                f"= {sum(durations):.1f}s (audio: {audio_duration:.1f}s)"
+            )
         return durations
 
     def _try_ai_image(
@@ -236,7 +247,7 @@ class VisualAssembler:
             }
             provider  = AIImageProvider(config)
             keywords  = provider.extract_keywords_from_script(script, tenant_config.niche)
-            clip_durs = self._compute_clip_durations(script, n_clips=6)
+            clip_durs = self._compute_clip_durations(script, n_clips=6, audio_duration=self._current_audio_duration)
 
             logger.info(
                 f"[VisualAssembler] Generating AI images: "
