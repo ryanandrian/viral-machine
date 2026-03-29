@@ -151,23 +151,102 @@ class VideoRenderer:
         style: dict,
     ) -> str:
         """
-        Fase 6C s6c3: Generate ASS subtitle dengan karaoke word highlight.
+        Karaoke ASS caption — fixed line group, bukan sliding window.
 
-        Setiap event ASS = satu kata aktif + konteks baris.
-        Kata aktif: warna active_word_color (default kuning #FFD700)
-        Kata lain di baris: warna inactive_word_color (default putih #FFFFFF)
-        Max 4 kata per baris, 1-2 baris.
+        Algoritma:
+        1. Grup kata ke baris fixed (max_words_per_line kata/baris)
+        2. Setiap kata dalam baris → 1 ASS event yang tampilkan SELURUH baris
+           dengan hanya kata aktif berwarna kuning
+        3. Baris TIDAK berubah sampai semua kata dalam baris selesai diucapkan
+        4. Baris baru muncul saat kata pertama baris berikutnya mulai diucapkan
         """
         if not word_timestamps:
             return ""
 
         ass_path     = os.path.join(output_dir, "subtitles.ass")
-        max_per_line = style.get("max_words_per_line", 4)
-        font_size    = style.get("font_size", 14)
-        margin_v     = style.get("margin_v", 150)
+        max_per_line = style.get("max_words_per_line", 3)
+        font_size    = style.get("font_size", 68)
+        margin_v     = style.get("margin_v", 320)
         active_color   = _hex_to_ass_color(style.get("active_word_color",   "#FFD700"))
         inactive_color = _hex_to_ass_color(style.get("inactive_word_color", "#FFFFFF"))
-        active_size    = int(font_size * 1.15)  # Kata aktif sedikit lebih besar
+        active_size    = int(font_size * 1.12)
+
+        def fmt_ass_time(seconds: float) -> str:
+            h  = int(seconds // 3600)
+            m  = int((seconds % 3600) // 60)
+            s  = int(seconds % 60)
+            cs = int((seconds % 1) * 100)
+            return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
+
+        # Step 1: Grup kata ke baris fixed
+        n      = len(word_timestamps)
+        groups = []
+        for i in range(0, n, max_per_line):
+            groups.append(word_timestamps[i:i + max_per_line])
+
+        # ASS header
+        ass_header = f"""[Script Info]
+ScriptType: v4.00+
+PlayResX: {self.OUTPUT_WIDTH}
+PlayResY: {self.OUTPUT_HEIGHT}
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,{font_size},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,2,1,2,10,10,{margin_v},1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+
+        events = []
+
+        # Step 2: Generate ASS events per kata dalam setiap baris
+        for group in groups:
+            group_size = len(group)
+
+            for active_idx, active_word_data in enumerate(group):
+                word_start = active_word_data["start"]
+
+                # End time = awal kata berikutnya dalam group (atau akhir kata ini)
+                if active_idx < group_size - 1:
+                    word_end = group[active_idx + 1]["start"]
+                else:
+                    # Kata terakhir dalam group: end = start kata pertama group berikutnya
+                    # Atau end = end kata ini + sedikit padding
+                    word_end = active_word_data["end"] + 0.05
+
+                # Build satu baris: semua kata dalam group
+                # hanya kata aktif yang kuning, sisanya putih
+                parts = []
+                for j, w in enumerate(group):
+                    word_text = w["word"]
+                    if j == active_idx:
+                        parts.append(
+                            f"{{\c{active_color}\fs{active_size}\b1}}{word_text}"
+                            f"{{\c{inactive_color}\fs{font_size}\b1}}"
+                        )
+                    else:
+                        parts.append(f"{{\c{inactive_color}\fs{font_size}\b1}}{word_text}")
+
+                line_text = " ".join(parts)
+                events.append(
+                    f"Dialogue: 0,{fmt_ass_time(word_start)},{fmt_ass_time(word_end)},"
+                    f"Default,,0,0,0,,{line_text}"
+                )
+
+        ass_content = ass_header + "\n".join(events)
+        with open(ass_path, "w", encoding="utf-8") as f:
+            f.write(ass_content)
+
+        logger.info(
+            f"[Caption] Karaoke ASS (fixed-line): {len(groups)} baris, "
+            f"{len(events)} events | "
+            f"font={font_size} margin_v={margin_v} "
+            f"words_per_line={max_per_line}"
+        )
+        return ass_path
+
 
         def fmt_ass_time(seconds: float) -> str:
             h   = int(seconds // 3600)
