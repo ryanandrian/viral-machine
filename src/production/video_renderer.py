@@ -446,13 +446,100 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             logger.error(f"Final render failed: {result.stderr[-500:]}")
             return ""
 
-        if os.path.exists(output_path):
-            size_mb = os.path.getsize(output_path) / (1024 * 1024)
-            caption_mode = "karaoke ASS" if use_ass else "SRT estimasi"
-            logger.info(
-                f"Video rendered: {output_path} ({size_mb:.1f} MB) "
-                f"| caption: {caption_mode}"
-            )
-            return output_path
+        if not os.path.exists(output_path):
+            return ""
 
-        return ""
+        size_mb = os.path.getsize(output_path) / (1024 * 1024)
+        caption_mode = "karaoke ASS" if use_ass else "SRT estimasi"
+        logger.info(
+            f"Video rendered: {output_path} ({size_mb:.1f} MB) "
+            f"| caption: {caption_mode}"
+        )
+
+        # ── s6c4: Music mixing (jika music_enabled) ────────────────
+        try:
+            from src.config.tenant_config import load_tenant_config
+            rc = load_tenant_config(tenant_config.tenant_id)
+            if getattr(rc, "music_enabled", False):
+                output_path = self._mix_music(
+                    video_path=output_path,
+                    script=script,
+                    niche=tenant_config.niche,
+                    output_dir=output_dir,
+                    audio_duration=audio_duration,
+                )
+        except Exception as e:
+            logger.warning(f"[Renderer] Music mixing skipped: {e}")
+
+        return output_path
+
+    def _mix_music(
+        self,
+        video_path: str,
+        script: dict,
+        niche: str,
+        output_dir: str,
+        audio_duration: float,
+    ) -> str:
+        """
+        Fase 6C s6c4: Mix background music ke video.
+        Level: -18dB ducking — musik terdengar tapi tidak kalahkan narasi.
+        """
+        from src.providers.music.music_selector import select_and_download
+
+        music_path = select_and_download(
+            script=script,
+            niche=niche,
+            output_dir=output_dir,
+            audio_duration=audio_duration,
+        )
+
+        if not music_path or not os.path.exists(music_path):
+            logger.warning("[Renderer] Music tidak tersedia — video tanpa musik")
+            return video_path
+
+        mixed_path = video_path.replace(".mp4", "_music.mp4")
+
+        # FFmpeg: mix narasi (stream 1) + musik -18dB (stream 2)
+        # amix: input[0] = narasi penuh, input[1] = musik fade in/out
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", video_path,
+            "-i", music_path,
+            "-filter_complex",
+            (
+                # Narasi: volume tetap
+                "[0:a]volume=1.0[narasi];"
+                # Musik: -18dB (≈12.5% volume), fade in 1s, fade out 2s
+                f"[1:a]volume=0.125,"
+                f"afade=t=in:st=0:d=1,"
+                f"afade=t=out:st={max(0, audio_duration-2):.1f}:d=2,"
+                f"atrim=0:{audio_duration:.1f}[musik];"
+                # Mix keduanya
+                "[narasi][musik]amix=inputs=2:duration=first[aout]"
+            ),
+            "-map", "0:v",
+            "-map", "[aout]",
+            "-c:v", "copy",
+            "-c:a", "aac",
+            "-b:a", self.AUDIO_BITRATE,
+            "-shortest",
+            mixed_path,
+        ]
+
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            logger.error(f"[Renderer] Music mix failed: {result.stderr[-300:]}")
+            return video_path  # fallback ke video tanpa musik
+
+        if os.path.exists(mixed_path):
+            # Hapus video tanpa musik, ganti dengan yang sudah di-mix
+            os.remove(video_path)
+            os.rename(mixed_path, video_path)
+            size_mb = os.path.getsize(video_path) / (1024 * 1024)
+            logger.info(
+                f"[Renderer] ✅ Music mixed: -18dB ducking "
+                f"| {size_mb:.1f} MB"
+            )
+
+        return video_path
