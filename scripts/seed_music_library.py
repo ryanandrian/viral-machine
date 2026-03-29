@@ -70,7 +70,9 @@ def get_audio_bpm(file_path: Path) -> int:
         import librosa
         y, sr = librosa.load(str(file_path), duration=60)  # max 60 detik untuk speed
         tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
-        return int(round(float(tempo)))
+        # librosa 0.11.0: tempo adalah numpy array, bukan scalar
+        bpm_val = tempo[0] if hasattr(tempo, "__len__") else tempo
+        return int(round(float(bpm_val)))
     except Exception as e:
         print(f"  ⚠️  BPM detection error: {e} — BPM set to 0")
         return 0
