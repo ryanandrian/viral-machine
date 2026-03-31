@@ -10,6 +10,7 @@ v0.2 Changes:
 """
 
 import os
+import random
 import json
 import time
 from datetime import datetime
@@ -292,7 +293,23 @@ if __name__ == "__main__":
     import sys
     publish_flag = "--publish" in sys.argv
 
-    tenant = TenantConfig(tenant_id="ryan_andrian", niche="universe_mysteries")
+    # Config-driven niche — tidak ada hardcode, baca dari Supabase
+    try:
+        from src.config.tenant_config import load_tenant_config
+        _rc   = load_tenant_config("ryan_andrian")
+        _mode = getattr(_rc, "niche_mode", "fixed") or "fixed"
+        _pool = list(getattr(_rc, "niche_pool", None) or ["universe_mysteries"])
+        if _mode == "random" and _pool:
+            import random as _r
+            _niche = _r.choice(_pool)
+            logger.info(f"[Pipeline] niche_mode=random → {_niche} dari {_pool}")
+        else:
+            _niche = getattr(_rc, "niche", "universe_mysteries")
+            logger.info(f"[Pipeline] niche_mode=fixed → {_niche}")
+    except Exception as _e:
+        logger.warning(f"[Pipeline] Gagal baca niche config ({_e}) — fallback")
+        _niche = "universe_mysteries"
+    tenant = TenantConfig(tenant_id="ryan_andrian", niche=_niche)
 
     print(f"\n{'='*60}")
     print(f"MESINVIRAL — AUTOMATED PIPELINE")

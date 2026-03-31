@@ -72,6 +72,7 @@ def _get_provider_config(tenant_config: TenantConfig) -> dict:
             "tts_voice":         rc.tts_voice,
             "tts_api_key":       rc.tts_api_key or os.getenv("ELEVENLABS_API_KEY", ""),
             "tts_voice_per_niche": rc.tts_voice_per_niche,
+            "tts_voice_settings":  getattr(rc, "tts_voice_settings", {}) or {},
             "llm_api_key":       rc.llm_api_key or os.getenv("OPENAI_API_KEY", ""),
             "niche":             tenant_config.niche,
             "tenant_id":         tenant_config.tenant_id,

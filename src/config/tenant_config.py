@@ -85,6 +85,10 @@ class TenantRunConfig:
     script_max_retry:       int            = 3
     tts_voice_per_niche:    Optional[dict] = None
     music_enabled:          bool           = False
+    music_volume:           float          = 0.10
+    tts_voice_settings:     dict           = None
+    niche_mode:             str            = "fixed"
+    niche_pool:             list           = None
     caption_style:          Optional[dict] = None
 
     # Developer tenant
@@ -337,6 +341,10 @@ class TenantConfigManager:
                 script_max_retry=row.get("script_max_retry", 3),
                 tts_voice_per_niche=row.get("tts_voice_per_niche") if isinstance(row.get("tts_voice_per_niche"), dict) else None,
                 music_enabled=row.get("music_enabled", False),
+                music_volume=float(row.get("music_volume", 0.10)),
+                tts_voice_settings=row.get("tts_voice_settings") or {},
+                niche_mode=row.get("niche_mode", "fixed") or "fixed",
+                niche_pool=list(row.get("niche_pool") or ["universe_mysteries"]),
                 caption_style=row.get("caption_style") if isinstance(row.get("caption_style"), dict) else None,
             )
 
@@ -360,6 +368,10 @@ class TenantConfigManager:
             script_min_viral_score=75,
             script_max_retry=3,
             music_enabled=False,
+                music_volume=0.10,
+                tts_voice_settings={},
+                niche_mode="fixed",
+                niche_pool=["universe_mysteries"],
             tts_voice_per_niche=None,
             caption_style=None,
         )

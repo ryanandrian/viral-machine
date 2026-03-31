@@ -149,8 +149,17 @@ Write all 8 sections. Each has ONE job. Be specific to this topic — no generic
    QUALITY BAR: Must contain implicit or explicit reason to follow. Topic-specific always.
 
 WRITING RULES — every single one non-negotiable:
+- Second person "you" throughout — intimacy is everything
+- Maximum 15 words per sentence — punchy, direct, no run-ons
+- Specific numbers always beat vague words: "13.8 billion years" not "billions of years ago"
 - Every section transition must feel inevitable — not a gear shift, a deepening
 - Zero filler: "basically", "literally", "you know", "kind of", "amazing", "incredible"
+TTS DELIVERY RULES — write for the human ear, not the eye:
+- Use em-dash (—) for dramatic mid-sentence pause: "It survived — against all odds."
+- Use ellipsis (...) for suspense build-up: "No one knew what was coming..."
+- Short standalone sentences for emphasis: "It was real. Completely real."
+- ALWAYS "heard of" not "heard about": "You've never heard of this discovery."
+- Sentence fragments for dramatic impact: "Thirteen billion years. Vanished."
 
 Return ONLY valid JSON — no markdown, no preamble, no explanation:
 {{

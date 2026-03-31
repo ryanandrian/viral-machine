@@ -109,14 +109,30 @@ class ElevenLabsProvider(TTSProvider):
             from elevenlabs import VoiceSettings
             client = AsyncElevenLabs(api_key=self.api_key)
             niche  = self.config.get("niche", "universe_mysteries")
-            NICHE_VS = {
-                "universe_mysteries": VoiceSettings(stability=0.40, similarity_boost=0.75, style=0.50, speed=0.82),
-                "dark_history":       VoiceSettings(stability=0.35, similarity_boost=0.75, style=0.55, speed=0.80),
-                "ocean_mysteries":    VoiceSettings(stability=0.45, similarity_boost=0.75, style=0.40, speed=0.83),
-                "fun_facts":          VoiceSettings(stability=0.50, similarity_boost=0.80, style=0.35, speed=0.90),
+
+            # Config-driven: baca dari Supabase tts_voice_settings JSONB
+            # Fallback ke nilai default jika belum ada di Supabase config
+            DEFAULTS = {
+                "universe_mysteries": {"speed": 0.87, "style": 0.50, "stability": 0.30, "similarity_boost": 0.75},
+                "dark_history":       {"speed": 0.83, "style": 0.55, "stability": 0.28, "similarity_boost": 0.75},
+                "ocean_mysteries":    {"speed": 0.86, "style": 0.40, "stability": 0.35, "similarity_boost": 0.75},
+                "fun_facts":          {"speed": 0.90, "style": 0.35, "stability": 0.50, "similarity_boost": 0.80},
             }
-            voice_settings = NICHE_VS.get(niche, NICHE_VS["universe_mysteries"])
-            logger.info(f"[ElevenLabs] speed={voice_settings.speed} style={voice_settings.style}")
+            tts_vs_config = self.config.get("tts_voice_settings", {}) or {}
+            niche_vs      = {**DEFAULTS.get(niche, DEFAULTS["universe_mysteries"]),
+                             **tts_vs_config.get(niche, {})}
+            voice_settings = VoiceSettings(
+                stability        = float(niche_vs.get("stability",        0.30)),
+                similarity_boost = float(niche_vs.get("similarity_boost", 0.75)),
+                style            = float(niche_vs.get("style",            0.50)),
+                speed            = float(niche_vs.get("speed",            0.87)),
+            )
+            source = "supabase" if tts_vs_config.get(niche) else "default"
+            logger.info(
+                f"[ElevenLabs] voice_settings [{source}] niche={niche}: "
+                f"speed={voice_settings.speed} style={voice_settings.style} "
+                f"stability={voice_settings.stability}"
+            )
             response = await client.text_to_speech.convert_with_timestamps(
                 voice_id=self.voice,
                 text=text,
