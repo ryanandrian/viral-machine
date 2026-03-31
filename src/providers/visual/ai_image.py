@@ -321,8 +321,33 @@ class AIImageProvider(VisualProvider):
                 )
 
             except Exception as e:
-                logger.error(f"[AIImage] Scene {i+1} failed for '{keyword[:50]}': {e}")
-                continue
+                logger.warning(
+                    f"[AIImage] Scene {i+1} gagal (attempt 1): {e} — "
+                    f"retry dengan sanitized prompt"
+                )
+                # ── s71b: Retry dengan sanitized prompt ──────────
+                try:
+                    safe_prompt = self._sanitize_prompt(keyword, i, self.niche)
+                    safe_output = output_dir / f"clip_{i+1:02d}_ai_safe.jpg"
+                    safe_clip   = output_dir / f"clip_{i+1:02d}_ai_safe.mp4"
+                    target_dur  = clip_durations[i] if clip_durations and i < len(clip_durations) else 5.0
+                    await self._generate_image(safe_prompt, safe_output)
+                    self._image_to_video(safe_output, safe_clip, duration=target_dur, clip_index=i)
+                    size_mb = safe_clip.stat().st_size / (1024 * 1024)
+                    clips.append(VideoClip(
+                        path=safe_clip, duration=target_dur,
+                        width=1080, height=1920,
+                        file_size_mb=round(size_mb, 1),
+                        source_url="ai_generated:safe_retry",
+                        provider=self.provider_name,
+                    ))
+                    total_cost += self.model_config["cost_per_img"]
+                    logger.info(f"[AIImage] ✅ Scene {i+1} retry OK dengan safe prompt")
+                except Exception as e2:
+                    logger.error(
+                        f"[AIImage] Scene {i+1} GAGAL total (retry juga gagal): {e2}"
+                    )
+                    continue
 
         logger.info(
             f"[AIImage] Complete: {len(clips)}/{count} clips "
@@ -363,6 +388,43 @@ class AIImageProvider(VisualProvider):
             )
 
         return keywords[:6]
+
+    def _sanitize_prompt(self, original_keyword: str, section_index: int, niche: str) -> str:
+        """
+        s71b: Buat prompt alternatif aman dari content policy DALL-E 3.
+        Hapus kata sensitif dari prompt asli.
+        Fallback ke niche default jika prompt terlalu pendek setelah dibersihkan.
+        """
+        SENSITIVE_WORDS = [
+            "wound", "wounds", "wounded", "attack", "attacked", "attacking",
+            "blood", "bloody", "bleed", "dead", "dying", "death", "corpse",
+            "weapon", "weapons", "gun", "knife", "sword", "violent", "violence",
+            "brutal", "gore", "injury", "injured", "kill", "killing",
+            "torture", "suffer", "suffering", "terror", "horrific",
+        ]
+        cleaned = original_keyword.lower()
+        for word in SENSITIVE_WORDS:
+            cleaned = cleaned.replace(word, "")
+        cleaned = " ".join(cleaned.split())
+
+        if len(cleaned) > 20:
+            niche_style = NICHE_STYLE.get(niche, NICHE_STYLE["universe_mysteries"])
+            return (
+                f"{cleaned}. "
+                f"Shot in {niche_style['base_style']}. "
+                f"Vertical 9:16 format. Photorealistic, no text."
+            )
+
+        # Fallback: pakai niche default keywords untuk section ini
+        fallback_keywords = NICHE_FALLBACKS.get(niche, NICHE_FALLBACKS["universe_mysteries"])
+        safe_idx    = section_index % len(fallback_keywords)
+        niche_style = NICHE_STYLE.get(niche, NICHE_STYLE["universe_mysteries"])
+        logger.info(f"[AIImage] _sanitize_prompt: pakai niche fallback idx={safe_idx}")
+        return (
+            f"{fallback_keywords[safe_idx]}. "
+            f"Shot in {niche_style['base_style']}. "
+            f"Vertical 9:16 format optimized for mobile. Photorealistic, no text."
+        )
 
     @property
     def provider_name(self) -> str:

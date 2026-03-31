@@ -175,8 +175,9 @@ class Pipeline:
             clips = self.visual_assembler.assemble(script, tenant_config, audio_duration=audio_duration)
             if not clips:
                 raise Exception("Visual assembly failed — no clips downloaded")
-            result["steps"]["visuals"] = {"status": "ok", "clips": len(clips)}
-            logger.info(f"STEP 6 DONE | {len(clips)} clips ready")
+            clip_count = len(clips)
+            result["steps"]["visuals"] = {"status": "ok", "clips": clip_count}
+            logger.info(f"STEP 6 DONE | {clip_count} clips ready")
 
             # ── STEP 7: Video Render ────────────────────────────────
             logger.info("STEP 7/7 | Rendering final video...")
@@ -206,7 +207,7 @@ class Pipeline:
             video_duration = self._get_video_duration(video_path)
             file_size_mb   = round(os.path.getsize(video_path) / (1024 * 1024), 1)
 
-            qc_passed, qc_reason = self._pre_publish_qc(video_path, video_duration)
+            qc_passed, qc_reason = self._pre_publish_qc(video_path, video_duration, clip_count)
             result["steps"]["qc"] = {
                 "passed":   qc_passed,
                 "reason":   qc_reason,
@@ -353,15 +354,16 @@ class Pipeline:
         return result
 
 
-    def _pre_publish_qc(self, video_path: str, duration_secs) -> tuple:
+    def _pre_publish_qc(self, video_path: str, duration_secs, clip_count: int = None) -> tuple:
         """
         Fase 7 s71: Lightweight pre-publish quality control.
-        Tiga check cepat (<2 detik) sebelum upload ke YouTube.
+        Empat check cepat (<2 detik) sebelum upload ke YouTube.
 
         Checks:
-          1. File size > 5 MB   — render tidak korup/kosong
-          2. Durasi >= 45 detik — minimum Shorts yang layak
-          3. Durasi <= 180 detik — maksimum YouTube Shorts
+          1. File size > 5 MB      — render tidak korup/kosong
+          2. Durasi >= 45 detik    — minimum Shorts yang layak
+          3. Durasi <= 180 detik   — maksimum YouTube Shorts
+          4. clip_count >= 6       — semua visual scene berhasil
 
         Returns: (passed: bool, reason: str)
         Jika passed=False → video tidak dipublish, dicatat qc_failed.
@@ -381,6 +383,14 @@ class Pipeline:
                 return False, f"Durasi terlalu pendek: {duration_secs:.1f}s < 45s"
             if duration_secs > 180:
                 return False, f"Durasi terlalu panjang: {duration_secs:.1f}s > 180s (bukan Shorts)"
+
+        # Check 4: Jumlah clips — semua scene harus berhasil
+        # s71b: mencegah video dengan visual tidak lengkap dipublish
+        if clip_count is not None and clip_count < 6:
+            return False, (
+                f"Visual tidak lengkap: {clip_count}/6 clips berhasil. "
+                f"Scene gagal kemungkinan ditolak DALL-E 3 content policy."
+            )
 
         return True, "ok"
 
