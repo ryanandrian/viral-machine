@@ -6,6 +6,7 @@ from loguru import logger
 from openai import OpenAI
 from dotenv import load_dotenv
 from src.intelligence.config import TenantConfig, NICHES, VIRAL_SCORE_WEIGHTS, system_config
+from src.utils.supabase_writer import _normalize_slug, get_writer
 
 load_dotenv()
 
@@ -218,13 +219,21 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
     def select(self, signals: dict, tenant_config: TenantConfig) -> list:
         """
         Analisis sinyal dan pilih top 5 topik viral.
-        Returns: list of topic dicts sorted by viral_score desc.
+        s71: Tambah duplicate prevention — topik yang sudah diproduksi
+        dalam lookback_days terakhir difilter sebelum dikembalikan.
+
+        Prinsip: produksi TIDAK pernah berhenti.
+        Jika semua topik baru duplikat → pakai LRU dari riwayat (safety net).
         """
         total_signals = sum(len(v) for v in signals.values() if isinstance(v, list))
         logger.info(f"Analyzing {total_signals} signals...")
 
         summary = self._prepare_signals_summary(signals, tenant_config)
         topics  = self._analyze_with_ai(summary, tenant_config)
+
+        # ── s71: Duplicate prevention ──────────────────────────────────
+        topics = self._filter_duplicates(topics, tenant_config)
+        # ───────────────────────────────────────────────────────────────
 
         result = {
             "tenant_id": tenant_config.tenant_id,
@@ -237,8 +246,104 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
         with open(f"logs/topics_{tenant_config.tenant_id}.json", "w") as f:
             json.dump(result, f, ensure_ascii=False, indent=2)
 
-        logger.info(f"Selected {len(topics)} topics")
+        logger.info(f"Selected {len(topics)} topics after duplicate filter")
         return topics
+
+
+    def _filter_duplicates(self, topics: list, tenant_config: TenantConfig) -> list:
+        """
+        Filter topik yang sudah diproduksi dalam lookback_days terakhir.
+
+        Logika:
+          1. Ambil recent_topics dari Supabase (per tenant + niche)
+          2. Filter topics yang slug-nya tidak ada di recent_slugs
+          3. Jika semua duplikat → ambil topik paling lama (LRU) sebagai safety net
+             Produksi tidak pernah berhenti.
+        """
+        if not topics:
+            return topics
+
+        writer        = get_writer()
+        lookback_days = self._get_lookback_days(tenant_config)
+
+        recent = writer.get_recent_topics(
+            tenant_id=tenant_config.tenant_id,
+            niche=tenant_config.niche,
+            lookback_days=lookback_days,
+        )
+
+        if not recent:
+            logger.info("[NicheSelector] Tidak ada riwayat topik — semua dianggap baru")
+            return topics
+
+        recent_slugs = {r.get("topic_slug", "") for r in recent if r.get("topic_slug")}
+        logger.info(
+            f"[NicheSelector] Duplicate check: {len(recent_slugs)} recent slugs "
+            f"(lookback={lookback_days}d, niche={tenant_config.niche})"
+        )
+
+        fresh_topics = []
+        for t in topics:
+            slug = _normalize_slug(t.get("topic", ""))
+            if slug and slug not in recent_slugs:
+                fresh_topics.append(t)
+            else:
+                logger.info(f"[NicheSelector] Duplikat difilter: '{t.get('topic', '')[:60]}'")
+
+        if fresh_topics:
+            logger.info(
+                f"[NicheSelector] ✅ {len(fresh_topics)}/{len(topics)} topik baru "
+                f"(difilter {len(topics) - len(fresh_topics)} duplikat)"
+            )
+            return fresh_topics
+
+        # ── Safety net: semua topik AI adalah duplikat ────────────────
+        logger.warning(
+            f"[NicheSelector] ⚠️  SEMUA {len(topics)} topik AI duplikat. "
+            f"Pakai LRU dari riwayat sebagai safety net."
+        )
+
+        # recent di-order ASC (oldest first) dari get_recent_topics
+        lru = recent[0] if recent else None
+        if lru and lru.get("topic"):
+            fallback = {
+                "topic":               lru["topic"],
+                "angle":               "Revisiting this fascinating topic with fresh perspective",
+                "hook":                f"You need to hear this again — {lru['topic'][:50]}",
+                "why_viral":           "Previously produced topic — LRU safety net",
+                "search_volume":       50,
+                "trend_momentum":      50,
+                "emotional_trigger":   60,
+                "competition_gap":     40,
+                "evergreen_potential": 70,
+                "viral_score":         54.0,
+                "keywords":            [],
+                "estimated_views_range": "unknown",
+                "content_type":        "evergreen",
+                "_is_lru_fallback":    True,
+            }
+            logger.warning(
+                f"[NicheSelector] LRU fallback: '{lru['topic'][:60]}' "
+                f"(diproduksi: {lru.get('published_at', 'unknown')[:10]})"
+            )
+            return [fallback]
+
+        # Last resort — kembalikan topik AI pertama meski duplikat
+        logger.warning("[NicheSelector] LRU fallback gagal — pakai topik AI pertama")
+        return topics[:1]
+
+    def _get_lookback_days(self, tenant_config: TenantConfig) -> int:
+        """
+        Ambil duplicate_lookback_days dari Supabase config tenant.
+        Fallback ke 30 hari. Config-driven: ubah via Supabase.
+        """
+        try:
+            from src.config.tenant_config import load_tenant_config
+            rc = load_tenant_config(tenant_config.tenant_id)
+            days = getattr(rc, "duplicate_lookback_days", 30) or 30
+            return int(days)
+        except Exception:
+            return 30
 
 
 if __name__ == "__main__":

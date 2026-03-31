@@ -29,6 +29,7 @@ from src.production.visual_assembler import VisualAssembler
 from src.production.video_renderer import VideoRenderer
 from src.distribution.youtube_publisher import YouTubePublisher
 from src.utils.storage_cleaner import StorageCleaner
+from src.utils.supabase_writer import SupabaseWriter
 
 load_dotenv()
 
@@ -49,6 +50,7 @@ class Pipeline:
         self.video_renderer    = VideoRenderer()
         self.youtube_publisher = YouTubePublisher()
         self.storage_cleaner   = StorageCleaner(base_dir="logs")
+        self.supabase_writer   = SupabaseWriter()
 
     def _load_tenant_run_config(self, tenant_config: TenantConfig):
         """
@@ -200,10 +202,48 @@ class Pipeline:
             )
             result["storage"]["clips_cleaned"] = clips_cleaned
 
-            # ── PUBLISH ─────────────────────────────────────────────
+            # ── PRE-PUBLISH QC ──────────────────────────────────────────
+            video_duration = self._get_video_duration(video_path)
+            file_size_mb   = round(os.path.getsize(video_path) / (1024 * 1024), 1)
+
+            qc_passed, qc_reason = self._pre_publish_qc(video_path, video_duration)
+            result["steps"]["qc"] = {
+                "passed":   qc_passed,
+                "reason":   qc_reason,
+                "duration": video_duration,
+                "size_mb":  file_size_mb,
+            }
+
+            if not qc_passed:
+                logger.warning(f"QC FAILED | {qc_reason} — video tidak dipublish")
+                self.supabase_writer.write_qc_failed(
+                    run_id        = run_id,
+                    tenant_id     = tenant_config.tenant_id,
+                    niche         = tenant_config.niche,
+                    topic         = script.get("topic", ""),
+                    qc_reason     = qc_reason,
+                    duration_secs = video_duration,
+                    file_size_mb  = file_size_mb,
+                )
+                # Hapus clips dir DAN video final agar tidak bocor disk
+                self.storage_cleaner.cleanup_clips(
+                    tenant_id  = tenant_config.tenant_id,
+                    video_path = video_path,
+                )
+                try:
+                    if video_path and Path(video_path).exists():
+                        Path(video_path).unlink()
+                        logger.info(f"[Pipeline] QC fail — video dihapus: {video_path}")
+                except Exception as _e:
+                    logger.warning(f"[Pipeline] Gagal hapus video QC fail: {_e}")
+            else:
+                dur_str = f"{video_duration:.1f}" if video_duration is not None else "unknown"
+                logger.info(f"QC PASSED | duration={dur_str}s | size={file_size_mb}MB")
+
+            # ── PUBLISH ─────────────────────────────────────────────────
             published_platforms = []
 
-            if publish:
+            if publish and qc_passed:
                 # YouTube
                 logger.info("PUBLISHING | Uploading to YouTube Shorts...")
                 yt_result = self.youtube_publisher.publish(video_path, script, tenant_config)
@@ -213,9 +253,22 @@ class Pipeline:
                     published_platforms.append("youtube")
                     logger.info(f"PUBLISHED | YouTube: {yt_result['url']}")
 
-                    # ── Fase 7 placeholder: simpan metadata ke Supabase ──
-                    # supabase_writer akan diimplementasikan di s71
-                    # self._write_to_supabase(run_id, script, yt_result, tenant_config)
+                    # ── s71: Simpan metadata ke Supabase ──────────────
+                    self.supabase_writer.write_video(
+                        run_id        = run_id,
+                        tenant_id     = tenant_config.tenant_id,
+                        platform      = "youtube",
+                        video_id      = yt_result["video_id"],
+                        url           = yt_result["url"],
+                        title         = yt_result.get("title", script.get("title", "")),
+                        hook          = script.get("hook", ""),
+                        topic         = script.get("topic", ""),
+                        niche         = tenant_config.niche,
+                        viral_score   = float(script.get("viral_score", 0)),
+                        duration_secs = video_duration,
+                        file_size_mb  = file_size_mb,
+                    )
+                    # ──────────────────────────────────────────────────
 
                 else:
                     logger.warning(
@@ -232,12 +285,14 @@ class Pipeline:
                     else ["youtube"]
                 )
                 video_cleaned = self.storage_cleaner.cleanup_video(
-                    video_path=video_path,
-                    published_platforms=published_platforms,
-                    required_platforms=active_platforms,
+                    video_path          = video_path,
+                    published_platforms = published_platforms,
+                    required_platforms  = active_platforms,
                 )
                 result["storage"]["video_cleaned"] = video_cleaned
 
+            elif not qc_passed:
+                logger.info("PUBLISH SKIPPED | QC tidak lolos")
             else:
                 logger.info("PUBLISH SKIPPED | publish=False")
 
@@ -274,6 +329,15 @@ class Pipeline:
             result["elapsed_seconds"] = elapsed
             logger.error(f"PIPELINE FAILED | {elapsed}s | Error: {e}")
 
+            # ── s71: Catat pipeline failure ke Supabase ───────────────
+            self.supabase_writer.write_failed_run(
+                run_id    = run_id,
+                tenant_id = tenant_config.tenant_id,
+                niche     = getattr(tenant_config, "niche", "unknown"),
+                error     = str(e),
+            )
+            # ─────────────────────────────────────────────────────────
+
             # Cleanup clips meski pipeline gagal
             # (jika render sudah selesai sebelum error)
             if video_path and Path(video_path).exists():
@@ -287,6 +351,69 @@ class Pipeline:
             json.dump(result, f, ensure_ascii=False, indent=2)
 
         return result
+
+
+    def _pre_publish_qc(self, video_path: str, duration_secs) -> tuple:
+        """
+        Fase 7 s71: Lightweight pre-publish quality control.
+        Tiga check cepat (<2 detik) sebelum upload ke YouTube.
+
+        Checks:
+          1. File size > 5 MB   — render tidak korup/kosong
+          2. Durasi >= 45 detik — minimum Shorts yang layak
+          3. Durasi <= 180 detik — maksimum YouTube Shorts
+
+        Returns: (passed: bool, reason: str)
+        Jika passed=False → video tidak dipublish, dicatat qc_failed.
+        Pipeline tidak crash — lanjut ke run berikutnya.
+        """
+        # Check 1: File size
+        try:
+            size_mb = os.path.getsize(video_path) / (1024 * 1024)
+            if size_mb < 5.0:
+                return False, f"File terlalu kecil: {size_mb:.1f}MB < 5MB (render gagal?)"
+        except Exception as e:
+            return False, f"Tidak bisa baca file video: {e}"
+
+        # Check 2 & 3: Durasi (skip jika ffprobe tidak tersedia)
+        if duration_secs is not None:
+            if duration_secs < 45:
+                return False, f"Durasi terlalu pendek: {duration_secs:.1f}s < 45s"
+            if duration_secs > 180:
+                return False, f"Durasi terlalu panjang: {duration_secs:.1f}s > 180s (bukan Shorts)"
+
+        return True, "ok"
+
+    def _get_video_duration(self, video_path: str):
+        """
+        Dapatkan durasi video via FFprobe.
+        Returns: durasi detik (float) jika berhasil dan > 0, None jika gagal.
+        Jika None: QC skip cek durasi, pipeline tetap jalan.
+        """
+        import subprocess
+        import json as _json
+
+        try:
+            cmd = [
+                "ffprobe", "-v", "quiet",
+                "-print_format", "json",
+                "-show_format",
+                video_path
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                data         = _json.loads(result.stdout)
+                duration_str = data.get("format", {}).get("duration")
+                if duration_str:
+                    duration = float(duration_str)
+                    if duration > 0:
+                        return round(duration, 2)
+                logger.warning("[Pipeline] FFprobe OK tapi duration tidak valid")
+                return None
+        except Exception as e:
+            logger.warning(f"[Pipeline] FFprobe gagal: {e} — QC skip duration check")
+
+        return None
 
 
 if __name__ == "__main__":

@@ -89,6 +89,14 @@ class TenantRunConfig:
     tts_voice_settings:     dict           = None
     niche_mode:             str            = "fixed"
     niche_pool:             list           = None
+
+    # Fase 7 s71 — Provider fallback + billing behavior + multi-channel
+    duplicate_lookback_days: int  = 30            # window duplicate check (hari)
+    production_on_api_error: str  = "fallback"    # 'fallback' | 'stop_and_notify'
+    tts_fallback_provider:   str  = "edge_tts"    # fallback jika primary TTS error
+    visual_fallback_mode:    str  = "video"       # fallback jika primary visual error
+    llm_script_fallback:     str  = "gpt-4o-mini" # fallback jika Claude error
+    channel_group:           str  = "default"     # grup channel multi-tenant SaaS
     caption_style:          Optional[dict] = None
 
     # Developer tenant
@@ -346,6 +354,12 @@ class TenantConfigManager:
                 niche_mode=row.get("niche_mode", "fixed") or "fixed",
                 niche_pool=list(row.get("niche_pool") or ["universe_mysteries"]),
                 caption_style=row.get("caption_style") if isinstance(row.get("caption_style"), dict) else None,
+                duplicate_lookback_days = int(row.get("duplicate_lookback_days", 30) or 30),
+                production_on_api_error = row.get("production_on_api_error", "fallback") or "fallback",
+                tts_fallback_provider   = row.get("tts_fallback_provider", "edge_tts") or "edge_tts",
+                visual_fallback_mode    = row.get("visual_fallback_mode", "video") or "video",
+                llm_script_fallback     = row.get("llm_script_fallback", "gpt-4o-mini") or "gpt-4o-mini",
+                channel_group           = row.get("channel_group", "default") or "default",
             )
 
         except Exception as e:
@@ -374,6 +388,12 @@ class TenantConfigManager:
                 niche_pool=["universe_mysteries"],
             tts_voice_per_niche=None,
             caption_style=None,
+            duplicate_lookback_days = 30,
+            production_on_api_error = "fallback",
+            tts_fallback_provider   = "edge_tts",
+            visual_fallback_mode    = "video",
+            llm_script_fallback     = "gpt-4o-mini",
+            channel_group           = "default",
         )
 
     def invalidate_cache(self, tenant_id: str) -> None:
