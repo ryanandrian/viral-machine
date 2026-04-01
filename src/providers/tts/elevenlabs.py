@@ -42,7 +42,7 @@ def _chars_to_words(
         if char == " " or char == "":
             if cur_word:
                 words.append({
-                    "word":  cur_word.strip(".,!?;:\"'"),
+                    "word":  cur_word,  # s71e: pertahankan tanda baca untuk smart grouping
                     "start": round(word_start, 3),
                     "end":   round(word_end, 3),
                 })
@@ -58,7 +58,7 @@ def _chars_to_words(
     # Flush kata terakhir
     if cur_word:
         words.append({
-            "word":  cur_word.strip(".,!?;:\"'"),
+            "word":  cur_word,  # s71e: pertahankan tanda baca untuk smart grouping
             "start": round(word_start, 3),
             "end":   round(word_end, 3),
         })
