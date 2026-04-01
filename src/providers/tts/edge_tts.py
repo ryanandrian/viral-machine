@@ -190,7 +190,7 @@ class EdgeTTSProvider(TTSProvider):
                 current_time = start
 
                 for word in words:
-                    clean = word.strip().strip(".,!?;:\"'")
+                    clean = word.strip()  # s71d: pertahankan tanda baca untuk karaoke natural
                     if not clean:
                         continue
                     # Durasi proporsional berdasarkan panjang karakter

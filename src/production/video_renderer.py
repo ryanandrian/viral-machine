@@ -178,11 +178,35 @@ class VideoRenderer:
             cs = int((seconds % 1) * 100)
             return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
 
-        # Step 1: Grup kata ke baris fixed
-        n      = len(word_timestamps)
-        groups = []
-        for i in range(0, n, max_per_line):
-            groups.append(word_timestamps[i:i + max_per_line])
+        # Step 1: Smart grouping berbasis tanda baca (s71d)
+        # Timing per kata TIDAK berubah — hanya pengelompokan tampilan
+        # Aturan:
+        #   HARD BREAK: kata berakhir . ! ? → mulai grup baru setelah kata ini
+        #   SOFT BREAK: kata berakhir , ; : → tutup grup jika sudah >= 2 kata
+        #   HARD LIMIT: max_per_line kata per grup (batas keras)
+        HARD_END  = set("!?.")     # titik, seru, tanya → akhir kalimat
+        SOFT_END  = set(",;:")     # koma, titik koma, titik dua → jeda klausa
+        n         = len(word_timestamps)
+        groups    = []
+        current   = []
+
+        for i, wt in enumerate(word_timestamps):
+            current.append(wt)
+            word_text  = wt.get("word", "")
+            last_char  = word_text[-1] if word_text else ""
+            is_last    = (i == n - 1)
+            hard_break = last_char in HARD_END
+            soft_break = last_char in SOFT_END and len(current) >= 2
+            max_hit    = len(current) >= max_per_line
+
+            if hard_break or soft_break or max_hit or is_last:
+                groups.append(current)
+                current = []
+
+        # Kalau ada sisa (seharusnya tidak terjadi tapi safety net)
+        if current:
+            groups.append(current)
+
 
         # ASS header
         ass_header = f"""[Script Info]
