@@ -165,7 +165,7 @@ class VideoRenderer:
                 dt = (
                     "drawtext"
                     f"=fontfile={font_path}"
-                    f":text={line}"
+                    f":text='{line}'"
                     f":fontcolor={font_color}"
                     f":fontsize={font_size}"
                     ":x=(w-text_w)/2"
