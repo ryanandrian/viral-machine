@@ -345,11 +345,11 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                     word_text = w["word"]
                     if j == active_idx:
                         parts.append(
-                            f"{{\c{active_color}\fs{active_size}\b1}}{word_text}"
-                            f"{{\c{inactive_color}\fs{font_size}\b1}}"
+                            f"{{\\c{active_color}\\fs{active_size}\\b1}}{word_text}"
+                            f"{{\\c{inactive_color}\\fs{font_size}\\b1}}"
                         )
                     else:
-                        parts.append(f"{{\c{inactive_color}\fs{font_size}\b1}}{word_text}")
+                        parts.append(f"{{\\c{inactive_color}\\fs{font_size}\\b1}}{word_text}")
 
                 line_text = " ".join(parts)
                 events.append(
@@ -572,7 +572,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 round(climax + cta, 2),
             ]
             logger.info(f"[Renderer] section_durations: {clip_durations}")
-        clip_list_path = self._create_clip_list(clips, total_duration, output_dir, clip_durations)
+        clip_list_path = self._create_clip_list(clips, audio_duration, output_dir, clip_durations)
 
         # Load caption style dari tenant_configs
         caption_style = self._load_caption_style(tenant_config)
@@ -743,6 +743,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                     f",subtitles='{abs_sub}':force_style='{self.SRT_CAPTION_STYLE}'"
                 )
 
+        # s72b: tpad freeze frame terakhir + apad silence = trailing_silence detik
+        # -t explicit agar durasi tepat, bukan -shortest yang potong di video
+        tpad_filter = f"tpad=stop_mode=clone:stop_duration={trailing_silence}"
         cmd_final = [
             "ffmpeg", "-y",
             "-i", temp_path,
@@ -752,13 +755,15 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             "-b:v", self.VIDEO_BITRATE,
             "-c:a", "aac", "-b:a", self.AUDIO_BITRATE,
             "-af", f"apad=pad_dur={trailing_silence}",
-            "-shortest",
+            "-t", str(total_duration),
         ]
         if subtitle_filter:
             cmd_final += [
                 "-vf",
-                f"scale={self.OUTPUT_WIDTH}:{self.OUTPUT_HEIGHT}{subtitle_filter}"
+                f"scale={self.OUTPUT_WIDTH}:{self.OUTPUT_HEIGHT},{tpad_filter}{subtitle_filter}"
             ]
+        else:
+            cmd_final += ["-vf", tpad_filter]
         cmd_final.append(output_path)
 
         result = subprocess.run(cmd_final, capture_output=True, text=True)
