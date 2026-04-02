@@ -152,7 +152,9 @@ def _build_cinematic_prompt(
             f"Color palette: {niche_cfg['color_palette']}. "
             f"Atmosphere: {niche_cfg['atmosphere']}. "
             f"Vertical 9:16 format optimized for mobile full-screen viewing. "
-            f"Photorealistic, not illustrated or painted."
+            f"Photorealistic, not illustrated or painted. "
+            f"No text, no words, no letters, no numbers, no signs, "
+            f"no logos, no watermarks, no typography of any kind."
         )
     else:
         # Flux/SD: lebih baik dengan keyword-style prompts

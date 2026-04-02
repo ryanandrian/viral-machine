@@ -528,6 +528,19 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         audio_duration = self._get_audio_duration(audio_path)
         logger.info(f"Audio duration: {audio_duration:.1f}s")
 
+        # ── s72b: trailing_silence — baca dari Supabase config ──
+        try:
+            from src.config.tenant_config import load_tenant_config
+            rc = load_tenant_config(tenant_config.tenant_id)
+            trailing_silence = float(getattr(rc, "trailing_silence", 2.5))
+        except Exception:
+            trailing_silence = 2.5
+        total_duration = audio_duration + trailing_silence
+        logger.info(
+            f"[Renderer] trailing_silence={trailing_silence}s "
+            f"| total_duration={total_duration:.1f}s"
+        )
+
         # ── s72: Hook title overlay pada clip 1 ─────────────────
         hook_title_style = self._load_hook_title_style(tenant_config)
         hook_text_raw    = script.get("hook", "")
@@ -559,7 +572,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 round(climax + cta, 2),
             ]
             logger.info(f"[Renderer] section_durations: {clip_durations}")
-        clip_list_path = self._create_clip_list(clips, audio_duration, output_dir, clip_durations)
+        clip_list_path = self._create_clip_list(clips, total_duration, output_dir, clip_durations)
 
         # Load caption style dari tenant_configs
         caption_style = self._load_caption_style(tenant_config)
@@ -738,6 +751,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             "-c:v", "libx264", "-preset", "fast",
             "-b:v", self.VIDEO_BITRATE,
             "-c:a", "aac", "-b:a", self.AUDIO_BITRATE,
+            "-af", f"apad=pad_dur={trailing_silence}",
             "-shortest",
         ]
         if subtitle_filter:
