@@ -208,9 +208,25 @@ class YouTubePublisher:
             logger.warning(f"[YouTube] Thumbnail tidak ada: {thumbnail_path}")
             return False
         try:
+            # Resize ke 1280x720, max 2MB (YouTube limit)
+            import subprocess as sp
+            resized = thumbnail_path.replace(".jpg", "_yt.jpg")
+            sp.run([
+                "ffmpeg", "-y", "-i", thumbnail_path,
+                "-vf", "scale=1280:720:force_original_aspect_ratio=decrease",
+                "-q:v", "4", resized
+            ], capture_output=True)
+            # Pakai resized jika berhasil dan < 2MB, fallback ke original
+            if os.path.exists(resized) and os.path.getsize(resized) < 2097152:
+                upload_path = resized
+            elif os.path.getsize(thumbnail_path) < 2097152:
+                upload_path = thumbnail_path
+            else:
+                logger.warning("[YouTube] Thumbnail terlalu besar, skip")
+                return False
             from googleapiclient.http import MediaFileUpload
             media = MediaFileUpload(
-                thumbnail_path, mimetype="image/jpeg", resumable=False
+                upload_path, mimetype="image/jpeg", resumable=False
             )
             youtube.thumbnails().set(
                 videoId=video_id, media_body=media
