@@ -104,6 +104,104 @@ class VideoRenderer:
             pass
         return DEFAULT_CAPTION_STYLE.copy()
 
+    def _load_hook_title_style(self, tenant_config) -> dict:
+        """Load hook title style dari Supabase. Fallback ke default."""
+        DEFAULT = {
+            "enabled": True,
+            "font_size": 58,
+            "font_color": "#FFD700",
+            "outline": 4,
+            "outline_alpha": "CC",
+            "shadow": 3,
+            "position_y_pct": 15,
+            "max_chars_per_line": 25,
+        }
+        try:
+            from src.config.tenant_config import load_tenant_config
+            rc = load_tenant_config(tenant_config.tenant_id)
+            if rc.hook_title_style and isinstance(rc.hook_title_style, dict):
+                style = DEFAULT.copy()
+                style.update(rc.hook_title_style)
+                return style
+        except Exception:
+            pass
+        return DEFAULT.copy()
+
+    def _add_hook_title(self, clip_path, hook_text: str, style: dict, output_dir: str):
+        """s72: Overlay hook title ke clip 1 via FFmpeg drawtext.
+        Hook text ditampilkan penuh (tidak dipotong), font Anton, warna kuning.
+        Hanya clip 1. Returns path clip baru atau clip asli jika gagal.
+        """
+        if not hook_text or not style.get("enabled", True):
+            return clip_path
+        try:
+            import textwrap, os
+            font_path  = "/usr/local/share/fonts/Anton-Regular.ttf"
+            font_size  = style.get("font_size", 58)
+            font_color = style.get("font_color", "#FFD700").lstrip("#")
+            outline    = style.get("outline", 4)
+            shadow     = style.get("shadow", 3)
+            y_pct      = style.get("position_y_pct", 15) / 100.0
+            max_chars  = style.get("max_chars_per_line", 25)
+
+            # Bersihkan karakter problematik FFmpeg drawtext
+            clean = hook_text
+            clean = clean.replace("\\", "")
+            clean = clean.replace("'", "")
+            clean = clean.replace(":", " -")
+            clean = clean.replace("%", " pct")
+
+            lines = textwrap.wrap(clean, width=max_chars)
+            if not lines:
+                return clip_path
+
+            out_path    = str(clip_path).replace(".mp4", "_titled.mp4")
+            line_height = font_size + 10
+            y_start     = int(self.OUTPUT_HEIGHT * y_pct)
+
+            filters = []
+            for i, line in enumerate(lines):
+                y_pos = y_start + i * line_height
+                dt = (
+                    "drawtext"
+                    f"=fontfile={font_path}"
+                    f":text={line}"
+                    f":fontcolor={font_color}"
+                    f":fontsize={font_size}"
+                    ":x=(w-text_w)/2"
+                    f":y={y_pos}"
+                    f":borderw={outline}"
+                    ":bordercolor=000000@0.80"
+                    f":shadowx={shadow}"
+                    f":shadowy={shadow}"
+                    ":shadowcolor=000000@0.80"
+                )
+                filters.append(dt)
+
+            vf = ",".join(filters)
+            cmd = [
+                "ffmpeg", "-y", "-i", str(clip_path),
+                "-vf", vf,
+                "-c:v", "libx264", "-preset", "fast",
+                "-b:v", self.VIDEO_BITRATE,
+                "-an", out_path
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode == 0 and os.path.exists(out_path):
+                logger.info(
+                    f"[Renderer] s72 Hook title: {len(lines)} baris | y={y_start}"
+                )
+                return out_path
+            else:
+                logger.warning(
+                    f"[Renderer] Hook title gagal: {result.stderr[-200:]}"
+                    " — pakai clip original"
+                )
+                return clip_path
+        except Exception as e:
+            logger.warning(f"[Renderer] Hook title error: {e} — pakai clip original")
+            return clip_path
+
     def _create_clip_list(
         self,
         clips: list,
@@ -429,6 +527,15 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         logger.info("Getting audio duration...")
         audio_duration = self._get_audio_duration(audio_path)
         logger.info(f"Audio duration: {audio_duration:.1f}s")
+
+        # ── s72: Hook title overlay pada clip 1 ─────────────────
+        hook_title_style = self._load_hook_title_style(tenant_config)
+        hook_text_raw    = script.get("hook", "")
+        if clips and hook_text_raw and hook_title_style.get("enabled", True):
+            titled_clip_0 = self._add_hook_title(
+                clips[0], hook_text_raw, hook_title_style, output_dir
+            )
+            clips = [titled_clip_0] + list(clips[1:])
 
         logger.info("Creating clip list...")
         section_durs   = script.get("section_durations", {})

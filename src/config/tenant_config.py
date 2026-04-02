@@ -98,6 +98,7 @@ class TenantRunConfig:
     llm_script_fallback:     str  = "gpt-4o-mini" # fallback jika Claude error
     channel_group:           str  = "default"     # grup channel multi-tenant SaaS
     caption_style:          Optional[dict] = None
+    hook_title_style:       Optional[dict] = None
 
     # Developer tenant
     is_developer:       bool  = False
@@ -354,6 +355,7 @@ class TenantConfigManager:
                 niche_mode=row.get("niche_mode", "fixed") or "fixed",
                 niche_pool=list(row.get("niche_pool") or ["universe_mysteries"]),
                 caption_style=row.get("caption_style") if isinstance(row.get("caption_style"), dict) else None,
+                hook_title_style=row.get("hook_title_style") if isinstance(row.get("hook_title_style"), dict) else None,
                 duplicate_lookback_days = int(row.get("duplicate_lookback_days", 30) or 30),
                 production_on_api_error = row.get("production_on_api_error", "fallback") or "fallback",
                 tts_fallback_provider   = row.get("tts_fallback_provider", "edge_tts") or "edge_tts",
@@ -388,6 +390,7 @@ class TenantConfigManager:
                 niche_pool=["universe_mysteries"],
             tts_voice_per_niche=None,
             caption_style=None,
+            hook_title_style=None,
             duplicate_lookback_days = 30,
             production_on_api_error = "fallback",
             tts_fallback_provider   = "edge_tts",

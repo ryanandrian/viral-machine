@@ -304,41 +304,50 @@ class VisualAssembler:
             from src.providers.visual.ai_image import AIImageProvider, VideoClip
 
             hook_text = script.get("hook", "").strip()
+            # s72: thumbnail_concept = deskripsi visual murni dari script engine
+            # Mencegah DALL-E render teks literal dari kalimat hook
+            thumbnail_concept = script.get("thumbnail_concept", "").strip() or hook_text
             niche     = config.get("niche", "universe_mysteries")
 
             if not hook_text:
                 return None
 
-            # Niche-specific hook frame style
+            # Niche-specific hook frame style — s72
+            # Pakai thumbnail_concept (deskripsi visual murni dari script engine)
+            # BUKAN hook_text — hook_text menyebabkan DALL-E render teks di gambar
             HOOK_FRAME_STYLE = {
                 "universe_mysteries": (
                     f"Cinematic vertical 9:16 hero image. "
-                    f"Visually represents: '{hook_text}'. "
+                    f"{thumbnail_concept}. "
                     f"Style: NASA documentary, dramatic cosmic scale, "
                     f"extreme high contrast, cold blue-black palette, "
                     f"single striking focal point that stops the scroll instantly. "
-                    f"Photorealistic, 8K, no text, no people."
+                    f"Photorealistic, 8K. "
+                    f"No text, no words, no letters, no numbers, no signs, no typography. No people."
                 ),
                 "dark_history": (
                     f"Cinematic vertical 9:16 hero image. "
-                    f"Visually represents: '{hook_text}'. "
+                    f"{thumbnail_concept}. "
                     f"Style: dark historical documentary, ominous atmosphere, "
                     f"desaturated with deep shadows, single haunting focal point. "
-                    f"Photorealistic, no text, no people."
+                    f"Photorealistic. "
+                    f"No text, no words, no letters, no numbers, no signs, no typography. No people."
                 ),
                 "ocean_mysteries": (
                     f"Cinematic vertical 9:16 hero image. "
-                    f"Visually represents: '{hook_text}'. "
+                    f"{thumbnail_concept}. "
                     f"Style: deep ocean documentary, bioluminescent darkness, "
                     f"eerie yet beautiful, single creature or phenomenon as focal point. "
-                    f"Photorealistic, no text."
+                    f"Photorealistic. "
+                    f"No text, no words, no letters, no numbers, no signs, no typography."
                 ),
                 "fun_facts": (
                     f"Cinematic vertical 9:16 hero image. "
-                    f"Visually represents: '{hook_text}'. "
+                    f"{thumbnail_concept}. "
                     f"Style: vibrant, high-energy, bold colors, "
                     f"single surprising visual that demands attention. "
-                    f"Photorealistic, no text."
+                    f"Photorealistic. "
+                    f"No text, no words, no letters, no numbers, no signs, no typography."
                 ),
             }
 

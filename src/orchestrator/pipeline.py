@@ -196,6 +196,14 @@ class Pipeline:
             result["video_path"] = video_path
             logger.info(f"STEP 7 DONE | Video: {video_path} ({size_mb:.1f} MB)")
 
+            # ── s72: Simpan thumbnail SEBELUM clips dihapus ─────────
+            thumbnail_path = self._save_thumbnail(
+                tenant_id  = tenant_config.tenant_id,
+                run_id     = run_id,
+                output_dir = "logs",
+            )
+            result["thumbnail_path"] = thumbnail_path
+
             # ── CLEANUP: Hapus clips mentah setelah render ──────────
             clips_cleaned = self.storage_cleaner.cleanup_clips(
                 tenant_id=tenant_config.tenant_id,
@@ -247,7 +255,10 @@ class Pipeline:
             if publish and qc_passed:
                 # YouTube
                 logger.info("PUBLISHING | Uploading to YouTube Shorts...")
-                yt_result = self.youtube_publisher.publish(video_path, script, tenant_config)
+                yt_result = self.youtube_publisher.publish(
+                    video_path, script, tenant_config,
+                    thumbnail_path=result.get("thumbnail_path", ""),
+                )
                 result["published"]["youtube"] = yt_result
 
                 if yt_result.get("video_id"):
@@ -353,6 +364,23 @@ class Pipeline:
 
         return result
 
+
+    def _save_thumbnail(self, tenant_id: str, run_id: str, output_dir: str = "logs") -> str:
+        """s72: Copy hook_frame_img.jpg ke logs/ sebelum cleanup_clips."""
+        import shutil
+        clips_dir = Path(output_dir) / f"clips_{tenant_id}"
+        src = clips_dir / "hook_frame_img.jpg"
+        if not src.exists():
+            logger.warning("[Pipeline] hook_frame_img.jpg tidak ada — thumbnail skip")
+            return ""
+        dst = Path(output_dir) / f"thumbnail_{run_id}.jpg"
+        try:
+            shutil.copy2(str(src), str(dst))
+            logger.info(f"[Pipeline] s72 Thumbnail saved: {dst.name}")
+            return str(dst)
+        except Exception as e:
+            logger.warning(f"[Pipeline] Thumbnail copy gagal: {e}")
+            return ""
 
     def _pre_publish_qc(self, video_path: str, duration_secs, clip_count: int = None) -> tuple:
         """

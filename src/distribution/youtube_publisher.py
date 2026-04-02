@@ -128,7 +128,8 @@ class YouTubePublisher:
 
 
     def publish(self, video_path: str, script: dict,
-                tenant_config: TenantConfig) -> dict:
+                tenant_config: TenantConfig,
+                thumbnail_path: str = "") -> dict:
         """
         Upload video ke YouTube Shorts.
         Returns: dict berisi video_id dan URL jika berhasil.
@@ -183,6 +184,10 @@ class YouTubePublisher:
             logger.info(f"Video ID : {video_id}")
             logger.info(f"URL      : {video_url}")
 
+            # ── s72: Upload custom thumbnail ──────────────────
+            if thumbnail_path and video_id:
+                self._upload_thumbnail(youtube, video_id, thumbnail_path)
+
             return {
                 "platform": "youtube",
                 "video_id": video_id,
@@ -195,6 +200,26 @@ class YouTubePublisher:
         except Exception as e:
             logger.error(f"YouTube upload error: {e}")
             return {"platform": "youtube", "status": "failed", "error": str(e)}
+
+    def _upload_thumbnail(self, youtube, video_id: str, thumbnail_path: str) -> bool:
+        """s72: Upload custom thumbnail via YouTube thumbnails.set()."""
+        import os
+        if not thumbnail_path or not os.path.exists(thumbnail_path):
+            logger.warning(f"[YouTube] Thumbnail tidak ada: {thumbnail_path}")
+            return False
+        try:
+            from googleapiclient.http import MediaFileUpload
+            media = MediaFileUpload(
+                thumbnail_path, mimetype="image/jpeg", resumable=False
+            )
+            youtube.thumbnails().set(
+                videoId=video_id, media_body=media
+            ).execute()
+            logger.info(f"[YouTube] s72 Thumbnail uploaded OK: {video_id}")
+            return True
+        except Exception as e:
+            logger.warning(f"[YouTube] Thumbnail upload gagal (non-critical): {e}")
+            return False
 
     def get_channel_stats(self, tenant_config: TenantConfig) -> dict:
         try:
