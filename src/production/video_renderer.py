@@ -191,6 +191,19 @@ class VideoRenderer:
                 logger.info(
                     f"[Renderer] s72 Hook title: {len(lines)} baris | y={y_start}"
                 )
+                # s72e: Extract frame dari titled clip → update hook_frame_img.jpg
+                # Agar thumbnail YouTube sama persis dengan clip 1 (ada hook title)
+                try:
+                    from pathlib import Path as _Path
+                    thumb_dst = str(_Path(clip_path).parent / "hook_frame_img.jpg")
+                    subprocess.run(
+                        ["ffmpeg", "-y", "-i", out_path,
+                         "-frames:v", "1", "-q:v", "2", thumb_dst],
+                        capture_output=True
+                    )
+                    logger.info(f"[Renderer] s72e Thumbnail frame extracted: {thumb_dst}")
+                except Exception as _e:
+                    logger.warning(f"[Renderer] s72e Thumbnail extract gagal (non-critical): {_e}")
                 return out_path
             else:
                 logger.warning(
