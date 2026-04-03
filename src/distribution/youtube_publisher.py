@@ -84,21 +84,55 @@ class YouTubePublisher:
         build_up   = script.get("build_up", "")
         core_facts = script.get("core_facts", "")
         climax     = script.get("climax", "")
-        hashtags   = script.get("hashtags", ["#shorts", "#facts"])
+        hashtags   = script.get("hashtags", [])
         cta        = self.NICHE_CTA.get(niche, self.NICHE_CTA["fun_facts"])
-        desc_parts = []
-        if hook:
-            desc_parts.extend([hook, ""])
-        preview = " ".join(filter(None, [
-            mystery[:150] if mystery else "",
-            build_up[:150] if build_up else "",
-            core_facts[:200] if core_facts else "",
-            climax[:150] if climax else "",
-        ]))
-        if preview.strip():
-            desc_parts.extend([preview.strip(), ""])
-        desc_parts.extend([cta, "", " ".join(hashtags[:15])])
-        description = "\n".join(desc_parts)[:5000]
+
+        # ── s73: Hashtag strategy — topik + niche + universal ──
+        try:
+            from src.config.tenant_config import load_tenant_config
+            rc = load_tenant_config(tenant_config.tenant_id)
+            niche_tags = []
+            if hasattr(rc, "niche_hashtags") and rc.niche_hashtags:
+                niche_tags = rc.niche_hashtags.get(niche, [])
+        except Exception:
+            niche_tags = []
+
+        topic_tags = [h for h in hashtags if h.startswith("#")][:5]
+        niche_tags = [h for h in niche_tags if h not in topic_tags][:7]
+        universal  = ["#shorts", "#viral", "#facts"]
+        all_hashtags = topic_tags + niche_tags + universal
+        seen = set()
+        final_hashtags = []
+        for h in all_hashtags:
+            if h.lower() not in seen:
+                seen.add(h.lower())
+                final_hashtags.append(h)
+        hashtag_str = " ".join(final_hashtags[:15])
+
+        # ── s73: Description — CTA + hashtag dijamin masuk ──
+        footer     = f"\n{cta}\n\n{hashtag_str}"
+        MAX_DESC   = 4500
+        hook_block = f"{hook}\n\n" if hook else ""
+        budget     = MAX_DESC - len(footer) - len(hook_block)
+
+        preview_full = " ".join(filter(None, [mystery, build_up, core_facts, climax]))
+        if len(preview_full) > budget and budget > 0:
+            preview_cut = preview_full[:budget]
+            last_dot = max(
+                preview_cut.rfind("."),
+                preview_cut.rfind("!"),
+                preview_cut.rfind("?")
+            )
+            if last_dot > budget // 2:
+                preview_full = preview_cut[:last_dot + 1]
+            else:
+                preview_full = preview_cut.rsplit(" ", 1)[0]
+
+        if preview_full.strip():
+            description = f"{hook_block}{preview_full.strip()}{footer}"
+        else:
+            description = f"{hook_block.strip()}{footer}"
+        description = description[:MAX_DESC]
         tags = list(self.NICHE_BASE_TAGS.get(niche, []))
         for tag in hashtags:
             clean = tag.replace("#", "").strip().lower()

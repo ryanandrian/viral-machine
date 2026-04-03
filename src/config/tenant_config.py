@@ -100,6 +100,7 @@ class TenantRunConfig:
     caption_style:          Optional[dict] = None
     hook_title_style:       Optional[dict] = None
     trailing_silence:       float          = 2.5
+    niche_hashtags:         Optional[dict] = None
 
     # Developer tenant
     is_developer:       bool  = False
@@ -358,6 +359,7 @@ class TenantConfigManager:
                 caption_style=row.get("caption_style") if isinstance(row.get("caption_style"), dict) else None,
                 hook_title_style=row.get("hook_title_style") if isinstance(row.get("hook_title_style"), dict) else None,
                 trailing_silence=float(row.get("trailing_silence") or 2.5),
+                niche_hashtags=row.get("niche_hashtags") if isinstance(row.get("niche_hashtags"), dict) else None,
                 duplicate_lookback_days = int(row.get("duplicate_lookback_days", 30) or 30),
                 production_on_api_error = row.get("production_on_api_error", "fallback") or "fallback",
                 tts_fallback_provider   = row.get("tts_fallback_provider", "edge_tts") or "edge_tts",
@@ -394,6 +396,7 @@ class TenantConfigManager:
             caption_style=None,
             hook_title_style=None,
             trailing_silence=2.5,
+            niche_hashtags=None,
             duplicate_lookback_days = 30,
             production_on_api_error = "fallback",
             tts_fallback_provider   = "edge_tts",
