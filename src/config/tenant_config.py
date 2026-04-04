@@ -108,6 +108,11 @@ class TenantRunConfig:
     auto_schedule:      bool  = True
     peak_region:        str   = "us"
 
+    # Notifikasi Telegram (s81)
+    telegram_enabled:   bool           = True
+    telegram_chat_id:   Optional[str]  = None   # Per-tenant; fallback ke env TELEGRAM_CHAT_ID
+    channel_name:       str            = ""     # Display name: "RAD The Explorer"
+
     # Provider settings (raw config — provider diinisialisasi saat dibutuhkan)
     tts_provider:      str           = "edge_tts"
     tts_voice:         str           = "en-US-GuyNeural"
@@ -366,6 +371,10 @@ class TenantConfigManager:
                 visual_fallback_mode    = row.get("visual_fallback_mode", "video") or "video",
                 llm_script_fallback     = row.get("llm_script_fallback", "gpt-4o-mini") or "gpt-4o-mini",
                 channel_group           = row.get("channel_group", "default") or "default",
+                # Telegram (s81)
+                telegram_enabled        = row.get("telegram_enabled", True),
+                telegram_chat_id        = row.get("telegram_chat_id") or None,
+                channel_name            = row.get("channel_name", "") or "",
             )
 
         except Exception as e:
@@ -403,6 +412,10 @@ class TenantConfigManager:
             visual_fallback_mode    = "video",
             llm_script_fallback     = "gpt-4o-mini",
             channel_group           = "default",
+            # Telegram (s81)
+            telegram_enabled        = True,
+            telegram_chat_id        = None,
+            channel_name            = "",
         )
 
     def invalidate_cache(self, tenant_id: str) -> None:

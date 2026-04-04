@@ -30,6 +30,7 @@ from src.production.video_renderer import VideoRenderer
 from src.distribution.youtube_publisher import YouTubePublisher
 from src.utils.storage_cleaner import StorageCleaner
 from src.utils.supabase_writer import SupabaseWriter
+from src.utils.telegram_notifier import TelegramNotifier
 
 load_dotenv()
 
@@ -51,6 +52,7 @@ class Pipeline:
         self.youtube_publisher = YouTubePublisher()
         self.storage_cleaner   = StorageCleaner(base_dir="logs")
         self.supabase_writer   = SupabaseWriter()
+        self.telegram          = TelegramNotifier()
 
     def _load_tenant_run_config(self, tenant_config: TenantConfig):
         """
@@ -234,6 +236,19 @@ class Pipeline:
                     duration_secs = video_duration,
                     file_size_mb  = file_size_mb,
                 )
+                # s81: Notifikasi Telegram QC fail
+                try:
+                    self.telegram.notify_qc_fail(
+                        run_id        = run_id,
+                        tenant_id     = tenant_config.tenant_id,
+                        topic         = script.get("topic", ""),
+                        qc_reason     = qc_reason,
+                        duration_secs = video_duration,
+                        size_mb       = file_size_mb,
+                        run_config    = run_config,
+                    )
+                except Exception as _te:
+                    logger.warning(f"[Telegram] notify_qc_fail gagal: {_te}")
                 # Hapus clips dir DAN video final agar tidak bocor disk
                 self.storage_cleaner.cleanup_clips(
                     tenant_id  = tenant_config.tenant_id,
@@ -282,10 +297,25 @@ class Pipeline:
                     )
                     # ──────────────────────────────────────────────────
 
+                    # s81: Notifikasi Telegram sukses publish
+                    try:
+                        self.telegram.notify_success(result, run_config=run_config)
+                    except Exception as _te:
+                        logger.warning(f"[Telegram] notify_success gagal: {_te}")
+
                 else:
-                    logger.warning(
-                        f"YouTube publish failed: {yt_result.get('error', 'unknown')}"
-                    )
+                    _yt_err = yt_result.get("error", "unknown")
+                    logger.warning(f"YouTube publish failed: {_yt_err}")
+                    # s81: Notifikasi Telegram upload gagal (QC lulus tapi YouTube reject)
+                    try:
+                        self.telegram.notify_publish_fail(
+                            run_id     = run_id,
+                            tenant_id  = tenant_config.tenant_id,
+                            error      = _yt_err,
+                            run_config = run_config,
+                        )
+                    except Exception as _te:
+                        logger.warning(f"[Telegram] notify_publish_fail gagal: {_te}")
 
                 # TikTok — akan ditambah di Fase 8
                 # Instagram — akan ditambah di Fase 8
@@ -348,6 +378,18 @@ class Pipeline:
                 niche     = getattr(tenant_config, "niche", "unknown"),
                 error     = str(e),
             )
+            # s81: Notifikasi Telegram pipeline crash
+            try:
+                self.telegram.notify_failure(
+                    run_id          = run_id,
+                    tenant_id       = tenant_config.tenant_id,
+                    niche           = getattr(tenant_config, "niche", "unknown"),
+                    error           = str(e),
+                    elapsed_seconds = elapsed,
+                    run_config      = run_config,
+                )
+            except Exception as _te:
+                logger.warning(f"[Telegram] notify_failure gagal: {_te}")
             # ─────────────────────────────────────────────────────────
 
             # Cleanup clips meski pipeline gagal
