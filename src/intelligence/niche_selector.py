@@ -96,11 +96,11 @@ class NicheSelector:
             1
         )
 
-    def _analyze_with_ai(self, signals_summary: str, tenant_config: TenantConfig) -> list:
+    def _analyze_with_ai(self, signals_summary: str, tenant_config: TenantConfig,
+                         peak_region: str = "us") -> list:
         niche_data = NICHES[tenant_config.niche]
 
-        peak_region = signals.get("peak_region", "us")
-        audience    = REGION_DISPLAY.get(peak_region, REGION_DISPLAY["us"])
+        audience = REGION_DISPLAY.get(peak_region, REGION_DISPLAY["us"])
 
         prompt = f"""You are an expert viral content strategist specializing in short-form video (60 seconds max).
 
@@ -239,8 +239,9 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
         total_signals = sum(len(v) for v in signals.values() if isinstance(v, list))
         logger.info(f"Analyzing {total_signals} signals...")
 
-        summary = self._prepare_signals_summary(signals, tenant_config)
-        topics  = self._analyze_with_ai(summary, tenant_config)
+        summary     = self._prepare_signals_summary(signals, tenant_config)
+        peak_region = signals.get("peak_region", "us")
+        topics      = self._analyze_with_ai(summary, tenant_config, peak_region=peak_region)
 
         # ── s71: Duplicate prevention ──────────────────────────────────
         topics = self._filter_duplicates(topics, tenant_config)
