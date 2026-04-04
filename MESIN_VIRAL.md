@@ -859,63 +859,97 @@ File-file berikut muncul di `git status` sebagai untracked (`??`) namun **tidak 
 
 ## 11. LINGKUNGAN PRODUCTION SERVER
 
-### Server VPS
-| Parameter | Detail |
-|-----------|--------|
-| **Path production** | `/home/rad4vm/viral-machine` |
-| **User** | `rad4vm` |
-| **Python** | `/usr/bin/python3.11` |
-| **Shell** | Bash |
+> Diverifikasi langsung: 4 April 2026
 
-> **Catatan**: Path ini berbeda dari environment development lokal (`/home/rad/viral-machine`). Hal ini terlihat dari `scripts/daily_run.sh`:
-> ```bash
-> cd /home/rad4vm/viral-machine
-> /usr/bin/python3.11 -m src.orchestrator.pipeline --publish >> logs/cron_$(date +%Y%m%d).log 2>&1
-> ```
+### Spesifikasi VPS
 
-### Eksekusi Pipeline di Production
-| Parameter | Detail |
-|-----------|--------|
-| **Command** | `/usr/bin/python3.11 -m src.orchestrator.pipeline --publish` |
-| **Log output** | `logs/cron_YYYYMMDD.log` (append mode per hari) |
-| **Trigger** | Cron job (jadwal baca dari `tenant_configs.production_cron`) |
-| **Flag** | `--publish` → aktifkan upload ke YouTube (tanpa flag: dry-run render saja) |
+| Parameter | VPS Production | Dev Local (WSL2) |
+|-----------|---------------|-----------------|
+| **OS** | Ubuntu 22.04.5 LTS | Windows 11 + WSL2 |
+| **User** | `rad4vm` | `rad` |
+| **Path project** | `/home/rad4vm/viral-machine` | `/home/rad/viral-machine` |
+| **Python binary** | `/usr/bin/python3.11` | `~/.pyenv/shims/python3.11` |
+| **Python versi** | `3.11.0rc1` ⚠️ | `3.11.9` (stable) |
+| **Package mode** | User-local (`~/.local/lib/`) | pyenv + pip |
+| **Virtual env** | ❌ Tidak ada | ❌ Tidak ada |
+| **FFmpeg** | `4.4.2` (Ubuntu apt) | Sistem WSL |
+| **Disk tersedia** | 53 GB / 58 GB total | — |
 
-### Konfigurasi Cron di Production
-Berdasarkan kode dan `daily_run.sh`, eksekusi pipeline harus didaftarkan via `crontab -e`:
+### Versi Package: VPS vs Dev
+
+| Package | VPS | Dev | Status |
+|---------|-----|-----|--------|
+| `openai` | 2.29.0 | 2.29.0 | ✅ Sama |
+| `supabase` | 2.28.2 | 2.28.3 | ⚠️ Beda patch |
+| `edge-tts` | 7.2.8 | 7.2.8 | ✅ Sama |
+| `pytrends` | 4.9.2 | 4.9.2 | ✅ Sama |
+| `httpx` | 0.28.1 | 0.28.1 | ✅ Sama |
+| `requests` | **2.25.1** (sistem apt) | **2.32.5** (pip) | ❌ Gap besar |
+| `feedparser` | 6.0.12 | 6.0.12 | ✅ Sama |
+| `loguru` | 0.7.3 | 0.7.3 | ✅ Sama |
+| `tenacity` | 9.1.4 | 9.1.4 | ✅ Sama |
+| Python | **3.11.0rc1** | **3.11.9** | ⚠️ RC vs stable |
+
+**Package ekstra terinstall di VPS** (tidak di `requirements.txt`):
+`elevenlabs`, `anthropic`, `replicate`, `google-api-core` — terinstall manual atau lewat dependency chain.
+
+### Temuan & Tindakan
+
+| # | Temuan | Risiko | Tindakan |
+|---|--------|--------|---------|
+| 1 | Python 3.11.0rc1 (bukan stable) | Rendah — pipeline berjalan normal | Upgrade ke 3.11.x stable jika ada masalah aneh |
+| 2 | `requests` 2.25.1 sistem vs 2.32.5 dev | Sedang — keamanan & bug fix | Jalankan `pip install "requests==2.32.5"` di VPS |
+| 3 | `supabase` 2.28.2 vs 2.28.3 | Rendah — beda patch | Jalankan `pip install "supabase==2.28.3"` di VPS |
+| 4 | Tidak ada virtual env | Rendah — konflik potensial | Buat venv saat refactor infrastruktur |
+| 5 | Git commit VPS tertinggal setelah s82 | Tinggi — kode baru belum aktif | `git pull origin main` sekarang |
+
 ```bash
-# Contoh (sesuaikan dengan production_cron di Supabase):
-0 13 * * * /home/rad4vm/viral-machine/scripts/daily_run.sh
+# Fix package di VPS (jalankan sekali):
+pip install "requests==2.32.5" "supabase==2.28.3"
 ```
-> Pipeline saat ini berjalan 5× sehari — berarti terdapat 5 entri cron berbeda dengan jadwal berbeda, atau menggunakan single-run-multi-slot orchestration.
 
-### Sistem Operasi & Dependencies
-| Komponen | Detail |
-|----------|--------|
-| **OS** | Linux (Ubuntu/Debian assumed dari `apt-get`) |
-| **Python** | 3.11 (`/usr/bin/python3.11`) |
-| **FFmpeg** | Harus terinstall: `apt-get install ffmpeg` |
-| **FFprobe** | Ikut dengan FFmpeg |
-| **Git** | Terhubung ke GitHub remote (push/pull untuk deploy) |
-| **Disk** | ~200–500 MB per run aktif; dibersihkan otomatis setelah upload |
-| **RAM** | ~2–4 GB saat render FFmpeg (buffering clips) |
-| **CPU** | Single-thread FFmpeg; ~5–15 menit per run |
+### Konfigurasi Cron (Aktif di VPS)
+
+5 slot produksi/hari, target audience US Tier-1 (semua waktu UTC):
+
+```bash
+# Slot 1 → Upload 18:00 UTC (Morning US East)
+30 17 * * * cd /home/rad4vm/viral-machine && /usr/bin/python3.11 -m src.orchestrator.pipeline --publish >> logs/cron_$(date +\%Y\%m\%d)_r1.log 2>&1
+# Slot 2 → Upload 21:00 UTC (Late Morning US / Afternoon UK)
+30 20 * * * cd /home/rad4vm/viral-machine && /usr/bin/python3.11 -m src.orchestrator.pipeline --publish >> logs/cron_$(date +\%Y\%m\%d)_r2.log 2>&1
+# Slot 3 → Upload 00:00 UTC (Lunch US East)
+30 23 * * * cd /home/rad4vm/viral-machine && /usr/bin/python3.11 -m src.orchestrator.pipeline --publish >> logs/cron_$(date +\%Y\%m\%d)_r3.log 2>&1
+# Slot 4 → Upload 04:00 UTC (After Work US East)
+30 3  * * * cd /home/rad4vm/viral-machine && /usr/bin/python3.11 -m src.orchestrator.pipeline --publish >> logs/cron_$(date +\%Y\%m\%d)_r4.log 2>&1
+# Slot 5 → Upload 07:00 UTC (Prime Time US West)
+30 6  * * * cd /home/rad4vm/viral-machine && /usr/bin/python3.11 -m src.orchestrator.pipeline --publish >> logs/cron_$(date +\%Y\%m\%d)_r5.log 2>&1
+```
+
+Log per slot: `logs/cron_YYYYMMDD_r{1-5}.log`
 
 ### Deploy Workflow
+
 ```
-Dev (local /home/rad/viral-machine)
-    │
+Dev local (/home/rad/viral-machine, WSL2, Python 3.11.9)
     │  git push origin main
     ▼
-GitHub Repository
-    │
-    │  (manual pull atau CI/CD)
+GitHub (ryanandrian/viral-machine)
+    │  git pull origin main  ← manual di VPS
     ▼
-Production VPS (/home/rad4vm/viral-machine)
-    │
-    │  git pull + restart cron (jika ada perubahan)
+VPS (/home/rad4vm/viral-machine, Ubuntu 22.04, Python 3.11.0rc1)
+    │  Edit .env jika ada var baru
+    │  Jalankan SQL di Supabase dashboard jika ada DDL baru
     ▼
-Cron → daily_run.sh → pipeline.py --publish → YouTube
+Cron 5× sehari → pipeline.py --publish → YouTube
+```
+
+### Checklist Deploy Per Rilis
+
+```bash
+cd /home/rad4vm/viral-machine
+git pull origin main
+# Jika ada package baru:
+pip install -r requirements.txt
 ```
 
 ---

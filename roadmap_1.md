@@ -9,7 +9,7 @@
 | # | Item | Tier | Status | Selesai |
 |---|------|------|--------|---------|
 | 1 | Telegram Notifikasi | 1 | ✅ DONE | 4 Apr 2026 |
-| 2 | Regional Targeting Tier-1 di TrendRadar | 1 | ⬜ TODO | — |
+| 2 | Regional Targeting Tier-1 di TrendRadar | 1 | ✅ DONE | 4 Apr 2026 |
 | 3 | Loop Ending Video | 1 | ⬜ TODO | — |
 | 4 | ChannelAnalytics + Feedback Loop NicheSelector | 1 | ⬜ TODO | — |
 | 5 | Error Management Profesional (exceptions.py) | 2 | ⬜ TODO | — |
