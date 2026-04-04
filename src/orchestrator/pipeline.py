@@ -364,41 +364,61 @@ class Pipeline:
                 logger.info(f"Live at: {result['published']['youtube']['url']}")
             logger.info(f"{'='*60}")
 
-        except Exception as e:
+        except BaseException as e:
+            # BaseException (bukan hanya Exception) agar Ctrl+C / SIGTERM
+            # pun tetap trigger cleanup — tidak tinggalkan sampah di disk.
+            is_interrupt = isinstance(e, (KeyboardInterrupt, SystemExit))
+
             elapsed          = round(time.time() - start_time, 1)
             result["status"] = "failed"
-            result["error"]  = str(e)
+            result["error"]  = str(e) if not is_interrupt else "Interrupted (KeyboardInterrupt/SystemExit)"
             result["elapsed_seconds"] = elapsed
             logger.error(f"PIPELINE FAILED | {elapsed}s | Error: {e}")
 
             # ── s71: Catat pipeline failure ke Supabase ───────────────
-            self.supabase_writer.write_failed_run(
-                run_id    = run_id,
-                tenant_id = tenant_config.tenant_id,
-                niche     = getattr(tenant_config, "niche", "unknown"),
-                error     = str(e),
-            )
-            # s81: Notifikasi Telegram pipeline crash
-            try:
-                self.telegram.notify_failure(
-                    run_id          = run_id,
-                    tenant_id       = tenant_config.tenant_id,
-                    niche           = getattr(tenant_config, "niche", "unknown"),
-                    error           = str(e),
-                    elapsed_seconds = elapsed,
-                    run_config      = run_config,
+            # Skip Supabase write jika interrupt — koneksi mungkin sudah mati
+            if not is_interrupt:
+                self.supabase_writer.write_failed_run(
+                    run_id    = run_id,
+                    tenant_id = tenant_config.tenant_id,
+                    niche     = getattr(tenant_config, "niche", "unknown"),
+                    error     = str(e),
                 )
-            except Exception as _te:
-                logger.warning(f"[Telegram] notify_failure gagal: {_te}")
+                # s81: Notifikasi Telegram pipeline crash
+                try:
+                    self.telegram.notify_failure(
+                        run_id          = run_id,
+                        tenant_id       = tenant_config.tenant_id,
+                        niche           = getattr(tenant_config, "niche", "unknown"),
+                        error           = str(e),
+                        elapsed_seconds = elapsed,
+                        run_config      = run_config,
+                    )
+                except Exception as _te:
+                    logger.warning(f"[Telegram] notify_failure gagal: {_te}")
             # ─────────────────────────────────────────────────────────
 
-            # Cleanup clips meski pipeline gagal
-            # (jika render sudah selesai sebelum error)
+            # Cleanup clips meski pipeline gagal (termasuk Ctrl+C)
+            # Hapus clips_dir tanpa syarat video_path — bisa saja render belum selesai
+            try:
+                clips_dir = Path("logs") / f"clips_{tenant_config.tenant_id}"
+                if clips_dir.exists():
+                    import shutil as _shutil
+                    _shutil.rmtree(clips_dir)
+                    logger.info(f"[Pipeline] Cleanup clips dir: {clips_dir.name}")
+            except Exception as _ce:
+                logger.warning(f"[Pipeline] Cleanup clips gagal: {_ce}")
+            # Hapus video final jika ada tapi belum di-publish
             if video_path and Path(video_path).exists():
-                self.storage_cleaner.cleanup_clips(
-                    tenant_id=tenant_config.tenant_id,
-                    video_path=video_path,
-                )
+                try:
+                    Path(video_path).unlink()
+                    logger.info(f"[Pipeline] Cleanup video: {Path(video_path).name}")
+                except Exception as _ve:
+                    logger.warning(f"[Pipeline] Cleanup video gagal: {_ve}")
+
+            # Re-raise interrupt agar proses benar-benar berhenti
+            if is_interrupt:
+                raise
 
         os.makedirs("logs", exist_ok=True)
         with open(f"logs/pipeline_{run_id}.json", "w") as f:
