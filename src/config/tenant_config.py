@@ -117,6 +117,10 @@ class TenantRunConfig:
     loop_ending_enabled:  bool  = True   # Tambah loop ending → watch time meningkat
     loop_ending_duration: float = 1.5   # Durasi loop clip yang ditambah di akhir (detik)
 
+    # Niche Rotation (s84) — dipakai ScheduleManager Layer 2
+    default_niche_rotation: list = field(default_factory=list)  # ["universe_mysteries", ...]
+    niche_rotation_index:   int  = 0                            # posisi saat ini di rotasi
+
     # Provider settings (raw config — provider diinisialisasi saat dibutuhkan)
     tts_provider:      str           = "edge_tts"
     tts_voice:         str           = "en-US-GuyNeural"
@@ -382,6 +386,9 @@ class TenantConfigManager:
                 # Loop Ending (s83)
                 loop_ending_enabled     = row.get("loop_ending_enabled", True),
                 loop_ending_duration    = float(row.get("loop_ending_duration") or 1.5),
+                # Niche Rotation (s84)
+                default_niche_rotation  = list(row.get("default_niche_rotation") or []),
+                niche_rotation_index    = int(row.get("niche_rotation_index") or 0),
             )
 
         except Exception as e:
@@ -426,6 +433,9 @@ class TenantConfigManager:
             # Loop Ending (s83)
             loop_ending_enabled     = True,
             loop_ending_duration    = 1.5,
+            # Niche Rotation (s84)
+            default_niche_rotation  = [],
+            niche_rotation_index    = 0,
         )
 
     def invalidate_cache(self, tenant_id: str) -> None:

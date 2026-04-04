@@ -31,6 +31,7 @@ from src.distribution.youtube_publisher import YouTubePublisher
 from src.utils.storage_cleaner import StorageCleaner
 from src.utils.supabase_writer import SupabaseWriter
 from src.utils.telegram_notifier import TelegramNotifier
+from src.intelligence.schedule_manager import ScheduleManager
 
 load_dotenv()
 
@@ -50,9 +51,10 @@ class Pipeline:
         self.visual_assembler  = VisualAssembler()
         self.video_renderer    = VideoRenderer()
         self.youtube_publisher = YouTubePublisher()
-        self.storage_cleaner   = StorageCleaner(base_dir="logs")
-        self.supabase_writer   = SupabaseWriter()
-        self.telegram          = TelegramNotifier()
+        self.storage_cleaner    = StorageCleaner(base_dir="logs")
+        self.supabase_writer    = SupabaseWriter()
+        self.telegram           = TelegramNotifier()
+        self.schedule_manager   = ScheduleManager()
 
     def _load_tenant_run_config(self, tenant_config: TenantConfig):
         """
@@ -95,10 +97,31 @@ class Pipeline:
         # Load config dari Supabase
         run_config = self._load_tenant_run_config(tenant_config)
 
+        # ── s84: Resolve niche + focus dari production_schedules ────
+        try:
+            channel_id   = getattr(run_config, "channel_id", None) or tenant_config.tenant_id
+            resolved_niche, niche_focus = self.schedule_manager.resolve_slot(
+                tenant_id  = tenant_config.tenant_id,
+                channel_id = channel_id,
+            )
+            if resolved_niche and resolved_niche != tenant_config.niche:
+                logger.info(
+                    f"[Pipeline] Niche override: "
+                    f"{tenant_config.niche} → {resolved_niche}"
+                )
+                tenant_config.niche = resolved_niche
+            if niche_focus:
+                logger.info(f"[Pipeline] Niche focus: '{niche_focus}'")
+        except Exception as _se:
+            logger.warning(f"[Pipeline] ScheduleManager gagal ({_se}) — pakai niche default")
+            niche_focus = None
+        # ────────────────────────────────────────────────────────────
+
         result = {
             "run_id":       run_id,
             "tenant_id":    tenant_config.tenant_id,
-            "niche":        tenant_config.niche,
+            "niche":        tenant_config.niche,  # diupdate setelah resolve_slot
+            "niche_focus":  niche_focus,
             "started_at":   datetime.now().isoformat(),
             "steps":        {},
             "status":       "running",
@@ -108,18 +131,25 @@ class Pipeline:
         }
 
         video_path = None
+        # Sync result["niche"] setelah resolve_slot (mungkin sudah diubah)
+        result["niche"] = tenant_config.niche
 
         try:
             # ── STEP 1: Trend Scan ──────────────────────────────────
             logger.info("STEP 1/7 | Scanning trends...")
-            signals       = self.trend_radar.scan(tenant_config, run_config=run_config)
+            signals = self.trend_radar.scan(
+                tenant_config, run_config=run_config, focus=niche_focus
+            )
             total_signals = sum(len(v) for v in signals.values() if isinstance(v, list))
-            result["steps"]["trend_scan"] = {"status": "ok", "signals": total_signals}
+            result["steps"]["trend_scan"] = {
+                "status": "ok", "signals": total_signals,
+                "niche_focus": niche_focus or None,
+            }
             logger.info(f"STEP 1 DONE | {total_signals} signals collected")
 
             # ── STEP 2: Topic Selection ─────────────────────────────
             logger.info("STEP 2/7 | Selecting best topic...")
-            topics = self.niche_selector.select(signals, tenant_config)
+            topics = self.niche_selector.select(signals, tenant_config, focus=niche_focus)
             if not topics:
                 raise Exception("No topics selected")
             result["steps"]["topic_selection"] = {

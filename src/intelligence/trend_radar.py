@@ -294,13 +294,26 @@ class TrendRadar:
 
     # ─── MAIN SCAN ─────────────────────────────────────────────────────────
 
-    def scan(self, tenant_config: TenantConfig, run_config=None) -> dict:
+    def scan(self, tenant_config: TenantConfig, run_config=None,
+             focus: str = None) -> dict:
         """
         s82: terima run_config (opsional) untuk baca peak_region.
+        s84: terima focus (opsional) — keyword fokus dari production_schedules.
+             Jika focus diisi, focus menjadi keyword prioritas pertama di semua sumber.
         Fallback: peak_region='us' (Tier-1 US default).
         """
-        niche_data  = NICHES.get(tenant_config.niche, NICHES["universe_mysteries"])
-        keywords    = niche_data["keywords"]
+        niche_data = NICHES.get(tenant_config.niche, NICHES["universe_mysteries"])
+        base_keywords = niche_data["keywords"]
+
+        # s84: focus keyword jadi prioritas #1, niche keywords pelengkap
+        if focus and focus.strip():
+            focus_clean = focus.strip()
+            # Hindari duplikat jika focus sudah ada di base keywords
+            extra = [k for k in base_keywords if k.lower() not in focus_clean.lower()]
+            keywords = [focus_clean] + extra[:4]
+            logger.info(f"[TrendRadar] Focus override: '{focus_clean}' + {extra[:4]}")
+        else:
+            keywords = base_keywords
 
         # ── Tentukan region ──────────────────────────────────────────
         peak_region = (
@@ -323,6 +336,7 @@ class TrendRadar:
             "tenant_id":          tenant_config.tenant_id,
             "niche":              tenant_config.niche,
             "peak_region":        peak_region,
+            "niche_focus":        focus or None,
             "timestamp":          datetime.now().isoformat(),
             "google_trends":      [],
             "youtube_search":     [],

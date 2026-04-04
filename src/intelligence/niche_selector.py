@@ -97,10 +97,19 @@ class NicheSelector:
         )
 
     def _analyze_with_ai(self, signals_summary: str, tenant_config: TenantConfig,
-                         peak_region: str = "us") -> list:
+                         peak_region: str = "us", focus: str = None) -> list:
         niche_data = NICHES[tenant_config.niche]
 
         audience = REGION_DISPLAY.get(peak_region, REGION_DISPLAY["us"])
+
+        # s84: focus constraint untuk AI prompt
+        focus_block = ""
+        if focus and focus.strip():
+            focus_block = (
+                f"\nFOCUS CONSTRAINT: Topics MUST be specifically about \"{focus.strip()}\". "
+                f"Only select topics that directly relate to this focus within the "
+                f"{niche_data['name']} niche. Generic topics outside this focus are NOT acceptable.\n"
+            )
 
         prompt = f"""You are an expert viral content strategist specializing in short-form video (60 seconds max).
 
@@ -113,7 +122,7 @@ TARGET EMOTION: {niche_data['target_emotion']}
 TARGET AUDIENCE: {audience}
 LANGUAGE: {tenant_config.language}
 PLATFORM: YouTube Shorts, TikTok, Instagram Reels
-
+{focus_block}
 IMPORTANT: Prioritize topics that are trending RIGHT NOW in the target region.
 Pick angles and hooks that resonate specifically with the target audience's culture and interests.
 
@@ -227,11 +236,13 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
         logger.error(f"All {self.MAX_RETRIES} attempts failed. Last error: {last_error}")
         return []
 
-    def select(self, signals: dict, tenant_config: TenantConfig) -> list:
+    def select(self, signals: dict, tenant_config: TenantConfig,
+               focus: str = None) -> list:
         """
         Analisis sinyal dan pilih top 5 topik viral.
         s71: Tambah duplicate prevention — topik yang sudah diproduksi
         dalam lookback_days terakhir difilter sebelum dikembalikan.
+        s84: focus (opsional) — constraint AI agar topik spesifik ke focus keyword.
 
         Prinsip: produksi TIDAK pernah berhenti.
         Jika semua topik baru duplikat → pakai LRU dari riwayat (safety net).
@@ -239,9 +250,18 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
         total_signals = sum(len(v) for v in signals.values() if isinstance(v, list))
         logger.info(f"Analyzing {total_signals} signals...")
 
+        # s84: ambil focus dari signals jika tidak di-pass langsung
+        if not focus:
+            focus = signals.get("niche_focus") or None
+
+        if focus:
+            logger.info(f"[NicheSelector] Focus constraint: '{focus}'")
+
         summary     = self._prepare_signals_summary(signals, tenant_config)
         peak_region = signals.get("peak_region", "us")
-        topics      = self._analyze_with_ai(summary, tenant_config, peak_region=peak_region)
+        topics      = self._analyze_with_ai(
+            summary, tenant_config, peak_region=peak_region, focus=focus
+        )
 
         # ── s71: Duplicate prevention ──────────────────────────────────
         topics = self._filter_duplicates(topics, tenant_config)
