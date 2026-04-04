@@ -10,7 +10,7 @@
 |---|------|------|--------|---------|
 | 1 | Telegram Notifikasi | 1 | ✅ DONE | 4 Apr 2026 |
 | 2 | Regional Targeting Tier-1 di TrendRadar | 1 | ✅ DONE | 4 Apr 2026 |
-| 3 | Loop Ending Video | 1 | ⬜ TODO | — |
+| 3 | Loop Ending Video | 1 | ✅ DONE | 4 Apr 2026 |
 | 4 | ChannelAnalytics + Feedback Loop NicheSelector | 1 | ⬜ TODO | — |
 | 5 | Error Management Profesional (exceptions.py) | 2 | ⬜ TODO | — |
 | 6 | Niche DB + Keyword Fokus per Slot | 2 | ⬜ TODO | — |
@@ -131,24 +131,23 @@ Tidak ada schema baru — gunakan `peak_region` yang sudah ada di `tenant_config
 
 ---
 
-### ⬜ Item 3 — Loop Ending Video
+### ✅ Item 3 — Loop Ending Video
 
-**Status**: TODO  
-**Kode target**: `src/production/video_renderer.py`
+**Status**: SELESAI — 4 April 2026  
+**Kode**: `src/production/video_renderer.py` (`_add_loop_ending` method)  
+**Config**: `src/config/tenant_config.py` (`loop_ending_enabled`, `loop_ending_duration`)
 
-#### Rencana
-- Setelah render final selesai, extract ~1.5 detik pertama video (hook frame)
-- Tambahkan sebagai ending transition dengan crossfade (0.5 detik fade-in dari hitam)
-- FFmpeg filter: `[main][loop_end]xfade=fade:duration=0.5`
-- Config: `loop_ending_enabled` di `tenant_configs` (default: true)
-- Config: `loop_ending_duration` (default: 1.5 detik)
-- Hasil: penonton tidak sadar video restart → watch time meningkat
+#### Yang Dikerjakan
+- Tambah `TenantRunConfig` fields: `loop_ending_enabled=True`, `loop_ending_duration=1.5`
+- Tambah `_add_loop_ending(video_path, loop_duration, output_dir)` di `VideoRenderer`:
+  1. ffprobe → dapat durasi video utama
+  2. Extract N detik pertama (video only, re-encode) → `_loop_clip.mp4`
+  3. xfade `transition=fade:duration=0.5` di offset `main_duration - 0.5`
+  4. Replace video asli dengan hasil xfade (fire-and-forget: jika gagal → return video asli)
+- Insert setelah music mixing di `render()`: separate try-except block
+- load_tenant_config di-cache → panggilan kedua tidak menambah latency
 
-#### File yang Dimodifikasi
-- `src/production/video_renderer.py` (tambah step post-render)
-- `src/config/tenant_config.py` (tambah `loop_ending_enabled`, `loop_ending_duration`)
-
-#### Schema Change (Supabase)
+#### Schema Change (Supabase) — Jalankan Manual di Dashboard
 ```sql
 ALTER TABLE tenant_configs
   ADD COLUMN IF NOT EXISTS loop_ending_enabled  BOOLEAN DEFAULT true,

@@ -812,7 +812,112 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         except Exception as e:
             logger.warning(f"[Renderer] Music mixing skipped: {e}")
 
+        # ── s83: Loop Ending (jika enabled) ──────────────────────────
+        try:
+            from src.config.tenant_config import load_tenant_config
+            rc_loop = load_tenant_config(tenant_config.tenant_id)
+            if getattr(rc_loop, "loop_ending_enabled", True):
+                loop_dur = float(getattr(rc_loop, "loop_ending_duration", 1.5) or 1.5)
+                output_path = self._add_loop_ending(output_path, loop_dur, output_dir)
+        except Exception as e:
+            logger.warning(f"[Renderer] Loop ending skipped: {e}")
+
         return output_path
+
+    def _add_loop_ending(
+        self,
+        video_path: str,
+        loop_duration: float,
+        output_dir: str,
+    ) -> str:
+        """
+        s83: Tambah loop ending — ekstrak N detik pertama video, crossfade di akhir.
+        Membuat ilusi seamless loop → penonton tidak sadar video restart → watch time naik.
+
+        Flow:
+          1. ffprobe → dapat durasi video utama
+          2. Extract loop_duration detik pertama (video only, re-encode)
+          3. xfade fade 0.5s antara main video dan loop clip
+          4. Return path video yang sudah di-loop
+        """
+        import json as _json
+
+        # Step 1: Get main video duration
+        probe_cmd = [
+            "ffprobe", "-v", "quiet",
+            "-print_format", "json",
+            "-show_format",
+            video_path,
+        ]
+        probe_result = subprocess.run(probe_cmd, capture_output=True, text=True)
+        if probe_result.returncode != 0:
+            logger.warning("[LoopEnding] ffprobe gagal — skip loop ending")
+            return video_path
+
+        try:
+            main_duration = float(_json.loads(probe_result.stdout)["format"]["duration"])
+        except (KeyError, ValueError, _json.JSONDecodeError) as e:
+            logger.warning(f"[LoopEnding] Gagal parse durasi video: {e}")
+            return video_path
+
+        # Step 2: Extract loop clip (video only, tanpa audio)
+        loop_clip_path = os.path.join(output_dir, "_loop_clip.mp4")
+        cmd_extract = [
+            "ffmpeg", "-y",
+            "-i", video_path,
+            "-t", str(loop_duration),
+            "-vf", f"scale={self.OUTPUT_WIDTH}:{self.OUTPUT_HEIGHT}",
+            "-c:v", "libx264", "-preset", "fast",
+            "-b:v", self.VIDEO_BITRATE,
+            "-an",
+            loop_clip_path,
+        ]
+        r_extract = subprocess.run(cmd_extract, capture_output=True, text=True)
+        if r_extract.returncode != 0 or not os.path.exists(loop_clip_path):
+            logger.warning(f"[LoopEnding] Gagal extract loop clip: {r_extract.stderr[-200:]}")
+            return video_path
+
+        # Step 3: xfade — offset = main_duration - xfade_duration
+        xfade_dur = 0.5
+        offset = max(0.0, main_duration - xfade_dur)
+        output_loop_path = video_path.replace(".mp4", "_loop.mp4")
+
+        cmd_xfade = [
+            "ffmpeg", "-y",
+            "-i", video_path,
+            "-i", loop_clip_path,
+            "-filter_complex",
+            (
+                f"[0:v][1:v]xfade=transition=fade:"
+                f"duration={xfade_dur}:offset={offset:.3f}[vout]"
+            ),
+            "-map", "[vout]",
+            "-map", "0:a",
+            "-c:v", "libx264", "-preset", "fast",
+            "-b:v", self.VIDEO_BITRATE,
+            "-c:a", "aac", "-b:a", self.AUDIO_BITRATE,
+            "-shortest",
+            output_loop_path,
+        ]
+        r_xfade = subprocess.run(cmd_xfade, capture_output=True, text=True)
+
+        # Cleanup loop clip
+        if os.path.exists(loop_clip_path):
+            os.remove(loop_clip_path)
+
+        if r_xfade.returncode != 0 or not os.path.exists(output_loop_path):
+            logger.warning(f"[LoopEnding] xfade gagal: {r_xfade.stderr[-300:]}")
+            return video_path
+
+        # Step 4: Replace original dengan loop version
+        os.remove(video_path)
+        os.rename(output_loop_path, video_path)
+        size_mb = os.path.getsize(video_path) / (1024 * 1024)
+        logger.info(
+            f"[LoopEnding] ✅ Loop ending added: +{loop_duration}s "
+            f"| xfade={xfade_dur}s | {size_mb:.1f} MB"
+        )
+        return video_path
 
     def _mix_music(
         self,

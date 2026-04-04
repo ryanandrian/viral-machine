@@ -113,6 +113,10 @@ class TenantRunConfig:
     telegram_chat_id:   Optional[str]  = None   # Per-tenant; fallback ke env TELEGRAM_CHAT_ID
     channel_name:       str            = ""     # Display name: "RAD The Explorer"
 
+    # Loop Ending Video (s83)
+    loop_ending_enabled:  bool  = True   # Tambah loop ending → watch time meningkat
+    loop_ending_duration: float = 1.5   # Durasi loop clip yang ditambah di akhir (detik)
+
     # Provider settings (raw config — provider diinisialisasi saat dibutuhkan)
     tts_provider:      str           = "edge_tts"
     tts_voice:         str           = "en-US-GuyNeural"
@@ -375,6 +379,9 @@ class TenantConfigManager:
                 telegram_enabled        = row.get("telegram_enabled", True),
                 telegram_chat_id        = row.get("telegram_chat_id") or None,
                 channel_name            = row.get("channel_name", "") or "",
+                # Loop Ending (s83)
+                loop_ending_enabled     = row.get("loop_ending_enabled", True),
+                loop_ending_duration    = float(row.get("loop_ending_duration") or 1.5),
             )
 
         except Exception as e:
@@ -416,6 +423,9 @@ class TenantConfigManager:
             telegram_enabled        = True,
             telegram_chat_id        = None,
             channel_name            = "",
+            # Loop Ending (s83)
+            loop_ending_enabled     = True,
+            loop_ending_duration    = 1.5,
         )
 
     def invalidate_cache(self, tenant_id: str) -> None:
