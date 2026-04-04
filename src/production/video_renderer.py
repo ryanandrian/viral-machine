@@ -878,9 +878,16 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             return video_path
 
         # Step 3: xfade — offset = main_duration - xfade_duration
-        xfade_dur = 0.5
-        offset = max(0.0, main_duration - xfade_dur)
-        output_loop_path = video_path.replace(".mp4", "_loop.mp4")
+        xfade_dur    = 0.5
+        offset       = max(0.0, main_duration - xfade_dur)
+        new_duration = round(main_duration + loop_duration - xfade_dur, 3)
+
+        # Naming: strip semua suffix dulu agar tidak double-suffix
+        base = video_path
+        for suffix in ("_loop.mp4", "_music.mp4"):
+            if base.endswith(suffix):
+                base = base[: -len(suffix)] + ".mp4"
+        output_loop_path = base.replace(".mp4", "_loop.mp4")
 
         cmd_xfade = [
             "ffmpeg", "-y",
@@ -888,15 +895,18 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             "-i", loop_clip_path,
             "-filter_complex",
             (
+                # Video: xfade antara main dan loop clip
                 f"[0:v][1:v]xfade=transition=fade:"
-                f"duration={xfade_dur}:offset={offset:.3f}[vout]"
+                f"duration={xfade_dur}:offset={offset:.3f}[vout];"
+                # Audio: pad silence agar cover durasi baru (loop_duration extra)
+                f"[0:a]apad=pad_dur={loop_duration}[aout]"
             ),
             "-map", "[vout]",
-            "-map", "0:a",
+            "-map", "[aout]",
+            "-t", str(new_duration),   # cut tepat — tanpa -shortest
             "-c:v", "libx264", "-preset", "fast",
             "-b:v", self.VIDEO_BITRATE,
             "-c:a", "aac", "-b:a", self.AUDIO_BITRATE,
-            "-shortest",
             output_loop_path,
         ]
         r_xfade = subprocess.run(cmd_xfade, capture_output=True, text=True)
