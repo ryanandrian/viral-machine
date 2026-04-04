@@ -112,7 +112,7 @@ class Pipeline:
         try:
             # ── STEP 1: Trend Scan ──────────────────────────────────
             logger.info("STEP 1/7 | Scanning trends...")
-            signals       = self.trend_radar.scan(tenant_config)
+            signals       = self.trend_radar.scan(tenant_config, run_config=run_config)
             total_signals = sum(len(v) for v in signals.values() if isinstance(v, list))
             result["steps"]["trend_scan"] = {"status": "ok", "signals": total_signals}
             logger.info(f"STEP 1 DONE | {total_signals} signals collected")

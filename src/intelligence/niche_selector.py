@@ -6,6 +6,7 @@ from loguru import logger
 from openai import OpenAI
 from dotenv import load_dotenv
 from src.intelligence.config import TenantConfig, NICHES, VIRAL_SCORE_WEIGHTS, system_config
+from src.intelligence.trend_radar import REGION_DISPLAY
 from src.utils.supabase_writer import _normalize_slug, get_writer
 
 load_dotenv()
@@ -28,10 +29,13 @@ class NicheSelector:
         self.client = OpenAI(api_key=system_config.openai_api_key)
 
     def _prepare_signals_summary(self, signals: dict, tenant_config: TenantConfig) -> str:
-        niche_data = NICHES[tenant_config.niche]
+        niche_data  = NICHES[tenant_config.niche]
+        peak_region = signals.get("peak_region", "us")
+        audience    = REGION_DISPLAY.get(peak_region, REGION_DISPLAY["us"])
         lines = [
             f"NICHE: {niche_data['name']}",
             f"TARGET EMOTION: {niche_data['target_emotion']}",
+            f"TARGET AUDIENCE: {audience}",
             ""
         ]
 
@@ -95,6 +99,9 @@ class NicheSelector:
     def _analyze_with_ai(self, signals_summary: str, tenant_config: TenantConfig) -> list:
         niche_data = NICHES[tenant_config.niche]
 
+        peak_region = signals.get("peak_region", "us")
+        audience    = REGION_DISPLAY.get(peak_region, REGION_DISPLAY["us"])
+
         prompt = f"""You are an expert viral content strategist specializing in short-form video (60 seconds max).
 
 Analyze the following trending signals and select the TOP 5 video topics with the highest viral potential.
@@ -103,8 +110,12 @@ Analyze the following trending signals and select the TOP 5 video topics with th
 
 CONTENT STYLE: {niche_data['style']}
 TARGET EMOTION: {niche_data['target_emotion']}
+TARGET AUDIENCE: {audience}
 LANGUAGE: {tenant_config.language}
 PLATFORM: YouTube Shorts, TikTok, Instagram Reels
+
+IMPORTANT: Prioritize topics that are trending RIGHT NOW in the target region.
+Pick angles and hooks that resonate specifically with the target audience's culture and interests.
 
 For each topic, score these dimensions (0-100):
 1. search_volume: How many people are searching for this?

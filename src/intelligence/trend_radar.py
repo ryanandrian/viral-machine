@@ -2,10 +2,8 @@
 Trend Radar — mengumpulkan sinyal tren dari 5 sumber resmi.
 Multi-tenant ready.
 
-Fix v0.2:
-- Google Trends 429: exponential backoff + jitter + retry 3x
-- Wikipedia trending: fix format tanggal (YYYY/MM/DD)
-- urllib3/chardet: sudah difix di requirements.txt
+v0.2: Google Trends 429 backoff, Wikipedia date fix
+s82:  Regional targeting — geo disesuaikan peak_region tenant (default: US)
 """
 
 import os
@@ -25,50 +23,83 @@ from src.intelligence.config import TenantConfig, NICHES, system_config
 
 load_dotenv()
 
+# ── Regional targeting map ─────────────────────────────────────────────────
+# peak_region (dari tenant_configs) → parameter per API
+REGION_MAP = {
+    "us":     {"geo": "US", "yt_region": "US", "news_geo": "US", "news_ceid": "US:en", "tz": -300},
+    "uk":     {"geo": "GB", "yt_region": "GB", "news_geo": "GB", "news_ceid": "GB:en", "tz":    0},
+    "au":     {"geo": "AU", "yt_region": "AU", "news_geo": "AU", "news_ceid": "AU:en", "tz":  600},
+    "ca":     {"geo": "CA", "yt_region": "CA", "news_geo": "CA", "news_ceid": "CA:en", "tz": -300},
+    "global": {"geo": "",   "yt_region": "",   "news_geo": "US", "news_ceid": "US:en", "tz":    0},
+}
+
+REGION_DISPLAY = {
+    "us":     "United States (Tier-1 — US audience)",
+    "uk":     "United Kingdom (Tier-1 — UK audience)",
+    "au":     "Australia (Tier-1 — AU audience)",
+    "ca":     "Canada (Tier-1 — CA audience)",
+    "global": "Global English-speaking audience",
+}
+
 
 class TrendRadar:
     """
     Mengumpulkan sinyal tren dari multiple sumber resmi.
-    Multi-tenant ready — setiap scan menerima TenantConfig.
+    Multi-tenant ready — setiap scan menerima TenantConfig + opsional run_config.
+
+    s82: regional targeting — semua sumber diarahkan ke peak_region tenant.
     """
 
     GOOGLE_TRENDS_MAX_RETRIES = 3
-    GOOGLE_TRENDS_BASE_DELAY  = 5   # detik — base untuk exponential backoff
-    GOOGLE_TRENDS_MAX_DELAY   = 60  # detik — cap backoff
+    GOOGLE_TRENDS_BASE_DELAY  = 5
+    GOOGLE_TRENDS_MAX_DELAY   = 60
 
     def __init__(self):
-        self.pytrends = TrendReq(hl='en-US', tz=420, timeout=(10, 30))
+        # Lazy init — pytrends diinit per-scan berdasarkan region
+        self._pytrends = None
+        self._pytrends_tz = None
+
+    def _get_pytrends(self, tz: int = -300) -> TrendReq:
+        """Inisialisasi (atau reinit jika tz berubah) TrendReq instance."""
+        if self._pytrends is None or self._pytrends_tz != tz:
+            self._pytrends    = TrendReq(hl='en-US', tz=tz, timeout=(10, 30))
+            self._pytrends_tz = tz
+        return self._pytrends
 
     # ─── SOURCE 1: Google Trends ───────────────────────────────────────────
 
-    def _get_google_trends(self, keywords: list, timeframe: str = "now 7-d") -> list:
+    def _get_google_trends(self, keywords: list, geo: str = "US",
+                           timeframe: str = "now 7-d", tz: int = -300) -> list:
         """
         Fetch Google Trends dengan exponential backoff + jitter.
-        Fix: handle 429 rate limit yang sebelumnya crash pipeline.
+        s82: geo parameter untuk regional targeting (default: US).
         """
+        pytrends = self._get_pytrends(tz)
+
         for attempt in range(1, self.GOOGLE_TRENDS_MAX_RETRIES + 1):
             try:
-                self.pytrends.build_payload(
+                pytrends.build_payload(
                     keywords[:5],
                     timeframe=timeframe,
-                    geo='',
+                    geo=geo,
                     gprop=''
                 )
-                interest = self.pytrends.interest_over_time()
+                interest = pytrends.interest_over_time()
                 if interest.empty:
-                    logger.warning("Google Trends: empty response")
+                    logger.warning(f"Google Trends [{geo}]: empty response")
                     return []
 
                 results = []
                 for kw in keywords[:5]:
                     if kw in interest.columns:
-                        recent  = interest[kw].tail(7)
-                        avg     = float(recent.mean())
+                        recent   = interest[kw].tail(7)
+                        avg      = float(recent.mean())
                         momentum = float(recent.iloc[-1]) - float(recent.iloc[0])
                         results.append({
                             "keyword":      kw,
                             "avg_interest": round(avg, 1),
                             "momentum":     round(momentum, 1),
+                            "geo":          geo,
                             "source":       "google_trends"
                         })
                 return sorted(results, key=lambda x: x["avg_interest"], reverse=True)
@@ -78,17 +109,12 @@ class TrendRadar:
                 is_rate_limit = "429" in err_str or "too many" in err_str or "rate" in err_str
 
                 if is_rate_limit and attempt < self.GOOGLE_TRENDS_MAX_RETRIES:
-                    # Exponential backoff + jitter
-                    delay = min(
-                        self.GOOGLE_TRENDS_BASE_DELAY * (2 ** (attempt - 1)),
-                        self.GOOGLE_TRENDS_MAX_DELAY
-                    )
+                    delay  = min(self.GOOGLE_TRENDS_BASE_DELAY * (2 ** (attempt - 1)), self.GOOGLE_TRENDS_MAX_DELAY)
                     jitter = random.uniform(0, delay * 0.3)
                     wait   = round(delay + jitter, 1)
                     logger.warning(
-                        f"Google Trends 429 rate limit — "
-                        f"attempt {attempt}/{self.GOOGLE_TRENDS_MAX_RETRIES}, "
-                        f"tunggu {wait}s..."
+                        f"Google Trends 429 [{geo}] — "
+                        f"attempt {attempt}/{self.GOOGLE_TRENDS_MAX_RETRIES}, tunggu {wait}s..."
                     )
                     time.sleep(wait)
                     continue
@@ -102,11 +128,15 @@ class TrendRadar:
 
     # ─── SOURCE 2: YouTube Search API ──────────────────────────────────────
 
-    def _get_youtube_trending_search(self, keywords: list, limit: int = 10) -> list:
+    def _get_youtube_trending_search(self, keywords: list, region_code: str = "US",
+                                     limit: int = 10) -> list:
+        """
+        s82: tambah regionCode dan relevanceLanguage untuk Tier-1 targeting.
+        """
         try:
-            results = []
-            # publishedAfter: 7 hari yang lalu dari sekarang
+            results        = []
             seven_days_ago = (datetime.utcnow() - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            api_key        = os.getenv('YOUTUBE_API_KEY', '')
 
             for kw in keywords[:3]:
                 url = (
@@ -114,7 +144,9 @@ class TrendRadar:
                     f"?part=snippet&q={quote_plus(kw)}&type=video"
                     f"&videoDuration=short&order=viewCount"
                     f"&publishedAfter={seven_days_ago}"
-                    f"&maxResults=5&key={os.getenv('YOUTUBE_API_KEY', '')}"
+                    f"&regionCode={region_code}"
+                    f"&relevanceLanguage=en"
+                    f"&maxResults=5&key={api_key}"
                 )
                 with httpx.Client(timeout=10) as client:
                     r = client.get(url)
@@ -123,18 +155,19 @@ class TrendRadar:
                         for item in items:
                             snippet = item.get("snippet", {})
                             results.append({
-                                "title":     snippet.get("title", ""),
-                                "channel":   snippet.get("channelTitle", ""),
-                                "published": snippet.get("publishedAt", ""),
-                                "keyword":   kw,
-                                "source":    "youtube_search"
+                                "title":       snippet.get("title", ""),
+                                "channel":     snippet.get("channelTitle", ""),
+                                "published":   snippet.get("publishedAt", ""),
+                                "keyword":     kw,
+                                "region_code": region_code,
+                                "source":      "youtube_search"
                             })
                     elif r.status_code == 403:
-                        logger.warning("YouTube API key tidak valid atau quota habis")
+                        logger.warning("YouTube API: quota habis atau key tidak valid")
                         break
                 time.sleep(0.5)
 
-            logger.info(f"YouTube Search: {len(results)} videos found")
+            logger.info(f"YouTube Search [{region_code}]: {len(results)} videos found")
             return results[:limit]
 
         except Exception as e:
@@ -143,23 +176,28 @@ class TrendRadar:
 
     # ─── SOURCE 3: Google News RSS ─────────────────────────────────────────
 
-    def _get_google_news_trending(self, keywords: list, limit: int = 20) -> list:
+    def _get_google_news_trending(self, keywords: list, geo: str = "US",
+                                  ceid: str = "US:en", limit: int = 20) -> list:
+        """
+        s82: geo dan ceid untuk regional targeting.
+        """
         try:
             results = []
             for kw in keywords[:2]:
                 encoded = quote_plus(kw)
-                url     = f"https://news.google.com/rss/search?q={encoded}&hl=en-US&gl=US&ceid=US:en"
+                url     = f"https://news.google.com/rss/search?q={encoded}&hl=en-{geo}&gl={geo}&ceid={ceid}"
                 feed    = feedparser.parse(url)
                 for entry in feed.entries[:10]:
                     results.append({
                         "title":     entry.get("title", ""),
                         "published": entry.get("published", ""),
                         "keyword":   kw,
+                        "geo":       geo,
                         "source":    "google_news"
                     })
                 time.sleep(0.5)
 
-            logger.info(f"Google News: {len(results)} articles found")
+            logger.info(f"Google News [{geo}]: {len(results)} articles found")
             return results[:limit]
 
         except Exception as e:
@@ -203,23 +241,16 @@ class TrendRadar:
 
     def _get_wikipedia_trending(self, limit: int = 10) -> list:
         """
-        Fix v0.2: format tanggal yang benar untuk Wikimedia API.
-        API expects: YYYY/MM/DD (dengan leading zero)
-        Sebelumnya kadang return 0 karena format tidak sesuai.
+        Fix v0.2: format tanggal YYYY/MM/DD.
         """
         try:
-            # Coba kemarin dulu, fallback ke 2 hari lalu
-            # (Wikimedia kadang belum update data kemarin)
             for days_ago in [1, 2]:
                 target_date = datetime.utcnow() - timedelta(days=days_ago)
-                # Format yang benar: YYYY/MM/DD dengan leading zero
-                date_str = target_date.strftime("%Y/%m/%d")
-
-                url = (
+                date_str    = target_date.strftime("%Y/%m/%d")
+                url         = (
                     f"https://wikimedia.org/api/rest_v1/metrics/pageviews/top/"
                     f"en.wikipedia/all-access/{date_str}"
                 )
-
                 headers = {
                     "User-Agent": "MesinViral/1.0 (https://mesinviral.com; ryan.andrian.diputra@gmail.com)"
                 }
@@ -247,17 +278,12 @@ class TrendRadar:
                             break
 
                     if results:
-                        logger.info(
-                            f"Wikipedia Trending: {len(results)} articles "
-                            f"(date: {date_str})"
-                        )
+                        logger.info(f"Wikipedia Trending: {len(results)} articles (date: {date_str})")
                         return results
                     else:
                         logger.warning(f"Wikipedia: no results for {date_str}, trying earlier...")
-                        continue
                 else:
                     logger.warning(f"Wikipedia API {r.status_code} for {date_str}")
-                    continue
 
             logger.warning("Wikipedia: tidak ada data tersedia")
             return []
@@ -268,16 +294,35 @@ class TrendRadar:
 
     # ─── MAIN SCAN ─────────────────────────────────────────────────────────
 
-    def scan(self, tenant_config: TenantConfig) -> dict:
-        niche_data = NICHES.get(tenant_config.niche, NICHES["universe_mysteries"])
-        keywords   = niche_data["keywords"]
+    def scan(self, tenant_config: TenantConfig, run_config=None) -> dict:
+        """
+        s82: terima run_config (opsional) untuk baca peak_region.
+        Fallback: peak_region='us' (Tier-1 US default).
+        """
+        niche_data  = NICHES.get(tenant_config.niche, NICHES["universe_mysteries"])
+        keywords    = niche_data["keywords"]
 
-        logger.info(f"Scanning trends for tenant: {tenant_config.tenant_id}")
-        logger.info(f"Niche: {niche_data['name']} | Keywords: {keywords[:3]}")
+        # ── Tentukan region ──────────────────────────────────────────
+        peak_region = (
+            getattr(run_config, "peak_region", None)
+            or getattr(tenant_config, "peak_region", None)
+            or "us"
+        )
+        region      = REGION_MAP.get(peak_region, REGION_MAP["us"])
+        geo         = region["geo"]
+        yt_region   = region["yt_region"]
+        news_geo    = region["news_geo"]
+        news_ceid   = region["news_ceid"]
+        tz          = region["tz"]
+        # ────────────────────────────────────────────────────────────
+
+        logger.info(f"Scanning trends | tenant: {tenant_config.tenant_id}")
+        logger.info(f"Niche: {niche_data['name']} | Region: {peak_region.upper()} | Keywords: {keywords[:3]}")
 
         signals = {
             "tenant_id":          tenant_config.tenant_id,
             "niche":              tenant_config.niche,
+            "peak_region":        peak_region,
             "timestamp":          datetime.now().isoformat(),
             "google_trends":      [],
             "youtube_search":     [],
@@ -286,19 +331,19 @@ class TrendRadar:
             "wikipedia_trending": []
         }
 
-        logger.info("1/5 Scanning Google Trends...")
-        signals["google_trends"] = self._get_google_trends(keywords)
+        logger.info(f"1/5 Google Trends [geo={geo or 'global'}]...")
+        signals["google_trends"] = self._get_google_trends(keywords, geo=geo, tz=tz)
 
-        logger.info("2/5 Scanning YouTube Search...")
-        signals["youtube_search"] = self._get_youtube_trending_search(keywords)
+        logger.info(f"2/5 YouTube Search [regionCode={yt_region or 'global'}]...")
+        signals["youtube_search"] = self._get_youtube_trending_search(keywords, region_code=yt_region or "US")
 
-        logger.info("3/5 Scanning Google News...")
-        signals["news_trending"] = self._get_google_news_trending(keywords)
+        logger.info(f"3/5 Google News [geo={news_geo}]...")
+        signals["news_trending"] = self._get_google_news_trending(keywords, geo=news_geo, ceid=news_ceid)
 
-        logger.info("4/5 Scanning HackerNews...")
+        logger.info("4/5 HackerNews...")
         signals["hackernews"] = self._get_hackernews_trending(limit=10)
 
-        logger.info("5/5 Scanning Wikipedia Trending...")
+        logger.info("5/5 Wikipedia Trending...")
         signals["wikipedia_trending"] = self._get_wikipedia_trending(limit=10)
 
         os.makedirs("logs", exist_ok=True)
@@ -306,7 +351,7 @@ class TrendRadar:
             json.dump(signals, f, ensure_ascii=False, indent=2)
 
         total = sum(len(signals[k]) for k in signals if isinstance(signals[k], list))
-        logger.info(f"Scan complete: {total} signals collected")
+        logger.info(f"Scan complete: {total} signals | region: {peak_region.upper()}")
         return signals
 
 
@@ -316,6 +361,7 @@ if __name__ == "__main__":
     signals = radar.scan(tenant)
 
     print(f"\n=== TREND SIGNALS — {tenant.tenant_id} ===")
+    print(f"Region        : {signals.get('peak_region', 'us').upper()}")
     print(f"Google Trends : {len(signals['google_trends'])} keywords")
     print(f"YouTube Search: {len(signals['youtube_search'])} videos")
     print(f"Google News   : {len(signals['news_trending'])} articles")
@@ -324,7 +370,7 @@ if __name__ == "__main__":
 
     if signals['google_trends']:
         t = signals['google_trends'][0]
-        print(f"\nTop Trend: {t['keyword']} (interest: {t['avg_interest']}, momentum: {t['momentum']})")
+        print(f"\nTop Trend: {t['keyword']} (geo={t.get('geo','?')}, interest={t['avg_interest']}, momentum={t['momentum']:+.1f})")
     if signals['wikipedia_trending']:
         w = signals['wikipedia_trending'][0]
         print(f"Top Wiki : {w['title']} ({w['views']:,} views)")
