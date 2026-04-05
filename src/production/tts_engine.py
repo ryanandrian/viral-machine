@@ -197,7 +197,24 @@ class TTSEngine:
 
     @staticmethod
     def get_duration(audio_path: str) -> float:
-        """Estimasi durasi audio dari file size."""
+        """Durasi audio via ffprobe (akurat untuk semua bitrate/provider)."""
+        import subprocess, json
+        try:
+            result = subprocess.run(
+                [
+                    "ffprobe", "-v", "quiet", "-print_format", "json",
+                    "-show_streams", audio_path,
+                ],
+                capture_output=True, text=True, timeout=10,
+            )
+            data = json.loads(result.stdout)
+            for stream in data.get("streams", []):
+                dur = stream.get("duration")
+                if dur:
+                    return round(float(dur), 1)
+        except Exception:
+            pass
+        # Fallback: estimasi dari file size (128 kbps — hanya untuk ElevenLabs/OpenAI TTS)
         try:
             size_bytes = os.path.getsize(audio_path)
             return round((size_bytes * 8) / (128 * 1000), 1)
