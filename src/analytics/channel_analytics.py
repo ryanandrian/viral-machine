@@ -352,6 +352,7 @@ class ChannelAnalytics:
             row = {
                 "video_id":           video.get("video_id"),
                 "tenant_id":          tenant_id,
+                "platform":           "youtube",
                 "niche":              video.get("niche"),
                 "title":              (video.get("title") or "")[:200],
                 "hook_text":          (video.get("hook") or "")[:300],
