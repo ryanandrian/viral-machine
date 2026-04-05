@@ -268,21 +268,30 @@ class PerformanceAnalyzer:
             views    = row.get("views") or 0
 
             if ct not in ct_data:
-                ct_data[ct] = {"total_avg_view": 0.0, "total_views": 0, "count": 0}
+                ct_data[ct] = {
+                    "total_avg_view": 0.0, "retention_count": 0,
+                    "total_views": 0, "count": 0,
+                }
 
-            ct_data[ct]["total_avg_view"] += avg_view
-            ct_data[ct]["total_views"]    += views
-            ct_data[ct]["count"]          += 1
+            ct_data[ct]["total_views"] += views
+            ct_data[ct]["count"]       += 1
+            # Hanya hitung avg_view dari video yang punya data nyata (has_full_analytics)
+            if avg_view > 0:
+                ct_data[ct]["total_avg_view"]  += avg_view
+                ct_data[ct]["retention_count"] += 1
 
         result = {}
         for ct, d in ct_data.items():
-            count        = d["count"]
-            avg_view_pct = round(d["total_avg_view"] / count, 1) if count else 0.0
+            count           = d["count"]
+            ret_count       = d["retention_count"]
+            # avg_view hanya dari video dengan data nyata — jangan dilusi dengan 0
+            avg_view_pct = round(d["total_avg_view"] / ret_count, 1) if ret_count else 0.0
             result[ct] = {
                 "avg_view_pct":      avg_view_pct,
                 "avg_views":         round(d["total_views"] / count),
                 "count":             count,
-                "has_retention_data": avg_view_pct > 0,
+                "retention_count":   ret_count,
+                "has_retention_data": ret_count > 0,
             }
 
         logger.debug(f"[Analyzer] Content type perf: {result}")
