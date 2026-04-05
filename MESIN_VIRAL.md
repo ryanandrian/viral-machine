@@ -182,7 +182,7 @@ viral-machine/
 | `src/providers/visual/pexels.py` | Provider | Pexels stock footage; filter durasi & ukuran |
 | `src/providers/visual/ai_image.py` | Provider | DALL-E 3 / Flux Schnell; section-aware prompt |
 | `src/providers/visual/ai_video.py` | Provider | **DISABLED** — raise `VisualError` saat dipanggil |
-| `src/providers/music/music_selector.py` | Provider | Query `music_library` Supabase; download dari R2; analisis mood |
+| `src/providers/music/music_selector.py` | Provider | Deteksi mood dari script via keywords (dari tabel `moods`); query `music_library` per niche+mood; download dari R2 |
 | `src/distribution/youtube_publisher.py` | Distribution | Upload video + thumbnail ke YouTube Shorts via Google API |
 | `src/utils/supabase_writer.py` | Utils | Fire-and-forget writer; catat video, QC fail, pipeline error |
 | `src/utils/storage_cleaner.py` | Utils | Hapus clips (setelah render), video (setelah upload), log lama |
@@ -192,7 +192,7 @@ viral-machine/
 | `scripts/fetch_analytics.sh` | Scripts | Cron harian 06:00 UTC; pull YouTube Analytics untuk semua video published |
 | `scripts/compute_insights.sh` | Scripts | Cron mingguan Senin 07:00 UTC; hitung channel_insights dari video_analytics |
 | `scripts/reauth_youtube.py` | Scripts | Re-auth OAuth per channel; jalankan LOKAL (butuh browser) |
-| `scripts/seed_music_library.py` | Scripts | Upload MP3 lokal → R2; insert metadata ke Supabase `music_library` |
+| `scripts/seed_music_library.py` | Scripts | Upload MP3 lokal → R2; insert metadata ke Supabase `music_library`; validasi niche+mood dari Supabase (tidak hardcode) |
 
 ---
 
@@ -487,7 +487,7 @@ flowchart TD
 | **Auth** | `SUPABASE_KEY` (JWT anon key) |
 | **Library** | `supabase==2.28.3` |
 | **Pattern akses** | Fire-and-forget (gagal tidak menghentikan pipeline) |
-| **Tables aktif** | `tenant_configs`, `videos`, `qc_failed`, `failed_runs`, `music_library` |
+| **Tables aktif** | `tenant_configs`, `videos`, `qc_failed`, `failed_runs`, `music_library`, `moods`, `niches` |
 | **Cache** | In-memory cache di `TenantConfigManager._cache` |
 
 ### 6.6 Cloudflare R2
@@ -727,23 +727,44 @@ error           TEXT                   -- Stack trace / pesan error
 created_at      TIMESTAMP  DEFAULT NOW()
 ```
 
+### Tabel `moods` — Definisi Mood + Keywords Deteksi
+```sql
+mood_id         TEXT       PRIMARY KEY  -- 'dramatic' | 'mysterious' | 'eerie' | dll
+name            TEXT                    -- Display name
+keywords        JSONB                   -- Array keyword untuk deteksi mood dari script
+is_active       BOOLEAN
+created_at      TIMESTAMP
+```
+- Dipakai oleh `music_selector.py` untuk keyword matching dari konten script
+- Tidak ada hardcode di kode — admin bisa tambah/edit mood dan keyword dari sini
+- 15 mood aktif: dramatic, mysterious, tense, ominous, dark, upbeat, inspirational, energetic, calm, eerie, epic, suspense, happy, ambient, playful
+
 ### Tabel `music_library` — Koleksi Musik Background
 ```sql
 id              UUID       PRIMARY KEY
 tenant_id       UUID                   -- NULL = global library
-niche           VARCHAR
-mood            VARCHAR                -- 'dramatic' | 'mysterious' | 'epic' | dll
+niche           VARCHAR                -- 'universe_mysteries' | 'dark_history' | dll
+mood            VARCHAR                -- 'dramatic' | 'mysterious' | 'eerie' | dll
 name            VARCHAR
 r2_key          VARCHAR                -- 'music/{niche}/{mood}/{filename}.mp3'
 duration_s      INT
 bpm             INT
-source          VARCHAR                -- 'youtube_audio_library' | 'pixabay' | 'custom'
+source          VARCHAR                -- 'suno_ai' | 'upload' | dll
 is_active       BOOLEAN
-is_default      BOOLEAN
 play_count      INT
-pixabay_id      VARCHAR
 created_at      TIMESTAMP
 ```
+**Query logic music_selector:**
+1. `niche + mood` — paling spesifik
+2. `mood only` (any niche) — jika niche tidak punya track untuk mood tersebut
+3. fallback moods — mood lain berdasarkan skor script
+4. any active — last resort
+
+**Upload musik baru:**
+```
+python3.11 scripts/seed_music_library.py --folder /path/to/folder
+```
+Format nama file: `{niche}__{mood}__{nama_track}.mp3`
 
 ---
 
