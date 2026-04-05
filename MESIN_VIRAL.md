@@ -764,7 +764,20 @@ created_at      TIMESTAMP
 ```
 python3.11 scripts/seed_music_library.py --folder /path/to/folder
 ```
-Format nama file: `{niche}__{mood}__{nama_track}.mp3`
+Format nama file wajib: `{niche}__{mood}__{nama_track}.mp3`
+Contoh: `universe_mysteries__dramatic__dark_space_orchestra.mp3`
+
+**Jika niche baru:**
+1. Tambah niche di tabel `niches` (Supabase) — isi `niche_id`, `mood_priority`, `visual_style`, `visual_fallbacks`
+2. Siapkan file MP3 dengan nama format di atas (niche = niche_id baru)
+3. Jalankan seeder — folder R2 terbentuk otomatis saat file pertama diupload
+
+**Jika mood baru:**
+1. Tambah mood di tabel `moods` (Supabase) — isi `mood_id`, `name`, `keywords`
+2. Siapkan file MP3 dengan nama format di atas (mood = mood_id baru)
+3. Jalankan seeder
+
+> Tidak perlu buat folder manual di R2. Tidak perlu ubah kode apapun.
 
 ---
 
