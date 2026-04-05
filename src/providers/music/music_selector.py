@@ -1,53 +1,45 @@
 """
-Music Selector — pilih track dari library R2 berdasarkan niche + mood script.
-Fase 6C s6c4:
-  - Analisa emotional tone dari script → tentukan mood
-  - Query Supabase music_library → pilih track terbaik
-  - Download dari Cloudflare R2 → return local path
-  - FFmpeg mix di video_renderer: -18dB ducking agar tidak kalahkan narasi
+Music Selector — pilih track dari library R2 berdasarkan mood script.
+
+s85: Keyword-based mood detection, bukan niche-based.
+  - Mood dideteksi dari konten script (keyword matching)
+  - Query musik berdasarkan mood saja — niche baru otomatis dapat musik
+  - mood_priority per niche diambil dari Supabase niches.mood_priority (tidak hardcode)
+  - Fallback: mood dengan skor tertinggi berikutnya → any active track
 """
 
 import os
 import random
-import tempfile
 from pathlib import Path
 
 from loguru import logger
 
 
-# ── Mood mapping per niche ────────────────────────────────────────────────────
-# Script emotional arc → mood yang paling cocok
-# Urutan = prioritas (index 0 = paling diutamakan)
-
-NICHE_MOOD_PRIORITY = {
-    "universe_mysteries": ["dramatic", "mysterious", "tense", "epic", "ambient"],
-    "dark_history":       ["ominous", "dark", "dramatic", "tense", "suspense"],
-    "ocean_mysteries":    ["mysterious", "eerie", "calm", "ambient", "tense"],
-    "fun_facts":          ["upbeat", "energetic", "inspirational", "happy", "playful"],
-}
-
-# Script keywords → mood signal
+# ── Mood → keyword signal (universal NLP mapping, bukan niche-specific) ──────
+# Digunakan untuk deteksi mood dari teks script
 MOOD_KEYWORDS = {
-    "dramatic":     ["shocking", "incredible", "unbelievable", "changed everything", "nobody expected"],
-    "mysterious":   ["unknown", "mystery", "unexplained", "secret", "hidden", "discovered"],
-    "tense":        ["danger", "threat", "warning", "critical", "urgent", "countdown"],
-    "ominous":      ["dark", "evil", "betrayal", "conspiracy", "cover-up", "forbidden"],
-    "dark":         ["death", "massacre", "tragedy", "catastrophe", "destruction"],
-    "upbeat":       ["amazing", "fun", "surprising", "interesting", "cool", "wow"],
-    "inspirational":["wonder", "beautiful", "incredible", "miraculous", "stunning"],
-    "energetic":    ["fast", "quick", "rapid", "explosive", "powerful", "breakthrough"],
-    "calm":         ["peaceful", "gentle", "quiet", "deep", "vast", "infinite"],
-    "eerie":        ["strange", "weird", "unsettling", "alien", "bizarre", "uncanny"],
+    "dramatic":      ["shocking", "incredible", "unbelievable", "changed everything", "nobody expected"],
+    "mysterious":    ["unknown", "mystery", "unexplained", "secret", "hidden", "discovered"],
+    "tense":         ["danger", "threat", "warning", "critical", "urgent", "countdown"],
+    "ominous":       ["dark", "evil", "betrayal", "conspiracy", "cover-up", "forbidden"],
+    "dark":          ["death", "massacre", "tragedy", "catastrophe", "destruction"],
+    "upbeat":        ["amazing", "fun", "surprising", "interesting", "cool", "wow"],
+    "inspirational": ["wonder", "beautiful", "incredible", "miraculous", "stunning"],
+    "energetic":     ["fast", "quick", "rapid", "explosive", "powerful", "breakthrough"],
+    "calm":          ["peaceful", "gentle", "quiet", "deep", "vast", "infinite"],
+    "eerie":         ["strange", "weird", "unsettling", "alien", "bizarre", "uncanny"],
+    "epic":          ["enormous", "massive", "universe", "galaxy", "civilization", "ancient"],
+    "suspense":      ["what if", "imagine", "but here", "nobody knows", "the truth"],
 }
 
 
-def _detect_mood_from_script(script: dict, niche: str) -> str:
+def _detect_mood_from_script(script: dict, niche_mood_priority: list) -> tuple[str, dict]:
     """
-    Analisa script → deteksi mood yang paling cocok.
-    Scoring: hitung keyword match per mood, pilih tertinggi.
-    Fallback: mood pertama dari NICHE_MOOD_PRIORITY.
+    Analisa konten script → deteksi mood terbaik via keyword matching.
+
+    Returns:
+        (best_mood, scores_dict) — mood terpilih + semua skor untuk fallback
     """
-    # Ambil text yang relevan dari script
     text_parts = [
         script.get("hook", ""),
         script.get("mystery_drop", ""),
@@ -56,101 +48,107 @@ def _detect_mood_from_script(script: dict, niche: str) -> str:
     ]
     full_text = " ".join(p for p in text_parts if p).lower()
 
-    if not full_text:
-        default = NICHE_MOOD_PRIORITY.get(niche, ["dramatic"])[0]
-        logger.info(f"[MusicSelector] No script text — default mood: {default}")
-        return default
+    # Score semua mood dari keyword match
+    scores = {
+        mood: sum(1 for kw in keywords if kw in full_text)
+        for mood, keywords in MOOD_KEYWORDS.items()
+    }
 
-    # Score per mood
-    scores = {}
-    for mood, keywords in MOOD_KEYWORDS.items():
-        score = sum(1 for kw in keywords if kw in full_text)
-        if score > 0:
-            scores[mood] = score
+    # Pilih mood tertinggi
+    best_mood   = max(scores, key=scores.get) if any(scores.values()) else None
+    best_score  = scores.get(best_mood, 0) if best_mood else 0
 
-    # Filter hanya mood yang tersedia untuk niche ini
-    niche_moods = NICHE_MOOD_PRIORITY.get(niche, ["dramatic"])
+    # Jika tidak ada keyword match, gunakan mood_priority dari niches table
+    if not best_mood or best_score == 0:
+        best_mood = niche_mood_priority[0] if niche_mood_priority else "dramatic"
+        logger.info(f"[MusicSelector] No keyword match — pakai mood_priority: {best_mood}")
+    else:
+        logger.info(
+            f"[MusicSelector] Mood detected: {best_mood} "
+            f"(score={best_score})"
+        )
 
-    # Pilih mood dengan score tertinggi yang ada di niche
-    best_mood = None
-    best_score = 0
-    for mood in niche_moods:
-        s = scores.get(mood, 0)
-        if s > best_score:
-            best_score = s
-            best_mood = mood
-
-    if not best_mood:
-        best_mood = niche_moods[0]  # fallback ke prioritas pertama
-
-    logger.info(
-        f"[MusicSelector] Mood detected: {best_mood} "
-        f"(score={best_score}, niche={niche})"
-    )
-    return best_mood
+    return best_mood, scores
 
 
-def _query_supabase(niche: str, mood: str) -> list[dict]:
+def _load_niche_mood_priority(niche: str) -> list:
     """
-    Query Supabase music_library untuk niche + mood.
-    Fallback: coba niche lain dengan mood sama jika tidak ada hasil.
+    Load mood_priority dari Supabase niches table.
+    Fallback ke list kosong jika kolom belum ada.
     """
     try:
         from supabase import create_client
         from dotenv import load_dotenv
         load_dotenv()
 
-        sb = create_client(
-            os.getenv("SUPABASE_URL"),
-            os.getenv("SUPABASE_KEY")
-        )
-
-        # Query utama: exact niche + mood match
-        res = sb.table("music_library") \
-            .select("*") \
-            .eq("niche", niche) \
-            .eq("mood", mood) \
-            .eq("is_active", True) \
-            .order("play_count", desc=False) \
-            .execute()
-
+        sb  = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+        res = sb.table("niches").select("mood_priority").eq("niche_id", niche).single().execute()
         if res.data:
-            logger.info(
-                f"[MusicSelector] Found {len(res.data)} tracks: "
-                f"niche={niche} mood={mood}"
-            )
+            priority = res.data.get("mood_priority") or []
+            if priority:
+                logger.debug(f"[MusicSelector] mood_priority dari Supabase: {priority}")
+                return priority
+    except Exception as e:
+        logger.warning(f"[MusicSelector] Gagal load mood_priority dari niches: {e}")
+    return []
+
+
+def _query_supabase_by_mood(mood: str, fallback_moods: list) -> list[dict]:
+    """
+    Query music_library berdasarkan mood — TIDAK filter per niche.
+    Niche baru otomatis dapat musik tanpa perubahan kode.
+
+    Fallback cascade: mood utama → mood dengan skor tinggi berikutnya → any active
+    """
+    try:
+        from supabase import create_client
+        from dotenv import load_dotenv
+        load_dotenv()
+
+        sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+
+        # Query utama: mood exact match
+        res = (
+            sb.table("music_library")
+            .select("*")
+            .eq("mood", mood)
+            .eq("is_active", True)
+            .order("play_count", desc=False)
+            .execute()
+        )
+        if res.data:
+            logger.info(f"[MusicSelector] {len(res.data)} tracks untuk mood={mood}")
             return res.data
 
-        # Fallback 1: niche sama, mood berbeda (urutan prioritas)
-        niche_moods = NICHE_MOOD_PRIORITY.get(niche, [])
-        for fallback_mood in niche_moods:
+        # Fallback: coba mood lain berdasarkan skor script (bukan hardcoded niche priority)
+        for fallback_mood in fallback_moods:
             if fallback_mood == mood:
                 continue
-            res2 = sb.table("music_library") \
-                .select("*") \
-                .eq("niche", niche) \
-                .eq("mood", fallback_mood) \
-                .eq("is_active", True) \
-                .limit(3) \
+            res2 = (
+                sb.table("music_library")
+                .select("*")
+                .eq("mood", fallback_mood)
+                .eq("is_active", True)
+                .limit(5)
                 .execute()
+            )
             if res2.data:
                 logger.warning(
-                    f"[MusicSelector] ⚠️ Fallback mood: {niche}/{fallback_mood} "
-                    f"(original mood '{mood}' tidak tersedia)"
+                    f"[MusicSelector] Fallback mood: {fallback_mood} "
+                    f"(mood '{mood}' tidak tersedia di library)"
                 )
                 return res2.data
 
-        # Fallback 2: any active track
-        res3 = sb.table("music_library") \
-            .select("*") \
-            .eq("is_active", True) \
-            .limit(5) \
+        # Last resort: any active track
+        res3 = (
+            sb.table("music_library")
+            .select("*")
+            .eq("is_active", True)
+            .limit(5)
             .execute()
+        )
         if res3.data:
-            logger.warning(
-                f"[MusicSelector] ⚠️ Fallback any: tidak ada track untuk "
-                f"niche={niche} — pakai track random dari library"
-            )
+            logger.warning("[MusicSelector] Last resort: pakai track random dari library")
             return res3.data
 
         return []
@@ -170,11 +168,11 @@ def _download_from_r2(r2_key: str, output_path: Path) -> bool:
 
         s3 = boto3.client(
             "s3",
-            endpoint_url=os.getenv("R2_ENDPOINT"),
-            aws_access_key_id=os.getenv("R2_ACCESS_KEY"),
-            aws_secret_access_key=os.getenv("R2_SECRET_KEY"),
-            config=Config(signature_version="s3v4"),
-            region_name="auto",
+            endpoint_url        = os.getenv("R2_ENDPOINT"),
+            aws_access_key_id   = os.getenv("R2_ACCESS_KEY"),
+            aws_secret_access_key = os.getenv("R2_SECRET_KEY"),
+            config              = Config(signature_version="s3v4"),
+            region_name         = "auto",
         )
         bucket = os.getenv("R2_BUCKET", "viral-machine")
         s3.download_file(bucket, r2_key, str(output_path))
@@ -186,29 +184,19 @@ def _download_from_r2(r2_key: str, output_path: Path) -> bool:
 
 
 def _increment_play_count(track_id: str) -> None:
-    """Increment play_count di Supabase untuk track yang dipilih."""
+    """Increment play_count di Supabase. Fire-and-forget."""
     try:
         from supabase import create_client
         from dotenv import load_dotenv
         load_dotenv()
 
-        sb = create_client(
-            os.getenv("SUPABASE_URL"),
-            os.getenv("SUPABASE_KEY")
-        )
-        # Baca play_count aktual dulu
-        res = sb.table("music_library") \
-            .select("play_count") \
-            .eq("id", track_id) \
-            .execute()
+        sb  = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+        res = sb.table("music_library").select("play_count").eq("id", track_id).execute()
         if res.data:
             current = res.data[0].get("play_count", 0) or 0
-            sb.table("music_library") \
-                .update({"play_count": current + 1}) \
-                .eq("id", track_id) \
-                .execute()
+            sb.table("music_library").update({"play_count": current + 1}).eq("id", track_id).execute()
     except Exception:
-        pass  # Non-critical
+        pass
 
 
 def select_and_download(
@@ -220,28 +208,40 @@ def select_and_download(
     """
     Main entry point: pilih track terbaik → download → return local path.
 
+    Mood dideteksi dari konten script (keyword-based).
+    Query musik berdasarkan mood — tidak bergantung niche (future-proof).
+
     Returns:
         str path ke file musik local, atau None jika tidak tersedia.
     """
-    logger.info(f"[MusicSelector] Selecting music for niche={niche}")
+    logger.info(f"[MusicSelector] Selecting music | niche={niche}")
 
-    # 1. Detect mood dari script
-    mood = _detect_mood_from_script(script, niche)
+    # 1. Load mood_priority dari Supabase (fallback jika tidak ada keyword match)
+    niche_mood_priority = _load_niche_mood_priority(niche)
 
-    # 2. Query Supabase
-    tracks = _query_supabase(niche, mood)
+    # 2. Detect mood dari konten script
+    mood, scores = _detect_mood_from_script(script, niche_mood_priority)
+
+    # Fallback moods: urutan berdasarkan skor script (bukan hardcoded)
+    fallback_moods = sorted(
+        [m for m, s in scores.items() if s > 0 and m != mood],
+        key=lambda m: scores[m],
+        reverse=True,
+    )
+    # Tambah mood_priority dari niches sebagai safety net di akhir
+    for m in niche_mood_priority:
+        if m not in fallback_moods and m != mood:
+            fallback_moods.append(m)
+
+    # 3. Query Supabase (mood-based, tidak filter niche)
+    tracks = _query_supabase_by_mood(mood, fallback_moods)
     if not tracks:
-        logger.warning("[MusicSelector] ⚠️ Tidak ada track di library — skip music")
+        logger.warning("[MusicSelector] Tidak ada track di library — skip music")
         return None
 
-    # 3. Filter track yang durasinya cukup (min = audio_duration)
-    # Prioritaskan track yang lebih panjang dari audio (tidak perlu loop)
+    # 4. Prioritaskan track yang durasinya >= audio (tidak perlu loop)
     long_tracks = [t for t in tracks if (t.get("duration_s") or 0) >= audio_duration]
-    candidate   = long_tracks[0] if long_tracks else tracks[0]
-
-    # Randomize jika ada beberapa track dengan durasi cukup (variasi)
-    if len(long_tracks) > 1:
-        candidate = random.choice(long_tracks)
+    candidate   = random.choice(long_tracks) if len(long_tracks) > 1 else (long_tracks[0] if long_tracks else tracks[0])
 
     track_name = candidate.get("name", "unknown")
     track_mood = candidate.get("mood", mood)
@@ -251,15 +251,15 @@ def select_and_download(
 
     logger.info(
         f"[MusicSelector] Selected: '{track_name}' "
-        f"({track_mood}, {duration_s}s, bpm={candidate.get('bpm')})"
+        f"(mood={track_mood}, {duration_s}s, bpm={candidate.get('bpm')})"
     )
 
     if not r2_key:
         logger.error("[MusicSelector] Track tidak punya r2_key")
         return None
 
-    # 4. Download dari R2
-    output_path = Path(output_dir) / f"music_{niche}_{mood}_{track_id[:8]}.mp3"
+    # 5. Download dari R2
+    output_path = Path(output_dir) / f"music_{mood}_{track_id[:8]}.mp3"
     if output_path.exists():
         logger.info(f"[MusicSelector] Cache hit: {output_path.name}")
         return str(output_path)
@@ -270,11 +270,9 @@ def select_and_download(
         return None
 
     size_kb = output_path.stat().st_size / 1024
-    logger.info(
-        f"[MusicSelector] ✅ Music ready: {output_path.name} ({size_kb:.0f}KB)"
-    )
+    logger.info(f"[MusicSelector] ✅ Music ready: {output_path.name} ({size_kb:.0f}KB)")
 
-    # 5. Increment play count (non-blocking)
+    # 6. Increment play count (non-blocking)
     _increment_play_count(track_id)
 
     return str(output_path)

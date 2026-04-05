@@ -5,7 +5,15 @@
 
 ALTER TABLE niches
   ADD COLUMN IF NOT EXISTS visual_style     JSONB DEFAULT '{}',
-  ADD COLUMN IF NOT EXISTS visual_fallbacks JSONB DEFAULT '[]';
+  ADD COLUMN IF NOT EXISTS visual_fallbacks JSONB DEFAULT '[]',
+  ADD COLUMN IF NOT EXISTS mood_priority    JSONB DEFAULT '[]';
+
+-- mood_priority: urutan mood yang diutamakan jika keyword tidak match
+-- Dipakai sebagai safety net fallback di music_selector, bukan sebagai filter utama
+UPDATE niches SET mood_priority = '["dramatic","mysterious","tense","epic","ambient"]' WHERE niche_id = 'universe_mysteries';
+UPDATE niches SET mood_priority = '["ominous","dark","dramatic","tense","suspense"]'   WHERE niche_id = 'dark_history';
+UPDATE niches SET mood_priority = '["mysterious","eerie","calm","ambient","tense"]'     WHERE niche_id = 'ocean_mysteries';
+UPDATE niches SET mood_priority = '["upbeat","energetic","inspirational","happy"]'      WHERE niche_id = 'fun_facts';
 
 -- universe_mysteries
 UPDATE niches SET
