@@ -68,9 +68,10 @@ def _build_system_prompt():
     )
 
 
-def _build_user_prompt(topic, niche, feedback=None):
+def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None):
     """
     Build prompt. Jika feedback ada (dari retry), sisipkan sebagai instruksi perbaikan.
+    niche_visual_style: dict dari tabel niches (base_style, color_palette, atmosphere).
     """
     profile    = _get_profile(niche)
     niche_data = NICHES.get(niche, NICHES["universe_mysteries"])
@@ -86,6 +87,16 @@ Fix these specific weaknesses in this attempt:
 Do not repeat the previous output. Write fresh, with these issues resolved.
 """
 
+    vs = niche_visual_style or {}
+    visual_direction_block = ""
+    if vs:
+        visual_direction_block = f"""
+VISUAL DIRECTION — apply to all visual_suggestions prompts:
+- Style: {vs.get("base_style", "")}
+- Color palette: {vs.get("color_palette", "")}
+- Atmosphere: {vs.get("atmosphere", "")}
+"""
+
     return f"""Write a viral short-form video script.
 
 TOPIC: {topic.get('topic', '')}
@@ -97,7 +108,7 @@ STYLE: {profile['style']}
 AVOID: {profile['avoid']}
 EMOTION ARC: {profile['emotion_arc']}
 HOOK FORMULA: {profile['hook_style']}
-{feedback_block}
+{visual_direction_block}{feedback_block}
 Write all 8 sections. Each has ONE job. Be specific to this topic — no generic phrases:
 
 1. HOOK ({SECTION_TIMING['hook']}s ~{words['hook']} words)
@@ -177,12 +188,12 @@ Return ONLY valid JSON — no markdown, no preamble, no explanation:
   "estimated_duration_seconds": {TARGET_DURATION},
   "section_durations": {json.dumps(SECTION_TIMING)},
   "visual_suggestions": [
-    "Scene 1 hook: [SUBJECT dari hook] — dramatic still photo, single striking focal point, photorealistic, NASA/National Geographic quality, vertical 9:16, no text, no split-screen",
-    "Scene 2 mystery drop: [SUBJECT dari mystery_drop] — mysterious atmosphere, low-key lighting, single subject, photorealistic, cinematic vertical 9:16, no text",
-    "Scene 3 build up: [SUBJECT dari build_up] — epic scale, wide establishing shot, dramatic lighting, photorealistic, NASA documentary style, vertical 9:16, no text",
-    "Scene 4 core facts 1: [SUBJECT spesifik dari core_facts] — detail shot, unexpected angle, photorealistic, high contrast, vertical 9:16, no text",
-    "Scene 5 core facts 2: [SUBJECT spesifik dari core_facts lanjutan] — tension building, dramatic composition, photorealistic, vertical 9:16, no text",
-    "Scene 6 climax: [SUBJECT dari climax] — most powerful composition, overwhelming scale or emotion, photorealistic masterpiece, vertical 9:16, no text, no people unless essential"
+    "Scene 1 — hook: [Complete cinematic image prompt. Character: dramatic, tension-filled, stops the scroll in 1 second. Lighting: high contrast, sharp shadows. Camera: extreme close-up OR extreme wide establishing shot. Subject: the exact visual moment from this hook — specific, not generic. Apply VISUAL DIRECTION style. Vertical 9:16, photorealistic, no text no words no letters no numbers no signs no logos no watermarks.]",
+    "Scene 2 — mystery drop: [Complete cinematic image prompt. Character: mysterious, unsettling, raises more questions than it answers. Lighting: low-key, shadows concealing as much as revealing, ambient glow. Camera: slow-reveal composition, subject partially obscured. Subject: the specific mysterious element from this section. Apply VISUAL DIRECTION style. Vertical 9:16, photorealistic, no text no words no letters no numbers no signs no logos no watermarks.]",
+    "Scene 3 — build up: [Complete cinematic image prompt. Character: epic scale, awe-inspiring, conveys the full weight and context. Lighting: dramatic natural or cosmic light, golden hour or deep space. Camera: wide establishing shot showing overwhelming scale. Subject: the specific subject from build-up section at its grandest scale. Apply VISUAL DIRECTION style. Vertical 9:16, photorealistic, no text no words no letters no numbers no signs no logos no watermarks.]",
+    "Scene 4 — core facts 1: [Complete cinematic image prompt. Character: visually striking, the undeniable proof, unexpected angle. Lighting: clinical precision or dramatic chiaroscuro. Camera: tight detail shot revealing something specific and surprising. Subject: the exact visual evidence of the first core fact. Apply VISUAL DIRECTION style. Vertical 9:16, photorealistic, no text no words no letters no numbers no signs no logos no watermarks.]",
+    "Scene 5 — core facts 2: [Complete cinematic image prompt. Character: tension building, something enormous approaching, point of no return. Lighting: darkening atmosphere, spotlight on the key element. Camera: medium shot with leading lines converging toward the climax. Subject: the specific visual that bridges core facts to the final reveal. Apply VISUAL DIRECTION style. Vertical 9:16, photorealistic, no text no words no letters no numbers no signs no logos no watermarks.]",
+    "Scene 6 — climax: [Complete cinematic image prompt. Character: overwhelming, emotionally peak, the single most unforgettable frame of the entire video. Lighting: dramatic peak — total darkness OR blinding light, nothing in between. Camera: the most powerful composition possible — scale, symmetry, or singular focal point. Subject: the ultimate visual payoff of this story — awe, shock, revelation, or profound emotion. Apply VISUAL DIRECTION style. Vertical 9:16, photorealistic, no text no words no letters no numbers no signs no logos no watermarks.]"
   "background_music_mood": "specific mood, instrumentation, and emotional arc — not just one word",
   "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#shorts"],
   "thumbnail_concept": "the specific image that makes someone stop scrolling and need to click"
@@ -224,8 +235,13 @@ class ScriptEngine:
         vs = script.get("visual_suggestions", [])
         if not isinstance(vs, list):
             vs = []
+        topic_text = topic.get("topic", "the topic")
         while len(vs) < 6:
-            vs.append(f"Cinematic footage related to {topic.get('topic', 'the topic')}")
+            vs.append(
+                f"Cinematic documentary photograph directly related to {topic_text}. "
+                f"Single powerful focal point, dramatic natural lighting. "
+                f"Vertical 9:16, photorealistic, no text no words no letters no numbers no signs."
+            )
         script["visual_suggestions"] = vs[:6]
         script.setdefault("section_durations", SECTION_TIMING)
         if not script.get("full_script"):
@@ -235,7 +251,7 @@ class ScriptEngine:
             script["full_script"] = " ".join(p for p in parts if p)
         return script
 
-    def _call_claude(self, topic, niche, attempt, feedback=None):
+    def _call_claude(self, topic, niche, attempt, niche_visual_style=None, feedback=None):
         try:
             import anthropic
             api_key = os.getenv("ANTHROPIC_API_KEY", "")
@@ -247,7 +263,7 @@ class ScriptEngine:
                 max_tokens=2000,
                 temperature=1,
                 system=_build_system_prompt(),
-                messages=[{"role": "user", "content": _build_user_prompt(topic, niche, feedback)}],
+                messages=[{"role": "user", "content": _build_user_prompt(topic, niche, niche_visual_style, feedback)}],
             )
             raw    = response.content[0].text.strip()
             script = json.loads(self._clean_json(raw))
@@ -259,7 +275,7 @@ class ScriptEngine:
             logger.warning(f"[ScriptEngine] Claude attempt {attempt} failed: {e}")
             return None
 
-    def _call_openai(self, topic, niche, attempt, feedback=None):
+    def _call_openai(self, topic, niche, attempt, niche_visual_style=None, feedback=None):
         try:
             response = self._openai.chat.completions.create(
                 model="gpt-4o-mini",
@@ -268,7 +284,7 @@ class ScriptEngine:
                 max_tokens=1800,
                 messages=[
                     {"role": "system", "content": _build_system_prompt()},
-                    {"role": "user",   "content": _build_user_prompt(topic, niche, feedback)},
+                    {"role": "user",   "content": _build_user_prompt(topic, niche, niche_visual_style, feedback)},
                 ],
             )
             raw    = response.choices[0].message.content.strip()
@@ -281,25 +297,26 @@ class ScriptEngine:
             logger.warning(f"[ScriptEngine] GPT attempt {attempt} failed: {e}")
             return None
 
-    def _call_llm(self, topic, niche, attempt, llm_provider, feedback=None):
+    def _call_llm(self, topic, niche, attempt, llm_provider, niche_visual_style=None, feedback=None):
         if llm_provider == "claude":
-            script = self._call_claude(topic, niche, attempt, feedback)
+            script = self._call_claude(topic, niche, attempt, niche_visual_style, feedback)
             if script is None:
                 logger.warning("[ScriptEngine] Claude gagal — fallback ke GPT-4o-mini")
-                script = self._call_openai(topic, niche, attempt, feedback)
+                script = self._call_openai(topic, niche, attempt, niche_visual_style, feedback)
                 return script, "openai_fallback"
             return script, "claude"
         else:
-            script = self._call_openai(topic, niche, attempt, feedback)
+            script = self._call_openai(topic, niche, attempt, niche_visual_style, feedback)
             return script, "openai"
 
     def generate(self, topic, tenant_config):
         logger.info(f"[ScriptEngine] Generating: {topic.get('topic','')[:50]}...")
 
-        run_config   = self._get_run_config(tenant_config)
-        llm_provider = run_config.llm_provider            if run_config else "openai"
-        min_score    = run_config.script_min_viral_score  if run_config else 82
-        max_retry    = run_config.script_max_retry        if run_config else 3
+        run_config         = self._get_run_config(tenant_config)
+        llm_provider       = run_config.llm_provider            if run_config else "openai"
+        min_score          = run_config.script_min_viral_score  if run_config else 82
+        max_retry          = run_config.script_max_retry        if run_config else 3
+        niche_visual_style = getattr(run_config, "niche_visual_style", {}) or {}
 
         logger.info(
             f"[ScriptEngine] provider={llm_provider} "
@@ -322,7 +339,7 @@ class ScriptEngine:
             logger.info(f"[ScriptEngine] Attempt {attempt}/{max_retry} via {llm_provider}")
 
             script, actual_provider = self._call_llm(
-                topic, tenant_config.niche, attempt, llm_provider, feedback
+                topic, tenant_config.niche, attempt, llm_provider, niche_visual_style, feedback
             )
             logger.info(f"[ScriptEngine] Actually used: {actual_provider}")
 

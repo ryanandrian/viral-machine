@@ -1,13 +1,10 @@
 """
 AI Image Visual Provider — generate gambar via AI + motion effect.
-Fase 6C s6c5: Cinematic prompt engineering per section type.
 
-Upgrade dari versi sebelumnya:
-  - Section-aware prompts: Hook=dramatic, Climax=epic, Core=informative
-  - visual_suggestions dari script langsung dipakai tanpa dilusi template generik
-  - DALL-E 3 optimized: natural language yang kaya, bukan template robotik
-  - Niche style modifier: universe=cosmic, dark_history=ominous, dll
-  - Negative prompt support untuk Replicate models
+s85c: LLM-generated prompts — tidak ada template manual.
+  - visual_suggestions dari script = full DALL-E 3 ready prompts (dibuat oleh LLM)
+  - ai_image.py hanya terima dan pakai, tidak merangkai prompt
+  - Rejection rewrite menggunakan LLM tenant (Claude atau OpenAI), tidak hardcode
 """
 
 import asyncio
@@ -44,97 +41,12 @@ AI_IMAGE_MODELS = {
     },
 }
 
-# ── Section type enhancer ─────────────────────────────────────────────────────
-# Dipilih berdasarkan posisi clip dalam 6-clip sequence
-# Mapping: clip index → section character
-SECTION_ENHANCERS = {
-    0: {  # Hook — harus stop scroll dalam 1 detik
-        "character":  "dramatic, tension-filled, scroll-stopping",
-        "lighting":   "high contrast dramatic lighting, sharp shadows",
-        "camera":     "extreme close-up or extreme wide establishing shot",
-        "mood":       "immediate visual impact, creates instant question",
-        "technical":  "cinematic 9:16 vertical, photorealistic, 8K sharp",
-    },
-    1: {  # Mystery Drop — menambah lapisan misteri
-        "character":  "mysterious, unsettling, raises more questions",
-        "lighting":   "low key lighting, mysterious shadows, ambient glow",
-        "camera":     "slow reveal composition, partially obscured subject",
-        "mood":       "eerie beauty, something unknown lurking",
-        "technical":  "cinematic 9:16 vertical, photorealistic, atmospheric depth",
-    },
-    2: {  # Build Up — membangun konteks dan skala
-        "character":  "epic scale, awe-inspiring, informative yet beautiful",
-        "lighting":   "natural dramatic lighting, golden hour or cosmic light",
-        "camera":     "wide establishing shot showing full scale and context",
-        "mood":       "sense of vast scale, weight of information lands visually",
-        "technical":  "cinematic 9:16 vertical, photorealistic, ultra detailed",
-    },
-    3: {  # Core Facts — informasi padat, visual yang kuat
-        "character":  "visually striking, information-rich, unexpected angle",
-        "lighting":   "clinical precision or dramatic chiaroscuro",
-        "camera":     "detail shot revealing something specific and surprising",
-        "mood":       "this is the proof, the evidence, the undeniable visual",
-        "technical":  "cinematic 9:16 vertical, photorealistic, razor sharp detail",
-    },
-    4: {  # Core Facts 2 — building to climax
-        "character":  "tension building, anticipation, something about to change",
-        "lighting":   "darkening atmosphere, spotlight on key element",
-        "camera":     "medium shot with leading lines pointing to climax",
-        "mood":       "the viewer feels they are approaching something enormous",
-        "technical":  "cinematic 9:16 vertical, photorealistic, dramatic composition",
-    },
-    5: {  # Climax — emotional peak, most memorable frame
-        "character":  "overwhelming, emotionally peak, unforgettable visual impact",
-        "lighting":   "dramatic peak lighting — could be total darkness or blinding light",
-        "camera":     "the single most powerful composition of the entire video",
-        "mood":       "this is the moment — awe, shock, revelation, or profound emotion",
-        "technical":  "cinematic 9:16 vertical, photorealistic, masterpiece composition, 8K",
-    },
-}
-
-def _build_cinematic_prompt(
-    visual_suggestion: str,
-    section_index: int,
-    niche_style: dict,
-    model: str,
-) -> str:
-    """
-    Build prompt sinematik dari visual_suggestion script.
-    niche_style: dict dari tabel niches.visual_style (loaded dari Supabase).
-    """
-    enhancer = SECTION_ENHANCERS.get(section_index, SECTION_ENHANCERS[2])
-
-    base_style    = niche_style.get("base_style", "documentary photography style")
-    color_palette = niche_style.get("color_palette", "natural colors")
-    atmosphere    = niche_style.get("atmosphere", "cinematic atmosphere")
-
-    if model == "dall-e-3":
-        prompt = (
-            f"{visual_suggestion}. "
-            f"Shot in {base_style}. "
-            f"The image should feel {enhancer['character']}. "
-            f"{enhancer['lighting']}. "
-            f"Framed as {enhancer['camera']}. "
-            f"Color palette: {color_palette}. "
-            f"Atmosphere: {atmosphere}. "
-            f"Vertical 9:16 format optimized for mobile full-screen viewing. "
-            f"Photorealistic, not illustrated or painted. "
-            f"No text, no words, no letters, no numbers, no signs, "
-            f"no logos, no watermarks, no typography of any kind."
-        )
-    else:
-        # Flux/SD: keyword-style prompts
-        prompt = (
-            f"{visual_suggestion}, "
-            f"{base_style}, "
-            f"{enhancer['character']}, "
-            f"{enhancer['lighting']}, "
-            f"{enhancer['camera']}, "
-            f"color palette {color_palette}, "
-            f"{enhancer['technical']}"
-        )
-
-    return prompt
+# Safety constraint yang selalu ditambahkan ke setiap prompt
+# Mencegah text/watermark muncul di gambar
+SAFETY_SUFFIX = (
+    "No text, no words, no letters, no numbers, no signs, "
+    "no logos, no watermarks, no typography of any kind."
+)
 
 
 
@@ -163,6 +75,9 @@ class AIImageProvider(VisualProvider):
         # Niche visual data — dari Supabase via TenantRunConfig (tidak hardcode)
         self.niche_visual_style     = config.get("niche_visual_style") or {}
         self.niche_visual_fallbacks = config.get("niche_visual_fallbacks") or []
+        # LLM config — untuk rejection rewrite (pakai LLM tenant, bukan hardcode)
+        self.llm_provider = config.get("llm_provider", "openai")
+        self.llm_api_key  = config.get("llm_api_key", "")
 
         if self.model_config["platform"] == "replicate":
             self.api_key = (
@@ -208,13 +123,10 @@ class AIImageProvider(VisualProvider):
 
         for i, keyword in enumerate(keywords[:count]):
             try:
-                # Build cinematic prompt — section-aware, niche style dari Supabase
-                prompt = _build_cinematic_prompt(
-                    visual_suggestion=keyword,
-                    section_index=i,
-                    niche_style=self.niche_visual_style,
-                    model=self.ai_model,
-                )
+                # Prompt sudah full DALL-E ready dari LLM — hanya tambah safety suffix
+                prompt = keyword
+                if SAFETY_SUFFIX.lower() not in prompt.lower():
+                    prompt = f"{prompt} {SAFETY_SUFFIX}"
 
                 # Durasi per clip dari section_durations (s6c2)
                 # Fallback ke 5.0 jika tidak tersedia
@@ -224,9 +136,7 @@ class AIImageProvider(VisualProvider):
                     duration = 5.0
 
                 logger.info(
-                    f"[AIImage:{self.ai_model}] Scene {i+1}/{count} "
-                    f"| duration={duration}s "
-                    f"| section={list(SECTION_ENHANCERS.keys())[min(i,5)]}"
+                    f"[AIImage:{self.ai_model}] Scene {i+1}/{count} | duration={duration}s"
                 )
                 logger.debug(f"[AIImage] Prompt: {prompt[:120]}...")
 
@@ -343,68 +253,69 @@ class AIImageProvider(VisualProvider):
         rejection_history: list[dict],
     ) -> str:
         """
-        Kirim penolakan dari image generator kembali ke GPT.
-        Biarkan GPT yang berpikir ulang — tidak ada manipulasi kata dari kita.
+        Kirim penolakan dari image generator kembali ke LLM tenant.
+        LLM yang berpikir ulang — pakai Claude atau OpenAI sesuai config tenant.
 
         rejection_history: list of {"prompt": str, "rejection": str}
-          — semua attempt sebelumnya beserta alasan penolakannya.
+        Returns: full DALL-E ready prompt baru (langsung siap dipakai)
         """
-        import openai
-
-        enhancer      = SECTION_ENHANCERS.get(section_index, SECTION_ENHANCERS[2])
         section_names = ["hook", "mystery", "build-up", "core facts", "tension", "climax"]
         section_name  = section_names[min(section_index, 5)]
         niche_style   = self.niche_visual_style
         base_style    = niche_style.get("base_style", "documentary photography")
         atmosphere    = niche_style.get("atmosphere", "cinematic")
 
-        # Build rejection context untuk GPT
         rejection_context = "\n".join([
-            f"Attempt {idx+1}:\n  Prompt: \"{r['prompt'][:200]}\"\n  Rejected: {r['rejection'][:200]}"
+            f"Attempt {idx+1}:\n  Prompt: \"{r['prompt'][:200]}\"\n  Rejected because: {r['rejection'][:200]}"
             for idx, r in enumerate(rejection_history)
         ])
 
         system_prompt = (
-            "You are a visual prompt engineer. "
-            "An image generator rejected your visual scene description. "
-            "Your task: create a new safe prompt that still visually communicates "
-            "the same narrative concept and emotional atmosphere. "
-            "You may NOT directly repeat any element from rejected prompts. "
-            "Think creatively — use environmental cues, abstract elements, scale, "
-            "light, texture, and composition to convey the concept indirectly. "
-            "Output ONLY the new visual description, 1-2 sentences, no explanation."
+            "You are a visual prompt engineer for DALL-E 3. "
+            "An image generator rejected your prompt. "
+            "Create a new complete DALL-E 3 prompt that conveys the same narrative concept "
+            "but avoids the rejection reason. "
+            "Use environmental cues, abstract elements, scale, light, and texture instead of direct depiction. "
+            "Output ONLY the new complete DALL-E 3 prompt, 2-3 sentences, no explanation."
         )
         user_prompt = (
-            f"Original visual concept: \"{original_keyword}\"\n"
-            f"Scene position: {section_name} (scene {section_index+1}/6)\n"
+            f"Original prompt (rejected): \"{original_keyword}\"\n"
+            f"Scene: {section_name} (scene {section_index+1}/6)\n"
             f"Visual style: {base_style}\n"
-            f"Mood needed: {enhancer['mood']}\n"
             f"Atmosphere: {atmosphere}\n\n"
-            f"Previous attempts that were rejected:\n{rejection_context}\n\n"
-            f"Write a new visual description that conveys the same narrative moment safely:"
+            f"Rejection history:\n{rejection_context}\n\n"
+            f"Write a new safe complete DALL-E 3 prompt. "
+            f"End with: vertical 9:16, photorealistic, {SAFETY_SUFFIX}"
         )
 
-        client   = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        response = client.chat.completions.create(
-            model    = "gpt-4o-mini",
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user",   "content": user_prompt},
-            ],
-            max_tokens  = 150,
-            temperature = 0.7,
-        )
-        rewritten = response.choices[0].message.content.strip().strip('"')
+        if self.llm_provider == "claude":
+            import anthropic
+            client   = anthropic.Anthropic(api_key=self.llm_api_key)
+            response = client.messages.create(
+                model    = "claude-haiku-4-5-20251001",
+                max_tokens  = 200,
+                messages = [{"role": "user", "content": f"{system_prompt}\n\n{user_prompt}"}],
+            )
+            rewritten = response.content[0].text.strip().strip('"')
+        else:
+            import openai
+            client   = openai.OpenAI(api_key=self.llm_api_key)
+            response = client.chat.completions.create(
+                model    = "gpt-4o-mini",
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user",   "content": user_prompt},
+                ],
+                max_tokens  = 200,
+                temperature = 0.7,
+            )
+            rewritten = response.choices[0].message.content.strip().strip('"')
+
         logger.info(
-            f"[AIImage] GPT rewrite scene {section_index+1} "
+            f"[AIImage] {self.llm_provider} rewrite scene {section_index+1} "
             f"(attempt {len(rejection_history)+1}): {rewritten[:120]}"
         )
-        return _build_cinematic_prompt(
-            visual_suggestion = rewritten,
-            section_index     = section_index,
-            niche_style       = self.niche_visual_style,
-            model             = self.ai_model,
-        )
+        return rewritten  # Already a full DALL-E ready prompt
 
     @property
     def provider_name(self) -> str:

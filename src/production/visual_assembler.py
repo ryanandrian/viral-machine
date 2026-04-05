@@ -240,10 +240,8 @@ class VisualAssembler:
                 "visual_provider":        visual_mode,
                 "visual_ai_model":        visual_mode.split(":", 1)[1] if ":" in visual_mode else "dall-e-3",
                 "visual_api_key":         run_config.get("visual_api_key"),
-                "llm_api_key":            (
-                    run_config.get("llm_api_key")
-                    or os.getenv("OPENAI_API_KEY", "")
-                ),
+                "llm_api_key":            run_config.get("llm_api_key") or os.getenv("OPENAI_API_KEY", ""),
+                "llm_provider":           run_config.get("llm_provider", "openai"),
                 "niche_visual_style":     run_config.get("niche_visual_style") or {},
                 "niche_visual_fallbacks": run_config.get("niche_visual_fallbacks") or [],
             }
@@ -412,17 +410,23 @@ class VisualAssembler:
             from src.config.tenant_config import load_tenant_config
             rc = load_tenant_config(tenant_config.tenant_id)
             return {
-                "visual_mode":       getattr(rc, "visual_mode", "video"),
-                "visual_max_clip_mb": rc.visual_max_clip_mb,
-                "visual_api_key":    rc.visual_api_key,
-                "llm_api_key":       rc.llm_api_key,
-                "is_developer":      getattr(rc, "is_developer", False),
+                "visual_mode":            getattr(rc, "visual_mode", "video"),
+                "visual_max_clip_mb":     rc.visual_max_clip_mb,
+                "visual_api_key":         rc.visual_api_key,
+                "llm_api_key":            rc.llm_api_key,
+                "llm_provider":           getattr(rc, "llm_provider", "openai"),
+                "niche_visual_style":     getattr(rc, "niche_visual_style", {}) or {},
+                "niche_visual_fallbacks": getattr(rc, "niche_visual_fallbacks", []) or [],
+                "is_developer":           getattr(rc, "is_developer", False),
             }
         except Exception:
             return {
-                "visual_mode":       "video",
-                "visual_max_clip_mb": 150,
-                "visual_api_key":    None,
-                "llm_api_key":       None,
-                "is_developer":      False,
+                "visual_mode":            "video",
+                "visual_max_clip_mb":     150,
+                "visual_api_key":         None,
+                "llm_api_key":            None,
+                "llm_provider":           "openai",
+                "niche_visual_style":     {},
+                "niche_visual_fallbacks": [],
+                "is_developer":           False,
             }
