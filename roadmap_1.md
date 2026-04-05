@@ -15,10 +15,16 @@
 | 4b | ChannelAnalytics — YouTube Analytics pull | 1 | ✅ DONE | 5 Apr 2026 |
 | 4c | PerformanceAnalyzer + channel_insights | 1 | ✅ DONE | 5 Apr 2026 |
 | 4d | Feedback Loop NicheSelector (self-learning) | 1 | ✅ DONE | 5 Apr 2026 |
-| 5 | Error Management Profesional (exceptions.py) | 2 | ⬜ TODO | — |
-| 6 | Analytics Isolation: channel_id per (tenant+channel) | 2 | ⬜ TODO | — |
-| 7 | Multi-Channel per Tenant (channels table) | 2 | ⬜ TODO | — |
-| 8 | Tenant Baru Onboarding (SaaS testing) | 2 | ⬜ TODO | — |
+| 5a | Niche visual_style + visual_fallbacks + mood_priority dari Supabase | 1 | ✅ DONE | 5 Apr 2026 |
+| 5b | Music system config-driven — moods table, niche+mood query | 1 | ✅ DONE | 5 Apr 2026 |
+| 5c | LLM generate full cinematic prompts — model-agnostic, hapus template manual | 1 | ✅ DONE | 6 Apr 2026 |
+| 6 | BYO-CC Phase 1 — tenant_credentials table + enkripsi + mandatory validation | 2 | ⬜ TODO | — |
+| 7 | BYO-CC Phase 2 — Dispatcher (ganti crontab hardcode) | 2 | ⬜ TODO | — |
+| 8 | BYO-CC Phase 3 — Tenant Onboarding script | 2 | ⬜ TODO | — |
+| 9 | Migrasi DALL-E 3 → gpt-image-1 (setelah research + test, sebelum May 2026) | 2 | ⬜ TODO | — |
+| 10 | Error Management Profesional (exceptions.py) | 2 | ⬜ TODO | — |
+| 11 | Analytics Isolation: channel_id per (tenant+channel) | 2 | ⬜ TODO | — |
+| 12 | Multi-Channel per Tenant (channels table) | 2 | ⬜ TODO | — |
 
 ---
 
@@ -319,7 +325,130 @@ ALTER TABLE channel_insights
 
 ---
 
-### ⬜ Item 5 — Error Management Profesional
+### ✅ Item 5a — Niche Visual Config dari Supabase
+
+**Status**: SELESAI — 5 April 2026
+**Migration**: `scripts/migrate_s85_niche_visual.sql`
+
+#### Yang Dikerjakan
+- Kolom `visual_style` (JSONB), `visual_fallbacks` (JSONB), `mood_priority` (JSONB) ditambah ke tabel `niches`
+- Semua 4 niche terisi: base_style, color_palette, atmosphere, fallback prompts, mood priority
+- `ai_image.py`: niche_visual_style di-load dari Supabase — tidak ada hardcode di kode
+- `visual_assembler.py`: niche_visual_style + niche_visual_fallbacks di-pass ke AIImageProvider
+- `tenant_config.py`: fields niche_visual_style + niche_visual_fallbacks ditambah
+
+---
+
+### ✅ Item 5b — Music System Config-Driven
+
+**Status**: SELESAI — 5–6 April 2026
+**Migration**: `scripts/migrate_s85b_moods_table.sql`
+
+#### Yang Dikerjakan
+- Tabel `moods` dibuat di Supabase: 15 mood aktif dengan keywords untuk deteksi dari script
+- `music_selector.py`: MOOD_KEYWORDS hardcode dihapus — load dari tabel `moods`
+- `music_selector.py`: query `niche + mood` (sebelumnya mood-only → bisa lintas niche)
+- `seed_music_library.py`: VALID_NICHES/VALID_MOODS/NICHE_MOOD_MAP hardcode dihapus — load dari Supabase
+- Bug fix: `music_volume` dari `tenant_configs` sekarang dipakai di ffmpeg (sebelumnya hardcode 0.125)
+- R2 struktur tidak berubah: `music/{niche}/{mood}/{filename}.mp3`
+
+#### Infrastruktur Music (Platform, bukan tenant)
+- Music library = platform-managed (R2 + Supabase music_library)
+- Tenant tidak perlu API key untuk musik — platform yang sediakan
+
+---
+
+### ✅ Item 5c — LLM Generate Full Cinematic Prompts
+
+**Status**: SELESAI — 6 April 2026
+
+#### Yang Dikerjakan
+- `script_engine.py`: `visual_suggestions` = full cinematic image prompts dari LLM (bukan deskripsi singkat)
+- `script_engine.py`: `niche_visual_style` (base_style, color_palette, atmosphere) di-pass ke LLM sebagai VISUAL DIRECTION context
+- `script_engine.py`: panduan cinematic per section (hook/mystery/build-up/core/climax) ada di instruksi template — LLM yang eksekusi
+- `ai_image.py`: `SECTION_ENHANCERS` + `_build_cinematic_prompt` dihapus — tidak diperlukan lagi
+- `ai_image.py`: rejection rewrite pakai LLM tenant (Claude atau OpenAI) — tidak hardcode OpenAI
+- `ai_image.py`: `llm_provider` + `llm_api_key` disimpan di instance untuk rejection rewrite
+- `visual_assembler.py`: `llm_provider` ditambah ke config dict AIImageProvider
+- Prompts model-agnostic — tidak ada "DALL-E 3" hardcode, siap untuk gpt-image-1 atau model lain
+
+#### Manfaat
+- Prompt jauh lebih relevan dengan narasi (LLM tahu konteks penuh cerita)
+- Satu API key untuk LLM + visual prompt (tidak split provider)
+- Siap ganti image generator tanpa ubah kode
+
+---
+
+### ⬜ Item 6 — BYO-CC Phase 1: Kredensial & Mandatory Validation
+
+**Status**: TODO
+**Prerequisite**: Kesepakatan infrastruktur v1 ✅ (selesai 6 Apr 2026)
+
+#### Latar Belakang
+YouTube Data API quota = 10.000 unit/hari per GCP project. SaaS 100+ tenant tidak bisa pakai 1 project. Solusi: setiap tenant bawa GCP project sendiri (BYO-CC = Bring Your Own Cloud Console).
+
+#### Infrastruktur Resmi v1 (Disepakati)
+| Elemen | Default | Alternatif | Key Wajib |
+|---|---|---|---|
+| LLM | Claude Sonnet 4.6 | GPT-4o-mini | anthropic_api_key ATAU openai_api_key |
+| TTS | ElevenLabs | OpenAI TTS | elevenlabs_api_key ATAU openai_api_key |
+| Visual AI | DALL-E 3 | — (gpt-image-1 menyusul) | openai_api_key |
+| YouTube | YouTube Data API v3 | — | Google OAuth (GCP milik tenant) |
+| Music | Platform R2 | — | Tidak ada |
+
+**Prinsip**: Jika tenant belum isi API key wajib → config tidak bisa disave, mesin tidak jalan.
+
+#### Yang Perlu Dikerjakan
+- Tabel `tenant_credentials` di Supabase: `google_client_id`, `google_client_secret_enc`, `google_refresh_token_enc`, `google_access_token_enc`, `token_expiry`, `channel_id`
+- `src/utils/crypto.py`: enkripsi Fernet, master key di `.env` VPS (`ENCRYPTION_KEY`)
+- `youtube_publisher.py`: load OAuth dari `tenant_credentials` (bukan file `tokens/`)
+- `channel_analytics.py`: load OAuth dari `tenant_credentials`
+- Hapus semua `.env` fallback untuk API key tenant di semua provider
+- Mandatory validation di awal pipeline: cek semua key wajib, jika kosong → stop + Telegram notif
+
+---
+
+### ⬜ Item 7 — BYO-CC Phase 2: Dispatcher
+
+**Status**: TODO
+**Prerequisite**: Item 6 selesai
+
+#### Yang Perlu Dikerjakan
+- `src/orchestrator/dispatcher.py`: ganti crontab hardcode di VPS
+- Baca `production_schedules` / `tenant_configs.publish_slots` → spawn pipeline per tenant
+- Error tenant A tidak mengganggu tenant B — isolated per tenant
+- Satu crontab entry di VPS: jalankan dispatcher setiap menit
+- Logging per tenant terpisah
+
+---
+
+### ⬜ Item 8 — BYO-CC Phase 3: Tenant Onboarding
+
+**Status**: TODO
+**Prerequisite**: Item 7 selesai
+
+#### Yang Perlu Dikerjakan
+- `scripts/tenant_onboard.py`: input credentials tenant → enkripsi → simpan ke DB → jalankan OAuth flow
+- Validasi semua key sebelum simpan
+- Panduan step-by-step setup GCP project untuk tenant non-teknis
+
+---
+
+### ⬜ Item 9 — Migrasi DALL-E 3 → gpt-image-1
+
+**Status**: TODO — sebelum May 2026
+**Alasan**: DALL-E 3 discontinue ~May 2026, digantikan gpt-image-1 / gpt-image-1-mini
+
+#### Yang Perlu Dilakukan
+- Research gpt-image-1 API spec (endpoint, parameter, ukuran output)
+- Test kualitas output vs DALL-E 3 dengan prompt yang sama
+- Update `AI_IMAGE_MODELS` di `ai_image.py` — tambah `gpt-image-1` dan `gpt-image-1-mini`
+- Set gpt-image-1 sebagai default baru
+- DALL-E 3 tetap tersedia sebagai alternatif sampai resmi deprecated
+
+---
+
+### ⬜ Item 10 — Error Management Profesional
 
 **Status**: TODO  
 **Kode target**: `src/utils/exceptions.py` (baru) + semua providers

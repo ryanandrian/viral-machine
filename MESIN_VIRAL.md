@@ -37,9 +37,9 @@
 | **Durasi video** | 45–180 detik (target ~58–111 detik) |
 | **Bahasa** | Inggris (`en`) — default |
 | **Niche aktif** | `universe_mysteries`, `fun_facts`, `dark_history`, `ocean_mysteries` |
-| **AI Engine** | OpenAI GPT-4o-mini (script, hook, topic) |
-| **TTS** | ElevenLabs → OpenAI TTS → Edge TTS (fallback berlapis) |
-| **Visual** | Pexels stock footage / DALL-E 3 (AI Image) |
+| **AI Engine** | Claude Sonnet 4.6 (default) → GPT-4o-mini (alternatif/fallback) |
+| **TTS** | ElevenLabs (default) → OpenAI TTS (alternatif) |
+| **Visual** | DALL-E 3 AI Image (default v1) — Pexels deprecated |
 | **Render** | FFmpeg, H.264, 1080×1920, 30fps, 4000k bitrate |
 | **Database** | Supabase (PostgreSQL) |
 | **Storage** | Cloudflare R2 (musik) |
@@ -165,22 +165,22 @@ viral-machine/
 | `src/intelligence/config.py` | Intelligence | `TenantConfig` legacy (entry point), `NICHES` dict, `SystemConfig` |
 | `src/intelligence/trend_radar.py` | Intelligence | Scan tren dari Google Trends, YouTube, News, HackerNews, Wikipedia |
 | `src/intelligence/niche_selector.py` | Intelligence | Pilih 5 topik viral via GPT-4o-mini; cegah duplikat dari Supabase |
-| `src/intelligence/script_engine.py` | Intelligence | Generate script 8-section (hook→CTA) via GPT-4o-mini; retry 3× |
+| `src/intelligence/script_engine.py` | Intelligence | Generate script 8-section + full cinematic visual prompts via Claude/GPT; retry 3× dengan feedback |
 | `src/intelligence/script_analyzer.py` | Intelligence | Score script 0–100 di 6 dimensi; feedback untuk retry |
 | `src/intelligence/hook_optimizer.py` | Intelligence | Generate 5 varian hook; pilih pemenang berdasarkan scroll_stop_power |
 | `src/production/tts_engine.py` | Production | Orkestrasi TTS + fallback berlapis; kembalikan audio + word timestamps |
-| `src/production/visual_assembler.py` | Production | Download/generate 6 clip visual; fallback ke cache/black screen |
+| `src/production/visual_assembler.py` | Production | Generate 6 clip AI image; pass llm_provider + niche_visual_style ke AIImageProvider; fallback ke cache/black screen |
 | `src/production/video_renderer.py` | Production | FFmpeg pipeline: combine clip + audio + karaoke caption → MP4 1080×1920 |
 | `src/providers/llm/base.py` | Provider | Abstract class LLM provider |
 | `src/providers/llm/openai.py` | Provider | OpenAI GPT (sync + async); gpt-4o-mini default |
-| `src/providers/llm/claude.py` | Provider | Claude Sonnet (implementasi ada, **tidak dipakai**) |
+| `src/providers/llm/claude.py` | Provider | Claude Sonnet 4.6 — **default LLM v1** |
 | `src/providers/tts/base.py` | Provider | Abstract class TTS provider |
-| `src/providers/tts/edge_tts.py` | Provider | Microsoft Edge TTS; gratis; SubMaker untuk timestamps |
+| `src/providers/tts/edge_tts.py` | Provider | Microsoft Edge TTS — **dihapus dari auto-fallback v1** |
 | `src/providers/tts/elevenlabs.py` | Provider | ElevenLabs; kualitas terbaik; char→word timestamp conversion |
 | `src/providers/tts/openai_tts.py` | Provider | OpenAI TTS; tidak ada timestamps native |
 | `src/providers/visual/base.py` | Provider | Abstract class Visual provider |
-| `src/providers/visual/pexels.py` | Provider | Pexels stock footage; filter durasi & ukuran |
-| `src/providers/visual/ai_image.py` | Provider | DALL-E 3 / Flux Schnell; section-aware prompt |
+| `src/providers/visual/pexels.py` | Provider | Pexels stock footage — **deprecated v1, tidak efektif** |
+| `src/providers/visual/ai_image.py` | Provider | AI Image (DALL-E 3 / model lain); prompt dari LLM langsung; rejection rewrite pakai LLM tenant |
 | `src/providers/visual/ai_video.py` | Provider | **DISABLED** — raise `VisualError` saat dipanggil |
 | `src/providers/music/music_selector.py` | Provider | Deteksi mood dari script via keywords (dari tabel `moods`); query `music_library` per niche+mood; download dari R2 |
 | `src/distribution/youtube_publisher.py` | Distribution | Upload video + thumbnail ke YouTube Shorts via Google API |
