@@ -102,6 +102,10 @@ class TenantRunConfig:
     trailing_silence:       float          = 2.5
     niche_hashtags:         Optional[dict] = None
 
+    # Niche data dari tabel niches (loaded dinamis dari Supabase)
+    niche_visual_style:     dict = field(default_factory=dict)
+    niche_visual_fallbacks: list = field(default_factory=list)
+
     # Developer tenant
     is_developer:       bool  = False
     discount_pct:       int   = 0
@@ -173,14 +177,17 @@ class TenantRunConfig:
             ),
 
             # Visual
-            "visual_provider":    self.visual_provider,
-            "visual_max_clip_mb": self.visual_max_clip_mb,
-            "visual_api_key":     (
+            "visual_provider":        self.visual_provider,
+            "visual_max_clip_mb":     self.visual_max_clip_mb,
+            "visual_api_key":         (
                 self.visual_api_key
                 or os.getenv("PEXELS_API_KEY")
                 or os.getenv("REPLICATE_API_TOKEN")
             ),
-            "visual_ai_model": self.visual_ai_model,
+            "visual_ai_model":        self.visual_ai_model,
+            # Niche visual data dari Supabase — bukan hardcode
+            "niche_visual_style":     self.niche_visual_style,
+            "niche_visual_fallbacks": self.niche_visual_fallbacks,
 
             # LLM
             "llm_provider": self.llm_provider,
@@ -339,6 +346,25 @@ class TenantConfigManager:
                 )
                 niche = "universe_mysteries"
 
+            # Load niche visual data dari tabel niches (dynamic, no hardcode)
+            niche_visual_style     = {}
+            niche_visual_fallbacks = []
+            try:
+                niche_row = (
+                    self._supabase
+                    .table("niches")
+                    .select("visual_style, visual_fallbacks")
+                    .eq("niche_id", niche)
+                    .single()
+                    .execute()
+                )
+                if niche_row.data:
+                    niche_visual_style     = niche_row.data.get("visual_style") or {}
+                    niche_visual_fallbacks = niche_row.data.get("visual_fallbacks") or []
+                    logger.debug(f"[TenantConfig] Niche visual data loaded: {niche}")
+            except Exception as e:
+                logger.warning(f"[TenantConfig] Gagal load niche visual data: {e}")
+
             # Validasi plan limits
             plan_type           = row.get("plan_type", "starter")
             limits              = PLAN_LIMITS.get(plan_type, PLAN_LIMITS["starter"])
@@ -396,6 +422,8 @@ class TenantConfigManager:
                 visual_fallback_mode    = row.get("visual_fallback_mode", "video") or "video",
                 llm_script_fallback     = row.get("llm_script_fallback", "gpt-4o-mini") or "gpt-4o-mini",
                 channel_group           = row.get("channel_group", "default") or "default",
+                niche_visual_style      = niche_visual_style,
+                niche_visual_fallbacks  = niche_visual_fallbacks,
                 # Telegram (s81)
                 telegram_enabled        = row.get("telegram_enabled", True),
                 telegram_chat_id        = row.get("telegram_chat_id") or None,

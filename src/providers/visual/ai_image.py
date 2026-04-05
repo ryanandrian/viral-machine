@@ -92,121 +92,51 @@ SECTION_ENHANCERS = {
     },
 }
 
-# ── Niche style modifier ──────────────────────────────────────────────────────
-# Menambahkan karakter visual konsisten per niche
-NICHE_STYLE = {
-    "universe_mysteries": {
-        "base_style":    "NASA documentary photography style, cosmic scale",
-        "color_palette": "deep blacks, cold blues, nebula purples, star whites",
-        "atmosphere":    "infinite void of space, cosmic loneliness, vast scale",
-        "avoid":         "cartoon, illustration, warm colors, Earth-bound settings",
-    },
-    "dark_history": {
-        "base_style":    "historical documentary photography, period-accurate",
-        "color_palette": "desaturated, sepia undertones, deep shadows, blood reds",
-        "atmosphere":    "weight of history, moral gravity, ominous inevitability",
-        "avoid":         "bright colors, modern elements, cheerful lighting",
-    },
-    "ocean_mysteries": {
-        "base_style":    "deep sea documentary photography, National Geographic quality",
-        "color_palette": "deep ocean blues and blacks, bioluminescent greens and blues",
-        "atmosphere":    "crushing depth, alien beauty, ancient and unknowable",
-        "avoid":         "shallow water, bright sunlight, tropical colors",
-    },
-    "fun_facts": {
-        "base_style":    "vibrant documentary photography, engaging and dynamic",
-        "color_palette": "bold saturated colors, energetic, eye-catching",
-        "atmosphere":    "surprising discovery, playful wonder, instant delight",
-        "avoid":         "dark moody lighting, horror elements, dull colors",
-    },
-}
-
-
 def _build_cinematic_prompt(
     visual_suggestion: str,
     section_index: int,
-    niche: str,
+    niche_style: dict,
     model: str,
 ) -> str:
     """
     Build prompt sinematik dari visual_suggestion script.
-
-    Prinsip:
-    - visual_suggestion dari script sudah detail — gunakan sebagai INTI prompt
-    - Perkaya dengan section enhancer (karakter per posisi)
-    - Tambahkan niche style (konsistensi visual per niche)
-    - Format sesuai model (DALL-E 3 vs Flux)
+    niche_style: dict dari tabel niches.visual_style (loaded dari Supabase).
     """
-    enhancer   = SECTION_ENHANCERS.get(section_index, SECTION_ENHANCERS[2])
-    niche_cfg  = NICHE_STYLE.get(niche, NICHE_STYLE["universe_mysteries"])
+    enhancer = SECTION_ENHANCERS.get(section_index, SECTION_ENHANCERS[2])
+
+    base_style    = niche_style.get("base_style", "documentary photography style")
+    color_palette = niche_style.get("color_palette", "natural colors")
+    atmosphere    = niche_style.get("atmosphere", "cinematic atmosphere")
 
     if model == "dall-e-3":
-        # DALL-E 3: natural language yang kaya, instruksi eksplisit
-        # Tidak butuh magic words seperti "8K" — DALL-E 3 lebih memahami konteks
         prompt = (
             f"{visual_suggestion}. "
-            f"Shot in {niche_cfg['base_style']}. "
+            f"Shot in {base_style}. "
             f"The image should feel {enhancer['character']}. "
             f"{enhancer['lighting']}. "
             f"Framed as {enhancer['camera']}. "
-            f"Color palette: {niche_cfg['color_palette']}. "
-            f"Atmosphere: {niche_cfg['atmosphere']}. "
+            f"Color palette: {color_palette}. "
+            f"Atmosphere: {atmosphere}. "
             f"Vertical 9:16 format optimized for mobile full-screen viewing. "
             f"Photorealistic, not illustrated or painted. "
             f"No text, no words, no letters, no numbers, no signs, "
             f"no logos, no watermarks, no typography of any kind."
         )
     else:
-        # Flux/SD: lebih baik dengan keyword-style prompts
+        # Flux/SD: keyword-style prompts
         prompt = (
             f"{visual_suggestion}, "
-            f"{niche_cfg['base_style']}, "
+            f"{base_style}, "
             f"{enhancer['character']}, "
             f"{enhancer['lighting']}, "
             f"{enhancer['camera']}, "
-            f"color palette {niche_cfg['color_palette']}, "
-            f"{enhancer['technical']}, "
-            f"not {niche_cfg['avoid']}"
+            f"color palette {color_palette}, "
+            f"{enhancer['technical']}"
         )
 
     return prompt
 
 
-# ── Fallback keywords per niche jika visual_suggestions kosong ───────────────
-NICHE_FALLBACKS = {
-    "universe_mysteries": [
-        "A single star sharpening into focus against absolute black void, cold blue light",
-        "Radio telescope dish rotating under star-dense night sky, amber warning lights",
-        "Milky Way galaxy arching overhead, time-lapse compression, infinite scale",
-        "Deep field Hubble imagery showing galaxy after galaxy, overwhelming scale",
-        "Primordial Earth teeming with microbial oceans, cold dead exoplanet contrast",
-        "Human silhouette beneath infinite star field, camera pulling back at speed",
-    ],
-    "dark_history": [
-        "Ancient ruins emerging from fog at dawn, weight of centuries visible",
-        "Medieval castle silhouette against stormy sky, lightning in distance",
-        "Candlelit map table with battle plans, shadows concealing dark intent",
-        "Archaeological excavation revealing buried artifacts, earth and mystery",
-        "Desaturated crowd scene at pivotal historical moment, moral weight",
-        "Single torch illuminating dark corridor leading to hidden chamber",
-    ],
-    "ocean_mysteries": [
-        "Bioluminescent creatures in absolute ocean darkness, alien beauty",
-        "Massive whale silhouette emerging from deep ocean murk, scale overwhelming",
-        "Coral reef ecosystem at the boundary of light and darkness",
-        "Shipwreck resting on ocean floor, encrusted with decades of silence",
-        "Looking up from ocean floor at distant surface light, crushing depth",
-        "Deep sea creature with impossible anatomy, alien and ancient",
-    ],
-    "fun_facts": [
-        "Colorful world landmark from unexpected aerial perspective, vibrant",
-        "Science laboratory experiment with dramatic visual result, surprising",
-        "Nature phenomenon captured at peak moment, visually astonishing",
-        "Human brain visualization with neural activity, colorful and dynamic",
-        "Extreme microscopic world revealing hidden beauty, unexpected scale",
-        "Urban aerial view revealing geometric patterns invisible from ground",
-    ],
-}
 
 
 class AIImageProvider(VisualProvider):
@@ -228,8 +158,11 @@ class AIImageProvider(VisualProvider):
                 f"Pilihan: {list(AI_IMAGE_MODELS.keys())}"
             )
 
-        self.model_config = AI_IMAGE_MODELS[self.ai_model]
-        self.niche        = config.get("niche", "universe_mysteries")
+        self.model_config       = AI_IMAGE_MODELS[self.ai_model]
+        self.niche              = config.get("niche", "universe_mysteries")
+        # Niche visual data — dari Supabase via TenantRunConfig (tidak hardcode)
+        self.niche_visual_style     = config.get("niche_visual_style") or {}
+        self.niche_visual_fallbacks = config.get("niche_visual_fallbacks") or []
 
         if self.model_config["platform"] == "replicate":
             self.api_key = (
@@ -275,11 +208,11 @@ class AIImageProvider(VisualProvider):
 
         for i, keyword in enumerate(keywords[:count]):
             try:
-                # Build cinematic prompt — section-aware
+                # Build cinematic prompt — section-aware, niche style dari Supabase
                 prompt = _build_cinematic_prompt(
                     visual_suggestion=keyword,
                     section_index=i,
-                    niche=self.niche,
+                    niche_style=self.niche_visual_style,
                     model=self.ai_model,
                 )
 
@@ -323,61 +256,47 @@ class AIImageProvider(VisualProvider):
                 )
 
             except Exception as e:
-                err_str = str(e).lower()
-                is_policy = "content_policy" in err_str or "safety system" in err_str or "400" in err_str
-                logger.warning(
-                    f"[AIImage] Scene {i+1} gagal (attempt 1): {e} — "
-                    f"retry dengan {'AI-rewritten prompt' if is_policy else 'sanitized prompt'}"
-                )
-                # ── Retry: content policy → GPT rewrite, else sanitize ──
-                try:
-                    if is_policy:
-                        # GPT rewrite: tetap relevan dengan narasi, tapi aman dari policy
-                        safe_prompt = await self._rewrite_prompt_with_ai(
-                            keyword, i, self.niche
-                        )
-                    else:
-                        safe_prompt = self._sanitize_prompt(keyword, i, self.niche)
-                    safe_output = output_dir / f"clip_{i+1:02d}_ai_safe.jpg"
-                    safe_clip   = output_dir / f"clip_{i+1:02d}_ai_safe.mp4"
-                    target_dur  = clip_durations[i] if clip_durations and i < len(clip_durations) else 5.0
-                    await self._generate_image(safe_prompt, safe_output)
-                    self._image_to_video(safe_output, safe_clip, duration=target_dur, clip_index=i)
-                    size_mb = safe_clip.stat().st_size / (1024 * 1024)
-                    clips.append(VideoClip(
-                        path=safe_clip, duration=target_dur,
-                        width=1080, height=1920,
-                        file_size_mb=round(size_mb, 1),
-                        source_url="ai_generated:safe_retry",
-                        provider=self.provider_name,
-                    ))
-                    total_cost += self.model_config["cost_per_img"]
-                    logger.info(f"[AIImage] ✅ Scene {i+1} retry OK dengan safe prompt")
-                except Exception as e2:
-                    logger.warning(
-                        f"[AIImage] Scene {i+1} retry gagal, fallback ke niche generic: {e2}"
-                    )
-                    # Last resort: generic niche fallback
+                # ── Retry loop: kirim rejection ke GPT, biarkan AI yang memikirkan ulang ──
+                rejection_history = [{"prompt": prompt, "rejection": str(e)}]
+                succeeded = False
+                for attempt in range(2, 4):  # attempt 2 dan 3
                     try:
-                        fallback_prompt = self._niche_fallback_prompt(i, self.niche)
-                        safe_output = output_dir / f"clip_{i+1:02d}_ai_safe.jpg"
-                        safe_clip   = output_dir / f"clip_{i+1:02d}_ai_safe.mp4"
+                        logger.warning(
+                            f"[AIImage] Scene {i+1} attempt {attempt-1} gagal — "
+                            f"kirim rejection ke GPT untuk rewrite (attempt {attempt}/3)"
+                        )
+                        safe_prompt = await self._ai_rewrite_on_rejection(
+                            original_keyword=keyword,
+                            section_index=i,
+                            rejection_history=rejection_history,
+                        )
+                        safe_output = output_dir / f"clip_{i+1:02d}_attempt{attempt}.jpg"
+                        safe_clip   = output_dir / f"clip_{i+1:02d}_attempt{attempt}.mp4"
                         target_dur  = clip_durations[i] if clip_durations and i < len(clip_durations) else 5.0
-                        await self._generate_image(fallback_prompt, safe_output)
+                        await self._generate_image(safe_prompt, safe_output)
                         self._image_to_video(safe_output, safe_clip, duration=target_dur, clip_index=i)
                         size_mb = safe_clip.stat().st_size / (1024 * 1024)
                         clips.append(VideoClip(
                             path=safe_clip, duration=target_dur,
                             width=1080, height=1920,
                             file_size_mb=round(size_mb, 1),
-                            source_url="ai_generated:niche_fallback",
+                            source_url=f"ai_generated:retry_{attempt}",
                             provider=self.provider_name,
                         ))
                         total_cost += self.model_config["cost_per_img"]
-                        logger.info(f"[AIImage] ✅ Scene {i+1} niche fallback OK")
-                    except Exception as e3:
-                        logger.error(f"[AIImage] Scene {i+1} GAGAL total: {e3}")
-                        continue
+                        logger.info(f"[AIImage] ✅ Scene {i+1} berhasil pada attempt {attempt}")
+                        succeeded = True
+                        break
+                    except Exception as retry_err:
+                        rejection_history.append({"prompt": safe_prompt, "rejection": str(retry_err)})
+                        logger.warning(f"[AIImage] Scene {i+1} attempt {attempt} juga ditolak: {retry_err}")
+
+                if not succeeded:
+                    logger.error(
+                        f"[AIImage] Scene {i+1} GAGAL setelah 3 attempt — "
+                        f"GPT tidak bisa hasilkan prompt yang diterima image generator"
+                    )
+                    continue
 
         logger.info(
             f"[AIImage] Complete: {len(clips)}/{count} clips "
@@ -405,143 +324,86 @@ class AIImageProvider(VisualProvider):
             f"[AIImage] visual_suggestions dari script: {len(keywords)} items"
         )
 
-        # Priority 2: fallback ke niche defaults jika kurang dari 6
+        # Priority 2: fallback ke niche visual_fallbacks dari Supabase jika kurang dari 6
         if len(keywords) < 6:
-            fallbacks = NICHE_FALLBACKS.get(niche, NICHE_FALLBACKS["universe_mysteries"])
+            fallbacks = self.niche_visual_fallbacks
             for fb in fallbacks:
                 if len(keywords) >= 6:
                     break
                 if fb not in keywords:
                     keywords.append(fb)
-            logger.info(
-                f"[AIImage] Setelah fallback: {len(keywords)} items"
-            )
+            logger.info(f"[AIImage] Setelah fallback: {len(keywords)} items")
 
         return keywords[:6]
 
-    def _sanitize_prompt(self, original_keyword: str, section_index: int, niche: str) -> str:
-        """
-        s71b: Buat prompt alternatif aman dari content policy DALL-E 3.
-        Hapus kata sensitif dari prompt asli.
-        Fallback ke niche default jika prompt terlalu pendek setelah dibersihkan.
-        """
-        SENSITIVE_WORDS = [
-            # Violence / injury
-            "wound", "wounds", "wounded", "attack", "attacked", "attacking",
-            "blood", "bloody", "bleed", "dead", "dying", "death", "corpse",
-            "weapon", "weapons", "gun", "knife", "sword", "violent", "violence",
-            "brutal", "gore", "injury", "injured", "kill", "killing",
-            "torture", "suffer", "suffering", "terror", "horrific",
-            # Creatures / dark themes (ocean_mysteries, dark_history)
-            "monster", "monsters", "monstrous", "creature", "creatures",
-            "predator", "predators", "beast", "beasts", "demon", "demons",
-            "horrifying", "terrifying", "terrified", "scary", "frightening",
-            "menacing", "lurking", "stalking", "deadly", "lethal",
-            "dangerous", "ferocious", "vicious", "savage", "brutal",
-            "nightmare", "nightmarish", "sinister", "evil", "wicked",
-            "decayed", "rotting", "skeleton", "skulls", "skull",
-        ]
-        cleaned = original_keyword.lower()
-        for word in SENSITIVE_WORDS:
-            cleaned = cleaned.replace(word, "")
-        cleaned = " ".join(cleaned.split())
-
-        if len(cleaned) > 20:
-            niche_style = NICHE_STYLE.get(niche, NICHE_STYLE["universe_mysteries"])
-            return (
-                f"{cleaned}. "
-                f"Shot in {niche_style['base_style']}. "
-                f"Vertical 9:16 format. Photorealistic, no text."
-            )
-
-        # Fallback: pakai niche default keywords untuk section ini
-        fallback_keywords = NICHE_FALLBACKS.get(niche, NICHE_FALLBACKS["universe_mysteries"])
-        safe_idx    = section_index % len(fallback_keywords)
-        niche_style = NICHE_STYLE.get(niche, NICHE_STYLE["universe_mysteries"])
-        logger.info(f"[AIImage] _sanitize_prompt: pakai niche fallback idx={safe_idx}")
-        return (
-            f"{fallback_keywords[safe_idx]}. "
-            f"Shot in {niche_style['base_style']}. "
-            f"Vertical 9:16 format optimized for mobile. Photorealistic, no text."
-        )
-
-    async def _rewrite_prompt_with_ai(
-        self, original_keyword: str, section_index: int, niche: str
+    async def _ai_rewrite_on_rejection(
+        self,
+        original_keyword: str,
+        section_index: int,
+        rejection_history: list[dict],
     ) -> str:
         """
-        Gunakan GPT-4o-mini untuk rewrite visual prompt agar aman dari DALL-E
-        content policy, tapi tetap relevan dengan konteks narasi scene.
+        Kirim penolakan dari image generator kembali ke GPT.
+        Biarkan GPT yang berpikir ulang — tidak ada manipulasi kata dari kita.
 
-        Contoh:
-          Input:  "deep sea monster lurking in absolute darkness"
-          Output: "deep ocean environment, ancient unknowable presence suggested
-                   by bioluminescent particles, vast darkness, cinematic"
+        rejection_history: list of {"prompt": str, "rejection": str}
+          — semua attempt sebelumnya beserta alasan penolakannya.
         """
-        try:
-            import openai
-            niche_cfg  = NICHE_STYLE.get(niche, NICHE_STYLE["universe_mysteries"])
-            enhancer   = SECTION_ENHANCERS.get(section_index, SECTION_ENHANCERS[2])
-            section_names = ["hook", "mystery", "build-up", "core facts", "tension", "climax"]
-            section_name  = section_names[min(section_index, 5)]
+        import openai
 
-            system_prompt = (
-                "You are a visual prompt engineer for DALL-E 3. "
-                "Your task: rewrite a scene description that was rejected by DALL-E's safety system "
-                "into a safe alternative that STILL visually supports the same narrative concept. "
-                "Rules:\n"
-                "- Keep the emotional tone and atmosphere\n"
-                "- Replace literal depictions of creatures/monsters/violence with environmental, "
-                "  atmospheric, or abstract visual equivalents\n"
-                "- 'monster' → suggest its presence through environment (shadows, disturbance in water, scale)\n"
-                "- 'attack/violence' → show aftermath or tension without explicit action\n"
-                "- Output ONLY the rewritten visual description, no explanation, 1-2 sentences max"
-            )
-            user_prompt = (
-                f"Original (rejected): \"{original_keyword}\"\n"
-                f"Section: {section_name} (scene {section_index + 1}/6)\n"
-                f"Niche: {niche} — style: {niche_cfg['base_style']}\n"
-                f"Mood needed: {enhancer['mood']}\n"
-                f"Rewrite to be DALL-E safe while visually supporting this narrative moment:"
-            )
+        enhancer      = SECTION_ENHANCERS.get(section_index, SECTION_ENHANCERS[2])
+        section_names = ["hook", "mystery", "build-up", "core facts", "tension", "climax"]
+        section_name  = section_names[min(section_index, 5)]
+        niche_style   = self.niche_visual_style
+        base_style    = niche_style.get("base_style", "documentary photography")
+        atmosphere    = niche_style.get("atmosphere", "cinematic")
 
-            client   = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-            response = client.chat.completions.create(
-                model    = "gpt-4o-mini",
-                messages = [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user",   "content": user_prompt},
-                ],
-                max_tokens  = 120,
-                temperature = 0.4,
-            )
-            rewritten = response.choices[0].message.content.strip().strip('"')
-            logger.info(f"[AIImage] GPT rewrite scene {section_index+1}: {rewritten[:100]}")
+        # Build rejection context untuk GPT
+        rejection_context = "\n".join([
+            f"Attempt {idx+1}:\n  Prompt: \"{r['prompt'][:200]}\"\n  Rejected: {r['rejection'][:200]}"
+            for idx, r in enumerate(rejection_history)
+        ])
 
-            # Build full cinematic prompt dari hasil rewrite
-            return _build_cinematic_prompt(
-                visual_suggestion = rewritten,
-                section_index     = section_index,
-                niche             = niche,
-                model             = self.ai_model,
-            )
+        system_prompt = (
+            "You are a visual prompt engineer. "
+            "An image generator rejected your visual scene description. "
+            "Your task: create a new safe prompt that still visually communicates "
+            "the same narrative concept and emotional atmosphere. "
+            "You may NOT directly repeat any element from rejected prompts. "
+            "Think creatively — use environmental cues, abstract elements, scale, "
+            "light, texture, and composition to convey the concept indirectly. "
+            "Output ONLY the new visual description, 1-2 sentences, no explanation."
+        )
+        user_prompt = (
+            f"Original visual concept: \"{original_keyword}\"\n"
+            f"Scene position: {section_name} (scene {section_index+1}/6)\n"
+            f"Visual style: {base_style}\n"
+            f"Mood needed: {enhancer['mood']}\n"
+            f"Atmosphere: {atmosphere}\n\n"
+            f"Previous attempts that were rejected:\n{rejection_context}\n\n"
+            f"Write a new visual description that conveys the same narrative moment safely:"
+        )
 
-        except Exception as e:
-            logger.warning(f"[AIImage] GPT rewrite gagal ({e}), fallback ke sanitize")
-            return self._sanitize_prompt(original_keyword, section_index, niche)
-
-    def _niche_fallback_prompt(self, section_index: int, niche: str) -> str:
-        """
-        Prompt aman 100% — tidak bergantung pada keyword asli sama sekali.
-        Dipakai langsung jika attempt 1 kena content_policy_violation.
-        """
-        fallback_keywords = NICHE_FALLBACKS.get(niche, NICHE_FALLBACKS["universe_mysteries"])
-        niche_style = NICHE_STYLE.get(niche, NICHE_STYLE["universe_mysteries"])
-        safe_idx = section_index % len(fallback_keywords)
-        logger.info(f"[AIImage] _niche_fallback_prompt: idx={safe_idx} niche={niche}")
-        return (
-            f"{fallback_keywords[safe_idx]}. "
-            f"Shot in {niche_style['base_style']}. "
-            f"Vertical 9:16 format optimized for mobile. Photorealistic, no text, no people."
+        client   = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        response = client.chat.completions.create(
+            model    = "gpt-4o-mini",
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": user_prompt},
+            ],
+            max_tokens  = 150,
+            temperature = 0.7,
+        )
+        rewritten = response.choices[0].message.content.strip().strip('"')
+        logger.info(
+            f"[AIImage] GPT rewrite scene {section_index+1} "
+            f"(attempt {len(rejection_history)+1}): {rewritten[:120]}"
+        )
+        return _build_cinematic_prompt(
+            visual_suggestion = rewritten,
+            section_index     = section_index,
+            niche_style       = self.niche_visual_style,
+            model             = self.ai_model,
         )
 
     @property

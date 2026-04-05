@@ -235,15 +235,17 @@ class VisualAssembler:
             from src.providers.visual.ai_image import AIImageProvider
 
             config = {
-                "tenant_id":       tenant_config.tenant_id,
-                "niche":           tenant_config.niche,
-                "visual_provider": visual_mode,
-                "visual_ai_model": visual_mode.split(":", 1)[1] if ":" in visual_mode else "dall-e-3",
-                "visual_api_key":  run_config.get("visual_api_key"),
-                "llm_api_key":     (
+                "tenant_id":              tenant_config.tenant_id,
+                "niche":                  tenant_config.niche,
+                "visual_provider":        visual_mode,
+                "visual_ai_model":        visual_mode.split(":", 1)[1] if ":" in visual_mode else "dall-e-3",
+                "visual_api_key":         run_config.get("visual_api_key"),
+                "llm_api_key":            (
                     run_config.get("llm_api_key")
                     or os.getenv("OPENAI_API_KEY", "")
                 ),
+                "niche_visual_style":     run_config.get("niche_visual_style") or {},
+                "niche_visual_fallbacks": run_config.get("niche_visual_fallbacks") or [],
             }
             provider  = AIImageProvider(config)
             keywords  = provider.extract_keywords_from_script(script, tenant_config.niche)
@@ -312,46 +314,22 @@ class VisualAssembler:
             if not hook_text:
                 return None
 
-            # Niche-specific hook frame style — s72
-            # Pakai thumbnail_concept (deskripsi visual murni dari script engine)
-            # BUKAN hook_text — hook_text menyebabkan DALL-E render teks di gambar
-            HOOK_FRAME_STYLE = {
-                "universe_mysteries": (
-                    f"Cinematic vertical 9:16 hero image. "
-                    f"{thumbnail_concept}. "
-                    f"Style: NASA documentary, dramatic cosmic scale, "
-                    f"extreme high contrast, cold blue-black palette, "
-                    f"single striking focal point that stops the scroll instantly. "
-                    f"Photorealistic, 8K. "
-                    f"No text, no words, no letters, no numbers, no signs, no typography. No people."
-                ),
-                "dark_history": (
-                    f"Cinematic vertical 9:16 hero image. "
-                    f"{thumbnail_concept}. "
-                    f"Style: dark historical documentary, ominous atmosphere, "
-                    f"desaturated with deep shadows, single haunting focal point. "
-                    f"Photorealistic. "
-                    f"No text, no words, no letters, no numbers, no signs, no typography. No people."
-                ),
-                "ocean_mysteries": (
-                    f"Cinematic vertical 9:16 hero image. "
-                    f"{thumbnail_concept}. "
-                    f"Style: deep ocean documentary, bioluminescent darkness, "
-                    f"eerie yet beautiful, single creature or phenomenon as focal point. "
-                    f"Photorealistic. "
-                    f"No text, no words, no letters, no numbers, no signs, no typography."
-                ),
-                "fun_facts": (
-                    f"Cinematic vertical 9:16 hero image. "
-                    f"{thumbnail_concept}. "
-                    f"Style: vibrant, high-energy, bold colors, "
-                    f"single surprising visual that demands attention. "
-                    f"Photorealistic. "
-                    f"No text, no words, no letters, no numbers, no signs, no typography."
-                ),
-            }
+            # Hook frame prompt — dibangun dari niche visual_style Supabase (tidak hardcode)
+            niche_vs   = config.get("niche_visual_style") or {}
+            base_style = niche_vs.get("base_style", "documentary photography style, cinematic")
+            color_pal  = niche_vs.get("color_palette", "natural cinematic colors")
+            atmosphere = niche_vs.get("atmosphere", "dramatic cinematic atmosphere")
 
-            prompt    = HOOK_FRAME_STYLE.get(niche, HOOK_FRAME_STYLE["universe_mysteries"])
+            prompt = (
+                f"Cinematic vertical 9:16 hero image. "
+                f"{thumbnail_concept}. "
+                f"Style: {base_style}. "
+                f"Color palette: {color_pal}. "
+                f"Atmosphere: {atmosphere}. "
+                f"Single striking focal point that stops the scroll instantly. "
+                f"Photorealistic. "
+                f"No text, no words, no letters, no numbers, no signs, no typography. No people."
+            )
             provider  = AIImageProvider(config)
             img_path  = clips_dir / "hook_frame_img.jpg"
             clip_path = clips_dir / "clip_01_hook.mp4"
