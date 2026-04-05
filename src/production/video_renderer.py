@@ -808,6 +808,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                     niche=tenant_config.niche,
                     output_dir=output_dir,
                     audio_duration=audio_duration,
+                    music_volume=float(getattr(rc, "music_volume", 0.10)),
                 )
         except Exception as e:
             logger.warning(f"[Renderer] Music mixing skipped: {e}")
@@ -936,6 +937,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         niche: str,
         output_dir: str,
         audio_duration: float,
+        music_volume: float = 0.10,
     ) -> str:
         """
         Fase 6C s6c4: Mix background music ke video.
@@ -967,7 +969,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 # Narasi: volume tetap
                 "[0:a]volume=1.0[narasi];"
                 # Musik: -18dB (≈12.5% volume), fade in 1s, fade out 2s
-                f"[1:a]volume=0.125,"
+                f"[1:a]volume={music_volume:.3f},"
                 f"afade=t=in:st=0:d=1,"
                 f"afade=t=out:st={max(0, audio_duration-2):.1f}:d=2,"
                 f"atrim=0:{audio_duration:.1f}[musik];"
