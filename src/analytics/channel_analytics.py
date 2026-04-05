@@ -57,6 +57,7 @@ class ChannelAnalytics:
         self._youtube    = None      # Data API v3
         self._analytics  = None      # Analytics API v2
         self._has_analytics_scope = False
+        self._analytics_403_count = 0   # consecutive 403s — disable scope setelah 3
         self._init_clients()
 
     @staticmethod
@@ -348,12 +349,21 @@ class ChannelAnalytics:
             except Exception as e:
                 err_str = str(e).lower()
                 if "insufficient" in err_str or "forbidden" in err_str or "403" in err_str:
+                    self._analytics_403_count += 1
                     logger.warning(
-                        f"[Analytics] Analytics API 403 untuk {video_id} — "
-                        "scope tidak cukup. Jalankan scripts/reauth_youtube.py"
+                        f"[Analytics] Analytics API 403 untuk {video_id} "
+                        f"(mungkin data belum tersedia / video baru) — "
+                        f"403 count: {self._analytics_403_count}"
                     )
-                    self._has_analytics_scope = False  # disable untuk run ini
+                    # Disable scope hanya jika 3 video berturut-turut gagal (auth issue)
+                    if self._analytics_403_count >= 3:
+                        logger.error(
+                            "[Analytics] 3x 403 berturut-turut — scope kemungkinan invalid. "
+                            "Jalankan scripts/reauth_youtube.py"
+                        )
+                        self._has_analytics_scope = False
                 else:
+                    self._analytics_403_count = 0
                     logger.warning(f"[Analytics] Analytics API gagal untuk {video_id}: {e}")
 
         return metrics
