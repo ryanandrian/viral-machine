@@ -4,5 +4,5 @@ sys.path.insert(0, '/home/rad4vm/viral-machine')
 
 from src.analytics.performance_analyzer import PerformanceAnalyzer
 
-result = PerformanceAnalyzer('ryan_andrian').compute_and_store()
+result = PerformanceAnalyzer().compute_and_store(tenant_id='ryan_andrian')
 print(result)
