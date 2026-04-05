@@ -1,7 +1,7 @@
 # MESIN VIRAL — Single Source of Truth
 > Dokumentasi Arsitektur & Workflow Lengkap  
-> Dibuat: 4 April 2026 | Versi Sistem: v0.3.1  
-> Tenant Aktif: `ryan_andrian` | Niche: `universe_mysteries`
+> Dibuat: 4 April 2026 | Versi Sistem: v0.4.0 | Diupdate: 5 April 2026
+> Tenant Aktif: `ryan_andrian` | Niche: rotasi (ocean_mysteries, fun_facts, dark_history, universe_mysteries)
 
 ---
 
@@ -69,6 +69,10 @@ viral-machine/
 │
 ├── scripts/
 │   ├── daily_run.sh              # Shell script pemanggil pipeline via cron
+│   ├── fetch_analytics.sh        # Cron harian: pull YouTube Analytics → Supabase
+│   ├── compute_insights.sh       # Cron mingguan: compute channel_insights
+│   ├── compute_insights.py       # Runner: PerformanceAnalyzer().compute_and_store()
+│   ├── reauth_youtube.py         # Re-auth OAuth per channel (jalankan lokal, butuh browser)
 │   └── seed_music_library.py     # Utility: upload musik ke R2 + insert Supabase
 │
 ├── src/
@@ -130,7 +134,9 @@ viral-machine/
 │   │   └── pipeline.py           # Master controller — menjalankan semua step
 │   │
 │   └── analytics/
-│       └── __init__.py           # Empty placeholder (Phase 9)
+│       ├── __init__.py
+│       ├── channel_analytics.py  # Pull YouTube Analytics API → Supabase video_analytics
+│       └── performance_analyzer.py # Compute channel_insights — self-learning engine
 │
 ├── logs/                         # Runtime files (diabaikan git)
 │   ├── pipeline_{run_id}.json    # Execution report per run
@@ -180,7 +186,12 @@ viral-machine/
 | `src/distribution/youtube_publisher.py` | Distribution | Upload video + thumbnail ke YouTube Shorts via Google API |
 | `src/utils/supabase_writer.py` | Utils | Fire-and-forget writer; catat video, QC fail, pipeline error |
 | `src/utils/storage_cleaner.py` | Utils | Hapus clips (setelah render), video (setelah upload), log lama |
+| `src/analytics/channel_analytics.py` | Analytics | Pull YouTube Data API v3 + Analytics API v2 → upsert `video_analytics` |
+| `src/analytics/performance_analyzer.py` | Analytics | Compute niche_weights, top_hooks, avoid_patterns → upsert `channel_insights` |
 | `scripts/daily_run.sh` | Scripts | Shell wrapper cron; eksekusi pipeline dengan flag `--publish` |
+| `scripts/fetch_analytics.sh` | Scripts | Cron harian 06:00 UTC; pull YouTube Analytics untuk semua video published |
+| `scripts/compute_insights.sh` | Scripts | Cron mingguan Senin 07:00 UTC; hitung channel_insights dari video_analytics |
+| `scripts/reauth_youtube.py` | Scripts | Re-auth OAuth per channel; jalankan LOKAL (butuh browser) |
 | `scripts/seed_music_library.py` | Scripts | Upload MP3 lokal → R2; insert metadata ke Supabase `music_library` |
 
 ---
@@ -852,7 +863,7 @@ File-file berikut muncul di `git status` sebagai untracked (`??`) namun **tidak 
 ### 10.4 Module Kosong (Placeholder)
 | File | Status |
 |------|--------|
-| `src/analytics/__init__.py` | Hanya berisi empty package init — belum ada konten |
+| `src/analytics/__init__.py` | Empty package init |
 | `src/__init__.py` | Empty |
 | `src/config/__init__.py` | Empty |
 | `src/distribution/__init__.py` | Empty |
@@ -949,6 +960,12 @@ pip install "requests==2.32.5" "supabase==2.28.3"
 30 3  * * * cd /home/rad4vm/viral-machine && /usr/bin/python3.11 -m src.orchestrator.pipeline --publish >> logs/cron_$(date +\%Y\%m\%d)_r4.log 2>&1
 # Slot 5 → Upload 07:00 UTC (Prime Time US West)
 30 6  * * * cd /home/rad4vm/viral-machine && /usr/bin/python3.11 -m src.orchestrator.pipeline --publish >> logs/cron_$(date +\%Y\%m\%d)_r5.log 2>&1
+
+# Analytics: pull YouTube metrics harian (06:00 UTC)
+0 6 * * * /home/rad4vm/viral-machine/scripts/fetch_analytics.sh >> logs/analytics_$(date +\%Y\%m\%d).log 2>&1
+
+# Self-learning: compute channel_insights mingguan (Senin 07:00 UTC)
+0 7 * * 1 /home/rad4vm/viral-machine/scripts/compute_insights.sh >> logs/insights_$(date +\%Y\%m\%d).log 2>&1
 ```
 
 Log per slot: `logs/cron_YYYYMMDD_r{1-5}.log`
@@ -1049,7 +1066,7 @@ Sistem mencegah konten yang sama diproduksi dua kali dengan:
 | No unit tests | Tidak ada test suite, tidak ada mock API |
 | Claude tidak terhubung | `claude.py` ada tapi `get_llm_provider()` tidak mengenali `"claude"` |
 | Tidak ada REST API | Pipeline hanya bisa dipanggil via CLI atau langsung dari Python |
-| OAuth single account | `token_youtube.json` satu file = satu akun YouTube |
+| Analytics isolation | `video_analytics` + `channel_insights` dipartisi per `tenant_id` saja — jika tenant ganti channel, data lama ikut dihitung. Fix: tambah `youtube_channel_id` (Item 6 roadmap) |
 
 ---
 
@@ -1080,7 +1097,10 @@ Sistem mencegah konten yang sama diproduksi dua kali dengan:
 | Multi-tenant | ✅ Infrastruktur siap | `tenant_id` diparameterisasi; 1 tenant aktif saat ini |
 | TikTok publish | ❌ Phase 8 | Config field ada, kode belum ada |
 | Instagram publish | ❌ Phase 8 | Config field ada, kode belum ada |
-| Analytics dashboard | ❌ Phase 9 | `src/analytics/` kosong |
+| YouTube Analytics pull | ✅ Aktif | `ChannelAnalytics` — views, likes, watch_time, avg_view_pct, CTR, subs |
+| Self-learning insights | ✅ Aktif | `PerformanceAnalyzer` — niche_weights, top_hooks, avoid_patterns |
+| Analytics feedback loop | ✅ Aktif | `NicheSelector` inject channel_insights ke AI prompt (grade: optimizing) |
+| Analytics dashboard (web) | ❌ Phase 10 | REST API + web panel belum ada |
 | REST API | ❌ Phase 9 | Belum ada web layer |
 | Multi-language | ❌ Future | `language` field ada di config |
 
@@ -1089,8 +1109,8 @@ Sistem mencegah konten yang sama diproduksi dua kali dengan:
 |------|--------|--------|
 | Phase 6C | Script quality + hook optimization | ✅ DONE |
 | Phase 7 s71–s73 | Supabase writer + QC + thumbnail + description fix | ✅ DONE |
-| **Phase 8a** | **Intelligence upgrade + Loop ending + Notifikasi Telegram** | 🔄 PRIORITAS SEKARANG |
-| **Phase 8b** | **Multi-channel per tenant + Niche DB + SaaS onboarding tenant baru** | 🔄 PRIORITAS SEKARANG |
+| **Phase 8a** | **Intelligence upgrade + Loop ending + Notifikasi Telegram + Self-Learning Analytics** | ✅ DONE |
+| **Phase 8b** | **Multi-channel per tenant + Analytics Isolation + SaaS onboarding tenant baru** | 🔄 PRIORITAS SEKARANG |
 | Phase 9 | TikTok + Instagram distribution | Antrian |
 | Phase 10 | REST API + analytics dashboard (web panel) | Antrian |
 | Phase 11 | Advanced analytics + A/B testing konten | Planned |

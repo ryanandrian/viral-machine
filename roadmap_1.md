@@ -16,8 +16,8 @@
 | 4c | PerformanceAnalyzer + channel_insights | 1 | ✅ DONE | 5 Apr 2026 |
 | 4d | Feedback Loop NicheSelector (self-learning) | 1 | ✅ DONE | 5 Apr 2026 |
 | 5 | Error Management Profesional (exceptions.py) | 2 | ⬜ TODO | — |
-| 6 | Multi-channel per Tenant | 2 | ⬜ TODO | — |
-| 7 | Multi-channel per Tenant | 2 | ⬜ TODO | — |
+| 6 | Analytics Isolation: channel_id per (tenant+channel) | 2 | ⬜ TODO | — |
+| 7 | Multi-Channel per Tenant (channels table) | 2 | ⬜ TODO | — |
 | 8 | Tenant Baru Onboarding (SaaS testing) | 2 | ⬜ TODO | — |
 
 ---
@@ -195,10 +195,12 @@ ALTER TABLE tenant_configs
 
 ---
 
-### 🔄 Item 4c — PerformanceAnalyzer + channel_insights
+### ✅ Item 4c — PerformanceAnalyzer + channel_insights
 
-**Status**: WIP
-**Kode target**: `src/analytics/performance_analyzer.py` (baru)
+**Status**: SELESAI — 5 April 2026
+**Kode**: `src/analytics/performance_analyzer.py`
+**Runner**: `scripts/compute_insights.py`
+**Cron wrapper**: `scripts/compute_insights.sh` (mingguan, Senin 07:00 UTC)
 
 #### Technical Design — Self-Learning Analytics Engine
 
@@ -281,6 +283,39 @@ Dilakukan bersamaan dengan 4d untuk fondasi SaaS:
 - `reauth_youtube.py --channel {id}` — re-auth per channel
 - `channel_analytics.py` + `youtube_publisher.py` — baca token dari config
 - Backward compatible: fallback ke `token_youtube.json`
+
+---
+
+### ⬜ Item 6 — Analytics Isolation: channel_id per (tenant + channel)
+
+**Status**: TODO
+**Prerequisite**: Item 7 (channels table) sebaiknya dikerjakan bersamaan
+
+#### Latar Belakang
+Saat ini `video_analytics` dan `channel_insights` hanya dipartisi per `tenant_id`. Jika tenant yang sama berganti channel YouTube (channel baru, niche berbeda), data analytics channel lama akan ikut menghitung insights channel baru — merusak self-learning.
+
+#### Skenario yang Perlu Diantisipasi
+1. Tenant berganti channel (channel lama kena strike / ditutup)
+2. Tenant pivot niche drastis dengan channel yang sama
+
+#### Yang Perlu Dikerjakan
+- Tambah kolom `youtube_channel_id VARCHAR` di `video_analytics` dan `channel_insights`
+- `PerformanceAnalyzer.compute_and_store()` filter by `(tenant_id, youtube_channel_id)`
+- `ChannelAnalytics._upsert_analytics()` isi `youtube_channel_id` dari OAuth token (channel info)
+- Insights dihitung per kombinasi `(tenant_id, youtube_channel_id)` — ganti channel = fresh start
+
+#### Schema Change
+```sql
+ALTER TABLE video_analytics
+  ADD COLUMN IF NOT EXISTS youtube_channel_id VARCHAR;
+
+ALTER TABLE channel_insights
+  ADD COLUMN IF NOT EXISTS youtube_channel_id VARCHAR;
+```
+
+#### Catatan Keamanan Tenant
+- Video dari pipeline lama (sebelum onboarding) TIDAK akan masuk ke analytics — karena `video_analytics` hanya berisi video yang diproduksi oleh pipeline kita (dari tabel `videos`)
+- Histori channel sebelum bergabung dengan mesin = tidak tersentuh
 
 ---
 
