@@ -12,8 +12,8 @@
 | 2 | Regional Targeting Tier-1 di TrendRadar | 1 | ✅ DONE | 4 Apr 2026 |
 | 3 | Loop Ending Video | 1 | ✅ DONE (disabled) | 4 Apr 2026 |
 | 4a | Niche DB + Schedule Manager + Focus per Slot | 1 | ✅ DONE | 4 Apr 2026 |
-| 4b | ChannelAnalytics — YouTube Analytics pull | 1 | 🔄 WIP | — |
-| 4c | PerformanceAnalyzer + channel_insights | 1 | ⬜ TODO | — |
+| 4b | ChannelAnalytics — YouTube Analytics pull | 1 | ✅ DONE | 5 Apr 2026 |
+| 4c | PerformanceAnalyzer + channel_insights | 1 | 🔄 WIP | — |
 | 4d | Feedback Loop NicheSelector (self-learning) | 1 | ⬜ TODO | — |
 | 5 | Error Management Profesional (exceptions.py) | 2 | ⬜ TODO | — |
 | 6 | Multi-channel per Tenant | 2 | ⬜ TODO | — |
@@ -180,44 +180,97 @@ ALTER TABLE tenant_configs
 
 ---
 
-### 🔄 Item 4b — ChannelAnalytics — YouTube Analytics Pull
+### ✅ Item 4b — ChannelAnalytics — YouTube Analytics Pull
 
-**Status**: WIP  
-**Kode target**: `src/analytics/channel_analytics.py`
+**Status**: SELESAI — 5 April 2026
+**Kode**: `src/analytics/channel_analytics.py`
+**Migration**: `scripts/migrate_s84b_analytics.sql` — sudah dijalankan di Supabase
+**Cron wrapper**: `scripts/fetch_analytics.sh` — perlu ditambah ke crontab VPS
 
-#### Dua Layer Analytics
-- **Layer Basic** (Data API v3 — scope sudah ada):
-  views, likes, comments — tersedia sekarang
-- **Layer Full** (Analytics API v2 — butuh re-auth sekali):
-  watch_time, avg_view_pct, CTR, subscribers_gained — aktivasi via `scripts/reauth_youtube.py`
+#### Yang Dikerjakan
+- Pull YouTube Data API v3: views, likes, comments
+- Pull YouTube Analytics API v2: watch_time, avg_view_pct, CTR, subscriber_gain
+- Upsert ke `video_analytics`, skip < 48 jam, re-fetch interval 23 jam
+- `scripts/reauth_youtube.py` — one-time re-auth untuk full analytics scope
 
-#### File Baru
-- `src/analytics/__init__.py`
-- `src/analytics/channel_analytics.py`
-- `scripts/migrate_s84b_analytics.sql`
-- `scripts/fetch_analytics.sh` (cron wrapper harian)
-- `scripts/reauth_youtube.py` (one-time re-auth untuk yt-analytics scope)
+---
 
-#### Schema Change (Supabase)
+### 🔄 Item 4c — PerformanceAnalyzer + channel_insights
+
+**Status**: WIP
+**Kode target**: `src/analytics/performance_analyzer.py` (baru)
+
+#### Technical Design — Self-Learning Analytics Engine
+
+Sistem 3 layer yang membuat pipeline makin pintar setiap minggu:
+
+
+
+#### A. Hook CTR Analysis
+Deteksi pola hook proven tinggi CTR:
+- Pattern: "[Entity] that [defies/challenges] [authority]" → CTR 9.2%
+- Pattern: "What [scientists/NASA] found [context]" → CTR 8.7%
+
+#### B. Niche Performance Weight
+Shift produksi ke niche yang convert ke subscriber tertinggi.
+
+#### C. Content Type Retention
+
+
+#### D. Historical Factor Score Adjustment
+Range: 0.7× (proven poor) → 1.5× (proven winner)
+
+#### Self-Improvement Lifecycle
+| Fase | Kondisi | Behavior |
+|------|---------|----------|
+| `insufficient_data` | < 5 videos | AI estimation murni |
+| `learning` | 5–20 videos | Inject top topics, tidak adjust score |
+| `optimizing` | 21–50 videos | Full historical_factor + niche weights |
+| `peak` | 50+ videos | Hook pattern extraction + A/B testing |
+
+#### File yang Dibuat/Dimodifikasi
+- `src/analytics/performance_analyzer.py` (baru)
+- `src/intelligence/niche_selector.py` (modified)
+- `scripts/compute_insights.sh` (cron mingguan Senin 07:00 UTC)
+- `scripts/migrate_s84c_insights.sql` (DDL channel_insights + ALTER video_analytics)
+
+#### Schema Baru (Supabase)
 ```sql
-CREATE TABLE IF NOT EXISTS video_analytics (
-  video_id          VARCHAR   PRIMARY KEY,
+-- ALTER video_analytics: tambah kolom yang kurang
+ALTER TABLE video_analytics
+  ADD COLUMN IF NOT EXISTS channel_id     VARCHAR,
+  ADD COLUMN IF NOT EXISTS content_type   VARCHAR,
+  ADD COLUMN IF NOT EXISTS views_per_sub  FLOAT   DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS analytics_date DATE    DEFAULT CURRENT_DATE;
+
+-- Aggregated insights (computed mingguan)
+CREATE TABLE IF NOT EXISTS channel_insights (
+  insight_id        UUID      PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id         TEXT      NOT NULL,
-  niche             VARCHAR,
-  title             TEXT,
-  hook_text         TEXT,
-  views             INT       DEFAULT 0,
-  watch_time_mins   INT       DEFAULT 0,
-  avg_view_pct      FLOAT     DEFAULT 0,
-  ctr               FLOAT     DEFAULT 0,
-  likes             INT       DEFAULT 0,
-  comments          INT       DEFAULT 0,
-  subscriber_gain   INT       DEFAULT 0,
-  has_full_analytics BOOLEAN  DEFAULT false,
-  published_at      TIMESTAMP,
-  fetched_at        TIMESTAMP DEFAULT NOW()
+  channel_id        VARCHAR,
+  computed_at       TIMESTAMP DEFAULT NOW(),
+  videos_analyzed   INT       DEFAULT 0,
+  niche_weights     JSONB     DEFAULT '{}',
+  top_hooks         JSONB     DEFAULT '[]',
+  content_type_perf JSONB     DEFAULT '{}',
+  avoid_patterns    JSONB     DEFAULT '[]',
+  top_topics        JSONB     DEFAULT '[]',
+  performance_grade VARCHAR   DEFAULT 'insufficient_data'
 );
 ```
+
+---
+
+### ⬜ Item 4d — Feedback Loop NicheSelector (Self-Learning)
+
+**Status**: TODO
+**Prerequisite**: Item 4c selesai + min 5 video per niche di video_analytics
+
+#### Yang Akan Dikerjakan
+- Load `channel_insights` terbaru di awal setiap pipeline run
+- Inject performance data ke AI prompt NicheSelector sebagai "evidence"
+- Apply `historical_factor` (0.7×–1.5×) ke `viral_score` hasil AI
+- Dynamic niche weighting berdasarkan `niche_weights` dari insights
 
 ---
 
