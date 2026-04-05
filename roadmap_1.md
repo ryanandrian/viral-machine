@@ -10,10 +10,13 @@
 |---|------|------|--------|---------|
 | 1 | Telegram Notifikasi | 1 | ✅ DONE | 4 Apr 2026 |
 | 2 | Regional Targeting Tier-1 di TrendRadar | 1 | ✅ DONE | 4 Apr 2026 |
-| 3 | Loop Ending Video | 1 | ✅ DONE | 4 Apr 2026 |
-| 4 | ChannelAnalytics + Feedback Loop NicheSelector | 1 | ⬜ TODO | — |
+| 3 | Loop Ending Video | 1 | ✅ DONE (disabled) | 4 Apr 2026 |
+| 4a | Niche DB + Schedule Manager + Focus per Slot | 1 | ✅ DONE | 4 Apr 2026 |
+| 4b | ChannelAnalytics — YouTube Analytics pull | 1 | 🔄 WIP | — |
+| 4c | PerformanceAnalyzer + channel_insights | 1 | ⬜ TODO | — |
+| 4d | Feedback Loop NicheSelector (self-learning) | 1 | ⬜ TODO | — |
 | 5 | Error Management Profesional (exceptions.py) | 2 | ⬜ TODO | — |
-| 6 | Niche DB + Keyword Fokus per Slot | 2 | ⬜ TODO | — |
+| 6 | Multi-channel per Tenant | 2 | ⬜ TODO | — |
 | 7 | Multi-channel per Tenant | 2 | ⬜ TODO | — |
 | 8 | Tenant Baru Onboarding (SaaS testing) | 2 | ⬜ TODO | — |
 
@@ -156,42 +159,65 @@ ALTER TABLE tenant_configs
 
 ---
 
-### ⬜ Item 4 — ChannelAnalytics + Feedback Loop NicheSelector
+### ✅ Item 4a — Niche DB + Schedule Manager + Focus per Slot
 
-**Status**: TODO  
-**Kode target**: `src/analytics/` (modul baru)
+**Status**: SELESAI — 4 April 2026  
+**Kode**: `src/intelligence/schedule_manager.py`  
+**Config**: `src/config/tenant_config.py` (`default_niche_rotation`, `niche_rotation_index`)  
+**Migration**: `scripts/migrate_s84_schedules.sql`
 
-#### Rencana
-- Buat `src/analytics/channel_analytics.py`:
-  - Pull data YouTube Analytics API per channel (views, watch_time, CTR, likes, subscribers)
-  - Insert/update ke tabel `video_analytics` Supabase
-  - Scheduled: 1× per hari via cron terpisah
-- Modifikasi `NicheSelector`:
-  - Sebelum pilih topik, query top-performing topics dari `video_analytics`
-  - Inject data ini sebagai context ke GPT prompt: "Topik yang terbukti viral di channel ini: ..."
-  - Avoid topik dengan avg_view_pct < 30% (penonton skip)
+#### Yang Dikerjakan
+- `niches` table — registry 4 niche aktif (seeded dari NICHES dict)
+- `production_schedules` table — 5 slot/hari ryan_andrian, semua `niche_id=NULL` (rotation)
+- `ScheduleManager.resolve_slot()` — waterfall 3 layer:
+  - Layer 1: production_schedules (niche eksplisit per slot)
+  - Layer 2: default_niche_rotation round-robin (index auto-increment)
+  - Layer 3: random dari niches table, hindari consecutive duplicate
+- `TrendRadar.scan(focus=)` — focus keyword jadi keyword prioritas #1
+- `NicheSelector.select(focus=)` — inject FOCUS CONSTRAINT ke AI prompt
+- Pipeline resolve_slot sebelum Step 1, override tenant_config.niche
+- Verified production: `Layer 2 — rotation: niche=fun_facts` ✅
+
+---
+
+### 🔄 Item 4b — ChannelAnalytics — YouTube Analytics Pull
+
+**Status**: WIP  
+**Kode target**: `src/analytics/channel_analytics.py`
+
+#### Dua Layer Analytics
+- **Layer Basic** (Data API v3 — scope sudah ada):
+  views, likes, comments — tersedia sekarang
+- **Layer Full** (Analytics API v2 — butuh re-auth sekali):
+  watch_time, avg_view_pct, CTR, subscribers_gained — aktivasi via `scripts/reauth_youtube.py`
+
+#### File Baru
+- `src/analytics/__init__.py`
+- `src/analytics/channel_analytics.py`
+- `scripts/migrate_s84b_analytics.sql`
+- `scripts/fetch_analytics.sh` (cron wrapper harian)
+- `scripts/reauth_youtube.py` (one-time re-auth untuk yt-analytics scope)
 
 #### Schema Change (Supabase)
 ```sql
 CREATE TABLE IF NOT EXISTS video_analytics (
-  video_id         VARCHAR  PRIMARY KEY,
-  tenant_id        TEXT,
-  views            INT      DEFAULT 0,
-  watch_time_mins  INT      DEFAULT 0,
-  avg_view_pct     FLOAT    DEFAULT 0,
-  ctr              FLOAT    DEFAULT 0,
-  likes            INT      DEFAULT 0,
-  comments         INT      DEFAULT 0,
-  shares           INT      DEFAULT 0,
-  subscriber_gain  INT      DEFAULT 0,
-  fetched_at       TIMESTAMP DEFAULT NOW()
+  video_id          VARCHAR   PRIMARY KEY,
+  tenant_id         TEXT      NOT NULL,
+  niche             VARCHAR,
+  title             TEXT,
+  hook_text         TEXT,
+  views             INT       DEFAULT 0,
+  watch_time_mins   INT       DEFAULT 0,
+  avg_view_pct      FLOAT     DEFAULT 0,
+  ctr               FLOAT     DEFAULT 0,
+  likes             INT       DEFAULT 0,
+  comments          INT       DEFAULT 0,
+  subscriber_gain   INT       DEFAULT 0,
+  has_full_analytics BOOLEAN  DEFAULT false,
+  published_at      TIMESTAMP,
+  fetched_at        TIMESTAMP DEFAULT NOW()
 );
 ```
-
-#### File Baru
-- `src/analytics/channel_analytics.py`
-- `src/analytics/__init__.py` (update dari kosong)
-- `scripts/fetch_analytics.sh` (cron wrapper)
 
 ---
 
