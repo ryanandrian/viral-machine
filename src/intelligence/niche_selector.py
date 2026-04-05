@@ -16,17 +16,25 @@ class NicheSelector:
     Menganalisis sinyal tren dan memilih topik terbaik untuk diproduksi.
     Multi-tenant ready — setiap analisis menerima TenantConfig + signals.
 
-    Fix v0.2:
-    - Retry logic 3x jika JSON parse gagal
-    - response_format=json_object untuk paksa GPT return valid JSON
-    - JSON extraction fallback — cari array [...] dari response apapun
-    - Tidak pernah return [] tanpa mencoba ulang
+    s84d: Self-learning feedback loop.
+    - Load channel_insights terbaru sebelum AI call
+    - Inject proven patterns ke AI prompt sebagai "evidence"
+    - Apply historical_factor ke viral_score jika grade >= optimizing
     """
 
     MAX_RETRIES = 3
 
     def __init__(self):
         self.client = OpenAI(api_key=system_config.openai_api_key)
+        self._analyzer = self._init_analyzer()
+
+    def _init_analyzer(self):
+        try:
+            from src.analytics.performance_analyzer import PerformanceAnalyzer
+            return PerformanceAnalyzer()
+        except Exception as e:
+            logger.warning(f"[NicheSelector] PerformanceAnalyzer init gagal: {e}")
+            return None
 
     def _prepare_signals_summary(self, signals: dict, tenant_config: TenantConfig) -> str:
         niche_data  = NICHES[tenant_config.niche]
@@ -96,8 +104,109 @@ class NicheSelector:
             1
         )
 
+    def _build_insights_block(self, insights: dict) -> str:
+        """
+        Bangun blok teks channel performance untuk diinjeksi ke AI prompt.
+        Hanya dipanggil jika grade >= learning.
+        """
+        grade         = insights.get("performance_grade", "insufficient_data")
+        top_topics    = insights.get("top_topics") or []
+        top_hooks     = insights.get("top_hooks") or []
+        avoid         = insights.get("avoid_patterns") or []
+        ct_perf       = insights.get("content_type_perf") or {}
+        videos_count  = insights.get("videos_analyzed", 0)
+
+        lines = [
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            f"CHANNEL PERFORMANCE DATA (based on {videos_count} published videos — PRIORITIZE these patterns):",
+        ]
+
+        # Top performing topics
+        if top_topics:
+            lines.append("\nTOP PERFORMING TOPICS (proven high engagement):")
+            for t in top_topics[:3]:
+                views = t.get("views", 0)
+                avg_v = t.get("avg_view_pct", 0)
+                lines.append(
+                    f'- "{t["title"]}" → {views:,} views, {avg_v:.0f}% watched'
+                )
+
+        # High CTR hooks
+        if top_hooks:
+            lines.append("\nHIGH CTR HOOKS (proven scroll-stoppers):")
+            for h in top_hooks[:3]:
+                ctr     = h.get("ctr", 0)
+                pattern = h.get("pattern", "")
+                hook    = h.get("hook", "")[:80]
+                if ctr > 0:
+                    lines.append(f'- "{hook}" → CTR {ctr:.1f}% [{pattern}]')
+                else:
+                    lines.append(f'- "{hook}" [{pattern}]')
+
+        # Content type performance
+        if ct_perf:
+            ranked = sorted(ct_perf.items(), key=lambda x: x[1].get("avg_view_pct", 0), reverse=True)
+            lines.append("\nBEST CONTENT TYPES (by audience retention):")
+            for ct, perf in ranked[:4]:
+                avg_v = perf.get("avg_view_pct", 0)
+                emoji = "✅" if avg_v >= 60 else ("⚠️" if avg_v >= 40 else "❌")
+                lines.append(f"- {ct}: {avg_v:.0f}% avg view {emoji}")
+
+        # Avoid patterns
+        if avoid:
+            lines.append(f"\nTOPICS/PATTERNS TO AVOID (low retention on this channel):")
+            lines.append(f"- Avoid: {', '.join(avoid)}")
+
+        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        lines.append("Use this data to SELECT topics and WRITE hooks that match proven patterns.")
+
+        return "\n".join(lines)
+
+    def _apply_historical_factor(self, topic: dict, insights: dict) -> dict:
+        """
+        Sesuaikan viral_score berdasarkan channel performance history.
+        Range: 0.7× (proven poor) → 1.5× (proven winner).
+        Hanya diterapkan jika grade >= optimizing.
+        """
+        factor     = 1.0
+        ct         = (topic.get("content_type") or "").lower()
+        ct_perf    = insights.get("content_type_perf") or {}
+        avoid      = insights.get("avoid_patterns") or []
+        topic_text = (topic.get("topic", "") + " " + topic.get("angle", "")).lower()
+
+        # Boost/penalize berdasarkan content type retention
+        if ct and ct in ct_perf:
+            avg_view = ct_perf[ct].get("avg_view_pct", 0)
+            if avg_view >= 65:
+                factor *= 1.3
+            elif avg_view >= 50:
+                factor *= 1.1
+            elif avg_view < 40:
+                factor *= 0.75
+
+        # Penalize jika topik mirip dengan avoid patterns
+        for pattern in avoid:
+            if pattern.lower() in topic_text:
+                factor *= 0.7
+                logger.debug(
+                    f"[NicheSelector] Penalize '{topic.get('topic', '')[:40]}' "
+                    f"— matches avoid pattern '{pattern}'"
+                )
+                break
+
+        if factor != 1.0:
+            original = topic["viral_score"]
+            topic["viral_score"]       = round(original * factor, 1)
+            topic["historical_factor"] = round(factor, 2)
+            logger.debug(
+                f"[NicheSelector] Score adjusted: {original} → {topic['viral_score']} "
+                f"(×{factor:.2f}) | topic='{topic.get('topic', '')[:40]}'"
+            )
+        return topic
+
     def _analyze_with_ai(self, signals_summary: str, tenant_config: TenantConfig,
-                         peak_region: str = "us", focus: str = None) -> list:
+                         peak_region: str = "us", focus: str = None,
+                         insights: dict = None) -> list:
         niche_data = NICHES[tenant_config.niche]
 
         audience = REGION_DISPLAY.get(peak_region, REGION_DISPLAY["us"])
@@ -111,6 +220,11 @@ class NicheSelector:
                 f"{niche_data['name']} niche. Generic topics outside this focus are NOT acceptable.\n"
             )
 
+        # s84d: channel performance insights block
+        insights_block = ""
+        if insights:
+            insights_block = "\n" + self._build_insights_block(insights) + "\n"
+
         prompt = f"""You are an expert viral content strategist specializing in short-form video (60 seconds max).
 
 Analyze the following trending signals and select the TOP 5 video topics with the highest viral potential.
@@ -122,7 +236,7 @@ TARGET EMOTION: {niche_data['target_emotion']}
 TARGET AUDIENCE: {audience}
 LANGUAGE: {tenant_config.language}
 PLATFORM: YouTube Shorts, TikTok, Instagram Reels
-{focus_block}
+{focus_block}{insights_block}
 IMPORTANT: Prioritize topics that are trending RIGHT NOW in the target region.
 Pick angles and hooks that resonate specifically with the target audience's culture and interests.
 
@@ -240,12 +354,11 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
                focus: str = None) -> list:
         """
         Analisis sinyal dan pilih top 5 topik viral.
-        s71: Tambah duplicate prevention — topik yang sudah diproduksi
-        dalam lookback_days terakhir difilter sebelum dikembalikan.
-        s84: focus (opsional) — constraint AI agar topik spesifik ke focus keyword.
+        s71: Duplicate prevention dari Supabase.
+        s84: focus constraint per slot.
+        s84d: Self-learning — inject channel_insights + apply historical_factor.
 
         Prinsip: produksi TIDAK pernah berhenti.
-        Jika semua topik baru duplikat → pakai LRU dari riwayat (safety net).
         """
         total_signals = sum(len(v) for v in signals.values() if isinstance(v, list))
         logger.info(f"Analyzing {total_signals} signals...")
@@ -253,25 +366,44 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
         # s84: ambil focus dari signals jika tidak di-pass langsung
         if not focus:
             focus = signals.get("niche_focus") or None
-
         if focus:
             logger.info(f"[NicheSelector] Focus constraint: '{focus}'")
+
+        # s84d: load channel insights (fire-and-forget jika gagal)
+        insights = self._load_insights(tenant_config.tenant_id)
 
         summary     = self._prepare_signals_summary(signals, tenant_config)
         peak_region = signals.get("peak_region", "us")
         topics      = self._analyze_with_ai(
-            summary, tenant_config, peak_region=peak_region, focus=focus
+            summary, tenant_config,
+            peak_region=peak_region,
+            focus=focus,
+            insights=insights,
         )
 
-        # ── s71: Duplicate prevention ──────────────────────────────────
+        # s84d: apply historical_factor jika grade >= optimizing
+        if insights:
+            grade = insights.get("performance_grade", "insufficient_data")
+            if grade in ("optimizing", "peak"):
+                before = [t["viral_score"] for t in topics]
+                topics = [self._apply_historical_factor(t, insights) for t in topics]
+                after  = [t["viral_score"] for t in topics]
+                if before != after:
+                    logger.info(
+                        f"[NicheSelector] Historical factor applied | "
+                        f"scores: {before} → {after}"
+                    )
+                # Re-sort setelah score adjustment
+                topics = sorted(topics, key=lambda x: x["viral_score"], reverse=True)
+
+        # s71: Duplicate prevention
         topics = self._filter_duplicates(topics, tenant_config)
-        # ───────────────────────────────────────────────────────────────
 
         result = {
             "tenant_id": tenant_config.tenant_id,
             "niche":     tenant_config.niche,
             "timestamp": datetime.now().isoformat(),
-            "topics":    topics
+            "topics":    topics,
         }
 
         os.makedirs("logs", exist_ok=True)
@@ -280,6 +412,26 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
 
         logger.info(f"Selected {len(topics)} topics after duplicate filter")
         return topics
+
+    def _load_insights(self, tenant_id: str) -> dict | None:
+        """
+        Load channel_insights terbaru. Fire-and-forget — tidak pernah crash pipeline.
+        Return None jika tidak tersedia atau grade=insufficient_data.
+        """
+        if not self._analyzer:
+            return None
+        try:
+            insights = self._analyzer.load_latest_insights(tenant_id)
+            if insights:
+                grade = insights.get("performance_grade", "insufficient_data")
+                logger.info(
+                    f"[NicheSelector] Channel insights loaded | "
+                    f"grade={grade} | videos={insights.get('videos_analyzed', 0)}"
+                )
+            return insights
+        except Exception as e:
+            logger.warning(f"[NicheSelector] Load insights gagal (non-fatal): {e}")
+            return None
 
 
     def _filter_duplicates(self, topics: list, tenant_config: TenantConfig) -> list:

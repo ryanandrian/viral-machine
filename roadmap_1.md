@@ -13,8 +13,8 @@
 | 3 | Loop Ending Video | 1 | ✅ DONE (disabled) | 4 Apr 2026 |
 | 4a | Niche DB + Schedule Manager + Focus per Slot | 1 | ✅ DONE | 4 Apr 2026 |
 | 4b | ChannelAnalytics — YouTube Analytics pull | 1 | ✅ DONE | 5 Apr 2026 |
-| 4c | PerformanceAnalyzer + channel_insights | 1 | 🔄 WIP | — |
-| 4d | Feedback Loop NicheSelector (self-learning) | 1 | ⬜ TODO | — |
+| 4c | PerformanceAnalyzer + channel_insights | 1 | ✅ DONE | 5 Apr 2026 |
+| 4d | Feedback Loop NicheSelector (self-learning) | 1 | ✅ DONE | 5 Apr 2026 |
 | 5 | Error Management Profesional (exceptions.py) | 2 | ⬜ TODO | — |
 | 6 | Multi-channel per Tenant | 2 | ⬜ TODO | — |
 | 7 | Multi-channel per Tenant | 2 | ⬜ TODO | — |
