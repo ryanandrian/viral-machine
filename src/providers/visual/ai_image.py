@@ -323,13 +323,19 @@ class AIImageProvider(VisualProvider):
                 )
 
             except Exception as e:
+                err_str = str(e).lower()
+                is_policy = "content_policy" in err_str or "safety system" in err_str or "400" in err_str
                 logger.warning(
                     f"[AIImage] Scene {i+1} gagal (attempt 1): {e} — "
-                    f"retry dengan sanitized prompt"
+                    f"retry dengan {'niche fallback' if is_policy else 'sanitized prompt'}"
                 )
-                # ── s71b: Retry dengan sanitized prompt ──────────
+                # ── s71b: Retry — jika content policy langsung pakai niche fallback ──
                 try:
-                    safe_prompt = self._sanitize_prompt(keyword, i, self.niche)
+                    if is_policy:
+                        # Content policy: skip sanitize, langsung fallback ke niche keywords
+                        safe_prompt = self._niche_fallback_prompt(i, self.niche)
+                    else:
+                        safe_prompt = self._sanitize_prompt(keyword, i, self.niche)
                     safe_output = output_dir / f"clip_{i+1:02d}_ai_safe.jpg"
                     safe_clip   = output_dir / f"clip_{i+1:02d}_ai_safe.mp4"
                     target_dur  = clip_durations[i] if clip_durations and i < len(clip_durations) else 5.0
@@ -398,11 +404,20 @@ class AIImageProvider(VisualProvider):
         Fallback ke niche default jika prompt terlalu pendek setelah dibersihkan.
         """
         SENSITIVE_WORDS = [
+            # Violence / injury
             "wound", "wounds", "wounded", "attack", "attacked", "attacking",
             "blood", "bloody", "bleed", "dead", "dying", "death", "corpse",
             "weapon", "weapons", "gun", "knife", "sword", "violent", "violence",
             "brutal", "gore", "injury", "injured", "kill", "killing",
             "torture", "suffer", "suffering", "terror", "horrific",
+            # Creatures / dark themes (ocean_mysteries, dark_history)
+            "monster", "monsters", "monstrous", "creature", "creatures",
+            "predator", "predators", "beast", "beasts", "demon", "demons",
+            "horrifying", "terrifying", "terrified", "scary", "frightening",
+            "menacing", "lurking", "stalking", "deadly", "lethal",
+            "dangerous", "ferocious", "vicious", "savage", "brutal",
+            "nightmare", "nightmarish", "sinister", "evil", "wicked",
+            "decayed", "rotting", "skeleton", "skulls", "skull",
         ]
         cleaned = original_keyword.lower()
         for word in SENSITIVE_WORDS:
@@ -426,6 +441,21 @@ class AIImageProvider(VisualProvider):
             f"{fallback_keywords[safe_idx]}. "
             f"Shot in {niche_style['base_style']}. "
             f"Vertical 9:16 format optimized for mobile. Photorealistic, no text."
+        )
+
+    def _niche_fallback_prompt(self, section_index: int, niche: str) -> str:
+        """
+        Prompt aman 100% — tidak bergantung pada keyword asli sama sekali.
+        Dipakai langsung jika attempt 1 kena content_policy_violation.
+        """
+        fallback_keywords = NICHE_FALLBACKS.get(niche, NICHE_FALLBACKS["universe_mysteries"])
+        niche_style = NICHE_STYLE.get(niche, NICHE_STYLE["universe_mysteries"])
+        safe_idx = section_index % len(fallback_keywords)
+        logger.info(f"[AIImage] _niche_fallback_prompt: idx={safe_idx} niche={niche}")
+        return (
+            f"{fallback_keywords[safe_idx]}. "
+            f"Shot in {niche_style['base_style']}. "
+            f"Vertical 9:16 format optimized for mobile. Photorealistic, no text, no people."
         )
 
     @property
