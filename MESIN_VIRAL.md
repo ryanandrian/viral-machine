@@ -653,6 +653,59 @@ published_at    TIMESTAMP
 created_at      TIMESTAMP  DEFAULT NOW()
 ```
 
+### Tabel `video_analytics` — Performa Video (Self-Learning)
+```sql
+video_id          VARCHAR    PRIMARY KEY
+tenant_id         TEXT
+platform          VARCHAR    DEFAULT 'youtube'   -- NOT NULL
+niche             VARCHAR
+title             VARCHAR(200)
+hook_text         VARCHAR(300)
+views             INT        DEFAULT 0
+likes             INT        DEFAULT 0
+comments          INT        DEFAULT 0
+watch_time_mins   INT        DEFAULT 0
+avg_view_pct      FLOAT      DEFAULT 0           -- % video ditonton rata-rata (Analytics API)
+ctr               FLOAT      DEFAULT 0           -- CTR dari cardClickRate (sering 0 — lihat catatan)
+subscriber_gain   INT        DEFAULT 0
+has_full_analytics BOOLEAN   DEFAULT false       -- True jika Analytics API berhasil
+published_at      TIMESTAMP
+fetched_at        TIMESTAMP                      -- Kapan analytics terakhir di-pull
+```
+> **Catatan CTR**: `cardClickRate` dari YouTube Analytics sering return 0. Untuk CTR thumbnail yang akurat, perlu switch ke `impressionClickThroughRate` (TODO).
+
+### Tabel `channel_insights` — Agregasi Self-Learning (Mingguan)
+```sql
+insight_id        UUID       PRIMARY KEY DEFAULT gen_random_uuid()
+tenant_id         TEXT       NOT NULL
+channel_id        VARCHAR                        -- Belum dipakai (TODO: analytics isolation)
+computed_at       TIMESTAMP  DEFAULT NOW()
+videos_analyzed   INT        DEFAULT 0
+niche_weights     JSONB      DEFAULT '{}'        -- {niche: weight 0.0–1.0}
+top_hooks         JSONB      DEFAULT '[]'        -- [{hook_text, avg_view_pct, views}]
+content_type_perf JSONB      DEFAULT '{}'        -- {type: {avg_view_pct, avg_views, count}}
+avoid_patterns    JSONB      DEFAULT '[]'        -- Content types dengan retention buruk
+top_topics        JSONB      DEFAULT '[]'        -- [{topic, avg_views, count}]
+performance_grade VARCHAR    DEFAULT 'insufficient_data'
+```
+
+#### Self-Learning Grade System
+| Grade | Kondisi | Behavior NicheSelector |
+|-------|---------|------------------------|
+| `insufficient_data` | < 5 video analytics | AI estimation murni, tidak ada injection |
+| `learning` | 5–20 video | Inject top topics ke AI prompt, tidak adjust score |
+| `optimizing` | 21–50 video | Full injection + `historical_factor` (0.7×–1.5×) ke viral_score |
+| `peak` | 50+ video | Hook pattern extraction + A/B testing ready |
+
+**Status ryan_andrian**: grade=`optimizing` (36 videos, 5 Apr 2026)
+
+#### Logika Avoid Patterns
+- Hanya dihitung jika `retention_count >= 3` (minimal 3 video dengan full analytics per content type)
+- `avg_view_pct` rata-rata hanya dari video dengan `has_full_analytics=True` — tidak dilusi video lama yang 0
+- Cap 100% — YouTube Analytics kadang return >100% untuk video dengan views sangat sedikit
+
+---
+
 ### Tabel `qc_failed` — QC Failure Log
 ```sql
 run_id          TEXT       PRIMARY KEY
@@ -1067,6 +1120,7 @@ Sistem mencegah konten yang sama diproduksi dua kali dengan:
 | Claude tidak terhubung | `claude.py` ada tapi `get_llm_provider()` tidak mengenali `"claude"` |
 | Tidak ada REST API | Pipeline hanya bisa dipanggil via CLI atau langsung dari Python |
 | Analytics isolation | `video_analytics` + `channel_insights` dipartisi per `tenant_id` saja — jika tenant ganti channel, data lama ikut dihitung. Fix: tambah `youtube_channel_id` (Item 6 roadmap) |
+| CTR selalu 0% | `cardClickRate` dari YouTube Analytics API return 0 untuk semua video. Perlu ganti ke `impressionClickThroughRate` (belum diimplementasi) |
 
 ---
 
@@ -1119,61 +1173,33 @@ Sistem mencegah konten yang sama diproduksi dua kali dengan:
 
 ---
 
-## 14. PRIORITAS IMPROVEMENT SAAT INI (Phase 8a & 8b)
+## 14. PRIORITAS IMPROVEMENT SAAT INI (Phase 8b)
 
-> Tujuan: Meningkatkan kualitas viral → monetisasi → 100% siap dipasarkan sebagai SaaS
+> Phase 8a selesai 5 April 2026. Phase 8b = fondasi SaaS multi-tenant.
 
-### 14.1 Intelligence Upgrade — Trend Radar + Analytics Feedback Loop
+### 14.1 ✅ SELESAI — Self-Learning Analytics Engine (Phase 8a)
 
-**Masalah**: TrendRadar saat ini bersifat global dan tidak belajar dari performa konten yang sudah dipublish.
+Sudah live di production. Lihat Section 7 untuk schema dan grade system.
 
-**Target**:
-- Tambah modul `ChannelAnalytics` yang secara berkala menarik statistik video dari YouTube Analytics API (views, watch time, CTR, like rate, subscriber gain) ke Supabase
-- Sebelum setiap produksi, `NicheSelector` membaca statistik ini untuk:
-  - Mengetahui topik/angle mana yang historisnya paling viral di channel ini
-  - Menghindari angle yang performa-nya buruk
-  - Memberi bobot lebih pada format yang terbukti berhasil
-- Regional targeting: TrendRadar difokuskan ke Tier-1 (US, UK, Canada, Australia) menggunakan `geo` parameter Google Trends + filter lokasi YouTube Search
+**Cron aktif di VPS:**
+- Harian 06:00 UTC: `fetch_analytics.sh` → pull YouTube metrics
+- Mingguan Senin 07:00 UTC: `compute_insights.sh` → update channel_insights
 
-**Tabel Supabase baru yang dibutuhkan**:
-```sql
--- video_analytics: Statistik performa per video
-video_id        VARCHAR  PRIMARY KEY
-tenant_id       TEXT
-views           INT
-watch_time_mins INT
-avg_view_pct    FLOAT    -- % rata-rata video yang ditonton
-ctr             FLOAT    -- Click-through rate dari thumbnail
-likes           INT
-comments        INT
-shares          INT
-subscriber_gain INT
-fetched_at      TIMESTAMP
-```
+**Status ryan_andrian (5 Apr 2026):** grade=optimizing, 36 videos analyzed, niche_weights: ocean_mysteries=0.6, fun_facts=0.4
 
-### 14.2 Niche Management di Database + Multi-Channel per Tenant
+### 14.2 🔄 TODO — Analytics Isolation per Channel (Item 6 Roadmap)
 
-**Masalah**: Niche hardcode di `AVAILABLE_NICHES`, tidak bisa diatur per-channel; 1 tenant hanya bisa 1 channel saat ini.
+Lihat Item 6 di `roadmap_1.md` untuk detail teknis.
+
+### 14.3 🔄 TODO — Multi-Channel per Tenant (Item 7 Roadmap)
 
 **Target**:
-- Tabel `niches` di Supabase: daftar niche resmi + metadata (keywords, style, voice, hashtags)
-- Tabel `channels` di Supabase: 1 tenant → banyak channel, setiap channel punya jadwal produksi sendiri
-- Tabel `production_schedules`: per channel, per slot waktu — pilih niche + keyword fokus (opsional)
-- Panel config: user bisa pilih niche dari combobox; jika kosong → random dari pool niche aktif
-- Keyword fokus (optional per slot): contoh niche "Fun Facts" + fokus "Gadget & Teknologi Terkini"
+- Tabel `channels` di Supabase: 1 tenant → banyak channel
+- Setiap channel punya OAuth token, jadwal produksi, dan analytics sendiri
+- Panel config: user bisa tambah/hapus channel dari UI
 
-**Schema baru yang dibutuhkan**:
+**Schema:**
 ```sql
--- niches: Daftar niche resmi
-niche_id        VARCHAR  PRIMARY KEY  -- 'universe_mysteries'
-name            VARCHAR               -- Display name
-keywords        JSONB                 -- Keyword array untuk trend radar
-style           VARCHAR
-voice_style     VARCHAR
-default_hashtags JSONB
-is_active       BOOLEAN  DEFAULT true
-created_at      TIMESTAMP
-
 -- channels: 1 tenant → banyak channel
 channel_id      VARCHAR  PRIMARY KEY
 tenant_id       TEXT
