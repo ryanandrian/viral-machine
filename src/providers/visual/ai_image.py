@@ -327,13 +327,15 @@ class AIImageProvider(VisualProvider):
                 is_policy = "content_policy" in err_str or "safety system" in err_str or "400" in err_str
                 logger.warning(
                     f"[AIImage] Scene {i+1} gagal (attempt 1): {e} — "
-                    f"retry dengan {'niche fallback' if is_policy else 'sanitized prompt'}"
+                    f"retry dengan {'AI-rewritten prompt' if is_policy else 'sanitized prompt'}"
                 )
-                # ── s71b: Retry — jika content policy langsung pakai niche fallback ──
+                # ── Retry: content policy → GPT rewrite, else sanitize ──
                 try:
                     if is_policy:
-                        # Content policy: skip sanitize, langsung fallback ke niche keywords
-                        safe_prompt = self._niche_fallback_prompt(i, self.niche)
+                        # GPT rewrite: tetap relevan dengan narasi, tapi aman dari policy
+                        safe_prompt = await self._rewrite_prompt_with_ai(
+                            keyword, i, self.niche
+                        )
                     else:
                         safe_prompt = self._sanitize_prompt(keyword, i, self.niche)
                     safe_output = output_dir / f"clip_{i+1:02d}_ai_safe.jpg"
@@ -352,10 +354,30 @@ class AIImageProvider(VisualProvider):
                     total_cost += self.model_config["cost_per_img"]
                     logger.info(f"[AIImage] ✅ Scene {i+1} retry OK dengan safe prompt")
                 except Exception as e2:
-                    logger.error(
-                        f"[AIImage] Scene {i+1} GAGAL total (retry juga gagal): {e2}"
+                    logger.warning(
+                        f"[AIImage] Scene {i+1} retry gagal, fallback ke niche generic: {e2}"
                     )
-                    continue
+                    # Last resort: generic niche fallback
+                    try:
+                        fallback_prompt = self._niche_fallback_prompt(i, self.niche)
+                        safe_output = output_dir / f"clip_{i+1:02d}_ai_safe.jpg"
+                        safe_clip   = output_dir / f"clip_{i+1:02d}_ai_safe.mp4"
+                        target_dur  = clip_durations[i] if clip_durations and i < len(clip_durations) else 5.0
+                        await self._generate_image(fallback_prompt, safe_output)
+                        self._image_to_video(safe_output, safe_clip, duration=target_dur, clip_index=i)
+                        size_mb = safe_clip.stat().st_size / (1024 * 1024)
+                        clips.append(VideoClip(
+                            path=safe_clip, duration=target_dur,
+                            width=1080, height=1920,
+                            file_size_mb=round(size_mb, 1),
+                            source_url="ai_generated:niche_fallback",
+                            provider=self.provider_name,
+                        ))
+                        total_cost += self.model_config["cost_per_img"]
+                        logger.info(f"[AIImage] ✅ Scene {i+1} niche fallback OK")
+                    except Exception as e3:
+                        logger.error(f"[AIImage] Scene {i+1} GAGAL total: {e3}")
+                        continue
 
         logger.info(
             f"[AIImage] Complete: {len(clips)}/{count} clips "
@@ -442,6 +464,70 @@ class AIImageProvider(VisualProvider):
             f"Shot in {niche_style['base_style']}. "
             f"Vertical 9:16 format optimized for mobile. Photorealistic, no text."
         )
+
+    async def _rewrite_prompt_with_ai(
+        self, original_keyword: str, section_index: int, niche: str
+    ) -> str:
+        """
+        Gunakan GPT-4o-mini untuk rewrite visual prompt agar aman dari DALL-E
+        content policy, tapi tetap relevan dengan konteks narasi scene.
+
+        Contoh:
+          Input:  "deep sea monster lurking in absolute darkness"
+          Output: "deep ocean environment, ancient unknowable presence suggested
+                   by bioluminescent particles, vast darkness, cinematic"
+        """
+        try:
+            import openai
+            niche_cfg  = NICHE_STYLE.get(niche, NICHE_STYLE["universe_mysteries"])
+            enhancer   = SECTION_ENHANCERS.get(section_index, SECTION_ENHANCERS[2])
+            section_names = ["hook", "mystery", "build-up", "core facts", "tension", "climax"]
+            section_name  = section_names[min(section_index, 5)]
+
+            system_prompt = (
+                "You are a visual prompt engineer for DALL-E 3. "
+                "Your task: rewrite a scene description that was rejected by DALL-E's safety system "
+                "into a safe alternative that STILL visually supports the same narrative concept. "
+                "Rules:\n"
+                "- Keep the emotional tone and atmosphere\n"
+                "- Replace literal depictions of creatures/monsters/violence with environmental, "
+                "  atmospheric, or abstract visual equivalents\n"
+                "- 'monster' → suggest its presence through environment (shadows, disturbance in water, scale)\n"
+                "- 'attack/violence' → show aftermath or tension without explicit action\n"
+                "- Output ONLY the rewritten visual description, no explanation, 1-2 sentences max"
+            )
+            user_prompt = (
+                f"Original (rejected): \"{original_keyword}\"\n"
+                f"Section: {section_name} (scene {section_index + 1}/6)\n"
+                f"Niche: {niche} — style: {niche_cfg['base_style']}\n"
+                f"Mood needed: {enhancer['mood']}\n"
+                f"Rewrite to be DALL-E safe while visually supporting this narrative moment:"
+            )
+
+            client   = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            response = client.chat.completions.create(
+                model    = "gpt-4o-mini",
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user",   "content": user_prompt},
+                ],
+                max_tokens  = 120,
+                temperature = 0.4,
+            )
+            rewritten = response.choices[0].message.content.strip().strip('"')
+            logger.info(f"[AIImage] GPT rewrite scene {section_index+1}: {rewritten[:100]}")
+
+            # Build full cinematic prompt dari hasil rewrite
+            return _build_cinematic_prompt(
+                visual_suggestion = rewritten,
+                section_index     = section_index,
+                niche             = niche,
+                model             = self.ai_model,
+            )
+
+        except Exception as e:
+            logger.warning(f"[AIImage] GPT rewrite gagal ({e}), fallback ke sanitize")
+            return self._sanitize_prompt(original_keyword, section_index, niche)
 
     def _niche_fallback_prompt(self, section_index: int, niche: str) -> str:
         """
