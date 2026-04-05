@@ -8,3 +8,4 @@ logs/
 dist/
 youtube_credentials.json
 token_youtube.json
+tokens/

@@ -20,13 +20,18 @@ class YouTubePublisher:
     SCOPES = [
         "https://www.googleapis.com/auth/youtube.upload",
         "https://www.googleapis.com/auth/youtube",
-        "https://www.googleapis.com/auth/youtube.readonly"
+        "https://www.googleapis.com/auth/youtube.readonly",
+        "https://www.googleapis.com/auth/yt-analytics.readonly",
     ]
 
-    TOKEN_PATH = "token_youtube.json"
+    TOKEN_PATH = "token_youtube.json"  # backward compatible fallback
 
     def _get_credentials(self, tenant_config: TenantConfig) -> Credentials:
-        token_path = getattr(tenant_config, 'youtube_token_path', self.TOKEN_PATH)
+        # Config-driven: gunakan get_youtube_token_path() jika tersedia
+        if hasattr(tenant_config, 'get_youtube_token_path'):
+            token_path = tenant_config.get_youtube_token_path()
+        else:
+            token_path = getattr(tenant_config, 'youtube_token_path', self.TOKEN_PATH) or self.TOKEN_PATH
         if not os.path.exists(token_path):
             raise FileNotFoundError(f"YouTube token not found: {token_path}")
 

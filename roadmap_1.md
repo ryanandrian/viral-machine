@@ -261,16 +261,26 @@ CREATE TABLE IF NOT EXISTS channel_insights (
 
 ---
 
-### ⬜ Item 4d — Feedback Loop NicheSelector (Self-Learning)
+### ✅ Item 4d — Feedback Loop NicheSelector (Self-Learning)
 
-**Status**: TODO
-**Prerequisite**: Item 4c selesai + min 5 video per niche di video_analytics
+**Status**: SELESAI — 5 April 2026
+**Kode**: `src/intelligence/niche_selector.py` (modified)
 
-#### Yang Akan Dikerjakan
-- Load `channel_insights` terbaru di awal setiap pipeline run
-- Inject performance data ke AI prompt NicheSelector sebagai "evidence"
-- Apply `historical_factor` (0.7×–1.5×) ke `viral_score` hasil AI
-- Dynamic niche weighting berdasarkan `niche_weights` dari insights
+#### Yang Dikerjakan
+- Load `channel_insights` terbaru sebelum AI call (fire-and-forget)
+- Inject proven patterns ke AI prompt: top topics, high CTR hooks, content type retention, avoid patterns
+- Apply `historical_factor` (0.7×–1.5×) ke `viral_score` jika grade >= optimizing
+- Grade learning: inject context only, tidak adjust score
+- Grade optimizing/peak: full injection + score adjustment
+- Tidak pernah crash pipeline jika insights tidak tersedia
+
+#### OAuth Token Refactor (Multi-Channel Ready)
+Dilakukan bersamaan dengan 4d untuk fondasi SaaS:
+- Konvensi: `tokens/{channel_id}.json` — satu token per channel
+- `TenantRunConfig.get_youtube_token_path()` — resolve path otomatis
+- `reauth_youtube.py --channel {id}` — re-auth per channel
+- `channel_analytics.py` + `youtube_publisher.py` — baca token dari config
+- Backward compatible: fallback ke `token_youtube.json`
 
 ---
 

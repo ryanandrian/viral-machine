@@ -1,13 +1,18 @@
 """
 Re-authorize YouTube token untuk tambah scope yt-analytics.readonly.
 
-Jalankan SEKALI secara interaktif (butuh browser):
-    python3.11 scripts/reauth_youtube.py
+Multi-channel ready: setiap channel punya token sendiri di tokens/{channel_id}.json
 
-Setelah selesai, token_youtube.json akan diupdate dengan scope baru.
-Pipeline upload YouTube tidak terganggu — scope lama tetap ada.
+Jalankan SEKALI secara interaktif (butuh browser):
+    python3.11 scripts/reauth_youtube.py --channel ryan_andrian
+
+Setelah selesai:
+- Token disimpan ke tokens/{channel_id}.json
+- Pipeline upload dan analytics tidak terganggu — scope lama tetap ada
+- Copy tokens/{channel_id}.json ke VPS (path yang sama)
 """
 
+import argparse
 import json
 import os
 import sys
@@ -19,18 +24,37 @@ SCOPES = [
     "https://www.googleapis.com/auth/youtube.upload",
     "https://www.googleapis.com/auth/youtube",
     "https://www.googleapis.com/auth/youtube.readonly",
-    # Scope baru untuk YouTube Analytics API v2
     "https://www.googleapis.com/auth/yt-analytics.readonly",
 ]
 
-TOKEN_PATH          = "token_youtube.json"
-CLIENT_SECRET_PATH  = os.getenv("YOUTUBE_CLIENT_SECRET_PATH", "client_secret.json")
+TOKENS_DIR          = "tokens"
+CLIENT_SECRET_PATH  = os.getenv("YOUTUBE_CLIENT_SECRET_PATH", "youtube_credentials.json")
+
+
+def resolve_token_path(channel_id: str) -> str:
+    """Konvensi: tokens/{channel_id}.json"""
+    os.makedirs(TOKENS_DIR, exist_ok=True)
+    return os.path.join(TOKENS_DIR, f"{channel_id}.json")
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="Re-authorize YouTube OAuth token per channel"
+    )
+    parser.add_argument(
+        "--channel",
+        required=True,
+        help="Channel ID / tenant_id (contoh: ryan_andrian)",
+    )
+    args = parser.parse_args()
+    channel_id = args.channel
+    token_path = resolve_token_path(channel_id)
+
     print("=" * 60)
-    print("YouTube Re-Authorization — Tambah yt-analytics scope")
+    print(f"YouTube Re-Authorization — Channel: {channel_id}")
     print("=" * 60)
+    print(f"Token path  : {token_path}")
+    print(f"Client file : {CLIENT_SECRET_PATH}")
 
     if not os.path.exists(CLIENT_SECRET_PATH):
         print(f"\nERROR: {CLIENT_SECRET_PATH} tidak ditemukan.")
@@ -41,11 +65,9 @@ def main():
 
     try:
         from google_auth_oauthlib.flow import InstalledAppFlow
-        from google.auth.transport.requests import Request
-        from google.oauth2.credentials import Credentials
     except ImportError:
-        print("\nERROR: Package tidak tersedia.")
-        print("Install: pip install google-auth-oauthlib google-auth-httplib2 google-api-python-client")
+        print("\nERROR: google-auth-oauthlib tidak terinstall.")
+        print("Install: pip install google-auth-oauthlib")
         sys.exit(1)
 
     print(f"\nScopes yang akan diotorisasi:")
@@ -58,15 +80,15 @@ def main():
     flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRET_PATH, SCOPES)
     creds = flow.run_local_server(port=0)
 
-    # Baca token lama untuk preserve data yang ada
+    # Preserve data token lama jika ada
     old_data = {}
-    if os.path.exists(TOKEN_PATH):
-        with open(TOKEN_PATH) as f:
+    if os.path.exists(token_path):
+        with open(token_path) as f:
             old_data = json.load(f)
 
-    # Tulis token baru
     token_data = {
         **old_data,
+        "channel_id":    channel_id,
         "token":         creds.token,
         "refresh_token": creds.refresh_token,
         "token_uri":     creds.token_uri,
@@ -75,18 +97,21 @@ def main():
         "scopes":        list(creds.scopes),
     }
 
-    with open(TOKEN_PATH, "w") as f:
+    with open(token_path, "w") as f:
         json.dump(token_data, f, indent=2)
 
-    print(f"\n✅ Token berhasil diupdate: {TOKEN_PATH}")
-    print(f"Scopes aktif: {len(token_data['scopes'])}")
+    print(f"\n✅ Token berhasil disimpan: {token_path}")
+    print(f"Scopes aktif ({len(token_data['scopes'])}):")
     for s in token_data["scopes"]:
         marker = "✅" if "yt-analytics" in s else "  "
         print(f"  {marker} {s}")
 
-    print("\nSekarang jalankan:")
-    print("  python3.11 -c \"from src.analytics.channel_analytics import ChannelAnalytics; "
-          "print(ChannelAnalytics().fetch_and_store('ryan_andrian'))\"")
+    print(f"\nLangkah berikutnya:")
+    print(f"1. Copy token ke VPS:")
+    print(f"   scp {token_path} rad4vm@<IP_VPS>:/home/rad4vm/viral-machine/{token_path}")
+    print(f"2. Verifikasi di VPS:")
+    print(f"   python3.11 -c \"from src.analytics.channel_analytics import ChannelAnalytics; "
+          f"print(ChannelAnalytics(tenant_id='{channel_id}').fetch_and_store('{channel_id}'))\"")
 
 
 if __name__ == "__main__":

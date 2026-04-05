@@ -144,7 +144,9 @@ viral-machine/
 │   ├── subtitles.ass             # File subtitle ASS (debug)
 │   └── cron_YYYYMMDD.log         # Log cron harian (production)
 │
-├── token_youtube.json            # OAuth token YouTube (diabaikan git)
+├── tokens/                       # OAuth tokens per channel (diabaikan git)
+│   └── {channel_id}.json          # token YouTube per channel
+├── token_youtube.json            # Legacy token — backward compat fallback
 └── youtube_credentials.json      # OAuth credentials YouTube (diabaikan git)
 ```
 
@@ -725,8 +727,32 @@ created_at      TIMESTAMP
 - **Channel YouTube**: `RAD The Explorer`
 - **niche**: `universe_mysteries` (fixed)
 - **music_enabled**: `true` (terhubung ke `music_library` Supabase)
-- **OAuth**: `token_youtube.json` disync via GitHub (local = VPS = sama)
+- **OAuth token**: `tokens/ryan_andrian.json` — konvensi multi-channel
 - **plan_type**: Terbaca dari Supabase
+
+### OAuth Token Management (Multi-Channel Ready)
+
+Konvensi token path: `tokens/{channel_id}.json` — satu file per channel.
+
+| File | Channel | Keterangan |
+|------|---------|------------|
+| `tokens/ryan_andrian.json` | RAD The Explorer | Channel aktif saat ini |
+| `tokens/{channel_id}.json` | Channel baru | Ditambah saat onboarding |
+
+**Cara re-auth / tambah channel baru:**
+```bash
+# Di lokal (butuh browser):
+python3 scripts/reauth_youtube.py --channel ryan_andrian
+
+# Copy token ke VPS:
+scp tokens/ryan_andrian.json rad4vm@<IP_VPS>:/home/rad4vm/viral-machine/tokens/ryan_andrian.json
+```
+
+**Config di Supabase** (`tenant_configs.youtube_token_path`):
+- Kosong = auto-resolve ke `tokens/{tenant_id}.json`
+- Diisi = gunakan path spesifik (untuk kasus khusus)
+
+**Backward compatible**: jika `tokens/{tenant_id}.json` tidak ada, fallback ke `token_youtube.json`
 
 ### Niche yang Tersedia
 | Niche | Nama | Gaya | Emosi Target |

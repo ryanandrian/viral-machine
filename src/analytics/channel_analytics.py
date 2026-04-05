@@ -45,14 +45,30 @@ class ChannelAnalytics:
     # Maksimum video yang diproses per run
     MAX_VIDEOS_PER_RUN = 50
 
-    def __init__(self, token_path: str = "token_youtube.json"):
-        self._token_path = token_path
+    def __init__(self, token_path: str = None, tenant_id: str = None):
+        """
+        token_path: eksplisit path ke token file (opsional)
+        tenant_id:  jika diisi, resolve path via konvensi tokens/{tenant_id}.json
+        Fallback:   token_youtube.json (backward compatible)
+        """
+        self._token_path = self._resolve_token_path(token_path, tenant_id)
         self._supabase   = self._init_supabase()
         self._creds      = None
         self._youtube    = None      # Data API v3
         self._analytics  = None      # Analytics API v2
         self._has_analytics_scope = False
         self._init_clients()
+
+    @staticmethod
+    def _resolve_token_path(token_path: str = None, tenant_id: str = None) -> str:
+        """Resolve token path dengan priority: eksplisit → per-channel → fallback."""
+        if token_path:
+            return token_path
+        if tenant_id:
+            per_channel = f"tokens/{tenant_id}.json"
+            if os.path.exists(per_channel):
+                return per_channel
+        return "token_youtube.json"
 
     # ── Init ──────────────────────────────────────────────────────────────
 

@@ -121,6 +121,23 @@ class TenantRunConfig:
     default_niche_rotation: list = field(default_factory=list)  # ["universe_mysteries", ...]
     niche_rotation_index:   int  = 0                            # posisi saat ini di rotasi
 
+    # OAuth Token — multi-channel ready (s84d)
+    # Konvensi: tokens/{channel_id}.json — satu file per channel
+    # Fallback: token_youtube.json (backward compatible)
+    youtube_token_path: str = ""  # diisi otomatis dari tenant_id jika kosong
+
+    def get_youtube_token_path(self) -> str:
+        """
+        Resolve path token YouTube untuk channel ini.
+        Priority: youtube_token_path (dari Supabase) → tokens/{tenant_id}.json → token_youtube.json
+        """
+        if self.youtube_token_path:
+            return self.youtube_token_path
+        per_channel = f"tokens/{self.tenant_id}.json"
+        if os.path.exists(per_channel):
+            return per_channel
+        return "token_youtube.json"  # backward compatible fallback
+
     # Provider settings (raw config — provider diinisialisasi saat dibutuhkan)
     tts_provider:      str           = "edge_tts"
     tts_voice:         str           = "en-US-GuyNeural"
@@ -389,6 +406,8 @@ class TenantConfigManager:
                 # Niche Rotation (s84)
                 default_niche_rotation  = list(row.get("default_niche_rotation") or []),
                 niche_rotation_index    = int(row.get("niche_rotation_index") or 0),
+                # OAuth Token path (s84d) — opsional, auto-resolve jika kosong
+                youtube_token_path      = row.get("youtube_token_path") or "",
             )
 
         except Exception as e:
@@ -436,6 +455,8 @@ class TenantConfigManager:
             # Niche Rotation (s84)
             default_niche_rotation  = [],
             niche_rotation_index    = 0,
+            # OAuth Token path (s84d)
+            youtube_token_path      = "",
         )
 
     def invalidate_cache(self, tenant_id: str) -> None:
