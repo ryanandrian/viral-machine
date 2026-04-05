@@ -285,7 +285,8 @@ class PerformanceAnalyzer:
             count           = d["count"]
             ret_count       = d["retention_count"]
             # avg_view hanya dari video dengan data nyata — jangan dilusi dengan 0
-            avg_view_pct = round(d["total_avg_view"] / ret_count, 1) if ret_count else 0.0
+            # Cap 100% — YouTube kadang return >100% untuk video dengan view sangat sedikit
+            avg_view_pct = min(round(d["total_avg_view"] / ret_count, 1), 100.0) if ret_count else 0.0
             result[ct] = {
                 "avg_view_pct":      avg_view_pct,
                 "avg_views":         round(d["total_views"] / count),
@@ -332,7 +333,8 @@ class PerformanceAnalyzer:
 
         # Content types dengan retention buruk (hanya dari rows dengan data nyata)
         for ct, perf in content_type_perf.items():
-            if perf["count"] >= 3 and perf["avg_view_pct"] < 40.0:
+            # Butuh minimal 3 video dengan full analytics — jangan pakai total count
+            if perf.get("retention_count", 0) >= 3 and perf["avg_view_pct"] < 40.0:
                 avoid.append(ct)
                 logger.debug(
                     f"[Analyzer] Avoid content type '{ct}': "
