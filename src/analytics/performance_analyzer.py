@@ -276,11 +276,13 @@ class PerformanceAnalyzer:
 
         result = {}
         for ct, d in ct_data.items():
-            count = d["count"]
+            count        = d["count"]
+            avg_view_pct = round(d["total_avg_view"] / count, 1) if count else 0.0
             result[ct] = {
-                "avg_view_pct": round(d["total_avg_view"] / count, 1) if count else 0.0,
-                "avg_views":    round(d["total_views"] / count),
-                "count":        count,
+                "avg_view_pct":      avg_view_pct,
+                "avg_views":         round(d["total_views"] / count),
+                "count":             count,
+                "has_retention_data": avg_view_pct > 0,
             }
 
         logger.debug(f"[Analyzer] Content type perf: {result}")
@@ -304,13 +306,22 @@ class PerformanceAnalyzer:
 
     def _compute_avoid_patterns(self, rows: list, content_type_perf: dict) -> list:
         """
-        Tentukan pattern/keyword yang harus dihindari berdasarkan:
-        1. Content type dengan avg_view_pct < 40%
-        2. Hook patterns yang underperform
+        Tentukan pattern/keyword yang harus dihindari berdasarkan avg_view_pct.
+        HANYA dijalankan jika ada data full analytics (has_full_analytics=True).
+        Jika semua avg_view_pct=0 (basic stats only) → return [] agar tidak salah penalize.
         """
+        # Guard: pastikan ada data avg_view_pct yang nyata sebelum compute avoid
+        rows_with_retention = [r for r in rows if (r.get("avg_view_pct") or 0) > 0]
+        if not rows_with_retention:
+            logger.info(
+                "[Analyzer] avg_view_pct semua 0 (basic stats only) — "
+                "skip avoid patterns. Aktifkan yt-analytics scope untuk full insights."
+            )
+            return []
+
         avoid = []
 
-        # Content types dengan retention buruk
+        # Content types dengan retention buruk (hanya dari rows dengan data nyata)
         for ct, perf in content_type_perf.items():
             if perf["count"] >= 3 and perf["avg_view_pct"] < 40.0:
                 avoid.append(ct)
@@ -319,9 +330,9 @@ class PerformanceAnalyzer:
                     f"avg_view={perf['avg_view_pct']}% count={perf['count']}"
                 )
 
-        # Hook patterns dengan performa buruk (listicle umumnya under-perform di Shorts)
+        # Hook patterns dengan performa buruk
         hook_pattern_perf: dict = {}
-        for row in rows:
+        for row in rows_with_retention:
             hook    = row.get("hook_text", "")
             pattern = self._extract_hook_pattern(hook)
             avg_v   = row.get("avg_view_pct") or 0.0
