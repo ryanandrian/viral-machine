@@ -86,15 +86,14 @@ class AIImageProvider(VisualProvider):
                 or os.getenv("REPLICATE_API_TOKEN", "")
             )
         else:
-            self.api_key = (
-                config.get("llm_api_key")
-                or os.getenv("OPENAI_API_KEY", "")
-            )
+            # DALL-E / OpenAI image: pakai visual_api_key — bukan llm_api_key
+            # llm_api_key dipisah khusus untuk LLM (narasi + rejection rewrite)
+            self.api_key = config.get("visual_api_key") or ""
 
         if not self.api_key:
             raise VisualError(
                 f"AI Image ({self.ai_model}) membutuhkan API key. "
-                f"Platform: {self.model_config['platform']}"
+                f"Set visual_api_key (OpenAI key) di tenant_configs Supabase."
             )
 
         logger.info(
