@@ -156,10 +156,12 @@ class TenantRunConfig:
     llm_model:         str           = "gpt-4o-mini"
     llm_api_key:       Optional[str] = None
 
+    youtube_api_key:   Optional[str] = None  # YouTube Data API v3 — untuk trend scan
+
     def to_provider_config(self) -> dict:
         """
         Konversi ke dict yang dipakai oleh semua provider.
-        Inject system API keys dari .env jika tenant tidak punya key sendiri.
+        Keys dari tenant DB only — tidak ada env fallback (DESIGN.md).
         """
         return {
             # Identity
@@ -170,35 +172,23 @@ class TenantRunConfig:
             # TTS
             "tts_provider": self.tts_provider,
             "tts_voice":    self.tts_voice,
-            "tts_api_key":  (
-                self.tts_api_key
-                or os.getenv("ELEVENLABS_API_KEY")
-                or os.getenv("OPENAI_API_KEY")
-            ),
+            "tts_api_key":  self.tts_api_key or "",
 
             # Visual
             "visual_provider":        self.visual_provider,
             "visual_max_clip_mb":     self.visual_max_clip_mb,
-            "visual_api_key":         (
-                self.visual_api_key
-                or os.getenv("PEXELS_API_KEY")
-                or os.getenv("REPLICATE_API_TOKEN")
-            ),
+            "visual_api_key":         self.visual_api_key or "",
             "visual_ai_model":        self.visual_ai_model,
-            # Niche visual data dari Supabase — bukan hardcode
             "niche_visual_style":     self.niche_visual_style,
             "niche_visual_fallbacks": self.niche_visual_fallbacks,
 
             # LLM
-            "llm_provider": self.llm_provider,
-            "llm_model":    self.llm_model,
-            "visual_mode":  self.visual_mode,
+            "llm_provider":  self.llm_provider,
+            "llm_model":     self.llm_model,
+            "llm_api_key":   self.llm_api_key or "",
+            "visual_mode":   self.visual_mode,
             "is_developer":  self.is_developer,
             "discount_pct":  self.discount_pct,
-            "llm_api_key":  (
-                self.llm_api_key
-                or os.getenv("OPENAI_API_KEY")
-            ),
         }
 
     def get_tts_provider(self):
@@ -401,6 +391,7 @@ class TenantConfigManager:
                 llm_provider=row.get("llm_provider", "openai"),
                 llm_model=row.get("llm_model", "gpt-4o-mini"),
                 llm_api_key=row.get("llm_api_key"),
+                youtube_api_key=row.get("youtube_api_key"),
                 visual_mode=row.get("visual_mode", "video"),
                 is_developer=row.get("is_developer", False),
                 discount_pct=row.get("discount_pct", 0),

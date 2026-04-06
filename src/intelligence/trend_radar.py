@@ -129,14 +129,16 @@ class TrendRadar:
     # ─── SOURCE 2: YouTube Search API ──────────────────────────────────────
 
     def _get_youtube_trending_search(self, keywords: list, region_code: str = "US",
-                                     limit: int = 10) -> list:
+                                     limit: int = 10, api_key: str = "") -> list:
         """
         s82: tambah regionCode dan relevanceLanguage untuk Tier-1 targeting.
         """
         try:
             results        = []
             seven_days_ago = (datetime.utcnow() - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
-            api_key        = os.getenv('YOUTUBE_API_KEY', '')
+            if not api_key:
+                logger.warning("[TrendRadar] youtube_api_key tidak tersedia — skip YouTube search")
+                return []
 
             for kw in keywords[:3]:
                 url = (
@@ -349,7 +351,10 @@ class TrendRadar:
         signals["google_trends"] = self._get_google_trends(keywords, geo=geo, tz=tz)
 
         logger.info(f"2/5 YouTube Search [regionCode={yt_region or 'global'}]...")
-        signals["youtube_search"] = self._get_youtube_trending_search(keywords, region_code=yt_region or "US")
+        _yt_api_key = getattr(run_config, "youtube_api_key", None) or ""
+        signals["youtube_search"] = self._get_youtube_trending_search(
+            keywords, region_code=yt_region or "US", api_key=_yt_api_key
+        )
 
         logger.info(f"3/5 Google News [geo={news_geo}]...")
         signals["news_trending"] = self._get_google_news_trending(keywords, geo=news_geo, ceid=news_ceid)
