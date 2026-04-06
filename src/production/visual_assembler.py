@@ -60,7 +60,10 @@ class VisualAssembler:
 
         clips_dir = Path(output_dir) / f"clips_{tenant_config.tenant_id}"
 
-        # ── Attempt 1: Provider pilihan user ──────────────────────────
+        # Provider pilihan user — satu-satunya sumber clips.
+        # Tidak ada fallback ke provider lain (Pexels, cache, black screen).
+        # Kualitas konten non-negotiable: jika gagal → return [] →
+        # pipeline raise exception → Telegram notify → user retry manual.
         clips = self._try_provider(
             visual_mode=visual_mode,
             script=script,
@@ -70,38 +73,8 @@ class VisualAssembler:
             run_config=run_config,
         )
 
-        # ── Attempt 2: Fallback ke Pexels jika provider user gagal ────
-        if not clips and visual_mode != "video":
-            logger.warning(
-                f"[VisualAssembler] ⚠️ Provider '{visual_mode}' gagal — "
-                f"fallback otomatis ke Pexels (gratis)"
-            )
-            clips = self._try_pexels(
-                script=script,
-                tenant_config=tenant_config,
-                clips_dir=clips_dir,
-                max_clip_mb=150,
-                run_config=run_config,
-            )
-
-        # ── Attempt 3: Cache dari run sebelumnya ──────────────────────
-        if not clips:
-            logger.warning(
-                "[VisualAssembler] ⚠️ Pexels juga gagal — "
-                "mencari clips dari cache run sebelumnya"
-            )
-            clips = self._try_cache(clips_dir)
-
-        # ── Attempt 4: Black screen last resort ───────────────────────
-        if not clips:
-            logger.warning(
-                "[VisualAssembler] ⚠️ Tidak ada clips tersedia — "
-                "menggunakan black screen. Pipeline tetap berjalan."
-            )
-            clips = self._create_black_screen(output_dir)
-
         paths = [str(c) for c in clips]
-        logger.info(f"[VisualAssembler] Assembly complete: {len(paths)} clips")
+        logger.info(f"[VisualAssembler] Assembly complete: {len(paths)}/6 clips")
         return paths
 
     # ──────────────────────────────────────────────
@@ -240,7 +213,7 @@ class VisualAssembler:
                 "visual_provider":        visual_mode,
                 "visual_ai_model":        visual_mode.split(":", 1)[1] if ":" in visual_mode else "dall-e-3",
                 "visual_api_key":         run_config.get("visual_api_key"),
-                "llm_api_key":            run_config.get("llm_api_key") or os.getenv("OPENAI_API_KEY", ""),
+                "llm_api_key":            run_config.get("llm_api_key") or "",
                 "llm_provider":           run_config.get("llm_provider", "openai"),
                 "niche_visual_style":     run_config.get("niche_visual_style") or {},
                 "niche_visual_fallbacks": run_config.get("niche_visual_fallbacks") or [],
@@ -359,46 +332,6 @@ class VisualAssembler:
         except Exception as e:
             logger.warning(f"[s6c7] Hook frame generation failed ({e}) — keeping original clips[0]")
             return None
-
-    def _try_cache(self, clips_dir: Path) -> list[Path]:
-        """Cari clip dari cache run sebelumnya."""
-        try:
-            cached = sorted(clips_dir.glob("clip_*.mp4"))
-            if cached:
-                logger.info(
-                    f"[VisualAssembler] Cache found: {len(cached)} clips"
-                )
-                return cached[:6]
-        except Exception:
-            pass
-        return []
-
-    def _create_black_screen(self, output_dir: str) -> list[Path]:
-        """
-        Buat black screen 10 detik sebagai last resort.
-        Pipeline tidak crash — video tetap diproduksi dengan audio + caption.
-        """
-        import subprocess
-        black_path = Path(output_dir) / "fallback_black.mp4"
-        try:
-            cmd = [
-                "ffmpeg", "-y",
-                "-f", "lavfi",
-                "-i", "color=c=black:size=1080x1920:rate=30",
-                "-t", "10",
-                "-c:v", "libx264", "-preset", "fast",
-                str(black_path)
-            ]
-            subprocess.run(cmd, capture_output=True)
-            if black_path.exists():
-                logger.warning(
-                    "[VisualAssembler] ⚠️ Black screen fallback digunakan. "
-                    "Periksa koneksi API provider visual Anda."
-                )
-                return [black_path]
-        except Exception as e:
-            logger.error(f"[VisualAssembler] Black screen creation failed: {e}")
-        return []
 
     # ──────────────────────────────────────────────
     # Config loader

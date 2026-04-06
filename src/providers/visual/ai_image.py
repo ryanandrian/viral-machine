@@ -76,8 +76,9 @@ class AIImageProvider(VisualProvider):
         self.niche_visual_style     = config.get("niche_visual_style") or {}
         self.niche_visual_fallbacks = config.get("niche_visual_fallbacks") or []
         # LLM config — untuk rejection rewrite (pakai LLM tenant, bukan hardcode)
+        # Key harus dari tenant DB — tidak ada env fallback (DESIGN.md)
         self.llm_provider = config.get("llm_provider", "openai")
-        self.llm_api_key  = config.get("llm_api_key", "")
+        self.llm_api_key  = config.get("llm_api_key") or ""
 
         if self.model_config["platform"] == "replicate":
             self.api_key = (
@@ -166,20 +167,42 @@ class AIImageProvider(VisualProvider):
                 )
 
             except Exception as e:
-                # ── Retry loop: kirim rejection ke GPT, biarkan AI yang memikirkan ulang ──
+                # ── Retry loop ────────────────────────────────────────────────────────
+                # Attempt 2: LLM rewrite prompt
+                # Attempt 3: visual_fallbacks[i] dari niches table (pre-approved, pasti aman)
+                # Tidak ada fallback ke provider lain — kualitas konten non-negotiable.
                 rejection_history = [{"prompt": prompt, "rejection": str(e)}]
                 succeeded = False
                 for attempt in range(2, 4):  # attempt 2 dan 3
+                    safe_prompt = keyword  # inisialisasi — fallback jika rewrite gagal sebelum assign
                     try:
-                        logger.warning(
-                            f"[AIImage] Scene {i+1} attempt {attempt-1} gagal — "
-                            f"kirim rejection ke GPT untuk rewrite (attempt {attempt}/3)"
-                        )
-                        safe_prompt = await self._ai_rewrite_on_rejection(
-                            original_keyword=keyword,
-                            section_index=i,
-                            rejection_history=rejection_history,
-                        )
+                        if attempt == 2:
+                            logger.warning(
+                                f"[AIImage] Scene {i+1} attempt 1 gagal — "
+                                f"rewrite via {self.llm_provider} (attempt 2/3)"
+                            )
+                            safe_prompt = await self._ai_rewrite_on_rejection(
+                                original_keyword=keyword,
+                                section_index=i,
+                                rejection_history=rejection_history,
+                            )
+                        else:
+                            # Attempt 3: visual_fallbacks dari niches table
+                            fallbacks = self.niche_visual_fallbacks
+                            if not fallbacks:
+                                logger.error(
+                                    f"[AIImage] Scene {i+1}: tidak ada visual_fallbacks "
+                                    f"di niches table — scene di-skip"
+                                )
+                                break
+                            safe_prompt = fallbacks[i % len(fallbacks)]
+                            if SAFETY_SUFFIX.lower() not in safe_prompt.lower():
+                                safe_prompt = f"{safe_prompt} {SAFETY_SUFFIX}"
+                            logger.warning(
+                                f"[AIImage] Scene {i+1} attempt 2 gagal — "
+                                f"pakai visual_fallback[{i % len(fallbacks)}] (attempt 3/3)"
+                            )
+
                         safe_output = output_dir / f"clip_{i+1:02d}_attempt{attempt}.jpg"
                         safe_clip   = output_dir / f"clip_{i+1:02d}_attempt{attempt}.mp4"
                         target_dur  = clip_durations[i] if clip_durations and i < len(clip_durations) else 5.0
@@ -199,12 +222,11 @@ class AIImageProvider(VisualProvider):
                         break
                     except Exception as retry_err:
                         rejection_history.append({"prompt": safe_prompt, "rejection": str(retry_err)})
-                        logger.warning(f"[AIImage] Scene {i+1} attempt {attempt} juga ditolak: {retry_err}")
+                        logger.warning(f"[AIImage] Scene {i+1} attempt {attempt} gagal: {retry_err}")
 
                 if not succeeded:
                     logger.error(
-                        f"[AIImage] Scene {i+1} GAGAL setelah 3 attempt — "
-                        f"GPT tidak bisa hasilkan prompt yang diterima image generator"
+                        f"[AIImage] Scene {i+1} GAGAL setelah 3 attempt — scene di-skip"
                     )
                     continue
 
@@ -287,6 +309,13 @@ class AIImageProvider(VisualProvider):
             f"Write a new safe complete DALL-E 3 prompt. "
             f"End with: vertical 9:16, photorealistic, {SAFETY_SUFFIX}"
         )
+
+        if not self.llm_api_key:
+            raise VisualError(
+                f"llm_api_key tidak tersedia untuk rejection rewrite "
+                f"(provider={self.llm_provider}). "
+                f"Set llm_api_key di tenant_configs Supabase."
+            )
 
         if self.llm_provider == "claude":
             import anthropic
