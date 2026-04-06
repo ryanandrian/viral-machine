@@ -26,7 +26,7 @@ class HookOptimizer:
     }
 
     def __init__(self):
-        self.client = OpenAI(api_key=system_config.openai_api_key)
+        pass
 
     def _build_prompt(self, script: dict, tenant_config: TenantConfig) -> str:
         niche_data     = NICHES[tenant_config.niche]
@@ -89,14 +89,21 @@ IMPORTANT: Return ONLY the JSON object. No markdown, no explanation, no extra te
         raw = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', raw)
         return raw.strip()
 
-    def _generate_hooks(self, script: dict, tenant_config: TenantConfig) -> dict:
+    def _generate_hooks(self, script: dict, tenant_config: TenantConfig,
+                        openai_api_key: str = "") -> dict:
+        if not openai_api_key:
+            raise ValueError(
+                f"visual_api_key (OpenAI) tidak ada di tenant_configs "
+                f"untuk tenant '{tenant_config.tenant_id}'"
+            )
+        client     = OpenAI(api_key=openai_api_key)
         last_error = None
 
         for attempt in range(1, self.MAX_RETRIES + 1):
             try:
                 logger.info(f"Hook generation attempt {attempt}/{self.MAX_RETRIES}...")
 
-                response = self.client.chat.completions.create(
+                response = client.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[
                         {
@@ -147,7 +154,15 @@ IMPORTANT: Return ONLY the JSON object. No markdown, no explanation, no extra te
 
     def optimize(self, script: dict, tenant_config: TenantConfig) -> dict:
         logger.info(f"Optimizing hooks for: {script.get('topic', '')[:50]}...")
-        hook_data = self._generate_hooks(script, tenant_config)
+        # Load OpenAI key dari tenant DB — tidak ada env fallback
+        _openai_key = ""
+        try:
+            from src.config.tenant_config import load_tenant_config
+            _rc = load_tenant_config(tenant_config.tenant_id)
+            _openai_key = (_rc.visual_api_key if _rc else "") or ""
+        except Exception as _ke:
+            logger.warning(f"[HookOptimizer] Gagal load tenant key: {_ke}")
+        hook_data = self._generate_hooks(script, tenant_config, openai_api_key=_openai_key)
 
         if not hook_data or "winner" not in hook_data:
             logger.warning("Hook optimization failed — keeping original hook")

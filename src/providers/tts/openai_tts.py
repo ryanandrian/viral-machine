@@ -42,16 +42,16 @@ class OpenAITTSProvider(TTSProvider):
 
     def __init__(self, config: dict):
         super().__init__(config)
-        # Pakai llm_api_key jika tts_api_key tidak ada
+        # Pakai visual_api_key (OpenAI key) — tidak ada env fallback (DESIGN.md)
         self.api_key = (
             config.get("tts_api_key")
-            or config.get("llm_api_key")
-            or os.getenv("OPENAI_API_KEY")
+            or config.get("visual_api_key")
+            or ""
         )
         if not self.api_key:
             raise TTSError(
                 "OpenAI TTS membutuhkan API key. "
-                "Set llm_api_key di tenant_configs atau OPENAI_API_KEY di .env."
+                "Set tts_api_key atau visual_api_key di tenant_configs Supabase."
             )
         niche = config.get("niche", "universe_mysteries")
         if not config.get("tts_voice"):

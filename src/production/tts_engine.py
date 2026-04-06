@@ -63,30 +63,32 @@ def _build_full_script(script: dict) -> str:
 
 
 def _get_provider_config(tenant_config: TenantConfig) -> dict:
-    """Load TenantRunConfig dari Supabase. Return dict config untuk provider."""
+    """Load TenantRunConfig dari Supabase. Return dict config untuk provider.
+    Keys dari tenant DB only — tidak ada env fallback (DESIGN.md).
+    """
     try:
         from src.config.tenant_config import load_tenant_config
         rc = load_tenant_config(tenant_config.tenant_id)
         return {
-            "tts_provider":      rc.tts_provider,
-            "tts_voice":         rc.tts_voice,
-            "tts_api_key":       rc.tts_api_key or os.getenv("ELEVENLABS_API_KEY", ""),
+            "tts_provider":        rc.tts_provider,
+            "tts_voice":           rc.tts_voice,
+            "tts_api_key":         rc.tts_api_key or "",
             "tts_voice_per_niche": rc.tts_voice_per_niche,
             "tts_voice_settings":  getattr(rc, "tts_voice_settings", {}) or {},
-            "llm_api_key":       rc.llm_api_key or os.getenv("OPENAI_API_KEY", ""),
-            "niche":             tenant_config.niche,
-            "tenant_id":         tenant_config.tenant_id,
+            "visual_api_key":      getattr(rc, "visual_api_key", "") or "",
+            "niche":               tenant_config.niche,
+            "tenant_id":           tenant_config.tenant_id,
         }
     except Exception as e:
         logger.warning(f"[TTSEngine] RunConfig load failed ({e}) — pakai defaults")
         return {
-            "tts_provider":      "edge_tts",
-            "tts_voice":         "en-US-GuyNeural",
-            "tts_api_key":       os.getenv("ELEVENLABS_API_KEY", ""),
+            "tts_provider":        "edge_tts",
+            "tts_voice":           "en-US-GuyNeural",
+            "tts_api_key":         "",
             "tts_voice_per_niche": None,
-            "llm_api_key":       os.getenv("OPENAI_API_KEY", ""),
-            "niche":             tenant_config.niche,
-            "tenant_id":         tenant_config.tenant_id,
+            "visual_api_key":      "",
+            "niche":               tenant_config.niche,
+            "tenant_id":           tenant_config.tenant_id,
         }
 
 

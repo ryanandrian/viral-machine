@@ -25,7 +25,6 @@ class NicheSelector:
     MAX_RETRIES = 3
 
     def __init__(self):
-        self.client = OpenAI(api_key=system_config.openai_api_key)
         self._analyzer = self._init_analyzer()
 
     def _init_analyzer(self):
@@ -206,7 +205,7 @@ class NicheSelector:
 
     def _analyze_with_ai(self, signals_summary: str, tenant_config: TenantConfig,
                          peak_region: str = "us", focus: str = None,
-                         insights: dict = None) -> list:
+                         insights: dict = None, openai_api_key: str = "") -> list:
         niche_data = NICHES[tenant_config.niche]
 
         audience = REGION_DISPLAY.get(peak_region, REGION_DISPLAY["us"])
@@ -276,7 +275,13 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
             try:
                 logger.info(f"AI analysis attempt {attempt}/{self.MAX_RETRIES}...")
 
-                response = self.client.chat.completions.create(
+                if not openai_api_key:
+                    raise ValueError(
+                        f"visual_api_key (OpenAI) tidak ada di tenant_configs "
+                        f"untuk tenant '{tenant_config.tenant_id}'"
+                    )
+                client   = OpenAI(api_key=openai_api_key)
+                response = client.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[
                         {
@@ -374,11 +379,21 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
 
         summary     = self._prepare_signals_summary(signals, tenant_config)
         peak_region = signals.get("peak_region", "us")
+        # Load OpenAI key dari tenant DB — tidak ada env fallback
+        _openai_key = ""
+        try:
+            from src.config.tenant_config import load_tenant_config
+            _rc = load_tenant_config(tenant_config.tenant_id)
+            _openai_key = (_rc.visual_api_key if _rc else "") or ""
+        except Exception as _ke:
+            logger.warning(f"[NicheSelector] Gagal load tenant key: {_ke}")
+
         topics      = self._analyze_with_ai(
             summary, tenant_config,
             peak_region=peak_region,
             focus=focus,
             insights=insights,
+            openai_api_key=_openai_key,
         )
 
         # s84d: apply historical_factor jika grade >= optimizing

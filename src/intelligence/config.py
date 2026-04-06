@@ -19,11 +19,12 @@ class TenantConfig:
     hook_style: str = "question"
     video_duration: int = 58
 
-@dataclass 
+@dataclass
 class SystemConfig:
-    """Konfigurasi sistem — dikelola oleh MesinViral"""
-    openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
-    elevenlabs_api_key: str = field(default_factory=lambda: os.getenv("ELEVENLABS_API_KEY", ""))
+    """Konfigurasi mesin (platform) — bukan milik tenant.
+    Hanya berisi infra yang dioperasikan platform: Supabase, R2, Redis.
+    API key tenant (OpenAI, Anthropic, ElevenLabs, dll) disimpan di tenant_configs Supabase.
+    """
     supabase_url: str = field(default_factory=lambda: os.getenv("SUPABASE_URL", ""))
     supabase_key: str = field(default_factory=lambda: os.getenv("SUPABASE_KEY", ""))
     r2_endpoint: str = field(default_factory=lambda: os.getenv("R2_ENDPOINT", ""))

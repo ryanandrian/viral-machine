@@ -93,7 +93,7 @@ class ScriptAnalyzer:
     """
 
     def __init__(self, api_key: str | None = None, model: str = "gpt-4o-mini"):
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY", "")
+        self.api_key = api_key or ""
         self.model   = model
 
     def analyze(self, script: dict, niche: str) -> dict:

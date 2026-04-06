@@ -188,12 +188,12 @@ Return ONLY valid JSON — no markdown, no preamble, no explanation:
   "estimated_duration_seconds": {TARGET_DURATION},
   "section_durations": {json.dumps(SECTION_TIMING)},
   "visual_suggestions": [
-    "Scene 1 — hook: [Complete cinematic image prompt. Character: dramatic, tension-filled, stops the scroll in 1 second. Lighting: high contrast, sharp shadows. Camera: extreme close-up OR extreme wide establishing shot. Subject: the exact visual moment from this hook — specific, not generic. Apply VISUAL DIRECTION style. Vertical 9:16, photorealistic, no text no words no letters no numbers no signs no logos no watermarks.]",
-    "Scene 2 — mystery drop: [Complete cinematic image prompt. Character: mysterious, unsettling, raises more questions than it answers. Lighting: low-key, shadows concealing as much as revealing, ambient glow. Camera: slow-reveal composition, subject partially obscured. Subject: the specific mysterious element from this section. Apply VISUAL DIRECTION style. Vertical 9:16, photorealistic, no text no words no letters no numbers no signs no logos no watermarks.]",
-    "Scene 3 — build up: [Complete cinematic image prompt. Character: epic scale, awe-inspiring, conveys the full weight and context. Lighting: dramatic natural or cosmic light, golden hour or deep space. Camera: wide establishing shot showing overwhelming scale. Subject: the specific subject from build-up section at its grandest scale. Apply VISUAL DIRECTION style. Vertical 9:16, photorealistic, no text no words no letters no numbers no signs no logos no watermarks.]",
-    "Scene 4 — core facts 1: [Complete cinematic image prompt. Character: visually striking, the undeniable proof, unexpected angle. Lighting: clinical precision or dramatic chiaroscuro. Camera: tight detail shot revealing something specific and surprising. Subject: the exact visual evidence of the first core fact. Apply VISUAL DIRECTION style. Vertical 9:16, photorealistic, no text no words no letters no numbers no signs no logos no watermarks.]",
-    "Scene 5 — core facts 2: [Complete cinematic image prompt. Character: tension building, something enormous approaching, point of no return. Lighting: darkening atmosphere, spotlight on the key element. Camera: medium shot with leading lines converging toward the climax. Subject: the specific visual that bridges core facts to the final reveal. Apply VISUAL DIRECTION style. Vertical 9:16, photorealistic, no text no words no letters no numbers no signs no logos no watermarks.]",
-    "Scene 6 — climax: [Complete cinematic image prompt. Character: overwhelming, emotionally peak, the single most unforgettable frame of the entire video. Lighting: dramatic peak — total darkness OR blinding light, nothing in between. Camera: the most powerful composition possible — scale, symmetry, or singular focal point. Subject: the ultimate visual payoff of this story — awe, shock, revelation, or profound emotion. Apply VISUAL DIRECTION style. Vertical 9:16, photorealistic, no text no words no letters no numbers no signs no logos no watermarks.]"
+    "Scene 1 — hook: [Look at the hook text you just wrote. Identify the single most concrete noun, entity, or visual moment in those exact words — not the topic in general, but the SPECIFIC thing named or implied in YOUR hook. Build the entire DALL-E 3 prompt around that one element. Character: dramatic, tension-filled, stops the scroll in 1 second. Lighting: high contrast, sharp shadows, or stark cosmic void. Camera: extreme close-up on a detail OR extreme wide shot showing overwhelming scale. Apply VISUAL DIRECTION style. Vertical 9:16, photorealistic, no text no words no letters no numbers no signs no logos no watermarks.]",
+    "Scene 2 — mystery drop: [Look at the mystery_drop text you just wrote. What is the single most specific, uncanny, or unsettling concrete thing you described? Show THAT — not a generic mysterious atmosphere. Character: mysterious, raises more questions than it answers, something is being concealed. Lighting: low-key, shadows dominate, one element catches ambient glow. Camera: subject partially obscured, slow-reveal composition. Apply VISUAL DIRECTION style. Vertical 9:16, photorealistic, no text no words no letters no numbers no signs no logos no watermarks.]",
+    "Scene 3 — build up: [Look at the build_up text you just wrote. What specific entity, location, or phenomenon did you describe — with a number, name, or date? Visualize THAT at its maximum scale and weight. Character: epic, awe-inspiring, the full enormity of what was just described. Lighting: dramatic natural or cosmic light — golden hour, deep space, or geological ancient. Camera: wide establishing shot, the subject dwarfed by its own context. Apply VISUAL DIRECTION style. Vertical 9:16, photorealistic, no text no words no letters no numbers no signs no logos no watermarks.]",
+    "Scene 4 — core facts 1: [Look at the core_facts text you just wrote. What is the first specific surprising fact — the concrete subject of that fact? Render the exact visual evidence of it, from an angle no one expects. Character: undeniable proof, visually striking, unexpected perspective. Lighting: clinical precision or dramatic chiaroscuro — no ambiguity. Camera: tight detail shot on the specific element that proves the fact. Apply VISUAL DIRECTION style. Vertical 9:16, photorealistic, no text no words no letters no numbers no signs no logos no watermarks.]",
+    "Scene 5 — core facts 2: [Look at the core_facts text you just wrote. What is the second specific fact — what entity, force, or moment does it describe? Show THAT at the precise moment of tension, the point of no return. Character: mounting tension, something vast approaching, irreversible. Lighting: atmosphere darkening, spotlight converging on the key element. Camera: medium shot, leading lines pulling toward the climax. Apply VISUAL DIRECTION style. Vertical 9:16, photorealistic, no text no words no letters no numbers no signs no logos no watermarks.]",
+    "Scene 6 — climax: [Look at the climax text you just wrote. What is the single most powerful revelation — the ultimate truth you just delivered? This frame must be the most unforgettable image in the entire video. Character: emotionally peak, overwhelming, the moment everything lands. Lighting: absolute extremes only — total darkness with one piercing light OR blinding overexposed reveal. Camera: the single most powerful composition possible for this specific revelation. Apply VISUAL DIRECTION style. Vertical 9:16, photorealistic, no text no words no letters no numbers no signs no logos no watermarks.]"
   "background_music_mood": "specific mood, instrumentation, and emotional arc — not just one word",
   "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#shorts"],
   "thumbnail_concept": "the specific image that makes someone stop scrolling and need to click"
@@ -203,8 +203,7 @@ Return ONLY valid JSON — no markdown, no preamble, no explanation:
 class ScriptEngine:
 
     def __init__(self):
-        from openai import OpenAI
-        self._openai = OpenAI(api_key=system_config.openai_api_key)
+        pass
 
     def _get_run_config(self, tenant_config):
         try:
@@ -251,12 +250,11 @@ class ScriptEngine:
             script["full_script"] = " ".join(p for p in parts if p)
         return script
 
-    def _call_claude(self, topic, niche, attempt, niche_visual_style=None, feedback=None):
+    def _call_claude(self, topic, niche, attempt, api_key, niche_visual_style=None, feedback=None):
         try:
             import anthropic
-            api_key = os.getenv("ANTHROPIC_API_KEY", "")
             if not api_key:
-                raise ValueError("ANTHROPIC_API_KEY tidak ada")
+                raise ValueError("llm_api_key (Anthropic) tidak ada di tenant_configs")
             client   = anthropic.Anthropic(api_key=api_key)
             response = client.messages.create(
                 model="claude-sonnet-4-6",
@@ -275,9 +273,13 @@ class ScriptEngine:
             logger.warning(f"[ScriptEngine] Claude attempt {attempt} failed: {e}")
             return None
 
-    def _call_openai(self, topic, niche, attempt, niche_visual_style=None, feedback=None):
+    def _call_openai(self, topic, niche, attempt, api_key, niche_visual_style=None, feedback=None):
         try:
-            response = self._openai.chat.completions.create(
+            if not api_key:
+                raise ValueError("visual_api_key (OpenAI) tidak ada di tenant_configs")
+            from openai import OpenAI
+            client   = OpenAI(api_key=api_key)
+            response = client.chat.completions.create(
                 model="gpt-4o-mini",
                 response_format={"type": "json_object"},
                 temperature=0.85,
@@ -297,16 +299,18 @@ class ScriptEngine:
             logger.warning(f"[ScriptEngine] GPT attempt {attempt} failed: {e}")
             return None
 
-    def _call_llm(self, topic, niche, attempt, llm_provider, niche_visual_style=None, feedback=None):
+    def _call_llm(self, topic, niche, attempt, llm_provider,
+                  llm_api_key, openai_api_key,
+                  niche_visual_style=None, feedback=None):
         if llm_provider == "claude":
-            script = self._call_claude(topic, niche, attempt, niche_visual_style, feedback)
+            script = self._call_claude(topic, niche, attempt, llm_api_key, niche_visual_style, feedback)
             if script is None:
                 logger.warning("[ScriptEngine] Claude gagal — fallback ke GPT-4o-mini")
-                script = self._call_openai(topic, niche, attempt, niche_visual_style, feedback)
+                script = self._call_openai(topic, niche, attempt, openai_api_key, niche_visual_style, feedback)
                 return script, "openai_fallback"
             return script, "claude"
         else:
-            script = self._call_openai(topic, niche, attempt, niche_visual_style, feedback)
+            script = self._call_openai(topic, niche, attempt, openai_api_key, niche_visual_style, feedback)
             return script, "openai"
 
     def generate(self, topic, tenant_config):
@@ -317,6 +321,9 @@ class ScriptEngine:
         min_score          = run_config.script_min_viral_score  if run_config else 82
         max_retry          = run_config.script_max_retry        if run_config else 3
         niche_visual_style = getattr(run_config, "niche_visual_style", {}) or {}
+        # Keys dari tenant DB — tidak ada env fallback
+        llm_api_key    = (run_config.llm_api_key    if run_config else "") or ""
+        openai_api_key = (run_config.visual_api_key if run_config else "") or ""
 
         logger.info(
             f"[ScriptEngine] provider={llm_provider} "
@@ -325,7 +332,7 @@ class ScriptEngine:
 
         try:
             from src.intelligence.script_analyzer import ScriptAnalyzer
-            analyzer = ScriptAnalyzer(api_key=system_config.openai_api_key)
+            analyzer = ScriptAnalyzer(api_key=openai_api_key)
         except Exception as e:
             logger.warning(f"[ScriptEngine] Analyzer failed ({e}) — no gate")
             analyzer = None
@@ -339,7 +346,9 @@ class ScriptEngine:
             logger.info(f"[ScriptEngine] Attempt {attempt}/{max_retry} via {llm_provider}")
 
             script, actual_provider = self._call_llm(
-                topic, tenant_config.niche, attempt, llm_provider, niche_visual_style, feedback
+                topic, tenant_config.niche, attempt, llm_provider,
+                llm_api_key, openai_api_key,
+                niche_visual_style, feedback,
             )
             logger.info(f"[ScriptEngine] Actually used: {actual_provider}")
 
