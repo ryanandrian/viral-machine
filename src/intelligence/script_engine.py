@@ -19,13 +19,12 @@ from src.intelligence.config import TenantConfig, get_niches, system_config
 # Harus actionable dan spesifik, bukan saran generik.
 DIMENSION_RETRY_GUIDANCE = {
     "emotional_peak": (
-        "Do NOT describe the emotion — CAUSE it. Rewrite the CLIMAX using one of these: "
-        "(1) Scale contrast: reduce something infinite to a single human moment, or reduce "
-        "a human to cosmic insignificance in a way that feels real. "
-        "(2) Reversal: the truth about this topic is the precise opposite of what seemed obvious. "
-        "(3) Infinite implication: this one fact permanently changes how the viewer sees "
-        "something they encounter every day. "
-        "Test: read the climax aloud alone. If you don't feel something physical — rewrite it."
+        # Generic fallback — dipakai hanya jika niche_profile tidak tersedia.
+        # Normalnya diganti oleh _build_emotional_peak_guidance(niche_profile).
+        "Do NOT describe the emotion — CAUSE it. Rewrite the CLIMAX so the viewer "
+        "feels the final stage of this niche's emotion arc physically. "
+        "Choose the technique that serves THIS specific topic: scale contrast, reversal, "
+        "or infinite implication. Test: read aloud alone. If you don't feel it — rewrite."
     ),
     "cta_strength": (
         "Delete everything. Rewrite the CTA as a thought, not a request. "
@@ -61,6 +60,30 @@ DIMENSION_RETRY_GUIDANCE = {
         "viewers share facts they can quote precisely, not impressions."
     ),
 }
+
+def _build_emotional_peak_guidance(niche_profile: dict) -> str:
+    """
+    Bangun retry guidance emotional_peak dari niche profile Supabase.
+    Config-driven — tidak hardcode per niche.
+    """
+    vp          = niche_profile.get("voice_profile") or {}
+    emotion_arc = vp.get("emotion_arc", "").strip()
+    target      = niche_profile.get("target_emotion", "").strip()
+    style       = vp.get("style", "").strip()
+
+    base = "Do NOT describe the emotion — CAUSE it. Rewrite the CLIMAX to deliver "
+    if emotion_arc:
+        base += f"the final stage of this arc: '{emotion_arc}'. "
+    if target:
+        base += f"The viewer must feel: {target}. "
+    if style:
+        base += f"Technique guidance: {style}. "
+    base += (
+        "Choose what serves THIS specific topic best: scale contrast, reversal, "
+        "or infinite implication. Test: read aloud alone. If you don't feel it — rewrite completely."
+    )
+    return base
+
 
 load_dotenv()
 
@@ -494,6 +517,11 @@ class ScriptEngine:
             logger.warning(f"[ScriptEngine] Analyzer failed ({e}) — no gate")
             analyzer = None
 
+        # Niche profile untuk emotional_peak scoring yang niche-aware.
+        # Config-driven dari Supabase — tidak hardcode per niche.
+        niches_data   = get_niches()
+        niche_profile = niches_data.get(tenant_config.niche) or {}
+
         best_script     = None
         best_score      = 0
         actual_provider = llm_provider
@@ -515,7 +543,7 @@ class ScriptEngine:
                 continue
 
             if analyzer:
-                analysis = analyzer.analyze(script, tenant_config.niche)
+                analysis = analyzer.analyze(script, tenant_config.niche, niche_profile=niche_profile)
                 score    = analysis.get("viral_score", 0)
                 script["viral_analysis"] = analysis
 
@@ -528,9 +556,14 @@ class ScriptEngine:
                 feedback = []
                 for area in weak_areas:
                     area_score = dim_scores.get(area, "?")
-                    guidance   = DIMENSION_RETRY_GUIDANCE.get(
-                        area, "improve this dimension — be more specific and impactful"
-                    )
+                    # emotional_peak: gunakan guidance niche-aware dari Supabase
+                    # dimensi lain: guidance universal dari DIMENSION_RETRY_GUIDANCE
+                    if area == "emotional_peak" and niche_profile:
+                        guidance = _build_emotional_peak_guidance(niche_profile)
+                    else:
+                        guidance = DIMENSION_RETRY_GUIDANCE.get(
+                            area, "improve this dimension — be more specific and impactful"
+                        )
                     feedback.append(
                         f"{area} scored {area_score}/100 (need {min_score}+): {guidance}"
                     )

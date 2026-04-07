@@ -29,41 +29,6 @@ VIRAL_DIMENSIONS = {
     "cta_strength":         0.05,
 }
 
-# Niche-specific emotional peak criteria.
-# emotional_peak tidak bisa dinilai dengan kriteria generik — setiap niche
-# punya register emosi yang berbeda. Tanpa ini, GPT akan menilai konservatif
-# karena tidak tahu apa yang "counts" sebagai emotional peak untuk niche tersebut.
-NICHE_EMOTION_CRITERIA = {
-    "universe_mysteries": (
-        "Score 80+ if the climax delivers EXISTENTIAL AWE — viewer feels simultaneously "
-        "insignificant and connected to something infinite. Valid techniques: scale contrast "
-        "(a human lifetime vs 13.8 billion years), reversal (the universe behaves against all "
-        "intuition), infinite implication (this one fact changes what it means to be human). "
-        "Score LOW for generic 'amazing discovery' language without specific revelatory weight."
-    ),
-    "dark_history": (
-        "Score 80+ if the climax creates MORAL WEIGHT — the specific gravity of real suffering "
-        "or systemic evil made undeniable. Valid techniques: a specific name, date, or detail "
-        "that collapses abstract history into visceral reality. Viewer should feel uncomfortable "
-        "in a way that demands reflection, not just shock. Score LOW for vague 'shocking facts' "
-        "without human specificity."
-    ),
-    "ocean_mysteries": (
-        "Score 80+ if the climax creates PRIMAL FEAR AND ALIEN WONDER — the deep ocean is more "
-        "foreign than space and it is completely real. Valid techniques: pressure scale (crushing "
-        "force at depth vs human fragility), darkness as absolute (no light has ever reached "
-        "there), biological wrongness (this creature should not exist by any logic). "
-        "Score LOW for surface-level creature observations without genuine unease."
-    ),
-    "fun_facts": (
-        "Score 80+ if the climax creates the IRRESISTIBLE URGE TO SHARE — fact so counterintuitive "
-        "that the viewer's first instinct is to tell someone. The 'wait, WHAT?' moment followed "
-        "immediately by 'I have to show this to someone'. Valid techniques: everyday object "
-        "revealed as extraordinary, number so absurd it breaks intuition, implication that "
-        "changes how viewer sees something they encounter daily. Score LOW if interesting but not shareable."
-    ),
-}
-
 DEFAULT_EMOTION_CRITERIA = (
     "Score 80+ if the climax causes a genuine reaction — goosebumps, held breath, or the "
     "immediate need to tell someone. The emotion must be CAUSED by the content, not described. "
@@ -71,7 +36,39 @@ DEFAULT_EMOTION_CRITERIA = (
 )
 
 
-def _build_prompt(script: dict, niche: str) -> str:
+def _derive_emotion_criteria(niche_profile: dict | None) -> str:
+    """
+    Bangun emotional_peak scoring criteria dari niche profile Supabase.
+    Config-driven — tidak ada hardcode niche. Niche baru otomatis works
+    selama voice_profile diisi dengan benar di tabel niches.
+    Fallback ke DEFAULT_EMOTION_CRITERIA jika data tidak tersedia.
+    """
+    if not niche_profile:
+        return DEFAULT_EMOTION_CRITERIA
+
+    vp          = niche_profile.get("voice_profile") or {}
+    emotion_arc = vp.get("emotion_arc", "").strip()
+    target      = niche_profile.get("target_emotion", "").strip()
+    style       = vp.get("style", "").strip()
+
+    if not (emotion_arc or target):
+        return DEFAULT_EMOTION_CRITERIA
+
+    parts = ["Score 80+ if the climax delivers the FINAL STAGE of this emotion arc:"]
+    if emotion_arc:
+        parts.append(f"'{emotion_arc}'.")
+    if target:
+        parts.append(f"The viewer must genuinely feel: {target}.")
+    if style:
+        parts.append(f"Achieve it through: {style}.")
+    parts.append(
+        "Do NOT describe the emotion — CAUSE it directly through the content. "
+        "Score LOW if the climax tells the viewer what to feel instead of making them feel it."
+    )
+    return " ".join(parts)
+
+
+def _build_prompt(script: dict, niche: str, niche_profile: dict | None = None) -> str:
     sections = "\n".join([
         f"[HOOK]: {script.get('hook', '')}",
         f"[MYSTERY DROP]: {script.get('mystery_drop', '')}",
@@ -93,7 +90,7 @@ def _build_prompt(script: dict, niche: str) -> str:
             f"[CTA]: {script.get('cta', '')}",
         ])
 
-    emotion_criteria = NICHE_EMOTION_CRITERIA.get(niche, DEFAULT_EMOTION_CRITERIA)
+    emotion_criteria = _derive_emotion_criteria(niche_profile)
 
     return f"""You are a strict viral content analyst. Analyze this {niche} video script.
 
@@ -141,9 +138,12 @@ class ScriptAnalyzer:
         self.api_key = api_key or ""
         self.model   = model
 
-    def analyze(self, script: dict, niche: str) -> dict:
+    def analyze(self, script: dict, niche: str, niche_profile: dict | None = None) -> dict:
         """
         Score script terhadap 6 dimensi viral.
+        niche_profile: data niche dari Supabase (voice_profile, target_emotion, dll).
+                       Dipakai untuk emotional_peak criteria yang niche-aware.
+                       Jika None → fallback ke DEFAULT_EMOTION_CRITERIA.
         Returns dict dengan viral_score, weak_areas, strengths.
         Tidak pernah crash — fallback ke local estimate jika GPT gagal.
         """
@@ -163,7 +163,7 @@ class ScriptAnalyzer:
                             "Score honestly. Only respond with valid JSON."
                         ),
                     },
-                    {"role": "user", "content": _build_prompt(script, niche)},
+                    {"role": "user", "content": _build_prompt(script, niche, niche_profile)},
                 ],
             )
 
