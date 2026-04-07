@@ -28,9 +28,32 @@ class HookOptimizer:
     def __init__(self):
         pass
 
-    def _build_prompt(self, script: dict, tenant_config: TenantConfig) -> str:
+    def _build_historical_block(self, top_hooks: list) -> str:
+        """Format top_hooks dari channel_insights sebagai referensi historis."""
+        if not top_hooks:
+            return ""
+        lines = [
+            "HISTORICAL HIGH-CTR HOOKS from this channel (real data — these formulas worked):"
+        ]
+        for i, h in enumerate(top_hooks[:3], 1):
+            ctr     = h.get("avg_ctr", 0)
+            pattern = h.get("hook_pattern", "unknown")
+            text    = h.get("hook", "")[:80]
+            lines.append(f"  {i}. [{pattern}] \"{text}\" — CTR: {ctr:.1f}%")
+        lines.append(
+            "Use these as formula inspiration. "
+            "Generate a 6th hook variant inspired by the highest-CTR pattern above. "
+            "Rate it honestly — if it truly rivals the historical winners, score it high."
+        )
+        return "\n".join(lines)
+
+    def _build_prompt(self, script: dict, tenant_config: TenantConfig,
+                      top_hooks: list | None = None) -> str:
         niche_data     = NICHES[tenant_config.niche]
         formulas_text  = "\n".join([f"- {k}: {v}" for k, v in self.HOOK_FORMULAS.items()])
+        historical_block = self._build_historical_block(top_hooks or [])
+        hooks_count    = 6 if historical_block else 5
+        historical_section = f"\n{historical_block}\n" if historical_block else ""
 
         return f"""You are an expert at writing viral hooks for short-form video.
 
@@ -38,9 +61,9 @@ TOPIC: {script['topic']}
 CURRENT HOOK: {script['hook']}
 NICHE: {niche_data['name']}
 TARGET EMOTION: {niche_data['target_emotion']}
-
-Generate 5 alternative hooks using these formulas:
-{formulas_text}
+{historical_section}
+Generate {hooks_count} alternative hooks using these formulas:
+{formulas_text}{"" if not historical_block else chr(10) + "- historical_variant: Inspired by the highest-CTR hook pattern shown above"}
 
 Rules:
 - Maximum 15 words each
@@ -89,8 +112,18 @@ IMPORTANT: Return ONLY the JSON object. No markdown, no explanation, no extra te
         raw = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', raw)
         return raw.strip()
 
+    def _load_insights(self, tenant_id: str) -> dict | None:
+        """Load channel_insights terbaru. Fire-and-forget — tidak pernah crash pipeline."""
+        try:
+            from src.analytics.performance_analyzer import PerformanceAnalyzer
+            return PerformanceAnalyzer().load_latest_insights(tenant_id)
+        except Exception as e:
+            logger.warning(f"[HookOptimizer] Load insights gagal (non-fatal): {e}")
+            return None
+
     def _generate_hooks(self, script: dict, tenant_config: TenantConfig,
-                        openai_api_key: str = "") -> dict:
+                        openai_api_key: str = "",
+                        top_hooks: list | None = None) -> dict:
         if not openai_api_key:
             raise ValueError(
                 f"visual_api_key (OpenAI) tidak ada di tenant_configs "
@@ -114,9 +147,11 @@ IMPORTANT: Return ONLY the JSON object. No markdown, no explanation, no extra te
                                 "No markdown, no explanation, no text outside the JSON."
                             )
                         },
-                        {"role": "user", "content": self._build_prompt(script, tenant_config)}
+                        {"role": "user", "content": self._build_prompt(
+                            script, tenant_config, top_hooks
+                        )}
                     ],
-                    max_tokens=1000,
+                    max_tokens=1200,
                     temperature=0.9,
                     response_format={"type": "json_object"}
                 )
@@ -162,7 +197,23 @@ IMPORTANT: Return ONLY the JSON object. No markdown, no explanation, no extra te
             _openai_key = (_rc.visual_api_key if _rc else "") or ""
         except Exception as _ke:
             logger.warning(f"[HookOptimizer] Gagal load tenant key: {_ke}")
-        hook_data = self._generate_hooks(script, tenant_config, openai_api_key=_openai_key)
+
+        # S1-C: load channel insights → ambil top_hooks untuk formula ke-6
+        top_hooks = None
+        insights  = self._load_insights(tenant_config.tenant_id)
+        if insights:
+            grade = insights.get("performance_grade", "insufficient_data")
+            if grade != "insufficient_data":
+                top_hooks = insights.get("top_hooks") or None
+                if top_hooks:
+                    logger.info(
+                        f"[HookOptimizer] Historical hooks loaded | grade={grade} | "
+                        f"top_hooks={len(top_hooks)} — adding formula ke-6"
+                    )
+
+        hook_data = self._generate_hooks(
+            script, tenant_config, openai_api_key=_openai_key, top_hooks=top_hooks
+        )
 
         if not hook_data or "winner" not in hook_data:
             logger.warning("Hook optimization failed — keeping original hook")

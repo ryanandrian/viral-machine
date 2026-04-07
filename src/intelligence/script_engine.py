@@ -68,7 +68,46 @@ def _build_system_prompt():
     )
 
 
-def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None):
+def _build_insights_block(insights: dict) -> str:
+    """
+    Format channel_insights menjadi blok instruksi untuk prompt ScriptEngine.
+    Hanya dipanggil jika grade != insufficient_data.
+    """
+    lines = ["CHANNEL PERFORMANCE INSIGHTS — This channel's real data. Apply these learnings:"]
+
+    top_hooks = insights.get("top_hooks", [])
+    if top_hooks:
+        lines.append("TOP PERFORMING HOOKS from this channel (highest CTR — study these patterns):")
+        for i, h in enumerate(top_hooks[:3], 1):
+            ctr     = h.get("avg_ctr", 0)
+            pattern = h.get("hook_pattern", "")
+            text    = h.get("hook", "")[:80]
+            lines.append(f"  {i}. \"{text}\" | Pattern: {pattern} | CTR: {ctr:.1f}%")
+
+    ct_perf = insights.get("content_type_perf", [])
+    if ct_perf:
+        lines.append("CONTENT TYPES ranked by audience retention:")
+        for ct in ct_perf[:3]:
+            lines.append(
+                f"  - {ct.get('content_type','?')}: "
+                f"retention {ct.get('avg_view_pct',0):.0f}% | "
+                f"avg views {ct.get('avg_views',0):,.0f}"
+            )
+
+    avoid = insights.get("avoid_patterns", {})
+    bad_hooks    = avoid.get("hook_patterns", [])
+    bad_ct       = avoid.get("content_types", [])
+    if bad_hooks or bad_ct:
+        lines.append("AVOID — these patterns underperform on this channel:")
+        for p in bad_hooks[:3]:
+            lines.append(f"  - Hook pattern: {p}")
+        for c in bad_ct[:2]:
+            lines.append(f"  - Content type: {c}")
+
+    return "\n".join(lines)
+
+
+def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, insights_block=None):
     """
     Build prompt. Jika feedback ada (dari retry), sisipkan sebagai instruksi perbaikan.
     niche_visual_style: dict dari tabel niches (base_style, color_palette, atmosphere).
@@ -97,6 +136,10 @@ VISUAL DIRECTION — apply to all visual_suggestions prompts:
 - Atmosphere: {vs.get("atmosphere", "")}
 """
 
+    insights_section = ""
+    if insights_block:
+        insights_section = f"\n{insights_block}\n"
+
     return f"""Write a viral short-form video script.
 
 TOPIC: {topic.get('topic', '')}
@@ -108,7 +151,7 @@ STYLE: {profile['style']}
 AVOID: {profile['avoid']}
 EMOTION ARC: {profile['emotion_arc']}
 HOOK FORMULA: {profile['hook_style']}
-{visual_direction_block}{feedback_block}
+{visual_direction_block}{insights_section}{feedback_block}
 Write all 8 sections. Each has ONE job. Be specific to this topic — no generic phrases:
 
 1. HOOK ({SECTION_TIMING['hook']}s ~{words['hook']} words)
@@ -250,7 +293,8 @@ class ScriptEngine:
             script["full_script"] = " ".join(p for p in parts if p)
         return script
 
-    def _call_claude(self, topic, niche, attempt, api_key, niche_visual_style=None, feedback=None):
+    def _call_claude(self, topic, niche, attempt, api_key,
+                     niche_visual_style=None, feedback=None, insights_block=None):
         try:
             import anthropic
             if not api_key:
@@ -261,7 +305,9 @@ class ScriptEngine:
                 max_tokens=2000,
                 temperature=1,
                 system=_build_system_prompt(),
-                messages=[{"role": "user", "content": _build_user_prompt(topic, niche, niche_visual_style, feedback)}],
+                messages=[{"role": "user", "content": _build_user_prompt(
+                    topic, niche, niche_visual_style, feedback, insights_block
+                )}],
             )
             raw    = response.content[0].text.strip()
             script = json.loads(self._clean_json(raw))
@@ -273,7 +319,8 @@ class ScriptEngine:
             logger.warning(f"[ScriptEngine] Claude attempt {attempt} failed: {e}")
             return None
 
-    def _call_openai(self, topic, niche, attempt, api_key, niche_visual_style=None, feedback=None):
+    def _call_openai(self, topic, niche, attempt, api_key,
+                     niche_visual_style=None, feedback=None, insights_block=None):
         try:
             if not api_key:
                 raise ValueError("visual_api_key (OpenAI) tidak ada di tenant_configs")
@@ -286,7 +333,9 @@ class ScriptEngine:
                 max_tokens=1800,
                 messages=[
                     {"role": "system", "content": _build_system_prompt()},
-                    {"role": "user",   "content": _build_user_prompt(topic, niche, niche_visual_style, feedback)},
+                    {"role": "user",   "content": _build_user_prompt(
+                        topic, niche, niche_visual_style, feedback, insights_block
+                    )},
                 ],
             )
             raw    = response.choices[0].message.content.strip()
@@ -301,17 +350,35 @@ class ScriptEngine:
 
     def _call_llm(self, topic, niche, attempt, llm_provider,
                   llm_api_key, openai_api_key,
-                  niche_visual_style=None, feedback=None):
+                  niche_visual_style=None, feedback=None, insights_block=None):
         if llm_provider == "claude":
-            script = self._call_claude(topic, niche, attempt, llm_api_key, niche_visual_style, feedback)
+            script = self._call_claude(
+                topic, niche, attempt, llm_api_key,
+                niche_visual_style, feedback, insights_block,
+            )
             if script is None:
                 logger.warning("[ScriptEngine] Claude gagal — fallback ke GPT-4o-mini")
-                script = self._call_openai(topic, niche, attempt, openai_api_key, niche_visual_style, feedback)
+                script = self._call_openai(
+                    topic, niche, attempt, openai_api_key,
+                    niche_visual_style, feedback, insights_block,
+                )
                 return script, "openai_fallback"
             return script, "claude"
         else:
-            script = self._call_openai(topic, niche, attempt, openai_api_key, niche_visual_style, feedback)
+            script = self._call_openai(
+                topic, niche, attempt, openai_api_key,
+                niche_visual_style, feedback, insights_block,
+            )
             return script, "openai"
+
+    def _load_insights(self, tenant_id: str) -> dict | None:
+        """Load channel_insights terbaru. Fire-and-forget — tidak pernah crash pipeline."""
+        try:
+            from src.analytics.performance_analyzer import PerformanceAnalyzer
+            return PerformanceAnalyzer().load_latest_insights(tenant_id)
+        except Exception as e:
+            logger.warning(f"[ScriptEngine] Load insights gagal (non-fatal): {e}")
+            return None
 
     def generate(self, topic, tenant_config):
         logger.info(f"[ScriptEngine] Generating: {topic.get('topic','')[:50]}...")
@@ -324,6 +391,19 @@ class ScriptEngine:
         # Keys dari tenant DB — tidak ada env fallback
         llm_api_key    = (run_config.llm_api_key    if run_config else "") or ""
         openai_api_key = (run_config.visual_api_key if run_config else "") or ""
+
+        # S1-B: load channel insights — inject ke semua attempt jika grade cukup
+        insights       = self._load_insights(tenant_config.tenant_id)
+        insights_block = None
+        if insights:
+            grade = insights.get("performance_grade", "insufficient_data")
+            if grade != "insufficient_data":
+                insights_block = _build_insights_block(insights)
+                logger.info(
+                    f"[ScriptEngine] Insights injected | grade={grade} | "
+                    f"top_hooks={len(insights.get('top_hooks', []))} | "
+                    f"content_types={len(insights.get('content_type_perf', []))}"
+                )
 
         logger.info(
             f"[ScriptEngine] provider={llm_provider} "
@@ -348,7 +428,7 @@ class ScriptEngine:
             script, actual_provider = self._call_llm(
                 topic, tenant_config.niche, attempt, llm_provider,
                 llm_api_key, openai_api_key,
-                niche_visual_style, feedback,
+                niche_visual_style, feedback, insights_block,
             )
             logger.info(f"[ScriptEngine] Actually used: {actual_provider}")
 
