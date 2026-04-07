@@ -52,18 +52,21 @@
 
 ## Stage 3 — Learning Evolution (Jangka Menengah)
 
-### S3-A: Viral Score Weight Adaptif
-- [ ] Desain schema: `viral_score_weights` di `tenant_configs` (per-channel override)
-- [ ] Script bulanan: bandingkan predicted `viral_score` vs actual performance (views, CTR, subs)
-- [ ] Algoritma penyesuaian weight: regression sederhana atau korelasi per dimensi
-- [ ] Simpan weight baru ke DB, pipeline otomatis pakai weight terbaru
-- [ ] Test: weight berubah setelah ada data cukup; default weight tetap untuk channel baru
+### S3-A: Viral Score Weight Adaptif ✅
+- [x] Migration s87: `videos.topic_scores` + `videos.insights_grade` + `tenant_configs.viral_score_weights`
+- [x] ScriptEngine: embed `topic_scores` (5 dimensi) + `insights_grade` ke script output
+- [x] SupabaseWriter + Pipeline: simpan field baru saat publish
+- [x] `compute_viral_weights.py`: Pearson correlation 5 dimensi vs performance_score
+      (avg_view_pct×0.30 + CTR×0.25 + subs_norm×0.25 + views_norm×0.15 + like_rate×0.05)
+- [x] Gradual blending: n<20 → default, n=20–50 → blend, n≥50 → fully computed
+- [x] NicheSelector `_get_blended_weights()` + `_calculate_viral_score(tenant_id)`
+- [ ] Tambah cron bulanan untuk `compute_viral_weights.py`
+- [ ] Test live: verifikasi weights berubah setelah n≥20 video dengan analytics
 
-### S3-B: Performance Attribution
-- [ ] Tag setiap video di `videos` table: `insights_grade` saat produksi
-- [ ] Query: bandingkan avg performa video pre-insights vs post-insights per channel
-- [ ] Siapkan data untuk ditampilkan di Dashboard tenant (DESIGN.md 8.B — TBD)
-- [ ] Test: angka attribution masuk akal dan tidak menyesatkan
+### S3-B: Performance Attribution ✅
+- [x] `videos.insights_grade`: tag grade saat produksi
+- [x] `compute_viral_weights.py`: attribution report pre vs post insights (avg performance score)
+- [ ] Data siap untuk Dashboard tenant (DESIGN.md 8.B — roadmap berikutnya)
 
 ---
 
@@ -79,4 +82,4 @@
 *Last updated: 2026-04-07*
 *Status Stage 1: ✅ Done (test live pending)*
 *Status Stage 2: ✅ Done (test live pending)*
-*Status Stage 3: ⏳ Belum dimulai*
+*Status Stage 3: ✅ Done (migration s87 perlu dijalankan | cron bulanan perlu ditambah)*
