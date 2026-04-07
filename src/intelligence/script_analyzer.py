@@ -39,13 +39,25 @@ DEFAULT_EMOTION_CRITERIA = (
 def _derive_emotion_criteria(niche_profile: dict | None) -> str:
     """
     Bangun emotional_peak scoring criteria dari niche profile Supabase.
-    Config-driven — tidak ada hardcode niche. Niche baru otomatis works
-    selama voice_profile diisi dengan benar di tabel niches.
-    Fallback ke DEFAULT_EMOTION_CRITERIA jika data tidak tersedia.
+
+    Prioritas:
+    1. emotion_scoring_criteria (field khusus scoring — spesifik, dirancang sebagai
+       scoring guide, diisi admin via migrate_s89)
+    2. Derive dari voice_profile.emotion_arc + target_emotion + style
+       (kurang spesifik tapi otomatis works untuk niche baru)
+    3. DEFAULT_EMOTION_CRITERIA — generic fallback
+
+    Config-driven: niche baru cukup diisi di Supabase, kode tidak perlu disentuh.
     """
     if not niche_profile:
         return DEFAULT_EMOTION_CRITERIA
 
+    # Prioritas 1: field khusus scoring — paling spesifik
+    explicit = (niche_profile.get("emotion_scoring_criteria") or "").strip()
+    if explicit:
+        return explicit
+
+    # Prioritas 2: derive dari voice_profile
     vp          = niche_profile.get("voice_profile") or {}
     emotion_arc = vp.get("emotion_arc", "").strip()
     target      = niche_profile.get("target_emotion", "").strip()
