@@ -5,7 +5,7 @@ from datetime import datetime
 from loguru import logger
 from openai import OpenAI
 from dotenv import load_dotenv
-from src.intelligence.config import TenantConfig, NICHES, system_config
+from src.intelligence.config import TenantConfig, get_niches, system_config
 
 load_dotenv()
 
@@ -49,7 +49,10 @@ class HookOptimizer:
 
     def _build_prompt(self, script: dict, tenant_config: TenantConfig,
                       top_hooks: list | None = None) -> str:
-        niche_data     = NICHES[tenant_config.niche]
+        niches     = get_niches()
+        niche_data = niches.get(tenant_config.niche) or next(
+            (v for v in niches.values() if v.get("is_active", True)), {}
+        )
         formulas_text  = "\n".join([f"- {k}: {v}" for k, v in self.HOOK_FORMULAS.items()])
         historical_block = self._build_historical_block(top_hooks or [])
         hooks_count    = 6 if historical_block else 5

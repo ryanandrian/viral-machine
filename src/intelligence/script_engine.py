@@ -10,7 +10,7 @@ import os, json, re, time
 from datetime import datetime
 from loguru import logger
 from dotenv import load_dotenv
-from src.intelligence.config import TenantConfig, NICHES, system_config
+from src.intelligence.config import TenantConfig, get_niches, system_config
 
 load_dotenv()
 
@@ -21,40 +21,36 @@ SECTION_TIMING = {
 }
 TARGET_DURATION = sum(SECTION_TIMING.values())
 
-NICHE_VOICE_PROFILE = {
-    "universe_mysteries": {
-        "tone":        "authoritative yet awe-inspiring, like a world-class documentary narrator",
-        "style":       "dramatic pauses, building tension, sense of cosmic wonder and scale",
-        "avoid":       "casual language, humor, sarcasm, weak openers, generic phrases",
-        "hook_style":  "impossible_claim or number_shock about space/universe",
-        "emotion_arc": "curiosity → shock → wonder → awe",
-    },
-    "dark_history": {
-        "tone":        "serious and grave, like a true crime narrator uncovering hidden truth",
-        "style":       "slow reveals, uncomfortable truths, moral weight, eerie calmness",
-        "avoid":       "humor, lighthearted tone, casual slang",
-        "hook_style":  "story_open or you_dont_know about a dark historical event",
-        "emotion_arc": "intrigue → discomfort → shock → sobering realization",
-    },
-    "ocean_mysteries": {
-        "tone":        "mysterious and calm yet deeply unsettling",
-        "style":       "vast scale descriptions, eerie biological details, scientific credibility",
-        "avoid":       "sensationalist claims, unscientific assertions",
-        "hook_style":  "impossible_claim or question about ocean depths or creatures",
-        "emotion_arc": "curiosity → unease → fascination → profound wonder",
-    },
-    "fun_facts": {
-        "tone":        "enthusiastic and curious, like an excited friend sharing a discovery",
-        "style":       "rapid fire delivery, surprising connections, relatable everyday analogies",
-        "avoid":       "overly serious tone, academic jargon, slow pacing",
-        "hook_style":  "number_shock or question about surprising everyday facts",
-        "emotion_arc": "surprise → delight → disbelief → urge to share immediately",
-    },
-}
 
+def _get_profile(niche: str) -> dict:
+    """
+    Load voice profile dari niche registry (Supabase-driven, no hardcode).
+    Jika voice_profile belum diisi admin, derive dari base fields niche.
+    """
+    niches     = get_niches()
+    niche_data = niches.get(niche)
+    if not niche_data:
+        # Niche tidak dikenal — pakai niche aktif pertama sebagai fallback
+        active     = {k: v for k, v in niches.items() if v.get("is_active", True)}
+        niche_data = next(iter(active.values()), {})
+        logger.warning(f"[ScriptEngine] Niche '{niche}' tidak ada di registry — pakai fallback")
 
-def _get_profile(niche):
-    return NICHE_VOICE_PROFILE.get(niche, NICHE_VOICE_PROFILE["universe_mysteries"])
+    vp = niche_data.get("voice_profile") or {}
+
+    # Jika admin belum isi voice_profile, derive dari base fields
+    if not vp.get("tone"):
+        style          = niche_data.get("style", "engaging and informative")
+        target_emotion = niche_data.get("target_emotion", "curiosity and wonder")
+        vp = {
+            "tone":        f"engaging narrator with {style} delivery",
+            "style":       f"builds toward {target_emotion}, specific and concrete",
+            "avoid":       "generic phrases, weak openers, filler words, vague claims",
+            "hook_style":  "impossible_claim or question",
+            "emotion_arc": f"curiosity → interest → {target_emotion}",
+        }
+        logger.debug(f"[ScriptEngine] voice_profile '{niche}' derived dari base fields")
+
+    return vp
 
 
 def _build_system_prompt():
@@ -113,7 +109,10 @@ def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, ins
     niche_visual_style: dict dari tabel niches (base_style, color_palette, atmosphere).
     """
     profile    = _get_profile(niche)
-    niche_data = NICHES.get(niche, NICHES["universe_mysteries"])
+    niches     = get_niches()
+    niche_data = niches.get(niche) or next(
+        (v for v in niches.values() if v.get("is_active", True)), {}
+    )
     WPS        = 2.4
     words      = {k: max(4, round(v * WPS)) for k, v in SECTION_TIMING.items()}
 

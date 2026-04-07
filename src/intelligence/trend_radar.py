@@ -19,7 +19,7 @@ from loguru import logger
 from pytrends.request import TrendReq
 from dotenv import load_dotenv
 
-from src.intelligence.config import TenantConfig, NICHES, system_config
+from src.intelligence.config import TenantConfig, get_niches, system_config
 
 load_dotenv()
 
@@ -304,7 +304,10 @@ class TrendRadar:
              Jika focus diisi, focus menjadi keyword prioritas pertama di semua sumber.
         Fallback: peak_region='us' (Tier-1 US default).
         """
-        niche_data = NICHES.get(tenant_config.niche, NICHES["universe_mysteries"])
+        niches     = get_niches()
+        niche_data = niches.get(tenant_config.niche) or next(
+            (v for v in niches.values() if v.get("is_active", True)), {}
+        )
         base_keywords = niche_data["keywords"]
 
         # s84: focus keyword jadi prioritas #1, niche keywords pelengkap

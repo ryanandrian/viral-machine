@@ -5,7 +5,7 @@ from datetime import datetime
 from loguru import logger
 from openai import OpenAI
 from dotenv import load_dotenv
-from src.intelligence.config import TenantConfig, NICHES, VIRAL_SCORE_WEIGHTS, system_config
+from src.intelligence.config import TenantConfig, get_niches, VIRAL_SCORE_WEIGHTS, system_config
 from src.intelligence.trend_radar import REGION_DISPLAY
 from src.utils.supabase_writer import _normalize_slug, get_writer
 
@@ -36,7 +36,10 @@ class NicheSelector:
             return None
 
     def _prepare_signals_summary(self, signals: dict, tenant_config: TenantConfig) -> str:
-        niche_data  = NICHES[tenant_config.niche]
+        niches     = get_niches()
+        niche_data = niches.get(tenant_config.niche) or next(
+            (v for v in niches.values() if v.get("is_active", True)), {}
+        )
         peak_region = signals.get("peak_region", "us")
         audience    = REGION_DISPLAY.get(peak_region, REGION_DISPLAY["us"])
         lines = [
@@ -243,7 +246,10 @@ class NicheSelector:
                          peak_region: str = "us", focus: str = None,
                          focus_is_smart: bool = False,
                          insights: dict = None, openai_api_key: str = "") -> list:
-        niche_data = NICHES[tenant_config.niche]
+        niches     = get_niches()
+        niche_data = niches.get(tenant_config.niche) or next(
+            (v for v in niches.values() if v.get("is_active", True)), {}
+        )
 
         audience = REGION_DISPLAY.get(peak_region, REGION_DISPLAY["us"])
 

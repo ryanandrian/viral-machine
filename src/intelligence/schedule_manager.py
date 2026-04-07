@@ -276,9 +276,10 @@ class ScheduleManager:
             if not rotation or not isinstance(rotation, list):
                 return None
 
-            from src.intelligence.config import NICHES
-            # Validasi: hanya pakai niche yang ada di NICHES dict
-            valid_rotation = [n for n in rotation if n in NICHES]
+            from src.intelligence.config import get_niches
+            registry       = get_niches()
+            # Validasi: hanya pakai niche yang ada di registry
+            valid_rotation = [n for n in rotation if n in registry]
             if not valid_rotation:
                 return None
 
@@ -347,10 +348,12 @@ class ScheduleManager:
         else:
             active_niches = []
 
-        # Fallback ke NICHES dict jika table kosong
+        # Fallback ke registry jika table kosong
         if not active_niches:
-            from src.intelligence.config import NICHES
-            active_niches = list(NICHES.keys())
+            from src.intelligence.config import get_niches
+            active_niches = [
+                k for k, v in get_niches().items() if v.get("is_active", True)
+            ]
 
         if not active_niches:
             return None
@@ -413,8 +416,8 @@ class ScheduleManager:
             f"{count}/{len(recent)} produksi terakhir (max {max_allowed}) — cari alternatif"
         )
 
-        from src.intelligence.config import NICHES
-        active = list(NICHES.keys())
+        from src.intelligence.config import get_niches
+        active = [k for k, v in get_niches().items() if v.get("is_active", True)]
         if self._supabase:
             try:
                 res = (

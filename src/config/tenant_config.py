@@ -20,21 +20,8 @@ load_dotenv()
 
 
 # ──────────────────────────────────────────────────────────
-# Niche Registry — Curated + Expandable
-# Tambah niche baru di sini setelah dikonfigurasi penuh
-# ──────────────────────────────────────────────────────────
-
-AVAILABLE_NICHES = {
-    "universe_mysteries",
-    "fun_facts",
-    "dark_history",
-    "ocean_mysteries",
-    # Tier 2 — coming soon:
-    # "finance_money",
-    # "motivational_psychology",
-    # "tech_ai_facts",
-    # "true_crime",
-}
+# Niche Registry — fully Supabase-driven via get_niches()
+# Tidak ada hardcode di sini. Admin tambah/nonaktifkan niche via tabel niches di Supabase.
 
 # Plan limits — dikontrol di sini, bukan di database
 PLAN_LIMITS = {
@@ -328,13 +315,28 @@ class TenantConfigManager:
             )
 
             # Validasi niche
-            niche = row.get("niche", "universe_mysteries")
-            if niche not in AVAILABLE_NICHES:
-                logger.warning(
-                    f"[TenantConfig] Niche '{niche}' tidak tersedia — "
-                    f"fallback ke universe_mysteries"
-                )
-                niche = "universe_mysteries"
+            niche = row.get("niche") or ""
+            # Validasi niche dari registry (Supabase-driven, no hardcode)
+            try:
+                from src.intelligence.config import get_niches
+                registry      = get_niches()
+                active_niches = [k for k, v in registry.items() if v.get("is_active", True)]
+                if niche not in registry:
+                    fallback = active_niches[0] if active_niches else niche
+                    logger.warning(
+                        f"[TenantConfig] Niche '{niche}' tidak ada di registry — "
+                        f"fallback ke '{fallback}'"
+                    )
+                    niche = fallback
+                elif not registry[niche].get("is_active", True):
+                    fallback = active_niches[0] if active_niches else niche
+                    logger.warning(
+                        f"[TenantConfig] Niche '{niche}' nonaktif — "
+                        f"fallback ke '{fallback}'"
+                    )
+                    niche = fallback
+            except Exception as _ne:
+                logger.warning(f"[TenantConfig] Validasi niche gagal ({_ne}) — pakai niche as-is")
 
             # Load niche visual data dari tabel niches (dynamic, no hardcode)
             niche_visual_style     = {}
