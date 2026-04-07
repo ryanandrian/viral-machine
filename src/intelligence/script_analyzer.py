@@ -29,6 +29,47 @@ VIRAL_DIMENSIONS = {
     "cta_strength":         0.05,
 }
 
+# Niche-specific emotional peak criteria.
+# emotional_peak tidak bisa dinilai dengan kriteria generik — setiap niche
+# punya register emosi yang berbeda. Tanpa ini, GPT akan menilai konservatif
+# karena tidak tahu apa yang "counts" sebagai emotional peak untuk niche tersebut.
+NICHE_EMOTION_CRITERIA = {
+    "universe_mysteries": (
+        "Score 80+ if the climax delivers EXISTENTIAL AWE — viewer feels simultaneously "
+        "insignificant and connected to something infinite. Valid techniques: scale contrast "
+        "(a human lifetime vs 13.8 billion years), reversal (the universe behaves against all "
+        "intuition), infinite implication (this one fact changes what it means to be human). "
+        "Score LOW for generic 'amazing discovery' language without specific revelatory weight."
+    ),
+    "dark_history": (
+        "Score 80+ if the climax creates MORAL WEIGHT — the specific gravity of real suffering "
+        "or systemic evil made undeniable. Valid techniques: a specific name, date, or detail "
+        "that collapses abstract history into visceral reality. Viewer should feel uncomfortable "
+        "in a way that demands reflection, not just shock. Score LOW for vague 'shocking facts' "
+        "without human specificity."
+    ),
+    "ocean_mysteries": (
+        "Score 80+ if the climax creates PRIMAL FEAR AND ALIEN WONDER — the deep ocean is more "
+        "foreign than space and it is completely real. Valid techniques: pressure scale (crushing "
+        "force at depth vs human fragility), darkness as absolute (no light has ever reached "
+        "there), biological wrongness (this creature should not exist by any logic). "
+        "Score LOW for surface-level creature observations without genuine unease."
+    ),
+    "fun_facts": (
+        "Score 80+ if the climax creates the IRRESISTIBLE URGE TO SHARE — fact so counterintuitive "
+        "that the viewer's first instinct is to tell someone. The 'wait, WHAT?' moment followed "
+        "immediately by 'I have to show this to someone'. Valid techniques: everyday object "
+        "revealed as extraordinary, number so absurd it breaks intuition, implication that "
+        "changes how viewer sees something they encounter daily. Score LOW if interesting but not shareable."
+    ),
+}
+
+DEFAULT_EMOTION_CRITERIA = (
+    "Score 80+ if the climax causes a genuine reaction — goosebumps, held breath, or the "
+    "immediate need to tell someone. The emotion must be CAUSED by the content, not described. "
+    "Score LOW for climaxes that explain what to feel instead of making the viewer feel it."
+)
+
 
 def _build_prompt(script: dict, niche: str) -> str:
     sections = "\n".join([
@@ -52,21 +93,25 @@ def _build_prompt(script: dict, niche: str) -> str:
             f"[CTA]: {script.get('cta', '')}",
         ])
 
+    emotion_criteria = NICHE_EMOTION_CRITERIA.get(niche, DEFAULT_EMOTION_CRITERIA)
+
     return f"""You are a strict viral content analyst. Analyze this {niche} video script.
 
 SCRIPT:
 {sections}
 
-Score each dimension 0-100. Be honest — 75+ means this genuinely makes viewers stay.
-Below 60 means viewers will scroll away at that point.
+Score each dimension 0-100. Be honest and calibrated:
+- 80-100: genuinely makes viewers stay, share, or feel something
+- 60-79: decent but missing one key element
+- below 60: viewers scroll away at this point
 
 Dimensions:
-- hook_power (25%): stops scroll in first second, creates information gap
-- curiosity_gap (20%): maintains unanswered questions throughout
-- retention_arc (20%): every second gives reason not to stop watching
-- emotional_peak (20%): emotion built and released at climax
-- information_density (10%): real surprising facts, no filler
-- cta_strength (5%): sounds like one human talking to another — emotional, not instructional. Score HIGH for natural conversation closers (a thought, a question, a feeling). Score LOW only for robotic or sales-y phrases
+- hook_power (25%): stops scroll in first second. Score 80+ only if the opening creates an information gap so specific it cannot apply to any other video. Score LOW for generic openers.
+- curiosity_gap (20%): every section ends with an unanswered question. Score 80+ if viewer feels stopping is like leaving mid-sentence. Score LOW if any section summarizes instead of deepening.
+- retention_arc (20%): every sentence adds new information or raises stakes. Score 80+ if no sentence could be cut without the video losing something. Score LOW for filler, repetition, or vague claims.
+- emotional_peak (20%): {emotion_criteria}
+- information_density (10%): specific numbers, names, dates — not vague claims. Score 80+ if every fact is verifiable and surprising. Score LOW for "very large", "long ago", "many scientists".
+- cta_strength (5%): Score HIGH if it reads like one human sharing a thought — a question that demands an answer, an open loop, a perspective shift. Score HIGH for implicit engagement (curiosity that naturally leads to following). Score LOW for ANY explicit instruction: "follow", "subscribe", "like", "hit the bell", or any sentence starting with an imperative verb. The best CTA makes following feel like the viewer's own idea.
 
 Return ONLY valid JSON, no markdown:
 {{
@@ -79,10 +124,10 @@ Return ONLY valid JSON, no markdown:
     "cta_strength": 0-100
   }},
   "viral_score": 0-100,
-  "summary": "one sentence: main strength or weakness",
-  "weak_areas": ["specific area 1", "specific area 2"],
-  "strengths": ["strength 1", "strength 2"],
-  "retry_suggestion": "specific improvement instruction for next attempt if score < 75"
+  "summary": "one sentence: the single most important strength or weakness",
+  "weak_areas": ["exact dimension name if score < 80"],
+  "strengths": ["exact dimension name if score >= 80"],
+  "retry_suggestion": "if any dimension < 80: one concrete technique the writer must apply, specific to THIS script's actual weakness — not generic advice"
 }}"""
 
 

@@ -1,9 +1,12 @@
 """
-Script Engine v0.3.1 — Fase 6C
+Script Engine v0.3.2 — Fase 6C
 Fixes:
   - Pattern interrupt: tidak ada contoh verbatim yang bisa di-copy
   - Retry prompt: menyertakan weak areas dari analyzer sebagai feedback
   - Threshold: dibaca dari Supabase (sekarang 82 untuk ryan_andrian)
+  - CLIMAX: instruksi emosi eksplisit — cause, don't describe
+  - CTA: chemistry-first, zero explicit CTA verbs
+  - Retry feedback: skor per dimensi + teknik konkret per area lemah
 """
 
 import os, json, re, time
@@ -11,6 +14,53 @@ from datetime import datetime
 from loguru import logger
 from dotenv import load_dotenv
 from src.intelligence.config import TenantConfig, get_niches, system_config
+
+# Teknik perbaikan konkret per dimensi — dikirim ke Claude saat retry.
+# Harus actionable dan spesifik, bukan saran generik.
+DIMENSION_RETRY_GUIDANCE = {
+    "emotional_peak": (
+        "Do NOT describe the emotion — CAUSE it. Rewrite the CLIMAX using one of these: "
+        "(1) Scale contrast: reduce something infinite to a single human moment, or reduce "
+        "a human to cosmic insignificance in a way that feels real. "
+        "(2) Reversal: the truth about this topic is the precise opposite of what seemed obvious. "
+        "(3) Infinite implication: this one fact permanently changes how the viewer sees "
+        "something they encounter every day. "
+        "Test: read the climax aloud alone. If you don't feel something physical — rewrite it."
+    ),
+    "cta_strength": (
+        "Delete everything. Rewrite the CTA as a thought, not a request. "
+        "NEVER use: follow, subscribe, like, hit, smash, or any imperative verb. "
+        "Choose one: (1) A question so specific to this topic they cannot answer it alone. "
+        "(2) A statement that implies something is coming that changes what they just learned. "
+        "(3) A perspective shift that makes the viewer feel they now belong to a group that "
+        "sees the world differently. Following should feel like THEIR idea."
+    ),
+    "hook_power": (
+        "Rewrite the hook so it cannot belong to any other video. Use a specific number, "
+        "name, or date from THIS topic. The information gap must be so precise that the "
+        "viewer's only path forward is to keep watching. "
+        "Test: could this hook appear on a different channel's video? If yes — rewrite."
+    ),
+    "curiosity_gap": (
+        "Every section must end mid-thought — with something unresolved that only the next "
+        "section answers. Each answer must reveal a deeper question. Cut any sentence that "
+        "summarizes, explains, or closes a loop prematurely. "
+        "The viewer stopping should feel like leaving a sentence unfinished."
+    ),
+    "retention_arc": (
+        "Cover each sentence. Ask: does the video lose anything without it? "
+        "If no — cut it. Every 5 seconds must deliver something new: a fact, a reframe, "
+        "or a raised stake. Cut all filler words, all transitions that don't carry new information, "
+        "all sentences that repeat what was already said in different words."
+    ),
+    "information_density": (
+        "Replace every vague claim with its specific measurement. "
+        "'Very large' → the actual size. 'Long ago' → the exact year. "
+        "'Many scientists' → the specific institution or person. "
+        "A fact without specificity is an opinion. Specificity is what makes content shareable — "
+        "viewers share facts they can quote precisely, not impressions."
+    ),
+}
 
 load_dotenv()
 
@@ -125,10 +175,14 @@ def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, ins
     feedback_block = ""
     if feedback:
         feedback_block = f"""
-CRITICAL — PREVIOUS ATTEMPT FAILED QUALITY GATE.
-Fix these specific weaknesses in this attempt:
-{chr(10).join(f"  - {w}" for w in feedback)}
-Do not repeat the previous output. Write fresh, with these issues resolved.
+QUALITY GATE FAILED — The previous attempt did not reach the threshold.
+Rewrite completely from scratch. Do not rephrase — fundamentally rethink each weak dimension.
+The previous attempt's structure, phrasing, and approach are now off-limits.
+
+Dimensions that need improvement (with specific techniques to apply):
+{chr(10).join(f"  • {w}" for w in feedback)}
+
+Apply each technique above precisely. Fresh thinking only — not a revision of what came before.
 """
 
     vs = niche_visual_style or {}
@@ -192,20 +246,36 @@ Write all 8 sections. Each has ONE job. Be specific to this topic — no generic
    FORBIDDEN: Summarizing. Generic "but it gets even more interesting" without specifics.
 
 7. CLIMAX ({SECTION_TIMING['climax']}s ~{words['climax']} words)
-   JOB: The biggest reveal. Deliver fully on everything built. The moment they share this video.
-   MUST: The most unexpected, most impactful truth about this topic. Let it land with weight.
-   TECHNIQUE: Write the climax first, then ensure everything before builds toward it.
+   JOB: The moment they feel something they cannot name but must share.
+   MUST: The most unexpected, most impactful truth about this topic. Let it land in silence.
+   TECHNIQUE: Write the climax first, then build everything before toward it.
+   EMOTIONAL TECHNIQUE — do NOT describe the emotion. CAUSE it through one of these:
+     • Scale contrast: reduce something infinite to a single human moment — or expand
+       a human to cosmic/historical scale until the viewer feels the weight physically.
+     • Reversal: the truth about this topic is the precise opposite of what seemed obvious.
+       The setup leads one direction; the climax breaks it completely.
+     • Infinite implication: one fact that permanently changes how the viewer sees
+       something they encounter every day — their life, their place in the world, time itself.
+   QUALITY BAR: Read the climax aloud alone. If you don't feel something — rewrite it.
+   The viewer's next instinct should be to sit in silence, screenshot it, or tell someone immediately.
 
 8. CTA ({SECTION_TIMING['cta']}s ~{words['cta']} words)
-   JOB: Make them follow without asking directly. Emotional + curiosity hook to next video.
-   MUST: End with ONE of these — a question they must answer, a teaser for what comes next,
-         or a statement so intriguing they NEED to follow to find out more.
-   EXAMPLE PATTERNS (adapt to topic, never copy verbatim):
-     - 'Follow — tomorrow we reveal what [specific next mystery] means for you.'
-     - 'The answer changes everything. Follow to find out what scientists discovered next.'
-     - 'That question has one answer. Follow this channel — it drops tomorrow.'
-   FORBIDDEN: 'Like and subscribe', 'Hit the bell', generic phrases unrelated to topic.
-   QUALITY BAR: Must contain implicit or explicit reason to follow. Topic-specific always.
+   JOB: Create a chemical reaction — leave something unresolved that only this channel completes.
+   PHILOSOPHY: Never ask. Never instruct. Chemistry is built through resonance, not solicitation.
+   The viewer must feel that following is THEIR decision — the only logical response to what
+   they just experienced. The channel sees something about the world that most people miss.
+   MUST: Choose ONE — a question so specific to this topic they cannot answer it alone,
+         a revelation that implies something larger is coming, or a reframe that makes
+         the viewer feel they now see the world differently than they did 90 seconds ago.
+   EXAMPLE PATTERNS (absorb the principle — never copy the words, adapt deeply to topic):
+     - Open question: 'What does it mean that you now know this — and most people never will?'
+     - Implication drop: 'The next discovery in this field makes this one look like a footnote.'
+     - Identity shift: 'You just understood something that took scientists decades to accept.'
+   FORBIDDEN: 'Follow', 'Subscribe', 'Like', 'Hit the bell', 'Smash the like button',
+              any sentence beginning with an imperative verb directed at the viewer,
+              any phrase that sounds like a creator asking for something from the audience.
+   QUALITY BAR: Read it aloud as if speaking to one person you respect.
+   If it sounds like a pitch — delete it and rewrite. If it sounds like a genuine thought — keep it.
 
 WRITING RULES — every single one non-negotiable:
 - Second person "you" throughout — intimacy is everything
@@ -449,12 +519,23 @@ class ScriptEngine:
                 score    = analysis.get("viral_score", 0)
                 script["viral_analysis"] = analysis
 
-                # Siapkan feedback untuk retry berikutnya
-                weak_areas       = analysis.get("weak_areas", [])
-                retry_suggestion = analysis.get("retry_suggestion", "")
-                feedback = weak_areas.copy()
-                if retry_suggestion:
-                    feedback.append(retry_suggestion)
+                # Siapkan feedback untuk retry berikutnya.
+                # Sertakan skor aktual + teknik konkret per dimensi lemah
+                # agar Claude tahu ANGKA yang harus dicapai dan CARA spesifiknya.
+                weak_areas   = analysis.get("weak_areas", [])
+                dim_scores   = analysis.get("dimension_scores", {})
+                retry_note   = analysis.get("retry_suggestion", "")
+                feedback = []
+                for area in weak_areas:
+                    area_score = dim_scores.get(area, "?")
+                    guidance   = DIMENSION_RETRY_GUIDANCE.get(
+                        area, "improve this dimension — be more specific and impactful"
+                    )
+                    feedback.append(
+                        f"{area} scored {area_score}/100 (need {min_score}+): {guidance}"
+                    )
+                if retry_note:
+                    feedback.append(f"Analyzer note: {retry_note}")
 
                 logger.info(
                     f"[ScriptEngine] Score: {score}/100 "
