@@ -241,14 +241,13 @@ def select_and_download(
     # 3. Detect mood dari konten script
     mood, scores = _detect_mood_from_script(script, mood_keywords, niche_mood_priority)
 
-    # Fallback moods: urutan dari skor script tertinggi, tambah mood_priority sebagai safety net
-    fallback_moods = sorted(
-        [m for m, s in scores.items() if s > 0 and m != mood],
-        key=lambda m: scores[m],
-        reverse=True,
-    )
-    for m in niche_mood_priority:
-        if m not in fallback_moods and m != mood:
+    # Fallback moods: mood_priority niche dulu (lebih kontekstual),
+    # baru keyword matches dari script sebagai safety net tambahan.
+    # Urutan ini penting — keyword matches bisa lintas niche (misal 'energetic'
+    # dari fun_facts) sehingga harus kalah prioritas dari mood niche sendiri.
+    fallback_moods = [m for m in niche_mood_priority if m != mood]
+    for m, s in sorted(scores.items(), key=lambda x: x[1], reverse=True):
+        if s > 0 and m != mood and m not in fallback_moods:
             fallback_moods.append(m)
 
     # 4. Query Supabase

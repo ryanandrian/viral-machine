@@ -77,7 +77,7 @@ class AIImageProvider(VisualProvider):
         self.niche_visual_fallbacks = config.get("niche_visual_fallbacks") or []
         # LLM config — untuk rejection rewrite (pakai LLM tenant, bukan hardcode)
         # Key harus dari tenant DB — tidak ada env fallback (DESIGN.md)
-        self.llm_provider = config.get("llm_provider", "openai")
+        self.llm_provider = config.get("llm_provider", "claude")
         self.llm_api_key  = config.get("llm_api_key") or ""
 
         if self.model_config["platform"] == "replicate":
@@ -393,21 +393,21 @@ class AIImageProvider(VisualProvider):
         except ImportError:
             raise VisualError("openai tidak terinstall. Jalankan: pip install openai")
 
-        client = AsyncOpenAI(api_key=self.api_key)
-        size   = self.model_config.get("size", "1024x1792")
+        size = self.model_config.get("size", "1024x1792")
 
-        response = await client.images.generate(
-            model=self.model_config["model_id"],
-            prompt=prompt,
-            size=size,
-            quality="hd",       # Upgrade dari 'standard' ke 'hd' untuk kualitas terbaik
-            style="vivid",      # 'vivid' lebih dramatic vs 'natural' — sesuai konten viral
-            n=1,
-        )
-        img_url = response.data[0].url
-        async with httpx.AsyncClient(timeout=60) as client:
-            r = await client.get(img_url)
-            output_path.write_bytes(r.content)
+        async with AsyncOpenAI(api_key=self.api_key) as client:
+            response = await client.images.generate(
+                model=self.model_config["model_id"],
+                prompt=prompt,
+                size=size,
+                quality="hd",       # Upgrade dari 'standard' ke 'hd' untuk kualitas terbaik
+                style="vivid",      # 'vivid' lebih dramatic vs 'natural' — sesuai konten viral
+                n=1,
+            )
+            img_url = response.data[0].url
+            async with httpx.AsyncClient(timeout=60) as http:
+                r = await http.get(img_url)
+                output_path.write_bytes(r.content)
 
     # ──────────────────────────────────────────────
     # Internal: image → video dengan Ken Burns effect
