@@ -203,21 +203,67 @@ class NicheSelector:
             )
         return topic
 
+    def _derive_smart_focus(self, insights: dict) -> str | None:
+        """
+        S2-B: Derive smart focus dari content_type_perf + top_topics.
+        Hanya dipanggil jika grade in (optimizing, peak) dan user tidak set focus.
+        Output: focus string sebagai soft suggestion ke AI.
+        """
+        ct_perf    = insights.get("content_type_perf") or []
+        top_topics = insights.get("top_topics") or []
+
+        parts = []
+
+        # Ambil content type terbaik (retensi tertinggi)
+        if ct_perf:
+            best_ct   = ct_perf[0]
+            ct_name   = best_ct.get("content_type", "")
+            retention = best_ct.get("avg_view_pct", 0)
+            if ct_name:
+                parts.append(
+                    f"'{ct_name}' content format "
+                    f"(proven {retention:.0f}% avg retention on this channel)"
+                )
+
+        # Ambil top topic sebagai arah tematik (bukan untuk di-copy, tapi arah)
+        if top_topics:
+            best_topic = top_topics[0].get("topic", "")
+            if best_topic:
+                parts.append(
+                    f"thematic direction inspired by best-performing topic "
+                    f"'{best_topic[:60]}' — explore a FRESH angle not yet covered"
+                )
+
+        if not parts:
+            return None
+
+        return "Prioritize " + " combined with ".join(parts) + "."
+
     def _analyze_with_ai(self, signals_summary: str, tenant_config: TenantConfig,
                          peak_region: str = "us", focus: str = None,
+                         focus_is_smart: bool = False,
                          insights: dict = None, openai_api_key: str = "") -> list:
         niche_data = NICHES[tenant_config.niche]
 
         audience = REGION_DISPLAY.get(peak_region, REGION_DISPLAY["us"])
 
         # s84: focus constraint untuk AI prompt
+        # S2-B: jika focus dari mesin (smart) → soft suggestion; jika dari user → hard constraint
         focus_block = ""
         if focus and focus.strip():
-            focus_block = (
-                f"\nFOCUS CONSTRAINT: Topics MUST be specifically about \"{focus.strip()}\". "
-                f"Only select topics that directly relate to this focus within the "
-                f"{niche_data['name']} niche. Generic topics outside this focus are NOT acceptable.\n"
-            )
+            if focus_is_smart:
+                focus_block = (
+                    f"\nPREFERRED DIRECTION (machine-derived from channel performance data): "
+                    f"{focus.strip()} "
+                    f"This is a suggestion — if current trending signals point to a clearly "
+                    f"stronger topic, you may deviate. Always prioritize viral potential.\n"
+                )
+            else:
+                focus_block = (
+                    f"\nFOCUS CONSTRAINT: Topics MUST be specifically about \"{focus.strip()}\". "
+                    f"Only select topics that directly relate to this focus within the "
+                    f"{niche_data['name']} niche. Generic topics outside this focus are NOT acceptable.\n"
+                )
 
         # s84d: channel performance insights block
         insights_block = ""
@@ -375,7 +421,18 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
             logger.info(f"[NicheSelector] Focus constraint: '{focus}'")
 
         # s84d: load channel insights (fire-and-forget jika gagal)
-        insights = self._load_insights(tenant_config.tenant_id)
+        insights    = self._load_insights(tenant_config.tenant_id)
+        focus_is_smart = False  # True jika focus di-derive oleh mesin (bukan dari user)
+
+        # S2-B: smart focus derivation jika user tidak set focus
+        if not focus and insights:
+            grade = insights.get("performance_grade", "insufficient_data")
+            if grade in ("optimizing", "peak"):
+                smart_focus = self._derive_smart_focus(insights)
+                if smart_focus:
+                    focus          = smart_focus
+                    focus_is_smart = True
+                    logger.info(f"[NicheSelector] S2-B smart focus derived: '{focus[:80]}'")
 
         summary     = self._prepare_signals_summary(signals, tenant_config)
         peak_region = signals.get("peak_region", "us")
@@ -392,6 +449,7 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
             summary, tenant_config,
             peak_region=peak_region,
             focus=focus,
+            focus_is_smart=focus_is_smart,
             insights=insights,
             openai_api_key=_openai_key,
         )

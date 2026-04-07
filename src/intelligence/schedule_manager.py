@@ -225,10 +225,36 @@ class ScheduleManager:
 
     # ── Layer 2: default_niche_rotation ────────────────────────────────────
 
+    def _load_niche_weights(self, tenant_id: str) -> dict:
+        """
+        Load niche_weights dari channel_insights terbaru.
+        Return {} jika tidak ada data atau grade=insufficient_data.
+        """
+        try:
+            from src.analytics.performance_analyzer import PerformanceAnalyzer
+            insights = PerformanceAnalyzer().load_latest_insights(tenant_id)
+            if not insights:
+                return {}
+            weights = insights.get("niche_weights") or {}
+            grade   = insights.get("performance_grade", "insufficient_data")
+            if grade == "insufficient_data" or not isinstance(weights, dict):
+                return {}
+            return weights
+        except Exception as e:
+            logger.warning(f"[ScheduleManager] Load niche_weights gagal (non-fatal): {e}")
+            return {}
+
     def _resolve_from_rotation(self, tenant_id: str) -> Optional[Tuple[str, Optional[str]]]:
         """
-        Ambil niche berikutnya dari default_niche_rotation (round-robin).
-        Increment niche_rotation_index di Supabase (fire-and-forget).
+        S2-A: Pilih niche dari default_niche_rotation.
+
+        Jika channel sudah punya insights (grade >= learning):
+          → pilih niche dari rotation list dengan niche_weight tertinggi (smart selection)
+        Jika belum ada data:
+          → round-robin biasa (fallback)
+
+        Increment niche_rotation_index tetap dilakukan (fire-and-forget) untuk
+        menjaga fairness jika suatu saat insights tidak tersedia.
         """
         if not self._supabase:
             return None
@@ -250,27 +276,38 @@ class ScheduleManager:
             if not rotation or not isinstance(rotation, list):
                 return None
 
-            idx      = int(row.get("niche_rotation_index") or 0)
-            niche_id = rotation[idx % len(rotation)]
-
-            # Validasi niche_id ada di NICHES dict
             from src.intelligence.config import NICHES
-            if niche_id not in NICHES:
-                logger.warning(
-                    f"[ScheduleManager] Niche '{niche_id}' dari rotasi tidak ada di NICHES — skip"
-                )
+            # Validasi: hanya pakai niche yang ada di NICHES dict
+            valid_rotation = [n for n in rotation if n in NICHES]
+            if not valid_rotation:
                 return None
 
-            # Increment index (fire-and-forget)
+            idx = int(row.get("niche_rotation_index") or 0)
+
+            # S2-A: gunakan niche_weights jika tersedia
+            niche_weights = self._load_niche_weights(tenant_id)
+            if niche_weights:
+                # Pilih niche dari valid_rotation dengan weight tertinggi
+                best_niche = max(valid_rotation, key=lambda n: niche_weights.get(n, 0.0))
+                logger.info(
+                    f"[ScheduleManager] S2-A smart selection: '{best_niche}' "
+                    f"(weight={niche_weights.get(best_niche, 0):.3f}) "
+                    f"dari rotation {valid_rotation}"
+                )
+                niche_id = best_niche
+            else:
+                # Fallback: round-robin
+                niche_id = valid_rotation[idx % len(valid_rotation)]
+                logger.debug(
+                    f"[ScheduleManager] Rotation round-robin: idx={idx} → '{niche_id}'"
+                )
+
+            # Increment index (fire-and-forget) — tetap jalan meski pakai smart selection
             next_idx = (idx + 1) % len(rotation)
             try:
                 self._supabase.table("tenant_configs").update(
                     {"niche_rotation_index": next_idx}
                 ).eq("tenant_id", tenant_id).execute()
-                logger.debug(
-                    f"[ScheduleManager] Rotation index: {idx} → {next_idx} "
-                    f"(dari {len(rotation)} niche)"
-                )
             except Exception as _e:
                 logger.warning(f"[ScheduleManager] Gagal update rotation index: {_e}")
 
