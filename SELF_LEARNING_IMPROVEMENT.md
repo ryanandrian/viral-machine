@@ -11,20 +11,19 @@
 - [x] Cron harian: `fetch_analytics.sh` → `ChannelAnalytics.fetch_and_store()` (06:00 UTC)
 - [x] Cron mingguan: `compute_insights.sh` → `PerformanceAnalyzer.compute_and_store()` (Senin 07:00 UTC)
 
-### S1-B: ScriptEngine Baca Insights
-- [ ] Load `channel_insights` terbaru di awal `ScriptEngine.generate()`
-- [ ] Inject `top_hooks` (CTR-ranked) ke system prompt ScriptEngine
-- [ ] Inject `content_type_perf` (retention-ranked) ke system prompt
-- [ ] Inject `avoid_patterns` ke system prompt (patterns dengan retention rendah)
-- [ ] Guard: jika grade `insufficient_data` → generate normal tanpa injection (no degradation)
-- [ ] Test: pastikan script yang dihasilkan mencerminkan pola top_hooks historis
+### S1-B: ScriptEngine Baca Insights ✅
+- [x] Load `channel_insights` terbaru di awal `ScriptEngine.generate()`
+- [x] Inject `top_hooks` (CTR-ranked) ke prompt ScriptEngine (Claude & GPT)
+- [x] Inject `content_type_perf` (retention-ranked) ke prompt
+- [x] Inject `avoid_patterns` ke prompt (patterns dengan retention rendah)
+- [x] Guard: jika grade `insufficient_data` → generate normal tanpa injection (no degradation)
+- [ ] Test live: pastikan script yang dihasilkan mencerminkan pola top_hooks historis
 
-### S1-C: HookOptimizer Baca `top_hooks`
-- [ ] Load `channel_insights` di awal `HookOptimizer.optimize()`
-- [ ] Tambah "formula ke-6": variasi dari hook historis CTR tertinggi channel
-- [ ] Bobot hook historis lebih tinggi saat scoring (jika ada data CTR nyata)
-- [ ] Guard: jika tidak ada insights → tetap pakai 5 formula existing (no degradation)
-- [ ] Test: pastikan hook historis masuk sebagai kandidat dan bersaing fair
+### S1-C: HookOptimizer Baca `top_hooks` ✅
+- [x] Load `channel_insights` di awal `HookOptimizer.optimize()`
+- [x] Tambah "formula ke-6": variasi dari hook historis CTR tertinggi channel
+- [x] Guard: jika tidak ada insights → tetap pakai 5 formula existing (no degradation)
+- [ ] Test live: pastikan hook historis masuk sebagai kandidat dan bersaing fair
 
 ---
 
@@ -77,4 +76,6 @@
 ---
 
 *Last updated: 2026-04-07*
-*Status Stage 1: 🔄 In Progress (S1-A ✅, S1-B & S1-C pending)*
+*Status Stage 1: 🔄 In Progress (S1-A ✅ S1-B ✅ S1-C ✅ — test live pending)*
+*Status Stage 2: ⏳ Belum dimulai*
+*Status Stage 3: ⏳ Belum dimulai*
