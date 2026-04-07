@@ -29,22 +29,23 @@
 
 ## Stage 2 — Smart Default (Selaras DESIGN.md 8.D)
 
-### S2-A: Smart Niche Selection (user tidak set niche)
-- [ ] Jika `niche_id = NULL` di schedule → baca `niche_weights` dari `channel_insights`
-- [ ] Pilih niche dengan weight tertinggi yang belum dipakai berlebihan (diversity guard tetap aktif)
-- [ ] Fallback ke rotasi round-robin jika grade `insufficient_data`
-- [ ] Test: channel dengan data insights memilih niche berdasarkan performa, bukan urutan
+### S2-A: Smart Niche Selection (user tidak set niche) ✅
+- [x] Jika insights tersedia (grade >= learning) → pilih niche dengan `niche_weight` tertinggi dari rotation list user
+- [x] Diversity guard tetap aktif (dari Stage 1) — niche dominan tetap diblokir
+- [x] Fallback ke round-robin jika grade `insufficient_data`
+- [ ] Test live: verifikasi niche yang dipilih sesuai weight, bukan urutan rotation
 
-### S2-B: Smart Focus Selection (user tidak set focus)
-- [ ] Jika `niche_focus = NULL` → gabungkan `top_topics` dari insights + sinyal TrendRadar
-- [ ] Hindari fokus yang sudah diproduksi dalam lookback window (dedup tetap jalan)
-- [ ] Output: focus string yang diinjek ke NicheSelector sebagai soft constraint
-- [ ] Test: focus yang dipilih mesin relevan dengan tren + historis channel
+### S2-B: Smart Focus Selection (user tidak set focus) ✅
+- [x] Jika focus kosong dan grade >= `optimizing` → derive smart focus dari `content_type_perf` + `top_topics`
+- [x] Smart focus pakai bahasa "PREFERRED DIRECTION" (soft) — AI boleh deviate jika trending lebih kuat
+- [x] User focus (eksplisit) tetap pakai bahasa "FOCUS CONSTRAINT" (hard)
+- [x] Dedup tetap jalan untuk mencegah topik serupa diproduksi ulang
+- [ ] Test live: verifikasi smart focus relevan dengan historis + trending
 
-### S2-C: User Override Tetap Dihormati
-- [ ] Verifikasi: jika user set niche eksplisit → S1-B & S1-C tetap berjalan di balik layar
-- [ ] Verifikasi: jika user set focus eksplisit → insights tetap diinjek ke ScriptEngine
-- [ ] Verifikasi: tidak ada degradasi kualitas di mode custom vs mode auto
+### S2-C: User Override Tetap Dihormati ✅
+- [x] User set niche → S1-B & S1-C (script + hook learning) tetap jalan di balik layar
+- [x] User set focus → insights tetap diinjek ke ScriptEngine, focus user dihormati sebagai hard constraint
+- [x] Grade `insufficient_data` → semua berjalan normal, zero degradation
 - [ ] Test end-to-end: 3 skenario (full-auto, niche-only, niche+focus)
 
 ---
@@ -76,6 +77,6 @@
 ---
 
 *Last updated: 2026-04-07*
-*Status Stage 1: 🔄 In Progress (S1-A ✅ S1-B ✅ S1-C ✅ — test live pending)*
-*Status Stage 2: ⏳ Belum dimulai*
+*Status Stage 1: ✅ Done (test live pending)*
+*Status Stage 2: ✅ Done (test live pending)*
 *Status Stage 3: ⏳ Belum dimulai*
