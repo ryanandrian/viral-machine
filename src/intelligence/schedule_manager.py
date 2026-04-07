@@ -53,6 +53,10 @@ class ScheduleManager:
 
     # ── Public API ─────────────────────────────────────────────────────────
 
+    # Cek N produksi terakhir; niche tidak boleh > fraksi ini
+    DIVERSITY_LOOKBACK    = 6
+    DIVERSITY_MAX_FRACTION = 0.4  # max 2 dari 6 run terakhir (40%)
+
     def resolve_slot(
         self,
         tenant_id: str,
@@ -76,6 +80,7 @@ class ScheduleManager:
                 f"[ScheduleManager] Layer 1 — schedule: "
                 f"niche={niche_id} | focus={niche_focus or '-'}"
             )
+            niche_id = self._apply_diversity_guard(tenant_id, niche_id)
             return niche_id, niche_focus
 
         # Layer 2: default_niche_rotation
@@ -86,6 +91,7 @@ class ScheduleManager:
                 f"[ScheduleManager] Layer 2 — rotation: "
                 f"niche={niche_id}"
             )
+            niche_id = self._apply_diversity_guard(tenant_id, niche_id)
             return niche_id, niche_focus
 
         # Layer 3: random dari niches table
@@ -96,6 +102,7 @@ class ScheduleManager:
                 f"[ScheduleManager] Layer 3 — random: "
                 f"niche={niche_id}"
             )
+            niche_id = self._apply_diversity_guard(tenant_id, niche_id)
             return niche_id, niche_focus
 
         # Absolute fallback — tidak pernah return None
@@ -321,8 +328,13 @@ class ScheduleManager:
 
     def _get_last_niche(self, tenant_id: str) -> Optional[str]:
         """Ambil niche dari produksi terakhir untuk hindari consecutive duplicate."""
+        recent = self._get_recent_niches(tenant_id, limit=1)
+        return recent[0] if recent else None
+
+    def _get_recent_niches(self, tenant_id: str, limit: int = 6) -> list:
+        """Ambil daftar niche dari N produksi terakhir (urutan terbaru duluan)."""
         if not self._supabase:
-            return None
+            return []
         try:
             result = (
                 self._supabase
@@ -330,10 +342,73 @@ class ScheduleManager:
                 .select("niche")
                 .eq("tenant_id", tenant_id)
                 .order("published_at", desc=True)
-                .limit(1)
+                .limit(limit)
                 .execute()
             )
             rows = result.data or []
-            return rows[0]["niche"] if rows else None
+            return [r["niche"] for r in rows if r.get("niche")]
         except Exception:
-            return None
+            return []
+
+    def _apply_diversity_guard(self, tenant_id: str, proposed_niche: str) -> str:
+        """
+        Pastikan satu niche tidak mendominasi produksi terakhir.
+
+        Jika proposed_niche muncul > DIVERSITY_MAX_FRACTION dari
+        DIVERSITY_LOOKBACK produksi terakhir, ganti dengan niche aktif
+        yang paling lama tidak diproduksi (LRU).
+
+        Tidak mengubah niche_focus — hanya niche_id.
+        """
+        recent = self._get_recent_niches(tenant_id, limit=self.DIVERSITY_LOOKBACK)
+        if not recent:
+            return proposed_niche
+
+        count       = recent.count(proposed_niche)
+        max_allowed = max(1, int(len(recent) * self.DIVERSITY_MAX_FRACTION))
+
+        if count < max_allowed:
+            return proposed_niche
+
+        # Terlalu dominan — cari kandidat alternatif
+        logger.warning(
+            f"[ScheduleManager] Diversity guard: '{proposed_niche}' muncul "
+            f"{count}/{len(recent)} produksi terakhir (max {max_allowed}) — cari alternatif"
+        )
+
+        from src.intelligence.config import NICHES
+        active = list(NICHES.keys())
+        if self._supabase:
+            try:
+                res = (
+                    self._supabase
+                    .table("niches")
+                    .select("niche_id")
+                    .eq("is_active", True)
+                    .execute()
+                )
+                db_niches = [r["niche_id"] for r in (res.data or [])]
+                if db_niches:
+                    active = db_niches
+            except Exception:
+                pass
+
+        alternatives = [n for n in active if n != proposed_niche]
+        if not alternatives:
+            return proposed_niche  # tidak ada pilihan lain
+
+        # Pilih niche yang paling lama tidak dipakai (LRU)
+        # recent[0] = terbaru, recent[-1] = terlama
+        # Beri bobot: niche yang tidak muncul sama sekali = prioritas tertinggi
+        def lru_score(niche: str) -> int:
+            """Makin kecil = makin prioritas (index terakhir kemunculan, -1 jika tidak ada)."""
+            for i, n in enumerate(recent):
+                if n == niche:
+                    return i  # muncul di posisi i (0=terbaru, buruk)
+            return len(recent)  # tidak muncul sama sekali → paling prioritas
+
+        lru_niche = max(alternatives, key=lru_score)
+        logger.info(
+            f"[ScheduleManager] Diversity guard: '{proposed_niche}' → '{lru_niche}'"
+        )
+        return lru_niche
