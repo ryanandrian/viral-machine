@@ -5,6 +5,10 @@ Fase 6C s6c3 upgrade:
   - Caption style dari tenant_configs.caption_style — multi-tenant configurable
   - Fallback SRT estimasi jika word timestamps tidak tersedia
   - Fix: fallback full_script cover 8 section (bukan 5 section lama)
+s88:
+  - Font config-driven: font_name, outline_color, border_color, position_y_pct
+  - Caption & hook style property lengkap untuk branding tenant
+  - fonts table di Supabase untuk Admin Panel font management
 """
 
 import json
@@ -17,15 +21,23 @@ from src.intelligence.config import TenantConfig
 
 load_dotenv()
 
-# Default caption style — override via tenant_configs.caption_style
+# Default caption style — override via tenant_configs.caption_style (partial override OK)
+# position_y_pct: % dari atas layar (83% ≈ margin_v 326px untuk 1920px height)
+# alignment: ASS alignment — 2=bottom-center, 5=mid-center, 8=top-center
 DEFAULT_CAPTION_STYLE = {
-    "active_word_color":   "#FFD700",  # Kuning — kata yang sedang diucapkan
-    "inactive_word_color": "#FFFFFF",  # Putih — kata lain
-    "font_size":           14,
-    "max_words_per_line":  4,
-    "max_lines":           2,
-    "margin_v":            150,
-    "bold_keywords":       True,
+    "font_name":            "Anton",
+    "font_size":            68,
+    "bold":                 True,
+    "italic":               False,
+    "active_word_color":    "#FFD700",   # Kuning — kata yang sedang diucapkan
+    "inactive_word_color":  "#FFFFFF",   # Putih — kata lain
+    "outline_color":        "#000000",   # Warna border teks
+    "outline":              4,           # Ketebalan border
+    "shadow":               2,           # Ukuran bayangan
+    "position_y_pct":       83,          # % dari atas layar
+    "alignment":            2,           # bottom-center
+    "max_words_per_line":   3,
+    "max_lines":            2,
 }
 
 
@@ -52,20 +64,43 @@ class VideoRenderer:
     VIDEO_BITRATE = "4000k"
     AUDIO_BITRATE = "192k"
 
-    # SRT fallback style — dipakai jika tidak ada word timestamps
-    SRT_CAPTION_STYLE = (
-        "FontName=Arial,"
-        "FontSize=14,"
-        "Bold=1,"
-        "PrimaryColour=&H00FFFFFF,"
-        "OutlineColour=&H00000000,"
-        "BackColour=&H80000000,"
-        "Outline=2,"
-        "Shadow=1,"
-        "MarginV=150,"
-        "Alignment=2,"
-        "WrapStyle=1"
-    )
+    FONTS_DIR  = "/usr/local/share/fonts"
+    # Map font_name → file name. Admin Panel tambah entry sini saat upload font baru.
+    FONT_FILES = {
+        "Anton": "Anton-Regular.ttf",
+    }
+
+    def _resolve_font_path(self, font_name: str) -> str:
+        """Resolve font_name ke absolute path. Fallback ke Anton jika tidak ditemukan."""
+        file_name = self.FONT_FILES.get(font_name, f"{font_name}-Regular.ttf")
+        path = os.path.join(self.FONTS_DIR, file_name)
+        if os.path.exists(path):
+            return path
+        fallback = os.path.join(self.FONTS_DIR, "Anton-Regular.ttf")
+        logger.warning(f"[Font] '{font_name}' tidak ditemukan di {path}, fallback ke Anton")
+        return fallback
+
+    def _build_srt_style(self, caption_style: dict) -> str:
+        """Build force_style string untuk SRT fallback dari caption_style."""
+        font_name   = caption_style.get("font_name", "Anton")
+        font_size   = caption_style.get("font_size", 68)
+        bold        = 1 if caption_style.get("bold", True) else 0
+        pos_y_pct   = caption_style.get("position_y_pct", 83)
+        margin_v    = int(self.OUTPUT_HEIGHT * (1 - pos_y_pct / 100))
+        outline_c   = _hex_to_ass_color(caption_style.get("outline_color", "#000000"))
+        return (
+            f"FontName={font_name},"
+            f"FontSize={font_size},"
+            f"Bold={bold},"
+            "PrimaryColour=&H00FFFFFF,"
+            f"OutlineColour={outline_c},"
+            "BackColour=&H80000000,"
+            "Outline=2,"
+            "Shadow=1,"
+            f"MarginV={margin_v},"
+            "Alignment=2,"
+            "WrapStyle=1"
+        )
 
     def _get_audio_duration(self, audio_path: str) -> float:
         try:
@@ -107,13 +142,17 @@ class VideoRenderer:
     def _load_hook_title_style(self, tenant_config) -> dict:
         """Load hook title style dari Supabase. Fallback ke default."""
         DEFAULT = {
-            "enabled": True,
-            "font_size": 58,
-            "font_color": "#FFD700",
-            "outline": 4,
-            "outline_alpha": "CC",
-            "shadow": 3,
-            "position_y_pct": 15,
+            "enabled":          True,
+            "font_name":        "Anton",
+            "font_size":        58,
+            "bold":             True,
+            "italic":           False,
+            "font_color":       "#FFD700",
+            "border_color":     "#000000",
+            "outline":          4,
+            "shadow":           3,
+            "position_y_pct":   15,
+            "alignment":        "center",
             "max_chars_per_line": 25,
         }
         try:
@@ -136,13 +175,14 @@ class VideoRenderer:
             return clip_path
         try:
             import textwrap, os
-            font_path  = "/usr/local/share/fonts/Anton-Regular.ttf"
-            font_size  = style.get("font_size", 58)
-            font_color = style.get("font_color", "#FFD700").lstrip("#")
-            outline    = style.get("outline", 4)
-            shadow     = style.get("shadow", 3)
-            y_pct      = style.get("position_y_pct", 15) / 100.0
-            max_chars  = style.get("max_chars_per_line", 25)
+            font_path    = self._resolve_font_path(style.get("font_name", "Anton"))
+            font_size    = style.get("font_size", 58)
+            font_color   = style.get("font_color", "#FFD700").lstrip("#")
+            border_color = style.get("border_color", "#000000").lstrip("#")
+            outline      = style.get("outline", 4)
+            shadow       = style.get("shadow", 3)
+            y_pct        = style.get("position_y_pct", 15) / 100.0
+            max_chars    = style.get("max_chars_per_line", 25)
 
             # Bersihkan karakter problematik FFmpeg drawtext
             clean = hook_text
@@ -171,7 +211,7 @@ class VideoRenderer:
                     ":x=(w-text_w)/2"
                     f":y={y_pos}"
                     f":borderw={outline}"
-                    ":bordercolor=000000@0.80"
+                    f":bordercolor={border_color}@0.80"
                     f":shadowx={shadow}"
                     f":shadowy={shadow}"
                     ":shadowcolor=000000@0.80"
@@ -279,9 +319,17 @@ class VideoRenderer:
 
         fname    = f"subtitles_{run_id}.ass" if run_id else "subtitles.ass"
         ass_path = os.path.join(output_dir, fname)
-        max_per_line = style.get("max_words_per_line", 3)
-        font_size    = style.get("font_size", 68)
-        margin_v     = style.get("margin_v", 320)
+        max_per_line   = style.get("max_words_per_line", 3)
+        font_name      = style.get("font_name", "Anton")
+        font_size      = style.get("font_size", 68)
+        bold           = 1 if style.get("bold", True) else 0
+        italic         = 1 if style.get("italic", False) else 0
+        outline        = style.get("outline", 4)
+        shadow         = style.get("shadow", 2)
+        alignment      = style.get("alignment", 2)
+        outline_color  = _hex_to_ass_color(style.get("outline_color", "#000000"))
+        pos_y_pct      = style.get("position_y_pct", 83)
+        margin_v       = int(self.OUTPUT_HEIGHT * (1 - pos_y_pct / 100))
         active_color   = _hex_to_ass_color(style.get("active_word_color",   "#FFD700"))
         inactive_color = _hex_to_ass_color(style.get("inactive_word_color", "#FFFFFF"))
         active_size    = int(font_size * 1.12)
@@ -332,13 +380,14 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Anton,{font_size},&H00FFFFFF,&H000000FF,&H33000000,&H80000000,1,0,0,0,100,100,0,0,1,4,2,2,10,10,{margin_v},1
+Style: Default,{font_name},{font_size},&H00FFFFFF,&H000000FF,{outline_color},&H80000000,{bold},{italic},0,0,100,100,0,0,1,{outline},{shadow},{alignment},10,10,{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
 
         events = []
+        b_tag = "\\b1" if bold else ""
 
         # Step 2: Generate ASS events per kata dalam setiap baris
         for group in groups:
@@ -351,8 +400,6 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 if active_idx < group_size - 1:
                     word_end = group[active_idx + 1]["start"]
                 else:
-                    # Kata terakhir dalam group: end = start kata pertama group berikutnya
-                    # Atau end = end kata ini + sedikit padding
                     word_end = active_word_data["end"] + 0.05
 
                 # Build satu baris: semua kata dalam group
@@ -362,11 +409,11 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                     word_text = w["word"]
                     if j == active_idx:
                         parts.append(
-                            f"{{\\c{active_color}\\fs{active_size}\\b1}}{word_text}"
-                            f"{{\\c{inactive_color}\\fs{font_size}\\b1}}"
+                            f"{{\\c{active_color}\\fs{active_size}{b_tag}}}{word_text}"
+                            f"{{\\c{inactive_color}\\fs{font_size}{b_tag}}}"
                         )
                     else:
-                        parts.append(f"{{\\c{inactive_color}\\fs{font_size}\\b1}}{word_text}")
+                        parts.append(f"{{\\c{inactive_color}\\fs{font_size}{b_tag}}}{word_text}")
 
                 line_text = " ".join(parts)
                 events.append(
@@ -381,80 +428,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         logger.info(
             f"[Caption] Karaoke ASS (fixed-line): {len(groups)} baris, "
             f"{len(events)} events | "
-            f"font={font_size} margin_v={margin_v} "
-            f"words_per_line={max_per_line}"
-        )
-        return ass_path
-
-
-        def fmt_ass_time(seconds: float) -> str:
-            h   = int(seconds // 3600)
-            m   = int((seconds % 3600) // 60)
-            s   = int(seconds % 60)
-            cs  = int((seconds % 1) * 100)  # centiseconds (ASS pakai H:MM:SS.cc)
-            return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
-
-        # ASS header
-        ass_header = f"""[Script Info]
-ScriptType: v4.00+
-PlayResX: {self.OUTPUT_WIDTH}
-PlayResY: {self.OUTPUT_HEIGHT}
-ScaledBorderAndShadow: yes
-
-[V4+ Styles]
-Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Anton,{font_size},&H00FFFFFF,&H000000FF,&H33000000,&H80000000,1,0,0,0,100,100,0,0,1,4,2,2,10,10,{margin_v},1
-
-[Events]
-Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-"""
-
-        events = []
-        n = len(word_timestamps)
-
-        for i, word_data in enumerate(word_timestamps):
-            word_start = word_data["start"]
-            word_end   = word_data["end"]
-
-            # Tentukan window kata yang ditampilkan di baris
-            # Ambil konteks: beberapa kata sebelum dan sesudah kata aktif
-            half     = max_per_line // 2
-            win_start = max(0, i - half)
-            win_end   = min(n, win_start + max_per_line)
-            if win_end - win_start < max_per_line:
-                win_start = max(0, win_end - max_per_line)
-
-            window = word_timestamps[win_start:win_end]
-
-            # Build teks dengan color tag per kata
-            parts = []
-            for j, w in enumerate(window):
-                global_idx = win_start + j
-                word_text  = w["word"]
-                if global_idx == i:
-                    # Kata aktif — kuning, sedikit lebih besar
-                    parts.append(
-                        f"{{\\c{active_color}\\fs{active_size}}}{word_text}"
-                        f"{{\\c{inactive_color}\\fs{font_size}}}"
-                    )
-                else:
-                    parts.append(f"{{\\c{inactive_color}}}{word_text}")
-
-            line_text = " ".join(parts)
-
-            events.append(
-                f"Dialogue: 0,{fmt_ass_time(word_start)},{fmt_ass_time(word_end)},"
-                f"Default,,0,0,0,,{line_text}"
-            )
-
-        ass_content = ass_header + "\n".join(events)
-        with open(ass_path, "w", encoding="utf-8") as f:
-            f.write(ass_content)
-
-        logger.info(
-            f"[Caption] Karaoke ASS: {len(events)} events → {ass_path} "
-            f"(active={style.get('active_word_color')}, "
-            f"inactive={style.get('inactive_word_color')})"
+            f"font={font_name} size={font_size} pos_y={pos_y_pct}% "
+            f"margin_v={margin_v} words_per_line={max_per_line}"
         )
         return ass_path
 
@@ -759,8 +734,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 subtitle_filter = f",ass='{abs_sub}'"
             else:
                 # SRT fallback — gunakan filter 'subtitles=' dengan force_style
+                srt_style = self._build_srt_style(caption_style)
                 subtitle_filter = (
-                    f",subtitles='{abs_sub}':force_style='{self.SRT_CAPTION_STYLE}'"
+                    f",subtitles='{abs_sub}':force_style='{srt_style}'"
                 )
 
         # s72b: tpad freeze frame terakhir + apad silence = trailing_silence detik
