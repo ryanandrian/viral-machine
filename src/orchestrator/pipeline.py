@@ -312,18 +312,20 @@ class Pipeline:
 
                     # ── s71: Simpan metadata ke Supabase ──────────────
                     self.supabase_writer.write_video(
-                        run_id        = run_id,
-                        tenant_id     = tenant_config.tenant_id,
-                        platform      = "youtube",
-                        video_id      = yt_result["video_id"],
-                        url           = yt_result["url"],
-                        title         = yt_result.get("title", script.get("title", "")),
-                        hook          = script.get("hook", ""),
-                        topic         = script.get("topic", ""),
-                        niche         = tenant_config.niche,
-                        viral_score   = float(script.get("viral_score", 0)),
-                        duration_secs = video_duration,
-                        file_size_mb  = file_size_mb,
+                        run_id         = run_id,
+                        tenant_id      = tenant_config.tenant_id,
+                        platform       = "youtube",
+                        video_id       = yt_result["video_id"],
+                        url            = yt_result["url"],
+                        title          = yt_result.get("title", script.get("title", "")),
+                        hook           = script.get("hook", ""),
+                        topic          = script.get("topic", ""),
+                        niche          = tenant_config.niche,
+                        viral_score    = float(script.get("viral_score", 0)),
+                        duration_secs  = video_duration,
+                        file_size_mb   = file_size_mb,
+                        topic_scores   = script.get("topic_scores"),
+                        insights_grade = script.get("insights_grade", ""),
                     )
                     # ──────────────────────────────────────────────────
 

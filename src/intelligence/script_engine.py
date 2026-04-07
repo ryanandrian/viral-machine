@@ -394,8 +394,10 @@ class ScriptEngine:
         # S1-B: load channel insights — inject ke semua attempt jika grade cukup
         insights       = self._load_insights(tenant_config.tenant_id)
         insights_block = None
+        insights_grade = ""
         if insights:
-            grade = insights.get("performance_grade", "insufficient_data")
+            grade          = insights.get("performance_grade", "insufficient_data")
+            insights_grade = grade
             if grade != "insufficient_data":
                 insights_block = _build_insights_block(insights)
                 logger.info(
@@ -496,6 +498,16 @@ class ScriptEngine:
             "generated_at":            datetime.now().isoformat(),
             "llm_provider_used":       actual_provider,
             "llm_provider_requested":  llm_provider,
+            # S3-A: simpan 5 skor dimensi untuk adaptive weight computation
+            "topic_scores": {
+                "search_volume":       topic.get("search_volume", 0),
+                "trend_momentum":      topic.get("trend_momentum", 0),
+                "emotional_trigger":   topic.get("emotional_trigger", 0),
+                "competition_gap":     topic.get("competition_gap", 0),
+                "evergreen_potential": topic.get("evergreen_potential", 0),
+            },
+            # S3-B: tag grade saat produksi untuk attribution
+            "insights_grade": insights_grade,
         })
 
         logger.info(

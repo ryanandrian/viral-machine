@@ -95,8 +95,58 @@ class NicheSelector:
 
         return raw.strip()
 
-    def _calculate_viral_score(self, topic: dict) -> float:
-        weights = VIRAL_SCORE_WEIGHTS
+    def _get_blended_weights(self, tenant_id: str) -> dict:
+        """
+        S3-A: Blend default weights dengan computed weights per channel.
+        Gradual blending berdasarkan jumlah video dengan analytics:
+          n < 20  → 100% default (VIRAL_SCORE_WEIGHTS)
+          n 20-50 → blend bertahap
+          n >= 50 → 100% computed weights
+        """
+        try:
+            if not self._analyzer:
+                return VIRAL_SCORE_WEIGHTS
+
+            sb = getattr(self._analyzer, '_supabase', None)
+            if not sb:
+                return VIRAL_SCORE_WEIGHTS
+
+            result = (
+                sb.table("tenant_configs")
+                .select("viral_score_weights")
+                .eq("tenant_id", tenant_id)
+                .single()
+                .execute()
+            )
+            row  = result.data or {}
+            meta = row.get("viral_score_weights") or {}
+
+            computed         = meta.get("weights") or {}
+            videos_analyzed  = int(meta.get("videos_analyzed", 0))
+
+            if not computed or videos_analyzed < 20:
+                return VIRAL_SCORE_WEIGHTS
+
+            MIN_VIDEOS    = 20
+            TARGET_VIDEOS = 50
+            alpha = min(1.0, (videos_analyzed - MIN_VIDEOS) / (TARGET_VIDEOS - MIN_VIDEOS))
+
+            blended = {
+                dim: round((1 - alpha) * VIRAL_SCORE_WEIGHTS[dim] + alpha * computed.get(dim, VIRAL_SCORE_WEIGHTS[dim]), 4)
+                for dim in VIRAL_SCORE_WEIGHTS
+            }
+            logger.info(
+                f"[NicheSelector] Blended weights | α={alpha:.2f} | "
+                f"n={videos_analyzed} | weights={blended}"
+            )
+            return blended
+
+        except Exception as e:
+            logger.debug(f"[NicheSelector] _get_blended_weights fallback ({e})")
+            return VIRAL_SCORE_WEIGHTS
+
+    def _calculate_viral_score(self, topic: dict, tenant_id: str = None) -> float:
+        weights = self._get_blended_weights(tenant_id) if tenant_id else VIRAL_SCORE_WEIGHTS
         return round(
             topic.get("search_volume", 0)       * weights["search_volume"] +
             topic.get("trend_momentum", 0)      * weights["trend_momentum"] +
@@ -383,9 +433,9 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
                 if not topics:
                     raise ValueError("Topics array kosong")
 
-                # Hitung ulang viral score untuk konsistensi
+                # Hitung ulang viral score — pakai blended weights jika tersedia
                 for t in topics:
-                    t["viral_score"] = self._calculate_viral_score(t)
+                    t["viral_score"] = self._calculate_viral_score(t, tenant_config.tenant_id)
 
                 logger.info(f"AI analysis success on attempt {attempt}: {len(topics)} topics")
                 return sorted(topics, key=lambda x: x["viral_score"], reverse=True)
