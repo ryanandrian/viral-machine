@@ -80,7 +80,16 @@ def _build_insights_block(insights: dict) -> str:
             text    = h.get("hook", "")[:80]
             lines.append(f"  {i}. \"{text}\" | Pattern: {pattern} | CTR: {ctr:.1f}%")
 
-    ct_perf = insights.get("content_type_perf", [])
+    ct_perf_raw = insights.get("content_type_perf", {})
+    # content_type_perf dari PerformanceAnalyzer adalah dict {ct_name: {...}}
+    if isinstance(ct_perf_raw, dict):
+        ct_perf = sorted(
+            [{"content_type": k, **v} for k, v in ct_perf_raw.items()],
+            key=lambda x: x.get("avg_view_pct", 0),
+            reverse=True,
+        )
+    else:
+        ct_perf = ct_perf_raw
     if ct_perf:
         lines.append("CONTENT TYPES ranked by audience retention:")
         for ct in ct_perf[:3]:
@@ -90,15 +99,12 @@ def _build_insights_block(insights: dict) -> str:
                 f"avg views {ct.get('avg_views',0):,.0f}"
             )
 
-    avoid = insights.get("avoid_patterns", {})
-    bad_hooks    = avoid.get("hook_patterns", [])
-    bad_ct       = avoid.get("content_types", [])
-    if bad_hooks or bad_ct:
-        lines.append("AVOID — these patterns underperform on this channel:")
-        for p in bad_hooks[:3]:
-            lines.append(f"  - Hook pattern: {p}")
-        for c in bad_ct[:2]:
-            lines.append(f"  - Content type: {c}")
+    # avoid_patterns adalah list[str] dari PerformanceAnalyzer
+    avoid_patterns = insights.get("avoid_patterns", [])
+    if isinstance(avoid_patterns, list) and avoid_patterns:
+        lines.append("AVOID — these content types underperform on this channel:")
+        for p in avoid_patterns[:3]:
+            lines.append(f"  - {p}")
 
     return "\n".join(lines)
 

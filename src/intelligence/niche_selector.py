@@ -262,7 +262,18 @@ class NicheSelector:
         Hanya dipanggil jika grade in (optimizing, peak) dan user tidak set focus.
         Output: focus string sebagai soft suggestion ke AI.
         """
-        ct_perf    = insights.get("content_type_perf") or []
+        ct_perf_raw = insights.get("content_type_perf") or {}
+        # content_type_perf dari PerformanceAnalyzer adalah dict {ct_name: {...}}
+        # Konversi ke list sorted by avg_view_pct desc
+        if isinstance(ct_perf_raw, dict):
+            ct_perf = sorted(
+                [{"content_type": k, **v} for k, v in ct_perf_raw.items()],
+                key=lambda x: x.get("avg_view_pct", 0),
+                reverse=True,
+            )
+        else:
+            ct_perf = ct_perf_raw
+
         top_topics = insights.get("top_topics") or []
 
         parts = []
