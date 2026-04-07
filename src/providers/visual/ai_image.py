@@ -167,41 +167,24 @@ class AIImageProvider(VisualProvider):
 
             except Exception as e:
                 # ── Retry loop ────────────────────────────────────────────────────────
-                # Attempt 2: LLM rewrite prompt
-                # Attempt 3: visual_fallbacks[i] dari niches table (pre-approved, pasti aman)
+                # Attempt 2-3: Claude/LLM rewrite dengan accumulated rejection_history.
+                # Setiap iterasi Claude makin tahu apa yang harus dihindari.
+                # Tidak ada fallback ke visual_fallbacks — visual harus relevan dengan narasi.
                 # Tidak ada fallback ke provider lain — kualitas konten non-negotiable.
+                # Jika semua attempt gagal: scene di-skip, pipeline laporkan ke Telegram.
                 rejection_history = [{"prompt": prompt, "rejection": str(e)}]
                 succeeded = False
                 for attempt in range(2, 4):  # attempt 2 dan 3
-                    safe_prompt = keyword  # inisialisasi — fallback jika rewrite gagal sebelum assign
                     try:
-                        if attempt == 2:
-                            logger.warning(
-                                f"[AIImage] Scene {i+1} attempt 1 gagal — "
-                                f"rewrite via {self.llm_provider} (attempt 2/3)"
-                            )
-                            safe_prompt = await self._ai_rewrite_on_rejection(
-                                original_keyword=keyword,
-                                section_index=i,
-                                rejection_history=rejection_history,
-                            )
-                        else:
-                            # Attempt 3: visual_fallbacks dari niches table
-                            fallbacks = self.niche_visual_fallbacks
-                            if not fallbacks:
-                                logger.error(
-                                    f"[AIImage] Scene {i+1}: tidak ada visual_fallbacks "
-                                    f"di niches table — scene di-skip"
-                                )
-                                break
-                            safe_prompt = fallbacks[i % len(fallbacks)]
-                            if SAFETY_SUFFIX.lower() not in safe_prompt.lower():
-                                safe_prompt = f"{safe_prompt} {SAFETY_SUFFIX}"
-                            logger.warning(
-                                f"[AIImage] Scene {i+1} attempt 2 gagal — "
-                                f"pakai visual_fallback[{i % len(fallbacks)}] (attempt 3/3)"
-                            )
-
+                        logger.warning(
+                            f"[AIImage] Scene {i+1} attempt {attempt-1} gagal — "
+                            f"rewrite via {self.llm_provider} (attempt {attempt}/3)"
+                        )
+                        safe_prompt = await self._ai_rewrite_on_rejection(
+                            original_keyword=keyword,
+                            section_index=i,
+                            rejection_history=rejection_history,
+                        )
                         safe_output = output_dir / f"clip_{i+1:02d}_attempt{attempt}.jpg"
                         safe_clip   = output_dir / f"clip_{i+1:02d}_attempt{attempt}.mp4"
                         target_dur  = clip_durations[i] if clip_durations and i < len(clip_durations) else 5.0
