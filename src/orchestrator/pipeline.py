@@ -215,7 +215,8 @@ class Pipeline:
             logger.info("STEP 7/7 | Rendering final video...")
             video_path = self.video_renderer.render(
                 script, audio_path, clips, tenant_config,
-                word_timestamps=word_timestamps
+                word_timestamps=word_timestamps,
+                run_id=run_id,
             )
             if not video_path:
                 raise Exception("Video rendering failed")

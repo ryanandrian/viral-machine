@@ -221,11 +221,13 @@ class VideoRenderer:
         target_duration: float,
         output_dir: str,
         clip_durations: list[float] | None = None,
+        run_id: str = "",
     ) -> str:
         """
         Fase 6C s6c1+s6c2: durasi per clip presisi, tidak ada loop/repeat.
         """
-        list_path = os.path.join(output_dir, "clip_list.txt")
+        fname     = f"clip_list_{run_id}.txt" if run_id else "clip_list.txt"
+        list_path = os.path.join(output_dir, fname)
         n         = len(clips)
         entries   = []
 
@@ -260,6 +262,7 @@ class VideoRenderer:
         word_timestamps: list[dict],
         output_dir: str,
         style: dict,
+        run_id: str = "",
     ) -> str:
         """
         Karaoke ASS caption — fixed line group, bukan sliding window.
@@ -274,7 +277,8 @@ class VideoRenderer:
         if not word_timestamps:
             return ""
 
-        ass_path     = os.path.join(output_dir, "subtitles.ass")
+        fname    = f"subtitles_{run_id}.ass" if run_id else "subtitles.ass"
+        ass_path = os.path.join(output_dir, fname)
         max_per_line = style.get("max_words_per_line", 3)
         font_size    = style.get("font_size", 68)
         margin_v     = style.get("margin_v", 320)
@@ -460,13 +464,15 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         audio_duration: float,
         output_dir: str,
         words_per_segment: int = 4,
+        run_id: str = "",
     ) -> str:
         """
         Fallback SRT: estimasi timing dari word count.
         Fix: cover 8 section (bukan 5 section lama).
         Akurasi ~60-70%.
         """
-        srt_path    = os.path.join(output_dir, "subtitles.srt")
+        fname    = f"subtitles_{run_id}.srt" if run_id else "subtitles.srt"
+        srt_path = os.path.join(output_dir, fname)
 
         # Cover 8 section — fix dari versi lama yang hanya 5 section
         full_script = script.get("full_script", "")
@@ -521,6 +527,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         tenant_config: TenantConfig,
         output_dir: str = "logs",
         word_timestamps: list[dict] | None = None,
+        run_id: str = "",
     ) -> str:
         """
         Render video final.
@@ -585,7 +592,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 round(climax + cta, 2),
             ]
             logger.info(f"[Renderer] section_durations: {clip_durations}")
-        clip_list_path = self._create_clip_list(clips, audio_duration, output_dir, clip_durations)
+        clip_list_path = self._create_clip_list(clips, audio_duration, output_dir, clip_durations, run_id=run_id)
 
         # Load caption style dari tenant_configs
         caption_style = self._load_caption_style(tenant_config)
@@ -599,7 +606,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 f"({len(word_timestamps)} words, ~98% akurasi)"
             )
             sub_path = self._generate_karaoke_ass(
-                word_timestamps, output_dir, caption_style
+                word_timestamps, output_dir, caption_style, run_id=run_id
             )
             use_ass = True
         else:
@@ -608,7 +615,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 "aktifkan ElevenLabs untuk karaoke akurat"
             )
             sub_path = self._generate_subtitles_estimated(
-                script, audio_duration, output_dir
+                script, audio_duration, output_dir, run_id=run_id
             )
             use_ass = False
 
