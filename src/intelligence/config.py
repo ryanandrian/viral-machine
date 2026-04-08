@@ -24,7 +24,7 @@ class TenantConfig:
 @dataclass
 class SystemConfig:
     """Konfigurasi mesin (platform) — bukan milik tenant.
-    Hanya berisi infra yang dioperasikan platform: Supabase, R2, Redis.
+    Hanya berisi infra yang dioperasikan platform: Supabase, R2.
     API key tenant (OpenAI, Anthropic, ElevenLabs, dll) disimpan di tenant_configs Supabase.
     """
     supabase_url: str = field(default_factory=lambda: os.getenv("SUPABASE_URL", ""))
@@ -33,7 +33,6 @@ class SystemConfig:
     r2_access_key: str = field(default_factory=lambda: os.getenv("R2_ACCESS_KEY", ""))
     r2_secret_key: str = field(default_factory=lambda: os.getenv("R2_SECRET_KEY", ""))
     r2_bucket: str = field(default_factory=lambda: os.getenv("R2_BUCKET", "viral-machine"))
-    redis_url: str = field(default_factory=lambda: os.getenv("REDIS_URL", ""))
 
 VIRAL_SCORE_WEIGHTS = {
     "search_volume": 0.25,
