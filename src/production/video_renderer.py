@@ -571,7 +571,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         # Step A xfade: (n-1) × 0.4s loss → target harus audio_duration + loss
         # Sehingga: Step B tpad(trailing_silence) → total_duration = audio sync sempurna
         _xfade_loss = (len(clips) - 1) * 0.4 if len(clips) >= 2 else 0
-        clip_list_target = audio_duration + _xfade_loss
+        clip_list_target = total_duration + _xfade_loss
         clip_list_path = self._create_clip_list(clips, clip_list_target, output_dir, clip_durations, run_id=run_id)
 
         # Load caption style dari tenant_configs
@@ -796,6 +796,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                     niche=tenant_config.niche,
                     output_dir=output_dir,
                     audio_duration=audio_duration,
+                    total_duration=total_duration,
                     music_volume=float(getattr(rc, "music_volume", 0.10)),
                 )
         except Exception as e:
@@ -925,6 +926,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         niche: str,
         output_dir: str,
         audio_duration: float,
+        total_duration: float,
         music_volume: float = 0.10,
     ) -> str:
         """
@@ -969,7 +971,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             "-c:v", "copy",
             "-c:a", "aac",
             "-b:a", self.AUDIO_BITRATE,
-            "-shortest",
+            "-t", str(total_duration),
             mixed_path,
         ]
 
