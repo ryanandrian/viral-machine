@@ -67,7 +67,8 @@ pipeline.py
   │
   └─ Step 8: YouTubePublisher.publish()
               Upload + metadata (title, description, hashtags, thumbnail)
-              Thumbnail: frame dari hook clip
+              Thumbnail: frame dari hook clip, di-resize sesuai content_type
+                short → 1080×1920 portrait (9:16) | long → 1280×720 landscape (16:9)
               Telegram notif: success / QC fail / error
 ```
 
@@ -125,7 +126,7 @@ pipeline.py
 
 | File | Fungsi |
 |------|--------|
-| `src/distribution/youtube_publisher.py` | Upload YouTube, set metadata, thumbnail. OAuth per channel |
+| `src/distribution/youtube_publisher.py` | Upload YouTube, set metadata, thumbnail. OAuth per channel. Thumbnail: short→1080×1920 portrait, long→1280×720 landscape (s92) |
 
 ### 3.7 Config & Utils
 
@@ -208,6 +209,7 @@ Jadwal produksi per slot. Niche eksplisit per slot atau NULL untuk rotation.
 | slot_time | VARCHAR | Jam UTC, e.g. `"08:30"` |
 | niche_id | VARCHAR | NULL = rotation otomatis |
 | niche_focus | TEXT | Keyword fokus opsional |
+| content_type | VARCHAR | `'short'` (default) atau `'long'` — menentukan dimensi thumbnail (s92) |
 | is_active | BOOLEAN | |
 
 ### 4.4 fonts
@@ -624,6 +626,7 @@ Config-driven: duplicate_lookback_days di tenant_configs (default 30)
 | Masalah | File | Detail |
 |---------|------|--------|
 | ScriptAnalyzer selalu pakai OpenAI | `script_analyzer.py` | Scoring gpt-4o-mini via `visual_api_key` — disengaja, lebih murah untuk scoring |
+| Long form belum diimplementasi | — | `content_type='long'` di schedule tidak akan mengubah video resolution/duration — hanya thumbnail yang sudah siap |
 | `_filter_duplicates()` hanya exact slug match | `niche_selector.py` | Topik bermakna sama tapi formulasi berbeda tetap lolos filter |
 | AI Video DISABLED | `ai_video.py` | raise `VisualError` — belum ada provider video |
 | Single tenant di `__main__` | `pipeline.py` | Hardcode `tenant_id="ryan_andrian"` |

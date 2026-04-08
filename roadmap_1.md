@@ -24,6 +24,7 @@
 | s89 | emotion_scoring_criteria config-driven — kolom baru di niches table, isi 4 niche | ✅ DONE | 7 Apr 2026 |
 | s90 | Script quality: CLIMAX/CTA rewrite + niche-aware emotional_peak + retry feedback dengan skor | ✅ DONE | 7 Apr 2026 |
 | s91 | Bug fixes: get_llm_provider Claude + CTR metric + video CTA terpotong + topic diversity inject | ✅ DONE | 8 Apr 2026 |
+| s92 | Thumbnail portrait 9:16 untuk Shorts + content_type per-slot di production_schedules | ✅ DONE | 8 Apr 2026 |
 | 6 | BYO-CC Phase 1 — tenant_credentials table + enkripsi Fernet + mandatory validation | ⬜ TODO | — |
 | 7 | BYO-CC Phase 2 — Dispatcher (ganti crontab hardcode per tenant) | ⬜ TODO | — |
 | 8 | BYO-CC Phase 3 — Tenant Onboarding script (OAuth flow per tenant) | ⬜ TODO | — |
