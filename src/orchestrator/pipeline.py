@@ -97,10 +97,11 @@ class Pipeline:
         # Load config dari Supabase
         run_config = self._load_tenant_run_config(tenant_config)
 
-        # ── s84: Resolve niche + focus dari production_schedules ────
+        # ── s84/s92: Resolve niche + focus + content_type dari production_schedules ──
+        resolved_content_type = "short"  # default
         try:
             channel_id   = getattr(run_config, "channel_id", None) or tenant_config.tenant_id
-            resolved_niche, niche_focus = self.schedule_manager.resolve_slot(
+            resolved_niche, niche_focus, resolved_content_type = self.schedule_manager.resolve_slot(
                 tenant_id  = tenant_config.tenant_id,
                 channel_id = channel_id,
             )
@@ -112,6 +113,7 @@ class Pipeline:
                 tenant_config.niche = resolved_niche
             if niche_focus:
                 logger.info(f"[Pipeline] Niche focus: '{niche_focus}'")
+            logger.info(f"[Pipeline] Content type: '{resolved_content_type}'")
         except Exception as _se:
             logger.warning(f"[Pipeline] ScheduleManager gagal ({_se}) — pakai niche default")
             niche_focus = None
@@ -304,7 +306,7 @@ class Pipeline:
                 yt_result = self.youtube_publisher.publish(
                     video_path, script, tenant_config,
                     thumbnail_path=result.get("thumbnail_path", ""),
-                    content_type=getattr(run_config, "content_type", "short"),
+                    content_type=resolved_content_type,
                 )
                 result["published"]["youtube"] = yt_result
 

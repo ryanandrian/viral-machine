@@ -436,8 +436,6 @@ class TenantConfigManager:
                 niche_rotation_index    = int(row.get("niche_rotation_index") or 0),
                 # OAuth Token path (s84d) — opsional, auto-resolve jika kosong
                 youtube_token_path      = row.get("youtube_token_path") or "",
-                # Jenis konten (s92)
-                content_type            = row.get("content_type", "short") or "short",
             )
 
         except Exception as e:

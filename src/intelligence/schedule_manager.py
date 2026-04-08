@@ -61,53 +61,54 @@ class ScheduleManager:
         self,
         tenant_id: str,
         channel_id: Optional[str] = None,
-    ) -> Tuple[str, Optional[str]]:
+    ) -> Tuple[str, Optional[str], str]:
         """
-        Resolve niche + focus untuk slot produksi saat ini.
+        Resolve niche + focus + content_type untuk slot produksi saat ini.
 
         Returns:
-            (niche_id: str, niche_focus: str | None)
+            (niche_id: str, niche_focus: str | None, content_type: str)
             niche_id selalu terisi — tidak pernah None.
             niche_focus bisa None jika tidak ada fokus khusus.
+            content_type: 'short' (default) atau 'long' — dari production_schedules.
         """
         channel_id = channel_id or tenant_id  # fallback: channel_id = tenant_id
 
         # Layer 1: production_schedules
         result = self._resolve_from_schedules(tenant_id, channel_id)
         if result:
-            niche_id, niche_focus = result
+            niche_id, niche_focus, content_type = result
             logger.info(
                 f"[ScheduleManager] Layer 1 — schedule: "
-                f"niche={niche_id} | focus={niche_focus or '-'}"
+                f"niche={niche_id} | focus={niche_focus or '-'} | type={content_type}"
             )
             niche_id = self._apply_diversity_guard(tenant_id, niche_id)
-            return niche_id, niche_focus
+            return niche_id, niche_focus, content_type
 
         # Layer 2: default_niche_rotation
         result = self._resolve_from_rotation(tenant_id)
         if result:
-            niche_id, niche_focus = result
+            niche_id, niche_focus, content_type = result
             logger.info(
                 f"[ScheduleManager] Layer 2 — rotation: "
-                f"niche={niche_id}"
+                f"niche={niche_id} | type={content_type}"
             )
             niche_id = self._apply_diversity_guard(tenant_id, niche_id)
-            return niche_id, niche_focus
+            return niche_id, niche_focus, content_type
 
         # Layer 3: random dari niches table
         result = self._resolve_random(tenant_id)
         if result:
-            niche_id, niche_focus = result
+            niche_id, niche_focus, content_type = result
             logger.info(
                 f"[ScheduleManager] Layer 3 — random: "
-                f"niche={niche_id}"
+                f"niche={niche_id} | type={content_type}"
             )
             niche_id = self._apply_diversity_guard(tenant_id, niche_id)
-            return niche_id, niche_focus
+            return niche_id, niche_focus, content_type
 
         # Absolute fallback — tidak pernah return None
         logger.warning("[ScheduleManager] Semua layer gagal — pakai universe_mysteries")
-        return "universe_mysteries", None
+        return "universe_mysteries", None, "short"
 
     # ── Layer 1: production_schedules ──────────────────────────────────────
 
@@ -115,10 +116,10 @@ class ScheduleManager:
         self,
         tenant_id: str,
         channel_id: str,
-    ) -> Optional[Tuple[str, Optional[str]]]:
+    ) -> Optional[Tuple[str, Optional[str], str]]:
         """
         Query production_schedules, cari slot yang paling dekat dengan jam sekarang.
-        Jika niche_id diisi → return (niche_id, niche_focus).
+        Jika niche_id diisi → return (niche_id, niche_focus, content_type).
         Jika niche_id NULL → return None (fall through ke layer 2).
         """
         if not self._supabase:
@@ -128,7 +129,7 @@ class ScheduleManager:
             result = (
                 self._supabase
                 .table("production_schedules")
-                .select("niche_id, niche_focus, cron_expression")
+                .select("niche_id, niche_focus, cron_expression, content_type")
                 .eq("channel_id", channel_id)
                 .eq("is_active", True)
                 .execute()
@@ -145,11 +146,12 @@ class ScheduleManager:
             if best is None:
                 return None
 
-            niche_id    = best.get("niche_id")
-            niche_focus = best.get("niche_focus") or None
+            niche_id     = best.get("niche_id")
+            niche_focus  = best.get("niche_focus") or None
+            content_type = best.get("content_type", "short") or "short"
 
             if niche_id:
-                return niche_id, niche_focus
+                return niche_id, niche_focus, content_type
 
             # niche_id NULL — slot ada tapi tidak di-assign niche
             # niche_focus mungkin masih ada (fokus tanpa niche eksplisit)
@@ -315,7 +317,7 @@ class ScheduleManager:
             # Ambil pending_focus dari Layer 1 jika ada
             niche_focus = getattr(self, "_pending_focus", None)
             self._pending_focus = None
-            return niche_id, niche_focus
+            return niche_id, niche_focus, "short"
 
         except Exception as e:
             logger.warning(f"[ScheduleManager] Rotation query gagal: {e}")
@@ -323,7 +325,7 @@ class ScheduleManager:
 
     # ── Layer 3: random dari niches table ──────────────────────────────────
 
-    def _resolve_random(self, tenant_id: str) -> Optional[Tuple[str, Optional[str]]]:
+    def _resolve_random(self, tenant_id: str) -> Optional[Tuple[str, Optional[str], str]]:
         """
         Pilih niche random dari niches table (is_active = true).
         Hindari niche yang sama dengan produksi terakhir tenant ini.
@@ -364,7 +366,7 @@ class ScheduleManager:
         if not candidates:
             candidates = active_niches  # semua sama → tidak ada pilihan lain
 
-        return random.choice(candidates), niche_focus
+        return random.choice(candidates), niche_focus, "short"
 
     def _get_last_niche(self, tenant_id: str) -> Optional[str]:
         """Ambil niche dari produksi terakhir untuk hindari consecutive duplicate."""
