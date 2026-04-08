@@ -622,7 +622,6 @@ Config-driven: duplicate_lookback_days di tenant_configs (default 30)
 > Estimasi dengan `visual_mode="ai_image:dall-e-3"`. Mode `video` (Pexels) lebih murah: ~$0.10/run.
 
 ### 10.9 Keterbatasan yang Diketahui
-
 | Masalah | File | Detail |
 |---------|------|--------|
 | ScriptAnalyzer selalu pakai OpenAI | `script_analyzer.py` | Scoring gpt-4o-mini via `visual_api_key` — disengaja, lebih murah untuk scoring |

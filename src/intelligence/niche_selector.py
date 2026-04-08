@@ -622,9 +622,9 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
         if not topics:
             return topics
 
+        lookback_days = self._get_lookback_days(tenant_config)
         if recent is None:
-            writer        = get_writer()
-            lookback_days = self._get_lookback_days(tenant_config)
+            writer = get_writer()
             recent = writer.get_recent_topics(
                 tenant_id=tenant_config.tenant_id,
                 niche=tenant_config.niche,

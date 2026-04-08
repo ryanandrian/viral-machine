@@ -21,5 +21,11 @@ INSERT INTO fonts (name, file_name, is_active)
 VALUES ('Anton', 'Anton-Regular.ttf', true)
 ON CONFLICT (name) DO NOTHING;
 
--- 3. Verifikasi
+-- 3. RLS policy — anon bisa SELECT (untuk dropdown font di UI)
+ALTER TABLE fonts ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "fonts_select_anon" ON fonts
+    FOR SELECT USING (true);
+
+-- 4. Verifikasi
 SELECT id, name, file_name, is_active FROM fonts ORDER BY id;
