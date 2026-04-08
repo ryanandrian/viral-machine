@@ -1,558 +1,115 @@
-# ROADMAP MESIN VIRAL — Phase 8a & 8b
-> Tujuan: Meningkatkan kualitas viral → monetisasi → 100% siap SaaS  
-> Dimulai: 4 April 2026 | Diupdate setiap item selesai + tervalidasi
+# ROADMAP MESIN VIRAL
+> Checklist status semua item development — diupdate setiap item selesai.  
+> Mulai: 4 April 2026 | Update terakhir: 8 April 2026
 
 ---
 
-## PROGRESS TRACKER
+## STATUS PER ITEM
 
-| # | Item | Tier | Status | Selesai |
-|---|------|------|--------|---------|
-| 1 | Telegram Notifikasi | 1 | ✅ DONE | 4 Apr 2026 |
-| 2 | Regional Targeting Tier-1 di TrendRadar | 1 | ✅ DONE | 4 Apr 2026 |
-| 3 | Loop Ending Video | 1 | ✅ DONE (disabled) | 4 Apr 2026 |
-| 4a | Niche DB + Schedule Manager + Focus per Slot | 1 | ✅ DONE | 4 Apr 2026 |
-| 4b | ChannelAnalytics — YouTube Analytics pull | 1 | ✅ DONE | 5 Apr 2026 |
-| 4c | PerformanceAnalyzer + channel_insights | 1 | ✅ DONE | 5 Apr 2026 |
-| 4d | Feedback Loop NicheSelector (self-learning) | 1 | ✅ DONE | 5 Apr 2026 |
-| 5a | Niche visual_style + visual_fallbacks + mood_priority dari Supabase | 1 | ✅ DONE | 5 Apr 2026 |
-| 5b | Music system config-driven — moods table, niche+mood query | 1 | ✅ DONE | 5 Apr 2026 |
-| 5c | LLM generate full cinematic prompts — model-agnostic, hapus template manual | 1 | ✅ DONE | 6 Apr 2026 |
-| 6 | BYO-CC Phase 1 — tenant_credentials table + enkripsi + mandatory validation | 2 | ⬜ TODO | — |
-| 7 | BYO-CC Phase 2 — Dispatcher (ganti crontab hardcode) | 2 | ⬜ TODO | — |
-| 8 | BYO-CC Phase 3 — Tenant Onboarding script | 2 | ⬜ TODO | — |
-| 9 | Migrasi DALL-E 3 → gpt-image-1 (setelah research + test, sebelum May 2026) | 2 | ⬜ TODO | — |
-| 10 | Error Management Profesional (exceptions.py) | 2 | ⬜ TODO | — |
-| 11 | Analytics Isolation: channel_id per (tenant+channel) | 2 | ⬜ TODO | — |
-| 12 | Multi-Channel per Tenant (channels table) | 2 | ⬜ TODO | — |
-
----
-
-## DETAIL SETIAP ITEM
-
----
-
-### ✅ Item 1 — Telegram Notifikasi
-
-**Status**: SELESAI — 4 April 2026  
-**Kode**: `src/utils/telegram_notifier.py`  
-**Integrasi**: `src/orchestrator/pipeline.py` (3 titik inject)  
-**Config**: `src/config/tenant_config.py` + `.env`
-
-#### Yang Dikerjakan
-- Buat `TelegramNotifier` class dengan 4 method notifikasi:
-  - `notify_success()` — video berhasil dipublish ke YouTube
-  - `notify_qc_fail()` — video gagal QC, tidak dipublish
-  - `notify_publish_fail()` — QC lulus tapi YouTube upload gagal
-  - `notify_failure()` — pipeline crash dengan exception
-- Fire-and-forget: semua wrapped dalam try-except, tidak pernah crash pipeline
-- Per-tenant: `telegram_chat_id` dari `tenant_configs` Supabase, fallback ke env `TELEGRAM_CHAT_ID`
-- Format HTML: bold, italic, code block untuk readability di Telegram
-- Tambah field ke `TenantRunConfig`: `telegram_enabled`, `telegram_chat_id`, `channel_name`
-- Tambah env vars: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` ke `.env` + `.env.example`
-
-#### Migration Supabase yang Diperlukan
-Jalankan `scripts/migrate_s81_telegram.sql` di Supabase SQL Editor:
-- `ALTER TABLE tenant_configs ADD COLUMN telegram_enabled BOOLEAN DEFAULT true`
-- `ALTER TABLE tenant_configs ADD COLUMN telegram_chat_id VARCHAR(50)`
-- `ALTER TABLE tenant_configs ADD COLUMN channel_name VARCHAR(100) DEFAULT ''`
-- UPDATE `ryan_andrian`: telegram_chat_id=8699847842, channel_name='RAD The Explorer'
-
-#### Cara Test
-```bash
-# Dari root folder
-python3.11 scripts/test_telegram.py
-```
-
-#### Bot Info
-| Field | Value |
-|-------|-------|
-| Bot Name | Mesinviral.com |
-| Username | @MesinViral_Bot |
-| Token | Di `.env` (TELEGRAM_BOT_TOKEN) |
-| Chat ID | Di `.env` (TELEGRAM_CHAT_ID) |
-
-#### Format Pesan
-
-**✅ Success:**
-```
-✅ [RAD The Explorer] Video Published!
-🎬 Dark Matter: The Invisible Force...
-🎯 Hook score: 92/100  |  🏷 Niche: universe_mysteries
-⏱ Durasi: 1:51  |  💾 55.6 MB  |  🎞 6 clips
-🔗 https://youtu.be/xxx
-⏰ Runtime: 12m 15s  |  📝 216 kata
-ryan_andrian_1234567
-```
-
-**⚠️ QC Fail:**
-```
-⚠️ [RAD The Explorer] QC GAGAL — Video tidak dipublish
-📋 Topik: The Mystery of Dark Energy...
-❌ Alasan: Durasi terlalu pendek: 38.2s < 45s
-⏱ Durasi: 38.2s  |  💾 12.5 MB
-ryan_andrian_1234567
-```
-
-**❌ Pipeline Error:**
-```
-❌ [RAD The Explorer] Pipeline GAGAL!
-🏷 Niche: universe_mysteries
-💥 Error: ElevenLabs API timeout after 3 retries...
-⏰ Runtime: 4m 5s
-ryan_andrian_1234567
-```
-
-#### Deploy ke VPS
-```bash
-# Setelah test lokal berhasil:
-git add src/utils/telegram_notifier.py src/orchestrator/pipeline.py \
-        src/config/tenant_config.py .env.example scripts/
-git commit -m "feat(s81): telegram notifikasi success/qc_fail/failure"
-git push origin main
-
-# Di VPS:
-git pull origin main
-# Edit .env di VPS — tambah TELEGRAM_BOT_TOKEN dan TELEGRAM_CHAT_ID
-# Jalankan scripts/migrate_s81_telegram.sql di Supabase dashboard
-```
+| # | Item | Status | Selesai |
+|---|------|--------|---------|
+| s81 | Telegram Notifikasi (success / QC fail / error) | ✅ DONE | 4 Apr 2026 |
+| s82 | Regional Targeting Tier-1 di TrendRadar | ✅ DONE | 4 Apr 2026 |
+| s83 | Loop Ending Video (xfade, disabled by default) | ✅ DONE | 4 Apr 2026 |
+| s84a | Niche DB + Schedule Manager + Focus per Slot | ✅ DONE | 4 Apr 2026 |
+| s84b | ChannelAnalytics — YouTube Analytics pull | ✅ DONE | 5 Apr 2026 |
+| s84c | PerformanceAnalyzer + channel_insights | ✅ DONE | 5 Apr 2026 |
+| s84d | Self-Learning NicheSelector feedback loop | ✅ DONE | 5 Apr 2026 |
+| s85a | Niche visual_style + mood_priority config dari Supabase | ✅ DONE | 5 Apr 2026 |
+| s85b | Music system config-driven (moods table, niche+mood query) | ✅ DONE | 5–6 Apr 2026 |
+| s85c | LLM generate full cinematic visual prompts | ✅ DONE | 6 Apr 2026 |
+| s86 | DALL-E 3 async fix (AsyncOpenAI context manager) + hapus visual_fallbacks dari retry | ✅ DONE | 7 Apr 2026 |
+| s87 | Music fallback ordering fix — niche mood_priority sebelum keyword matches | ✅ DONE | 7 Apr 2026 |
+| s88 | Fonts config-driven — fonts table Supabase + caption/hook title properties per tenant | ✅ DONE | 7 Apr 2026 |
+| s89 | emotion_scoring_criteria config-driven — kolom baru di niches table, isi 4 niche | ✅ DONE | 7 Apr 2026 |
+| s90 | Script quality: CLIMAX/CTA rewrite + niche-aware emotional_peak + retry feedback dengan skor | ✅ DONE | 7 Apr 2026 |
+| s91 | Bug fixes: get_llm_provider Claude + CTR metric + video CTA terpotong + topic diversity inject | ✅ DONE | 8 Apr 2026 |
+| 6 | BYO-CC Phase 1 — tenant_credentials table + enkripsi Fernet + mandatory validation | ⬜ TODO | — |
+| 7 | BYO-CC Phase 2 — Dispatcher (ganti crontab hardcode per tenant) | ⬜ TODO | — |
+| 8 | BYO-CC Phase 3 — Tenant Onboarding script (OAuth flow per tenant) | ⬜ TODO | — |
+| 9 | **[URGENT]** Migrasi DALL-E 3 → gpt-image-1 (sebelum May 2026) | ⬜ TODO | — |
+| 10 | Error Management Profesional — exceptions.py terpusat | ⬜ TODO | — |
+| 11 | Analytics Isolation — youtube_channel_id per (tenant+channel) | ⬜ TODO | — |
+| 12 | Multi-Channel per Tenant — channels table + dispatcher per channel | ⬜ TODO | — |
 
 ---
 
-### ⬜ Item 2 — Regional Targeting Tier-1 di TrendRadar
+## CATATAN PER ITEM
 
-**Status**: TODO  
-**Kode target**: `src/intelligence/trend_radar.py`
+### s86 — DALL-E 3 Async Fix + No Visual Fallbacks
+- `ai_image.py` sekarang menggunakan `AsyncOpenAI` sebagai async context manager — fix `RuntimeError: Event loop is closed`
+- Hapus `visual_fallbacks` dari retry attempt 3 — semua 3 attempt pakai DALL-E 3 dengan Claude rewrite
+- Rejection feedback dari DALL-E 3 diakumulasi sebagai `rejection_history` → dikirim ke Claude per retry
+- Jika 3 attempt gagal: scene di-skip, pipeline lanjut, Telegram notifikasi (via item s81)
 
-#### Rencana
-- Tambah parameter `geo` ke Google Trends query (default: `US`)
-- Filter YouTube Search result ke region US/UK/CA
-- Tambah field `trend_region` di `tenant_configs`: `"us"`, `"uk"`, `"global"`
-- Weight sinyal berdasarkan Tier-1 (US bobot tertinggi)
-- Update `TenantRunConfig`: gunakan `peak_region` (sudah ada) untuk tentukan geo
+### s87 — Music Fallback Fix
+- Sebelumnya: keyword matches (dari script) diurut pertama → mood lintas niche bisa menang
+- Sekarang: `niche_mood_priority` dari niches table diurut lebih dulu sebagai fallback, baru keyword matches
+- Efek: universe_mysteries tidak akan mendapat musik `energetic` dari fun_facts
 
-#### Schema Change
-Tidak ada schema baru — gunakan `peak_region` yang sudah ada di `tenant_configs`.
+### s88 — Fonts Config-Driven
+- Tabel `fonts` di Supabase: `font_name`, `r2_key`, `is_active`
+- RLS policy ditambah di migration s88: anon key bisa SELECT fonts table
+- `tenant_configs.caption_style` dan `hook_title_style` menyimpan font_name, size, color, bold, italic, border, alignment
+- `video_renderer.py` download font dari R2, cache lokal di `logs/`
 
-#### File yang Dimodifikasi
-- `src/intelligence/trend_radar.py`
-- `src/intelligence/niche_selector.py` (context ke AI: "target audience: US, UK")
+### s89 — Emotion Scoring Criteria Config-Driven
+- Kolom `emotion_scoring_criteria` (TEXT) ditambah ke tabel `niches`
+- Diisi 4 niche aktif: universe_mysteries (EXISTENTIAL AWE), dark_history (MORAL WEIGHT), ocean_mysteries (PRIMAL FEAR), fun_facts (IRRESISTIBLE URGE TO SHARE)
+- `script_analyzer.py` pakai 3-tier priority: explicit criteria → derive dari voice_profile → default generic
 
----
+### s90 — Script Quality Improvement
+- `script_engine.py`: CLIMAX instruks "CAUSE emotion, don't describe" + 3 teknik konkrit + quality bar
+- `script_engine.py`: CTA instruksi dirombak total — tidak ada CTA eksplisit, chemistry via resonance
+- `script_engine.py`: FORBIDDEN list ditambah: "Follow", "Subscribe", "Like", "Hit the bell"
+- `script_engine.py`: retry feedback menyertakan skor aktual + teknik konkrit per dimensi (bukan hanya nama dimensi)
+- `script_analyzer.py`: scoring criteria semua 6 dimensi diperketat dengan threshold 80+ yang eksplisit
 
-### ✅ Item 3 — Loop Ending Video
+### s91 — Bug Fixes Bundle
 
-**Status**: SELESAI — 4 April 2026  
-**Kode**: `src/production/video_renderer.py` (`_add_loop_ending` method)  
-**Config**: `src/config/tenant_config.py` (`loop_ending_enabled`, `loop_ending_duration`)
+**4 fix dalam 1 item, semua perubahan minimal dan terisolasi:**
 
-#### Yang Dikerjakan
-- Tambah `TenantRunConfig` fields: `loop_ending_enabled=True`, `loop_ending_duration=1.5`
-- Tambah `_add_loop_ending(video_path, loop_duration, output_dir)` di `VideoRenderer`:
-  1. ffprobe → dapat durasi video utama
-  2. Extract N detik pertama (video only, re-encode) → `_loop_clip.mp4`
-  3. xfade `transition=fade:duration=0.5` di offset `main_duration - 0.5`
-  4. Replace video asli dengan hasil xfade (fire-and-forget: jika gagal → return video asli)
-- Insert setelah music mixing di `render()`: separate try-except block
-- load_tenant_config di-cache → panggilan kedua tidak menambah latency
+1. **`get_llm_provider()` Claude support** — `tenant_config.py:228`
+   - Tambah `from src.providers.llm.claude import ClaudeProvider`
+   - Tambah `"claude": ClaudeProvider` ke dict `providers`
+   - Tidak ada perubahan lain — ScriptEngine sudah handle Claude sendiri
 
-#### Schema Change (Supabase) — Jalankan Manual di Dashboard
-```sql
-ALTER TABLE tenant_configs
-  ADD COLUMN IF NOT EXISTS loop_ending_enabled  BOOLEAN DEFAULT true,
-  ADD COLUMN IF NOT EXISTS loop_ending_duration FLOAT   DEFAULT 1.5;
-```
+2. **CTR metric fix** — `channel_analytics.py:321`
+   - Ganti `cardClickRate` → `impressionClickThroughRate` di query metric Analytics API
+   - `impressionClickThroughRate` sudah dalam decimal, `×100` tetap valid
+   - Data langsung mengalir ke `top_hooks` dengan nilai real setelah 48 jam video publish
 
----
+3. **Video CTA terpotong** — `video_renderer.py:570`
+   - Ganti `audio_duration` → `total_duration` di pemanggilan `_create_clip_list()`
+   - Clip list target: 89.8s → setelah xfade -2.0s → video 87.8s = matching audio
+   - 0 perubahan di fungsi `_create_clip_list()` itu sendiri
 
-### ✅ Item 4a — Niche DB + Schedule Manager + Focus per Slot
+4. **Topic diversity AI prompt** — `niche_selector.py`
+   - Di `select()`: fetch `recent_topics` via `get_recent_topics()` SEBELUM AI call
+   - Pass ke `_analyze_with_ai()` sebagai parameter baru `recent_topics`
+   - Inject ke prompt sebagai blok "AVOID THESE ANGLES (recently covered)"
+   - `_filter_duplicates()` TIDAK diubah — tetap jalan sebagai hard filter post-generation
 
-**Status**: SELESAI — 4 April 2026  
-**Kode**: `src/intelligence/schedule_manager.py`  
-**Config**: `src/config/tenant_config.py` (`default_niche_rotation`, `niche_rotation_index`)  
-**Migration**: `scripts/migrate_s84_schedules.sql`
+### Item 9 — URGENT: gpt-image-1 Migration
+- DALL-E 3 discontinue ~May 2026
+- Langkah: research API spec → test kualitas → update `AI_IMAGE_MODELS` di `ai_image.py` → set default baru
+- `ai_image.py` prompts sudah model-agnostic (tidak ada "DALL-E 3" hardcode di prompt)
 
-#### Yang Dikerjakan
-- `niches` table — registry 4 niche aktif (seeded dari NICHES dict)
-- `production_schedules` table — 5 slot/hari ryan_andrian, semua `niche_id=NULL` (rotation)
-- `ScheduleManager.resolve_slot()` — waterfall 3 layer:
-  - Layer 1: production_schedules (niche eksplisit per slot)
-  - Layer 2: default_niche_rotation round-robin (index auto-increment)
-  - Layer 3: random dari niches table, hindari consecutive duplicate
-- `TrendRadar.scan(focus=)` — focus keyword jadi keyword prioritas #1
-- `NicheSelector.select(focus=)` — inject FOCUS CONSTRAINT ke AI prompt
-- Pipeline resolve_slot sebelum Step 1, override tenant_config.niche
-- Verified production: `Layer 2 — rotation: niche=fun_facts` ✅
-
----
-
-### ✅ Item 4b — ChannelAnalytics — YouTube Analytics Pull
-
-**Status**: SELESAI — 5 April 2026
-**Kode**: `src/analytics/channel_analytics.py`
-**Migration**: `scripts/migrate_s84b_analytics.sql` — sudah dijalankan di Supabase
-**Cron wrapper**: `scripts/fetch_analytics.sh` — perlu ditambah ke crontab VPS
-
-#### Yang Dikerjakan
-- Pull YouTube Data API v3: views, likes, comments
-- Pull YouTube Analytics API v2: watch_time, avg_view_pct, CTR, subscriber_gain
-- Upsert ke `video_analytics`, skip < 48 jam, re-fetch interval 23 jam
-- `scripts/reauth_youtube.py` — one-time re-auth untuk full analytics scope
+### Item 6–8 — BYO-CC (Bring Your Own Cloud Console)
+- Prerequisite: kesepakatan infrastruktur v1 sudah selesai (6 Apr 2026)
+- LLM wajib: `anthropic_api_key` ATAU `openai_api_key`
+- TTS wajib: `elevenlabs_api_key` ATAU `openai_api_key`
+- Visual AI wajib: `openai_api_key` (DALL-E 3 / gpt-image-1)
+- YouTube wajib: Google OAuth (GCP project milik tenant)
+- Musik: platform-managed, tidak perlu API key tenant
 
 ---
 
-### ✅ Item 4c — PerformanceAnalyzer + channel_insights
-
-**Status**: SELESAI — 5 April 2026
-**Kode**: `src/analytics/performance_analyzer.py`
-**Runner**: `scripts/compute_insights.py`
-**Cron wrapper**: `scripts/compute_insights.sh` (mingguan, Senin 07:00 UTC)
-
-#### Technical Design — Self-Learning Analytics Engine
-
-Sistem 3 layer yang membuat pipeline makin pintar setiap minggu:
-
-
-
-#### A. Hook CTR Analysis
-Deteksi pola hook proven tinggi CTR:
-- Pattern: "[Entity] that [defies/challenges] [authority]" → CTR 9.2%
-- Pattern: "What [scientists/NASA] found [context]" → CTR 8.7%
-
-#### B. Niche Performance Weight
-Shift produksi ke niche yang convert ke subscriber tertinggi.
-
-#### C. Content Type Retention
-
-
-#### D. Historical Factor Score Adjustment
-Range: 0.7× (proven poor) → 1.5× (proven winner)
-
-#### Self-Improvement Lifecycle
-| Fase | Kondisi | Behavior |
-|------|---------|----------|
-| `insufficient_data` | < 5 videos | AI estimation murni |
-| `learning` | 5–20 videos | Inject top topics, tidak adjust score |
-| `optimizing` | 21–50 videos | Full historical_factor + niche weights |
-| `peak` | 50+ videos | Hook pattern extraction + A/B testing |
-
-#### File yang Dibuat/Dimodifikasi
-- `src/analytics/performance_analyzer.py` (baru)
-- `src/intelligence/niche_selector.py` (modified)
-- `scripts/compute_insights.sh` (cron mingguan Senin 07:00 UTC)
-- `scripts/migrate_s84c_insights.sql` (DDL channel_insights + ALTER video_analytics)
-
-#### Schema Baru (Supabase)
-```sql
--- ALTER video_analytics: tambah kolom yang kurang
-ALTER TABLE video_analytics
-  ADD COLUMN IF NOT EXISTS channel_id     VARCHAR,
-  ADD COLUMN IF NOT EXISTS content_type   VARCHAR,
-  ADD COLUMN IF NOT EXISTS views_per_sub  FLOAT   DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS analytics_date DATE    DEFAULT CURRENT_DATE;
-
--- Aggregated insights (computed mingguan)
-CREATE TABLE IF NOT EXISTS channel_insights (
-  insight_id        UUID      PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id         TEXT      NOT NULL,
-  channel_id        VARCHAR,
-  computed_at       TIMESTAMP DEFAULT NOW(),
-  videos_analyzed   INT       DEFAULT 0,
-  niche_weights     JSONB     DEFAULT '{}',
-  top_hooks         JSONB     DEFAULT '[]',
-  content_type_perf JSONB     DEFAULT '{}',
-  avoid_patterns    JSONB     DEFAULT '[]',
-  top_topics        JSONB     DEFAULT '[]',
-  performance_grade VARCHAR   DEFAULT 'insufficient_data'
-);
-```
-
----
-
-### ✅ Item 4d — Feedback Loop NicheSelector (Self-Learning)
-
-**Status**: SELESAI — 5 April 2026
-**Kode**: `src/intelligence/niche_selector.py` (modified)
-
-#### Yang Dikerjakan
-- Load `channel_insights` terbaru sebelum AI call (fire-and-forget)
-- Inject proven patterns ke AI prompt: top topics, high CTR hooks, content type retention, avoid patterns
-- Apply `historical_factor` (0.7×–1.5×) ke `viral_score` jika grade >= optimizing
-- Grade learning: inject context only, tidak adjust score
-- Grade optimizing/peak: full injection + score adjustment
-- Tidak pernah crash pipeline jika insights tidak tersedia
-
-#### OAuth Token Refactor (Multi-Channel Ready)
-Dilakukan bersamaan dengan 4d untuk fondasi SaaS:
-- Konvensi: `tokens/{channel_id}.json` — satu token per channel
-- `TenantRunConfig.get_youtube_token_path()` — resolve path otomatis
-- `reauth_youtube.py --channel {id}` — re-auth per channel
-- `channel_analytics.py` + `youtube_publisher.py` — baca token dari config
-- Backward compatible: fallback ke `token_youtube.json`
-
----
-
-### ⬜ Item 6 — Analytics Isolation: channel_id per (tenant + channel)
-
-**Status**: TODO
-**Prerequisite**: Item 7 (channels table) sebaiknya dikerjakan bersamaan
-
-#### Latar Belakang
-Saat ini `video_analytics` dan `channel_insights` hanya dipartisi per `tenant_id`. Jika tenant yang sama berganti channel YouTube (channel baru, niche berbeda), data analytics channel lama akan ikut menghitung insights channel baru — merusak self-learning.
-
-#### Skenario yang Perlu Diantisipasi
-1. Tenant berganti channel (channel lama kena strike / ditutup)
-2. Tenant pivot niche drastis dengan channel yang sama
-
-#### Yang Perlu Dikerjakan
-- Tambah kolom `youtube_channel_id VARCHAR` di `video_analytics` dan `channel_insights`
-- `PerformanceAnalyzer.compute_and_store()` filter by `(tenant_id, youtube_channel_id)`
-- `ChannelAnalytics._upsert_analytics()` isi `youtube_channel_id` dari OAuth token (channel info)
-- Insights dihitung per kombinasi `(tenant_id, youtube_channel_id)` — ganti channel = fresh start
-
-#### Schema Change
-```sql
-ALTER TABLE video_analytics
-  ADD COLUMN IF NOT EXISTS youtube_channel_id VARCHAR;
-
-ALTER TABLE channel_insights
-  ADD COLUMN IF NOT EXISTS youtube_channel_id VARCHAR;
-```
-
-#### Catatan Keamanan Tenant
-- Video dari pipeline lama (sebelum onboarding) TIDAK akan masuk ke analytics — karena `video_analytics` hanya berisi video yang diproduksi oleh pipeline kita (dari tabel `videos`)
-- Histori channel sebelum bergabung dengan mesin = tidak tersentuh
-
----
-
-### ✅ Item 5a — Niche Visual Config dari Supabase
-
-**Status**: SELESAI — 5 April 2026
-**Migration**: `scripts/migrate_s85_niche_visual.sql`
-
-#### Yang Dikerjakan
-- Kolom `visual_style` (JSONB), `visual_fallbacks` (JSONB), `mood_priority` (JSONB) ditambah ke tabel `niches`
-- Semua 4 niche terisi: base_style, color_palette, atmosphere, fallback prompts, mood priority
-- `ai_image.py`: niche_visual_style di-load dari Supabase — tidak ada hardcode di kode
-- `visual_assembler.py`: niche_visual_style + niche_visual_fallbacks di-pass ke AIImageProvider
-- `tenant_config.py`: fields niche_visual_style + niche_visual_fallbacks ditambah
-
----
-
-### ✅ Item 5b — Music System Config-Driven
-
-**Status**: SELESAI — 5–6 April 2026
-**Migration**: `scripts/migrate_s85b_moods_table.sql`
-
-#### Yang Dikerjakan
-- Tabel `moods` dibuat di Supabase: 15 mood aktif dengan keywords untuk deteksi dari script
-- `music_selector.py`: MOOD_KEYWORDS hardcode dihapus — load dari tabel `moods`
-- `music_selector.py`: query `niche + mood` (sebelumnya mood-only → bisa lintas niche)
-- `seed_music_library.py`: VALID_NICHES/VALID_MOODS/NICHE_MOOD_MAP hardcode dihapus — load dari Supabase
-- Bug fix: `music_volume` dari `tenant_configs` sekarang dipakai di ffmpeg (sebelumnya hardcode 0.125)
-- R2 struktur tidak berubah: `music/{niche}/{mood}/{filename}.mp3`
-
-#### Infrastruktur Music (Platform, bukan tenant)
-- Music library = platform-managed (R2 + Supabase music_library)
-- Tenant tidak perlu API key untuk musik — platform yang sediakan
-
----
-
-### ✅ Item 5c — LLM Generate Full Cinematic Prompts
-
-**Status**: SELESAI — 6 April 2026
-
-#### Yang Dikerjakan
-- `script_engine.py`: `visual_suggestions` = full cinematic image prompts dari LLM (bukan deskripsi singkat)
-- `script_engine.py`: `niche_visual_style` (base_style, color_palette, atmosphere) di-pass ke LLM sebagai VISUAL DIRECTION context
-- `script_engine.py`: panduan cinematic per section (hook/mystery/build-up/core/climax) ada di instruksi template — LLM yang eksekusi
-- `ai_image.py`: `SECTION_ENHANCERS` + `_build_cinematic_prompt` dihapus — tidak diperlukan lagi
-- `ai_image.py`: rejection rewrite pakai LLM tenant (Claude atau OpenAI) — tidak hardcode OpenAI
-- `ai_image.py`: `llm_provider` + `llm_api_key` disimpan di instance untuk rejection rewrite
-- `visual_assembler.py`: `llm_provider` ditambah ke config dict AIImageProvider
-- Prompts model-agnostic — tidak ada "DALL-E 3" hardcode, siap untuk gpt-image-1 atau model lain
-
-#### Manfaat
-- Prompt jauh lebih relevan dengan narasi (LLM tahu konteks penuh cerita)
-- Satu API key untuk LLM + visual prompt (tidak split provider)
-- Siap ganti image generator tanpa ubah kode
-
----
-
-### ⬜ Item 6 — BYO-CC Phase 1: Kredensial & Mandatory Validation
-
-**Status**: TODO
-**Prerequisite**: Kesepakatan infrastruktur v1 ✅ (selesai 6 Apr 2026)
-
-#### Latar Belakang
-YouTube Data API quota = 10.000 unit/hari per GCP project. SaaS 100+ tenant tidak bisa pakai 1 project. Solusi: setiap tenant bawa GCP project sendiri (BYO-CC = Bring Your Own Cloud Console).
-
-#### Infrastruktur Resmi v1 (Disepakati)
-| Elemen | Default | Alternatif | Key Wajib |
-|---|---|---|---|
-| LLM | Claude Sonnet 4.6 | GPT-4o-mini | anthropic_api_key ATAU openai_api_key |
-| TTS | ElevenLabs | OpenAI TTS | elevenlabs_api_key ATAU openai_api_key |
-| Visual AI | DALL-E 3 | — (gpt-image-1 menyusul) | openai_api_key |
-| YouTube | YouTube Data API v3 | — | Google OAuth (GCP milik tenant) |
-| Music | Platform R2 | — | Tidak ada |
-
-**Prinsip**: Jika tenant belum isi API key wajib → config tidak bisa disave, mesin tidak jalan.
-
-#### Yang Perlu Dikerjakan
-- Tabel `tenant_credentials` di Supabase: `google_client_id`, `google_client_secret_enc`, `google_refresh_token_enc`, `google_access_token_enc`, `token_expiry`, `channel_id`
-- `src/utils/crypto.py`: enkripsi Fernet, master key di `.env` VPS (`ENCRYPTION_KEY`)
-- `youtube_publisher.py`: load OAuth dari `tenant_credentials` (bukan file `tokens/`)
-- `channel_analytics.py`: load OAuth dari `tenant_credentials`
-- Hapus semua `.env` fallback untuk API key tenant di semua provider
-- Mandatory validation di awal pipeline: cek semua key wajib, jika kosong → stop + Telegram notif
-
----
-
-### ⬜ Item 7 — BYO-CC Phase 2: Dispatcher
-
-**Status**: TODO
-**Prerequisite**: Item 6 selesai
-
-#### Yang Perlu Dikerjakan
-- `src/orchestrator/dispatcher.py`: ganti crontab hardcode di VPS
-- Baca `production_schedules` / `tenant_configs.publish_slots` → spawn pipeline per tenant
-- Error tenant A tidak mengganggu tenant B — isolated per tenant
-- Satu crontab entry di VPS: jalankan dispatcher setiap menit
-- Logging per tenant terpisah
-
----
-
-### ⬜ Item 8 — BYO-CC Phase 3: Tenant Onboarding
-
-**Status**: TODO
-**Prerequisite**: Item 7 selesai
-
-#### Yang Perlu Dikerjakan
-- `scripts/tenant_onboard.py`: input credentials tenant → enkripsi → simpan ke DB → jalankan OAuth flow
-- Validasi semua key sebelum simpan
-- Panduan step-by-step setup GCP project untuk tenant non-teknis
-
----
-
-### ⬜ Item 9 — Migrasi DALL-E 3 → gpt-image-1
-
-**Status**: TODO — sebelum May 2026
-**Alasan**: DALL-E 3 discontinue ~May 2026, digantikan gpt-image-1 / gpt-image-1-mini
-
-#### Yang Perlu Dilakukan
-- Research gpt-image-1 API spec (endpoint, parameter, ukuran output)
-- Test kualitas output vs DALL-E 3 dengan prompt yang sama
-- Update `AI_IMAGE_MODELS` di `ai_image.py` — tambah `gpt-image-1` dan `gpt-image-1-mini`
-- Set gpt-image-1 sebagai default baru
-- DALL-E 3 tetap tersedia sebagai alternatif sampai resmi deprecated
-
----
-
-### ⬜ Item 10 — Error Management Profesional
-
-**Status**: TODO  
-**Kode target**: `src/utils/exceptions.py` (baru) + semua providers
-
-#### Rencana
-- Buat `src/utils/exceptions.py` dengan exception hierarchy:
-  ```python
-  class MesinViralError(Exception): ...
-  class LLMError(MesinViralError): ...
-  class TTSError(MesinViralError): ...
-  class VisualError(MesinViralError): ...
-  class PublishError(MesinViralError): ...
-  ```
-- Setiap error menyimpan: `provider`, `status_code`, `retry_after`, `is_retryable`
-- Rate limit 429: baca header `Retry-After` dan tunggu tepat sesuai instruksi API
-- DALL-E content policy rejection: sanitize prompt → retry (max 2×)
-- YouTube quota exhausted: langsung `notify_publish_fail` + set flag skip hari ini
-
----
-
-### ⬜ Item 6 — Niche DB + Keyword Fokus per Slot
-
-**Status**: TODO
-
-#### Schema Baru (Supabase)
-```sql
--- Tabel niche resmi
-CREATE TABLE niches (
-  niche_id         VARCHAR  PRIMARY KEY,
-  name             VARCHAR,
-  keywords         JSONB,
-  style            VARCHAR,
-  voice_style      VARCHAR,
-  default_hashtags JSONB,
-  is_active        BOOLEAN  DEFAULT true,
-  created_at       TIMESTAMP DEFAULT NOW()
-);
-
--- Jadwal produksi per channel
-CREATE TABLE production_schedules (
-  schedule_id      UUID     PRIMARY KEY DEFAULT gen_random_uuid(),
-  channel_id       VARCHAR,
-  cron_expression  VARCHAR,
-  niche_id         VARCHAR  REFERENCES niches(niche_id),  -- NULL = random
-  niche_focus      TEXT,    -- Keyword fokus opsional
-  is_active        BOOLEAN  DEFAULT true,
-  created_at       TIMESTAMP DEFAULT NOW()
-);
-```
-
----
-
-### ⬜ Item 7 — Multi-Channel per Tenant
-
-**Status**: TODO
-
-#### Schema Baru (Supabase)
-```sql
-CREATE TABLE channels (
-  channel_id          VARCHAR  PRIMARY KEY,
-  tenant_id           TEXT,
-  youtube_channel_id  VARCHAR,
-  channel_name        VARCHAR,
-  oauth_token_path    VARCHAR,  -- Path ke file token OAuth per channel
-  is_active           BOOLEAN  DEFAULT true,
-  plan_type           VARCHAR,
-  telegram_chat_id    VARCHAR,
-  created_at          TIMESTAMP DEFAULT NOW()
-);
-```
-
-#### File yang Dimodifikasi
-- `src/distribution/youtube_publisher.py` — baca oauth_token_path dari channel config
-- `src/orchestrator/pipeline.py` — iterate per-channel dari tabel channels
-
----
-
-### ⬜ Item 8 — Tenant Baru Onboarding
-
-**Status**: TODO  
-**Prerequisite**: Item 7 selesai
-
-#### Yang Diperlukan
-- Script `scripts/onboard_tenant.py`: interaktif, generate OAuth flow per channel
-- Insert ke tabel `tenant_configs` + `channels`
-- Test end-to-end dengan 1 tenant baru (channel berbeda)
-- Validasi: video berhasil dipublish ke channel baru
-
----
-
-## CATATAN DEVELOPMENT
-
-### Prinsip yang Tidak Boleh Dilanggar
-1. **Pipeline tidak boleh crash** — setiap fitur baru wajib fire-and-forget atau memiliki fallback
-2. **Backward compatible** — kode baru tidak boleh merusak pipeline yang sudah berjalan
-3. **Supabase kolom baru** — selalu `ADD COLUMN IF NOT EXISTS` + `DEFAULT value` yang aman
-4. **Test lokal dulu** — validasi semua fitur di local sebelum push ke VPS
-5. **Commit per item** — 1 item selesai = 1 commit + push + deploy VPS
-
-### Deploy Checklist (setiap item)
-- [ ] Kode selesai + test lokal OK
-- [ ] Migration SQL dijalankan di Supabase dashboard
-- [ ] `.env` VPS diupdate jika ada env var baru
-- [ ] `git commit` + `git push origin main`
-- [ ] `git pull` di VPS
-- [ ] Monitor 1 run produksi berikutnya
-- [ ] Update `MESIN_VIRAL.md` + `roadmap_1.md` (status → ✅ DONE)
+## PRINSIP TIDAK BOLEH DILANGGAR
+
+1. **Pipeline tidak pernah crash** — setiap fitur baru wajib wrapped try-except dengan fallback
+2. **Config-driven** — tidak ada hardcode niche, threshold, font, atau API behavior di kode
+3. **Backward compatible** — kode baru tidak merusak pipeline yang sudah jalan
+4. **Supabase DDL** — selalu `ADD COLUMN IF NOT EXISTS` + `DEFAULT` yang aman
+5. **Test lokal dulu** — validasi sebelum push ke VPS
+6. **Commit per item** — 1 item = 1 commit + deploy + monitor 1 run produksi

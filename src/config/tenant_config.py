@@ -223,10 +223,12 @@ class TenantRunConfig:
     def get_llm_provider(self):
         """Inisialisasi dan return LLM provider instance."""
         from src.providers.llm.openai import OpenAIProvider
+        from src.providers.llm.claude import ClaudeProvider
 
         cfg = self.to_provider_config()
         providers = {
             "openai": OpenAIProvider,
+            "claude": ClaudeProvider,
         }
         cls = providers.get(self.llm_provider)
         if not cls:

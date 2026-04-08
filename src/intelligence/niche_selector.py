@@ -306,7 +306,8 @@ class NicheSelector:
     def _analyze_with_ai(self, signals_summary: str, tenant_config: TenantConfig,
                          peak_region: str = "us", focus: str = None,
                          focus_is_smart: bool = False,
-                         insights: dict = None, openai_api_key: str = "") -> list:
+                         insights: dict = None, openai_api_key: str = "",
+                         recent_topics: list = None) -> list:
         niches     = get_niches()
         niche_data = niches.get(tenant_config.niche) or next(
             (v for v in niches.values() if v.get("is_active", True)), {}
@@ -337,6 +338,19 @@ class NicheSelector:
         if insights:
             insights_block = "\n" + self._build_insights_block(insights) + "\n"
 
+        # s91: recent topics → inject ke prompt agar AI tidak generate ulang angle yang sama
+        avoid_block = ""
+        if recent_topics:
+            titles = [t.get("topic", "").strip() for t in recent_topics if t.get("topic")]
+            if titles:
+                avoid_list = "\n".join(f"- {t}" for t in titles[:10])
+                avoid_block = (
+                    f"\nAVOID THESE ANGLES (already produced on this channel — do NOT repeat "
+                    f"the same theme, angle, or perspective):\n{avoid_list}\n"
+                    f"Pick entirely different angles. If a topic above is currently trending, "
+                    f"approach it from a completely new, unexplored perspective.\n"
+                )
+
         prompt = f"""You are an expert viral content strategist specializing in short-form video (60 seconds max).
 
 Analyze the following trending signals and select the TOP 5 video topics with the highest viral potential.
@@ -348,7 +362,7 @@ TARGET EMOTION: {niche_data['target_emotion']}
 TARGET AUDIENCE: {audience}
 LANGUAGE: {tenant_config.language}
 PLATFORM: YouTube Shorts, TikTok, Instagram Reels
-{focus_block}{insights_block}
+{focus_block}{insights_block}{avoid_block}
 IMPORTANT: Prioritize topics that are trending RIGHT NOW in the target region.
 Pick angles and hooks that resonate specifically with the target audience's culture and interests.
 
@@ -512,6 +526,25 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
         except Exception as _ke:
             logger.warning(f"[NicheSelector] Gagal load tenant key: {_ke}")
 
+        # s91: fetch recent topics sebelum AI call untuk diversity inject ke prompt
+        # Gunakan lookback yang sama dengan _filter_duplicates() agar konsisten
+        _recent_topics = []
+        try:
+            writer         = get_writer()
+            lookback_days  = self._get_lookback_days(tenant_config)
+            _recent_topics = writer.get_recent_topics(
+                tenant_id=tenant_config.tenant_id,
+                niche=tenant_config.niche,
+                lookback_days=lookback_days,
+            )
+            if _recent_topics:
+                logger.info(
+                    f"[NicheSelector] Recent topics untuk avoid-inject: "
+                    f"{len(_recent_topics)} topik (lookback={lookback_days}d)"
+                )
+        except Exception as _re:
+            logger.debug(f"[NicheSelector] Gagal fetch recent_topics (non-fatal): {_re}")
+
         topics      = self._analyze_with_ai(
             summary, tenant_config,
             peak_region=peak_region,
@@ -519,6 +552,7 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
             focus_is_smart=focus_is_smart,
             insights=insights,
             openai_api_key=_openai_key,
+            recent_topics=_recent_topics,
         )
 
         # s84d: apply historical_factor jika grade >= optimizing
@@ -536,8 +570,8 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
                 # Re-sort setelah score adjustment
                 topics = sorted(topics, key=lambda x: x["viral_score"], reverse=True)
 
-        # s71: Duplicate prevention
-        topics = self._filter_duplicates(topics, tenant_config)
+        # s71: Duplicate prevention (pass _recent_topics agar tidak re-query Supabase)
+        topics = self._filter_duplicates(topics, tenant_config, recent=_recent_topics)
 
         result = {
             "tenant_id": tenant_config.tenant_id,
@@ -574,12 +608,13 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
             return None
 
 
-    def _filter_duplicates(self, topics: list, tenant_config: TenantConfig) -> list:
+    def _filter_duplicates(self, topics: list, tenant_config: TenantConfig,
+                           recent: list = None) -> list:
         """
         Filter topik yang sudah diproduksi dalam lookback_days terakhir.
 
         Logika:
-          1. Ambil recent_topics dari Supabase (per tenant + niche)
+          1. Gunakan recent yang sudah di-fetch (dari select()) atau query ulang jika tidak ada
           2. Filter topics yang slug-nya tidak ada di recent_slugs
           3. Jika semua duplikat → ambil topik paling lama (LRU) sebagai safety net
              Produksi tidak pernah berhenti.
@@ -587,14 +622,14 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
         if not topics:
             return topics
 
-        writer        = get_writer()
-        lookback_days = self._get_lookback_days(tenant_config)
-
-        recent = writer.get_recent_topics(
-            tenant_id=tenant_config.tenant_id,
-            niche=tenant_config.niche,
-            lookback_days=lookback_days,
-        )
+        if recent is None:
+            writer        = get_writer()
+            lookback_days = self._get_lookback_days(tenant_config)
+            recent = writer.get_recent_topics(
+                tenant_id=tenant_config.tenant_id,
+                niche=tenant_config.niche,
+                lookback_days=lookback_days,
+            )
 
         if not recent:
             logger.info("[NicheSelector] Tidak ada riwayat topik — semua dianggap baru")

@@ -567,7 +567,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 round(climax + cta, 2),
             ]
             logger.info(f"[Renderer] section_durations: {clip_durations}")
-        clip_list_path = self._create_clip_list(clips, audio_duration, output_dir, clip_durations, run_id=run_id)
+        clip_list_path = self._create_clip_list(clips, total_duration, output_dir, clip_durations, run_id=run_id)
 
         # Load caption style dari tenant_configs
         caption_style = self._load_caption_style(tenant_config)

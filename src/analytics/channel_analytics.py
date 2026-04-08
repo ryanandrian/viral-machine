@@ -318,7 +318,7 @@ class ChannelAnalytics:
                         endDate   = end_date,
                         metrics = (
                             "views,estimatedMinutesWatched,"
-                            "averageViewPercentage,cardClickRate,"
+                            "averageViewPercentage,impressionClickThroughRate,"
                             "subscribersGained"
                         ),
                         dimensions = "video",
@@ -332,7 +332,7 @@ class ChannelAnalytics:
                 if rows:
                     # Column order matches metrics parameter order
                     # [video_id, views, estimatedMinutesWatched, averageViewPercentage,
-                    #  cardClickRate, subscribersGained]
+                    #  impressionClickThroughRate, subscribersGained]
                     row = rows[0]
                     metrics["watch_time_mins"]   = int(row[2])
                     metrics["avg_view_pct"]      = round(float(row[3]), 1)
