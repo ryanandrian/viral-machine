@@ -567,7 +567,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 round(climax + cta, 2),
             ]
             logger.info(f"[Renderer] section_durations: {clip_durations}")
-        clip_list_path = self._create_clip_list(clips, total_duration, output_dir, clip_durations, run_id=run_id)
+        # clip_list harus kompensasi xfade loss agar Step A output = audio_duration
+        # Step A xfade: (n-1) × 0.4s loss → target harus audio_duration + loss
+        # Sehingga: Step B tpad(trailing_silence) → total_duration = audio sync sempurna
+        _xfade_loss = (len(clips) - 1) * 0.4 if len(clips) >= 2 else 0
+        clip_list_target = audio_duration + _xfade_loss
+        clip_list_path = self._create_clip_list(clips, clip_list_target, output_dir, clip_durations, run_id=run_id)
 
         # Load caption style dari tenant_configs
         caption_style = self._load_caption_style(tenant_config)
@@ -615,7 +620,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                     clip_durations_actual.append(float(cl_line.split()[1]))
         except Exception as e:
             logger.warning(f"[Renderer] Could not read clip durations: {e}")
-            clip_durations_actual = [audio_duration / len(clips)] * len(clips)
+            clip_durations_actual = [clip_list_target / len(clips)] * len(clips)
 
         # Jika hanya 1 clip atau gagal baca durasi — fallback ke concat biasa
         if len(clips) < 2 or len(clip_durations_actual) != len(clips):
