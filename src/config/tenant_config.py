@@ -112,6 +112,11 @@ class TenantRunConfig:
     default_niche_rotation: list = field(default_factory=list)  # ["universe_mysteries", ...]
     niche_rotation_index:   int  = 0                            # posisi saat ini di rotasi
 
+    # Jenis konten — Short Form vs Long Form (s92)
+    # 'short' → YouTube Shorts, portrait 9:16
+    # 'long'  → YouTube regular, landscape 16:9 (belum diimplementasi)
+    content_type: str = "short"
+
     # OAuth Token — multi-channel ready (s84d)
     # Konvensi: tokens/{channel_id}.json — satu file per channel
     # Fallback: token_youtube.json (backward compatible)
@@ -431,6 +436,8 @@ class TenantConfigManager:
                 niche_rotation_index    = int(row.get("niche_rotation_index") or 0),
                 # OAuth Token path (s84d) — opsional, auto-resolve jika kosong
                 youtube_token_path      = row.get("youtube_token_path") or "",
+                # Jenis konten (s92)
+                content_type            = row.get("content_type", "short") or "short",
             )
 
         except Exception as e:

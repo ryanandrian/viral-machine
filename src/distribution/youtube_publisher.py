@@ -168,7 +168,8 @@ class YouTubePublisher:
 
     def publish(self, video_path: str, script: dict,
                 tenant_config: TenantConfig,
-                thumbnail_path: str = "") -> dict:
+                thumbnail_path: str = "",
+                content_type: str = "short") -> dict:
         """
         Upload video ke YouTube Shorts.
         Returns: dict berisi video_id dan URL jika berhasil.
@@ -225,7 +226,7 @@ class YouTubePublisher:
 
             # ── s72: Upload custom thumbnail ──────────────────
             if thumbnail_path and video_id:
-                self._upload_thumbnail(youtube, video_id, thumbnail_path)
+                self._upload_thumbnail(youtube, video_id, thumbnail_path, content_type)
 
             return {
                 "platform": "youtube",
@@ -240,29 +241,55 @@ class YouTubePublisher:
             logger.error(f"YouTube upload error: {e}")
             return {"platform": "youtube", "status": "failed", "error": str(e)}
 
-    def _upload_thumbnail(self, youtube, video_id: str, thumbnail_path: str) -> bool:
-        """s72: Upload custom thumbnail via YouTube thumbnails.set()."""
+    def _upload_thumbnail(self, youtube, video_id: str, thumbnail_path: str,
+                          content_type: str = "short") -> bool:
+        """
+        s72/s92: Upload custom thumbnail via YouTube thumbnails.set().
+
+        Dimensi berdasarkan content_type:
+          short → 1080×1920 portrait (9:16) — Shorts, min width YouTube 640px terpenuhi
+          long  → 1280×720  landscape (16:9) — regular video
+        """
         import os
         if not thumbnail_path or not os.path.exists(thumbnail_path):
             logger.warning(f"[YouTube] Thumbnail tidak ada: {thumbnail_path}")
             return False
         try:
-            # Resize ke 1280x720, max 2MB (YouTube limit)
             import subprocess as sp
+
+            # Dimensi target berdasarkan content_type
+            if content_type == "long":
+                target_w, target_h = 1280, 720
+            else:
+                # short (default) — portrait 9:16
+                target_w, target_h = 1080, 1920
+
+            scale_filter = (
+                f"scale={target_w}:{target_h}:force_original_aspect_ratio=decrease,"
+                f"pad={target_w}:{target_h}:(ow-iw)/2:(oh-ih)/2,setsar=1"
+            )
+
             resized = thumbnail_path.replace(".jpg", "_yt.jpg")
             sp.run([
                 "ffmpeg", "-y", "-i", thumbnail_path,
-                "-vf", "scale=1280:720:force_original_aspect_ratio=decrease",
-                "-q:v", "4", resized
+                "-vf", scale_filter,
+                "-q:v", "3", resized
             ], capture_output=True)
+
             # Pakai resized jika berhasil dan < 2MB, fallback ke original
             if os.path.exists(resized) and os.path.getsize(resized) < 2097152:
                 upload_path = resized
+                logger.info(
+                    f"[YouTube] Thumbnail resized → {target_w}×{target_h} "
+                    f"({content_type}) | {os.path.getsize(resized)/1024:.0f}KB"
+                )
             elif os.path.getsize(thumbnail_path) < 2097152:
                 upload_path = thumbnail_path
+                logger.warning("[YouTube] Thumbnail resize gagal — pakai original")
             else:
                 logger.warning("[YouTube] Thumbnail terlalu besar, skip")
                 return False
+
             from googleapiclient.http import MediaFileUpload
             media = MediaFileUpload(
                 upload_path, mimetype="image/jpeg", resumable=False
@@ -270,7 +297,7 @@ class YouTubePublisher:
             youtube.thumbnails().set(
                 videoId=video_id, media_body=media
             ).execute()
-            logger.info(f"[YouTube] s72 Thumbnail uploaded OK: {video_id}")
+            logger.info(f"[YouTube] Thumbnail uploaded OK: {video_id} ({content_type})")
             return True
         except Exception as e:
             logger.warning(f"[YouTube] Thumbnail upload gagal (non-critical): {e}")

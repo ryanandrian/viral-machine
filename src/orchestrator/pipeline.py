@@ -304,6 +304,7 @@ class Pipeline:
                 yt_result = self.youtube_publisher.publish(
                     video_path, script, tenant_config,
                     thumbnail_path=result.get("thumbnail_path", ""),
+                    content_type=getattr(run_config, "content_type", "short"),
                 )
                 result["published"]["youtube"] = yt_result
 
