@@ -726,7 +726,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                     return ""
 
         logger.info("Clips concatenated successfully")
-
+        try:
+            _p = subprocess.run(["ffprobe","-v","quiet","-print_format","json","-show_streams",temp_path],capture_output=True,text=True)
+            _sd = {s["codec_type"]:s.get("duration","?") for s in json.loads(_p.stdout).get("streams",[])}
+            logger.info(f"[StepA-Diag] temp_path video={_sd.get('video','?')}s | target=audio_duration={audio_duration:.3f}s")
+        except Exception as _e:
+            logger.warning(f"[StepA-Diag] ffprobe gagal: {_e}")
 
         # ── Step B: Add audio + subtitles ─────────────────────────────
         logger.info("Step B: Adding audio + captions...")
@@ -784,6 +789,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             f"Video rendered: {output_path} ({size_mb:.1f} MB) "
             f"| caption: {caption_mode}"
         )
+        try:
+            _p2 = subprocess.run(["ffprobe","-v","quiet","-print_format","json","-show_streams",output_path],capture_output=True,text=True)
+            _sd2 = {s["codec_type"]:s.get("duration","?") for s in json.loads(_p2.stdout).get("streams",[])}
+            logger.info(f"[StepB-Diag] output video={_sd2.get('video','?')}s audio={_sd2.get('audio','?')}s | expected total_duration={total_duration:.3f}s")
+        except Exception as _e2:
+            logger.warning(f"[StepB-Diag] ffprobe gagal: {_e2}")
 
         # ── s6c4: Music mixing (jika music_enabled) ────────────────
         try:
