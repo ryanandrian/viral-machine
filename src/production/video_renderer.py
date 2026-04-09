@@ -571,7 +571,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         # Step A xfade: (n-1) × 0.4s loss → target harus audio_duration + loss
         # Sehingga: Step B tpad(trailing_silence) → total_duration = audio sync sempurna
         _xfade_loss = (len(clips) - 1) * 0.4 if len(clips) >= 2 else 0
-        clip_list_target = total_duration + _xfade_loss
+        clip_list_target = audio_duration + _xfade_loss
         clip_list_path = self._create_clip_list(clips, clip_list_target, output_dir, clip_durations, run_id=run_id)
 
         # Load caption style dari tenant_configs
