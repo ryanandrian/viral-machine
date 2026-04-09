@@ -184,14 +184,17 @@ class VisualAssembler:
             f"[VisualAssembler] section_durations → clip_durations: "
             f"{durations} = {total:.1f}s"
         )
-        # Scale clip durations agar total = audio_duration aktual
+        # Scale clip durations agar total = audio_duration + xfade_loss
+        # xfade_loss = (n-1) × 0.4s — dikompensasi agar Step A xfade output = audio_duration
         if audio_duration > 0:
+            xfade_loss = (n_clips - 1) * 0.4 if n_clips >= 2 else 0.0
+            target_total = audio_duration + xfade_loss
             total_raw = sum(durations)
-            scale     = audio_duration / total_raw if total_raw > 0 else 1.0
+            scale     = target_total / total_raw if total_raw > 0 else 1.0
             durations = [round(d * scale, 4) for d in durations]
             logger.info(
                 f"[VisualAssembler] Scaled durations: {durations} "
-                f"= {sum(durations):.1f}s (audio: {audio_duration:.1f}s)"
+                f"= {sum(durations):.1f}s (audio: {audio_duration:.1f}s + xfade_loss: {xfade_loss:.1f}s)"
             )
         return durations
 
