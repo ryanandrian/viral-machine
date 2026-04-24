@@ -23,12 +23,44 @@ load_dotenv()
 # Niche Registry — fully Supabase-driven via get_niches()
 # Tidak ada hardcode di sini. Admin tambah/nonaktifkan niche via tabel niches di Supabase.
 
-# Plan limits — dikontrol di sini, bukan di database
-PLAN_LIMITS = {
+# Plan limits — Supabase-driven (tabel plan_limits).
+# Fallback dipakai hanya jika Supabase tidak tersedia.
+_PLAN_LIMITS_FALLBACK = {
     "starter": {"max_videos_per_day": 1,  "max_channels": 1},
     "pro":     {"max_videos_per_day": 3,  "max_channels": 3},
     "agency":  {"max_videos_per_day": 5,  "max_channels": 10},
 }
+_plan_limits_cache: Optional[dict] = None
+
+
+def _get_plan_limits() -> dict:
+    """Load plan limits dari Supabase tabel plan_limits. Cache per-process."""
+    global _plan_limits_cache
+    if _plan_limits_cache is not None:
+        return _plan_limits_cache
+    try:
+        from supabase import create_client
+        url = os.getenv("SUPABASE_URL")
+        key = os.getenv("SUPABASE_KEY")
+        if url and key:
+            sb     = create_client(url, key)
+            result = sb.table("plan_limits").select("*").execute()
+            if result.data:
+                limits = {
+                    row["plan_type"]: {
+                        "max_videos_per_day": row.get("max_videos_per_day", 1),
+                        "max_channels":       row.get("max_channels", 1),
+                    }
+                    for row in result.data if row.get("plan_type")
+                }
+                if limits:
+                    _plan_limits_cache = limits
+                    logger.info(f"[PlanLimits] Loaded from Supabase: {list(limits.keys())}")
+                    return _plan_limits_cache
+    except Exception as e:
+        logger.warning(f"[PlanLimits] Supabase load gagal ({e}) — pakai fallback")
+    _plan_limits_cache = _PLAN_LIMITS_FALLBACK
+    return _plan_limits_cache
 
 # Publish slots optimal per jumlah video (UTC)
 OPTIMAL_PUBLISH_SLOTS = {
@@ -366,9 +398,10 @@ class TenantConfigManager:
             except Exception as e:
                 logger.warning(f"[TenantConfig] Gagal load niche visual data: {e}")
 
-            # Validasi plan limits
+            # Validasi plan limits — dari Supabase, bukan hardcode
             plan_type           = row.get("plan_type", "starter")
-            limits              = PLAN_LIMITS.get(plan_type, PLAN_LIMITS["starter"])
+            _limits_map         = _get_plan_limits()
+            limits              = _limits_map.get(plan_type, _limits_map.get("starter", {"max_videos_per_day": 1, "max_channels": 1}))
             videos_per_day      = min(
                 row.get("videos_per_day", 1),
                 limits["max_videos_per_day"]

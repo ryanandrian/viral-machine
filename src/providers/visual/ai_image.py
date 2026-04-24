@@ -21,23 +21,20 @@ from src.providers.visual.base import VisualProvider, VideoClip, VisualError
 # Model registry
 AI_IMAGE_MODELS = {
     "flux-schnell": {
-        "platform":     "replicate",
-        "model_id":     "black-forest-labs/flux-schnell",
-        "cost_per_img": 0.003,
-        "description":  "Tercepat, kualitas sangat baik",
+        "platform":    "replicate",
+        "model_id":    "black-forest-labs/flux-schnell",
+        "description": "Tercepat, kualitas sangat baik",
     },
     "gpt-image-1-mini": {
-        "platform":     "openai",
-        "model_id":     "gpt-image-1-mini",
-        "cost_per_img": 0.005,
-        "description":  "GPT Image 1 Mini, low quality, lebih murah",
-        "size":         "1024x1536",
+        "platform":    "openai",
+        "model_id":    "gpt-image-1-mini",
+        "description": "GPT Image 1 Mini, low quality",
+        "size":        "1024x1536",
     },
     "stable-diffusion": {
-        "platform":     "replicate",
-        "model_id":     "stability-ai/stable-diffusion:db21e45d3f7023abc2a46ee38a23973f6dce16bb082a930b0c49861f96d1e5bf",
-        "cost_per_img": 0.001,
-        "description":  "Paling murah",
+        "platform":    "replicate",
+        "model_id":    "stability-ai/stable-diffusion:db21e45d3f7023abc2a46ee38a23973f6dce16bb082a930b0c49861f96d1e5bf",
+        "description": "Alternatif Replicate",
     },
 }
 
@@ -98,9 +95,7 @@ class AIImageProvider(VisualProvider):
             )
 
         logger.info(
-            f"[AIImage] Initialized: model={self.ai_model} "
-            f"niche={self.niche} "
-            f"cost=${self.model_config['cost_per_img']:.3f}/img"
+            f"[AIImage] Initialized: model={self.ai_model} niche={self.niche}"
         )
 
     async def fetch_clips(
@@ -120,7 +115,6 @@ class AIImageProvider(VisualProvider):
         output_dir.mkdir(parents=True, exist_ok=True)
 
         clips: list[VideoClip] = []
-        total_cost = 0.0
 
         for i, keyword in enumerate(keywords[:count]):
             try:
@@ -149,8 +143,6 @@ class AIImageProvider(VisualProvider):
                 self._image_to_video(img_path, clip_path, duration=duration, clip_index=i)
 
                 size_mb = clip_path.stat().st_size / (1024 * 1024)
-                cost    = self.model_config["cost_per_img"]
-                total_cost += cost
 
                 clips.append(VideoClip(
                     path=clip_path,
@@ -162,8 +154,7 @@ class AIImageProvider(VisualProvider):
                     provider=self.provider_name,
                 ))
                 logger.info(
-                    f"[AIImage] ✓ Scene {i+1}: {clip_path.name} "
-                    f"({size_mb:.1f}MB) {duration}s ~${cost:.3f}"
+                    f"[AIImage] ✓ Scene {i+1}: {clip_path.name} ({size_mb:.1f}MB) {duration}s"
                 )
 
             except Exception as e:
@@ -199,7 +190,6 @@ class AIImageProvider(VisualProvider):
                             source_url=f"ai_generated:retry_{attempt}",
                             provider=self.provider_name,
                         ))
-                        total_cost += self.model_config["cost_per_img"]
                         logger.info(f"[AIImage] ✅ Scene {i+1} berhasil pada attempt {attempt}")
                         succeeded = True
                         break
@@ -213,10 +203,7 @@ class AIImageProvider(VisualProvider):
                     )
                     continue
 
-        logger.info(
-            f"[AIImage] Complete: {len(clips)}/{count} clips "
-            f"| total cost ~${total_cost:.3f}"
-        )
+        logger.info(f"[AIImage] Complete: {len(clips)}/{count} clips")
         return clips
 
     def extract_keywords_from_script(self, script: dict, niche: str) -> list[str]:

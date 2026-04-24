@@ -24,16 +24,12 @@ from src.providers.llm.base import LLMProvider, LLMResponse, LLMError
 
 SUPPORTED_MODELS = {
     "gpt-4o-mini": {
-        "description":        "Cepat, murah — default pipeline",
-        "input_cost_per_1m":  0.15,
-        "output_cost_per_1m": 0.60,
-        "max_tokens":         16_000,
+        "description": "Cepat — default pipeline",
+        "max_tokens":  16_000,
     },
     "gpt-4o": {
-        "description":        "Lebih cerdas — untuk kasus kompleks",
-        "input_cost_per_1m":  2.50,
-        "output_cost_per_1m": 10.00,
-        "max_tokens":         16_000,
+        "description": "Lebih cerdas — untuk kasus kompleks",
+        "max_tokens":  16_000,
     },
 }
 

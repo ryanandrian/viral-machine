@@ -98,6 +98,7 @@ def _load_from_supabase() -> dict:
             "visual_fallbacks": row.get("visual_fallbacks") or [],
             "mood_priority":    row.get("mood_priority") or [],
             "default_hashtags": row.get("default_hashtags") or [],
+            "section_timing":   row.get("section_timing") or {},
         }
     return niches
 

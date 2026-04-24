@@ -87,12 +87,22 @@ def _build_emotional_peak_guidance(niche_profile: dict) -> str:
 
 load_dotenv()
 
-SECTION_TIMING = {
+_DEFAULT_SECTION_TIMING = {
     "hook": 3, "mystery_drop": 5, "build_up": 12,
     "pattern_interrupt": 2, "core_facts": 15,
     "curiosity_bridge": 3, "climax": 8, "cta": 3,
 }
-TARGET_DURATION = sum(SECTION_TIMING.values())
+
+def _get_section_timing(niche: str) -> dict:
+    """Load section timing dari tabel niches (Supabase). Fallback ke default jika tidak ada."""
+    try:
+        niches = get_niches()
+        timing = (niches.get(niche) or {}).get("section_timing") or {}
+        if timing and all(k in timing for k in _DEFAULT_SECTION_TIMING):
+            return timing
+    except Exception:
+        pass
+    return _DEFAULT_SECTION_TIMING.copy()
 
 
 def _get_profile(niche: str) -> dict:
@@ -187,13 +197,15 @@ def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, ins
     Build prompt. Jika feedback ada (dari retry), sisipkan sebagai instruksi perbaikan.
     niche_visual_style: dict dari tabel niches (base_style, color_palette, atmosphere).
     """
-    profile    = _get_profile(niche)
-    niches     = get_niches()
-    niche_data = niches.get(niche) or next(
+    profile        = _get_profile(niche)
+    niches         = get_niches()
+    niche_data     = niches.get(niche) or next(
         (v for v in niches.values() if v.get("is_active", True)), {}
     )
-    WPS        = 2.4
-    words      = {k: max(4, round(v * WPS)) for k, v in SECTION_TIMING.items()}
+    section_timing = _get_section_timing(niche)
+    target_duration = sum(section_timing.values())
+    WPS            = 2.4
+    words          = {k: max(4, round(v * WPS)) for k, v in section_timing.items()}
 
     feedback_block = ""
     if feedback:
@@ -227,7 +239,7 @@ VISUAL DIRECTION — apply to all visual_suggestions prompts:
 TOPIC: {topic.get('topic', '')}
 ANGLE: {topic.get('angle', topic.get('topic', ''))}
 NICHE: {niche_data.get('name', niche)}
-TARGET: {TARGET_DURATION} seconds total
+TARGET: {target_duration} seconds total
 TONE: {profile['tone']}
 STYLE: {profile['style']}
 AVOID: {profile['avoid']}
@@ -236,39 +248,39 @@ HOOK FORMULA: {profile['hook_style']}
 {visual_direction_block}{insights_section}{feedback_block}
 Write all 8 sections. Each has ONE job. Be specific to this topic — no generic phrases:
 
-1. HOOK ({SECTION_TIMING['hook']}s ~{words['hook']} words)
+1. HOOK ({section_timing['hook']}s ~{words['hook']} words)
    JOB: Stop scroll in the first second. Create an information gap that demands resolution.
    MUST: Use {profile['hook_style']}. The most counterintuitive angle of THIS specific topic.
    FORBIDDEN: "Did you know", "In this video", "Today we", any opener that could apply to any topic.
    QUALITY BAR: If this hook could belong to a different video, rewrite it.
 
-2. MYSTERY DROP ({SECTION_TIMING['mystery_drop']}s ~{words['mystery_drop']} words)
+2. MYSTERY DROP ({section_timing['mystery_drop']}s ~{words['mystery_drop']} words)
    JOB: Before answering hook, introduce a NEW layer of mystery specific to this topic.
    MUST: A detail that makes THIS topic even stranger than the hook implied.
    FORBIDDEN: Generic transitions. Every word must be about THIS specific topic.
 
-3. BUILD UP ({SECTION_TIMING['build_up']}s ~{words['build_up']} words)
+3. BUILD UP ({section_timing['build_up']}s ~{words['build_up']} words)
    JOB: Deliver surprising fact 1 with context. Make the viewer feel the weight and scale.
    MUST: At least one specific number, name, or date anchored to this topic.
    TECHNIQUE: Human-scale analogy — translate abstract scale into something felt viscerally.
 
-4. PATTERN INTERRUPT ({SECTION_TIMING['pattern_interrupt']}s ~{words['pattern_interrupt']} words)
+4. PATTERN INTERRUPT ({section_timing['pattern_interrupt']}s ~{words['pattern_interrupt']} words)
    JOB: Shatter the rhythm before they grow comfortable. Reframe everything said so far.
    MUST: Write something SPECIFIC to this topic that reframes the previous section unexpectedly.
    FORBIDDEN: "Wait. It gets worse." or any phrase that could appear in any video on any topic.
    QUALITY BAR: If this line could be copy-pasted into a different video, rewrite it.
 
-5. CORE FACTS ({SECTION_TIMING['core_facts']}s ~{words['core_facts']} words)
+5. CORE FACTS ({section_timing['core_facts']}s ~{words['core_facts']} words)
    JOB: Facts 2 and 3 — each more surprising than the last. Maximum information density.
    MUST: At least 2 distinct, specific, verifiable facts. Each sentence adds new information.
    FORBIDDEN: Repeating anything said before. Vague claims without specifics.
 
-6. CURIOSITY BRIDGE ({SECTION_TIMING['curiosity_bridge']}s ~{words['curiosity_bridge']} words)
+6. CURIOSITY BRIDGE ({section_timing['curiosity_bridge']}s ~{words['curiosity_bridge']} words)
    JOB: Create maximum anticipation for the climax. They must feel they cannot stop now.
    MUST: Point toward something not yet revealed — a specific unanswered question from THIS topic.
    FORBIDDEN: Summarizing. Generic "but it gets even more interesting" without specifics.
 
-7. CLIMAX ({SECTION_TIMING['climax']}s ~{words['climax']} words)
+7. CLIMAX ({section_timing['climax']}s ~{words['climax']} words)
    JOB: The moment they feel something they cannot name but must share.
    MUST: The most unexpected, most impactful truth about this topic. Let it land in silence.
    TECHNIQUE: Write the climax first, then build everything before toward it.
@@ -282,7 +294,7 @@ Write all 8 sections. Each has ONE job. Be specific to this topic — no generic
    QUALITY BAR: Read the climax aloud alone. If you don't feel something — rewrite it.
    The viewer's next instinct should be to sit in silence, screenshot it, or tell someone immediately.
 
-8. CTA ({SECTION_TIMING['cta']}s ~{words['cta']} words)
+8. CTA ({section_timing['cta']}s ~{words['cta']} words)
    JOB: Create a chemical reaction — leave something unresolved that only this channel completes.
    PHILOSOPHY: Never ask. Never instruct. Chemistry is built through resonance, not solicitation.
    The viewer must feel that following is THEIR decision — the only logical response to what
@@ -326,8 +338,8 @@ Return ONLY valid JSON — no markdown, no preamble, no explanation:
   "cta": "exact cta text — must sound human, not scripted",
   "full_script": "all 8 sections joined as one naturally flowing paragraph, no section labels",
   "word_count": 140,
-  "estimated_duration_seconds": {TARGET_DURATION},
-  "section_durations": {json.dumps(SECTION_TIMING)},
+  "estimated_duration_seconds": {target_duration},
+  "section_durations": {json.dumps(section_timing)},
   "visual_suggestions": [
     "Scene 1 — hook: [Look at the hook text you just wrote. Identify the single most concrete noun, entity, or visual moment in those exact words — not the topic in general, but the SPECIFIC thing named or implied in YOUR hook. Build the entire DALL-E 3 prompt around that one element. Character: dramatic, tension-filled, stops the scroll in 1 second. Lighting: high contrast, sharp shadows, or stark cosmic void. Camera: extreme close-up on a detail OR extreme wide shot showing overwhelming scale. Apply VISUAL DIRECTION style. Vertical 9:16, photorealistic, no text no words no letters no numbers no signs no logos no watermarks.]",
     "Scene 2 — mystery drop: [Look at the mystery_drop text you just wrote. What is the single most specific, uncanny, or unsettling concrete thing you described? Show THAT — not a generic mysterious atmosphere. Character: mysterious, raises more questions than it answers, something is being concealed. Lighting: low-key, shadows dominate, one element catches ambient glow. Camera: subject partially obscured, slow-reveal composition. Apply VISUAL DIRECTION style. Vertical 9:16, photorealistic, no text no words no letters no numbers no signs no logos no watermarks.]",
@@ -363,7 +375,7 @@ class ScriptEngine:
         raw = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', raw)
         return raw.strip()
 
-    def _validate_and_fix(self, script, topic):
+    def _validate_and_fix(self, script, topic, section_timing: dict | None = None):
         if not isinstance(script, dict):
             return None
         required = ["hook", "build_up", "core_facts", "climax", "cta", "full_script"]
@@ -383,7 +395,7 @@ class ScriptEngine:
                 f"Vertical 9:16, photorealistic, no text no words no letters no numbers no signs."
             )
         script["visual_suggestions"] = vs[:6]
-        script.setdefault("section_durations", SECTION_TIMING)
+        script.setdefault("section_durations", section_timing or _DEFAULT_SECTION_TIMING)
         if not script.get("full_script"):
             parts = [script.get(s, "") for s in
                      ["hook","mystery_drop","build_up","pattern_interrupt",
@@ -397,8 +409,9 @@ class ScriptEngine:
             import anthropic
             if not api_key:
                 raise ValueError("llm_api_key (Anthropic) tidak ada di tenant_configs")
-            client   = anthropic.Anthropic(api_key=api_key)
-            response = client.messages.create(
+            client        = anthropic.Anthropic(api_key=api_key)
+            section_timing = _get_section_timing(niche)
+            response      = client.messages.create(
                 model="claude-sonnet-4-6",
                 max_tokens=2000,
                 temperature=1,
@@ -409,7 +422,7 @@ class ScriptEngine:
             )
             raw    = response.content[0].text.strip()
             script = json.loads(self._clean_json(raw))
-            script = self._validate_and_fix(script, topic)
+            script = self._validate_and_fix(script, topic, section_timing)
             if script:
                 logger.info(f"[ScriptEngine] Claude attempt {attempt} OK")
             return script
@@ -423,8 +436,9 @@ class ScriptEngine:
             if not api_key:
                 raise ValueError("visual_api_key (OpenAI) tidak ada di tenant_configs")
             from openai import OpenAI
-            client   = OpenAI(api_key=api_key)
-            response = client.chat.completions.create(
+            client        = OpenAI(api_key=api_key)
+            section_timing = _get_section_timing(niche)
+            response      = client.chat.completions.create(
                 model="gpt-4o-mini",
                 response_format={"type": "json_object"},
                 temperature=0.85,
@@ -438,7 +452,7 @@ class ScriptEngine:
             )
             raw    = response.choices[0].message.content.strip()
             script = json.loads(self._clean_json(raw))
-            script = self._validate_and_fix(script, topic)
+            script = self._validate_and_fix(script, topic, section_timing)
             if script:
                 logger.info(f"[ScriptEngine] GPT-4o-mini attempt {attempt} OK")
             return script
