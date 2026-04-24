@@ -221,6 +221,48 @@ class SupabaseWriter:
         except Exception as e:
             logger.warning(f"[SupabaseWriter] write_failed_run gagal (non-fatal): {e}")
 
+    # ── Query untuk niche performance (Bug #2) ───────────────────────────────
+
+    def get_niche_performance(
+        self,
+        tenant_id: str,
+        days:      int = 30,
+    ) -> dict:
+        """
+        Return {niche: avg_views} dari tabel video_analytics dalam N hari terakhir.
+        Dict kosong jika belum ada data atau Supabase tidak bisa diakses.
+        """
+        if not self.is_available:
+            return {}
+        try:
+            since = (datetime.utcnow() - timedelta(days=days)).isoformat()
+            result = (
+                self._client.table("video_analytics")
+                .select("niche, views")
+                .eq("tenant_id", tenant_id)
+                .gte("published_at", since)
+                .execute()
+            )
+            rows = result.data or []
+            niche_totals: dict[str, list[int]] = {}
+            for row in rows:
+                niche = row.get("niche")
+                views = row.get("views")
+                if niche and views is not None:
+                    niche_totals.setdefault(niche, []).append(int(views))
+            perf = {n: sum(v) / len(v) for n, v in niche_totals.items() if v}
+            if perf:
+                logger.info(
+                    f"[SupabaseWriter] Niche performance ({days}d): "
+                    + ", ".join(f"{n}={v:.0f}" for n, v in perf.items())
+                )
+            else:
+                logger.info("[SupabaseWriter] Niche performance: no data yet")
+            return perf
+        except Exception as e:
+            logger.warning(f"[SupabaseWriter] get_niche_performance gagal (non-fatal): {e}")
+            return {}
+
     # ── Query untuk duplicate prevention ─────────────────────────────────────
 
     def get_recent_topics(

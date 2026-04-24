@@ -102,9 +102,9 @@ class YouTubePublisher:
         except Exception:
             niche_tags = []
 
-        topic_tags = [h for h in hashtags if h.startswith("#")][:5]
-        niche_tags = [h for h in niche_tags if h not in topic_tags][:7]
-        universal  = ["#shorts", "#viral", "#facts"]
+        topic_tags = [h for h in hashtags if h.startswith("#")][:2]
+        niche_tags = [h for h in niche_tags if h not in topic_tags][:2]
+        universal  = ["#Shorts"]
         all_hashtags = topic_tags + niche_tags + universal
         seen = set()
         final_hashtags = []
@@ -112,7 +112,7 @@ class YouTubePublisher:
             if h.lower() not in seen:
                 seen.add(h.lower())
                 final_hashtags.append(h)
-        hashtag_str = " ".join(final_hashtags[:15])
+        hashtag_str = " ".join(final_hashtags[:5])
 
         # ── s73: Description — CTA + hashtag dijamin masuk ──
         footer     = f"\n{cta}\n\n{hashtag_str}"
@@ -325,6 +325,46 @@ class YouTubePublisher:
         except Exception as e:
             logger.error(f"Get channel stats error: {e}")
         return {}
+
+    def update_channel_description(self, tenant_config: TenantConfig, description: str) -> bool:
+        """
+        Update channel description via YouTube API channels.update.
+        Dipanggil satu kali — cek flag .data/channel_updated.flag sebelum run.
+        Return True jika berhasil atau sudah pernah dijalankan.
+        """
+        flag_path = ".data/channel_updated.flag"
+        if os.path.exists(flag_path):
+            logger.info("[YouTube] Channel description sudah diupdate sebelumnya — skip")
+            return True
+        try:
+            creds = self._get_credentials(tenant_config)
+            youtube = build("youtube", "v3", credentials=creds)
+
+            channel_response = youtube.channels().list(
+                part="snippet", mine=True
+            ).execute()
+            if not channel_response.get("items"):
+                logger.warning("[YouTube] Channel tidak ditemukan — skip update description")
+                return False
+
+            channel_id = channel_response["items"][0]["id"]
+            snippet = channel_response["items"][0]["snippet"]
+            snippet["description"] = description
+
+            youtube.channels().update(
+                part="snippet",
+                body={"id": channel_id, "snippet": snippet}
+            ).execute()
+
+            os.makedirs(".data", exist_ok=True)
+            with open(flag_path, "w") as f:
+                f.write(time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+
+            logger.info(f"[YouTube] Channel description updated OK: {channel_id}")
+            return True
+        except Exception as e:
+            logger.error(f"[YouTube] update_channel_description gagal (non-critical): {e}")
+            return False
 
 
 if __name__ == "__main__":

@@ -26,12 +26,12 @@ AI_IMAGE_MODELS = {
         "cost_per_img": 0.003,
         "description":  "Tercepat, kualitas sangat baik",
     },
-    "dall-e-3": {
+    "gpt-image-1-mini": {
         "platform":     "openai",
-        "model_id":     "dall-e-3",
-        "cost_per_img": 0.040,
-        "description":  "Kualitas tertinggi, DALL-E 3 memahami natural language",
-        "size":         "1024x1792",
+        "model_id":     "gpt-image-1-mini",
+        "cost_per_img": 0.005,
+        "description":  "GPT Image 1 Mini, low quality, lebih murah",
+        "size":         "1024x1536",
     },
     "stable-diffusion": {
         "platform":     "replicate",
@@ -71,6 +71,7 @@ class AIImageProvider(VisualProvider):
             )
 
         self.model_config       = AI_IMAGE_MODELS[self.ai_model]
+        self.image_quality      = config.get("image_quality", "low")
         self.niche              = config.get("niche", "universe_mysteries")
         # Niche visual data — dari Supabase via TenantRunConfig (tidak hardcode)
         self.niche_visual_style     = config.get("niche_visual_style") or {}
@@ -86,7 +87,7 @@ class AIImageProvider(VisualProvider):
                 or os.getenv("REPLICATE_API_TOKEN", "")
             )
         else:
-            # DALL-E / OpenAI image: pakai visual_api_key — bukan llm_api_key
+            # OpenAI image: pakai visual_api_key — bukan llm_api_key
             # llm_api_key dipisah khusus untuk LLM (narasi + rejection rewrite)
             self.api_key = config.get("visual_api_key") or ""
 
@@ -376,15 +377,14 @@ class AIImageProvider(VisualProvider):
         except ImportError:
             raise VisualError("openai tidak terinstall. Jalankan: pip install openai")
 
-        size = self.model_config.get("size", "1024x1792")
+        size = self.model_config.get("size", "1024x1536")
 
         async with AsyncOpenAI(api_key=self.api_key) as client:
             response = await client.images.generate(
                 model=self.model_config["model_id"],
                 prompt=prompt,
                 size=size,
-                quality="hd",       # Upgrade dari 'standard' ke 'hd' untuk kualitas terbaik
-                style="vivid",      # 'vivid' lebih dramatic vs 'natural' — sesuai konten viral
+                quality=self.image_quality,
                 n=1,
             )
             img_url = response.data[0].url

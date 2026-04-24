@@ -214,12 +214,13 @@ class VisualAssembler:
                 "tenant_id":              tenant_config.tenant_id,
                 "niche":                  tenant_config.niche,
                 "visual_provider":        visual_mode,
-                "visual_ai_model":        visual_mode.split(":", 1)[1] if ":" in visual_mode else "dall-e-3",
+                "visual_ai_model":        visual_mode.split(":", 1)[1] if ":" in visual_mode else "gpt-image-1-mini",
                 "visual_api_key":         run_config.get("visual_api_key"),
                 "llm_api_key":            run_config.get("llm_api_key") or "",
                 "llm_provider":           run_config.get("llm_provider", "openai"),
                 "niche_visual_style":     run_config.get("niche_visual_style") or {},
                 "niche_visual_fallbacks": run_config.get("niche_visual_fallbacks") or [],
+                "image_quality":          run_config.get("image_quality", "low"),
             }
             provider  = AIImageProvider(config)
             keywords  = provider.extract_keywords_from_script(script, tenant_config.niche)
@@ -354,6 +355,7 @@ class VisualAssembler:
                 "niche_visual_style":     getattr(rc, "niche_visual_style", {}) or {},
                 "niche_visual_fallbacks": getattr(rc, "niche_visual_fallbacks", []) or [],
                 "is_developer":           getattr(rc, "is_developer", False),
+                "image_quality":          getattr(rc, "image_quality", "low"),
             }
         except Exception:
             return {
@@ -365,4 +367,5 @@ class VisualAssembler:
                 "niche_visual_style":     {},
                 "niche_visual_fallbacks": [],
                 "is_developer":           False,
+                "image_quality":          "low",
             }

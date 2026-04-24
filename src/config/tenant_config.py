@@ -62,10 +62,10 @@ class TenantRunConfig:
 
     # Visual mode
     visual_mode:        str   = "video"
-    # 'video'              → stock footage (Pexels/Getty/dll)
-    # 'ai_image:dall-e-3'  → AI generated image + motion
-    # 'ai_image:flux-schnell' → AI generated image + motion (cheaper)
-    # 'ai_video:*'         → AI video generation (DISABLED v0.2)
+    # 'video'                    → stock footage (Pexels/Getty/dll)
+    # 'ai_image:gpt-image-1-mini' → AI generated image + motion
+    # 'ai_image:flux-schnell'    → AI generated image + motion (cheaper via Replicate)
+    # 'ai_video:*'               → AI video generation (DISABLED v0.2)
 
     # Fase 6C fields
     script_min_viral_score: int            = 75
@@ -143,6 +143,7 @@ class TenantRunConfig:
     visual_max_clip_mb: int          = 50
     visual_api_key:    Optional[str] = None
     visual_ai_model:   Optional[str] = None
+    image_quality:     str           = "low"
 
     llm_provider:      str           = "openai"
     llm_model:         str           = "gpt-4o-mini"
@@ -171,6 +172,7 @@ class TenantRunConfig:
             "visual_max_clip_mb":     self.visual_max_clip_mb,
             "visual_api_key":         self.visual_api_key or "",
             "visual_ai_model":        self.visual_ai_model,
+            "image_quality":          self.image_quality,
             "niche_visual_style":     self.niche_visual_style,
             "niche_visual_fallbacks": self.niche_visual_fallbacks,
 
@@ -397,6 +399,7 @@ class TenantConfigManager:
                 visual_max_clip_mb=row.get("visual_max_clip_mb", 50),
                 visual_api_key=row.get("visual_api_key"),
                 visual_ai_model=row.get("visual_ai_model"),
+                image_quality=row.get("image_quality", "low"),
                 llm_provider=row.get("llm_provider", "openai"),
                 llm_model=row.get("llm_model", "gpt-4o-mini"),
                 llm_api_key=row.get("llm_api_key"),

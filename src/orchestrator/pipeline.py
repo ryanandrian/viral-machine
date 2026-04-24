@@ -301,6 +301,15 @@ class Pipeline:
             published_platforms = []
 
             if publish and qc_passed:
+                # One-time channel description update (flag-guarded)
+                CHANNEL_DESC = (
+                    "Exploring the ocean's darkest mysteries, strangest space phenomena, "
+                    "and science facts that feel illegal to know. New Shorts daily.\n"
+                    "Follow for mind-blowing discoveries from the deep ocean and beyond.\n\n"
+                    "#OceanMysteries #SpaceFacts #ScienceFacts #DeepSea #Shorts"
+                )
+                self.youtube_publisher.update_channel_description(tenant_config, CHANNEL_DESC)
+
                 # YouTube
                 logger.info("PUBLISHING | Uploading to YouTube Shorts...")
                 yt_result = self.youtube_publisher.publish(
@@ -409,7 +418,7 @@ class Pipeline:
             result["status"] = "failed"
             result["error"]  = str(e) if not is_interrupt else "Interrupted (KeyboardInterrupt/SystemExit)"
             result["elapsed_seconds"] = elapsed
-            logger.error(f"PIPELINE FAILED | {elapsed}s | Error: {e}")
+            logger.exception(f"PIPELINE FAILED | {elapsed}s | Error: {e}")
 
             # ── s71: Catat pipeline failure ke Supabase ───────────────
             # Skip Supabase write jika interrupt — koneksi mungkin sudah mati
@@ -564,8 +573,22 @@ if __name__ == "__main__":
         _pool = list(getattr(_rc, "niche_pool", None) or ["universe_mysteries"])
         if _mode == "random" and _pool:
             import random as _r
-            _niche = _r.choice(_pool)
-            logger.info(f"[Pipeline] niche_mode=random → {_niche} dari {_pool}")
+            from src.utils.supabase_writer import SupabaseWriter as _SW
+            _perf = _SW().get_niche_performance("ryan_andrian", days=30)
+            _weighted = [n for n in _pool if n in _perf]
+            if _weighted:
+                _weights = [_perf[n] + 1 for n in _weighted]
+                _niche = _r.choices(_weighted, weights=_weights, k=1)[0]
+                logger.info(
+                    f"[Pipeline] niche=performance-weighted → {_niche} "
+                    f"(avg {_perf.get(_niche, 0):.0f} views)"
+                )
+            else:
+                # Fallback: priority pool saat data performa belum ada
+                _PRIORITY = ["ocean_mysteries", "universe_mysteries", "space_facts"]
+                _fallback_pool = [n for n in _PRIORITY if n in _pool] or _pool
+                _niche = _r.choice(_fallback_pool)
+                logger.info(f"[Pipeline] niche=priority-fallback → {_niche}")
         else:
             _niche = getattr(_rc, "niche", "universe_mysteries")
             logger.info(f"[Pipeline] niche_mode=fixed → {_niche}")
