@@ -89,6 +89,7 @@ class TenantRunConfig:
     max_videos_per_day: int   = 1
     publish_platforms:  list  = field(default_factory=lambda: ["youtube"])
     publish_slots:      list  = field(default_factory=lambda: ["13:00"])
+    timezone:           str   = "UTC"
     production_cron:    str   = "0 13 * * *"
     analytics_cron:     str   = "0 13 * * *"
 
@@ -409,7 +410,7 @@ class TenantConfigManager:
 
             # Publish slots: dari DB atau otomatis berdasarkan videos_per_day
             publish_slots = row.get("publish_slots") or []
-            if not publish_slots or row.get("auto_schedule", True):
+            if not publish_slots and row.get("auto_schedule", True):
                 publish_slots = OPTIMAL_PUBLISH_SLOTS.get(videos_per_day, ["13:00"])
 
             return TenantRunConfig(
@@ -421,6 +422,7 @@ class TenantConfigManager:
                 max_videos_per_day=limits["max_videos_per_day"],
                 publish_platforms=row.get("publish_platforms") or ["youtube"],
                 publish_slots=publish_slots,
+                timezone=row.get("timezone", "UTC") or "UTC",
                 production_cron=row.get("production_cron", "0 13 * * *"),
                 analytics_cron=row.get("analytics_cron", "0 13 * * *"),
                 auto_schedule=row.get("auto_schedule", True),
@@ -489,6 +491,7 @@ class TenantConfigManager:
             max_videos_per_day=1,
             publish_platforms=["youtube"],
             publish_slots=["13:00"],
+            timezone="UTC",
             production_cron="0 13 * * *",
             analytics_cron="0 13 * * *",
             script_min_viral_score=75,
