@@ -38,11 +38,17 @@ AI_IMAGE_MODELS = {
     },
 }
 
-# Safety constraint yang selalu ditambahkan ke setiap prompt
-# Mencegah text/watermark muncul di gambar
-SAFETY_SUFFIX = (
-    "No text, no words, no letters, no numbers, no signs, "
-    "no logos, no watermarks, no typography of any kind."
+# Default quality tags dan negative prompt — dipakai jika niche belum punya custom value.
+# Per-niche value disimpan di tabel niches Supabase (kolom image_quality_tags / image_negative_prompt).
+_DEFAULT_QUALITY_TAGS = (
+    "ultra detailed, highly textured, fine details, sharp focus, cinematic lighting, "
+    "volumetric lighting, global illumination, soft shadows, high contrast, realistic textures, "
+    "depth of field, professional composition, 50mm lens, ambient occlusion, natural color grading, "
+    "realistic reflections, surface imperfections, micro details, immersive atmosphere, 8k detail"
+)
+_DEFAULT_NEGATIVE_PROMPT = (
+    "blurry, low detail, flat lighting, distorted, deformed, unrealistic, bad proportions, "
+    "text, words, letters, numbers, signs, logos, watermarks, typography"
 )
 
 
@@ -73,6 +79,16 @@ class AIImageProvider(VisualProvider):
         # Niche visual data — dari Supabase via TenantRunConfig (tidak hardcode)
         self.niche_visual_style     = config.get("niche_visual_style") or {}
         self.niche_visual_fallbacks = config.get("niche_visual_fallbacks") or []
+
+        # Image quality tags dan negative prompt — per-niche dari Supabase
+        try:
+            from src.intelligence.config import get_niches
+            _niche_data = get_niches().get(self.niche) or {}
+            self.image_quality_tags    = _niche_data.get("image_quality_tags") or _DEFAULT_QUALITY_TAGS
+            self.image_negative_prompt = _niche_data.get("image_negative_prompt") or _DEFAULT_NEGATIVE_PROMPT
+        except Exception:
+            self.image_quality_tags    = _DEFAULT_QUALITY_TAGS
+            self.image_negative_prompt = _DEFAULT_NEGATIVE_PROMPT
         # LLM config — untuk rejection rewrite (pakai LLM tenant, bukan hardcode)
         # Key harus dari tenant DB — tidak ada env fallback (DESIGN.md)
         self.llm_provider = config.get("llm_provider", "claude")
@@ -118,10 +134,7 @@ class AIImageProvider(VisualProvider):
 
         for i, keyword in enumerate(keywords[:count]):
             try:
-                # Prompt sudah full DALL-E ready dari LLM — hanya tambah safety suffix
-                prompt = keyword
-                if SAFETY_SUFFIX.lower() not in prompt.lower():
-                    prompt = f"{prompt} {SAFETY_SUFFIX}"
+                positive_prompt, negative_prompt = self._build_image_prompt(keyword)
 
                 # Durasi per clip dari section_durations (s6c2)
                 # Fallback ke 5.0 jika tidak tersedia
@@ -133,12 +146,12 @@ class AIImageProvider(VisualProvider):
                 logger.info(
                     f"[AIImage:{self.ai_model}] Scene {i+1}/{count} | duration={duration}s"
                 )
-                logger.debug(f"[AIImage] Prompt: {prompt[:120]}...")
+                logger.debug(f"[AIImage] Prompt: {positive_prompt[:120]}...")
 
                 img_path  = output_dir / f"ai_img_{i+1:02d}.jpg"
                 clip_path = output_dir / f"clip_{i+1:02d}_ai.mp4"
 
-                await self._generate_image(prompt, img_path)
+                await self._generate_image(positive_prompt, negative_prompt, img_path)
 
                 self._image_to_video(img_path, clip_path, duration=duration, clip_index=i)
 
@@ -164,7 +177,7 @@ class AIImageProvider(VisualProvider):
                 # Tidak ada fallback ke visual_fallbacks — visual harus relevan dengan narasi.
                 # Tidak ada fallback ke provider lain — kualitas konten non-negotiable.
                 # Jika semua attempt gagal: scene di-skip, pipeline laporkan ke Telegram.
-                rejection_history = [{"prompt": prompt, "rejection": str(e)}]
+                rejection_history = [{"prompt": positive_prompt, "rejection": str(e)}]
                 succeeded = False
                 for attempt in range(2, 4):  # attempt 2 dan 3
                     try:
@@ -172,15 +185,16 @@ class AIImageProvider(VisualProvider):
                             f"[AIImage] Scene {i+1} attempt {attempt-1} gagal — "
                             f"rewrite via {self.llm_provider} (attempt {attempt}/3)"
                         )
-                        safe_prompt = await self._ai_rewrite_on_rejection(
+                        rewritten_main = await self._ai_rewrite_on_rejection(
                             original_keyword=keyword,
                             section_index=i,
                             rejection_history=rejection_history,
                         )
+                        safe_positive, safe_negative = self._build_image_prompt(rewritten_main)
                         safe_output = output_dir / f"clip_{i+1:02d}_attempt{attempt}.jpg"
                         safe_clip   = output_dir / f"clip_{i+1:02d}_attempt{attempt}.mp4"
                         target_dur  = clip_durations[i] if clip_durations and i < len(clip_durations) else 5.0
-                        await self._generate_image(safe_prompt, safe_output)
+                        await self._generate_image(safe_positive, safe_negative, safe_output)
                         self._image_to_video(safe_output, safe_clip, duration=target_dur, clip_index=i)
                         size_mb = safe_clip.stat().st_size / (1024 * 1024)
                         clips.append(VideoClip(
@@ -194,7 +208,7 @@ class AIImageProvider(VisualProvider):
                         succeeded = True
                         break
                     except Exception as retry_err:
-                        rejection_history.append({"prompt": safe_prompt, "rejection": str(retry_err)})
+                        rejection_history.append({"prompt": safe_positive, "rejection": str(retry_err)})
                         logger.warning(f"[AIImage] Scene {i+1} attempt {attempt} gagal: {retry_err}")
 
                 if not succeeded:
@@ -276,8 +290,9 @@ class AIImageProvider(VisualProvider):
             f"Visual style: {base_style}\n"
             f"Atmosphere: {atmosphere}\n\n"
             f"Rejection history:\n{rejection_context}\n\n"
-            f"Write a new safe complete DALL-E 3 prompt. "
-            f"End with: vertical 9:16, photorealistic, {SAFETY_SUFFIX}"
+            f"Write ONLY the main prompt (2-3 sentences). "
+            f"Do not include quality tags or negative instructions — those are added automatically. "
+            f"End with: vertical 9:16, photorealistic."
         )
 
         if not self.llm_api_key:
@@ -316,6 +331,15 @@ class AIImageProvider(VisualProvider):
         )
         return rewritten  # Already a full DALL-E ready prompt
 
+    def _build_image_prompt(self, main_prompt: str) -> tuple[str, str]:
+        """
+        Bangun prompt 3-bagian: [PROMPT UTAMA] + [QUALITY TAGS] + [NEGATIVE PROMPT].
+        Returns: (positive_prompt, negative_prompt)
+        Quality tags dan negative prompt diambil dari niche (Supabase) atau default.
+        """
+        positive = f"{main_prompt}\n\n{self.image_quality_tags}"
+        return positive, self.image_negative_prompt
+
     @property
     def provider_name(self) -> str:
         return f"ai_image:{self.ai_model}"
@@ -332,16 +356,16 @@ class AIImageProvider(VisualProvider):
     # Internal: generate image
     # ──────────────────────────────────────────────
 
-    async def _generate_image(self, prompt: str, output_path: Path) -> None:
+    async def _generate_image(self, prompt: str, negative_prompt: str, output_path: Path) -> None:
         platform = self.model_config["platform"]
         if platform == "replicate":
-            await self._generate_replicate(prompt, output_path)
+            await self._generate_replicate(prompt, negative_prompt, output_path)
         elif platform == "openai":
-            await self._generate_dalle(prompt, output_path)
+            await self._generate_dalle(prompt, negative_prompt, output_path)
         else:
             raise VisualError(f"Platform tidak dikenal: {platform}")
 
-    async def _generate_replicate(self, prompt: str, output_path: Path) -> None:
+    async def _generate_replicate(self, prompt: str, negative_prompt: str, output_path: Path) -> None:
         try:
             import replicate
         except ImportError:
@@ -351,25 +375,33 @@ class AIImageProvider(VisualProvider):
         output = await asyncio.to_thread(
             replicate.run,
             self.model_config["model_id"],
-            input={"prompt": prompt, "aspect_ratio": "9:16"}
+            input={
+                "prompt":          prompt,
+                "negative_prompt": negative_prompt,
+                "aspect_ratio":    "9:16",
+            }
         )
         img_url = output[0] if isinstance(output, list) else str(output)
         async with httpx.AsyncClient(timeout=60) as client:
             r = await client.get(img_url)
             output_path.write_bytes(r.content)
 
-    async def _generate_dalle(self, prompt: str, output_path: Path) -> None:
+    async def _generate_dalle(self, prompt: str, negative_prompt: str, output_path: Path) -> None:
         try:
             from openai import AsyncOpenAI
         except ImportError:
             raise VisualError("openai tidak terinstall. Jalankan: pip install openai")
+
+        # OpenAI tidak support parameter negative_prompt terpisah —
+        # digabung ke prompt utama sebagai instruksi eksplisit.
+        full_prompt = f"{prompt}\n\nStrictly avoid: {negative_prompt}"
 
         size = self.model_config.get("size", "1024x1536")
 
         async with AsyncOpenAI(api_key=self.api_key) as client:
             response = await client.images.generate(
                 model=self.model_config["model_id"],
-                prompt=prompt,
+                prompt=full_prompt,
                 size=size,
                 quality=self.image_quality,
                 n=1,
