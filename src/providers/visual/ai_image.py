@@ -387,10 +387,16 @@ class AIImageProvider(VisualProvider):
                 quality=self.image_quality,
                 n=1,
             )
-            img_url = response.data[0].url
-            async with httpx.AsyncClient(timeout=60) as http:
-                r = await http.get(img_url)
-                output_path.write_bytes(r.content)
+            item = response.data[0]
+            if item.b64_json:
+                import base64
+                output_path.write_bytes(base64.b64decode(item.b64_json))
+            elif item.url:
+                async with httpx.AsyncClient(timeout=60) as http:
+                    r = await http.get(item.url)
+                    output_path.write_bytes(r.content)
+            else:
+                raise VisualError("Response tidak mengandung b64_json maupun url")
 
     # ──────────────────────────────────────────────
     # Internal: image → video dengan Ken Burns effect
