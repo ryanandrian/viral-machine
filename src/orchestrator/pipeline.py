@@ -170,8 +170,10 @@ class Pipeline:
             if not scripts:
                 raise Exception("Script generation failed")
             result["steps"]["script"] = {
-                "status": "ok",
-                "title":  scripts[0].get("title", "")
+                "status":       "ok",
+                "title":        scripts[0].get("title", ""),
+                "viral_score":  scripts[0].get("script_viral_score", 0),
+                "llm_provider": scripts[0].get("llm_provider_used", ""),
             }
             logger.info(f"STEP 3 DONE | {scripts[0].get('word_count', 0)} words")
 
