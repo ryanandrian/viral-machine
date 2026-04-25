@@ -179,6 +179,7 @@ class AIImageProvider(VisualProvider):
                 # Jika semua attempt gagal: scene di-skip, pipeline laporkan ke Telegram.
                 rejection_history = [{"prompt": positive_prompt, "rejection": str(e)}]
                 succeeded = False
+                safe_positive = positive_prompt  # fallback jika rewrite belum assign                
                 for attempt in range(2, 4):  # attempt 2 dan 3
                     try:
                         logger.warning(
