@@ -809,6 +809,17 @@ loop tiap menit:
 ### Scaling (orkestrator multi-node)
 `MAX_CONCURRENT_RENDER` itu **per-node**. Saat tenant tumbuh, **orkestrator** sebar `produksi_satu_video` ke **beberapa node** (concurrency/node = core/node). Lebih banyak proses di core yang sama TIDAK menambah throughput (CPU-bound, terbukti).
 
+### Trigger & interval loop (KEPUTUSAN — bukan cron, 2026-06-12)
+**Producer di-trigger oleh SCRIPT LOOPING persisten, BUKAN cron.** Alasan: rem concurrency (`MAX_RENDER = jumlah core`) **wajib dipegang satu proses yang hidup terus**; cron men-spawn proses **buta** (tak tahu berapa render jalan) → tak ada rem → **OOM/down** (terbukti live). Konsisten dgn worker sekarang yang **sudah loop** (sudah ganti crontab, commit `ff139ba`). **Antrian & state tetap di Supabase** (`production_queue`, `content_inventory`); koordinasi multi-node via `SELECT … FOR UPDATE SKIP LOCKED` (anti rebut/dobel). Prinsip: **Supabase = papan antrian/otak koordinasi; loop persisten = tangan yang bekerja & pegang rem.**
+
+| Komponen | Trigger | Interval loop (default, **config-driven/tunable**) | Dasar (terukur, bukan asumsi) |
+|---|---|---|---|
+| **Planner** (cek defisit buffer → enqueue) | loop / Supabase pg_cron | **60 detik** | Buffer berubah paling cepat ~13–35 mnt (1 produksi selesai) atau per-slot (jam) → lag 60s diabaikan |
+| **Producer** (klaim job + render) | **loop persisten** (pegang semaphore=core) | **10 detik** saat idle; **saat render selesai LANGSUNG klaim berikutnya** (tanpa tunggu) | Idle ≤10s vs render 13–35 mnt = <1,5% waste; isi slot core secepatnya |
+| **Publisher** (cek slot jatuh tempo → upload) | loop / cron | **30 detik** | Slot granularity menit; 30s pasti tangkap slot ≤30s; upload ringan (~5 dtk) |
+
+Interval = **default beralasan, config-driven** (ubah tanpa deploy), diturunkan dari **waktu produksi terukur** (13–35 mnt). Divalidasi/tuning di produksi — bukan angka karang.
+
 ### Angka pondasi (tervalidasi)
 - 1 video: **35 mnt sekarang → ~13 mnt** (optimasi render 2,87× terukur + paralel image).
 - Capacity: **~50 tenant → 4 core · ~100 → 8 core/16GB · 1000 → ~72 core (multi-node)**. RAM ~2GB/core + swap.
