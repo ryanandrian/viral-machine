@@ -266,6 +266,8 @@ Step 8: Publish YouTube — YouTube logo dengan upload arrow
 
 **Total: 39 screens unik + states**, dipecah jadi 5 section.
 
+> **Catatan (2026-06-11):** Screen/config tambahan untuk epic **Multi-Format Short Studio** (format config, duration preset, soft-sell/brand+link panel, distribution panel tier-gated, admin `format_profiles`) **TIDAK ada di bundle Claude Design** — dibangun langsung saat implementasi frontend (Hybrid). Spec: `MULTI_FORMAT_STUDIO.md`.
+
 | Section | Jumlah | URL Pattern |
 |---|---|---|
 | A. Public Marketing | 8 | mesinviral.com/* |
@@ -322,7 +324,7 @@ Step 8: Publish YouTube — YouTube logo dengan upload arrow
    - **🛡️ AI Slop Defense** — "Diversity engine otomatis lindungi channel dari YouTube AI policy 2026."
    - **🚀 5-24 Video/hari** — "Multi-channel parallel. Scale tanpa hire tim."
    - **🌐 Konten Multi-Bahasa** — "Produksi narasi + caption dalam Bahasa Indonesia, English, dan bahasa Asia Tenggara (Malaysia, Filipina, Thailand, Vietnam). Pilih bahasa per channel — jangkau audiens lintas negara dari satu platform."
-   - **🇮🇩 Indonesia-First** — "UI Bahasa Indonesia, Xendit payment, support lokal."
+   - **🇮🇩 Indonesia-First** — "UI Bahasa Indonesia, Midtrans payment, support lokal." *(bundle desain masih tulis "Xendit" → swap ke Midtrans saat implementasi)*
 
 7. **Comparison table** ("MesinViral vs Kompetitor")
    - Sticky header table dengan 5 kolom (MesinViral, AutoShorts, OpusClip, Submagic, Pictory)
@@ -966,7 +968,7 @@ Sama dengan B1 tapi simpler:
    - Usage indicators: Channel usage (1/3), Video this month (45/900)
 
 2. **Payment method**
-   - Current method (Xendit logo + masked detail)
+   - Current method (Midtrans logo + masked detail) *(bundle desain masih "Xendit" → swap ke Midtrans saat implementasi)*
    - "Update payment method" button
 
 3. **Invoice history table**

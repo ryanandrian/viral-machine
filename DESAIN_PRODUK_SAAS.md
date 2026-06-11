@@ -28,7 +28,7 @@
   BYOK Transparency      Self-Learning Loop      Indonesia-First
   ─────────────────      ──────────────────      ───────────────
   • Tidak ada vendor      • Belajar dari real     • UI Bahasa ID
-    lock-in              YT Analytics post-      • Xendit native
+    lock-in              YT Analytics post-      • Midtrans native
   • Tenant kontrol         publish               • Niche curated
     biaya AI sendiri     • Adaptasi niche &       untuk audiens ID
   • 7.5x lebih murah       hook per channel      • Concierge setup
@@ -231,18 +231,15 @@
 
 ### Payment Strategy
 
-**Primary: Xendit** (Indonesia-native)
-- ✅ Support recurring subscription native
-- ✅ E-wallet (GoPay, OVO, DANA, ShopeePay)
-- ✅ QRIS
+**Primary: Midtrans** (Indonesia-native) — ✅ **akun owner SUDAH tersedia** (2026-06-11), jadi provider final (menggantikan rencana Xendit/Stripe).
+- ✅ Recurring/Subscription API (auto-renew)
+- ✅ E-wallet (GoPay, ShopeePay, dll) + QRIS
 - ✅ Kartu kredit (Visa/Mastercard/JCB)
 - ✅ Virtual Account (semua bank)
-- ✅ Direct debit
-- ✅ Webhook untuk auto-suspend
+- ✅ Direct debit / paylater (Akulaku, Kredivo)
+- ✅ Webhook notification untuk auto-suspend
 
-**Secondary: Stripe** (untuk export market)
-- Kartu kredit international
-- Indonesia user yang prefer USD
+**Secondary (opsional, nanti):** Stripe untuk export market (USD international) — belum prioritas.
 
 ### Billing Mechanics
 
@@ -440,7 +437,7 @@ admin.mesinviral.com (Internal — staff only)
 
 #### 5. Indonesia-First
 - UI Bahasa Indonesia + EN
-- Xendit native payment
+- Midtrans native payment
 - Niche library curated untuk audiens ASEAN
 - Support Bahasa Indonesia
 - Indonesia content creator income-friendly pricing
@@ -594,7 +591,7 @@ Note: Scale margin lebih rendah karena volume render hit compute lebih keras. Mi
 
 **Fixed cost MesinViral (asumsi solo dev, post-launch):**
 - VPS + Supabase + R2 + domain + monitoring: **~$80/bulan**
-- Payment gateway fee (2.5% Xendit): variable, ~5% of revenue blended
+- Payment gateway fee (~2-3% Midtrans): variable, ~5% of revenue blended
 
 **Break-even tenant count:** 
 - 80 / (avg margin $8 dari blended tier) = **~10 tenant Starter** atau 7 Pro
@@ -693,7 +690,7 @@ Note: Scale margin lebih rendah karena volume render hit compute lebih keras. Mi
 - ⏳ **Self-Learning Feedback Engine** — **Phase 6 (NEW PRIORITY)** — pull YT Analytics 24-72h post-publish, adapt config
 - ⏳ **Diversity Engine** — **Phase 6 (NEW PRIORITY)** — voice/hook/niche rotation algorithm
 - ⏳ **Compliance Score calculator** — **Phase 7**
-- ❌ Payment integration (Xendit + Stripe webhook handler) — **Phase 8**
+- ❌ Payment integration (**Midtrans** webhook handler — akun owner sudah ada) — **Phase 8**
 - ❌ Email service (Resend) — **Phase 8**
 - ❌ Onboarding wizard backend (state machine) — **Phase 9**
 
@@ -725,13 +722,30 @@ Note: Scale margin lebih rendah karena volume render hit compute lebih keras. Mi
 | **5** | Multi-Channel | 1 minggu | – |
 | **6** | **NEW: Self-Learning Feedback Engine + Diversity Engine** | **2 minggu** | **CORE MOAT** |
 | **7** | **NEW: Compliance Score + AI Slop Defense polish** | 1 minggu | **SURVIVAL** |
-| **8** | Payment integration (Xendit + Stripe) | 2 minggu | – |
+| **8** | Payment integration (**Midtrans** — akun ready) + tier-gating | 2 minggu | – |
 | **9** | UI Foundation (Next.js + landing + dashboard) | 4-6 minggu | – |
 | **10** | UI Polish (onboarding wizard + admin) | 2-3 minggu | – |
 | **11** | Beta launch + 10 hand-picked tenants | 1 bulan | Feedback iteration |
 | **12** | Public launch | – | Marketing kick-off |
 
 **Total to MVP launch:** ~5-6 bulan full-time. Bisa beta launch **bulan 4**.
+
+---
+
+## 12b. EPIC — Multi-Format Short Studio (perluasan kategori creator)
+
+> **Konsep induk di sini; spec teknis + validasi lengkap di `MULTI_FORMAT_STUDIO.md`; status di `PROGRESS.md`. Sudah divalidasi terhadap kode + API (2026-06-11) — jangan analisa ulang.**
+
+**Positioning:** dari "tool creator viral faceless" → **studio short-video faceless multi-format** yang menampung **sebanyak mungkin kategori creator**: mystery/facts (existing), **edukasi soft-sell** (brand promosi halus), **motivational/quote**, **educator**. Memperluas TAM ke segmen **brand/advertiser** bernilai tinggi sambil menjaga filosofi **anti-hard-sell** (soft-sell terkontrol).
+
+**Pilar fitur (ringkas):**
+- **Duration presets** 8/15/30/45/60/75/90s + **Format profiles** (section = fungsi Format×Durasi); WPS per-format; QC window relatif.
+- **Render mode** `image_sequence` (existing) + **`ai_video`** (text-to-video, **BYOK**, untuk 8s motivasi) — tetap masuk karena provider sudah support (Kling/Runway/Luma/Veo/Sora).
+- **Branded Content:** logo overlay di video + soft-sell CTA ("hidup sehat bersama [brand]") + link landing di deskripsi (atas/bawah). *(Auto-pin komentar YouTube = mustahil via API → pakai link deskripsi.)*
+- **Multi-platform tier-gated:** Starter=YouTube · Pro=+Reels · Scale=+TikTok (ke-3). **Catatan onboarding:** Reels butuh akun Business+Page+App Review (2–4 mgg); TikTok butuh audit (2–4 mgg) untuk post publik.
+- **Katalog AI extensible (BYOK granular):** tenant pilih model (quality/cost), developer bisa tambah model (config) / provider (adapter) kapan saja.
+
+**Feasibility (tervalidasi):** cheap wins (logo, QC relatif, link, soft-sell, durasi 30–75s) → **Phase 1.x**; ai_video + multi-platform → fase berat tersendiri (nyambung BYO-CC Phase 4 + tier Phase 8 Midtrans). Detail per item + bukti file:line di `MULTI_FORMAT_STUDIO.md §0`.
 
 ❓ **Q13:** Setuju prioritas: Phase 6 (Self-Learning + Diversity) di-prioritaskan SETELAH foundation backend (Phase 1-5) — sebelum payment & UI?
 
@@ -806,9 +820,9 @@ Saya tidak akan koding sebelum minimal **Q1, Q4, Q6, Q10, Q13** (business critic
 
 ### Indonesia Market
 - [Jobstreet Content Creator Salary ID](https://id.jobstreet.com/career-advice/role/content-creator/salary)
-- [Xendit Subscriptions](https://www.xendit.co/en-id/products/subscriptions/)
-- [Xendit Usage-Based Subscriptions](https://docs.xendit.co/docs/usage-based-subscriptions)
-- [Xendit Recurring (Bahasa)](https://docs.xendit.co/id/recurring)
+- [Midtrans Docs](https://docs.midtrans.com/) (payment gateway — akun owner sudah ada)
+- [Midtrans Recurring / Subscription](https://docs.midtrans.com/docs/snap-recurring-transaction)
+- *(Xendit/Stripe = opsi historis, tidak dipakai — Midtrans final)*
 
 ### Competitor Auto-Pilot Tools
 - [inReels Auto-Upload Guide](https://www.inreels.ai/blog/create-ai-youtube-shorts-auto-upload)
