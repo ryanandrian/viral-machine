@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import "./globals.css";
-// Hybrid: design system MesinViral (di-port dari Claude Design bundle). Urutan penting:
-// tailwind (globals) -> tokens (CSS variables + base) -> components (.btn/.card/.kpi/dst).
-// Font (Geist + JetBrains Mono) di-load via @import di tokens.css; tema dark default via [data-theme].
-// TODO(optimasi): pindah font ke next/font, hapus @import google fonts di tokens.css (hindari double-load).
+// Hybrid design system MesinViral (port dari Claude Design bundle). Urutan import penting:
+// tailwind (globals) -> tokens -> components -> app-shell.
+// TODO(optimasi): font ke next/font, hapus @import google fonts di tokens.css.
 import "@/styles/tokens.css";
 import "@/styles/components.css";
+import "@/styles/app-shell.css";
+import { ThemeProvider } from "@/components/theme-provider";
 
 export const metadata: Metadata = {
   title: "MesinViral — Mesin produksi video YouTube otomatis",
@@ -18,10 +19,13 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // lang="id" = Bahasa Indonesia default (EN via toggle); data-theme="dark" = tema default desain.
+  // lang="id" default (EN via toggle). data-theme dikelola next-themes (default dark);
+  // suppressHydrationWarning karena next-themes inject atribut sebelum hydrate.
   return (
-    <html lang="id" data-theme="dark">
-      <body>{children}</body>
+    <html lang="id" suppressHydrationWarning>
+      <body>
+        <ThemeProvider>{children}</ThemeProvider>
+      </body>
     </html>
   );
 }
