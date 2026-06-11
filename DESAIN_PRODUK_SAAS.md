@@ -747,6 +747,75 @@ Note: Scale margin lebih rendah karena volume render hit compute lebih keras. Mi
 
 **Feasibility (tervalidasi):** cheap wins (logo, QC relatif, link, soft-sell, durasi 30–75s) → **Phase 1.x**; ai_video + multi-platform → fase berat tersendiri (nyambung BYO-CC Phase 4 + tier Phase 8 Midtrans). Detail per item + bukti file:line di `MULTI_FORMAT_STUDIO.md §0`.
 
+---
+
+## 12c. PONDASI — Arsitektur Produksi: Decoupling (Producer / Buffer / Publisher)
+
+> **Pondasi kritikal.** Angka & keputusan tervalidasi dari VPS nyata di memory `decisions_production_scaling`. **Jangan benchmark/analisa ulang.**
+
+### Masalah (kenapa wajib)
+Pipeline lama: **produksi + publish dalam satu tarikan, DI WAKTU SLOT**. Produksi 1 video = **35 menit terukur** (render ~21 mnt dominan). Kalau banyak tenant berbagi slot publish (mis. 14:00), semua produksi berat meledak bersamaan → **server down** (terbukti live: VPS 2-core/swap-0 OOM-mati di bawah render konkuren).
+
+### Solusi: pisah 2 mesin + buffer (analogi pabrik-gudang)
+- **PRODUCER** (pabrik) — jalan KONTINU 24/7, di-smooth. Tugas: jaga setiap channel punya **stok video siap-tayang** di buffer. Dibatasi **concurrency = jumlah core** (tak pernah overload).
+- **BUFFER** (gudang) — aset video di **Biznet Gio S3** (co-located, ~50MB/file) + status di tabel **`content_inventory`** (source of truth).
+- **PUBLISHER** (pengirim) — jalan saat slot tiba. Tugas: ambil 1 video ready dari buffer → publish (RINGAN, ~5 dtk I/O). "Jadwal" tenant = jadwal **publish**, bukan produksi.
+
+### Pseudo-code (acuan, agar tidak salah paham)
+
+```
+# ===== PRODUCER (mesin produksi) — loop terus 24/7 =====
+# Jaga stok buffer tiap channel. Tidak terikat jam slot.
+loop selamanya:
+    for channel in urutkan_prioritas(channel_aktif):       # buffer paling tipis / slot terdekat dulu
+        target = channel.buffer_depth                       # config per-niche: tren=1, evergreen=3-5
+        stok   = hitung_status_ready(channel)               # dari content_inventory
+        if stok < target:
+            if render_berjalan() < MAX_CONCURRENT_RENDER:   # = jumlah core (anti-overload!)
+                produksi_satu_video(channel)                # ~13 mnt (pasca-optimasi)
+        # stok cukup -> skip (jangan over-produksi, jaga freshness)
+    tunggu(30 detik)
+
+fungsi produksi_satu_video(channel):
+    catat_inventory(channel, status="producing")
+    video, meta = jalankan_pipeline_AI(channel)             # script->TTS->image->RENDER
+    s3_key = upload_biznet_S3(video)                        # aset berat ke object storage
+    update_inventory(channel, s3_key, meta, status="ready",
+                     expires_at = now + masa_segar)          # freshness guard
+
+# ===== PUBLISHER (mesin submit) — dispatcher tiap menit =====
+loop tiap menit:
+    for slot in slot_jatuh_tempo(now, timezone_tenant):    # hormati timezone tenant
+        video = ambil_ready_tertua(slot.channel)           # dari content_inventory
+        if video kosong:
+            telegram(slot.channel, "⚠️ Buffer kosong, slot dilewati")   # no silent degradation
+            naikkan_prioritas_produksi(slot.channel)
+            continue
+        update_inventory(video, status="publishing")
+        hasil = publish(video, slot.channel.platforms)     # YouTube/Reels/TikTok ~5 dtk
+        if hasil.sukses:
+            update_inventory(video, status="published")
+            hapus_S3(video.s3_key)                          # buang file berat, simpan record
+            telegram(slot.channel, "✅ Published " + hasil.url)
+        else:
+            update_inventory(video, status="ready")        # kembalikan ke buffer
+            retry_backoff(video); telegram(slot.channel, "❌ Gagal, akan diulang")
+```
+
+### Kenapa ini mencegah down
+- Produksi **dibatasi `MAX_CONCURRENT_RENDER` = jumlah core** + tersebar sepanjang hari → CPU tak pernah lewat kapasitas.
+- Publish di slot cuma **upload** (no CPU) → 50 channel berbagi 14:00 = 50 upload ringan, BUKAN 50 render.
+
+### Scaling (orkestrator multi-node)
+`MAX_CONCURRENT_RENDER` itu **per-node**. Saat tenant tumbuh, **orkestrator** sebar `produksi_satu_video` ke **beberapa node** (concurrency/node = core/node). Lebih banyak proses di core yang sama TIDAK menambah throughput (CPU-bound, terbukti).
+
+### Angka pondasi (tervalidasi)
+- 1 video: **35 mnt sekarang → ~13 mnt** (optimasi render 2,87× terukur + paralel image).
+- Capacity: **~50 tenant → 4 core · ~100 → 8 core/16GB · 1000 → ~72 core (multi-node)**. RAM ~2GB/core + swap.
+- **Optimasi render = prioritas #1** (lever terbesar, murah, prasyarat scale).
+
+Detail lengkap + bukti file:line: memory `decisions_production_scaling` · status/roadmap: `PROGRESS.md`.
+
 ❓ **Q13:** Setuju prioritas: Phase 6 (Self-Learning + Diversity) di-prioritaskan SETELAH foundation backend (Phase 1-5) — sebelum payment & UI?
 
 ---

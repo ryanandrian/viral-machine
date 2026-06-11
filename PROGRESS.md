@@ -159,7 +159,7 @@ Perluasan produk: menampung **banyak kategori creator short faceless** (mystery/
 
 ### ⚙️ ARSITEKTUR — Produksi & Scaling (TERVALIDASI 2026-06-12)
 
-Detail + angka di [[decisions_production_scaling]] (memory). **Berbasis benchmark/log VPS nyata — jangan analisa/benchmark ulang.**
+**Konsep/pondasi + pseudo-code di `DESAIN_PRODUK_SAAS.md §12c`** (rumah utama). Angka detail + bukti file:line di [[decisions_production_scaling]] (memory). Section ini = ringkasan status/roadmap. **Berbasis benchmark/log VPS nyata — jangan analisa/benchmark ulang.**
 
 > 🔴 **Kritikal:** produksi 1 video = **35 mnt** terukur (render ~21 mnt dominan). Banyak tenant berbagi slot publish → spike → **VPS down** (terbukti live: 2-core/swap-0 OOM-mati di bawah render konkuren).
 
