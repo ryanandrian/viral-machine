@@ -1,0 +1,410 @@
+# MesinViral — Live Progress & Master Plan
+
+> **Single source of truth** untuk status implementasi. Update setiap selesai sub-phase.
+> Dibuat: 2026-06-10 | Update terakhir: 2026-06-11
+
+---
+
+## 🎯 Visi Akhir (dari [[project_vision]])
+
+SaaS multi-tenancy, multi-channel — platform produksi konten video viral otomatis berbasis AI.
+Setiap tenant: login → dashboard → config API keys → scheduler → lihat laporan & log produksi sendiri.
+
+**Prinsip non-negotiable:**
+- Kualitas konten = segalanya (no silent degradation)
+- Config-driven, no hardcode biaya AI
+- Self-learning & self-improvement
+- Tenant isolation total (RLS di DB level)
+
+---
+
+## 📍 STATUS SAAT INI
+
+**Current phase:** ⏸️ Menunggu approval user untuk start **Phase 0**
+
+**Last validated run:** Job #96 (2026-06-10 09:31 WIB) — SUCCESS, published https://www.youtube.com/shorts/Jf-soZuYIOs
+
+**Active tenant:** `ryan_andrian` (single tenant)
+
+---
+
+## 🎨 FRONTEND DESIGN WORKFLOW (Strategic Decision 2026-06-10)
+
+**Strategi:** Frontend MesinViral didesain via **Claude Design** (Anthropic UI design tool), BUKAN custom from scratch oleh Claude Code.
+
+**Role Claude Code untuk frontend:** (a) tulis brief lengkap dari product spec, (b) verify desain output vs brief, (c) integrate ke Next.js + shadcn/ui.
+
+### File Brief (Single Source of Truth)
+
+`/home/rad/viral-machine/CLAUDE_DESIGN_BRIEF.md` — 10 section, 30 screen spec:
+- Design system shadcn/ui-compatible (color hex, typography, spacing, component list)
+- 30 screen dipecah 6 phase deliverable
+- Persona Indonesia + content examples ID
+- Tech stack target: Next.js 15 + shadcn/ui + Tailwind + tremor.so + Geist Sans + next-intl
+
+### Workflow Status
+
+1. ✅ **2026-06-10** — Brief ditulis (CLAUDE_DESIGN_BRIEF.md)
+2. ⏸️ User paste brief ke Claude Design
+3. ⏸️ Claude Design generate Phase 1 (design system + D5 Run Detail sebagai proof of concept)
+4. ⏸️ User share output ke Claude Code
+5. ⏸️ Claude Code verify alignment + plan implementasi screen-by-screen
+
+### Decisions UX User-Confirmed (Claude Design Q1-Q9)
+
+| Topik | Pilihan |
+|---|---|
+| **Start order** | Design system + D5 Run Detail (proof of concept) — BUKAN landing dulu |
+| **Presentation** | Hybrid — clickable prototype untuk dashboard, static high-fid untuk marketing |
+| **Theme** | Dark default + working light toggle |
+| **Language UI copy** | Bahasa Indonesia default + working EN toggle |
+| **Viewports** | Desktop 1440px + Mobile 375px untuk key screens (Landing, Pricing, Sign-up, Onboarding 5 step, Dashboard, D5 Run Detail) |
+| **Typography** | **Geist Sans** (BUKAN Inter — terlalu generik AI-slop), JetBrains Mono untuk log viewer |
+| **Charts** | Fully rendered dengan Indonesian sample data |
+| **Real content** | Sample tenant Riko Pratama, channel "Misteri Samudra", niche ID, pricing real Rp 149/349/699K, AI cost real $0.34/video |
+| **Priority demo** | D5 Run Detail → D1 Dashboard → A1 Landing → A2 Pricing → Onboarding step 3 (API Keys) → Compliance Score widget |
+
+### Sumber Referensi untuk Sesi Berikutnya
+
+[[plan_frontend_via_claude_design]] memory file — Claude Code yang baca ini akan tahu:
+- Brief ada di mana
+- Decisions sudah dikonfirmasi user (tidak perlu tanya ulang)
+- Action sequence saat desain output datang (verify alignment → flag misalignment → map shadcn/ui → plan implementation)
+
+### 🆕 Niche Model + Pricing Decisions (2026-06-11)
+
+User confirm via AskUserQuestion 3-question session:
+- **Niche granularity:** Hybrid broad + sub-tag layer (4 broad default + monthly release + tag pool per niche di videos)
+- **Custom niche workflow:** Monthly release + on-demand custom request (hybrid model)
+- **Exclusivity:** Public-after-90d (Rp 299K default) ATAU Permanent Private (Rp 1.499K default)
+- **🚨 CRITICAL: Pricing CONFIG-DRIVEN** — semua nominal disimpan di table `pricing_config`, adjustable by sysadmin via admin panel E5 (NEW screen di brief)
+
+Detail permanent reference: [[decisions_niche_model]] memory file.
+
+**Implication backend (untuk Phase implementasi nanti):**
+- Schema: tambah `tag_pool`, `released_at`, `access_type`, `exclusive_*` ke `niches`; `topic_tags` ke `videos`; NEW table `pricing_config`
+- Helper `src/utils/pricing.py` dengan `get_price(key)` + caching 5 menit
+- API `/api/pricing` endpoint untuk UI render
+
+**Implication design brief (sudah di-update dalam session ini):**
+- D18 Config Niches: dual-option request (public/private dengan pricing dari DB)
+- E2.3 Admin Niches: tag pool editor + monthly release scheduler + exclusivity manager (expanded detailed)
+- E5 NEW: Admin Pricing Config screen (CRUD pricing entries + audit log)
+- Screen inventory 38 → 39
+
+### Integration Tech Stack Target
+
+Next.js 15 (App Router) + shadcn/ui + Tailwind + tremor.so + Geist Sans + next-intl (i18n) + Supabase Auth + Supabase Realtime + Vercel deploy. Detail per layer di [[plan_frontend_via_claude_design]].
+
+**Repo structure:** TBD saat Phase 9 mulai — monorepo (`apps/web/`) vs separate repo. Rekomendasi: monorepo dengan pnpm workspaces.
+
+**Domain:** `mesinviral.com` (landing) + `app.mesinviral.com` (dashboard) + `admin.mesinviral.com` (internal).
+
+---
+
+## 🗺️ MASTER ROADMAP (12 Phase)
+
+> **Disinkronkan 2026-06-11** dengan roadmap final di `DESAIN_PRODUK_SAAS.md §12` (otoritatif). Versi 7-phase lama sudah usang — perubahan utama: Self-Learning + Diversity Engine disisipkan sebagai **Phase 6 (CORE MOAT)**, Compliance Phase 7, Payment Phase 8, UI digeser ke Phase 9-10, lalu Beta (11) + Public launch (12).
+
+| Phase | Nama | Tujuan | Estimasi | Status |
+|-------|------|--------|----------|--------|
+| **0** | Audit & Persiapan | Verifikasi semua klaim SOFTCODE_AI_CONFIG vs kode | – | ⏸️ Pending approval |
+| **1** | SOFTCODE AI Config | Hilangkan hardcode AI, hapus silent fallback (6 sub-phase) | 4-6 jam | 🔒 Blocked by Phase 0 |
+| **2** | Error Mgmt Terpusat | `src/exceptions.py` + structured error flow | 2 jam | 🔒 Blocked by Phase 1 |
+| **3** | Pipeline Run Logs (DB) | `pipeline_run_logs` table, RLS-ready, UI-facing | 2 jam | 🔒 Blocked by Phase 2 |
+| **4** | BYO-CC Phase 1 | `tenant_credentials` + Fernet + auth foundation | 1 minggu | 🔒 Blocked by Phase 3 |
+| **5** | Multi-Channel | `channels` table, channel_id propagation | 1 minggu | 🔒 Blocked by Phase 4 |
+| **6** | 🥇 Self-Learning + Diversity Engine | **CORE MOAT** — pull YT Analytics 24-72h post-publish + adapt config; voice/hook/niche rotation | 2 minggu | 🔒 Blocked by Phase 5 |
+| **7** | 🛡️ Compliance Score + AI Slop Defense | **SURVIVAL** — compliance calculator + polish diversity | 1 minggu | 🔒 Blocked by Phase 6 |
+| **8** | Payment Integration | Xendit + Stripe webhook handler + Email (Resend) | 2 minggu | 🔒 Blocked by Phase 7 |
+| **9** | UI Foundation | Next.js + landing + dashboard + Supabase Realtime + RLS | 4-6 minggu | 🔒 Blocked by Phase 8 |
+| **10** | UI Polish | Onboarding wizard + admin (E1-E5) | 2-3 minggu | 🔒 Blocked by Phase 9 |
+| **11** | Beta Launch | 10 hand-picked tenant + feedback iteration | 1 bulan | 🔒 Blocked by Phase 10 |
+| **12** | Public Launch | Marketing kick-off | – | 🔒 Blocked by Phase 11 |
+
+**Cross-cutting (bukan phase bernomor):** Docs Sync — update `MESIN_VIRAL.md` + `roadmap_1.md` + memory tiap selesai sub-phase (lihat "Aturan Lintas Phase" di [[plan_master_softcode_to_saas]]).
+
+**Catatan:** Detail sub-phase di bawah baru lengkap untuk Phase 0-5 (foundation backend). Detail Phase 6-8 ada di `DESAIN_PRODUK_SAAS.md`; detail UI Phase 9-10 mengacu `CLAUDE_DESIGN_BRIEF.md` + [[plan_frontend_via_claude_design]] (Claude Design workflow).
+
+---
+
+## 🔍 PHASE 0 — Audit & Persiapan
+
+**Tujuan:** verifikasi setiap klaim SOFTCODE_AI_CONFIG masih akurat di kode hari ini (file/line bisa shifted setelah 2 bulan).
+
+### Checklist
+- [ ] Git status bersih + `main` up-to-date dengan origin
+- [ ] Verifikasi 7 lokasi hardcode LLM (SOFTCODE §1):
+  - `src/intelligence/script_engine.py:415` (`"claude-sonnet-4-6"`)
+  - `src/intelligence/script_engine.py:442` (`"gpt-4o-mini"`)
+  - `src/intelligence/script_analyzer.py:149` (`"gpt-4o-mini"`)
+  - `src/intelligence/hook_optimizer.py:143` (`"gpt-4o-mini"`)
+  - `src/intelligence/niche_selector.py:412` (`"gpt-4o-mini"`)
+  - `src/providers/visual/ai_image.py:310` (`"claude-haiku-4-5-20251001"`)
+  - `src/providers/visual/ai_image.py:319` (`"gpt-4o-mini"`)
+- [ ] Verifikasi 3 lokasi hardcode TTS (SOFTCODE §2):
+  - `src/production/tts_engine.py:154` (chain `["elevenlabs", "openai_tts", "edge_tts"]`)
+  - `src/production/tts_engine.py:156` (chain `["openai_tts", "edge_tts"]`)
+- [ ] Verifikasi catalog `AI_IMAGE_MODELS` di `src/providers/visual/ai_image.py:20-38`
+- [ ] Verifikasi 7 lokasi hardcode niche_fallback `"universe_mysteries"` (SOFTCODE §6)
+- [ ] Cek `tenant_configs` schema sekarang (list semua kolom)
+- [ ] Snapshot daftar file yang akan diubah + rencana commit per file
+
+**Validation gate:** Tabel "klaim docs vs realita kode" disetujui user.
+
+---
+
+## 🔧 PHASE 1 — SOFTCODE AI CONFIG (6 sub-phase)
+
+### 1.1 — LLM Refactor (paling besar, paling penting)
+**Scope:**
+- Schema: tambah `llm_library` (text), `llm_models` (jsonb) ke `tenant_configs`
+- Code: refactor `script_engine`, `script_analyzer`, `hook_optimizer`, `niche_selector`, `ai_image` (untuk rewrite)
+- **Hapus silent fallback Claude→GPT** di `script_engine._call_llm()`
+- Per [[plan_s93_config_driven_llm]] yang sudah dimatangkan
+
+**File yang berubah:**
+- `src/intelligence/script_engine.py` — hapus fallback + fix ScriptAnalyzer key
+- `src/intelligence/script_analyzer.py` — dual provider support
+- `src/intelligence/niche_selector.py` — ganti `visual_api_key` → `llm_api_key` + dual provider
+- `src/intelligence/hook_optimizer.py` — sama dengan niche_selector
+- `src/providers/visual/ai_image.py` — prompt rewrite via `llm_models.rewrite`
+- `src/config/tenant_config.py` — tambah field baru
+
+**Validation gate:**
+- Push ke main → SSH VPS → git pull → restart worker
+- Update `tenant_configs` di Supabase: set `llm_library='anthropic'` + `llm_models` jsonb
+- Enqueue 1 production run
+- ✅ **Lulus jika:** pipeline COMPLETE + zero OpenAI call di log untuk komponen LLM (NicheSelector pakai Claude saat tenant Claude)
+
+### 1.2 — Niche Fallback Config
+**Scope:**
+- Schema: tambah `niche_fallback` (text, default `'universe_mysteries'`) ke `tenant_configs`
+- Code: hapus 7 hardcode `"universe_mysteries"` di:
+  - `src/orchestrator/pipeline.py:575,595,599`
+  - `src/intelligence/schedule_manager.py:110-111`
+  - `src/intelligence/config.py:14`
+  - `src/config/tenant_config.py:86,452,488,503`
+  - `scripts/worker.py:79`
+  - `src/production/visual_assembler.py:287`
+
+**Validation gate:** `grep -r "universe_mysteries" src/ scripts/` = zero match (kecuali file provider/test/youtube_publisher data).
+
+### 1.3 — Visual Image Catalog → DB
+**Scope:**
+- Schema: buat tabel `ai_image_models` (`model_key` PK, `platform`, `model_id`, `description`, `size`, `is_active`)
+- Seed data: 3 model existing (flux-schnell, gpt-image-1-mini, stable-diffusion)
+- Code: `ai_image.py` load catalog dari Supabase
+- `visual_assembler.py` — hapus default `"gpt-image-1-mini"`
+
+**Validation gate:** 1 production run sukses dengan model dipilih via DB row.
+
+### 1.4 — TTS Fallback Softcode
+**Scope:**
+- Schema: tambah `tts_library` (text), `tts_fallback` (text) ke `tenant_configs`
+- Code: `tts_engine.py` — bangun fallback chain dari config, bukan hardcode
+
+**Validation gate:** fallback hanya dalam ekosistem yang sama (e.g., elevenlabs → edge_tts, BUKAN elevenlabs → openai_tts).
+
+### 1.5 — Music + R2 Defaults Hapus
+**Scope:**
+- Schema: tambah `music_default_mood` ke `tenant_configs`
+- Code: `music_selector.py:88` hapus default `"dramatic"`, baca dari config
+- Code: `intelligence/config.py:35` hapus default `"viral-machine"` untuk R2 — wajib di `.env`, raise error jika kosong
+
+**Validation gate:** start worker tanpa `R2_BUCKET` → error message jelas + tenant pakai mood dari config.
+
+### 1.6 — Bug Fixes Bundle (pasangan refactor hari ini)
+- **Dispatcher timezone bug**: `dispatch_pipeline_jobs()` saat ini compare publish_slots dengan UTC, tidak hormati `tenant_configs.timezone`. Fix: konversi target ke timezone tenant sebelum compare.
+- **`AIImageProvider._generate_image()` signature mismatch**: warning saat hook_frame generation:
+  ```
+  WARNING [s6c7] Hook frame generation failed (AIImageProvider._generate_image() 
+  missing 1 required positional argument: 'output_path')
+  ```
+
+**Validation gate:** dispatcher fire pada slot WIB yang benar + hook_frame generated tanpa warning.
+
+---
+
+## 🔁 GitHub Workflow Per Sub-Phase
+
+```
+1. Code change di /home/rad/viral-machine (WSL dev)
+2. Test lokal jika applicable
+3. git add <files> → git commit (per sub-phase, commit message standar)
+4. git push origin main
+5. ssh vps → cd ~/viral-machine → git pull origin main
+6. pip install -r requirements.txt (jika ada)
+7. Apply SQL migration via Supabase MCP (jika ada)
+8. Restart worker: ssh vps → kill PID + nohup restart
+9. Enqueue test job (INSERT pipeline_queue)
+10. Monitor pipeline_queue + worker.log
+11. ✅ Validate pass → UPDATE PROGRESS.md + memory + roadmap_1.md → commit "docs: phase X.Y validated"
+    ❌ Fail → rollback (git revert) → diagnose → retry
+12. → next sub-phase
+```
+
+### Commit Message Standar
+```
+feat(s93): softcode LLM library/models — niche_selector, hook_optimizer, script_analyzer
+
+Phase 1.1 of master_softcode_to_saas. Removes hardcode model strings.
+Validation: production run #97 success with claude-sonnet-4-6 end-to-end.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+```
+
+---
+
+## 📝 PHASE 2 — Error Management Terpusat
+**Scope:**
+- Buat `src/exceptions.py` dengan hierarchy: `PipelineError` → `ConfigError` / `LLMError` / `TTSError` / `VisualError` / `PublishError`
+- Refactor semua `raise Exception(...)` → typed exceptions
+- Pipeline catch typed → log + Telegram + write ke `pipeline_errors` (existing table)
+
+**Validation gate:** simulasi 4 jenis error → semua tercatat di Supabase + Telegram notif sesuai jenis.
+
+---
+
+## 📊 PHASE 3 — Pipeline Run Logs (DB-based)
+**Scope:**
+- Schema: `pipeline_run_logs` table dengan `tenant_id`, `channel_id` (placeholder), `queue_id` FK, `level`, `step`, `message`, `metadata` jsonb
+- RLS policy (placeholder, aktif setelah Phase 4)
+- Custom loguru sink: `src/utils/db_log_sink.py` — batch insert ke DB
+- Konsolidasi `pipeline_errors` + `qc_failed_videos` jadi views dari `pipeline_run_logs`
+- Hapus rencana file-based `PIPELINE_LOG_SEPARATION` (superseded)
+
+**Validation gate:** pipeline run → events appear in DB dalam < 5 detik dari emit.
+
+---
+
+## 🔐 PHASE 4 — BYO-CC Phase 1
+**Scope (per [[project_byocc_roadmap]]):**
+- Tabel `tenant_credentials` di Supabase
+- `src/utils/crypto.py` Fernet utility, master key di `.env` VPS (`ENCRYPTION_KEY`)
+- Modifikasi `youtube_publisher.py` & `channel_analytics.py` load OAuth dari DB
+- Mandatory key validation di pipeline start (per provider yang dipilih tenant)
+- Hapus semua `.env` fallback untuk API key tenant
+
+**Validation gate:** tenant tanpa required key → pipeline berhenti + Telegram notif yang jelas; tenant dengan key valid → pipeline jalan normal.
+
+---
+
+## 🎬 PHASE 5 — Multi-Channel per Tenant
+**Scope:**
+- Tabel `channels` (channel_id, tenant_id, youtube_channel_id, oauth_creds_enc, niche_default, is_active)
+- `channel_id` propagation di pipeline (di-pass dari worker → orchestrator → publisher)
+- `production_schedules` dapat `channel_id`
+- Analytics isolation: `video_analytics` filter per channel
+- Update `pipeline_run_logs.channel_id` aktif
+
+**Validation gate:** 1 tenant 2 channel berbeda niche → both produce + publish independently.
+
+---
+
+## 🥇 PHASE 6 — Self-Learning + Diversity Engine (CORE MOAT)
+**Scope (detail di `DESAIN_PRODUK_SAAS.md`):**
+- Self-Learning Feedback Engine — pull YouTube Analytics 24-72h post-publish, adapt config per channel (niche/hook/visual weighting)
+- Diversity Engine — voice/hook/niche rotation algorithm (AI Slop Defense)
+
+**Validation gate:** TBD saat phase dimulai (post Phase 5).
+
+---
+
+## 🛡️ PHASE 7 — Compliance Score + AI Slop Defense Polish (SURVIVAL)
+**Scope:**
+- Compliance Score calculator (5 dimensi) — feed widget D20
+- Polish diversity rotation + threshold tuning
+
+**Validation gate:** TBD.
+
+---
+
+## 💳 PHASE 8 — Payment Integration
+**Scope:**
+- Xendit (Indonesia-native) + Stripe webhook handler
+- Email service (Resend)
+- Subscription state ↔ scheduler gate (suspend → stop produksi)
+
+**Validation gate:** TBD.
+
+---
+
+## 🎨 PHASE 9-10 — UI Foundation + Polish
+**Scope (sesi terpisah — via Claude Design workflow, lihat [[plan_frontend_via_claude_design]]):**
+- Next.js app baru atau subdir `apps/web/`
+- Supabase Auth — login per tenant
+- Page: dashboard, config, scheduler, reports, **logs per tenant**
+- Supabase Realtime subscription untuk live tail `pipeline_run_logs`
+- Deploy: Vercel atau VPS terpisah
+
+**Validation gate:** tenant A login → hanya lihat data tenant A (RLS test).
+
+---
+
+## 📋 Docs Sync (Cross-Cutting, Continuous — bukan phase bernomor)
+- Update `MESIN_VIRAL.md` per perubahan arsitektur (worker, dispatcher, tabel baru)
+- Update `roadmap_1.md` per item completed (mark ✅ dengan tanggal)
+- Delete `SOFTCODE_AI_CONFIG - BELUM DI EKSEKUSI.md` setelah Phase 1 selesai
+- Delete `PIPELINE_LOG_SEPARATION - BELUM DI EKSEKUSI.md` setelah Phase 3 selesai
+- Sync memory files dengan realitas baru
+
+---
+
+## 🐛 KNOWN ISSUES (Hari Ini, 2026-06-10)
+
+| # | Issue | Severity | Phase | Notes |
+|---|---|---|---|---|
+| 1 | NicheSelector/HookOptimizer/ScriptAnalyzer hardcode OpenAI meskipun config Claude | 🔴 Critical | Phase 1.1 | Root cause kegagalan job 94 & 95 hari ini |
+| 2 | Dispatcher `dispatch_pipeline_jobs()` tidak hormati `tenant_configs.timezone` — publish_slots di-treat UTC | 🟠 High | Phase 1.6 | publish_slots `[14:00, 23:00]` WIB sebenarnya fire pada 05:30 & 20:30 WIB karena UTC interpretation |
+| 3 | `AIImageProvider._generate_image()` signature mismatch saat hook_frame | 🟡 Medium | Phase 1.6 | Non-fatal, fallback ke clip[0] |
+| 4 | `tenant_configs.publish_slots` setting WIB tapi treated UTC | 🟠 High | Phase 1.6 | Bagian dari issue #2 |
+
+---
+
+## 📂 FILE REGISTRY
+
+### Project root (this repo)
+- `PROGRESS.md` — **this file** — live status & master plan
+- `MESIN_VIRAL.md` — dokumentasi arsitektur teknis (perlu sync, terakhir update 8 Apr 2026)
+- `roadmap_1.md` — checklist roadmap (perlu sync, terakhir update 8 Apr 2026)
+- `SOFTCODE_AI_CONFIG - BELUM DI EKSEKUSI.md` — spec Phase 1, akan dihapus saat selesai
+- `PIPELINE_LOG_SEPARATION - BELUM DI EKSEKUSI.md` — superseded oleh Phase 3 DB-based
+
+### Memory (auto-loaded sesi baru)
+- `MEMORY.md` — index
+- `plan_master_softcode_to_saas.md` — ringkasan master plan (this doc → memory)
+- `progress_journal.md` — per-phase completion log
+- `project_vision.md` — visi & prinsip non-negotiable
+- `project_byocc_roadmap.md` — BYO-CC roadmap (memory)
+- `plan_s93_config_driven_llm.md` — **superseded** oleh Phase 1.1
+- `feedback_workflow.md` — wajib propose dulu
+- `feedback_no_hardcode.md` — no silent fallback
+- `feedback_analysis_discipline.md` — no asumsi liar
+
+---
+
+## 🚀 QUICK-START UNTUK SESI BARU
+
+Kalau Anda buka chat baru, ini yang harus saya lakukan:
+1. Baca `MEMORY.md` index
+2. Baca `progress_journal.md` — phase terakhir yang selesai
+3. Baca `PROGRESS.md` (file ini) — current phase + next step
+4. Verify git state: `git status` + `git log -5`
+5. Verify VPS state: `ssh vps && tail worker.log`
+6. Tanyakan ke user: "Lanjut dari sub-phase X.Y atau ada arahan baru?"
+
+---
+
+## 📊 VALIDATION HISTORY
+
+| Tanggal | Phase | Job ID | Hasil | Notes |
+|---------|-------|--------|-------|-------|
+| 2026-06-10 09:31 | Pre-Phase-0 | #96 | ✅ SUCCESS | OpenAI billing aktif, pipeline normal, dipakai sebagai baseline |
+| 2026-06-10 05:30 | — | #95 | ❌ FAILED | OpenAI 429 billing_not_active — root cause yang memicu refactor |
+| 2026-06-09 20:30 | — | #94 | ❌ FAILED | Same as #95 |
+| 2026-06-09 05:30 | — | #93 | ✅ SUCCESS | Sebelum billing OpenAI berhenti |
+
+---
+
+**END OF FILE. Update setiap selesai sub-phase.**
