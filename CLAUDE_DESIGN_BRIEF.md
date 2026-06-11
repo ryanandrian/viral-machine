@@ -277,6 +277,8 @@ Step 8: Publish YouTube — YouTube logo dengan upload arrow
 | E. Admin Internal | 5 | admin.mesinviral.com/* |
 | F. States (modal/empty/error) | 6 patterns | Various |
 
+> ⚠️ **Cara hitung (anti-bingung):** kolom Jumlah = rentang penomoran (mis. D1-D21), BUKAN jumlah screen fisik — Config (D8-D19) = 1 screen multi-tab, E2.1-E2.5 = subtab E2. **Total screen logis kanonik = 39.** Bundle Claude Design = **32 file HTML ≈ 30 screen prototype + mobile/states**; screen epic Multi-Format belum di bundle (dibangun saat implementasi).
+
 ---
 
 ## 6. SCREEN SPECIFICATIONS — DETAILED

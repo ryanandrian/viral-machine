@@ -42,7 +42,7 @@
 
 **MesinViral 5-24 video/hari per channel otomatis = high-risk profile**. Tanpa mitigation, customer akan banned massal → mass churn → product death.
 
-**Mitigation = Pillar Produk #1** (bukan opsional — survival). Detail di Section 11.
+**Mitigation = Pillar Produk #1** (bukan opsional — survival). Detail di Section 9.
 
 ---
 
@@ -278,7 +278,7 @@ Engine "TTS" (locked di 2 provider)
 Engine "Visual AI" (locked di OpenAI image)
 ├─ gpt-image-1-mini (default — cheap & good)
 ├─ gpt-image-1 (premium quality)
-└─ dall-e-3 (legacy, sampai discontinue May 2026)
+└─ dall-e-3 (high-quality legacy; ⚠️ deadline discontinue ~May 2026 SUDAH LEWAT per 2026-06-12 — status perlu dikonfirmasi, lihat open-decision)
 
 Engine "Music" (platform-managed, BUKAN BYOK)
 └─ Library R2 curated
@@ -568,7 +568,7 @@ admin.mesinviral.com (Internal — staff only)
 
 | Komponen | Cost (USD) |
 |---|---|
-| Compute (worker render — ~1 menit FFmpeg per video) | $0.02/video × 150-7200 = $3-144 |
+| Compute (worker render — **~7-21 mnt/video**, lihat §12c; $/video tetap kecil krn compute murah/menit) | ~$0.02/video × 150-7200 = $3-144 |
 | Supabase DB (rows + storage) | $0.5-3 |
 | Cloudflare R2 (music streaming + storage) | $0.2-1 |
 | Egress (video file passing through) | $0.1-2 |
@@ -609,7 +609,7 @@ Note: Scale margin lebih rendah karena volume render hit compute lebih keras. Mi
 ### 🚨 Risk #1 (CRITICAL): YouTube AI Slop Policy
 **Likelihood:** Sangat tinggi (sudah aktif Jan 2026)
 **Impact:** Customer channel banned/demonetized → mass churn → death
-**Mitigation:** Section 11 Defense Engine (built-in dari day 1, BUKAN opsional)
+**Mitigation:** Section 9 Defense Engine (built-in dari day 1, BUKAN opsional)
 **Owner:** Product (architecture choice)
 
 ### 🚨 Risk #2 (HIGH): BYOK Onboarding Friction
@@ -651,7 +651,7 @@ Note: Scale margin lebih rendah karena volume render hit compute lebih keras. Mi
 **Owner:** Legal review
 
 ### 🟠 Risk #6 (MEDIUM): Anthropic/OpenAI API Cost Volatility
-**Data:** Model pricing bisa berubah (mis. DALL-E discontinue May 2026)
+**Data:** Model pricing bisa berubah (mis. DALL-E discontinue ~May 2026 — deadline sudah lewat, konfirmasi status)
 **Impact:** Catalog model harus update, communication ke tenant
 **Mitigation:**
 - Catalog di Supabase (Phase 1.3) — flag deprecated models
