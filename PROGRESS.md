@@ -22,7 +22,7 @@ Setiap tenant: login → dashboard → config API keys → scheduler → lihat l
 
 **Track BACKEND:** ⏸️ Menunggu approval user untuk start **Phase 0** (lihat roadmap 12-phase di bawah).
 
-**Track FRONTEND:** ✅ Desain Claude Design SELESAI 100% + diterima. Strategi/repo/sequencing sudah di-approve user (2026-06-11). **Next step = eksekusi langkah implementasi #1 (setup `apps/web` + port design system).** Belum ada kode frontend ditulis. Detail di section FRONTEND di bawah + [[plan_frontend_via_claude_design]].
+**Track FRONTEND:** 🛠️ Implementasi #1 (Fondasi) **DONE + tervalidasi (2026-06-11)** — `apps/web` Next.js 16.2.9 + React 19 + Tailwind v4; design system (`tokens.css`+`components.css`) ter-port; tema dark + lang ID default; `next build` ✅ pass (Hybrid terbukti). **Next: next-themes (toggle) + next-intl (ID/EN) + shadcn init + `MVShell`→layout, lalu screen pertama D5 Run Detail.** ⚠️ Next 16 ada breaking changes (`apps/web/AGENTS.md`) — konsultasi `node_modules/next/dist/docs/` sebelum kerja routing/RSC. Detail [[plan_frontend_via_claude_design]].
 
 > Frontend & backend jalan **paralel** — frontend pakai MOCK DATA dulu (tidak nunggu backend), wire ke Supabase saat phase backend mendarat. Frontend = Phase 9-10 di roadmap, tapi DIMULAI lebih awal secara paralel atas keputusan user.
 

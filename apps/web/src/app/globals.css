@@ -1,0 +1,5 @@
+/* Tailwind v4 — utilities tetap tersedia untuk shadcn/Radix & helper.
+   Look & feel utama datang dari design system MesinViral (tokens.css + components.css),
+   di-import di layout.tsx SETELAH file ini. Hybrid: reuse CSS desain + Tailwind/shadcn selektif.
+   Default :root/body bawaan create-next-app dihapus karena bertabrakan dgn tema dark desain. */
+@import "tailwindcss";

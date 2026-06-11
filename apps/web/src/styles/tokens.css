@@ -1,0 +1,171 @@
+/* ============================================================
+   MesinViral — Design Tokens
+   Dark mode default · Light mode via [data-theme="light"]
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+:root {
+  /* ---- Brand ---- */
+  --brand: #6366F1;          /* indigo-500 */
+  --brand-hover: #4F46E5;    /* indigo-600 */
+  --brand-soft: rgba(99,102,241,0.12);
+  --accent: #8B5CF6;         /* violet-500 — AI features */
+  --accent-soft: rgba(139,92,246,0.12);
+
+  /* ---- Semantic ---- */
+  --success: #10B981;
+  --success-soft: rgba(16,185,129,0.12);
+  --warning: #F59E0B;
+  --warning-soft: rgba(245,158,11,0.12);
+  --error: #EF4444;
+  --error-soft: rgba(239,68,68,0.12);
+  --info: #3B82F6;
+  --info-soft: rgba(59,130,246,0.12);
+
+  /* ---- Pipeline status ---- */
+  --st-pending: #71717A;
+  --st-running: #3B82F6;
+  --st-completed: #10B981;
+  --st-failed: #EF4444;
+  --st-warning: #F59E0B;
+
+  /* ---- Provider brand ---- */
+  --yt: #FF0000;
+  --telegram: #229ED9;
+  --elevenlabs: #6E2EF7;
+  --anthropic: #D97757;
+  --openai: #10A37F;
+  --xendit: #4573D2;
+
+  /* ---- Type ---- */
+  --font-ui: 'Geist', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-4xl: 2.25rem;
+  --text-5xl: 3rem;
+  --text-6xl: 3.75rem;
+
+  /* ---- Radius ---- */
+  --r-sm: 0.375rem;
+  --r-md: 0.5rem;
+  --r-lg: 0.75rem;
+  --r-xl: 1rem;
+  --r-2xl: 1.5rem;
+  --r-full: 9999px;
+
+  /* ---- Spacing (named) ---- */
+  --sp-1: 0.25rem; --sp-2: 0.5rem; --sp-3: 0.75rem; --sp-4: 1rem;
+  --sp-6: 1.5rem; --sp-8: 2rem; --sp-12: 3rem; --sp-16: 4rem; --sp-24: 6rem;
+
+  /* ---- Easing / duration ---- */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --d-fast: 150ms;
+  --d-mid: 300ms;
+  --d-slow: 500ms;
+}
+
+/* ============================================================
+   DARK (default)
+   ============================================================ */
+:root, [data-theme="dark"] {
+  --bg: #0A0A0B;             /* zinc-950 */
+  --bg-elevated: #101012;
+  --surface-1: #18181B;      /* zinc-900 */
+  --surface-2: #27272A;      /* zinc-800 — hover */
+  --surface-3: #323237;
+  --border-subtle: #1F1F23;
+  --border: #27272A;
+  --border-strong: #3F3F46;  /* zinc-700 */
+
+  --text-primary: #FAFAFA;   /* zinc-50 */
+  --text-secondary: #A1A1AA; /* zinc-400 */
+  --text-muted: #71717A;     /* zinc-500 */
+
+  --glow-brand: 0 0 0 1px rgba(99,102,241,0.4), 0 0 30px rgba(99,102,241,0.25);
+  --glow-accent: 0 0 30px rgba(139,92,246,0.22);
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.5);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.55);
+  --shadow-lg: 0 12px 28px rgba(0,0,0,0.6);
+  --shadow-xl: 0 24px 48px rgba(0,0,0,0.65);
+
+  --grid-line: rgba(255,255,255,0.04);
+  color-scheme: dark;
+}
+
+/* ============================================================
+   LIGHT
+   ============================================================ */
+[data-theme="light"] {
+  --bg: #FAFAFA;
+  --bg-elevated: #FFFFFF;
+  --surface-1: #FFFFFF;
+  --surface-2: #F4F4F5;
+  --surface-3: #E4E4E7;
+  --border-subtle: #F0F0F1;
+  --border: #E4E4E7;
+  --border-strong: #D4D4D8;
+
+  --text-primary: #18181B;
+  --text-secondary: #52525B;
+  --text-muted: #A1A1AA;
+
+  --brand-soft: rgba(99,102,241,0.10);
+  --accent-soft: rgba(139,92,246,0.10);
+  --success-soft: rgba(16,185,129,0.10);
+  --warning-soft: rgba(245,158,11,0.12);
+  --error-soft: rgba(239,68,68,0.10);
+  --info-soft: rgba(59,130,246,0.10);
+
+  --glow-brand: 0 0 0 1px rgba(99,102,241,0.3), 0 0 24px rgba(99,102,241,0.18);
+  --glow-accent: 0 0 24px rgba(139,92,246,0.15);
+
+  --shadow-sm: 0 1px 2px rgba(24,24,27,0.06);
+  --shadow-md: 0 4px 12px rgba(24,24,27,0.08);
+  --shadow-lg: 0 12px 28px rgba(24,24,27,0.10);
+  --shadow-xl: 0 24px 48px rgba(24,24,27,0.12);
+
+  --grid-line: rgba(0,0,0,0.035);
+  color-scheme: light;
+}
+
+/* ---- Base reset ---- */
+* { box-sizing: border-box; }
+html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+  background: var(--bg);
+  color: var(--text-primary);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  font-feature-settings: "cv11", "ss01";
+  transition: background var(--d-mid) var(--ease-out), color var(--d-mid) var(--ease-out);
+}
+::selection { background: var(--brand-soft); color: var(--text-primary); }
+
+/* Scrollbars */
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: var(--r-full); border: 2px solid transparent; background-clip: padding-box; }
+*::-webkit-scrollbar-thumb:hover { background: var(--text-muted); background-clip: padding-box; }
+
+/* i18n: show ID by default, EN when [lang=en] on <html>.
+   Hide-only, language-scoped, !important — beats any author display rule (incl.
+   broad `.x span{display:flex}` selectors). The VISIBLE element is never given a
+   forced display, so it keeps its natural/author display value. */
+html:not([lang="en"]) [data-en] { display: none !important; }
+html[lang="en"] [data-id] { display: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}
