@@ -1,5 +1,7 @@
 # Addendum untuk Claude Design — MesinViral.com (Post-Batch 1)
 
+> ⚠️ **HISTORIS — Claude Design SUDAH SELESAI 100%.** Addendum ini (delta prompt) sudah terserap ke bundle desain + `CLAUDE_DESIGN_BRIEF.md`. Angka "38 screen" di sini **superseded → final 39**. JANGAN paste ke Claude Design lagi. Spec UI terkini = `CLAUDE_DESIGN_BRIEF.md`.
+
 > **Cara pakai:** Copy seluruh isi file ini, paste ke Claude Design SEBELUM minta Batch berikutnya.
 > Ini ADDENDUM atas brief yang sudah ada — bukan replace. Konten existing tetap valid.
 

@@ -1,4 +1,6 @@
 # ROADMAP MESIN VIRAL
+
+> ⚠️ **HISTORIS — fase s8x (selesai ~April 2026). BUKAN roadmap aktif.** Roadmap aktif = **12-phase di `PROGRESS.md`**. Sebagian item di sini (ganti crontab→worker, migrasi DALL-E→gpt-image) **sudah dikerjakan** tapi tak ditandai. Jangan jadikan acuan status.
 > Checklist status semua item development — diupdate setiap item selesai.  
 > Mulai: 4 April 2026 | Update terakhir: 8 April 2026
 

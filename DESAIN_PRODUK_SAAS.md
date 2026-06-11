@@ -206,7 +206,7 @@
 
 ### Add-on & Upsell Potential
 
-> ⚠️ **PRINSIP:** Semua pricing add-on (dan subscription) **TIDAK hardcode** — disimpan di tabel `pricing_config` (Supabase) dan editable via admin panel (screen E2.5). Nilai di bawah = default initial seed. Lihat [[feedback_no_hardcode]] memory rule.
+> ⚠️ **PRINSIP:** Semua pricing add-on (dan subscription) **TIDAK hardcode** — disimpan di tabel `pricing_config` (Supabase) dan editable via admin panel (screen E5). Nilai di bawah = default initial seed. Lihat [[feedback_no_hardcode]] memory rule.
 
 | Add-on | Pricing Default | Karakteristik |
 |---|---|---|
@@ -397,7 +397,7 @@ admin.mesinviral.com (Internal — staff only)
 
 - **Mood:** professional, calm, focused (bukan flashy)
 - **Color:** indigo-600 primary, dark mode default (content creator audience)
-- **Typography:** Inter (UI), JetBrains Mono (logs)
+- **Typography:** Geist Sans (UI — KEPUTUSAN FINAL, bukan Inter), JetBrains Mono (logs)
 - **Layout:** sidebar nav + main + slide-in drawer untuk detail
 
 (Mockup ASCII tetap sama dengan v1 — lihat backup atau implementasi.)
@@ -711,6 +711,8 @@ Note: Scale margin lebih rendah karena volume render hit compute lebih keras. Mi
 - ❌ CDN (Cloudflare untuk landing)
 
 ### Updated Phase Roadmap
+
+> **Status LIVE per-phase = `PROGRESS.md` (master status).** Tabel di bawah = roadmap KONSEP; jangan catat status di sini (hindari drift 3-tempat).
 
 | Phase | Scope | Estimasi Solo Dev | Catatan |
 |---|---|---|---|

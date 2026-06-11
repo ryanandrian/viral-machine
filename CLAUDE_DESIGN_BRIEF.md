@@ -61,9 +61,9 @@ OpenAI brand       : #10A37F (untuk integration cards)
 ### 2.2 Typography
 
 ```
-Font UI            : Inter (Google Fonts) — modern, neutral, excellent readability
+Font UI            : Geist Sans (Google Fonts) — KEPUTUSAN FINAL (BUKAN Inter; Inter terlalu generik AI-slop). Bundle desain & implementasi pakai Geist.
 Font monospace     : JetBrains Mono — untuk log viewer, code, API keys display
-Font display (opt) : Geist (Vercel) — untuk landing hero only
+Font mono          : JetBrains Mono — log viewer/kode (Geist Sans = font SELURUH UI, bukan hanya hero)
 
 Scale (rem):
 xs    : 0.75rem  (12px) — labels, meta info

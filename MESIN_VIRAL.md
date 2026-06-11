@@ -1,4 +1,6 @@
 # MESIN VIRAL — Dokumentasi Teknis
+
+> ⚠️ **USANG (per 8 April 2026) — JANGAN jadikan acuan arsitektur terkini.** Sudah berubah: crontab → **worker loop + decoupling producer/publisher**; DALL-E 3 → **gpt-image-1-mini** default (DALL-E-3 = opsi high-quality); single-tenant → **multi-tenant**; roadmap → **12-phase**. **Acuan teknis terkini = `PROGRESS.md` + memory `decisions_production_scaling` + `DESAIN_PRODUK_SAAS.md §12c`.** Di-rewrite saat Phase 7 (docs sync).
 > Dokumentasi teknis sistem produksi konten otomatis mesinviral.com.  
 > Update terakhir: 8 April 2026.  
 > Selalu verifikasi dengan kode aktual sebelum mengambil keputusan teknis.

@@ -1,5 +1,7 @@
 # Feature: Pipeline Log Separation dari Worker Log
 
+> ⛔ **SUPERSEDED oleh Phase 3 (Pipeline Run Logs DB-based) — JANGAN implementasi pendekatan file-based di bawah ini.** Log per-run akan masuk tabel `pipeline_run_logs` di Supabase (untuk live tail UI D5 via Realtime + multi-node + aturan VPS-bersih). Disimpan sebagai referensi historis; dihapus setelah Phase 3 selesai.
+
 ## Tujuan
 Pisahkan log pipeline per-run dari worker log utama. Setiap pipeline run mendapat file log terpisah dengan format:
 ```

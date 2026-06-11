@@ -114,7 +114,9 @@ Next.js 15 (App Router) + shadcn/ui + Tailwind + tremor.so + Geist Sans + next-i
 
 ## 🗺️ MASTER ROADMAP (12 Phase)
 
-> **Disinkronkan 2026-06-11** dengan roadmap final di `DESAIN_PRODUK_SAAS.md §12` (otoritatif). Versi 7-phase lama sudah usang — perubahan utama: Self-Learning + Diversity Engine disisipkan sebagai **Phase 6 (CORE MOAT)**, Compliance Phase 7, Payment Phase 8, UI digeser ke Phase 9-10, lalu Beta (11) + Public launch (12).
+> **Roadmap konsep di `DESAIN_PRODUK_SAAS.md §12`; STATUS LIVE = tabel ini (MASTER status — jangan duplikat status di tempat lain).** Disinkronkan 12-phase: Self-Learning+Diversity **Phase 6 (CORE MOAT)**, Compliance 7, Payment 8 (Midtrans), UI 9-10, Beta 11, Public 12.
+>
+> **Konvensi status (PRINSIP: tahap jadi ✅ HANYA jika TERBUKTI valid / running well — wajib ada bukti):** ⏸️ pending approval · 🔒 blocked · 🛠️/⏳ in-progress · ✅ DONE+VALIDATED (sertakan bukti: production run #, `npm build` PASS, curl 200, migration applied — catat di Status/VALIDATION HISTORY) · 🔄 continuous. **Update tabel ini tiap sub-phase yang lulus validasi.**
 
 | Phase | Nama | Tujuan | Estimasi | Status |
 |-------|------|--------|----------|--------|
@@ -438,13 +440,13 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 
 ## 🚀 QUICK-START UNTUK SESI BARU
 
-Kalau Anda buka chat baru, ini yang harus saya lakukan:
-1. Baca `MEMORY.md` index
-2. Baca `progress_journal.md` — phase terakhir yang selesai
-3. Baca `PROGRESS.md` (file ini) — current phase + next step
-4. Verify git state: `git status` + `git log -5`
-5. Verify VPS state: `ssh vps && tail worker.log`
-6. Tanyakan ke user: "Lanjut dari sub-phase X.Y atau ada arahan baru?"
+**Urutan baca kanonik = `MEMORY.md` (auto-loaded) — ikuti itu.** Ringkas:
+1. `MEMORY.md` (index + urutan baca) → 2. `progress_journal.md` (kronologis terbaru) → 3. **file ini** (status LIVE + next step) → 4. `DESAIN_PRODUK_SAAS.md` (pondasi: bisnis, arsitektur §12b/§12c).
+   Lalu sesuai TRACK: **Backend** → [[decisions_production_scaling]] + `MULTI_FORMAT_STUDIO.md §0` + `SOFTCODE_AI_CONFIG…md`; **Frontend** → [[plan_frontend_via_claude_design]] + `design-source/mesinviral-com/project/CLAUDE.md` + `CLAUDE_DESIGN_BRIEF.md`.
+5. Verify state: `git status` + `git log -5` + (track backend) `ssh vps && tail logs/worker.log`.
+6. Tanya user: "Lanjut dari [next-step di STATUS SAAT INI] atau ada arahan baru?"
+
+**⛔ Jangan jadikan acuan:** `MESIN_VIRAL.md`, `roadmap_1.md` (usang April), `PIPELINE_LOG_SEPARATION` (superseded Phase 3), `plan_s93` (superseded Phase 1.1) — semua sudah ada banner.
 
 ---
 
