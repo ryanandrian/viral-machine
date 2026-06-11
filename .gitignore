@@ -7,6 +7,13 @@ logs/
 *.log
 .venv/
 dist/
+
+# Design reference bundle dari Claude Design (handoff) — referensi kerja, JANGAN ke git/VPS
+design-source/
+# Frontend Next.js build artifacts (app ada di apps/web/)
+apps/web/node_modules/
+apps/web/.next/
+node_modules/
 youtube_credentials.json
 token_youtube.json
 tokens/

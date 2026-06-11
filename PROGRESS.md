@@ -18,9 +18,13 @@ Setiap tenant: login → dashboard → config API keys → scheduler → lihat l
 
 ---
 
-## 📍 STATUS SAAT INI
+## 📍 STATUS SAAT INI (2 track paralel)
 
-**Current phase:** ⏸️ Menunggu approval user untuk start **Phase 0**
+**Track BACKEND:** ⏸️ Menunggu approval user untuk start **Phase 0** (lihat roadmap 12-phase di bawah).
+
+**Track FRONTEND:** ✅ Desain Claude Design SELESAI 100% + diterima. Strategi/repo/sequencing sudah di-approve user (2026-06-11). **Next step = eksekusi langkah implementasi #1 (setup `apps/web` + port design system).** Belum ada kode frontend ditulis. Detail di section FRONTEND di bawah + [[plan_frontend_via_claude_design]].
+
+> Frontend & backend jalan **paralel** — frontend pakai MOCK DATA dulu (tidak nunggu backend), wire ke Supabase saat phase backend mendarat. Frontend = Phase 9-10 di roadmap, tapi DIMULAI lebih awal secara paralel atas keputusan user.
 
 **Last validated run:** Job #96 (2026-06-10 09:31 WIB) — SUCCESS, published https://www.youtube.com/shorts/Jf-soZuYIOs
 
@@ -28,27 +32,34 @@ Setiap tenant: login → dashboard → config API keys → scheduler → lihat l
 
 ---
 
-## 🎨 FRONTEND DESIGN WORKFLOW (Strategic Decision 2026-06-10)
+## 🎨 FRONTEND — DESAIN SELESAI, IMPLEMENTASI HYBRID (Update 2026-06-11)
 
-**Strategi:** Frontend MesinViral didesain via **Claude Design** (Anthropic UI design tool), BUKAN custom from scratch oleh Claude Code.
+**Claude Design SELESAI 100%.** Handoff bundle (HTML/CSS/JS + screenshot, 32 screen) diterima & disimpan di `design-source/mesinviral-com/` (**gitignored** — tidak ke git/VPS). **Pengembangan UI lanjutan TIDAK lagi lewat Claude Design** — dikembangkan langsung di sini.
 
-**Role Claude Code untuk frontend:** (a) tulis brief lengkap dari product spec, (b) verify desain output vs brief, (c) integrate ke Next.js + shadcn/ui.
+### Keputusan implementasi (user-confirmed 2026-06-11)
 
-### File Brief (Single Source of Truth)
+| Topik | Keputusan |
+|---|---|
+| **Strategi** | **HYBRID** — reuse CSS desain (tokens+components, 0 redesign) + shadcn/Radix HANYA utk komponen interaktif/a11y, di-tema pakai tokens desain. Charts: tremor. |
+| **Repo** | **Monorepo** — frontend di `apps/web/` (Next.js 15) di repo ini. |
+| **Sequencing** | Mulai **SEKARANG dgn MOCK DATA**, paralel/mendahului backend. Wire Supabase saat phase backend mendarat. |
+| **Deploy** | **Vercel** (bukan VPS). VPS tetap bersih runtime Python. |
 
-`/home/rad/viral-machine/CLAUDE_DESIGN_BRIEF.md` — 10 section, 30 screen spec:
-- Design system shadcn/ui-compatible (color hex, typography, spacing, component list)
-- 30 screen dipecah 6 phase deliverable
-- Persona Indonesia + content examples ID
-- Tech stack target: Next.js 15 + shadcn/ui + Tailwind + tremor.so + Geist Sans + next-intl
+### Sumber desain (single source)
 
-### Workflow Status
+- `CLAUDE_DESIGN_BRIEF.md` — spec brief (39 screen, sudah termasuk multi-bahasa v4). Tetap acuan konten/layout.
+- `design-source/mesinviral-com/project/` — bundle final: `CLAUDE.md` (build notes), `*.html` (30 screen prototype), `styles/` (tokens.css, components.css, shell.js/MVShell, icons.js/MVIcons, marketing.*, app-shell.*), `config/` (cfg-content, cfg-engines), `content-languages.js`.
+- `CLAUDE_DESIGN_ADDENDUM_v2/v3/v4.md` — referensi delta (niche, pricing config-driven, multi-bahasa). Sudah terserap ke brief + desain; bukan untuk Claude Design lagi.
 
-1. ✅ **2026-06-10** — Brief ditulis (CLAUDE_DESIGN_BRIEF.md)
-2. ⏸️ User paste brief ke Claude Design
-3. ⏸️ Claude Design generate Phase 1 (design system + D5 Run Detail sebagai proof of concept)
-4. ⏸️ User share output ke Claude Code
-5. ⏸️ Claude Code verify alignment + plan implementasi screen-by-screen
+### Urutan kerja implementasi (NEXT)
+
+1. **Fondasi** ← NEXT — setup `apps/web` (Next.js 15 + Tailwind), port `tokens.css`+`components.css`→global, `MVShell`→layout React, icons (lucide + SVG custom), i18n (next-intl ID/EN), theme (next-themes `data-theme`).
+2. **Proof-of-concept:** D5 Run Detail (paling kompleks) → D1 Dashboard.
+3. **Marketing:** A1 Landing + A2 Pricing.
+4. **Auth + Onboarding** (C4 dropdown Bahasa Konten sebelum voice).
+5. Sisa Dashboard (D2-D21) → Admin (E1-E5) → States/Mobile.
+
+**Deviasi desain yg ditangani saat port:** A2/C1 literal "Rp..K"→placeholder `{{pricing.*}}`; ikon custom MVIcons→lucide+SVG; chart mockup→tremor; pola i18n span-ganda→next-intl.
 
 ### Decisions UX User-Confirmed (Claude Design Q1-Q9)
 
@@ -64,12 +75,11 @@ Setiap tenant: login → dashboard → config API keys → scheduler → lihat l
 | **Real content** | Sample tenant Riko Pratama, channel "Misteri Samudra", niche ID, pricing real Rp 149/349/699K, AI cost real $0.34/video |
 | **Priority demo** | D5 Run Detail → D1 Dashboard → A1 Landing → A2 Pricing → Onboarding step 3 (API Keys) → Compliance Score widget |
 
+> Tabel "Decisions UX Q1-Q9" di atas = konteks historis desain (sudah baked-in ke output Claude Design). Bukan pekerjaan terbuka.
+
 ### Sumber Referensi untuk Sesi Berikutnya
 
-[[plan_frontend_via_claude_design]] memory file — Claude Code yang baca ini akan tahu:
-- Brief ada di mana
-- Decisions sudah dikonfirmasi user (tidak perlu tanya ulang)
-- Action sequence saat desain output datang (verify alignment → flag misalignment → map shadcn/ui → plan implementation)
+[[plan_frontend_via_claude_design]] memory file (sudah di-rewrite 2026-06-11) — single source status frontend: lokasi bundle, strategi Hybrid, urutan kerja, fakta design system. **Baca itu + `design-source/.../CLAUDE.md` sebelum implementasi.**
 
 ### 🆕 Niche Model + Pricing Decisions (2026-06-11)
 
@@ -96,7 +106,7 @@ Detail permanent reference: [[decisions_niche_model]] memory file.
 
 Next.js 15 (App Router) + shadcn/ui + Tailwind + tremor.so + Geist Sans + next-intl (i18n) + Supabase Auth + Supabase Realtime + Vercel deploy. Detail per layer di [[plan_frontend_via_claude_design]].
 
-**Repo structure:** TBD saat Phase 9 mulai — monorepo (`apps/web/`) vs separate repo. Rekomendasi: monorepo dengan pnpm workspaces.
+**Repo structure:** ✅ DIPUTUSKAN (2026-06-11) — **monorepo**, frontend di `apps/web/` di repo ini. `apps/web` di-exclude dari sparse-checkout VPS; deploy ke Vercel.
 
 **Domain:** `mesinviral.com` (landing) + `app.mesinviral.com` (dashboard) + `admin.mesinviral.com` (internal).
 

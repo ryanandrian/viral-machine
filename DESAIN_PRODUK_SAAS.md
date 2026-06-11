@@ -689,6 +689,7 @@ Note: Scale margin lebih rendah karena volume render hit compute lebih keras. Mi
 - ✅ Worker + Dispatcher (perlu fix timezone bug — Phase 1.6)
 - ⏳ Tenant Credentials (Fernet) — **Phase 4**
 - ⏳ Multi-channel propagation — **Phase 5**
+- ⏳ **Konten Multi-Bahasa (per-channel)** — `content_language` di channel + catalog `content_languages` config-driven (id-ID/en-US official, SEA experimental); inject bahasa ke script LLM + voice filter + caption font. Backend nyangkut **Phase 1.x (prompt) + Phase 5 (channel field)**. Selling point landing page. Lihat memory `decisions_content_language`.
 - ⏳ **Self-Learning Feedback Engine** — **Phase 6 (NEW PRIORITY)** — pull YT Analytics 24-72h post-publish, adapt config
 - ⏳ **Diversity Engine** — **Phase 6 (NEW PRIORITY)** — voice/hook/niche rotation algorithm
 - ⏳ **Compliance Score calculator** — **Phase 7**

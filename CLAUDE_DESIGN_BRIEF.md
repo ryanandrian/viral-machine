@@ -316,16 +316,17 @@ Step 8: Publish YouTube — YouTube logo dengan upload arrow
    - Animated pipeline diagram horizontal: 7 step dengan icon + label, scroll-triggered animation
    - Caption per step (hover): explanation singkat
 
-6. **Killer Features section** (5 feature cards, 2-col grid pada desktop)
+6. **Killer Features section** (6 feature cards, 2-col grid pada desktop)
    - **🥇 Self-Learning Engine** — "Belajar dari real YouTube Analytics channelmu. Adapt niche, hook, visual style otomatis."
    - **🔓 BYOK Transparency** — "Kamu pegang API keys Anthropic/OpenAI/ElevenLabs. Lihat biaya AI real-time."
    - **🛡️ AI Slop Defense** — "Diversity engine otomatis lindungi channel dari YouTube AI policy 2026."
    - **🚀 5-24 Video/hari** — "Multi-channel parallel. Scale tanpa hire tim."
+   - **🌐 Konten Multi-Bahasa** — "Produksi narasi + caption dalam Bahasa Indonesia, English, dan bahasa Asia Tenggara (Malaysia, Filipina, Thailand, Vietnam). Pilih bahasa per channel — jangkau audiens lintas negara dari satu platform."
    - **🇮🇩 Indonesia-First** — "UI Bahasa Indonesia, Xendit payment, support lokal."
 
 7. **Comparison table** ("MesinViral vs Kompetitor")
    - Sticky header table dengan 5 kolom (MesinViral, AutoShorts, OpusClip, Submagic, Pictory)
-   - Rows: Auto-publish, Self-learning, BYOK, Diversity engine, Multi-channel, Max video/hari, Custom voice, Indonesia payment, Price/video
+   - Rows: Auto-publish, Self-learning, BYOK, Diversity engine, Multi-channel, **Multi-language content**, Max video/hari, Custom voice, Indonesia payment, Price/video
    - MesinViral column highlighted dengan border indigo + light glow
 
 8. **How It Works** (3 step process)
@@ -349,6 +350,7 @@ Step 8: Publish YouTube — YouTube logo dengan upload arrow
     - "Bisa cancel kapan saja?"
     - "Apakah ada free tier?"
     - "Channel saya 0 subs, bisa pakai?"
+    - "Bisa bikin konten dalam bahasa selain Indonesia (English, Malaysia, Thailand)?"
     - dll.
 
 12. **CTA strip final**
@@ -606,6 +608,13 @@ Sama dengan B1 tapi simpler:
   - "Niche custom (Rp 299K)" — pop-up form
 - Each niche card: thumbnail + description + sample video link + checkbox
 
+- **Bahasa Konten** dropdown (render dari catalog `content_languages` — config-driven, BUKAN hardcode)
+  - Default: Bahasa Indonesia (id-ID)
+  - Official: Indonesia, English; tier SEA (Malaysia, Filipina, Thailand, Vietnam) dengan badge "Eksperimental"
+  - **Menentukan bahasa narasi (TTS) + caption + script untuk SEMUA video channel ini**
+  - ⚠️ Mengubah bahasa = daftar voice ikut berubah (voice difilter per bahasa)
+  - Ditempatkan SEBELUM voice selection karena daftar voice difilter oleh bahasa ini
+
 - **Voice selection** dropdown dengan preview
   - Default voice per niche pre-selected
   - "Custom voice" — pilih dari ElevenLabs library
@@ -738,7 +747,7 @@ Sama dengan B1 tapi simpler:
    - Runs (filtered by this channel)
    - Analytics (charts)
    - Schedule (per-channel slots)
-   - Settings (per-channel niche, voice, brand)
+   - Settings (per-channel **bahasa konten**, niche, voice, brand) — ganti bahasa konten = peringatan non-retroaktif (hanya berlaku video baru) + voice ikut ter-reset/filter
 
 3. **Overview tab content:**
    - Performance chart (area, 90 days, multi-metric overlay)
@@ -885,7 +894,8 @@ Sama dengan B1 tapi simpler:
 #### D10. Config — Voice (`/config/voice`)
 
 - ElevenLabs voice library browser
-- Filter by language, gender, style, age
+- **Filter by language defaultnya = bahasa konten channel** (di-set di onboarding C4 / Channel Settings); voice yang ditampilkan hanya yang mendukung bahasa tsb
+- Filter tambahan: gender, style, age
 - Card grid: voice name + preview play + sample text + "Use this voice" button
 - Per niche assignment: default voice per niche
 
@@ -987,7 +997,9 @@ Sama dengan B1 tapi simpler:
 
 #### D15. Config — Captions (`/config/captions`)
 
-**Purpose:** Tenant atur visual style karaoke caption (ASS subtitle) yang muncul di video output.
+**Purpose:** Tenant atur visual style karaoke caption (ASS subtitle) yang muncul di video output. Caption otomatis mengikuti **bahasa konten channel** (dari narasi TTS) — tenant tidak set bahasa caption di sini, hanya style.
+
+⚠️ **Catatan font non-Latin:** untuk bahasa dengan skrip non-Latin (mis. Thailand), font ASS yang dipilih WAJIB punya glyph coverage bahasa itu — font tanpa coverage akan render kotak. `fonts` table tandai `script_support` per font; font picker auto-filter sesuai bahasa konten channel.
 
 **Layout:**
 
@@ -1387,7 +1399,7 @@ Sama dengan B1 tapi simpler:
 
 #### E2. Catalog Management (`/admin/catalog`)
 
-**Tabs:** AI Models | **Music Library (lihat E2.2 detail)** | Niche Library | Voice Templates
+**Tabs:** AI Models | **Music Library (lihat E2.2 detail)** | Niche Library | Voice Templates | **Content Languages (E2.5)**
 
 ##### E2.1 — Tab AI Models
 - Data table: model_key | platform (openai/anthropic/replicate) | model_id | description | size/cost class | is_active | actions
@@ -1658,6 +1670,12 @@ Sama dengan B1 tapi simpler:
 - Assign default voice per niche (dropdown dari ElevenLabs library)
 - Voice metadata: language, gender, style, age range
 - Preview play per voice
+
+##### E2.5 — Tab Content Languages (🆕 catalog config-driven)
+- CRUD catalog bahasa konten yang tersedia untuk tenant (pola sama dgn pricing/niche — admin-managed, BUKAN hardcode di kode/UI)
+- Kolom per row: `locale` (BCP-47, mis. id-ID / en-US / ms-MY / th-TH), `display_name`, `tts_providers_supported` (ElevenLabs/OpenAI/Edge), `quality_tier` (official/experimental), `caption_font` (font default dgn glyph coverage), `is_active`
+- Toggle active/inactive per bahasa → langsung mempengaruhi dropdown "Bahasa Konten" di onboarding C4 + D3 Channel Settings
+- Seed saat launch: **id-ID + en-US (official)**; ms-MY, fil-PH, th-TH, vi-VN (experimental — aktifkan setelah QA voice + font glyph)
 
 ---
 
