@@ -1,7 +1,28 @@
 # MesinViral — Live Progress & Master Plan
 
 > **Single source of truth** untuk status implementasi. Update setiap selesai sub-phase.
-> Dibuat: 2026-06-10 | Update terakhir: 2026-06-11
+> Dibuat: 2026-06-10 | Update terakhir: 2026-06-12
+
+---
+
+## ⏭️ RESUME POINT — BACA INI DULU SETIAP SESI BARU (jangan salah arah)
+
+**FRAMING FUNDAMENTAL (detail: memory [[decisions_v1_v2_migration]]):**
+- **v1 = PRODUKSI LIVE di VPS** — mesin produksi konten single-tenant (`ryan_andrian`) + Supabase. **TANPA SaaS/multitenancy/frontend. Running well. JANGAN DISENTUH.**
+- **v2 = YANG KITA KERJAKAN** — SaaS multi-tenant + Multi-Format Studio + frontend. **SEMUA di local dev ini, BELUM ada yang di-pull ke VPS.** Spec = `DESAIN_PRODUK_SAAS.md` + `MULTI_FORMAT_STUDIO.md` + `design-source/`.
+- **DB v2 = punya sendiri** (clone penuh skema+data dari v1) — bukan DB v1. **v2 REPLACE v1 penuh di VPS yang sama saat proven.**
+
+**🎯 THREAD AKTIF = integrasi desain Claude Design → frontend `apps/web` (Hybrid).**
+- **Terakhir selesai:** D1 Main Dashboard penuh (commit ini). 12 screen done (lihat tabel STATUS di bawah).
+- **Berikutnya (chart-free, bisa langsung):** Config D8-D19 · D21 Insights · D13 Billing · Admin E1-E5.
+- **Butuh tremor dulu (atau lanjut SVG seperti D1/D20):** D2 Channels · D3 Channel Detail · D6 Analytics.
+- **Infra FE pending:** next-intl · shadcn init · PWA · responsive harmonisasi · deploy Vercel (belum push).
+
+**JANGAN diulang (sudah dikerjakan):** Phase 0 audit (selesai 2026-06-12, lihat journal); framing v1/v2 (terkunci). **JANGAN** usulkan deploy backend ke VPS — backend v2 belum mulai & DB clone belum ada.
+
+**Clone DB v2 = PENDING** (butuh user buat Supabase project baru + connection strings; tak ada MCP di dev). Prasyarat backend + wiring FE→Supabase; TIDAK blok frontend mock-data sekarang.
+
+> ⛔ **GUARDRAIL WIRING (verified 2026-06-12: apps/web = 100% mock, NOL wiring):** JANGAN tulis satu baris koneksi Supabase pun (client/`@supabase/supabase-js`/`.env`/`NEXT_PUBLIC_SUPABASE_*`/query) SEBELUM clone DB v2 ada & env diarahkan ke **DB baru** (bukan v1). Wiring pertama = clone dulu. Ini supaya wiring tidak pernah nyasar ke DB produksi v1.
 
 ---
 
@@ -33,9 +54,10 @@ Setiap tenant: login → dashboard → config API keys → scheduler → lihat l
 - ✅ D7 Schedule (`/schedule`) — view toggle week/month/list, AI optimization banner, slot grid 3 channel + pause/switch, month pips, list view — `f2bf4dd`
 - ✅ B5 Settings (`/settings`) — tab nav (profil/keamanan/integrasi/notif/bahasa/danger), profil form, 2FA+sesi, integrasi, lang picker + theme toggle, danger zone — `d1a54e9`
 - ✅ C1-C5 Onboarding (`/onboarding`) — wizard 5 langkah: paket, connect YouTube (verify sim), API keys BYOK (accordion+test), niche+**Bahasa Konten** (config-driven catalog→voice filtered)+voice+warna, jadwal week. Standalone pre-login. — `9216849`
-- ✅ D20 Compliance (`/compliance`) — gauge skor + radar + 4 dim-card (donut/bar/dup), AI disclosure, tren 90hari, action items, edu. **Semua chart = SVG hand-drawn (tanpa tremor)**, deterministik (SSR-safe). — (commit ini)
+- ✅ D20 Compliance (`/compliance`) — gauge skor + radar + 4 dim-card (donut/bar/dup), AI disclosure, tren 90hari, action items, edu. **Semua chart = SVG hand-drawn (tanpa tremor)**, deterministik (SSR-safe). — `9aab4ff`
+- ✅ D1 Main Dashboard (`/dashboard`) — greeting+Run Now, 4 KPI (2 sparkline SVG), grid2: jadwal hari ini + recent runs (kiri) · compliance gauge + cost tracker BYOK + self-learning insight (kanan), activity feed. **Chart = SVG hand-drawn (spark+gauge, tanpa tremor)**, mock deterministik SSR-safe. Ganti placeholder lama. — (commit ini)
 
-**Next:** Config (D8-D19) / Insights (D21) / Admin (E1-E5) / next-intl / shadcn init / **PWA**. *(Chart D1/D2/D3/D6 = batch saat install tremor.)* *(Chart D1/D2/D3/D6 = batch saat install tremor.)* Data: mock → Supabase-first (RLS) saat backend mendarat. ⚠️ Next 16 breaking changes (`apps/web/AGENTS.md`) — baca `node_modules/next/dist/docs/` sebelum routing/middleware (next-intl). Detail [[plan_frontend_via_claude_design]].
+**Next:** Config (D8-D19) / Insights (D21) / Admin (E1-E5) / next-intl / shadcn init / **PWA**. *(Chart D2/D3/D6: lanjut SVG hand-drawn seperti D1/D20, atau install tremor jika chart kompleks spt heatmap D6.)* Data: mock → Supabase-first (RLS) saat backend mendarat. ⚠️ Next 16 breaking changes (`apps/web/AGENTS.md`) — baca `node_modules/next/dist/docs/` sebelum routing/middleware (next-intl). Detail [[plan_frontend_via_claude_design]].
 
 > Frontend & backend jalan **paralel** — frontend pakai MOCK DATA dulu (tidak nunggu backend), wire ke Supabase saat phase backend mendarat. Frontend = Phase 9-10 di roadmap, tapi DIMULAI lebih awal secara paralel atas keputusan user.
 
