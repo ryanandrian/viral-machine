@@ -1,0 +1,62 @@
+/* B1-B4 Auth — CSS halaman (port dari design-source/Auth.html <style>).
+   CATATAN: body{overflow:hidden} TIDAK ditaruh di sini (akan leak global) — di-handle via useEffect di page. */
+
+.auth { display: grid; grid-template-columns: 1fr 1fr; min-height: 100vh; }
+
+.auth-left { display: flex; flex-direction: column; padding: 1.5rem 2rem; overflow-y: auto; height: 100vh; }
+.auth-top { display: flex; align-items: center; justify-content: space-between; }
+.brandmark { display: flex; align-items: center; gap: 0.625rem; font-weight: 600; font-size: var(--text-base); letter-spacing: -0.01em; text-decoration: none; color: var(--text-primary); }
+.logo-glyph { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, var(--brand), var(--accent)); display: grid; place-items: center; box-shadow: var(--glow-brand); flex: none; }
+.auth-tools { display: flex; align-items: center; gap: 0.5rem; }
+
+.auth-center { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 2rem 0; }
+.auth-card { width: 100%; max-width: 380px; }
+.auth-card h1 { font-size: var(--text-3xl); font-weight: 700; letter-spacing: -0.025em; margin: 0 0 0.5rem; }
+.auth-card .lead { font-size: var(--text-base); color: var(--text-secondary); margin: 0 0 1.75rem; }
+
+.oauth-btn { width: 100%; height: 2.75rem; border: 1px solid var(--border-strong); background: var(--surface-1); color: var(--text-primary); border-radius: var(--r-md); display: flex; align-items: center; justify-content: center; gap: 0.625rem; font-family: var(--font-ui); font-size: var(--text-sm); font-weight: 500; cursor: pointer; transition: background var(--d-fast), border-color var(--d-fast); }
+.oauth-btn:hover { background: var(--surface-2); border-color: var(--text-muted); }
+.divider { display: flex; align-items: center; gap: 0.875rem; margin: 1.25rem 0; color: var(--text-muted); font-size: var(--text-xs); }
+.divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+.form-stack { display: flex; flex-direction: column; gap: 1rem; }
+.pw-wrap { position: relative; }
+.pw-wrap .toggle { position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); background: none; border: none; cursor: pointer; padding: 4px; display: grid; place-items: center; }
+.pw-wrap .toggle:hover { color: var(--text-secondary); }
+.terms { display: flex; align-items: flex-start; gap: 0.5rem; font-size: var(--text-xs); color: var(--text-secondary); line-height: 1.5; }
+.terms input { margin-top: 2px; accent-color: var(--brand); width: 15px; height: 15px; flex: none; }
+.terms a { color: var(--brand); text-decoration: none; }
+.row-between { display: flex; align-items: center; justify-content: space-between; }
+.link { color: var(--brand); text-decoration: none; font-size: var(--text-sm); font-weight: 500; cursor: pointer; }
+.link:hover { text-decoration: underline; }
+.auth-foot { text-align: center; font-size: var(--text-sm); color: var(--text-secondary); margin-top: 1.5rem; }
+
+.pw-meter { display: flex; gap: 4px; margin-top: 6px; }
+.pw-meter span { flex: 1; height: 3px; border-radius: 2px; background: var(--surface-3); }
+
+.state-ico { width: 56px; height: 56px; border-radius: var(--r-lg); display: grid; place-items: center; margin-bottom: 1.25rem; }
+
+.auth-right { position: relative; overflow: hidden; background:
+    radial-gradient(700px 500px at 20% 20%, color-mix(in srgb, var(--brand) 45%, transparent), transparent 60%),
+    radial-gradient(700px 500px at 90% 90%, color-mix(in srgb, var(--accent) 40%, transparent), transparent 55%),
+    linear-gradient(160deg, #14142b, #0a0a14); display: flex; flex-direction: column; justify-content: space-between; padding: 2.5rem; }
+.auth-right .mesh { position: absolute; inset: 0; background-image: linear-gradient(var(--grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--grid-line) 1px, transparent 1px); background-size: 44px 44px; opacity: 0.5; mask-image: radial-gradient(circle at 50% 40%, #000, transparent 75%); }
+.stat-ticker { position: relative; display: inline-flex; align-items: center; gap: 0.5rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); backdrop-filter: blur(8px); padding: 0.5rem 0.875rem; border-radius: var(--r-full); font-size: var(--text-sm); color: rgba(255,255,255,0.92); width: fit-content; }
+.quote-card { position: relative; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.14); backdrop-filter: blur(12px); border-radius: var(--r-xl); padding: 1.75rem; box-shadow: var(--shadow-lg); }
+.quote-card .stars { display: flex; gap: 3px; color: #FBBF24; margin-bottom: 0.875rem; }
+.quote-card blockquote { margin: 0 0 1.25rem; font-size: var(--text-xl); line-height: 1.45; color: #fff; font-weight: 500; letter-spacing: -0.01em; }
+.quote-author { display: flex; align-items: center; gap: 0.75rem; }
+.quote-author .av { width: 42px; height: 42px; border-radius: 50%; background: #1d4ed8; display: grid; place-items: center; color: #fff; font-weight: 700; }
+.quote-author .nm { color: #fff; font-weight: 600; font-size: var(--text-sm); }
+.quote-author .ch { color: rgba(255,255,255,0.7); font-size: var(--text-xs); }
+.quote-author .delta { margin-left: auto; text-align: right; }
+.quote-author .delta .big { color: #34D399; font-weight: 700; font-size: var(--text-lg); }
+.quote-author .delta .lbl { color: rgba(255,255,255,0.6); font-size: 0.625rem; }
+.trust-row { position: relative; display: flex; align-items: center; gap: 1.25rem; color: rgba(255,255,255,0.7); font-size: var(--text-xs); }
+.trust-row .logos { display: flex; gap: 0.875rem; align-items: center; font-weight: 600; }
+
+@media (max-width: 900px) {
+  .auth { grid-template-columns: 1fr; }
+  .auth-right { display: none; }
+  .auth-left { height: auto; min-height: 100vh; }
+}
