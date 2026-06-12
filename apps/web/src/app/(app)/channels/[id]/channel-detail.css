@@ -1,0 +1,47 @@
+/* D3 Channel Detail — port dari design-source/Channel Detail.html <style>.
+   Class di-prefix `cd-` agar tidak bentrok dgn .grid-2/.donut-wrap screen lain (CSS global, bundle per-route). */
+
+.cd-header { display: flex; align-items: flex-start; gap: 1.125rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+.cd-logo-lg { width: 64px; height: 64px; border-radius: var(--r-full); background: #1d4ed8; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: var(--text-2xl); flex: none; }
+.cd-h-meta { flex: 1; min-width: 0; }
+.cd-h-meta h1 { font-size: var(--text-2xl); font-weight: 700; letter-spacing: -0.02em; margin: 0 0 0.25rem; display: flex; align-items: center; gap: 0.625rem; }
+.cd-yt-link { display: inline-flex; align-items: center; gap: 0.375rem; font-size: var(--text-sm); color: var(--text-muted); text-decoration: none; }
+.cd-yt-link:hover { color: var(--text-primary); }
+.cd-yt-link .yt { width: 14px; height: 14px; border-radius: 3px; background: var(--yt); display: inline-block; flex: none; }
+.cd-kpi-strip { display: flex; gap: 2rem; margin-top: 0.875rem; flex-wrap: wrap; }
+.cd-kpi-strip .item .v { font-size: var(--text-xl); font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.cd-kpi-strip .item .l { font-size: var(--text-xs); color: var(--text-muted); }
+
+.cd-tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--border); margin-bottom: 1.5rem; overflow-x: auto; }
+.cd-tab { padding: 0.625rem 0.875rem; font-size: var(--text-sm); font-weight: 500; color: var(--text-muted); background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap; transition: color var(--d-fast); margin-bottom: -1px; }
+.cd-tab:hover { color: var(--text-secondary); }
+.cd-tab.active { color: var(--brand); border-bottom-color: var(--brand); }
+
+.cd-grid2 { display: grid; grid-template-columns: 1.6fr 1fr; gap: 1rem; align-items: start; }
+.cd-grid2b { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
+.cd-legend { display: flex; gap: 1.25rem; font-size: var(--text-xs); color: var(--text-secondary); }
+.cd-legend span { display: inline-flex; align-items: center; gap: 0.375rem; }
+.cd-legend i { width: 10px; height: 3px; border-radius: 2px; }
+
+.cd-donut-wrap { display: flex; align-items: center; gap: 1.25rem; }
+.cd-donut-leg { flex: 1; display: flex; flex-direction: column; gap: 0.5rem; font-size: var(--text-xs); }
+.cd-donut-leg .row { display: flex; align-items: center; gap: 0.5rem; }
+.cd-donut-leg .row .sw { width: 9px; height: 9px; border-radius: 2px; }
+.cd-donut-leg .row .pct { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--text-primary); font-weight: 500; }
+
+.cd-bar-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.4375rem 0; font-size: var(--text-sm); }
+.cd-bar-row .lab { width: 130px; flex: none; color: var(--text-secondary); }
+.cd-bar-track { flex: 1; height: 8px; background: var(--surface-2); border-radius: var(--r-full); overflow: hidden; }
+.cd-bar-track > span { display: block; height: 100%; border-radius: var(--r-full); }
+.cd-bar-row .val { width: 48px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+
+.cd-vthumb { width: 40px; height: 56px; border-radius: 5px; background: linear-gradient(160deg,#0c2233,#071018); flex: none; display: block; }
+.cd-rec { display: flex; gap: 0.625rem; padding: 0.75rem; background: var(--accent-soft); border: 1px solid color-mix(in srgb,var(--accent) 22%,transparent); border-radius: var(--r-md); font-size: var(--text-sm); line-height: 1.5; margin-top: 1rem; }
+
+.cd-run-item { display: grid; grid-template-columns: 20px 1fr auto; gap: 0.75rem; align-items: center; padding: 0.625rem 0.5rem; border-radius: var(--r-md); text-decoration: none; color: inherit; transition: background var(--d-fast); }
+.cd-run-item:hover { background: var(--surface-2); }
+.cd-run-item .rs { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; }
+.cd-sched-row { display: grid; grid-template-columns: 70px 1fr auto; align-items: center; gap: 1rem; padding: 0.75rem 0; border-bottom: 1px solid var(--border-subtle); }
+.cd-sched-row:last-child { border-bottom: none; }
+
+@media (max-width:1000px){ .cd-grid2,.cd-grid2b{ grid-template-columns:1fr;} }
