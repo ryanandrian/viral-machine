@@ -44,6 +44,8 @@ Setiap tenant: login → dashboard → config API keys → scheduler → lihat l
 | **Repo** | **Monorepo** — frontend di `apps/web/` (Next.js 15) di repo ini. |
 | **Sequencing** | Mulai **SEKARANG dgn MOCK DATA**, paralel/mendahului backend. Wire Supabase saat phase backend mendarat. |
 | **Deploy** | **Vercel** (bukan VPS). VPS tetap bersih runtime Python. |
+| **Data boundary** | **Supabase-first** — frontend→Supabase langsung (client SDK + RLS) + Realtime; **NO API layer Python**; worker = penulis data; endpoint minimal utk webhook Midtrans. |
+| **Responsive + PWA** | Responsive: harmonisasi breakpoint (29/33 screen sudah `@media`) saat port. **PWA installable** (manifest + service worker) ditambah saat implementasi — web-only, no native. |
 
 ### Sumber desain (single source)
 
