@@ -26,9 +26,10 @@ Setiap tenant: login → dashboard → config API keys → scheduler → lihat l
 - ✅ Fondasi: design system port (tokens+components+app-shell), tema dark, lang ID — `36fa616`
 - ✅ App Shell (sidebar+topbar `MVShell`) + theme/lang toggle + `/dashboard` placeholder — `ed1b2b5`
 - ✅ D5 Run Detail (`/runs/[id]`) — pipeline live + log streaming + cost rail — `97d6f1c`
-- ✅ D4 Runs List (`/runs`) — tabel + filter status + drawer slide-in → D5 — (commit ini)
+- ✅ D4 Runs List (`/runs`) — tabel + filter status + drawer slide-in → D5 — `2192488`
+- ✅ A1 Landing (`/`) — hero+mockup, stats, problem, pipeline, 6 fitur, comparison, how, testi, pricing, FAQ, CTA + MarketingShell (nav+footer). Xendit→Midtrans. — (commit ini)
 
-**Next:** D1 Dashboard penuh / A1 Landing / next-intl (ID/EN proper) / shadcn init / **PWA installable** (manifest+SW) / responsive harmonisasi. Data: mock → Supabase-first (RLS) saat backend mendarat. ⚠️ Next 16 breaking changes (`apps/web/AGENTS.md`) — baca `node_modules/next/dist/docs/` sebelum routing/middleware (next-intl). Detail [[plan_frontend_via_claude_design]].
+**Next:** D1 Dashboard penuh / D2 Channels / D3 Channel Detail / D7 Schedule / next-intl (ID/EN proper) / shadcn init / **PWA installable** (manifest+SW) / responsive harmonisasi. Data: mock → Supabase-first (RLS) saat backend mendarat. ⚠️ Next 16 breaking changes (`apps/web/AGENTS.md`) — baca `node_modules/next/dist/docs/` sebelum routing/middleware (next-intl). Detail [[plan_frontend_via_claude_design]].
 
 > Frontend & backend jalan **paralel** — frontend pakai MOCK DATA dulu (tidak nunggu backend), wire ke Supabase saat phase backend mendarat. Frontend = Phase 9-10 di roadmap, tapi DIMULAI lebih awal secara paralel atas keputusan user.
 

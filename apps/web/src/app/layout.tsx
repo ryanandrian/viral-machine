@@ -6,6 +6,7 @@ import "./globals.css";
 import "@/styles/tokens.css";
 import "@/styles/components.css";
 import "@/styles/app-shell.css";
+import "@/styles/marketing.css";
 import { ThemeProvider } from "@/components/theme-provider";
 
 export const metadata: Metadata = {
