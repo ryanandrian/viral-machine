@@ -327,7 +327,9 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 
 ---
 
-## 🔐 PHASE 4 — BYO-CC Phase 1
+## 🔐 PHASE 4 — BYO-CC Phase 1 + Auth foundation
+> **Auth model DIPUTUSKAN ([[decisions_auth_rbac]]):** `tenant_id = auth.uid()` (1 user=1 tenant, no team); RLS=`tenant_id=auth.uid()`; super-admin via `app_metadata`; migrasi "ryan_andrian"→UUID di sini.
+
 **Scope (per [[project_byocc_roadmap]]):**
 - Tabel `tenant_credentials` di Supabase
 - `src/utils/crypto.py` Fernet utility, master key di `.env` VPS (`ENCRYPTION_KEY`)
