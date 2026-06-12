@@ -18,7 +18,9 @@
 - **Butuh tremor dulu (atau lanjut SVG seperti D1/D20):** D2 Channels · D3 Channel Detail · D6 Analytics.
 - **Infra FE pending:** next-intl · shadcn init · PWA · responsive harmonisasi · deploy Vercel (belum push).
 
-**JANGAN diulang (sudah dikerjakan):** Phase 0 audit (selesai 2026-06-12, lihat journal); framing v1/v2 (terkunci). **JANGAN** usulkan deploy backend ke VPS — backend v2 belum mulai & DB clone belum ada.
+**JANGAN diulang (sudah dikerjakan):** Phase 0 audit ✅ (selesai 2026-06-12, hasil di journal + rekonsiliasi Phase 1.1); framing v1/v2 (terkunci); **frontend track ✅ semua screen desain ter-port (28 done)**. **JANGAN** usulkan deploy backend ke VPS — backend v2 belum mulai & DB clone belum ada.
+
+> **🧭 KEPUTUSAN ARAH (2026-06-12, senior call):** frontend track selesai di milestone bersih (audit clean, 28/28 build) → **pivot ke jalur kritis BACKEND** (poles infra next-intl/shadcn/PWA DITUNDA — gold-plating layar mock; next-intl akan rework i18n saat wiring data). **2 gate butuh user:** (1) **PUSH** ke origin (21+ commit belum di-backup — risiko tertinggi), (2) **clone DB v2** (gate eksekusi backend — user buat Supabase project). Rencana Phase 1.1 + rekonsiliasi sudah LOCKED (§1.1) → eksekusi instan saat DB siap.
 
 **Clone DB v2 = PENDING** (butuh user buat Supabase project baru + connection strings; tak ada MCP di dev). Prasyarat backend + wiring FE→Supabase; TIDAK blok frontend mock-data sekarang.
 
@@ -166,7 +168,7 @@ Next.js 15 (App Router) + shadcn/ui + Tailwind + tremor.so + Geist Sans + next-i
 
 | Phase | Nama | Tujuan | Estimasi | Status |
 |-------|------|--------|----------|--------|
-| **0** | Audit & Persiapan | Verifikasi semua klaim SOFTCODE_AI_CONFIG vs kode | – | ⏸️ Pending approval |
+| **0** | Audit & Persiapan | Verifikasi semua klaim SOFTCODE_AI_CONFIG vs kode | – | ✅ DONE (read-only, 2026-06-12) — hasil di journal + rekonsiliasi di §1.1 |
 | **1** | SOFTCODE AI Config | Hilangkan hardcode AI, hapus silent fallback (6 sub-phase) | 4-6 jam | 🔒 Blocked by Phase 0 |
 | **2** | Error Mgmt Terpusat | `src/exceptions.py` + structured error flow | 2 jam | 🔒 Blocked by Phase 1 |
 | **3** | Pipeline Run Logs (DB) | `pipeline_run_logs` table, RLS-ready, UI-facing | 2 jam | 🔒 Blocked by Phase 2 |
@@ -257,6 +259,15 @@ Perluasan produk: menampung **banyak kategori creator short faceless** (mystery/
 - Code: refactor `script_engine`, `script_analyzer`, `hook_optimizer`, `niche_selector`, `ai_image` (untuk rewrite)
 - **Hapus silent fallback Claude→GPT** di `script_engine._call_llm()`
 - Per [[plan_s93_config_driven_llm]] yang sudah dimatangkan
+
+> **🔑 REKONSILIASI dari Phase 0 audit (2026-06-12, LOCKED — jangan analisa ulang):** Skema `tenant_configs` SEKARANG (dibaca `tenant_config.py` `.select("*")`) sudah punya **kolom terkait yang SOFTCODE tidak catat** — wajib direkonsiliasi, bukan sekadar ADD:
+> - `llm_provider`+`llm_model` (flat, single model) **sudah ada** → Phase 1.1 ADD `llm_library`+`llm_models`(jsonb per-task). **Migrasi:** isi `llm_models` dari `llm_model` existing; pertahankan `llm_provider` sbg back-compat sampai semua kode baca `llm_library`.
+> - `llm_script_fallback` (default `gpt-4o-mini`) **= cross-library fallback yang §1 mau HAPUS** → drop/abaikan, ganti retry in-library.
+> - `tts_fallback_provider` (default `edge_tts`) **sudah ada** → Phase 1.2/1.4 `tts_fallback` REUSE kolom ini (jangan bikin duplikat); `tts_library` = `tts_provider` existing.
+> - `production_on_api_error` (default `fallback`) kontrol silent-fallback → audit saat hapus fallback.
+> - Realita kode (verified): semua hardcode LLM/TTS akurat persis (lihat journal 2026-06-12). worker niche `:83` (bukan :79); `AI_IMAGE_MODELS` `:22-44`; `music_selector.py` di `src/providers/music/`.
+>
+> **⚠️ VALIDATION GATE v2 ≠ v1:** gate di bawah (push→VPS→restart worker) adalah **pola v1 lama**. Untuk **v2**, validasi terhadap **DB CLONE v2 + worker lokal/branch v2**, **JANGAN sentuh v1 VPS/DB** sampai cutover (lihat [[decisions_v1_v2_migration]]). v1 tetap produksi normal selama dev v2.
 
 **File yang berubah:**
 - `src/intelligence/script_engine.py` — hapus fallback + fix ScriptAnalyzer key
