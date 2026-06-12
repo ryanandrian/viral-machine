@@ -13,8 +13,8 @@
 - **DB v2 = punya sendiri** (clone penuh skema+data dari v1) — bukan DB v1. **v2 REPLACE v1 penuh di VPS yang sama saat proven.**
 
 **🎯 THREAD AKTIF = integrasi desain Claude Design → frontend `apps/web` (Hybrid).**
-- **Terakhir selesai:** D1 Main Dashboard penuh (commit ini). 12 screen done (lihat tabel STATUS di bawah).
-- **Berikutnya (chart-free, bisa langsung):** Config D8-D19 · D21 Insights · D13 Billing · Admin E1-E5.
+- **Terakhir selesai:** Config (D8-D19) **Stage 1** = grup Engine (AI Engines/API Keys/Voice/Visual/Music). 13 screen done.
+- **Berikutnya:** **Config Stage 2** = grup Content+System (Captions/Quality Gate/Hashtags/Niches/Notifications — port `config/cfg-content.js`). Lalu D21 Insights · D13 Billing · Admin E1-E5.
 - **Butuh tremor dulu (atau lanjut SVG seperti D1/D20):** D2 Channels · D3 Channel Detail · D6 Analytics.
 - **Infra FE pending:** next-intl · shadcn init · PWA · responsive harmonisasi · deploy Vercel (belum push).
 
@@ -55,7 +55,8 @@ Setiap tenant: login → dashboard → config API keys → scheduler → lihat l
 - ✅ B5 Settings (`/settings`) — tab nav (profil/keamanan/integrasi/notif/bahasa/danger), profil form, 2FA+sesi, integrasi, lang picker + theme toggle, danger zone — `d1a54e9`
 - ✅ C1-C5 Onboarding (`/onboarding`) — wizard 5 langkah: paket, connect YouTube (verify sim), API keys BYOK (accordion+test), niche+**Bahasa Konten** (config-driven catalog→voice filtered)+voice+warna, jadwal week. Standalone pre-login. — `9216849`
 - ✅ D20 Compliance (`/compliance`) — gauge skor + radar + 4 dim-card (donut/bar/dup), AI disclosure, tren 90hari, action items, edu. **Semua chart = SVG hand-drawn (tanpa tremor)**, deterministik (SSR-safe). — `9aab4ff`
-- ✅ D1 Main Dashboard (`/dashboard`) — greeting+Run Now, 4 KPI (2 sparkline SVG), grid2: jadwal hari ini + recent runs (kiri) · compliance gauge + cost tracker BYOK + self-learning insight (kanan), activity feed. **Chart = SVG hand-drawn (spark+gauge, tanpa tremor)**, mock deterministik SSR-safe. Ganti placeholder lama. — (commit ini)
+- ✅ D1 Main Dashboard (`/dashboard`) — greeting+Run Now, 4 KPI (2 sparkline SVG), grid2: jadwal hari ini + recent runs (kiri) · compliance gauge + cost tracker BYOK + self-learning insight (kanan), activity feed. **Chart = SVG hand-drawn (spark+gauge, tanpa tremor)**, mock deterministik SSR-safe. Ganti placeholder lama. — `db3dafb`
+- ✅ Config (D8-D19) **Stage 1** (`/config`) — shell left-nav 10 tab (grup Engine/Content/System) + routing `?tab=` (pola auth) + 5 panel grup **Engine**: AI Engines (3 svc accordion: provider radio, model per-task, API key+Test, usage), API Keys (tabel 5 service + audit log), Voice (lang note + voice cards waveform + default per niche), Visual (preset + prompt prefix Pro+ + palette), Music (mood pills + track list + switch). Interaktif (accordion/test/play/radio), deterministik no-`Math.random`, brand-icon→kotak inisial. Tab Content+System = "Segera hadir" (Stage 2). — (commit ini)
 
 **Next:** Config (D8-D19) / Insights (D21) / Admin (E1-E5) / next-intl / shadcn init / **PWA**. *(Chart D2/D3/D6: lanjut SVG hand-drawn seperti D1/D20, atau install tremor jika chart kompleks spt heatmap D6.)* Data: mock → Supabase-first (RLS) saat backend mendarat. ⚠️ Next 16 breaking changes (`apps/web/AGENTS.md`) — baca `node_modules/next/dist/docs/` sebelum routing/middleware (next-intl). Detail [[plan_frontend_via_claude_design]].
 

@@ -1,0 +1,63 @@
+/* Config (D8-D19) — port verbatim dari design-source/Config.html <style>.
+   Shell + panel shared components. Class global (card, badge, btn, input, switch) dari components.css. */
+
+.cfg-layout { display: grid; grid-template-columns: 230px 1fr; gap: 1.75rem; align-items: start; }
+.cfg-nav { position: sticky; top: 72px; display: flex; flex-direction: column; gap: 0.125rem; }
+.cfg-grp { font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); padding: 0.875rem 0.625rem 0.375rem; }
+.cfg-item { display: flex; align-items: center; gap: 0.625rem; padding: 0.5rem 0.625rem; border-radius: var(--r-md); color: var(--text-secondary); cursor: pointer; font-size: var(--text-sm); transition: background var(--d-fast), color var(--d-fast); }
+.cfg-item:hover { background: var(--surface-2); color: var(--text-primary); }
+.cfg-item.active { background: var(--brand-soft); color: var(--brand); font-weight: 500; }
+.cfg-item svg { color: var(--text-muted); flex: none; }
+.cfg-item.active svg { color: var(--brand); }
+.cfg-item .lock { margin-left: auto; color: var(--text-muted); }
+
+.cfg-main { min-width: 0; }
+.cfg-head { margin-bottom: 1.5rem; }
+.cfg-head h1 { font-size: var(--text-2xl); font-weight: 700; letter-spacing: -0.02em; margin: 0 0 0.375rem; display: flex; align-items: center; gap: 0.625rem; }
+.cfg-head p { font-size: var(--text-sm); color: var(--text-secondary); margin: 0; max-width: 70ch; }
+
+/* shared panel components */
+.svc { border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; margin-bottom: 0.875rem; background: var(--surface-1); }
+.svc-head { display: flex; align-items: center; gap: 0.875rem; padding: 1rem 1.25rem; cursor: pointer; }
+.svc-ic { width: 38px; height: 38px; border-radius: var(--r-md); display: grid; place-items: center; flex: none; color: #fff; }
+.svc-ic svg { width: 20px; height: 20px; }
+.svc-name { font-weight: 600; font-size: var(--text-sm); }
+.svc-meta { font-size: var(--text-xs); color: var(--text-muted); }
+.svc-body { padding: 0 1.25rem 1.25rem; display: none; }
+.svc.open .svc-body { display: block; }
+.svc .chev { margin-left: auto; color: var(--text-muted); transition: transform var(--d-fast); }
+.svc.open .chev { transform: rotate(180deg); }
+
+.radio-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.radio-pill { padding: 0.4375rem 0.75rem; border: 1px solid var(--border-strong); border-radius: var(--r-md); font-size: var(--text-sm); cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; transition: all var(--d-fast); background: none; color: var(--text-secondary); }
+.radio-pill.sel { border-color: var(--brand); background: var(--brand-soft); color: var(--brand); }
+.radio-pill svg { width: 15px; height: 15px; }
+
+.fld { margin-bottom: 1rem; }
+.fld-row { display: grid; grid-template-columns: 200px 1fr; gap: 1rem; align-items: center; padding: 0.875rem 0; border-bottom: 1px solid var(--border-subtle); }
+.fld-row:last-child { border-bottom: none; }
+.fld-row .k { font-size: var(--text-sm); font-weight: 500; }
+.fld-row .k .sub { font-size: var(--text-xs); color: var(--text-muted); font-weight: 400; margin-top: 2px; }
+.selbox { display: inline-flex; align-items: center; gap: 0.5rem; border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 0 0.625rem; height: 2.125rem; font-size: var(--text-sm); color: var(--text-secondary); width: fit-content; cursor: pointer; }
+
+.save-bar { position: sticky; bottom: 0; margin-top: 1.5rem; padding: 0.875rem 1.25rem; background: color-mix(in srgb,var(--bg-elevated) 92%,transparent); backdrop-filter: blur(10px); border: 1px solid var(--border); border-radius: var(--r-lg); display: flex; align-items: center; gap: 0.75rem; box-shadow: var(--shadow-md); }
+.save-bar .muted { margin-right: auto; font-size: var(--text-sm); }
+
+.slider { width: 100%; accent-color: var(--brand); height: 6px; }
+.chip-input { display: flex; flex-wrap: wrap; gap: 0.375rem; padding: 0.5rem; border: 1px solid var(--border-strong); border-radius: var(--r-md); min-height: 2.5rem; background: var(--bg-elevated); }
+.chip { display: inline-flex; align-items: center; gap: 0.3125rem; padding: 0.25rem 0.5rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); font-size: var(--text-xs); }
+.chip .x { cursor: pointer; color: var(--text-muted); display: inline-flex; }
+.chip.ghost { background: transparent; color: var(--text-muted); }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 0.875rem; }
+.grid-4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 0.875rem; }
+.price-dyn { font-family: var(--font-mono); color: var(--brand); }
+.price-dyn .ex { color: var(--text-muted); font-size: 0.6875rem; margin-left: 0.375rem; }
+
+.mrow { transition: background var(--d-fast); }
+.mrow:hover { background: var(--surface-2); }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 960px){ .cfg-layout{ grid-template-columns:1fr; } .cfg-nav{ position:static; flex-direction:row; overflow-x:auto; } .cfg-grp{ display:none; } .grid-2,.grid-3,.grid-4{ grid-template-columns:1fr; } .fld-row{ grid-template-columns:1fr; gap:0.5rem; } }
