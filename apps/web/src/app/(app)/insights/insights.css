@@ -1,0 +1,50 @@
+/* D21 Self-Learning Insights — port verbatim dari design-source/Insights.html <style>. */
+
+.page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+.page-head h1 { font-size: var(--text-3xl); font-weight: 700; letter-spacing: -0.02em; margin: 0 0 0.375rem; display: flex; align-items: center; gap: 0.625rem; }
+.grade { display: inline-flex; align-items: center; gap: 0.4375rem; font-size: var(--text-xs); font-weight: 600; padding: 0.375rem 0.625rem; border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent); border: 1px solid color-mix(in srgb,var(--accent) 30%,transparent); }
+.ch-sel { display: inline-flex; align-items: center; gap: 0.5rem; background: var(--surface-1); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 0 0.75rem; height: 2.25rem; font-size: var(--text-sm); cursor: pointer; }
+.ch-sel .dot-ch { width: 18px; height: 18px; border-radius: 5px; background: #1d4ed8; display: grid; place-items: center; color: #fff; font-size: 9px; font-weight: 700; }
+
+.hero-card { padding: 1.75rem; border-radius: var(--r-xl); border: 1px solid color-mix(in srgb,var(--accent) 28%,transparent); background:
+    radial-gradient(500px 220px at 12% 0%, var(--accent-soft), transparent 65%), linear-gradient(120deg,var(--surface-1),color-mix(in srgb,var(--accent) 6%,var(--surface-1))); margin-bottom: 1.5rem; }
+.hero-card .brain { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; }
+.hero-card .brain .ic { width: 40px; height: 40px; border-radius: var(--r-md); background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; }
+.hero-card h2 { font-size: var(--text-xl); font-weight: 700; letter-spacing: -0.01em; margin: 0; }
+.hero-card .meta { display: flex; gap: 1.5rem; flex-wrap: wrap; font-size: var(--text-sm); color: var(--text-secondary); margin: 0.875rem 0 1.25rem; }
+.hero-card .meta span { display: inline-flex; align-items: center; gap: 0.4375rem; }
+.stat-strip { display: grid; grid-template-columns: repeat(3,1fr); gap: 0.875rem; }
+.stat-strip .s { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--r-md); padding: 0.875rem 1rem; }
+.stat-strip .s .v { font-size: var(--text-2xl); font-weight: 700; letter-spacing: -0.02em; }
+.stat-strip .s .l { font-size: var(--text-xs); color: var(--text-muted); }
+
+.filters { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+.fpill { padding: 0.375rem 0.75rem; border: 1px solid var(--border); border-radius: var(--r-full); font-size: var(--text-xs); font-weight: 500; color: var(--text-secondary); cursor: pointer; background: var(--surface-1); }
+.fpill.sel { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in srgb,var(--accent) 30%,transparent); }
+
+.layout { display: grid; grid-template-columns: 1fr 320px; gap: 1.5rem; align-items: start; }
+
+/* timeline */
+.tl { position: relative; padding-left: 1.5rem; }
+.tl::before { content: ''; position: absolute; left: 5px; top: 8px; bottom: 8px; width: 2px; background: var(--border); }
+.ins { position: relative; margin-bottom: 1rem; }
+.ins::before { content: ''; position: absolute; left: -1.5rem; top: 1.25rem; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); border: 3px solid var(--bg); margin-left: -0.5px; }
+.ins-card { border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--r-md); background: var(--surface-1); padding: 1.125rem 1.25rem; }
+.ins-top { display: flex; align-items: center; gap: 0.625rem; margin-bottom: 0.625rem; }
+.ins-type { display: inline-flex; align-items: center; gap: 0.375rem; font-size: var(--text-xs); color: var(--accent); font-weight: 500; }
+.ins-date { margin-left: auto; font-size: var(--text-xs); color: var(--text-muted); }
+.ins-title { font-size: var(--text-base); font-weight: 600; letter-spacing: -0.01em; line-height: 1.4; margin-bottom: 0.75rem; }
+.ins-chart { display: flex; align-items: flex-end; gap: 0.5rem; height: 56px; margin-bottom: 0.875rem; }
+.ins-chart .b { flex: 1; max-width: 90px; border-radius: 4px 4px 0 0; display: flex; flex-direction: column; justify-content: flex-end; }
+.ins-chart .b .cap { font-size: 0.625rem; text-align: center; color: var(--text-muted); margin-bottom: 3px; }
+.ins-adapt { display: flex; gap: 0.5rem; padding: 0.75rem; background: var(--accent-soft); border-radius: var(--r-md); font-size: var(--text-sm); line-height: 1.5; }
+.ins-adapt .ic { color: var(--accent); flex: none; }
+.ins-conf { font-size: var(--text-xs); color: var(--text-muted); margin: 0.625rem 0; display: flex; align-items: center; gap: 0.375rem; }
+.ins-acts { display: flex; align-items: center; gap: 0.375rem; flex-wrap: wrap; }
+.ins-acts .status { margin-left: auto; }
+
+.rail { display: flex; flex-direction: column; gap: 1rem; position: sticky; top: 72px; }
+.ov-row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.625rem 0; border-bottom: 1px solid var(--border-subtle); }
+.ov-row:last-child { border-bottom: none; }
+
+@media (max-width: 1050px){ .layout{ grid-template-columns:1fr; } .rail{ position:static; } .stat-strip{ grid-template-columns:1fr; } }
