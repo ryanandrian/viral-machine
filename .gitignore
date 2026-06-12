@@ -17,3 +17,8 @@ node_modules/
 youtube_credentials.json
 token_youtube.json
 tokens/
+
+# secrets (JANGAN commit)
+SUPABASE-CONNECTION.md
+.env.clone
+*.secret

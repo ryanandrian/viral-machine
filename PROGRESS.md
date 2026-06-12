@@ -22,7 +22,7 @@
 
 > **🧭 KEPUTUSAN ARAH (2026-06-12, senior call):** frontend track selesai di milestone bersih (audit clean, 28/28 build) → **pivot ke jalur kritis BACKEND** (poles infra next-intl/shadcn/PWA DITUNDA — gold-plating layar mock; next-intl akan rework i18n saat wiring data). **2 gate butuh user:** (1) **PUSH** ke origin (21+ commit belum di-backup — risiko tertinggi), (2) **clone DB v2** (gate eksekusi backend — user buat Supabase project). Rencana Phase 1.1 + rekonsiliasi sudah LOCKED (§1.1) → eksekusi instan saat DB siap.
 
-**Clone DB v2 = PENDING** (butuh user buat Supabase project baru + connection strings; tak ada MCP di dev). Prasyarat backend + wiring FE→Supabase; TIDAK blok frontend mock-data sekarang.
+**Clone DB v2 = ✅ DONE (2026-06-12)** — v1 `hiwkgxhkjanggeskjjen` (produksi, Tokyo) → v2 `atliatnjhysdibmfypul` (Singapore), via **psycopg2 + Session pooler IPv4** (pg_dump tak dipakai: server PG17.6, client default 16; direct conn IPv6-only). 13 tabel + data + 24 constraint + 40 index + 3 seq + 2 func + 8 RLS — **struktur & row count identik (verified)**. pg_cron jobs SENGAJA tak di-clone (v2 dev tak auto-produksi). **Akses dev:** direct psycopg2 ke v2 via pooler (write) — MCP tak jadi dipakai (butuh restart sesi). **Gate backend terbuka.**
 
 > ⛔ **GUARDRAIL WIRING (verified 2026-06-12: apps/web = 100% mock, NOL wiring):** JANGAN tulis satu baris koneksi Supabase pun (client/`@supabase/supabase-js`/`.env`/`NEXT_PUBLIC_SUPABASE_*`/query) SEBELUM clone DB v2 ada & env diarahkan ke **DB baru** (bukan v1). Wiring pertama = clone dulu. Ini supaya wiring tidak pernah nyasar ke DB produksi v1.
 
