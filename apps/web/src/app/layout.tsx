@@ -25,6 +25,13 @@ export default function RootLayout({
   return (
     <html lang="id" suppressHydrationWarning>
       <body>
+        {/* Set bahasa dari localStorage SEBELUM paint → hindari flash ID→EN saat hard-load
+            (navigasi antar-halaman pakai <Link> SPA, jadi lang persist tanpa reload). */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var l=localStorage.getItem('mv-lang');if(l==='en'||l==='id')document.documentElement.lang=l;}catch(e){}`,
+          }}
+        />
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>

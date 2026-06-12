@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
@@ -97,11 +98,11 @@ export function AppShell({
             const Icon = n.icon;
             const active = pathname === n.href || pathname.startsWith(n.href + "/");
             return (
-              <a key={n.id} className={`sb-item${active ? " active" : ""}`} href={n.href} title={n.idL}>
+              <Link key={n.id} className={`sb-item${active ? " active" : ""}`} href={n.href} title={n.idL}>
                 <Icon size={18} />
                 <span className="sb-label"><Bi id={n.idL} en={n.en} /></span>
                 {n.badge ? <span className="sb-badge">{n.badge}</span> : null}
-              </a>
+              </Link>
             );
           })}
         </nav>
@@ -122,7 +123,7 @@ export function AppShell({
               return last
                 ? <span key={i} className="cur"><Bi id={c.id} en={c.en || c.id} /></span>
                 : <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: "0.4375rem" }}>
-                    <a href={c.href || "#"}><Bi id={c.id} en={c.en || c.id} /></a><ChevronRight size={14} />
+                    <Link href={c.href || "#"}><Bi id={c.id} en={c.en || c.id} /></Link><ChevronRight size={14} />
                   </span>;
             })}
           </div>

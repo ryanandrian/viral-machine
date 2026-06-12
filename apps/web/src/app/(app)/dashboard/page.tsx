@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Zap, Play, CheckCircle, Eye, Users, ArrowUp, TrendingUp, Calendar, ExternalLink, ArrowRight, MoreVertical, List, Gauge as GaugeIcon, DollarSign, Sparkles, Activity, Check, Loader2, X, ChevronRight } from "lucide-react";
 import "./dashboard.css";
 
@@ -107,20 +108,20 @@ export default function DashboardPage() {
           <div className="card">
             <div className="card-head">
               <h3 className="card-title"><Calendar size={16} /> <Bi id="Jadwal Hari Ini" en="Today's Schedule" /></h3>
-              <a href="/schedule" className="muted" style={{ fontSize: "var(--text-xs)", textDecoration: "none" }}><Bi id="Lihat jadwal lengkap →" en="View full schedule →" /></a>
+              <Link href="/schedule" className="muted" style={{ fontSize: "var(--text-xs)", textDecoration: "none" }}><Bi id="Lihat jadwal lengkap →" en="View full schedule →" /></Link>
             </div>
             <div className="card-body" style={{ paddingTop: "0.5rem", paddingBottom: "0.5rem" }}>
               <div className="slot">
                 <div><div className="time">10:00</div><div className="tz">WIB</div></div>
                 <div><div className="topic">Kapal Hilang di Segitiga Bermuda</div><div className="ch">Misteri Samudra · short</div></div>
                 <span className="badge badge-success"><span className="dot" />Done</span>
-                <a href="/runs/97" className="btn btn-ghost btn-icon btn-sm"><ExternalLink size={14} /></a>
+                <Link href="/runs/97" className="btn btn-ghost btn-icon btn-sm"><ExternalLink size={14} /></Link>
               </div>
               <div className="slot">
                 <div><div className="time">14:00</div><div className="tz">WIB</div></div>
                 <div><div className="topic">Suara Misterius dari Palung Mariana</div><div className="ch">Misteri Samudra · short</div></div>
                 <span className="badge badge-running"><span className="dot" /><Bi id="Berjalan" en="Running" /></span>
-                <a href="/runs/98" className="btn btn-ghost btn-icon btn-sm"><ArrowRight size={14} /></a>
+                <Link href="/runs/98" className="btn btn-ghost btn-icon btn-sm"><ArrowRight size={14} /></Link>
               </div>
               <div className="slot">
                 <div><div className="time">19:00</div><div className="tz">WIB</div></div>
@@ -134,13 +135,13 @@ export default function DashboardPage() {
           <div className="card">
             <div className="card-head">
               <h3 className="card-title"><List size={16} /> <Bi id="Run Terbaru" en="Recent Runs" /></h3>
-              <a href="/runs" className="muted" style={{ fontSize: "var(--text-xs)", textDecoration: "none" }}><Bi id="Lihat semua →" en="View all →" /></a>
+              <Link href="/runs" className="muted" style={{ fontSize: "var(--text-xs)", textDecoration: "none" }}><Bi id="Lihat semua →" en="View all →" /></Link>
             </div>
             <div className="card-body" style={{ padding: "0.5rem 0.75rem" }}>
               {RUNS.map((r) => {
                 const m = ST_MAP[r.st];
                 return (
-                  <a key={r.id} href={`/runs/${r.id}`} className={`run-item${r.st === "failed" ? " failed" : ""}`}>
+                  <Link key={r.id} href={`/runs/${r.id}`} className={`run-item${r.st === "failed" ? " failed" : ""}`}>
                     <span className="rstat" style={{ background: m.bg, color: m.c }}><m.Icon size={12} /></span>
                     <div style={{ minWidth: 0 }}>
                       <div className="rtopic">{r.topic}</div>
@@ -152,7 +153,7 @@ export default function DashboardPage() {
                         : <span className="muted">{r.st === "running" ? "live" : ""}</span>}
                       <ChevronRight size={14} />
                     </div>
-                  </a>
+                  </Link>
                 );
               })}
             </div>
@@ -174,7 +175,7 @@ export default function DashboardPage() {
                 <div className="comp-row"><div className="top"><span className="muted"><Bi id="Sebaran hook" en="Hook spread" /></span><span className="v">81%</span></div><div className="progress"><span style={{ width: "81%", background: "var(--warning)" }} /></div></div>
               </div>
             </div>
-            <div className="card-foot"><a href="/compliance" className="muted" style={{ fontSize: "var(--text-xs)", textDecoration: "none" }}><Bi id="Lihat detail compliance →" en="View compliance detail →" /></a></div>
+            <div className="card-foot"><Link href="/compliance" className="muted" style={{ fontSize: "var(--text-xs)", textDecoration: "none" }}><Bi id="Lihat detail compliance →" en="View compliance detail →" /></Link></div>
           </div>
 
           <div className="card card-pad">
@@ -204,7 +205,7 @@ export default function DashboardPage() {
               <span className="ic"><TrendingUp size={18} /></span>
               <div className="t"><span data-id>Hook <b>&quot;gap question&quot;</b> perform <b>2.3× lebih baik</b> — mesin memprioritaskannya.</span><span data-en>The <b>&quot;gap question&quot;</b> hook performs <b>2.3× better</b> — the engine is prioritizing it.</span></div>
             </div>
-            <div style={{ marginTop: "0.75rem" }}><a href="/insights" className="muted" style={{ fontSize: "var(--text-xs)", textDecoration: "none" }}><Bi id="Lihat semua insight →" en="View all insights →" /></a></div>
+            <div style={{ marginTop: "0.75rem" }}><Link href="/insights" className="muted" style={{ fontSize: "var(--text-xs)", textDecoration: "none" }}><Bi id="Lihat semua insight →" en="View all insights →" /></Link></div>
           </div>
         </div>
       </div>

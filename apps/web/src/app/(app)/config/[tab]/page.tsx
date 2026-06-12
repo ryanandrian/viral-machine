@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
   Sparkles, Command, Mic, Image as ImageIcon, Music, FileText, Gauge, List, Target, Bell, Shield,
@@ -276,9 +277,9 @@ export default function ConfigTabPage() {
       <nav className="cfg-nav">
         {NAV.map((n, i) => "grp" in n
           ? <div className="cfg-grp" key={`g${i}`}><Bi id={n.grp.id} en={n.grp.en} /></div>
-          : <a key={n.id} className={`cfg-item${n.id === active ? " active" : ""}`} href={`/config/${n.id}`}>
+          : <Link key={n.id} className={`cfg-item${n.id === active ? " active" : ""}`} href={`/config/${n.id}`}>
               <n.Icon size={18} /><Bi id={n.t.id} en={n.t.en} />{n.lock ? <span className="lock"><Shield size={13} /></span> : null}
-            </a>
+            </Link>
         )}
       </nav>
       <main className="cfg-main">
