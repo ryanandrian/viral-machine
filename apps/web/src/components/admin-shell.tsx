@@ -1,0 +1,108 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useTheme } from "next-themes";
+import {
+  Users, HelpCircle, Activity, List, Target, DollarSign, Shield, ArrowLeft,
+  Menu, Search, Moon, Sun, ChevronRight,
+} from "lucide-react";
+
+// Port MVAdmin (design-source/styles/admin-shell.js) → React. admin.mesinviral.com.
+// Reuse app-shell.css (.app/.sidebar/.sb-*/.topbar). Nav admin distinct + badge ADMIN amber.
+
+type NavItem = { id: string; icon: React.ComponentType<{ size?: number }>; idL: string; en: string; href: string; badge?: string };
+type NavEntry = { section: { id: string; en: string } } | NavItem;
+
+const NAV: NavEntry[] = [
+  { section: { id: "Operasi", en: "Operations" } },
+  { id: "tenants", icon: Users, idL: "Tenant", en: "Tenants", href: "/admin/tenants" },
+  { id: "support", icon: HelpCircle, idL: "Dukungan", en: "Support", href: "/admin/support", badge: "4" },
+  { id: "system", icon: Activity, idL: "Kesehatan Sistem", en: "System Health", href: "/admin/system" },
+  { section: { id: "Katalog", en: "Catalog" } },
+  { id: "catalog", icon: List, idL: "Katalog", en: "Catalog", href: "/admin/catalog" },
+  { id: "niches", icon: Target, idL: "Pustaka Niche", en: "Niche Library", href: "/admin/niches" },
+  { id: "pricing", icon: DollarSign, idL: "Konfigurasi Harga", en: "Pricing Config", href: "/admin/pricing" },
+];
+
+function Bi({ id, en }: { id: string; en: string }) {
+  return (<><span data-id>{id}</span><span data-en>{en}</span></>);
+}
+
+export function AdminShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const { theme, setTheme } = useTheme();
+  const [collapsed, setCollapsed] = useState(false);
+  const [lang, setLang] = useState<"id" | "en">("id");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    const saved = (localStorage.getItem("mv-lang") as "id" | "en") || "id";
+    setLang(saved);
+    document.documentElement.lang = saved;
+  }, []);
+
+  function switchLang(l: "id" | "en") {
+    setLang(l);
+    document.documentElement.lang = l;
+    localStorage.setItem("mv-lang", l);
+  }
+
+  const active = NAV.find((n) => "id" in n && (pathname === n.href || pathname.startsWith(n.href + "/"))) as Extract<NavEntry, { id: string }> | undefined;
+
+  return (
+    <div className={`app${collapsed ? " collapsed" : ""}`}>
+      <aside className="sidebar">
+        <div className="sb-top">
+          <span className="sb-logo" style={{ background: "linear-gradient(135deg,#F59E0B,#D97757)" }}><Shield size={17} /></span>
+          <span className="sb-name">MesinViral</span>
+          <span className="badge" style={{ background: "var(--warning-soft)", color: "var(--warning)", fontSize: "0.5625rem", padding: "2px 5px", marginLeft: 2 }}>ADMIN</span>
+        </div>
+        <nav className="sb-nav" style={{ marginTop: "0.5rem" }}>
+          {NAV.map((n, i) => {
+            if ("section" in n) return <div key={`s${i}`} className="sb-section-title">{n.section.id}</div>;
+            const Icon = n.icon;
+            const isActive = pathname === n.href || pathname.startsWith(n.href + "/");
+            return (
+              <Link key={n.id} className={`sb-item${isActive ? " active" : ""}`} href={n.href} title={n.idL}>
+                <Icon size={18} />
+                <span className="sb-label"><Bi id={n.idL} en={n.en} /></span>
+                {n.badge ? <span className="sb-badge" style={{ background: "var(--warning)", color: "#000" }}>{n.badge}</span> : null}
+              </Link>
+            );
+          })}
+        </nav>
+        <div className="sb-bottom">
+          <Link className="sb-item" href="/dashboard"><ArrowLeft size={18} /><span className="sb-label"><Bi id="Ke app tenant" en="To tenant app" /></span></Link>
+        </div>
+      </aside>
+
+      <div className="main">
+        <header className="topbar">
+          <button className="btn btn-ghost btn-icon tb-toggle" aria-label="Toggle sidebar" onClick={() => setCollapsed((c) => !c)}><Menu size={18} /></button>
+          <div className="breadcrumb">
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.4375rem" }}><a href="/admin/tenants">Admin</a><ChevronRight size={14} /></span>
+            <span className="cur">{active ? <Bi id={active.idL} en={active.en} /> : null}</span>
+          </div>
+          <div className="tb-search">
+            <Search size={15} />
+            <span><Bi id="Cari tenant, tiket…" en="Search tenants, tickets…" /></span>
+            <kbd>⌘K</kbd>
+          </div>
+          <div className="segmented">
+            <button aria-selected={lang === "id"} onClick={() => switchLang("id")}>ID</button>
+            <button aria-selected={lang === "en"} onClick={() => switchLang("en")}>EN</button>
+          </div>
+          <button className="btn btn-ghost btn-icon" aria-label="Tema" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
+            {mounted && theme === "light" ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+          <span className="avatar" style={{ background: "var(--warning-soft)", color: "var(--warning)" }} title="Admin">AD</span>
+        </header>
+
+        <main className="page"><div className="page-wide">{children}</div></main>
+      </div>
+    </div>
+  );
+}

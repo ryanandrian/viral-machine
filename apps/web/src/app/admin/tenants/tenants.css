@@ -1,0 +1,30 @@
+/* E1 Admin Tenants — port dari design-source/Admin Tenants.html <style>.
+   Prefix `adm-` (anti bentrok .scrim/.drawer/.selbox/.kpi-strip dgn billing/config/analytics — CSS nyangkut antar-route SPA). */
+
+.adm-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+.adm-head h1 { font-size: var(--text-3xl); font-weight: 700; letter-spacing: -0.02em; margin: 0 0 0.25rem; }
+.adm-kpi-strip { display: grid; grid-template-columns: repeat(4,1fr); gap: 0.875rem; margin-bottom: 1.25rem; }
+.adm-kpic { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 1rem 1.125rem; }
+.adm-kpic .l { font-size: var(--text-xs); color: var(--text-muted); }
+.adm-kpic .v { font-size: var(--text-2xl); font-weight: 700; letter-spacing: -0.02em; margin-top: 0.25rem; }
+.adm-filters { display: flex; gap: 0.625rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.adm-selbox { display: inline-flex; align-items: center; gap: 0.4rem; border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 0 0.625rem; height: 2.125rem; font-size: var(--text-sm); color: var(--text-secondary); cursor: pointer; }
+.adm-tbl tbody tr { cursor: pointer; }
+.adm-tn-cell { display: flex; align-items: center; gap: 0.625rem; }
+.adm-tn-av { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 0.625rem; flex: none; }
+.adm-mrr { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+.adm-scrim { position: fixed; inset: 0; background: rgba(0,0,0,0.5); opacity: 0; pointer-events: none; transition: opacity var(--d-mid); z-index: 40; }
+.adm-scrim.open { opacity: 1; pointer-events: auto; }
+.adm-drawer { position: fixed; top: 0; right: 0; height: 100vh; width: 460px; max-width: 94vw; background: var(--bg-elevated); border-left: 1px solid var(--border); box-shadow: var(--shadow-xl); transform: translateX(100%); transition: transform var(--d-mid) var(--ease-out); z-index: 41; display: flex; flex-direction: column; }
+.adm-drawer.open { transform: none; }
+.adm-drawer-head { padding: 1.25rem; border-bottom: 1px solid var(--border-subtle); }
+.adm-drawer-body { padding: 1.25rem; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 1.25rem; }
+.adm-drawer-foot { padding: 1rem 1.25rem; border-top: 1px solid var(--border-subtle); display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+.adm-kv { display: flex; justify-content: space-between; font-size: var(--text-sm); padding: 0.3125rem 0; }
+.adm-kv .k { color: var(--text-muted); } .adm-kv .v { color: var(--text-primary); font-weight: 500; }
+.adm-sec-label { font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin-bottom: 0.5rem; }
+.adm-mini-list .row { display: flex; align-items: center; gap: 0.5rem; font-size: var(--text-sm); padding: 0.375rem 0; border-bottom: 1px solid var(--border-subtle); }
+.adm-mini-list .row:last-child { border-bottom: none; }
+
+@media (max-width: 900px){ .adm-kpi-strip{ grid-template-columns:repeat(2,1fr);} }
