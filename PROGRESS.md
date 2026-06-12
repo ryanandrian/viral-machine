@@ -13,8 +13,8 @@
 - **DB v2 = punya sendiri** (clone penuh skema+data dari v1) — bukan DB v1. **v2 REPLACE v1 penuh di VPS yang sama saat proven.**
 
 **🎯 THREAD AKTIF = integrasi desain Claude Design → frontend `apps/web` (Hybrid).**
-- **Terakhir selesai:** D13 Billing (`/billing`). 15 screen done.
-- **Berikutnya:** Admin E1-E5 · D2/D3/D6 (chart) · A3-A8 marketing sisa · F states. Lalu next-intl · shadcn · PWA.
+- **Terakhir selesai:** D2 Channels List (`/channels`, SVG spark). 16 screen done.
+- **Berikutnya:** D3 Channel Detail (`/channels/[id]`) — agar "Kelola" tak 404. Lalu D6 Analytics · Admin E1-E5 · A3-A8 · F states. Lalu next-intl · shadcn · PWA.
 - **Butuh tremor dulu (atau lanjut SVG seperti D1/D20):** D2 Channels · D3 Channel Detail · D6 Analytics.
 - **Infra FE pending:** next-intl · shadcn init · PWA · responsive harmonisasi · deploy Vercel (belum push).
 
@@ -59,7 +59,8 @@ Setiap tenant: login → dashboard → config API keys → scheduler → lihat l
 - ✅ Config (D8-D19) **Stage 1** (`/config/[tab]`) — **routing path-based** (`/config`→redirect `/config/ai-engines`; sidebar AppShell href `/config/<id>` nyambung + active-state pathname benar) + shell left-nav 10 tab (grup Engine/Content/System) + 5 panel grup **Engine**: AI Engines (3 svc accordion: provider radio, model per-task, API key+Test, usage), API Keys (tabel 5 service + audit log), Voice (lang note + voice cards waveform + default per niche), Visual (preset + prompt prefix Pro+ + palette), Music (mood pills + track list + switch). Interaktif (accordion/test/play/radio), deterministik no-`Math.random`, brand-icon→kotak inisial. — `d011662`
 - ✅ Config **Stage 2** (`/config/{captions,quality,hashtags,niches,notifications}`) — grup Content+System: Captions (preview 9:16 live + 3 sub-tab + slider/swatch interaktif + preset), Quality Gate (Pro+ badge + lock-preview toggle + histogram SVG + retry stepper + action radio + per-dim + AI rec), Hashtags (segmented niche + default/custom/blacklist chips removable + preview), Niches v3 (active grid + New This Month + catalog + **dual custom-request `{{pricing.*}}` placeholder** + modal + sub-tag + override), Notifications (3 accordion + event matrix + quiet hours). Routing path-based `/config/[tab]`. — `8973008`
 - ✅ D21 Self-Learning Insights (`/insights`) — moat #1: header+grade, hero "belajar dari 87 video"+stat-strip, **timeline insight filterable** (6 filter pill) dgn bar-chart CSS + adaptasi + confidence + **accept interaktif** (pending→accepted), rail (override manual slider + how-it-works FAQ per-channel isolation), tabel riwayat adaptasi. Mock deterministik. Sidebar "Wawasan" nyambung. — `17cf167`
-- ✅ D13 Billing (`/billing`) — current plan (harga `{{pricing.plan_pro}}` placeholder) + usage bars, metode pembayaran **Midtrans** (ex-Xendit), riwayat invoice 6-baris + PDF, add-ons aktif, **drawer katalog add-on** (slide-in + scrim + ESC), BYOK cost tracker (bar provider + budget). Mock deterministik. Sidebar "Tagihan" nyambung. — (commit ini)
+- ✅ D13 Billing (`/billing`) — current plan (harga `{{pricing.plan_pro}}` placeholder) + usage bars, metode pembayaran **Midtrans** (ex-Xendit), riwayat invoice 6-baris + PDF, add-ons aktif, **drawer katalog add-on** (slide-in + scrim + ESC), BYOK cost tracker (bar provider + budget). Mock deterministik. Sidebar "Tagihan" nyambung. — `66bb907`
+- ✅ D2 Channels List (`/channels`) — header+Add, quota bar, segmented filter (all/active/incomplete/suspended), grid card channel (logo+handle+niche badge+**spark SVG area+line hand-drawn**+4 stat+Kelola→`/channels/[id]`) + incomplete setup-card. Mock deterministik. Sidebar "Kanal" nyambung. — (commit ini)
 
 **Next:** Config (D8-D19) / Insights (D21) / Admin (E1-E5) / next-intl / shadcn init / **PWA**. *(Chart D2/D3/D6: lanjut SVG hand-drawn seperti D1/D20, atau install tremor jika chart kompleks spt heatmap D6.)* Data: mock → Supabase-first (RLS) saat backend mendarat. ⚠️ Next 16 breaking changes (`apps/web/AGENTS.md`) — baca `node_modules/next/dist/docs/` sebelum routing/middleware (next-intl). Detail [[plan_frontend_via_claude_design]].
 
