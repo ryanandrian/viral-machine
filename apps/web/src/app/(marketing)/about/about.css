@@ -1,0 +1,24 @@
+/* A6 About/Contact/Status/Legal — port dari design-source/About.html <style>. Prefix ab-. */
+.ab-tabs { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; padding: 2rem 0 0; }
+.ab-tab { padding: 0.4375rem 0.875rem; border: 1px solid var(--border); border-radius: var(--r-full); font-size: var(--text-sm); font-weight: 500; color: var(--text-secondary); cursor: pointer; background: var(--surface-1); }
+.ab-tab.sel { background: var(--brand); border-color: var(--brand); color: #fff; }
+.ab-hero { text-align: center; padding: 3rem 0 2.5rem; }
+.ab-hero h1 { font-size: var(--text-5xl); font-weight: 800; letter-spacing: -0.035em; margin: 1rem 0; max-width: 18ch; margin-inline: auto; }
+.ab-values { display: grid; grid-template-columns: repeat(3,1fr); gap: 1.25rem; }
+.ab-value { padding: 1.5rem; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-1); }
+.ab-value .ic { width: 44px; height: 44px; border-radius: var(--r-md); background: var(--brand-soft); color: var(--brand); display: grid; place-items: center; margin-bottom: 1rem; font-size: 22px; }
+.ab-value h3 { font-size: var(--text-lg); font-weight: 600; margin: 0 0 0.5rem; }
+.ab-value p { font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.55; margin: 0; }
+.ab-contact-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: start; }
+.ab-contact-item { display: flex; gap: 0.875rem; padding: 1rem 0; border-bottom: 1px solid var(--border-subtle); }
+.ab-contact-item .ic { width: 40px; height: 40px; border-radius: var(--r-md); background: var(--surface-2); color: var(--brand); display: grid; place-items: center; flex: none; }
+.ab-status-banner { display: flex; align-items: center; gap: 0.75rem; padding: 1.25rem 1.5rem; border: 1px solid color-mix(in srgb,var(--success) 30%,transparent); background: var(--success-soft); border-radius: var(--r-lg); margin-bottom: 1.5rem; }
+.ab-status-row { display: flex; align-items: center; justify-content: space-between; padding: 0.875rem 0; border-bottom: 1px solid var(--border-subtle); }
+.ab-status-row:last-child { border-bottom: none; }
+.ab-uptime { display: flex; gap: 2px; }
+.ab-uptime span { width: 5px; height: 22px; border-radius: 2px; background: var(--success); }
+.ab-uptime span.deg { background: var(--warning); }
+.ab-legal { max-width: 760px; margin: 0 auto; }
+.ab-legal h2 { font-size: var(--text-xl); font-weight: 700; color: var(--text-primary); margin: 2rem 0 0.75rem; }
+.ab-legal p { font-size: var(--text-base); color: var(--text-secondary); line-height: 1.7; margin: 0 0 1rem; }
+@media (max-width:900px){ .ab-values{ grid-template-columns:1fr; } .ab-contact-grid{ grid-template-columns:1fr; } }

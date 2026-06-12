@@ -1,0 +1,38 @@
+/* A4 Docs — port dari design-source/Docs.html <style>. Prefix dc-. */
+.dc { display: grid; grid-template-columns: 256px minmax(0,1fr) 200px; gap: 2.5rem; max-width: 1280px; margin: 0 auto; padding: 2rem; align-items: start; }
+.dc-side { position: sticky; top: 80px; }
+.dc-search { display: flex; align-items: center; gap: 0.5rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-md); padding: 0 0.625rem; height: 2.25rem; color: var(--text-muted); font-size: var(--text-sm); margin-bottom: 1rem; }
+.dc-search input { border: none; background: none; outline: none; color: var(--text-primary); font-size: var(--text-sm); flex: 1; }
+.dc-search kbd { font-family: var(--font-mono); font-size: 0.625rem; background: var(--surface-3); padding: 1px 5px; border-radius: 4px; }
+.dc-tree { display: flex; flex-direction: column; gap: 1.25rem; }
+.dc-grp .gt { font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.5rem; }
+.dc-tree a { display: block; font-size: var(--text-sm); color: var(--text-secondary); text-decoration: none; padding: 0.3125rem 0.625rem; border-radius: var(--r-sm); transition: background var(--d-fast), color var(--d-fast); }
+.dc-tree a:hover { background: var(--surface-2); color: var(--text-primary); }
+.dc-tree a.active { background: var(--brand-soft); color: var(--brand); font-weight: 500; }
+.dc-main { min-width: 0; }
+.dc-bc { font-size: var(--text-xs); color: var(--text-muted); margin-bottom: 1rem; }
+.dc-main h1 { font-size: var(--text-4xl); font-weight: 800; letter-spacing: -0.03em; margin: 0 0 0.75rem; }
+.dc-meta { display: flex; gap: 1rem; font-size: var(--text-xs); color: var(--text-muted); margin-bottom: 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border-subtle); }
+.dc-body { font-size: var(--text-base); line-height: 1.75; color: var(--text-secondary); }
+.dc-body h2 { font-size: var(--text-2xl); font-weight: 700; letter-spacing: -0.02em; color: var(--text-primary); margin: 2.5rem 0 1rem; scroll-margin-top: 80px; }
+.dc-body p { margin: 0 0 1.125rem; }
+.dc-body ul { margin: 0 0 1.125rem; padding-left: 1.25rem; }
+.dc-body li { margin-bottom: 0.5rem; }
+.dc-body code { font-family: var(--font-mono); font-size: 0.875em; background: var(--surface-2); padding: 0.125rem 0.375rem; border-radius: 4px; color: var(--text-primary); }
+.dc-body pre { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--r-md); padding: 1rem 1.25rem; overflow-x: auto; margin: 0 0 1.5rem; }
+.dc-body pre code { background: none; padding: 0; font-size: var(--text-sm); line-height: 1.7; }
+.dc-callout { display: flex; gap: 0.75rem; padding: 1rem 1.25rem; border-radius: var(--r-md); margin: 0 0 1.5rem; font-size: var(--text-sm); line-height: 1.6; }
+.dc-callout.info { background: var(--info-soft); border: 1px solid color-mix(in srgb,var(--info) 25%,transparent); }
+.dc-callout.warn { background: var(--warning-soft); border: 1px solid color-mix(in srgb,var(--warning) 25%,transparent); }
+.dc-feedback { margin: 3rem 0 1.5rem; padding: 1.25rem; border: 1px solid var(--border); border-radius: var(--r-lg); display: flex; align-items: center; gap: 1rem; }
+.dc-nav-links { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 2rem; }
+.dc-nav-link { padding: 1rem 1.25rem; border: 1px solid var(--border); border-radius: var(--r-md); text-decoration: none; transition: border-color var(--d-fast); }
+.dc-nav-link:hover { border-color: var(--border-strong); }
+.dc-nav-link .dir { font-size: var(--text-xs); color: var(--text-muted); }
+.dc-nav-link .ti { font-size: var(--text-sm); font-weight: 600; color: var(--text-primary); margin-top: 2px; }
+.dc-nav-link.next { text-align: right; }
+.dc-toc { position: sticky; top: 80px; font-size: var(--text-sm); }
+.dc-toc .tt { font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.75rem; }
+.dc-toc a { display: block; color: var(--text-muted); text-decoration: none; padding: 0.25rem 0; border-left: 2px solid var(--border); padding-left: 0.75rem; }
+.dc-toc a:hover, .dc-toc a.active { color: var(--text-primary); border-left-color: var(--brand); }
+@media (max-width: 1080px){ .dc{ grid-template-columns:1fr; } .dc-side,.dc-toc{ display:none; } }

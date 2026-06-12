@@ -1,0 +1,27 @@
+/* A5 Blog — port dari design-source/Blog.html <style>. Prefix blg-. */
+.blg-h { text-align: center; padding: 3.5rem 0 2rem; }
+.blg-h h1 { font-size: var(--text-5xl); font-weight: 800; letter-spacing: -0.035em; margin: 0.75rem 0 0.5rem; }
+.blg-view-toggle { display: flex; justify-content: center; margin-bottom: 1.5rem; }
+.blg-cats { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; margin-bottom: 2.5rem; }
+.blg-pill { padding: 0.4375rem 0.875rem; border: 1px solid var(--border); border-radius: var(--r-full); font-size: var(--text-sm); font-weight: 500; color: var(--text-secondary); cursor: pointer; background: var(--surface-1); transition: all var(--d-fast); }
+.blg-pill.sel { background: var(--brand); border-color: var(--brand); color: #fff; }
+.blg-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 1.5rem; }
+.blg-post { border: 1px solid var(--border); border-radius: var(--r-xl); overflow: hidden; background: var(--surface-1); cursor: pointer; transition: border-color var(--d-fast), transform var(--d-fast); text-decoration: none; display: flex; flex-direction: column; }
+.blg-post:hover { border-color: var(--border-strong); transform: translateY(-3px); }
+.blg-post .cover { height: 168px; position: relative; }
+.blg-post .cover .cat { position: absolute; top: 12px; left: 12px; font-size: 0.625rem; font-weight: 600; padding: 3px 9px; border-radius: var(--r-full); background: rgba(0,0,0,0.5); color: #fff; backdrop-filter: blur(4px); }
+.blg-post .pbody { padding: 1.25rem; flex: 1; display: flex; flex-direction: column; }
+.blg-post h3 { font-size: var(--text-lg); font-weight: 600; letter-spacing: -0.01em; line-height: 1.3; margin: 0 0 0.5rem; color: var(--text-primary); }
+.blg-post p { font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.55; margin: 0 0 1rem; flex: 1; }
+.blg-post .pmeta { display: flex; align-items: center; gap: 0.5rem; font-size: var(--text-xs); color: var(--text-muted); }
+.blg-post .av { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 0.625rem; }
+.blg-cs-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 1.5rem; }
+.blg-cs { border: 1px solid var(--border); border-radius: var(--r-xl); overflow: hidden; background: var(--surface-1); display: grid; grid-template-columns: 150px 1fr; cursor: pointer; transition: border-color var(--d-fast); text-decoration: none; }
+.blg-cs:hover { border-color: var(--brand); }
+.blg-cs .thumb { background: linear-gradient(160deg,#0c2233,#071018); display: grid; place-items: center; color: rgba(255,255,255,0.3); }
+.blg-cs .csbody { padding: 1.5rem; }
+.blg-cs .ch { font-size: var(--text-xs); color: var(--text-muted); }
+.blg-cs h3 { font-size: var(--text-xl); font-weight: 700; letter-spacing: -0.02em; margin: 0.25rem 0 0.75rem; color: var(--text-primary); }
+.blg-cs .metric { font-size: var(--text-3xl); font-weight: 800; letter-spacing: -0.03em; background: linear-gradient(100deg,var(--brand),var(--accent)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.blg-cs .ml { font-size: var(--text-xs); color: var(--text-secondary); }
+@media (max-width:900px){ .blg-grid{ grid-template-columns:1fr; } .blg-cs-grid{ grid-template-columns:1fr; } .blg-cs{ grid-template-columns:110px 1fr; } }
