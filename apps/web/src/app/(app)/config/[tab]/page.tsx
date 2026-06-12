@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import {
   Sparkles, Command, Mic, Image as ImageIcon, Music, FileText, Gauge, List, Target, Bell, Shield,
   ChevronDown, CheckCircle, Loader2, Play, Pause, Settings, X, Clock, Wand2, Plus, Tv,
+  Info, Eye, EyeOff, Minus, BarChart3, XCircle, HelpCircle, RefreshCw, Check, Zap,
 } from "lucide-react";
 import "../config.css";
 
@@ -238,13 +239,312 @@ function MusicPanel() {
   );
 }
 
-type Panel = { title: { id: string; en: string }; desc: { id: string; en: string }; Body: () => React.ReactElement };
+// ===== STAGE 2 panels (port cfg-content.js): Captions, Quality, Hashtags, Niches, Notifications =====
+
+function Captions() {
+  const [sub, setSub] = useState<"style" | "position" | "animation">("style");
+  const [size, setSize] = useState(119);
+  const [textColor, setTextColor] = useState("#FFFFFF");
+  const [activeColor, setActiveColor] = useState("#FFD700");
+  const [pos, setPos] = useState("bottom");
+  const [maxLine, setMaxLine] = useState(2);
+  return (
+    <>
+      <div style={{ display: "flex", gap: ".5rem", alignItems: "center", padding: ".625rem .875rem", background: "var(--brand-soft)", border: "1px solid color-mix(in srgb,var(--brand) 25%,transparent)", borderRadius: "var(--r-md)", marginBottom: "1.25rem", fontSize: "var(--text-sm)" }}>
+        <Info size={15} /> <span><Bi id="Caption mengikuti bahasa konten channel (🇮🇩 Bahasa Indonesia). Skrip non-Latin (Thai) pakai font pendukung — sistem otomatis fallback." en="Captions follow the channel's content language (🇮🇩 Indonesian). Non-Latin scripts (Thai) use a supporting font — system auto-falls back." /></span>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: "1.5rem", alignItems: "start" }} className="cap-grid">
+        <div style={{ position: "sticky", top: 72 }}>
+          <div style={{ aspectRatio: "9/16", borderRadius: "var(--r-lg)", overflow: "hidden", position: "relative", background: "linear-gradient(170deg,#0c2233,#05101a)", border: "1px solid var(--border)" }}>
+            <div style={{ position: "absolute", inset: 0, background: "radial-gradient(120% 70% at 50% 25%,transparent,rgba(0,0,0,.5))" }} />
+            <div style={{ position: "absolute", left: 12, right: 12, bottom: 60, textAlign: "center", fontFamily: "Anton,Geist,sans-serif", fontWeight: 800, fontSize: size * 0.25, lineHeight: 1.1, textShadow: "0 2px 8px rgba(0,0,0,.8)", color: textColor }}>Suara aneh di kedalaman <span style={{ color: activeColor }}>Mariana Trench</span></div>
+          </div>
+          <div className="muted" style={{ fontSize: "var(--text-xs)", textAlign: "center", marginTop: ".5rem" }}>Preview · 9:16 Shorts</div>
+        </div>
+        <div>
+          <div className="segmented" style={{ marginBottom: "1.25rem" }}>
+            <button aria-selected={sub === "style"} onClick={() => setSub("style")}>Style</button>
+            <button aria-selected={sub === "position"} onClick={() => setSub("position")}>Position</button>
+            <button aria-selected={sub === "animation"} onClick={() => setSub("animation")}>Animation</button>
+          </div>
+          {sub === "style" && <>
+            <div className="fld-row"><div className="k"><Bi id="Font" en="Font" /></div><div className="selbox">Anton <ChevronDown size={14} /></div></div>
+            <div className="fld-row"><div className="k"><Bi id="Ukuran font" en="Font size" /><div className="sub">{size}px</div></div><input type="range" className="slider" min={60} max={150} value={size} onChange={(e) => setSize(+e.target.value)} /></div>
+            <div className="fld-row"><div className="k"><Bi id="Warna teks" en="Text color" /></div><div style={{ display: "flex", gap: ".5rem" }}>{["#FFFFFF", "#F8FAFC", "#FDE68A"].map((c) => <span key={c} onClick={() => setTextColor(c)} style={{ width: 28, height: 28, borderRadius: "var(--r-sm)", background: c, border: `2px solid ${textColor === c ? "var(--text-primary)" : "transparent"}`, cursor: "pointer" }} />)}</div></div>
+            <div className="fld-row"><div className="k"><Bi id="Warna kata aktif" en="Active word" /></div><div style={{ display: "flex", gap: ".5rem" }}>{["#FFD700", "#22D3EE", "#F472B6", "#34D399"].map((c) => <span key={c} onClick={() => setActiveColor(c)} style={{ width: 28, height: 28, borderRadius: "var(--r-sm)", background: c, border: `2px solid ${activeColor === c ? "var(--text-primary)" : "transparent"}`, cursor: "pointer" }} />)}</div></div>
+            <div className="fld-row"><div className="k"><Bi id="Opasitas background" en="Background opacity" /></div><input type="range" className="slider" min={0} max={100} defaultValue={0} /></div>
+          </>}
+          {sub === "position" && <>
+            <div className="fld-row"><div className="k"><Bi id="Posisi" en="Position" /></div><div className="radio-row">{["top", "center", "bottom"].map((p) => <span key={p} className={`radio-pill${pos === p ? " sel" : ""}`} onClick={() => setPos(p)} style={{ textTransform: "capitalize" }}>{p}</span>)}</div></div>
+            <div className="fld-row"><div className="k"><Bi id="Margin vertikal" en="Vertical margin" /><div className="sub">326px</div></div><input type="range" className="slider" min={0} max={400} defaultValue={326} /></div>
+            <div className="fld-row"><div className="k">Max line</div><div className="radio-row">{[1, 2, 3].map((n) => <span key={n} className={`radio-pill${maxLine === n ? " sel" : ""}`} onClick={() => setMaxLine(n)}>{n}</span>)}</div></div>
+          </>}
+          {sub === "animation" && <>
+            <div className="fld-row"><div className="k"><Bi id="Gaya karaoke" en="Karaoke style" /></div><div className="radio-row"><span className="radio-pill sel">Word highlight</span><span className="radio-pill">Line fade</span><span className="radio-pill">Pop</span></div></div>
+            <div className="fld-row"><div className="k"><Bi id="Kecepatan" en="Speed" /></div><div className="radio-row"><span className="radio-pill">Slow</span><span className="radio-pill sel">Medium</span><span className="radio-pill">Fast</span></div></div>
+            <div className="fld-row"><div className="k"><Bi id="Kata per baris" en="Words per line" /><div className="sub">3</div></div><input type="range" className="slider" min={2} max={6} defaultValue={3} /></div>
+          </>}
+          <h4 style={{ fontSize: "var(--text-sm)", fontWeight: 600, margin: "1.5rem 0 .75rem" }}><Bi id="Template preset" en="Preset templates" /></h4>
+          <div className="grid-4">{([["🎬 Cinematic", true], ["✨ Subtle", false], ["🔥 Bold", false], ["🎨 Custom", false]] as [string, boolean][]).map(([n, s]) => <button key={n} className={`radio-pill${s ? " sel" : ""}`} style={{ justifyContent: "center" }}>{n}</button>)}</div>
+        </div>
+      </div>
+      <div className="save-bar"><span className="muted"><Bi id="Tier Pro: kustomisasi penuh aktif" en="Pro tier: full customization unlocked" /></span><button className="btn btn-ghost"><RefreshCw size={14} /> <Bi id="Reset" en="Reset" /></button><button className="btn btn-secondary"><Play size={14} /> <Bi id="Test di video" en="Test on video" /></button><button className="btn btn-default"><Bi id="Simpan & Terapkan" en="Save & Apply" /></button></div>
+    </>
+  );
+}
+
+function QHist({ thr }: { thr: number }) {
+  const binsArr = [4, 9, 16, 24, 30, 34, 28, 18, 9, 4]; const W = 320, H = 90, max = 34, bw = W / binsArr.length; const thrX = ((thr - 50) / 40) * W;
+  return (
+    <svg viewBox="0 0 320 90" style={{ width: "100%", height: "auto", margin: ".5rem 0" }}>
+      {binsArr.map((v, i) => { const h = (v / max) * (H - 16); return <rect key={i} x={i * bw + 3} y={H - h - 4} width={bw - 6} height={h} rx={2} fill={(i * bw) >= thrX ? "#10B981" : "var(--surface-3)"} />; })}
+      <line x1={thrX} y1={0} x2={thrX} y2={H - 4} stroke="var(--brand)" strokeWidth={2} strokeDasharray="3 3" />
+    </svg>
+  );
+}
+
+function Quality() {
+  const [score, setScore] = useState(75); const [retry, setRetry] = useState(3); const [fail, setFail] = useState(0); const [locked, setLocked] = useState(false);
+  const pass = Math.max(20, Math.round(100 - (score - 50) * 1.7));
+  const dims: [string, number][] = [["Hook Power", 80], ["Curiosity Gap", 80], ["Retention Arc", 80], ["Emotional Peak", 80], ["Information Density", 75], ["CTA Strength", 70]];
+  const fails: [string, number, string][] = [["Emotional Peak", 60, "var(--error)"], ["Hook Power", 25, "var(--warning)"], ["Lainnya", 15, "var(--text-muted)"]];
+  const actions: [string, string][] = [["🛑", "Skip publish + notif Telegram"], ["⚠️", "Publish dengan tag warning"], ["⏸️", "Pause channel sampai review"]];
+  return (
+    <>
+      <button className="btn btn-ghost btn-sm" style={{ marginBottom: "1rem" }} onClick={() => setLocked((l) => !l)}>{locked ? <><EyeOff size={14} /> <Bi id="Kembali ke Pro" en="Back to Pro" /></> : <><Eye size={14} /> <Bi id="Pratinjau sebagai Starter (terkunci)" en="Preview as Starter (locked)" /></>}</button>
+      <div className="lock-overlay" style={{ position: "relative" }}>
+        {locked && <div className="lock-shade"><span className="lic"><Shield size={26} /></span><div style={{ fontWeight: 600 }}><Bi id="Quality Gate hanya untuk paket Pro+" en="Quality Gate is for Pro+ plans only" /></div><div className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Upgrade untuk kustomisasi threshold" en="Upgrade to customize thresholds" /></div><button className="btn btn-default btn-sm"><Zap size={14} /> Upgrade ke Pro</button></div>}
+        <div className="grid-2">
+          <div className="card card-pad">
+            <h3 className="card-title" style={{ marginBottom: ".25rem" }}>Minimum Viral Score</h3>
+            <div style={{ display: "flex", alignItems: "baseline", gap: ".5rem", margin: ".5rem 0" }}><span style={{ fontSize: "var(--text-3xl)", fontWeight: 700 }}>{score}</span><span className="muted">/ 100</span></div>
+            <QHist thr={score} />
+            <input type="range" className="slider" min={50} max={90} value={score} onChange={(e) => setScore(+e.target.value)} />
+            <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".625rem" }}>Dengan threshold {score}, <b style={{ color: "var(--text-primary)" }}>{pass}% video lolos</b>.</div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <div className="card card-pad"><h3 className="card-title" style={{ marginBottom: ".75rem" }}>Max retry</h3>
+              <div style={{ display: "flex", alignItems: "center", gap: ".75rem" }}><button className="btn btn-secondary btn-icon btn-sm" onClick={() => setRetry((r) => Math.max(1, r - 1))}><Minus size={14} /></button><span style={{ fontSize: "var(--text-2xl)", fontWeight: 700, width: "2ch", textAlign: "center" }}>{retry}</span><button className="btn btn-secondary btn-icon btn-sm" onClick={() => setRetry((r) => Math.min(5, r + 1))}><Plus size={14} /></button>
+                <span className="muted" style={{ fontSize: "var(--text-xs)", marginLeft: ".5rem" }}>~$0.07 / retry · max <b style={{ color: "var(--text-primary)" }}>${(retry * 0.07).toFixed(2)}</b></span></div>
+            </div>
+            <div className="card card-pad"><h3 className="card-title" style={{ marginBottom: ".75rem" }}><Bi id="Aksi saat gagal" en="Action on fail" /></h3>
+              {actions.map(([e, t], i) => <label key={i} onClick={() => setFail(i)} style={{ display: "flex", alignItems: "center", gap: ".625rem", padding: ".5rem .625rem", border: `1px solid ${fail === i ? "var(--brand)" : "var(--border)"}`, borderRadius: "var(--r-md)", marginBottom: ".5rem", cursor: "pointer", background: fail === i ? "var(--brand-soft)" : "" }}><input type="radio" name="qfail" checked={fail === i} readOnly style={{ accentColor: "var(--brand)" }} /> <span>{e}</span> <span style={{ fontSize: "var(--text-sm)" }}>{t}</span></label>)}
+            </div>
+          </div>
+        </div>
+        <details className="card card-pad" style={{ marginTop: "1rem" }}><summary style={{ cursor: "pointer", fontWeight: 600, fontSize: "var(--text-sm)", listStyle: "none", display: "flex", alignItems: "center", gap: ".5rem" }}><ChevronDown size={16} /> <Bi id="Threshold per-dimensi (advanced)" en="Per-dimension thresholds (advanced)" /></summary>
+          <div style={{ marginTop: "1rem" }}>{dims.map(([n, v]) => <div key={n} className="fld-row"><div className="k">{n}<div className="sub">{v}</div></div><input type="range" className="slider" min={50} max={95} defaultValue={v} /></div>)}</div>
+        </details>
+        <div className="grid-2" style={{ marginTop: "1rem" }}>
+          <div className="card card-pad"><h3 className="card-title" style={{ marginBottom: ".75rem" }}><BarChart3 size={15} /> <Bi id="Riwayat kualitas (30 hari)" en="Quality history (30d)" /></h3>
+            <div style={{ fontSize: "var(--text-2xl)", fontWeight: 700, marginBottom: ".5rem" }}>85% <span className="muted" style={{ fontSize: "var(--text-sm)", fontWeight: 400 }}>pass rate</span></div>
+            {fails.map(([n, v, c]) => <div key={n} style={{ display: "flex", alignItems: "center", gap: ".75rem", fontSize: "var(--text-xs)", padding: ".25rem 0" }}><span style={{ width: 110, color: "var(--text-secondary)" }}>{n}</span><div style={{ flex: 1, height: 7, background: "var(--surface-2)", borderRadius: 99, overflow: "hidden" }}><span style={{ display: "block", height: "100%", width: `${v}%`, background: c }} /></div><span className="mono">{v}%</span></div>)}
+          </div>
+          <div className="card card-pad" style={{ borderColor: "color-mix(in srgb,var(--accent) 30%,transparent)", background: "var(--accent-soft)" }}>
+            <div style={{ display: "flex", gap: ".625rem" }}><span style={{ color: "var(--accent)", flex: "none" }}><Sparkles size={18} /></span><div><div style={{ fontSize: "var(--text-sm)", lineHeight: 1.5 }}><b style={{ color: "var(--text-primary)" }}><Bi id="Rekomendasi AI: " en="AI suggestion: " /></b><Bi id="Hook Power channelmu avg 76 — naikkan threshold ke 80 untuk hasil lebih konsisten?" en="Your Hook Power averages 76 — raise the threshold to 80 for more consistent results?" /></div><button className="btn btn-default btn-sm" style={{ marginTop: ".75rem" }}><Bi id="Terapkan" en="Apply" /></button></div></div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function Hashtags() {
+  const niches = ["Misteri Samudra", "Sejarah Kelam", "Fakta Menarik"];
+  const [ni, setNi] = useState(0);
+  const def = ["#misteri", "#laut", "#samudra", "#fakta", "#shorts", "#viral", "#mariana", "#kapal", "#bermuda", "#oceanmystery"];
+  const [custom, setCustom] = useState(["#misterisamudra", "#fyp", "#kapalhilang", "#segitigabermuda", "#lautdalam", "#mysteryshorts", "#faktalaut", "#viralindonesia"]);
+  const [black, setBlack] = useState(["#prank", "#giveaway"]);
+  return (
+    <>
+      <div className="segmented" style={{ marginBottom: "1.25rem" }}>{niches.map((n, i) => <button key={n} aria-selected={ni === i} onClick={() => setNi(i)}>{n}</button>)}</div>
+      <div className="grid-2">
+        <div className="card card-pad"><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: ".5rem" }}><h3 className="card-title" style={{ margin: 0 }}><Bi id="Pool default" en="Default pool" /></h3><span className="badge badge-default">Read-only</span></div>
+          <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: ".75rem" }}><Bi id="Default oleh MesinViral. Dipakai jika custom kosong." en="Default by MesinViral. Used when custom is empty." /></div>
+          <div className="chip-input" style={{ borderStyle: "dashed" }}>{def.map((t) => <span key={t} className="chip ghost">{t}</span>)}</div>
+        </div>
+        <div className="card card-pad"><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: ".5rem" }}><h3 className="card-title" style={{ margin: 0 }}><Bi id="Hashtag custom" en="Custom hashtags" /></h3><span className="muted" style={{ fontSize: "var(--text-xs)" }}>{custom.length}/15 (Pro)</span></div>
+          <div className="chip-input">{custom.map((t) => <span key={t} className="chip">{t} <span className="x" onClick={() => setCustom(custom.filter((x) => x !== t))}><X size={11} /></span></span>)}<input style={{ border: "none", background: "none", outline: "none", color: "var(--text-primary)", fontSize: "var(--text-xs)", flex: 1, minWidth: 80 }} placeholder="+ tambah" /></div>
+          <button className="btn btn-ai btn-sm" style={{ marginTop: ".75rem" }}><Sparkles size={14} /> <Bi id="Optimize via AI" en="Optimize via AI" /> <span className="badge badge-brand" style={{ marginLeft: ".25rem" }}>Pro+</span></button>
+        </div>
+      </div>
+      <div className="grid-2" style={{ marginTop: "1rem" }}>
+        <div className="card card-pad"><h3 className="card-title" style={{ marginBottom: ".5rem" }}><XCircle size={15} /> Blacklist</h3>
+          <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: ".75rem" }}><Bi id="Hindari tag demonetized / off-brand." en="Avoid demonetized / off-brand tags." /></div>
+          <div className="chip-input">{black.map((t) => <span key={t} className="chip" style={{ color: "var(--error)" }}>{t} <span className="x" onClick={() => setBlack(black.filter((x) => x !== t))}><X size={11} /></span></span>)}<input style={{ border: "none", background: "none", outline: "none", color: "var(--text-primary)", fontSize: "var(--text-xs)", flex: 1, minWidth: 80 }} placeholder="+ tambah" /></div>
+        </div>
+        <div className="card card-pad" style={{ background: "var(--bg-elevated)" }}><h3 className="card-title" style={{ marginBottom: ".5rem" }}><Eye size={15} /> <Bi id="Preview metadata" en="Metadata preview" /></h3>
+          <div className="mono" style={{ fontSize: "var(--text-xs)", color: "var(--text-secondary)", lineHeight: 1.7 }}>{custom.concat(def.slice(0, 5)).join(" ")}</div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: ".75rem", fontSize: "var(--text-xs)" }}><span className="muted">{custom.length + 5} hashtag</span><span style={{ color: "var(--success)" }}>97/100 char</span></div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function Mood({ cols }: { cols: string[] }) {
+  return <div style={{ height: 64, display: "flex" }}>{cols.map((c) => <span key={c} style={{ flex: 1, background: c }} />)}</div>;
+}
+
+function Niches() {
+  const [seg, setSeg] = useState(0);
+  const [modal, setModal] = useState(false);
+  const active: [string, string[], string[], string][] = [
+    ["Misteri Samudra", ["#082f49", "#0c4a6e", "#0ea5e9"], ["#laut", "#misteri", "#samudra"], "47 video · avg 2.3K"],
+    ["Fakta Menarik", ["#052e16", "#14532d", "#22c55e"], ["#fakta", "#sains", "#tahukah"], "63 video · avg 3.1K"],
+    ["Sejarah Kelam", ["#450a0a", "#7f1d1d", "#dc2626"], ["#sejarah", "#kelam", "#sejarahdunia"], "31 video · avg 1.8K"],
+  ];
+  const catalog: [string, string, string[], string][] = [
+    ["Misteri Alam Semesta", "Luar angkasa & kosmos", ["#1e1b4b", "#312e81", "#4338ca"], "activate"],
+    ["Teknologi Masa Depan", "AI, robotik, inovasi", ["#0c4a6e", "#075985", "#0891b2"], "swap"],
+    ["Kriminal Nyata", "True crime Indonesia", ["#1c1917", "#44403c", "#78716c"], "premium"],
+    ["Mitologi Nusantara", "Legenda & folklor lokal", ["#422006", "#854d0e", "#ca8a04"], "activate"],
+  ];
+  const newThis: [string, string, string[], string, boolean][] = [
+    ["Detektif Kripto", "Investigasi skandal crypto", ["#14532d", "#15803d", "#22c55e"], "2 hari lalu", true],
+    ["Misteri Medis", "Kasus medis yang tak terpecahkan", ["#4a044e", "#86198f", "#c026d3"], "5 hari lalu", true],
+    ["Arsitektur Hilang", "Bangunan kuno yang lenyap", ["#1e3a8a", "#1d4ed8", "#3b82f6"], "12 hari lalu", false],
+  ];
+  const tags = ["kapal-hantu", "palung-laut", "makhluk-abisal", "kota-tenggelam", "arus-misterius", "pulau-hilang", "bangkai-kapal", "fenomena-laut", "legenda-pelaut", "dasar-samudra", "cahaya-laut", "suara-laut"];
+  const segs = ["All (12)", "Active", "Inactive", "Premium", "Custom"];
+  const catBtn = (s: string) => s === "activate"
+    ? <button className="btn btn-outline btn-sm" style={{ width: "100%" }}><Bi id="Aktifkan" en="Activate" /></button>
+    : s === "swap"
+      ? <button className="btn btn-secondary btn-sm" style={{ width: "100%" }}><Bi id="Tukar dengan…" en="Swap with…" /> <ChevronDown size={13} /></button>
+      : <button className="btn btn-secondary btn-sm" style={{ width: "100%" }} disabled><Shield size={13} /> Premium</button>;
+  return (
+    <>
+      <div className="grid-4">
+        {active.map(([n, cols, chips, stat]) => (
+          <div key={n} className="card" style={{ overflow: "hidden" }}><Mood cols={cols} /><div style={{ padding: ".875rem 1rem" }}><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}><div style={{ fontWeight: 600, fontSize: "var(--text-sm)" }}>{n}</div><label className="switch" style={{ width: "1.75rem", height: "1rem" }}><input type="checkbox" defaultChecked /><span className="track" /><span className="thumb" style={{ width: ".75rem", height: ".75rem" }} /></label></div>
+            <div style={{ display: "flex", gap: ".25rem", flexWrap: "wrap", margin: ".5rem 0" }}>{chips.map((c) => <span key={c} className="badge badge-default" style={{ fontSize: ".625rem" }}>{c}</span>)}</div>
+            <div className="muted" style={{ fontSize: "var(--text-xs)" }}>{stat}</div></div></div>
+        ))}
+        <div className="card" style={{ borderStyle: "dashed", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: ".375rem", color: "var(--text-muted)", cursor: "pointer", minHeight: 150 }}><Plus size={20} /><span style={{ fontSize: "var(--text-xs)" }}><Bi id="Tambah dari catalog" en="Add from catalog" /></span></div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: ".5rem", margin: "2rem 0 1rem" }}><span style={{ color: "var(--accent)" }}><Sparkles size={18} /></span><h3 style={{ fontSize: "var(--text-lg)", fontWeight: 600, margin: 0 }}><Bi id="Baru Bulan Ini" en="New This Month" /></h3></div>
+      <div style={{ display: "flex", gap: "1rem", overflowX: "auto", paddingBottom: ".5rem" }}>
+        {newThis.map(([n, d, cols, rel, fresh]) => (
+          <div key={n} className="card" style={{ flex: "0 0 260px", overflow: "hidden", ...(fresh ? { boxShadow: "var(--glow-accent)", borderColor: "color-mix(in srgb,var(--accent) 30%,transparent)" } : {}) }}><Mood cols={cols} /><div style={{ padding: "1rem" }}><div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}><div style={{ fontWeight: 600, fontSize: "var(--text-sm)" }}>{n}</div>{fresh ? <span className="badge badge-brand" style={{ fontSize: ".625rem" }}>Baru</span> : null}</div><div className="muted" style={{ fontSize: "var(--text-xs)", margin: ".25rem 0 .5rem" }}>{d}</div><div className="muted" style={{ fontSize: ".625rem", marginBottom: ".75rem", display: "flex", alignItems: "center", gap: ".3rem" }}><Clock size={11} /> Released {rel}</div><button className="btn btn-default btn-sm" style={{ width: "100%" }}><Bi id="Aktifkan" en="Activate" /></button></div></div>
+        ))}
+      </div>
+
+      <h3 style={{ fontSize: "var(--text-lg)", fontWeight: 600, margin: "2rem 0 1rem" }}><Bi id="Katalog Niche" en="Niche Catalog" /></h3>
+      <div className="segmented" style={{ marginBottom: "1rem" }}>{segs.map((s, i) => <button key={s} aria-selected={seg === i} onClick={() => setSeg(i)}>{s}</button>)}</div>
+      <div className="grid-4">
+        {catalog.map(([n, d, cols, s]) => (
+          <div key={n} className="card" style={{ overflow: "hidden" }}><Mood cols={cols} /><div style={{ padding: ".875rem 1rem" }}><div style={{ fontWeight: 600, fontSize: "var(--text-sm)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>{n}{s === "premium" ? <span style={{ color: "var(--text-muted)" }}><Shield size={14} /></span> : null}</div><div className="muted" style={{ fontSize: "var(--text-xs)", margin: ".25rem 0 .75rem" }}>{d}</div><button className="btn btn-ghost btn-sm" style={{ marginBottom: ".5rem", padding: 0 }}><Play size={12} /> Sample</button>{catBtn(s)}</div></div>
+        ))}
+      </div>
+
+      {/* custom request DUAL — pricing PLACEHOLDER {{pricing.*}} (no-hardcode rule) */}
+      <div className="card" style={{ marginTop: "2rem", padding: "1.75rem", background: "linear-gradient(120deg,var(--surface-1),color-mix(in srgb,var(--accent) 8%,var(--surface-1)))", borderColor: "color-mix(in srgb,var(--accent) 25%,transparent)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: ".625rem", marginBottom: "1.25rem" }}><span style={{ color: "var(--accent)" }}><Wand2 size={20} /></span><div><h3 style={{ margin: 0, fontSize: "var(--text-lg)", fontWeight: 600 }}><Bi id="Tidak menemukan niche yang cocok?" en="Can't find the right niche?" /></h3><div className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Request niche custom — dibuat sesuai brief Anda." en="Request a custom niche — built to your brief." /></div></div></div>
+        <div className="grid-2">
+          <div className="card card-pad">
+            <div style={{ display: "flex", alignItems: "center", gap: ".5rem", fontWeight: 600, marginBottom: ".375rem" }}>🌍 <Bi id="Public Niche" en="Public Niche" /></div>
+            <div className="price-dyn" style={{ fontSize: "var(--text-xl)", fontWeight: 700 }}>{"{{pricing.custom_niche_public_90d}}"}<span className="ex">≈ Rp 299K</span></div>
+            <div className="muted" style={{ fontSize: "var(--text-xs)", margin: ".625rem 0 1rem" }}><Bi id="90 hari exclusive untuk channel-mu, lalu masuk public catalog. Affordable, cocok untuk solo creator." en="90 days exclusive to your channel, then enters the public catalog. Affordable, great for solo creators." /></div>
+            <button className="btn btn-default btn-sm" style={{ width: "100%" }} onClick={() => setModal(true)}><Bi id="Request Public Niche" en="Request Public Niche" /></button>
+          </div>
+          <div className="card card-pad" style={{ borderColor: "color-mix(in srgb,var(--accent) 35%,transparent)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: ".5rem", fontWeight: 600, marginBottom: ".375rem" }}>🔒 <Bi id="Permanent Private" en="Permanent Private" /> <span className="badge badge-brand" style={{ fontSize: ".625rem" }}>Premium</span></div>
+            <div className="price-dyn" style={{ fontSize: "var(--text-xl)", fontWeight: 700, color: "var(--accent)" }}>{"{{pricing.custom_niche_private}}"}<span className="ex">≈ Rp 1.499K</span></div>
+            <div className="muted" style={{ fontSize: "var(--text-xs)", margin: ".625rem 0 1rem" }}><Bi id="Tidak pernah public. Exclusive permanen untuk channel-mu. Positioning premium untuk agency." en="Never public. Permanently exclusive to your channel. Premium positioning for agencies." /></div>
+            <button className="btn btn-ai btn-sm" style={{ width: "100%" }} onClick={() => setModal(true)}><Bi id="Request Private Niche" en="Request Private Niche" /></button>
+          </div>
+        </div>
+        <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "1rem", display: "flex", alignItems: "center", gap: ".4rem" }}><Clock size={13} /> <Bi id="SLA: 3–5 hari delivery" en="SLA: 3–5 day delivery" /></div>
+      </div>
+
+      <details className="card card-pad" style={{ marginTop: "1rem" }} open><summary style={{ cursor: "pointer", fontWeight: 600, fontSize: "var(--text-sm)", listStyle: "none", display: "flex", alignItems: "center", gap: ".5rem" }}><ChevronDown size={16} /> <Bi id="Sub-tag pool · Misteri Samudra" en="Sub-tag pool · Ocean Mysteries" /> <span className="muted" title="Dipakai untuk variety tracking + hashtag granular" style={{ cursor: "help" }}><HelpCircle size={13} /></span></summary>
+        <div style={{ display: "flex", gap: ".375rem", flexWrap: "wrap", marginTop: "1rem" }}>{tags.map((t, i) => <span key={t} className="chip" style={i < 3 ? { borderColor: "var(--brand)", color: "var(--brand)" } : undefined}>{i < 3 ? <Check size={11} /> : null} {t}</span>)}</div>
+        <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".75rem" }}><Bi id="Tag dengan tanda ✓ jadi preferensi default-mu." en="Tags marked ✓ are your defaults." /></div>
+      </details>
+
+      <div className="card card-pad" style={{ marginTop: "1rem" }}><h3 className="card-title" style={{ marginBottom: "1rem" }}><Bi id="Override per channel" en="Per-channel override" /></h3>
+        <div style={{ overflowX: "auto" }}><table className="tbl"><thead><tr><th>Channel</th><th><Bi id="Niche default" en="Default niche" /></th><th>Override</th><th></th></tr></thead>
+          <tbody>{([["Misteri Samudra", "Misteri Samudra"], ["Fakta Yang Bikin Mikir", "Fakta Menarik"], ["Jejak Kelam Sejarah", "Sejarah Kelam"]] as [string, string][]).map(([ch, nc]) => <tr key={ch}><td style={{ color: "var(--text-primary)" }}>{ch}</td><td className="muted">{nc}</td><td><span className="selbox" style={{ height: "1.875rem", fontSize: "var(--text-xs)" }}>{nc} <ChevronDown size={12} /></span></td><td><button className="btn btn-ghost btn-sm"><Bi id="Terapkan" en="Apply" /></button></td></tr>)}</tbody></table></div>
+      </div>
+
+      {modal && (
+        <div onClick={(e) => { if (e.target === e.currentTarget) setModal(false); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem" }}>
+          <div className="card" style={{ maxWidth: 520, width: "100%", maxHeight: "90vh", overflow: "auto" }}>
+            <div className="card-head"><h3 className="card-title"><Bi id="Request niche custom" en="Request custom niche" /></h3><button className="btn btn-ghost btn-icon btn-sm" onClick={() => setModal(false)}><X size={16} /></button></div>
+            <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              <div><label className="label"><Bi id="Ide niche" en="Niche idea" /></label><textarea className="textarea" rows={2} placeholder="mis. Misteri kapal selam Perang Dunia II" /></div>
+              <div><label className="label"><Bi id="Target audiens" en="Target audience" /></label><div className="chip-input"><span className="chip">pria 18-34</span><span className="chip">pecinta sejarah</span><input style={{ border: "none", background: "none", outline: "none", color: "var(--text-primary)", fontSize: "var(--text-xs)", flex: 1, minWidth: 80 }} placeholder="+ tambah" /></div></div>
+              <div><label className="label"><Bi id="Channel YouTube referensi" en="Reference YouTube channels" /></label><input className="input input-mono" placeholder="youtube.com/@..." /></div>
+              <div><label className="label"><Bi id="Angle viral & use case" en="Viral angle & use case" /></label><textarea className="textarea" rows={2} /></div>
+            </div>
+            <div className="card-foot" style={{ display: "flex", gap: ".5rem", justifyContent: "flex-end" }}><button className="btn btn-ghost" onClick={() => setModal(false)}><Bi id="Batal" en="Cancel" /></button><button className="btn btn-default" onClick={() => setModal(false)}><Bi id="Kirim request" en="Submit request" /></button></div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function NotifCard({ mark, color, name, meta, badge, children }: { mark: string; color: string; name: string; meta: string; badge: React.ReactNode; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={`svc${open ? " open" : ""}`}>
+      <div className="svc-head" onClick={(e) => { if ((e.target as HTMLElement).closest("input,button,a,label")) return; setOpen((o) => !o); }}>
+        <Mark label={mark} color={color} />
+        <div><div className="svc-name">{name}</div><div className="svc-meta">{meta}</div></div>
+        {badge}<span className="chev"><ChevronDown size={16} /></span>
+      </div>
+      <div className="svc-body">{children}</div>
+    </div>
+  );
+}
+
+function Notifications() {
+  const events: [string, string, number[]][] = [
+    ["✅", "Video Published", [1, 1, 0, 1]], ["❌", "Run Failed", [1, 1, 1, 1]], ["⚠️", "Quality Gate Failed", [1, 0, 0, 1]],
+    ["🚫", "Channel Suspended", [1, 1, 0, 1]], ["🛡️", "Compliance Score Low", [1, 1, 0, 1]], ["⏰", "Trial Ending", [0, 1, 0, 1]],
+    ["💳", "Payment Failed", [1, 1, 0, 1]], ["💡", "Self-Learning Insight", [0, 0, 0, 1]], ["📊", "Weekly Digest", [0, 1, 0, 0]],
+  ];
+  const cols = ["Telegram", "Email", "Webhook", "In-app"];
+  const okBadge = (t: string) => <span className="badge badge-success" style={{ marginLeft: "auto" }}><span className="dot" />{t}</span>;
+  return (
+    <>
+      <NotifCard mark="TG" color="var(--telegram)" name="Telegram" meta="@MesinViralBot" badge={okBadge("Connected")}>
+        <div className="fld-row"><div className="k">Chat ID</div><div style={{ display: "flex", gap: ".5rem" }}><input className="input input-mono" defaultValue="-1001234567890" /><button className="btn btn-secondary"><Bi id="Test" en="Test" /></button></div></div>
+        <a href="#" style={{ color: "var(--brand)", fontSize: "var(--text-xs)", textDecoration: "none" }}>📖 <Bi id="Cara setup Telegram chat ID" en="How to set up Telegram chat ID" /></a>
+      </NotifCard>
+      <NotifCard mark="@" color="var(--info)" name="Email" meta="riko@misterisamudra.id" badge={okBadge("Active")}>
+        <div className="fld-row"><div className="k"><Bi id="Email tujuan" en="Destination email" /></div><div style={{ display: "flex", gap: ".5rem" }}><input className="input" defaultValue="riko@misterisamudra.id" /><button className="btn btn-secondary"><Bi id="Test email" en="Test email" /></button></div></div>
+      </NotifCard>
+      <NotifCard mark="{}" color="var(--surface-3)" name="Webhook" meta="" badge={<span className="badge badge-brand" style={{ marginLeft: "auto" }}>Enterprise</span>}>
+        <div className="fld-row"><div className="k">URL</div><input className="input input-mono" placeholder="https://..." /></div>
+        <div className="fld-row"><div className="k">HMAC secret</div><input className="input input-mono" type="password" placeholder="whsec_..." /></div>
+      </NotifCard>
+      <div className="card" style={{ marginTop: "1.25rem" }}><div className="card-head"><h3 className="card-title"><Bell size={15} /> <Bi id="Matriks event" en="Event matrix" /></h3></div>
+        <div style={{ overflowX: "auto" }}><table className="tbl"><thead><tr><th>Event</th>{cols.map((c) => <th key={c} style={{ textAlign: "center" }}>{c}</th>)}</tr></thead>
+          <tbody>{events.map(([e, n, vals]) => <tr key={n}><td><span style={{ color: "var(--text-primary)" }}>{e} {n}</span></td>{vals.map((v, i) => <td key={i} style={{ textAlign: "center" }}><label className="switch" style={{ width: "1.75rem", height: "1rem" }}><input type="checkbox" defaultChecked={!!v} /><span className="track" /><span className="thumb" style={{ width: ".75rem", height: ".75rem" }} /></label></td>)}</tr>)}</tbody></table></div>
+      </div>
+      <details className="card card-pad" style={{ marginTop: "1rem" }}><summary style={{ cursor: "pointer", fontWeight: 600, fontSize: "var(--text-sm)", listStyle: "none", display: "flex", alignItems: "center", gap: ".5rem" }}><ChevronDown size={16} /> <Bi id="Quiet hours" en="Quiet hours" /> <span className="badge badge-brand" style={{ fontSize: ".625rem" }}>Pro+</span></summary>
+        <div style={{ marginTop: "1rem" }}><div className="fld-row"><div className="k"><Bi id="Aktifkan quiet hours" en="Enable quiet hours" /><div className="sub"><Bi id="Notif di-batch, dikirim pagi hari" en="Batched, sent in the morning" /></div></div><label className="switch"><input type="checkbox" defaultChecked /><span className="track" /><span className="thumb" /></label></div>
+          <div className="fld-row"><div className="k"><Bi id="Rentang waktu" en="Time range" /></div><div style={{ display: "flex", gap: ".5rem", alignItems: "center" }}><input className="input" defaultValue="22:00" style={{ width: 90 }} /><span className="muted">—</span><input className="input" defaultValue="07:00" style={{ width: 90 }} /><span className="muted" style={{ fontSize: "var(--text-xs)" }}>WIB</span></div></div></div>
+      </details>
+    </>
+  );
+}
+
+type Panel = { title: { id: string; en: string }; desc: { id: string; en: string }; badge?: React.ReactNode; Body: () => React.ReactElement };
 const PANELS: Record<string, Panel> = {
   "ai-engines": { title: { id: "Mesin AI", en: "AI Engines" }, desc: { id: "Pilih provider & model per tugas produksi. Hubungkan API key milikmu (BYOK).", en: "Choose provider & model per production task. Connect your own API keys (BYOK)." }, Body: AiEngines },
   "api-keys": { title: { id: "API Keys", en: "API Keys" }, desc: { id: "Kelola semua API key. Dienkripsi Fernet AES-128, tidak pernah di-log.", en: "Manage all API keys. Encrypted with Fernet AES-128, never logged." }, Body: ApiKeys },
   "voice": { title: { id: "Suara", en: "Voice" }, desc: { id: "Voice difilter oleh bahasa konten channel aktif. Tetapkan voice default per niche.", en: "Voices are filtered by the active channel's content language. Set a default voice per niche." }, Body: Voice },
   "visual": { title: { id: "Visual", en: "Visual" }, desc: { id: "Pilih preset gaya visual & sesuaikan prompt per niche.", en: "Choose a visual style preset & customize prompts per niche." }, Body: Visual },
   "music": { title: { id: "Musik", en: "Music" }, desc: { id: "Library musik latar. Mesin memilih mood otomatis sesuai niche & performa.", en: "Background music library. The engine auto-selects mood by niche & performance." }, Body: MusicPanel },
+  "captions": { title: { id: "Teks", en: "Captions" }, desc: { id: "Atur gaya subtitle karaoke yang muncul di video. Preview real-time.", en: "Style the karaoke subtitles shown in your videos. Real-time preview." }, Body: Captions },
+  "quality": { title: { id: "Gerbang Kualitas", en: "Quality Gate" }, badge: <span className="badge badge-brand" style={{ fontSize: ".625rem" }}>Pro+</span>, desc: { id: "Tentukan threshold skor viral, retry, dan aksi saat gagal.", en: "Set viral-score threshold, retries, and action on failure." }, Body: Quality },
+  "hashtags": { title: { id: "Hashtags", en: "Hashtags" }, desc: { id: "Kelola pool hashtag per niche untuk metadata YouTube.", en: "Manage the hashtag pool per niche for YouTube metadata." }, Body: Hashtags },
+  "niches": { title: { id: "Niches", en: "Niches" }, desc: { id: "3 dari 4 niche aktif (Pro plan). Aktifkan dari catalog atau request niche custom.", en: "3 of 4 niches active (Pro plan). Activate from catalog or request a custom niche." }, Body: Niches },
+  "notifications": { title: { id: "Notifikasi", en: "Notifications" }, desc: { id: "Pilih event apa yang dikirim ke channel mana.", en: "Choose which events go to which channels." }, Body: Notifications },
 };
 
 type NavItem = { grp: { id: string; en: string } } | { id: string; Icon: typeof Sparkles; t: { id: string; en: string }; lock?: boolean };
@@ -285,7 +585,7 @@ export default function ConfigTabPage() {
       <main className="cfg-main">
         <div className="cfg-head">
           {panel ? <>
-            <h1><HeadIcon size={22} /> <Bi id={panel.title.id} en={panel.title.en} /></h1>
+            <h1><HeadIcon size={22} /> <Bi id={panel.title.id} en={panel.title.en} />{panel.badge}</h1>
             <p><Bi id={panel.desc.id} en={panel.desc.en} /></p>
           </> : <h1><HeadIcon size={22} /> {meta ? <Bi id={meta.t.id} en={meta.t.en} /> : null}</h1>}
         </div>

@@ -60,4 +60,4 @@
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-@media (max-width: 960px){ .cfg-layout{ grid-template-columns:1fr; } .cfg-nav{ position:static; flex-direction:row; overflow-x:auto; } .cfg-grp{ display:none; } .grid-2,.grid-3,.grid-4{ grid-template-columns:1fr; } .fld-row{ grid-template-columns:1fr; gap:0.5rem; } }
+@media (max-width: 960px){ .cfg-layout{ grid-template-columns:1fr; } .cfg-nav{ position:static; flex-direction:row; overflow-x:auto; } .cfg-grp{ display:none; } .grid-2,.grid-3,.grid-4,.cap-grid{ grid-template-columns:1fr !important; } .fld-row{ grid-template-columns:1fr; gap:0.5rem; } }
