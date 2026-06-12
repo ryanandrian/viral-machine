@@ -22,7 +22,13 @@ Setiap tenant: login → dashboard → config API keys → scheduler → lihat l
 
 **Track BACKEND:** ⏸️ Menunggu approval user untuk start **Phase 0** (lihat roadmap 12-phase di bawah).
 
-**Track FRONTEND:** 🛠️ Implementasi #1 (Fondasi) **DONE + tervalidasi (2026-06-11)** — `apps/web` Next.js 16.2.9 + React 19 + Tailwind v4; design system (`tokens.css`+`components.css`) ter-port; tema dark + lang ID default; `next build` ✅ pass (Hybrid terbukti). **Next: next-themes (toggle) + next-intl (ID/EN) + shadcn init + `MVShell`→layout, lalu screen pertama D5 Run Detail.** ⚠️ Next 16 ada breaking changes (`apps/web/AGENTS.md`) — konsultasi `node_modules/next/dist/docs/` sebelum kerja routing/RSC. Detail [[plan_frontend_via_claude_design]].
+**Track FRONTEND:** 🛠️ in-progress (`apps/web` Next.js 16 + React 19 + Tailwind v4, Hybrid). **DONE + tervalidasi (build PASS + curl 200):**
+- ✅ Fondasi: design system port (tokens+components+app-shell), tema dark, lang ID — `36fa616`
+- ✅ App Shell (sidebar+topbar `MVShell`) + theme/lang toggle + `/dashboard` placeholder — `ed1b2b5`
+- ✅ D5 Run Detail (`/runs/[id]`) — pipeline live + log streaming + cost rail — `97d6f1c`
+- ✅ D4 Runs List (`/runs`) — tabel + filter status + drawer slide-in → D5 — (commit ini)
+
+**Next:** D1 Dashboard penuh / A1 Landing / next-intl (ID/EN proper) / shadcn init / **PWA installable** (manifest+SW) / responsive harmonisasi. Data: mock → Supabase-first (RLS) saat backend mendarat. ⚠️ Next 16 breaking changes (`apps/web/AGENTS.md`) — baca `node_modules/next/dist/docs/` sebelum routing/middleware (next-intl). Detail [[plan_frontend_via_claude_design]].
 
 > Frontend & backend jalan **paralel** — frontend pakai MOCK DATA dulu (tidak nunggu backend), wire ke Supabase saat phase backend mendarat. Frontend = Phase 9-10 di roadmap, tapi DIMULAI lebih awal secara paralel atas keputusan user.
 
