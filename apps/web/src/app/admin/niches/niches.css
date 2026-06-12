@@ -1,0 +1,33 @@
+/* E2.3 Admin Niche Library — port dari design-source/Admin Niches.html <style>. Prefix nl-. */
+.nl-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.nl-head h1 { font-size: var(--text-3xl); font-weight: 700; letter-spacing: -0.02em; margin: 0 0 0.25rem; }
+.nl-stat-line { display: flex; gap: 1.25rem; flex-wrap: wrap; font-size: var(--text-sm); color: var(--text-secondary); }
+.nl-stat-line b { color: var(--text-primary); }
+.nl-filters { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 1.25rem 0; }
+.nl-tbl tbody tr { cursor: pointer; }
+.nl-mood-mini { display: inline-flex; width: 36px; height: 24px; border-radius: 4px; overflow: hidden; vertical-align: middle; margin-right: 0.5rem; }
+.nl-mood-mini span { flex: 1; }
+
+.nl-scrim { position: fixed; inset: 0; background: rgba(0,0,0,0.5); opacity: 0; pointer-events: none; transition: opacity var(--d-mid); z-index: 40; }
+.nl-scrim.open { opacity: 1; pointer-events: auto; }
+.nl-drawer { position: fixed; top: 0; right: 0; height: 100vh; width: 540px; max-width: 96vw; background: var(--bg-elevated); border-left: 1px solid var(--border); box-shadow: var(--shadow-xl); transform: translateX(100%); transition: transform var(--d-mid) var(--ease-out); z-index: 41; display: flex; flex-direction: column; }
+.nl-drawer.open { transform: none; }
+.nl-drawer-head { padding: 1.125rem 1.25rem; border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; gap: 0.75rem; }
+.nl-drawer-tabs { display: flex; gap: 0.125rem; padding: 0 1.25rem; border-bottom: 1px solid var(--border-subtle); overflow-x: auto; }
+.nl-dtab { padding: 0.75rem 0.625rem; font-size: var(--text-xs); font-weight: 500; color: var(--text-muted); background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap; margin-bottom: -1px; }
+.nl-dtab.active { color: var(--brand); border-bottom-color: var(--brand); }
+.nl-dpanel { padding: 1.25rem; overflow-y: auto; flex: 1; }
+.nl-fld { margin-bottom: 1rem; }
+.nl-json { font-family: var(--font-mono); font-size: var(--text-xs); line-height: 1.7; background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 0.875rem; color: var(--text-secondary); white-space: pre; overflow-x: auto; }
+.nl-chip-pool { display: flex; flex-wrap: wrap; gap: 0.375rem; }
+.nl-chip { display: inline-flex; align-items: center; gap: 0.3125rem; padding: 0.25rem 0.5rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); font-size: var(--text-xs); }
+.nl-chip .ct { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.nl-radio-card { display: flex; align-items: center; gap: 0.625rem; padding: 0.625rem 0.875rem; border: 1px solid var(--border); border-radius: var(--r-md); margin-bottom: 0.5rem; cursor: pointer; }
+.nl-radio-card.sel { border-color: var(--brand); background: var(--brand-soft); }
+.nl-swrow { display: flex; gap: 0.5rem; }
+.nl-swrow span { width: 30px; height: 30px; border-radius: var(--r-sm); border: 1px solid var(--border); }
+
+.nl-section-title { font-size: var(--text-lg); font-weight: 600; margin: 2rem 0 1rem; display: flex; align-items: center; gap: 0.5rem; }
+.nl-rel-grid { display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 0.5rem; }
+.nl-rel-card { flex: 0 0 220px; border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; background: var(--surface-1); }
+.nl-rel-card .mood { height: 56px; display: flex; } .nl-rel-card .mood span { flex: 1; }

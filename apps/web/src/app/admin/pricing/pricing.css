@@ -1,0 +1,36 @@
+/* E5 Admin Pricing Config — port dari design-source/Admin Pricing.html <style>. Prefix pr-. */
+.pr-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.pr-head h1 { font-size: var(--text-3xl); font-weight: 700; letter-spacing: -0.02em; margin: 0 0 0.25rem; }
+.pr-stat-line { display: flex; gap: 1.25rem; flex-wrap: wrap; font-size: var(--text-sm); color: var(--text-secondary); }
+.pr-stat-line b { color: var(--text-primary); }
+.pr-filters { display: flex; gap: 0.625rem; flex-wrap: wrap; margin: 1.25rem 0 1rem; }
+.pr-layout { display: grid; grid-template-columns: 1fr 280px; gap: 1.25rem; align-items: start; }
+.pr-tbl td.key { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-primary); }
+.pr-tbl tbody tr { cursor: pointer; }
+.pr-val-edit { font-family: var(--font-mono); font-variant-numeric: tabular-nums; background: var(--bg-elevated); border: 1px solid transparent; border-radius: var(--r-sm); padding: 0.25rem 0.5rem; cursor: text; transition: border-color var(--d-fast); display: inline-block; min-width: 80px; }
+.pr-val-edit:hover { border-color: var(--border-strong); }
+.pr-val-edit:focus { outline: none; border-color: var(--brand); background: var(--bg); }
+
+.pr-quick-card { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 1.25rem; margin-bottom: 1rem; }
+.pr-quick-card h3 { font-size: var(--text-sm); font-weight: 600; margin: 0 0 0.875rem; }
+.pr-qrow { display: flex; align-items: center; gap: 0.5rem; padding: 0.4375rem 0; font-size: var(--text-sm); }
+.pr-qrow .nm { color: var(--text-secondary); flex: 1; }
+
+.pr-api-panel { position: sticky; top: 72px; }
+.pr-api-doc { font-family: var(--font-mono); font-size: var(--text-xs); line-height: 1.7; background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 0.875rem; color: var(--text-secondary); white-space: pre-wrap; word-break: break-all; }
+
+.pr-save-toast { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%) translateY(120%); background: var(--surface-3); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 0.75rem 1rem; box-shadow: var(--shadow-lg); display: flex; align-items: center; gap: 0.5rem; font-size: var(--text-sm); z-index: 60; transition: transform var(--d-mid) var(--ease-out); }
+.pr-save-toast.show { transform: translateX(-50%) translateY(0); }
+
+.pr-scrim { position: fixed; inset: 0; background: rgba(0,0,0,0.5); opacity: 0; pointer-events: none; transition: opacity var(--d-mid); z-index: 40; }
+.pr-scrim.open { opacity: 1; pointer-events: auto; }
+.pr-drawer { position: fixed; top: 0; right: 0; height: 100vh; width: 480px; max-width: 95vw; background: var(--bg-elevated); border-left: 1px solid var(--border); box-shadow: var(--shadow-xl); transform: translateX(100%); transition: transform var(--d-mid) var(--ease-out); z-index: 41; display: flex; flex-direction: column; }
+.pr-drawer.open { transform: none; }
+.pr-drawer-head { padding: 1.125rem 1.25rem; border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: space-between; }
+.pr-drawer-tabs { display: flex; gap: 0.125rem; padding: 0 1.25rem; border-bottom: 1px solid var(--border-subtle); }
+.pr-dtab { padding: 0.75rem 0.625rem; font-size: var(--text-xs); font-weight: 500; color: var(--text-muted); background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; margin-bottom: -1px; }
+.pr-dtab.active { color: var(--brand); border-bottom-color: var(--brand); }
+.pr-dpanel { padding: 1.25rem; overflow-y: auto; flex: 1; }
+.pr-impact { display: flex; gap: 0.625rem; padding: 0.875rem 1rem; background: var(--warning-soft); border: 1px solid color-mix(in srgb,var(--warning) 25%,transparent); border-radius: var(--r-md); font-size: var(--text-sm); margin-top: 1rem; }
+
+@media (max-width:1000px){ .pr-layout{ grid-template-columns:1fr; } .pr-api-panel{ position:static; } }
