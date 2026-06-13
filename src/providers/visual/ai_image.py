@@ -67,8 +67,8 @@ class AIImageProvider(VisualProvider):
             "model_id": _row["model_id"],
             "size":     (_row.get("default_params") or {}).get("size", "1024x1536"),
         }
-        self.image_quality      = config.get("image_quality", "low")
-        self.niche              = config.get("niche", "universe_mysteries")
+        self.image_quality      = config.get("image_quality") or "low"  # tenant setting (DB default 'low')
+        self.niche              = config.get("niche") or ""
         # Niche visual data — dari Supabase via TenantRunConfig (tidak hardcode)
         self.niche_visual_style     = config.get("niche_visual_style") or {}
         self.niche_visual_fallbacks = config.get("niche_visual_fallbacks") or []

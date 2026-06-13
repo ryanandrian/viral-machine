@@ -53,7 +53,7 @@ class OpenAITTSProvider(TTSProvider):
                 "OpenAI TTS membutuhkan API key. "
                 "Set tts_api_key atau visual_api_key di tenant_configs Supabase."
             )
-        niche = config.get("niche", "universe_mysteries")
+        niche = config.get("niche") or ""
         if not config.get("tts_voice"):
             self.voice = OPENAI_VOICES.get(niche, "onyx")
 

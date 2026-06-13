@@ -79,7 +79,7 @@ class ElevenLabsProvider(TTSProvider):
                 "ElevenLabs membutuhkan API key. "
                 "Set ELEVENLABS_API_KEY di .env atau tts_api_key di tenant_configs."
             )
-        niche = config.get("niche", "universe_mysteries")
+        niche = config.get("niche") or ""
 
         # Priority: tts_voice_per_niche → tts_voice → niche default
         voice_per_niche = config.get("tts_voice_per_niche", {})
@@ -108,7 +108,7 @@ class ElevenLabsProvider(TTSProvider):
         try:
             from elevenlabs import VoiceSettings
             client = AsyncElevenLabs(api_key=self.api_key)
-            niche  = self.config.get("niche", "universe_mysteries")
+            niche  = self.config.get("niche") or ""
 
             # Config-driven: baca dari Supabase tts_voice_settings JSONB
             # Fallback ke nilai default jika belum ada di Supabase config

@@ -217,10 +217,12 @@ class VisualAssembler:
                 "visual_ai_model":        visual_mode.split(":", 1)[1] if ":" in visual_mode else "",
                 "visual_api_key":         run_config.get("visual_api_key"),
                 "llm_api_key":            run_config.get("llm_api_key") or "",
-                "llm_provider":           run_config.get("llm_provider", "openai"),
+                "llm_library":            run_config.get("llm_library") or "",
+                "llm_provider":           run_config.get("llm_provider") or "",
+                "llm_models":             run_config.get("llm_models") or {},
                 "niche_visual_style":     run_config.get("niche_visual_style") or {},
                 "niche_visual_fallbacks": run_config.get("niche_visual_fallbacks") or [],
-                "image_quality":          run_config.get("image_quality", "low"),
+                "image_quality":          run_config.get("image_quality") or "",
             }
             provider  = AIImageProvider(config)
             keywords  = provider.extract_keywords_from_script(script, tenant_config.niche)
@@ -351,11 +353,13 @@ class VisualAssembler:
                 "visual_max_clip_mb":     rc.visual_max_clip_mb,
                 "visual_api_key":         rc.visual_api_key,
                 "llm_api_key":            rc.llm_api_key,
-                "llm_provider":           getattr(rc, "llm_provider", "openai"),
+                "llm_library":            getattr(rc, "llm_library", None) or "",
+                "llm_provider":           getattr(rc, "llm_provider", None) or "",
+                "llm_models":             getattr(rc, "llm_models", None) or {},
                 "niche_visual_style":     getattr(rc, "niche_visual_style", {}) or {},
                 "niche_visual_fallbacks": getattr(rc, "niche_visual_fallbacks", []) or [],
                 "is_developer":           getattr(rc, "is_developer", False),
-                "image_quality":          getattr(rc, "image_quality", "low"),
+                "image_quality":          getattr(rc, "image_quality", None) or "",
             }
         except Exception:
             return {
@@ -363,7 +367,9 @@ class VisualAssembler:
                 "visual_max_clip_mb":     150,
                 "visual_api_key":         None,
                 "llm_api_key":            None,
-                "llm_provider":           "openai",
+                "llm_library":            "",
+                "llm_provider":           "",
+                "llm_models":             {},
                 "niche_visual_style":     {},
                 "niche_visual_fallbacks": [],
                 "is_developer":           False,

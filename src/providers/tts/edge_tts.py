@@ -60,7 +60,7 @@ class EdgeTTSProvider(TTSProvider):
         super().__init__(config)
         # Voice bisa di-override dari tenant_configs.tts_voice
         # Jika tidak ada di config, fallback ke niche voice atau default
-        niche = config.get("niche", "universe_mysteries")
+        niche = config.get("niche") or ""
         niche_data = NICHE_VOICES.get(niche, NICHE_VOICES["universe_mysteries"])
 
         if config.get("tts_voice"):

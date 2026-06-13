@@ -68,7 +68,7 @@ class PexelsProvider(VisualProvider):
                 "Pexels membutuhkan API key. "
                 "Set visual_api_key di tenant_configs atau PEXELS_API_KEY di .env."
             )
-        self.niche = config.get("niche", "universe_mysteries")
+        self.niche = config.get("niche") or ""
         # Gunakan hard limit jika config lebih besar dari HARD_SIZE_LIMIT_MB
         self.max_clip_size_mb = min(
             config.get("visual_max_clip_mb", HARD_SIZE_LIMIT_MB),
