@@ -14,8 +14,8 @@
 
 **🎯 THREAD AKTIF = BACKEND Phase 1 (SOFTCODE AI Config). Frontend track ✅ DITUTUP (28 screen ter-port).**
 - **✅ PHASE 1 SELESAI (2026-06-13):** 1.1 LLM softcode+catalog · 1.2 niche_fallback fail-loud · 1.3 image catalog→DB · 1.4 TTS chain config-driven · 1.5 music/R2 · 1.6 bugfix (`_generate_image` fixed; dispatcher-tz re-klasifikasi Phase 5). Semua AI config-driven (katalog DB `ai_providers`/`ai_models`), nol silent cross-provider, app bersih + re-audit hardcode bersih. **Committed branch `v2-backend`** (8 commit); `main` aman; production-run LLM HIJAU; VPS-pull terverifikasi.
-- **✅ PHASE 2 SELESAI (2026-06-13):** `src/exceptions.py` hierarki `PipelineError` + typed raises + catch kategori/step. (DB-persist `pipeline_errors` → Phase 3, tabel belum ada.)
-- **Berikutnya PER RENCANA (jangan keluar jalur):** **Phase 3 — Pipeline Run Logs (DB-based)**: tabel `pipeline_run_logs` (RLS-ready) + loguru sink batch-insert + konsolidasi `pipeline_errors`/`qc_failed_videos` jadi view. Follow-up tertunda: §"AI PROVIDER CATALOG" (A/B/C) + gate enforcement niche (Phase 5/9) + TTS voice catalog-wiring + **Bug 1 dispatcher-tz (Phase 5)**.
+- **✅ PHASE 2 & 3 SELESAI (2026-06-13):** P2 = `src/exceptions.py` hierarki `PipelineError` + typed raises. P3 = `pipeline_run_logs` (migr 0006, RLS-ready) + `db_log_sink` (loguru→DB, enqueue, live-tail <5s) + worker context-wire (menutup DB-persist error P2).
+- **Berikutnya PER RENCANA (jangan keluar jalur):** **Phase 4 — BYO-CC + Auth foundation**: `tenant_credentials` (Fernet `src/utils/crypto.py`), OAuth dari DB, mandatory key validation, migrasi `tenant_id` "ryan_andrian"→`auth.uid()` ([[decisions_auth_rbac]]). Follow-up tertunda: §"AI PROVIDER CATALOG" (A/B/C) + gate niche (P5/9) + TTS voice catalog + **Bug 1 dispatcher-tz (P5)**.
 - **Gate user:** (1) real production-run ke v2; (2) commit/push fase 1.1.
 
 **JANGAN diulang (sudah dikerjakan):** Phase 0 audit ✅ (selesai 2026-06-12, hasil di journal + rekonsiliasi Phase 1.1); framing v1/v2 (terkunci); **frontend track ✅ semua screen desain ter-port (28 done)**. **JANGAN** usulkan deploy backend ke VPS — backend v2 belum mulai & DB clone belum ada.
@@ -171,7 +171,7 @@ Next.js 15 (App Router) + shadcn/ui + Tailwind + tremor.so + Geist Sans + next-i
 | **0** | Audit & Persiapan | Verifikasi semua klaim SOFTCODE_AI_CONFIG vs kode | – | ✅ DONE (read-only, 2026-06-12) — hasil di journal + rekonsiliasi di §1.1 |
 | **1** | SOFTCODE AI Config | Hilangkan hardcode AI, hapus silent fallback (6 sub-phase) | 4-6 jam | ✅ **DONE (2026-06-13)** — 1.1-1.5 softcode + 1.6 bugfix (Bug 2 `_generate_image` fixed). Bug 1 dispatcher-timezone = **pg_cron DB v1 (bukan kode repo)** → re-klasifikasi **Phase 5** (publisher v2 timezone-aware). |
 | **2** | Error Mgmt Terpusat | `src/exceptions.py` + structured error flow | 2 jam | ✅ **DONE (2026-06-13)** — hierarki PipelineError + typed raises + catch kategori/step. DB-persist (`pipeline_errors`) → Phase 3 (tabel belum ada). |
-| **3** | Pipeline Run Logs (DB) | `pipeline_run_logs` table, RLS-ready, UI-facing | 2 jam | 🔒 Blocked by Phase 2 |
+| **3** | Pipeline Run Logs (DB) | `pipeline_run_logs` table, RLS-ready, UI-facing | 2 jam | ✅ **DONE (2026-06-13)** — tabel + `db_log_sink` loguru→DB (per-record, enqueue) + worker context-wire. Menutup DB-persist error Phase 2. |
 | **4** | BYO-CC Phase 1 | `tenant_credentials` + Fernet + auth foundation | 1 minggu | 🔒 Blocked by Phase 3 |
 | **5** | Multi-Channel | `channels` table, channel_id propagation | 1 minggu | 🔒 Blocked by Phase 4 |
 | **6** | 🥇 Self-Learning + Diversity Engine | **CORE MOAT** — pull YT Analytics 24-72h post-publish + adapt config; voice/hook/niche rotation | 2 minggu | 🔒 Blocked by Phase 5 |
@@ -448,6 +448,13 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 
 **Validation gate:** pipeline run → events appear in DB dalam < 5 detik dari emit.
 
+> ### ✅ PHASE 3 STATUS — DONE (2026-06-13)
+> - **Migrasi `0006`**: tabel `pipeline_run_logs` (tenant_id/channel_id-placeholder/queue_id/run_id/level/step/category/message/metadata jsonb), index, **RLS forward-compatible** (`SELECT tenant_id=auth.uid()`; dormant s/d Phase 4; INSERT hanya service_role). Applied v2.
+> - **`src/utils/db_log_sink.py`**: loguru sink → `pipeline_run_logs`. **enqueue=True** (thread bg, tak memblok render 35 mnt) + **flush per-record** (live-tail <5s). Konteks (tenant_id/queue_id/run_id) dari `record["extra"]`; **filter**: hanya log ber-`tenant_id` (skip noise global). Best-effort (gagal flush → stderr, tak crash pipeline).
+> - **Worker wiring**: `setup_db_logging()` di `main()`; call `_run_production` di-wrap `logger.contextualize(tenant_id, queue_id)` + `flush_logs()` (drain enqueue) di `finally`. queue_id = kunci grouping run (↔ `production_runs`).
+> - **Konsolidasi `pipeline_errors`/`qc_failed_videos` → view:** N/A (tabel tsb tak ada di v2; `pipeline_run_logs` = sumber baru). **Menutup DB-persist error yang di-defer Phase 2** (error typed → log ber-kategori → DB).
+> - **Bukti:** compile ✅ · sink build-row + filter konteks ✅ · shape valid roundtrip ke `pipeline_run_logs` ✅. **Catatan:** INSERT produksi butuh **service_role** (anon ke-block RLS — by design); e2e REST insert belum dites (tak ada service_role key di dev).
+
 ---
 
 ## 🔐 PHASE 4 — BYO-CC Phase 1 + Auth foundation
@@ -582,6 +589,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 | 2026-06-13 | 1.2 (niche_fallback) | — (struktural) | ✅ PARTIAL | Applied v2: migr 0003 (`niche_fallback` nullable). Best-practice: gate-enforcement + fail-loud, no global default. compile OK · grep site produksi=0 · resolver OK · `ryan_andrian` niche non-empty → no breakage. Real production-run BELUM. |
 | 2026-06-13 | 1.1 (LLM + AI Catalog) | — (round-trip) | ✅ **HIJAU** | **Production-run LLM-path GREEN.** v2 ryan dibelokkan ke OpenAI (key Anthropic clone-v1 mati → 401; OpenAI key valid di `visual_api_key`). catalog(DB)→`OpenAIChatAdapter`("OpenAI GPT" dari DB)→**REAL OpenAI API**→`{"ok":true,"engine":"openai"}` parsed ✓. **Membuktikan: ganti provider = 1 baris config DB (`llm_library`), nol perubahan kode.** Key Anthropic invalid = isu kredensial bukan bug. |
 | 2026-06-13 | (config v2) | — | ✅ INTENDED | **v2 ryan_andrian LLM = OpenAI** (pilihan owner): `llm_library=openai`, `llm_api_key←visual_api_key`, `llm_models→gpt-4o/4o-mini`. **Bukan temporary** — ganti ke Claude = **test post-go-live, DI LUAR plan** (key Anthropic dilepas dari plan per arahan owner 2026-06-13). **v1 TIDAK disentuh.** |
+| 2026-06-13 | **Phase 3** (Run Logs DB) | — (struktural) | ✅ | Migr 0006 `pipeline_run_logs` (RLS-ready) + `db_log_sink` (loguru→DB, enqueue, per-record, filter konteks) + worker contextualize/flush. compile OK · sink row+filter OK · shape roundtrip OK. INSERT produksi=service_role (anon block RLS). |
 | 2026-06-13 | **Phase 2** (Error Mgmt) | — (struktural) | ✅ | `src/exceptions.py` hierarki PipelineError + unifikasi LLM/TTS/VisualError (re-export, import lama jalan) + 6 raise pipeline → typed + catch kategori/step. compile OK · `raise Exception(`=0 · runtime isinstance/kategori OK. DB-persist `pipeline_errors`→Phase 3 (tabel belum ada). |
 | 2026-06-13 | 1.6 (bugfix) → **Phase 1 SELESAI** | — (struktural) | ✅ | Bug 2 `_generate_image` signature FIXED (compile + arity match). Bug 1 dispatcher-tz = pg_cron DB v1 (bukan repo) → re-klasifikasi Phase 5. Phase 1 SOFTCODE komplit (1.1-1.6). |
 | 2026-06-13 | 1.5 (music/R2) | — (struktural) | ✅ | Migr 0005 (`music_default_mood`). mood `'dramatic'` → config (threaded); R2_BUCKET default `'viral-machine'` dihapus → fail-loud. compile OK · grep dramatic/bucket=0 · runtime mood threading OK. Real music-gen BELUM (R2 keys absen di .env dev). |

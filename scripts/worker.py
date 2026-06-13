@@ -154,7 +154,14 @@ def _poll(sb) -> bool:
         job = res.data[0]
 
         if job["job_type"] == "production":
-            _run_production(job, sb)
+            # Phase 3: bind konteks tenant_id+queue_id → semua log (incl pipeline)
+            # ditulis ke pipeline_run_logs; flush tail di akhir job.
+            from src.utils.db_log_sink import flush_logs
+            with logger.contextualize(tenant_id=job["tenant_id"], queue_id=job["id"]):
+                try:
+                    _run_production(job, sb)
+                finally:
+                    flush_logs()
         else:
             logger.warning(f"[Worker] Job type tidak dikenal: {job['job_type']} — skip")
             sb.table("pipeline_queue").update({
@@ -176,6 +183,10 @@ def main():
     logger.info(f"[Worker] Poll interval : {POLL_INTERVAL}s")
     logger.info(f"[Worker] Stale timeout : {STALE_THRESHOLD}m")
     logger.info("[Worker] ══════════════════════════════════════════")
+
+    # Phase 3: aktifkan DB logging (pipeline_run_logs). Butuh service_role key utk INSERT (RLS).
+    from src.utils.db_log_sink import setup_db_logging
+    setup_db_logging()
 
     sb      = _get_supabase()
     running = True
