@@ -105,6 +105,16 @@ def _get_section_timing(niche: str) -> dict:
     return _DEFAULT_SECTION_TIMING.copy()
 
 
+def _scale_section_timing(section_timing: dict, target_seconds: float) -> dict:
+    """Skala proporsional section_timing agar total ≈ target_seconds (Duration Preset).
+    Pertahankan rasio antar-section; min 1 dtk/section. Sesuai compression-mapping
+    MULTI_FORMAT_STUDIO §3 (skema 8-section TETAP, durasi diskalakan ke preset;
+    pengelompokan ke N visual-beat = urusan sisi visual, bukan struktur script)."""
+    total = sum(section_timing.values()) or 1
+    factor = target_seconds / total
+    return {k: max(1, round(v * factor)) for k, v in section_timing.items()}
+
+
 def _get_profile(niche: str) -> dict:
     """
     Load voice profile dari niche registry (Supabase-driven, no hardcode).
@@ -192,10 +202,12 @@ def _build_insights_block(insights: dict) -> str:
     return "\n".join(lines)
 
 
-def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, insights_block=None):
+def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, insights_block=None,
+                       preset_seconds=None, format_wps=None):
     """
     Build prompt. Jika feedback ada (dari retry), sisipkan sebagai instruksi perbaikan.
     niche_visual_style: dict dari tabel niches (base_style, color_palette, atmosphere).
+    preset_seconds/format_wps: Duration Preset per-channel (MULTI_FORMAT §3). None → perilaku lama.
     """
     profile        = _get_profile(niche)
     niches         = get_niches()
@@ -203,9 +215,13 @@ def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, ins
         (v for v in niches.values() if v.get("is_active", True)), {}
     )
     section_timing = _get_section_timing(niche)
-    target_duration = sum(section_timing.values())
-    WPS            = 2.4
-    words          = {k: max(4, round(v * WPS)) for k, v in section_timing.items()}
+    # Duration Preset (per-channel, opsional): skalakan timing ke target + WPS per-format (§3).
+    # preset_seconds/format_wps None → perilaku lama (timing niche, WPS 2.4). Non-breaking.
+    if preset_seconds:
+        section_timing = _scale_section_timing(section_timing, preset_seconds)
+    WPS             = float(format_wps) if format_wps else 2.4
+    target_duration = int(preset_seconds) if preset_seconds else sum(section_timing.values())
+    words           = {k: max(4, round(v * WPS)) for k, v in section_timing.items()}
 
     feedback_block = ""
     if feedback:
@@ -404,7 +420,8 @@ class ScriptEngine:
         return script
 
     def _generate_one(self, provider, model, topic, niche, attempt,
-                      niche_visual_style=None, feedback=None, insights_block=None):
+                      niche_visual_style=None, feedback=None, insights_block=None,
+                      preset_seconds=None, format_wps=None):
         """Satu attempt generate script via LLMProvider (config-driven).
 
         Provider memegang SDK client + format API spesifik vendor — di sini tak
@@ -414,11 +431,14 @@ class ScriptEngine:
         from src.providers.llm import LLMError
 
         section_timing = _get_section_timing(niche)
+        if preset_seconds:   # selaras dgn prompt (validate pakai timing yg sama)
+            section_timing = _scale_section_timing(section_timing, preset_seconds)
         try:
             raw = provider.complete(
                 system=_build_system_prompt(),
                 user=_build_user_prompt(
-                    topic, niche, niche_visual_style, feedback, insights_block
+                    topic, niche, niche_visual_style, feedback, insights_block,
+                    preset_seconds=preset_seconds, format_wps=format_wps,
                 ),
                 model=model,
                 temperature=1.0,
@@ -467,6 +487,9 @@ class ScriptEngine:
         # API key + SDK client — di sini tak ada nama SDK/provider/model.
         llm          = run_config.get_llm_provider()      if run_config else None
         script_model = run_config.llm_model_for("script") if run_config else ""
+        # Duration Preset per-channel (opsional). None s/d F2b wiring run_config → non-breaking.
+        preset_seconds = getattr(run_config, "duration_preset", None) if run_config else None
+        format_wps     = (run_config.format_wps() if (run_config and hasattr(run_config, "format_wps")) else None)
 
         # S1-B: load channel insights — inject ke semua attempt jika grade cukup
         insights       = self._load_insights(tenant_config.tenant_id)
@@ -515,6 +538,7 @@ class ScriptEngine:
             script = self._generate_one(
                 llm, script_model, topic, tenant_config.niche, attempt,
                 niche_visual_style, feedback, insights_block,
+                preset_seconds=preset_seconds, format_wps=format_wps,
             )
 
             if not script:
