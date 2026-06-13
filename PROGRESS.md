@@ -12,14 +12,15 @@
 - **v2 = YANG KITA KERJAKAN** — SaaS multi-tenant + Multi-Format Studio + frontend. **SEMUA di local dev ini, BELUM ada yang di-pull ke VPS.** Spec = `DESAIN_PRODUK_SAAS.md` + `MULTI_FORMAT_STUDIO.md` + `design-source/`.
 - **DB v2 = punya sendiri** (clone penuh skema+data dari v1) — bukan DB v1. **v2 REPLACE v1 penuh di VPS yang sama saat proven.**
 
-**🎯 THREAD AKTIF = BACKEND Phase 1 (SOFTCODE AI Config). Frontend track ✅ DITUTUP (28 screen ter-port).**
-- **✅ PHASE 1 SELESAI (2026-06-13):** 1.1 LLM softcode+catalog · 1.2 niche_fallback fail-loud · 1.3 image catalog→DB · 1.4 TTS chain config-driven · 1.5 music/R2 · 1.6 bugfix (`_generate_image` fixed; dispatcher-tz re-klasifikasi Phase 5). Semua AI config-driven (katalog DB `ai_providers`/`ai_models`), nol silent cross-provider, app bersih + re-audit hardcode bersih. **Committed branch `v2-backend`** (8 commit); `main` aman; production-run LLM HIJAU; VPS-pull terverifikasi.
-- **✅ PHASE 2 & 3 SELESAI · PHASE 4 in-progress (2026-06-13):** P2 = `src/exceptions.py` hierarki + typed. P3 = `pipeline_run_logs` + `db_log_sink`. **P4.1 ✅** = `crypto.py` (Fernet) + `tenant_credentials` (migr 0007). Rencana desain Phase 4 = `PHASE4_DESIGN.md`.
-- **✅ PHASE 4 SELESAI · PHASE 5 in-progress (2026-06-13):** P4 = BYO-CC + Auth + RLS isolasi (+ security fix) + OAuth-dari-DB + key validation. Alignment: DB lengkap (pricing_config + content_languages dibuat). **P5.1 foundation ✅** (content_inventory + channel_id + s3_buffer util).
-- **Berikutnya:** Phase **5** lanjutan — 5.2 channel_id propagation kode · 5.4 niche-gate · 5.5 optimasi render (bertahap); **5.3 DECOUPLE producer/publisher = design-review** (`PHASE5_DESIGN.md`, risiko tinggi + butuh **S3_SECRET_KEY/S3_BUCKET** dari owner). Menutup Bug 1 dispatcher-tz. Follow-up lain: §"AI PROVIDER CATALOG" (A/B/C) + frontend wiring (P9) + kupon 100% owner (P8).
-- **Gate user:** (1) real production-run ke v2; (2) commit/push fase 1.1.
+**🎯 THREAD AKTIF (2026-06-14) = pasca-Phase 5. Phase 0-5 ✅ SELESAI. Menunggu owner tentukan FRONT berikut.** Frontend track ✅ DITUTUP (28 screen ter-port, mock).
+- **✅ PHASE 1 SELESAI:** softcode AI (LLM/image/TTS/niche/music) config-driven via katalog DB `ai_providers`/`ai_models`; nol silent cross-provider; re-audit hardcode bersih.
+- **✅ PHASE 2 & 3 SELESAI:** `src/exceptions.py` hierarki typed · `pipeline_run_logs` + `db_log_sink`.
+- **✅ PHASE 4 SELESAI:** BYO-CC + Auth (`tenant_id=auth.uid()`) + RLS isolasi (+security fix) + OAuth DB-first + key validation (STEP 0 fail-loud).
+- **✅ PHASE 5 DECOUPLE TERBUKTI END-TO-END NYATA (2026-06-13):** full loop `produce→buffer(Biznet S3)→claim→publish PRIVATE→published` + **upload YouTube asli** (`shorts/7ocW6BPdlVg`, privacy diverifikasi API), slot Asia/Jakarta (Bug1 tuntas), OAuth DB-first. Dibangun+tervalidasi: `content_inventory`·`s3_buffer`·`producer`(semaphore=core)·`publisher`(timezone)·`worker_decoupled.py`·**S3 janitor**·QC config-driven (G-final integritas). S3 secret/bucket RESOLVED. Branch `v2-backend` (32+ commit, pushed); `main` aman.
+- **Berikutnya (FRONT TERBUKA — owner pilih):** (a) **Cutover** (deploy `worker_decoupled.py` ke VPS + flip publik) · (b) **Multi-Format §12-A** preset 30-75s (compression-map + QC relatif ±15%, ikut `MULTI_FORMAT_STUDIO.md §3/§8 — TERVALIDASI, jangan analisa ulang`) · (c) **Phase 6 CORE MOAT** self-learning+diversity · (d) **5.5 optimasi render** 35→13mnt · (e) **5.2 multi-channel** propagation + uji 1-tenant-2-channel. Follow-up parkir: pricing helper (P8), content-lang inject (P5/6), TTS voice catalog-wiring, provider-mgmt UI (P9), seed OAuth ryan, QC v2 relatif (butuh field Duration Preset).
+- **Gate user terkini:** real production-run ✅ TERBUKTI (publish private). Sisa keputusan owner = otorisasi cutover (deploy+publik) + (saat siap) bayar ulang ElevenLabs.
 
-**JANGAN diulang (sudah dikerjakan):** Phase 0 audit ✅ (selesai 2026-06-12, hasil di journal + rekonsiliasi Phase 1.1); framing v1/v2 (terkunci); **frontend track ✅ semua screen desain ter-port (28 done)**. **JANGAN** usulkan deploy backend ke VPS — backend v2 belum mulai & DB clone belum ada.
+**JANGAN diulang (sudah dikerjakan):** Phase 0 audit ✅; framing v1/v2 (terkunci); **frontend track ✅ (28 screen)**; **backend Phase 1-5 ✅** (clone DB v2 ✅, decouple terbukti). Deploy backend v2 ke VPS = **cutover** (keputusan operasional owner, bukan "jangan") — v1 tetap jangan disentuh sampai saat itu.
 
 > **🧭 KEPUTUSAN ARAH (2026-06-12, senior call):** frontend track selesai di milestone bersih (audit clean, 28/28 build) → **pivot ke jalur kritis BACKEND** (poles infra next-intl/shadcn/PWA DITUNDA — gold-plating layar mock; next-intl akan rework i18n saat wiring data). **2 gate butuh user:** (1) **PUSH** ke origin (21+ commit belum di-backup — risiko tertinggi), (2) **clone DB v2** (gate eksekusi backend — user buat Supabase project). Rencana Phase 1.1 + rekonsiliasi sudah LOCKED (§1.1) → eksekusi instan saat DB siap.
 
@@ -224,7 +225,7 @@ Perluasan produk: menampung **banyak kategori creator short faceless** (mystery/
 
 **Placement:** optimasi render + paralel image + swap → **Phase 1.x** (murah, dampak terbesar, prasyarat scale). Decouple + buffer S3 + content_inventory + orkestrator multi-node → arsitektur dekat **Phase 5** / sebelum scale tenant.
 
-**Status (verified 2026-06-13):** ❌ **BELUM mulai.** v2 hanya punya `pipeline_queue`/`production_runs`/`production_schedules`/`videos` — **tidak ada `content_inventory`**, belum ada buffer Biznet S3. "tobe_submitted" saat ini = video numpuk di VPS `logs/` (de-facto, ~475MB). Tetap placement Phase 5 / sebelum scale tenant.
+**Status (update 2026-06-13):** ✅ **DECOUPLE TERBUKTI end-to-end nyata.** Dibangun+tervalidasi: `content_inventory` + buffer **Biznet Gio S3** + `producer`(semaphore=core) + `publisher`(timezone-aware) + `worker_decoupled.py` + **S3 janitor** (sweep+reconcile) — full loop → publish YouTube private. S3 secret/bucket resolved. **Sisa:** **5.5 optimasi render** (35→13mnt, BELUM — `decisions_production_scaling`, jangan analisa ulang) + **cutover deploy** ke VPS (owner). "tobe_submitted" lama (video numpuk VPS `logs/`) digantikan buffer S3 saat cutover.
 
 ---
 
