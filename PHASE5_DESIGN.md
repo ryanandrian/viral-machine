@@ -20,7 +20,7 @@
 - **⏳ 5.5 Optimasi render** (dari decisions §5, prioritas #1 scale): gabung 3-pass FFmpeg→1 (2,87×) + paralel image (asyncio.gather). 35→~13 mnt.
 
 ## Dependency (owner)
-- **S3_SECRET_KEY + S3_BUCKET** (Biznet Gio dashboard) untuk e2e buffer upload/download.
+- ✅ **S3_SECRET_KEY + S3_BUCKET RESOLVED** (owner, 2026-06-13). Bucket=`tobe-submitted`. **Buffer e2e ke Biznet HIJAU** (upload/download/delete proven). 5.3 decouple siap dibangun.
 
 ## Risiko + mitigasi
 - **5.3 decouple = rewrite alur inti produksi+publish** → RISIKO TINGGI. Mitigasi: **design-review dulu** (seperti Phase 4); v2 dev (v1 tak tersentuh); validasi buffer-flow dgn 1 channel sebelum multi; concurrency cap wajib (terbukti OOM tanpa rem).
