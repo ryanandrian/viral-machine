@@ -11,7 +11,7 @@ load_dotenv()
 class TenantConfig:
     """Konfigurasi per tenant — setiap user punya instance ini"""
     tenant_id: str
-    niche: str = "universe_mysteries"
+    niche: str = ""  # diset eksplisit; '' → fail-loud (no global default niche)
     language: str = "en"
     target_audience: str = "global"
     videos_per_day: int = 1

@@ -284,7 +284,7 @@ class VisualAssembler:
             # s72: thumbnail_concept = deskripsi visual murni dari script engine
             # Mencegah DALL-E render teks literal dari kalimat hook
             thumbnail_concept = script.get("thumbnail_concept", "").strip() or hook_text
-            niche     = config.get("niche", "universe_mysteries")
+            niche     = config.get("niche") or config.get("niche_fallback") or ""
 
             if not hook_text:
                 return None

@@ -83,7 +83,8 @@ class TenantRunConfig:
     plan_type:   str = "starter"
 
     # Pipeline settings
-    niche:              str   = "universe_mysteries"
+    niche:              str   = ""   # diset dari DB; '' → fail-loud (no global default)
+    niche_fallback:     Optional[str] = None  # Phase 1.2: fallback PILIHAN tenant (bukan global mystery)
     language:           str   = "en"
     videos_per_day:     int   = 1
     max_videos_per_day: int   = 1
@@ -178,9 +179,11 @@ class TenantRunConfig:
     visual_ai_model:   Optional[str] = None
     image_quality:     str           = "low"
 
-    llm_provider:      str           = "openai"
-    llm_model:         str           = "gpt-4o-mini"
+    llm_provider:      str           = "openai"   # legacy flat (back-compat) — sumber kebenaran baru = llm_library
+    llm_model:         str           = "gpt-4o-mini"  # legacy flat — fallback bila llm_models kosong
     llm_api_key:       Optional[str] = None
+    llm_library:       Optional[str]  = None  # Phase 1.1: 'anthropic'|'openai'. None → derive dari llm_provider
+    llm_models:        Optional[dict] = None  # Phase 1.1 per-task: script/utility/rewrite/analyzer/fallback
 
     youtube_api_key:   Optional[str] = None  # YouTube Data API v3 — untuk trend scan
 
@@ -193,6 +196,7 @@ class TenantRunConfig:
             # Identity
             "tenant_id": self.tenant_id,
             "niche":     self.niche,
+            "niche_fallback": self.niche_fallback or "",
             "language":  self.language,
 
             # TTS
@@ -210,9 +214,11 @@ class TenantRunConfig:
             "niche_visual_fallbacks": self.niche_visual_fallbacks,
 
             # LLM
-            "llm_provider":  self.llm_provider,
-            "llm_model":     self.llm_model,
+            "llm_provider":  self.effective_llm_provider(),
+            "llm_model":     self.llm_model_for("script"),
             "llm_api_key":   self.llm_api_key or "",
+            "llm_library":   self.llm_library or "",
+            "llm_models":    self.llm_models or {},
             "visual_mode":   self.visual_mode,
             "is_developer":  self.is_developer,
             "discount_pct":  self.discount_pct,
@@ -261,23 +267,42 @@ class TenantRunConfig:
             return PexelsProvider(cfg)
 
     def get_llm_provider(self):
-        """Inisialisasi dan return LLM provider instance."""
-        from src.providers.llm.openai import OpenAIProvider
-        from src.providers.llm.claude import ClaudeProvider
+        """Return LLMProvider instance via factory tunggal (config-driven).
+        Pemilihan provider berdasarkan llm_library/llm_provider — lihat
+        src/providers/llm/__init__.py (sumber tunggal registry)."""
+        from src.providers.llm import build_llm_provider
+        return build_llm_provider(self.to_provider_config())
 
-        cfg = self.to_provider_config()
-        providers = {
-            "openai": OpenAIProvider,
-            "claude": ClaudeProvider,
-        }
-        cls = providers.get(self.llm_provider)
-        if not cls:
-            logger.warning(
-                f"LLM provider '{self.llm_provider}' tidak dikenal — "
-                f"fallback ke openai"
-            )
-            cls = OpenAIProvider
-        return cls(cfg)
+    def effective_llm_provider(self) -> str:
+        """Routing key provider ('claude'|'openai') — Phase 1.1.
+        Prioritas llm_library; fallback ke kolom flat legacy llm_provider."""
+        lib = (self.llm_library or "").lower()
+        if lib == "anthropic":
+            return "claude"
+        if lib == "openai":
+            return "openai"
+        p = (self.llm_provider or "openai").lower()
+        return "claude" if p in ("claude", "anthropic") else "openai"
+
+    def llm_model_for(self, task: str) -> str:
+        """Model untuk task tertentu (script/utility/rewrite/analyzer/fallback) — Phase 1.1.
+        Prioritas llm_models[task]; fallback ke kolom flat legacy llm_model."""
+        if isinstance(self.llm_models, dict) and self.llm_models.get(task):
+            return self.llm_models[task]
+        if self.llm_model:
+            return self.llm_model
+        return "claude-sonnet-4-6" if self.effective_llm_provider() == "claude" else "gpt-4o"
+
+    def niche_or_fallback(self) -> str:
+        """Niche efektif tenant — TANPA default global. Urutan: niche_fallback
+        (pilihan tenant) → niche → niche_pool[0]. Kosong semua → '' (caller fail-loud,
+        no-silent-degradation). Niche dijamin ada di hulu (onboarding/schedule gate)."""
+        for cand in (self.niche_fallback, self.niche):
+            if cand and str(cand).strip():
+                return cand
+        if self.niche_pool:
+            return self.niche_pool[0]
+        return ""
 
 
 class TenantConfigManager:
@@ -438,6 +463,8 @@ class TenantConfigManager:
                 llm_provider=row.get("llm_provider", "openai"),
                 llm_model=row.get("llm_model", "gpt-4o-mini"),
                 llm_api_key=row.get("llm_api_key"),
+                llm_library=row.get("llm_library"),
+                llm_models=row.get("llm_models") if isinstance(row.get("llm_models"), dict) else None,
                 youtube_api_key=row.get("youtube_api_key"),
                 visual_mode=row.get("visual_mode", "video"),
                 is_developer=row.get("is_developer", False),
@@ -449,7 +476,8 @@ class TenantConfigManager:
                 music_volume=float(row.get("music_volume", 0.10)),
                 tts_voice_settings=row.get("tts_voice_settings") or {},
                 niche_mode=row.get("niche_mode", "fixed") or "fixed",
-                niche_pool=list(row.get("niche_pool") or ["universe_mysteries"]),
+                niche_pool=list(row.get("niche_pool") or []),
+                niche_fallback=row.get("niche_fallback"),
                 caption_style=row.get("caption_style") if isinstance(row.get("caption_style"), dict) else None,
                 hook_title_style=row.get("hook_title_style") if isinstance(row.get("hook_title_style"), dict) else None,
                 trailing_silence=float(row.get("trailing_silence") or 2.5),
@@ -485,7 +513,7 @@ class TenantConfigManager:
         return TenantRunConfig(
             tenant_id=tenant_id,
             plan_type="starter",
-            niche="universe_mysteries",
+            niche="",
             language="en",
             videos_per_day=1,
             max_videos_per_day=1,
@@ -500,7 +528,7 @@ class TenantConfigManager:
                 music_volume=0.10,
                 tts_voice_settings={},
                 niche_mode="fixed",
-                niche_pool=["universe_mysteries"],
+                niche_pool=[],
             tts_voice_per_niche=None,
             caption_style=None,
             hook_title_style=None,

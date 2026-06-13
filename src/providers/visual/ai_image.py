@@ -91,8 +91,11 @@ class AIImageProvider(VisualProvider):
             self.image_negative_prompt = _DEFAULT_NEGATIVE_PROMPT
         # LLM config — untuk rejection rewrite (pakai LLM tenant, bukan hardcode)
         # Key harus dari tenant DB — tidak ada env fallback (DESIGN.md)
-        self.llm_provider = config.get("llm_provider", "claude")
-        self.llm_api_key  = config.get("llm_api_key") or ""
+        self.llm_provider   = config.get("llm_provider", "")
+        self.llm_library    = config.get("llm_library")
+        self.llm_api_key    = config.get("llm_api_key") or ""
+        self.llm_models     = config.get("llm_models") or {}
+        self.llm_model_flat = config.get("llm_model") or ""
 
         if self.model_config["platform"] == "replicate":
             self.api_key = (
@@ -296,41 +299,33 @@ class AIImageProvider(VisualProvider):
             f"End with: vertical 9:16, photorealistic."
         )
 
-        if not self.llm_api_key:
-            raise VisualError(
-                f"llm_api_key tidak tersedia untuk rejection rewrite "
-                f"(provider={self.llm_provider}). "
-                f"Set llm_api_key di tenant_configs Supabase."
-            )
+        # Rejection rewrite pakai LLM tenant via factory tunggal (config-driven).
+        # Provider memegang SDK client + format API — di sini tak ada nama SDK.
+        from src.providers.llm import build_llm_provider, LLMError
 
-        if self.llm_provider == "claude":
-            import anthropic
-            client   = anthropic.Anthropic(api_key=self.llm_api_key)
-            response = client.messages.create(
-                model    = "claude-haiku-4-5-20251001",
-                max_tokens  = 200,
-                messages = [{"role": "user", "content": f"{system_prompt}\n\n{user_prompt}"}],
-            )
-            rewritten = response.content[0].text.strip().strip('"')
-        else:
-            import openai
-            client   = openai.OpenAI(api_key=self.llm_api_key)
-            response = client.chat.completions.create(
-                model    = "gpt-4o-mini",
-                messages = [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user",   "content": user_prompt},
-                ],
-                max_tokens  = 200,
-                temperature = 0.7,
-            )
-            rewritten = response.choices[0].message.content.strip().strip('"')
+        rewrite_model = self.llm_models.get("rewrite") or self.llm_model_flat
+        try:
+            provider = build_llm_provider({
+                "llm_library":  self.llm_library,
+                "llm_provider": self.llm_provider,
+                "llm_api_key":  self.llm_api_key,
+                "llm_model":    self.llm_model_flat,
+            })
+            rewritten = provider.complete(
+                system=system_prompt,
+                user=user_prompt,
+                model=rewrite_model,
+                max_tokens=200,
+                temperature=0.7,
+            ).strip().strip('"')
+        except LLMError as e:
+            raise VisualError(f"Rejection rewrite gagal — LLM error: {e}") from e
 
         logger.info(
-            f"[AIImage] {self.llm_provider} rewrite scene {section_index+1} "
+            f"[AIImage] {provider.provider_name} rewrite scene {section_index+1} "
             f"(attempt {len(rejection_history)+1}): {rewritten[:120]}"
         )
-        return rewritten  # Already a full DALL-E ready prompt
+        return rewritten  # full image-ready prompt
 
     def _build_image_prompt(self, main_prompt: str) -> tuple[str, str]:
         """

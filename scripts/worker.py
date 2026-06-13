@@ -80,7 +80,14 @@ def _run_production(job: dict, sb) -> None:
         from src.orchestrator.pipeline import Pipeline
 
         run_config = load_tenant_config(tenant_id)
-        niche      = getattr(run_config, "niche", "universe_mysteries")
+        niche      = run_config.niche_or_fallback() if run_config else ""
+        if not niche:
+            # Fail-loud: niche wajib diset di hulu (onboarding/schedule gate).
+            # Tidak menebak niche global — cegah produksi konten salah-kategori.
+            raise ValueError(
+                f"Niche belum diset untuk tenant '{tenant_id}' — produksi dihentikan. "
+                f"Set niche/niche_pool tenant terlebih dahulu."
+            )
         tenant     = TenantConfig(tenant_id=tenant_id, niche=niche)
 
         result = Pipeline().run(tenant, publish=True)

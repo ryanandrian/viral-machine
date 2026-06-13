@@ -3,7 +3,6 @@ import json
 import re
 from datetime import datetime
 from loguru import logger
-from openai import OpenAI
 from dotenv import load_dotenv
 from src.intelligence.config import TenantConfig, get_niches, system_config
 
@@ -125,41 +124,32 @@ IMPORTANT: Return ONLY the JSON object. No markdown, no explanation, no extra te
             return None
 
     def _generate_hooks(self, script: dict, tenant_config: TenantConfig,
-                        openai_api_key: str = "",
+                        provider=None, model: str = "",
                         top_hooks: list | None = None) -> dict:
-        if not openai_api_key:
+        if not provider:
             raise ValueError(
-                f"visual_api_key (OpenAI) tidak ada di tenant_configs "
-                f"untuk tenant '{tenant_config.tenant_id}'"
+                f"LLM provider tidak tersedia untuk tenant "
+                f"'{tenant_config.tenant_id}' (cek llm_api_key/llm_library)"
             )
-        client     = OpenAI(api_key=openai_api_key)
         last_error = None
 
         for attempt in range(1, self.MAX_RETRIES + 1):
             try:
                 logger.info(f"Hook generation attempt {attempt}/{self.MAX_RETRIES}...")
 
-                response = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": (
-                                "You are a viral hook specialist. "
-                                "You MUST return only a valid JSON object. "
-                                "No markdown, no explanation, no text outside the JSON."
-                            )
-                        },
-                        {"role": "user", "content": self._build_prompt(
-                            script, tenant_config, top_hooks
-                        )}
-                    ],
+                # JSON dipaksa via abstraksi provider (as_json) — vendor-agnostic.
+                raw = provider.complete(
+                    system=(
+                        "You are a viral hook specialist. "
+                        "You MUST return only a valid JSON object. "
+                        "No markdown, no explanation, no text outside the JSON."
+                    ),
+                    user=self._build_prompt(script, tenant_config, top_hooks),
+                    model=model,
                     max_tokens=1200,
                     temperature=0.9,
-                    response_format={"type": "json_object"}
-                )
-
-                raw     = response.choices[0].message.content.strip()
+                    as_json=True,
+                ).strip()
                 cleaned = self._clean_json_response(raw)
                 data    = json.loads(cleaned)
 
@@ -192,14 +182,16 @@ IMPORTANT: Return ONLY the JSON object. No markdown, no explanation, no extra te
 
     def optimize(self, script: dict, tenant_config: TenantConfig) -> dict:
         logger.info(f"Optimizing hooks for: {script.get('topic', '')[:50]}...")
-        # Load OpenAI key dari tenant DB — tidak ada env fallback
-        _openai_key = ""
+        # LLM provider tenant (config-driven, BYOK) — model task 'utility'.
+        _llm, _model = None, ""
         try:
             from src.config.tenant_config import load_tenant_config
             _rc = load_tenant_config(tenant_config.tenant_id)
-            _openai_key = (_rc.visual_api_key if _rc else "") or ""
+            if _rc:
+                _llm   = _rc.get_llm_provider()
+                _model = _rc.llm_model_for("utility")
         except Exception as _ke:
-            logger.warning(f"[HookOptimizer] Gagal load tenant key: {_ke}")
+            logger.warning(f"[HookOptimizer] Gagal load LLM provider: {_ke}")
 
         # S1-C: load channel insights → ambil top_hooks untuk formula ke-6
         top_hooks = None
@@ -215,7 +207,7 @@ IMPORTANT: Return ONLY the JSON object. No markdown, no explanation, no extra te
                     )
 
         hook_data = self._generate_hooks(
-            script, tenant_config, openai_api_key=_openai_key, top_hooks=top_hooks
+            script, tenant_config, provider=_llm, model=_model, top_hooks=top_hooks
         )
 
         if not hook_data or "winner" not in hook_data:

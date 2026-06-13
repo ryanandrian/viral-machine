@@ -15,7 +15,7 @@ from loguru import logger
 from dotenv import load_dotenv
 from src.intelligence.config import TenantConfig, get_niches, system_config
 
-# Teknik perbaikan konkret per dimensi — dikirim ke Claude saat retry.
+# Teknik perbaikan konkret per dimensi — dikirim ke LLM saat retry.
 # Harus actionable dan spesifik, bukan saran generik.
 DIMENSION_RETRY_GUIDANCE = {
     "emotional_peak": (
@@ -403,85 +403,48 @@ class ScriptEngine:
             script["full_script"] = " ".join(p for p in parts if p)
         return script
 
-    def _call_claude(self, topic, niche, attempt, api_key,
-                     niche_visual_style=None, feedback=None, insights_block=None):
+    def _generate_one(self, provider, model, topic, niche, attempt,
+                      niche_visual_style=None, feedback=None, insights_block=None):
+        """Satu attempt generate script via LLMProvider (config-driven).
+
+        Provider memegang SDK client + format API spesifik vendor — di sini tak
+        ada nama SDK/provider. Gagal LLM (LLMError) = stop attempt ini (loop akan
+        retry provider yang SAMA); TIDAK ada silent fallback ke provider lain.
+        """
+        from src.providers.llm import LLMError
+
+        section_timing = _get_section_timing(niche)
         try:
-            import anthropic
-            if not api_key:
-                raise ValueError("llm_api_key (Anthropic) tidak ada di tenant_configs")
-            client        = anthropic.Anthropic(api_key=api_key)
-            section_timing = _get_section_timing(niche)
-            response      = client.messages.create(
-                model="claude-sonnet-4-6",
-                max_tokens=2000,
-                temperature=1,
+            raw = provider.complete(
                 system=_build_system_prompt(),
-                messages=[{"role": "user", "content": _build_user_prompt(
+                user=_build_user_prompt(
                     topic, niche, niche_visual_style, feedback, insights_block
-                )}],
+                ),
+                model=model,
+                temperature=1.0,
+                max_tokens=2000,
+                as_json=True,
             )
-            raw    = response.content[0].text.strip()
             script = json.loads(self._clean_json(raw))
             script = self._validate_and_fix(script, topic, section_timing)
             if script:
-                logger.info(f"[ScriptEngine] Claude attempt {attempt} OK")
-            return script
-        except Exception as e:
-            logger.warning(f"[ScriptEngine] Claude attempt {attempt} failed: {e}")
-            return None
-
-    def _call_openai(self, topic, niche, attempt, api_key,
-                     niche_visual_style=None, feedback=None, insights_block=None):
-        try:
-            if not api_key:
-                raise ValueError("visual_api_key (OpenAI) tidak ada di tenant_configs")
-            from openai import OpenAI
-            client        = OpenAI(api_key=api_key)
-            section_timing = _get_section_timing(niche)
-            response      = client.chat.completions.create(
-                model="gpt-4o-mini",
-                response_format={"type": "json_object"},
-                temperature=0.85,
-                max_tokens=1800,
-                messages=[
-                    {"role": "system", "content": _build_system_prompt()},
-                    {"role": "user",   "content": _build_user_prompt(
-                        topic, niche, niche_visual_style, feedback, insights_block
-                    )},
-                ],
-            )
-            raw    = response.choices[0].message.content.strip()
-            script = json.loads(self._clean_json(raw))
-            script = self._validate_and_fix(script, topic, section_timing)
-            if script:
-                logger.info(f"[ScriptEngine] GPT-4o-mini attempt {attempt} OK")
-            return script
-        except Exception as e:
-            logger.warning(f"[ScriptEngine] GPT attempt {attempt} failed: {e}")
-            return None
-
-    def _call_llm(self, topic, niche, attempt, llm_provider,
-                  llm_api_key, openai_api_key,
-                  niche_visual_style=None, feedback=None, insights_block=None):
-        if llm_provider == "claude":
-            script = self._call_claude(
-                topic, niche, attempt, llm_api_key,
-                niche_visual_style, feedback, insights_block,
-            )
-            if script is None:
-                logger.warning("[ScriptEngine] Claude gagal — fallback ke GPT-4o-mini")
-                script = self._call_openai(
-                    topic, niche, attempt, openai_api_key,
-                    niche_visual_style, feedback, insights_block,
+                logger.info(
+                    f"[ScriptEngine] {provider.provider_name} attempt {attempt} "
+                    f"OK (model={model})"
                 )
-                return script, "openai_fallback"
-            return script, "claude"
-        else:
-            script = self._call_openai(
-                topic, niche, attempt, openai_api_key,
-                niche_visual_style, feedback, insights_block,
+            return script
+        except LLMError as e:
+            # Kegagalan provider tenant — JANGAN pindah ke provider lain.
+            logger.warning(
+                f"[ScriptEngine] {provider.provider_name} attempt {attempt} "
+                f"gagal: {e}"
             )
-            return script, "openai"
+            return None
+        except Exception as e:
+            logger.warning(
+                f"[ScriptEngine] attempt {attempt} parse/validate gagal: {e}"
+            )
+            return None
 
     def _load_insights(self, tenant_id: str) -> dict | None:
         """Load channel_insights terbaru. Fire-and-forget — tidak pernah crash pipeline."""
@@ -496,13 +459,14 @@ class ScriptEngine:
         logger.info(f"[ScriptEngine] Generating: {topic.get('topic','')[:50]}...")
 
         run_config         = self._get_run_config(tenant_config)
-        llm_provider       = run_config.llm_provider            if run_config else "openai"
+        llm_provider       = run_config.effective_llm_provider() if run_config else ""
         min_score          = run_config.script_min_viral_score  if run_config else 82
         max_retry          = run_config.script_max_retry        if run_config else 3
         niche_visual_style = getattr(run_config, "niche_visual_style", {}) or {}
-        # Keys dari tenant DB — tidak ada env fallback
-        llm_api_key    = (run_config.llm_api_key    if run_config else "") or ""
-        openai_api_key = (run_config.visual_api_key if run_config else "") or ""
+        # LLM via provider abstraction (config-driven, BYOK). Provider memegang
+        # API key + SDK client — di sini tak ada nama SDK/provider/model.
+        llm          = run_config.get_llm_provider()      if run_config else None
+        script_model = run_config.llm_model_for("script") if run_config else ""
 
         # S1-B: load channel insights — inject ke semua attempt jika grade cukup
         insights       = self._load_insights(tenant_config.tenant_id)
@@ -526,7 +490,11 @@ class ScriptEngine:
 
         try:
             from src.intelligence.script_analyzer import ScriptAnalyzer
-            analyzer = ScriptAnalyzer(api_key=openai_api_key)
+            # Analyzer pakai provider LLM tenant yang sama (model task 'analyzer').
+            analyzer = ScriptAnalyzer(
+                provider=llm,
+                model=(run_config.llm_model_for("analyzer") if run_config else ""),
+            )
         except Exception as e:
             logger.warning(f"[ScriptEngine] Analyzer failed ({e}) — no gate")
             analyzer = None
@@ -544,12 +512,10 @@ class ScriptEngine:
         for attempt in range(1, max_retry + 1):
             logger.info(f"[ScriptEngine] Attempt {attempt}/{max_retry} via {llm_provider}")
 
-            script, actual_provider = self._call_llm(
-                topic, tenant_config.niche, attempt, llm_provider,
-                llm_api_key, openai_api_key,
+            script = self._generate_one(
+                llm, script_model, topic, tenant_config.niche, attempt,
                 niche_visual_style, feedback, insights_block,
             )
-            logger.info(f"[ScriptEngine] Actually used: {actual_provider}")
 
             if not script:
                 if attempt < max_retry:
@@ -563,7 +529,7 @@ class ScriptEngine:
 
                 # Siapkan feedback untuk retry berikutnya.
                 # Sertakan skor aktual + teknik konkret per dimensi lemah
-                # agar Claude tahu ANGKA yang harus dicapai dan CARA spesifiknya.
+                # agar model tahu ANGKA yang harus dicapai dan CARA spesifiknya.
                 weak_areas   = analysis.get("weak_areas", [])
                 dim_scores   = analysis.get("dimension_scores", {})
                 retry_note   = analysis.get("retry_suggestion", "")

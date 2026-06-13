@@ -10,15 +10,12 @@ Scoring 6 dimensi viral:
   information_density (10%)— nilai informasi nyata, bukan filler
   cta_strength (5%)        — natural dan efektif
 
-Dipanggil oleh ScriptEngine — lightweight, satu GPT call per analyze.
+Dipanggil oleh ScriptEngine — lightweight, satu LLM call per analyze.
 """
 
-import json
-import os
 from loguru import logger
-from dotenv import load_dotenv
 
-load_dotenv()
+from src.providers.llm import parse_json_lenient
 
 VIRAL_DIMENSIONS = {
     "hook_power":           0.25,
@@ -143,44 +140,41 @@ Return ONLY valid JSON, no markdown:
 class ScriptAnalyzer:
     """
     Viral quality analyzer — dipanggil oleh ScriptEngine.
-    Satu GPT call per script. Fallback local jika GPT gagal.
+    Satu LLM call per script. Fallback local jika LLM gagal.
     """
 
-    def __init__(self, api_key: str | None = None, model: str = "gpt-4o-mini"):
-        self.api_key = api_key or ""
-        self.model   = model
+    def __init__(self, provider=None, model: str = ""):
+        """provider = LLMProvider (config-driven) dari ScriptEngine; model = task
+        'analyzer'. Jika provider None / LLM gagal → fallback _local_estimate
+        (quality gate tidak pernah meng-crash pipeline)."""
+        self.provider = provider
+        self.model    = model
 
     def analyze(self, script: dict, niche: str, niche_profile: dict | None = None) -> dict:
         """
-        Score script terhadap 6 dimensi viral.
+        Score script terhadap 6 dimensi viral via LLMProvider tenant (config-driven).
         niche_profile: data niche dari Supabase (voice_profile, target_emotion, dll).
                        Dipakai untuk emotional_peak criteria yang niche-aware.
                        Jika None → fallback ke DEFAULT_EMOTION_CRITERIA.
         Returns dict dengan viral_score, weak_areas, strengths.
-        Tidak pernah crash — fallback ke local estimate jika GPT gagal.
+        Tidak pernah crash — fallback ke local estimate jika LLM gagal/absen.
         """
+        if not self.provider:
+            logger.warning("[ScriptAnalyzer] tanpa LLM provider — local estimate")
+            return self._local_estimate(script)
         try:
-            from openai import OpenAI
-            client   = OpenAI(api_key=self.api_key)
-            response = client.chat.completions.create(
+            raw = self.provider.complete(
+                system=(
+                    "You are a strict viral content analyst. "
+                    "Score honestly. Only respond with valid JSON."
+                ),
+                user=_build_prompt(script, niche, niche_profile),
                 model=self.model,
-                response_format={"type": "json_object"},
                 temperature=0.3,
                 max_tokens=500,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "You are a strict viral content analyst. "
-                            "Score honestly. Only respond with valid JSON."
-                        ),
-                    },
-                    {"role": "user", "content": _build_prompt(script, niche, niche_profile)},
-                ],
+                as_json=True,
             )
-
-            raw      = response.choices[0].message.content
-            analysis = json.loads(raw)
+            analysis = parse_json_lenient(raw)
 
             # Hitung viral_score dari weighted dimensions jika tidak dikembalikan
             if "viral_score" not in analysis:
@@ -202,11 +196,11 @@ class ScriptAnalyzer:
             return analysis
 
         except Exception as e:
-            logger.warning(f"[ScriptAnalyzer] GPT failed ({e}) — local estimate")
+            logger.warning(f"[ScriptAnalyzer] LLM failed ({e}) — local estimate")
             return self._local_estimate(script)
 
     def _local_estimate(self, script: dict) -> dict:
-        """Fallback estimasi lokal tanpa GPT — pipeline tidak crash."""
+        """Fallback estimasi lokal tanpa LLM — pipeline tidak crash."""
         hook        = script.get("hook", "")
         power_words = ["secret", "never", "impossible", "discovered", "truth",
                        "nobody", "scientists", "actually", "shocking", "reveals",
@@ -234,8 +228,8 @@ class ScriptAnalyzer:
         return {
             "dimension_scores":  dim_scores,
             "viral_score":       viral_score,
-            "summary":           "Local estimate (GPT unavailable)",
-            "weak_areas":        ["GPT analysis unavailable"],
+            "summary":           "Local estimate (LLM unavailable)",
+            "weak_areas":        ["LLM analysis unavailable"],
             "strengths":         [],
             "retry_suggestion":  "",
         }

@@ -12,11 +12,10 @@
 - **v2 = YANG KITA KERJAKAN** — SaaS multi-tenant + Multi-Format Studio + frontend. **SEMUA di local dev ini, BELUM ada yang di-pull ke VPS.** Spec = `DESAIN_PRODUK_SAAS.md` + `MULTI_FORMAT_STUDIO.md` + `design-source/`.
 - **DB v2 = punya sendiri** (clone penuh skema+data dari v1) — bukan DB v1. **v2 REPLACE v1 penuh di VPS yang sama saat proven.**
 
-**🎯 THREAD AKTIF = integrasi desain Claude Design → frontend `apps/web` (Hybrid).**
-- **Terakhir selesai:** **Marketing A3-A6 + 404** (Demo/Docs/Blog/About/not-found). **Semua screen desain ~komplit.** 28 screen done.
-- **Berikutnya (infra):** next-intl (i18n proper) · shadcn init · PWA installable · responsive harmonisasi · deploy Vercel. *(F State Patterns = referensi desain, opsional.)*
-- **Butuh tremor dulu (atau lanjut SVG seperti D1/D20):** D2 Channels · D3 Channel Detail · D6 Analytics.
-- **Infra FE pending:** next-intl · shadcn init · PWA · responsive harmonisasi · deploy Vercel (belum push).
+**🎯 THREAD AKTIF = BACKEND Phase 1 (SOFTCODE AI Config). Frontend track ✅ DITUTUP (28 screen ter-port).**
+- **Terakhir selesai (2026-06-13):** **Phase 1.1** (LLM softcode + AI Provider Catalog DB-driven) **+ Phase 1.2** (niche_fallback). Provider/model LLM 100% dari DB; niche fallback config-driven **tenant-specific + fail-loud** (buang default global `universe_mysteries` dari fallback-logic). Tervalidasi **struktural** (compile + factory dari katalog v2 + backfill `0001`/`0003` + resolver). **Belum:** real production-run, commit/push.
+- **Berikutnya PER RENCANA (jangan keluar jalur):** Phase 1.3 (visual catalog→DB, perluas pakai `ai_models` yang sama) → 1.4 (TTS→katalog) → 1.5 (music/R2) → 1.6 (bugfix). Lihat §"AI PROVIDER CATALOG" untuk follow-up A/B/C + gate enforcement niche (Phase 5/9).
+- **Gate user:** (1) real production-run ke v2; (2) commit/push fase 1.1.
 
 **JANGAN diulang (sudah dikerjakan):** Phase 0 audit ✅ (selesai 2026-06-12, hasil di journal + rekonsiliasi Phase 1.1); framing v1/v2 (terkunci); **frontend track ✅ semua screen desain ter-port (28 done)**. **JANGAN** usulkan deploy backend ke VPS — backend v2 belum mulai & DB clone belum ada.
 
@@ -43,7 +42,7 @@ Setiap tenant: login → dashboard → config API keys → scheduler → lihat l
 
 ## 📍 STATUS SAAT INI (2 track paralel)
 
-**Track BACKEND:** ⏸️ Menunggu approval user untuk start **Phase 0** (lihat roadmap 12-phase di bawah).
+**Track BACKEND:** 🛠️ **Phase 1 in-progress.** Phase 0 ✅ (audit, 2026-06-12). **Phase 1.1 ✅ done + tervalidasi struktural (2026-06-13)** — LLM softcode + **AI Provider Catalog DB-driven** (`ai_providers`/`ai_models` live di v2; factory resolve provider/model dari DB; nol literal vendor di business logic/error; backfill `ryan_andrian` OK). Real production-run = gate user. Lihat §"AI PROVIDER CATALOG" + roadmap 12-phase.
 
 **Track FRONTEND:** 🛠️ in-progress (`apps/web` Next.js 16 + React 19 + Tailwind v4, Hybrid). **DONE + tervalidasi (build PASS + curl 200):**
 - ✅ Fondasi: design system port (tokens+components+app-shell), tema dark, lang ID — `36fa616`
@@ -169,7 +168,7 @@ Next.js 15 (App Router) + shadcn/ui + Tailwind + tremor.so + Geist Sans + next-i
 | Phase | Nama | Tujuan | Estimasi | Status |
 |-------|------|--------|----------|--------|
 | **0** | Audit & Persiapan | Verifikasi semua klaim SOFTCODE_AI_CONFIG vs kode | – | ✅ DONE (read-only, 2026-06-12) — hasil di journal + rekonsiliasi di §1.1 |
-| **1** | SOFTCODE AI Config | Hilangkan hardcode AI, hapus silent fallback (6 sub-phase) | 4-6 jam | 🔒 Blocked by Phase 0 |
+| **1** | SOFTCODE AI Config | Hilangkan hardcode AI, hapus silent fallback (6 sub-phase) | 4-6 jam | 🛠️ in-progress — **1.1 ✅** (LLM + AI Provider Catalog DB-driven) · **1.2 ✅** (niche_fallback, 2026-06-13); 1.3-1.6 pending |
 | **2** | Error Mgmt Terpusat | `src/exceptions.py` + structured error flow | 2 jam | 🔒 Blocked by Phase 1 |
 | **3** | Pipeline Run Logs (DB) | `pipeline_run_logs` table, RLS-ready, UI-facing | 2 jam | 🔒 Blocked by Phase 2 |
 | **4** | BYO-CC Phase 1 | `tenant_credentials` + Fernet + auth foundation | 1 minggu | 🔒 Blocked by Phase 3 |
@@ -222,6 +221,29 @@ Perluasan produk: menampung **banyak kategori creator short faceless** (mystery/
 - **Capacity model** (cores/RAM vs tenant) di memory: ~50 tenant→4 core, ~100→8 core, lalu multi-node 16-core.
 
 **Placement:** optimasi render + paralel image + swap → **Phase 1.x** (murah, dampak terbesar, prasyarat scale). Decouple + buffer S3 + content_inventory + orkestrator multi-node → arsitektur dekat **Phase 5** / sebelum scale tenant.
+
+**Status (verified 2026-06-13):** ❌ **BELUM mulai.** v2 hanya punya `pipeline_queue`/`production_runs`/`production_schedules`/`videos` — **tidak ada `content_inventory`**, belum ada buffer Biznet S3. "tobe_submitted" saat ini = video numpuk di VPS `logs/` (de-facto, ~475MB). Tetap placement Phase 5 / sebelum scale tenant.
+
+---
+
+### 🧩 AI PROVIDER CATALOG (DB-driven) — directive user 2026-06-13
+
+**Keputusan (user):** provider AI + **format parameter API**-nya bisa terus ditambah **super-admin lewat DATABASE** (tanpa redeploy), lengkap **quality + cost**, agar tenant punya banyak pilihan → makin banyak kategori kreator terlayani → makin banyak tenant. **Nol literal nama provider** di business logic & error message (kecuali file *adapter transport* yang memang implementasi SDK — batas yang diterima user). Lihat [[feedback_no_hardcode]].
+
+**Arsitektur (live di v2):** `ai_providers` (provider_key, display_name, **adapter**=protokol, base_url, auth, `request_param_schema`) + `ai_models` (model_key, provider_key, **component** llm/tts/image/video, model_id, quality_tier, **cost_hint**, default_params). Kode hanya punya **adapter per-protokol** (`anthropic_messages`, `openai_chat` (+OpenAI-compatible via base_url)). Tambah vendor sejenis = 1 baris DB (nol deploy); protokol baru = 1 adapter.
+
+**Status per komponen (verified 2026-06-13):**
+| Komponen | Sisi-tenant `tenant_configs` | Catalog-wired? | Tindak lanjut |
+|---|---|---|---|
+| **LLM** | `llm_library`+`llm_models` | ✅ DONE (1.1) | — |
+| **Image** | `visual_provider`/`visual_ai_model` (flat legacy) | ❌ | **Phase 1.3** |
+| **TTS** | `tts_provider`/`tts_voice` (flat legacy) | ❌ | **Phase 1.4** |
+| **Video (ai_video BYOK)** | belum ada kolom | ❌ | **Multi-Format fase C** |
+
+**FOLLOW-UP DITUANGKAN ke rencana (tindak lanjut PADA FASENYA — jangan dikerjakan di luar jalur):**
+- **(A) Backend** — harmonisasi `tenant_configs` agar refer `ai_models.model_key` per komponen + seed katalog: **image→Phase 1.3**, **TTS→Phase 1.4**, **video→Multi-Format fase C**. (Saat ini link loose by model_id string; pertimbangkan validasi app-layer ke katalog.)
+- **(B) Frontend** (saat wiring / Phase 9-10) — (1) **Admin E2 Catalog**: tambah manajemen **PROVIDER** (`ai_providers` CRUD: adapter/base_url/auth/`request_param_schema`) — sekarang UI hanya kelola MODEL. (2) **Tenant "AI Engines"**: ganti radio provider hardcoded `[Anthropic,OpenAI]` + model statik → **dinamis dari katalog** + tampilkan **quality/cost**. (Clone v2 sudah ada → guardrail wiring terbuka.)
+- **(C) S3 buffer / `content_inventory`** — sudah tercatat di §"Arsitektur Produksi & Scaling" (placement Phase 5), belum mulai.
 
 ---
 
@@ -283,6 +305,13 @@ Perluasan produk: menampung **banyak kategori creator short faceless** (mystery/
 - Enqueue 1 production run
 - ✅ **Lulus jika:** pipeline COMPLETE + zero OpenAI call di log untuk komponen LLM (NicheSelector pakai Claude saat tenant Claude)
 
+> ### ✅ 1.1 STATUS — DONE + TERVALIDASI STRUKTURAL (2026-06-13)
+> Diperluas jadi **AI Provider Catalog DB-driven** (atas directive user 2026-06-13 — lihat §"AI PROVIDER CATALOG"). Yang selesai & tervalidasi terhadap **v2 nyata**:
+> - **Skema:** `migrations/0001` (backfill `llm_library`+`llm_models` per-task — applied v2; row `ryan_andrian` OK) + `migrations/0002` (tabel `ai_providers`+`ai_models`, RLS+read-policy, seed 2 provider + 4 model LLM — applied v2).
+> - **Kode:** lapisan `src/providers/llm/` (base + `catalog.py` loader REST + `adapters.py` per-protokol + factory DB-driven). 5 call-site (`script_engine`/`script_analyzer`/`niche_selector`/`hook_optimizer`/`ai_image`) lewat abstraksi. Dihapus: SDK langsung, silent fallback Claude→GPT, `visual_api_key` utk LLM, `SUPPORTED_MODELS`, 3 parser duplikat, `claude.py`/`openai.py`. Net −282 baris.
+> - **Bukti:** `py_compile` ✅ · katalog dibaca REST+RLS ✅ · `build_llm_provider` resolve adapter dari DB ✅ · backfill row OK ✅. (**Belum**: real production-run = gate user; commit/push.)
+> - **Reconciliation §1.1 (LOCKED) terpenuhi:** `llm_provider`/`llm_model` legacy dipertahankan (back-compat); `llm_script_fallback` di-deprecate (di-`0001`); silent fallback dihapus.
+
 ### 1.2 — Niche Fallback Config
 **Scope:**
 - Schema: tambah `niche_fallback` (text, default `'universe_mysteries'`) ke `tenant_configs`
@@ -295,6 +324,13 @@ Perluasan produk: menampung **banyak kategori creator short faceless** (mystery/
   - `src/production/visual_assembler.py:287`
 
 **Validation gate:** `grep -r "universe_mysteries" src/ scripts/` = zero match (kecuali file provider/test/youtube_publisher data).
+
+> ### ✅ 1.2 STATUS — DONE + TERVALIDASI STRUKTURAL (2026-06-13)
+> **Revisi best-practice (keputusan user):** alih-alih default global, pakai **gate enforcement di hulu + fail-loud di hilir**. `niche_fallback` = **NULLABLE, tenant-specific** (bukan default global mystery). Migration `0003` applied v2.
+> - **Site produksi diperbaiki:** `worker.py:83` (resolver + **fail-loud** raise bila niche kosong), `visual_assembler.py:287`, `schedule_manager.py:110-111` (fallback niche tenant, bukan global). Resolver `TenantRunConfig.niche_or_fallback()` = `niche_fallback → niche → niche_pool[0] → '' (fail-loud)`. Default dataclass `niche`/`niche_pool` → `''`/`[]` (buang mystery global).
+> - **KEEP (verified, bukan produksi):** `pipeline.py:575/590/595/599` = blok `__main__` demo (line >566); test/`__main__`, `youtube_publisher`, data-map provider TTS/visual (`NICHE_VOICES[...]`), komentar. (Koreksi: line-number spec SOFTCODE §6 usang.)
+> - **Bukti:** compile ✅ · grep site produksi = 0 ✅ · resolver runtime ✅ · `ryan_andrian` niche=`universe_mysteries` (non-empty) + pool 4 niche → nol breakage ✅.
+> - **FOLLOW-UP ditindaklanjuti di fasenya:** **gate enforcement** (niche/niche_pool WAJIB sebelum schedule dibuat) → Phase 5 (schedule) + Phase 9-10 (onboarding C4) + pertimbangan constraint DB.
 
 ### 1.3 — Visual Image Catalog → DB
 **Scope:**
@@ -513,6 +549,8 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 
 | Tanggal | Phase | Job ID | Hasil | Notes |
 |---------|-------|--------|-------|-------|
+| 2026-06-13 | 1.2 (niche_fallback) | — (struktural) | ✅ PARTIAL | Applied v2: migr 0003 (`niche_fallback` nullable). Best-practice: gate-enforcement + fail-loud, no global default. compile OK · grep site produksi=0 · resolver OK · `ryan_andrian` niche non-empty → no breakage. Real production-run BELUM. |
+| 2026-06-13 | 1.1 (LLM + AI Catalog) | — (struktural) | ✅ PARTIAL | Applied v2: migr 0001 backfill + 0002 catalog. `py_compile` OK · katalog REST+RLS OK · `build_llm_provider` resolve adapter dari DB OK · backfill `ryan_andrian` OK. **Real production-run BELUM** (gate user: API key+biaya). |
 | 2026-06-10 09:31 | Pre-Phase-0 | #96 | ✅ SUCCESS | OpenAI billing aktif, pipeline normal, dipakai sebagai baseline |
 | 2026-06-10 05:30 | — | #95 | ❌ FAILED | OpenAI 429 billing_not_active — root cause yang memicu refactor |
 | 2026-06-09 20:30 | — | #94 | ❌ FAILED | Same as #95 |

@@ -3,7 +3,6 @@ import json
 import re
 from datetime import datetime
 from loguru import logger
-from openai import OpenAI
 from dotenv import load_dotenv
 from src.intelligence.config import TenantConfig, get_niches, VIRAL_SCORE_WEIGHTS, system_config
 from src.intelligence.trend_radar import REGION_DISPLAY
@@ -306,7 +305,7 @@ class NicheSelector:
     def _analyze_with_ai(self, signals_summary: str, tenant_config: TenantConfig,
                          peak_region: str = "us", focus: str = None,
                          focus_is_smart: bool = False,
-                         insights: dict = None, openai_api_key: str = "",
+                         insights: dict = None, provider=None, model: str = "",
                          recent_topics: list = None) -> list:
         niches     = get_niches()
         niche_data = niches.get(tenant_config.niche) or next(
@@ -402,32 +401,24 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
             try:
                 logger.info(f"AI analysis attempt {attempt}/{self.MAX_RETRIES}...")
 
-                if not openai_api_key:
+                if not provider:
                     raise ValueError(
-                        f"visual_api_key (OpenAI) tidak ada di tenant_configs "
-                        f"untuk tenant '{tenant_config.tenant_id}'"
+                        f"LLM provider tidak tersedia untuk tenant "
+                        f"'{tenant_config.tenant_id}' (cek llm_api_key/llm_library)"
                     )
-                client   = OpenAI(api_key=openai_api_key)
-                response = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": (
-                                "You are a viral content strategist. "
-                                "You MUST return only a valid JSON array. "
-                                "No markdown, no explanation, no text outside the JSON array."
-                            )
-                        },
-                        {"role": "user", "content": prompt}
-                    ],
+                # JSON dipaksa via abstraksi provider (as_json) — vendor-agnostic.
+                raw = provider.complete(
+                    system=(
+                        "You are a viral content strategist. "
+                        "You MUST return only a valid JSON array. "
+                        "No markdown, no explanation, no text outside the JSON array."
+                    ),
+                    user=prompt,
+                    model=model,
                     max_tokens=2000,
                     temperature=0.8,
-                    # Paksa GPT return JSON valid — eliminasi mayoritas parse error
-                    response_format={"type": "json_object"}
-                )
-
-                raw = response.choices[0].message.content.strip()
+                    as_json=True,
+                ).strip()
                 logger.debug(f"Raw response (first 200 chars): {raw[:200]}")
 
                 cleaned = self._clean_json_response(raw)
@@ -517,14 +508,17 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
 
         summary     = self._prepare_signals_summary(signals, tenant_config)
         peak_region = signals.get("peak_region", "us")
-        # Load OpenAI key dari tenant DB — tidak ada env fallback
-        _openai_key = ""
+        # LLM provider tenant (config-driven, BYOK) — model task 'utility' untuk
+        # seleksi/analisis topik. Provider memegang API key + SDK client.
+        _llm, _model = None, ""
         try:
             from src.config.tenant_config import load_tenant_config
             _rc = load_tenant_config(tenant_config.tenant_id)
-            _openai_key = (_rc.visual_api_key if _rc else "") or ""
+            if _rc:
+                _llm   = _rc.get_llm_provider()
+                _model = _rc.llm_model_for("utility")
         except Exception as _ke:
-            logger.warning(f"[NicheSelector] Gagal load tenant key: {_ke}")
+            logger.warning(f"[NicheSelector] Gagal load LLM provider: {_ke}")
 
         # s91: fetch recent topics sebelum AI call untuk diversity inject ke prompt
         # Gunakan lookback yang sama dengan _filter_duplicates() agar konsisten
@@ -551,7 +545,8 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
             focus=focus,
             focus_is_smart=focus_is_smart,
             insights=insights,
-            openai_api_key=_openai_key,
+            provider=_llm,
+            model=_model,
             recent_topics=_recent_topics,
         )
 

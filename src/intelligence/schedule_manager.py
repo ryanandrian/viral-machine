@@ -106,9 +106,16 @@ class ScheduleManager:
             niche_id = self._apply_diversity_guard(tenant_id, niche_id)
             return niche_id, niche_focus, content_type
 
-        # Absolute fallback — tidak pernah return None
-        logger.warning("[ScheduleManager] Semua layer gagal — pakai universe_mysteries")
-        return "universe_mysteries", None, "short"
+        # Absolute fallback — pakai niche milik TENANT (bukan default global mystery).
+        # Kosong → producer fail-loud (no-silent-degradation), bukan tebak konten.
+        try:
+            from src.config.tenant_config import load_tenant_config
+            _rc = load_tenant_config(tenant_id)
+            _nf = _rc.niche_or_fallback() if _rc else ""
+        except Exception:
+            _nf = ""
+        logger.warning(f"[ScheduleManager] Semua layer gagal — fallback niche tenant='{_nf or '∅'}'")
+        return _nf, None, "short"
 
     # ── Layer 1: production_schedules ──────────────────────────────────────
 
