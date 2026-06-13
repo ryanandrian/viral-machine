@@ -81,9 +81,11 @@ def publish_due_for_channel(sb, channel_row: dict, now_utc: datetime | None = No
     try:
         _publish_from_buffer(sb, channel_row, item)
         inventory.mark_published(item["id"])
-        if item.get("s3_key"):
-            s3_buffer.delete(item["s3_key"])           # buang aset berat, simpan record
-        logger.info(f"[Publisher] published ch={channel_id} inv={item['id']}")
+        # Buang SEMUA aset buffer (video + thumbnail) — cegah .jpg/.mp4 orphan menumpuk.
+        for k in (item.get("s3_key"), (item.get("metadata") or {}).get("thumb_s3")):
+            if k:
+                s3_buffer.delete(k)
+        logger.info(f"[Publisher] published ch={channel_id} inv={item['id']} (buffer dibersihkan)")
         return "published"
     except Exception as e:
         inventory.revert_to_ready(item["id"])           # kembalikan ke buffer utk retry
