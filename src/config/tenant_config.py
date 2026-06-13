@@ -116,7 +116,6 @@ class TenantRunConfig:
     production_on_api_error: str  = "fallback"    # 'fallback' | 'stop_and_notify'
     tts_fallback_provider:   str  = "edge_tts"    # fallback jika primary TTS error
     visual_fallback_mode:    str  = "video"       # fallback jika primary visual error
-    llm_script_fallback:     Optional[str] = None  # DEPRECATED (migr 0001): cross-lib fallback dihapus, tak dipakai
     channel_group:           str  = "default"     # grup channel multi-tenant SaaS
     caption_style:          Optional[dict] = None
     hook_title_style:       Optional[dict] = None
@@ -490,7 +489,6 @@ class TenantConfigManager:
                 production_on_api_error = row.get("production_on_api_error", "fallback") or "fallback",
                 tts_fallback_provider   = row.get("tts_fallback_provider", "edge_tts") or "edge_tts",
                 visual_fallback_mode    = row.get("visual_fallback_mode", "video") or "video",
-                llm_script_fallback     = row.get("llm_script_fallback"),  # DEPRECATED — tak dipakai
                 channel_group           = row.get("channel_group", "default") or "default",
                 niche_visual_style      = niche_visual_style,
                 niche_visual_fallbacks  = niche_visual_fallbacks,
@@ -542,7 +540,6 @@ class TenantConfigManager:
             production_on_api_error = "fallback",
             tts_fallback_provider   = "edge_tts",
             visual_fallback_mode    = "video",
-            llm_script_fallback     = None,  # DEPRECATED — tak dipakai
             channel_group           = "default",
             # Telegram (s81)
             telegram_enabled        = True,
