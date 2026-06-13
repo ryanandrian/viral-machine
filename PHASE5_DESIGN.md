@@ -11,7 +11,11 @@
 ## Sub-phase
 - **✅ 5.1 Foundation (DONE):** `content_inventory` + `channel_id` propagation (0011) + `s3_buffer.py` util + S3 env (partial).
 - **⏳ 5.2 Channel_id propagation kode:** worker→pipeline→publisher pass `channel_id` (dari `channels`); analytics filter per channel; pipeline_run_logs.channel_id terisi. (Schema siap.)
-- **⏳ 5.3 DECOUPLE producer/publisher (INTI, RISIKO TINGGI — design-review):** 
+- **🛠️ 5.3 DECOUPLE producer/publisher (INTI, RISIKO TINGGI):**
+  - **✅ Step 1 data-layer:** `src/orchestrator/inventory.py` (content_inventory CRUD: record_producing/mark_ready/buffer_depth/claim_oldest_ready[anti-rebut]/mark_published/revert/failed) — **tervalidasi e2e vs v2** + buffer S3 e2e ✅.
+  - **⏳ Step 2 Producer:** `produce_one` = pipeline.run(publish=False) → upload video **+ thumbnail** ke S3 + simpan script/metadata di content_inventory.metadata → ready. (Catatan: SEMUA input publish — video, thumbnail, script — harus masuk buffer/DB karena publisher = proses terpisah.)
+  - **⏳ Step 3 Publisher:** claim_oldest_ready → download S3 → **publish (ekstrak logic publish dari pipeline.run 311-365 jadi method reusable)** → mark_published + hapus S3; gagal → revert_to_ready; buffer kosong → skip+Telegram.
+  - **⏳ Step 4 Cutover (GATED):** worker pakai loop producer+publisher (ganti produce+publish satu-tarikan). **Validasi = run produksi NYATA** (render+publish) → keputusan owner (biaya/waktu/posting).
   - **Producer**: loop persisten, jaga buffer per-channel (target depth config per-niche); render → upload S3 → `content_inventory` status=ready; concurrency cap = core (anti-OOM, terbukti). 
   - **Publisher**: loop slot (timezone tenant!) → ambil ready tertua → publish → hapus S3 → status=published; buffer kosong → skip+Telegram. 
   - Trigger = **loop persisten BUKAN cron** (pegang semaphore=core); klaim multi-node `FOR UPDATE SKIP LOCKED`. Pseudo-code lengkap di DESAIN §12c.
