@@ -533,6 +533,9 @@ class ScriptEngine:
         best_score      = 0
         actual_provider = llm_provider
         feedback        = None  # Feedback dari attempt sebelumnya
+        # F2d — target word-budget (LLM-QC length gate). Aktif hanya bila preset di-set.
+        word_budget = round(preset_seconds * float(format_wps)) if (preset_seconds and format_wps) else None
+        _LEN_TOL    = float(os.getenv("SCRIPT_LENGTH_TOLERANCE", "0.25"))
 
         for attempt in range(1, max_retry + 1):
             logger.info(f"[ScriptEngine] Attempt {attempt}/{max_retry} via {llm_provider}")
@@ -587,14 +590,30 @@ class ScriptEngine:
                 script["viral_analysis"] = {}
                 feedback = None
 
+            # F2d — LLM-QC LENGTH GATE (shift-left): script wajib capai word-budget preset
+            # SEBELUM TTS/render (hemat kredit; "QC di LLM"). Aktif hanya bila preset di-set.
+            length_ok = True
+            if word_budget:
+                wc = len((script.get("full_script") or "").split())
+                if abs(wc - word_budget) / word_budget > _LEN_TOL:
+                    length_ok = False
+                    feedback = (feedback or []) + [
+                        f"LENGTH: script ~{wc} words but target ~{word_budget} words for a "
+                        f"{preset_seconds}s video. " + (
+                            "Expand — add more specific facts/depth, not filler."
+                            if wc < word_budget else
+                            "Tighten — cut weakest lines, keep it dense.")
+                    ]
+                    logger.info(f"[ScriptEngine] length-gate: {wc}w vs target {word_budget}w → retry")
+
             if score > best_score:
                 best_score  = score
                 best_script = script
 
-            if score >= min_score:
+            if score >= min_score and length_ok:
                 logger.info(
                     f"[ScriptEngine] ✅ Quality gate passed: "
-                    f"{score}/100 (attempt {attempt})"
+                    f"{score}/100 (attempt {attempt}) | length_ok={length_ok}"
                 )
                 break
 
