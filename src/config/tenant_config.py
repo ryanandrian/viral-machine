@@ -116,7 +116,7 @@ class TenantRunConfig:
     production_on_api_error: str  = "fallback"    # 'fallback' | 'stop_and_notify'
     tts_fallback_provider:   str  = "edge_tts"    # fallback jika primary TTS error
     visual_fallback_mode:    str  = "video"       # fallback jika primary visual error
-    llm_script_fallback:     str  = "gpt-4o-mini" # fallback jika Claude error
+    llm_script_fallback:     Optional[str] = None  # DEPRECATED (migr 0001): cross-lib fallback dihapus, tak dipakai
     channel_group:           str  = "default"     # grup channel multi-tenant SaaS
     caption_style:          Optional[dict] = None
     hook_title_style:       Optional[dict] = None
@@ -179,8 +179,8 @@ class TenantRunConfig:
     visual_ai_model:   Optional[str] = None
     image_quality:     str           = "low"
 
-    llm_provider:      str           = "openai"   # legacy flat (back-compat) — sumber kebenaran baru = llm_library
-    llm_model:         str           = "gpt-4o-mini"  # legacy flat — fallback bila llm_models kosong
+    llm_provider:      str           = ""   # legacy flat (back-compat); sumber kebenaran = llm_library
+    llm_model:         str           = ""   # legacy flat (back-compat); sumber kebenaran = llm_models
     llm_api_key:       Optional[str] = None
     llm_library:       Optional[str]  = None  # Phase 1.1: 'anthropic'|'openai'. None → derive dari llm_provider
     llm_models:        Optional[dict] = None  # Phase 1.1 per-task: script/utility/rewrite/analyzer/fallback
@@ -277,12 +277,16 @@ class TenantRunConfig:
         """Routing key provider ('claude'|'openai') — Phase 1.1.
         Prioritas llm_library; fallback ke kolom flat legacy llm_provider."""
         lib = (self.llm_library or "").lower()
-        if lib == "anthropic":
+        if lib in ("anthropic", "claude"):
             return "claude"
-        if lib == "openai":
+        if lib in ("openai", "gpt"):
             return "openai"
-        p = (self.llm_provider or "openai").lower()
-        return "claude" if p in ("claude", "anthropic") else "openai"
+        p = (self.llm_provider or "").lower()
+        if p in ("claude", "anthropic"):
+            return "claude"
+        if p in ("openai", "gpt"):
+            return "openai"
+        return ""  # tak terkonfigurasi → factory/caller fail-loud (TANPA default provider)
 
     def llm_model_for(self, task: str) -> str:
         """Model untuk task tertentu (script/utility/rewrite/analyzer/fallback) — Phase 1.1.
@@ -291,7 +295,7 @@ class TenantRunConfig:
             return self.llm_models[task]
         if self.llm_model:
             return self.llm_model
-        return "claude-sonnet-4-6" if self.effective_llm_provider() == "claude" else "gpt-4o"
+        return ""  # llm_models & llm_model kosong → fail-loud di adapter (TANPA model hardcode)
 
     def niche_or_fallback(self) -> str:
         """Niche efektif tenant — TANPA default global. Urutan: niche_fallback
@@ -460,8 +464,8 @@ class TenantConfigManager:
                 visual_api_key=row.get("visual_api_key"),
                 visual_ai_model=row.get("visual_ai_model"),
                 image_quality=row.get("image_quality", "low"),
-                llm_provider=row.get("llm_provider", "openai"),
-                llm_model=row.get("llm_model", "gpt-4o-mini"),
+                llm_provider=row.get("llm_provider"),
+                llm_model=row.get("llm_model"),
                 llm_api_key=row.get("llm_api_key"),
                 llm_library=row.get("llm_library"),
                 llm_models=row.get("llm_models") if isinstance(row.get("llm_models"), dict) else None,
@@ -486,7 +490,7 @@ class TenantConfigManager:
                 production_on_api_error = row.get("production_on_api_error", "fallback") or "fallback",
                 tts_fallback_provider   = row.get("tts_fallback_provider", "edge_tts") or "edge_tts",
                 visual_fallback_mode    = row.get("visual_fallback_mode", "video") or "video",
-                llm_script_fallback     = row.get("llm_script_fallback", "gpt-4o-mini") or "gpt-4o-mini",
+                llm_script_fallback     = row.get("llm_script_fallback"),  # DEPRECATED — tak dipakai
                 channel_group           = row.get("channel_group", "default") or "default",
                 niche_visual_style      = niche_visual_style,
                 niche_visual_fallbacks  = niche_visual_fallbacks,
@@ -538,7 +542,7 @@ class TenantConfigManager:
             production_on_api_error = "fallback",
             tts_fallback_provider   = "edge_tts",
             visual_fallback_mode    = "video",
-            llm_script_fallback     = "gpt-4o-mini",
+            llm_script_fallback     = None,  # DEPRECATED — tak dipakai
             channel_group           = "default",
             # Telegram (s81)
             telegram_enabled        = True,
