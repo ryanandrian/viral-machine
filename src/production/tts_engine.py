@@ -75,6 +75,7 @@ def _get_provider_config(tenant_config: TenantConfig) -> dict:
             "tts_api_key":         rc.tts_api_key or "",
             "tts_voice_per_niche": rc.tts_voice_per_niche,
             "tts_voice_settings":  getattr(rc, "tts_voice_settings", {}) or {},
+            "tts_fallback_provider": getattr(rc, "tts_fallback_provider", "edge_tts") or "edge_tts",
             "visual_api_key":      getattr(rc, "visual_api_key", "") or "",
             "niche":               tenant_config.niche,
             "tenant_id":           tenant_config.tenant_id,
@@ -82,10 +83,11 @@ def _get_provider_config(tenant_config: TenantConfig) -> dict:
     except Exception as e:
         logger.warning(f"[TTSEngine] RunConfig load failed ({e}) — pakai defaults")
         return {
-            "tts_provider":        "edge_tts",
+            "tts_provider":        "edge_tts",   # free universal fallback (SOFTCODE §2)
             "tts_voice":           "en-US-GuyNeural",
             "tts_api_key":         "",
             "tts_voice_per_niche": None,
+            "tts_fallback_provider": "edge_tts",
             "visual_api_key":      "",
             "niche":               tenant_config.niche,
             "tenant_id":           tenant_config.tenant_id,
@@ -146,16 +148,18 @@ class TTSEngine:
 
         # Load config dari Supabase
         config          = _get_provider_config(tenant_config)
-        primary         = config.get("tts_provider", "edge_tts")
-        logger.info(f"[TTSEngine] Primary provider: {primary}")
+        primary  = config.get("tts_provider") or "edge_tts"
+        fallback = config.get("tts_fallback_provider") or "edge_tts"
+        logger.info(f"[TTSEngine] Primary: {primary} | fallback: {fallback}")
 
-        # Tentukan fallback chain berdasarkan primary provider
-        if primary == "elevenlabs":
-            chain = ["elevenlabs", "openai_tts", "edge_tts"]
-        elif primary == "openai_tts":
-            chain = ["openai_tts", "edge_tts"]
-        else:
-            chain = ["edge_tts"]
+        # Fallback chain CONFIG-DRIVEN (tts_provider + tts_fallback_provider) — BUKAN
+        # hardcode. TIDAK ada auto cross-vendor (mis. elevenlabs→openai_tts yang tenant
+        # mungkin tak punya keynya); fallback hanya yang diset tenant (default edge_tts =
+        # gratis universal). SOFTCODE §2.
+        chain = []
+        for p in (primary, fallback):
+            if p and p not in chain:
+                chain.append(p)
 
         last_error = None
         for i, provider_name in enumerate(chain):
