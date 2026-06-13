@@ -1,0 +1,30 @@
+# PHASE 5 — Multi-Channel + Decouple Producer/Publisher — Rencana Desain
+
+> Status LIVE = `PROGRESS.md`. Pondasi+pseudo-code = `DESAIN_PRODUK_SAAS.md §12c` + [[decisions_production_scaling]] (JANGAN analisa/benchmark ulang). Tujuan: scale tenant tanpa VPS-down.
+
+## Kondisi nyata v2 (verified 2026-06-13)
+- **`channels` lengkap** (id, tenant_id, channel_group, channel_name, platform, platform_channel_id, token_path, niche, niche_mode, niche_pool, production_cron, publish_slots, is_active, is_primary) — 1 row (ryan). Multi-channel SCHEMA sebagian besar ADA.
+- `channel_id` ADA di production_schedules/videos/video_analytics/pipeline_run_logs; **ditambah** ke production_runs+pipeline_queue (migr 0011).
+- **`content_inventory` DIBUAT (0011)**: tenant_id/channel_id/niche/s3_key/status(producing→ready→publishing→published/failed)/metadata/target_slot/expires_at. RLS tenant-private.
+- Buffer storage = **Biznet Gio S3** (`nos.wjv-1.neo.id`, West Java, co-located). Util `src/utils/s3_buffer.py` (env-driven). **S3_SECRET_KEY + S3_BUCKET pending** (S3-CONNECTION cuma access key).
+
+## Sub-phase
+- **✅ 5.1 Foundation (DONE):** `content_inventory` + `channel_id` propagation (0011) + `s3_buffer.py` util + S3 env (partial).
+- **⏳ 5.2 Channel_id propagation kode:** worker→pipeline→publisher pass `channel_id` (dari `channels`); analytics filter per channel; pipeline_run_logs.channel_id terisi. (Schema siap.)
+- **⏳ 5.3 DECOUPLE producer/publisher (INTI, RISIKO TINGGI — design-review):** 
+  - **Producer**: loop persisten, jaga buffer per-channel (target depth config per-niche); render → upload S3 → `content_inventory` status=ready; concurrency cap = core (anti-OOM, terbukti). 
+  - **Publisher**: loop slot (timezone tenant!) → ambil ready tertua → publish → hapus S3 → status=published; buffer kosong → skip+Telegram. 
+  - Trigger = **loop persisten BUKAN cron** (pegang semaphore=core); klaim multi-node `FOR UPDATE SKIP LOCKED`. Pseudo-code lengkap di DESAIN §12c.
+  - **Menutup Bug 1 dispatcher-timezone** (publisher baru timezone-aware by-design; gantikan pg_cron v1 yang treat UTC).
+- **⏳ 5.4 Niche gate-enforcement:** niche/niche_pool WAJIB sebelum schedule/produksi (DB constraint + onboarding). Melengkapi fail-loud Phase 1.2.
+- **⏳ 5.5 Optimasi render** (dari decisions §5, prioritas #1 scale): gabung 3-pass FFmpeg→1 (2,87×) + paralel image (asyncio.gather). 35→~13 mnt.
+
+## Dependency (owner)
+- **S3_SECRET_KEY + S3_BUCKET** (Biznet Gio dashboard) untuk e2e buffer upload/download.
+
+## Risiko + mitigasi
+- **5.3 decouple = rewrite alur inti produksi+publish** → RISIKO TINGGI. Mitigasi: **design-review dulu** (seperti Phase 4); v2 dev (v1 tak tersentuh); validasi buffer-flow dgn 1 channel sebelum multi; concurrency cap wajib (terbukti OOM tanpa rem).
+- Bug 1 (pg_cron v1) tetap di v1 sampai cutover; v2 pakai publisher baru.
+
+## Rekomendasi
+5.2 + 5.4 + 5.5 (channel_id, niche-gate, optimasi render) bisa lanjut bertahap. **5.3 decouple = design-review + S3 secret dulu** (paling berisiko + butuh buffer e2e).
