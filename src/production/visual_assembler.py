@@ -214,7 +214,7 @@ class VisualAssembler:
                 "tenant_id":              tenant_config.tenant_id,
                 "niche":                  tenant_config.niche,
                 "visual_provider":        visual_mode,
-                "visual_ai_model":        visual_mode.split(":", 1)[1] if ":" in visual_mode else "gpt-image-1-mini",
+                "visual_ai_model":        visual_mode.split(":", 1)[1] if ":" in visual_mode else "",
                 "visual_api_key":         run_config.get("visual_api_key"),
                 "llm_api_key":            run_config.get("llm_api_key") or "",
                 "llm_provider":           run_config.get("llm_provider", "openai"),

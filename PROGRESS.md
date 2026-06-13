@@ -13,8 +13,8 @@
 - **DB v2 = punya sendiri** (clone penuh skema+data dari v1) — bukan DB v1. **v2 REPLACE v1 penuh di VPS yang sama saat proven.**
 
 **🎯 THREAD AKTIF = BACKEND Phase 1 (SOFTCODE AI Config). Frontend track ✅ DITUTUP (28 screen ter-port).**
-- **Terakhir selesai (2026-06-13):** **Phase 1.1** (LLM softcode + AI Provider Catalog DB-driven) **+ Phase 1.2** (niche_fallback). Provider/model LLM 100% dari DB; niche fallback config-driven **tenant-specific + fail-loud** (buang default global `universe_mysteries` dari fallback-logic). Tervalidasi **struktural** (compile + factory dari katalog v2 + backfill `0001`/`0003` + resolver). **Belum:** real production-run, commit/push.
-- **Berikutnya PER RENCANA (jangan keluar jalur):** Phase 1.3 (visual catalog→DB, perluas pakai `ai_models` yang sama) → 1.4 (TTS→katalog) → 1.5 (music/R2) → 1.6 (bugfix). Lihat §"AI PROVIDER CATALOG" untuk follow-up A/B/C + gate enforcement niche (Phase 5/9).
+- **Terakhir selesai (2026-06-13):** **Phase 1.1** (LLM softcode + AI Provider Catalog DB-driven) **+ 1.2** (niche_fallback fail-loud) **+ 1.3** (visual image catalog→DB). Provider/model LLM **& image** 100% dari katalog DB (`ai_providers`/`ai_models`); niche fallback tenant-specific. **Committed** di branch `v2-backend`. **Production-run LLM-path HIJAU** (round-trip OpenAI nyata).
+- **Berikutnya PER RENCANA (jangan keluar jalur):** Phase 1.4 (TTS→katalog) → 1.5 (music/R2) → 1.6 (bugfix). Lihat §"AI PROVIDER CATALOG" untuk follow-up A/B/C + gate enforcement niche (Phase 5/9).
 - **Gate user:** (1) real production-run ke v2; (2) commit/push fase 1.1.
 
 **JANGAN diulang (sudah dikerjakan):** Phase 0 audit ✅ (selesai 2026-06-12, hasil di journal + rekonsiliasi Phase 1.1); framing v1/v2 (terkunci); **frontend track ✅ semua screen desain ter-port (28 done)**. **JANGAN** usulkan deploy backend ke VPS — backend v2 belum mulai & DB clone belum ada.
@@ -168,7 +168,7 @@ Next.js 15 (App Router) + shadcn/ui + Tailwind + tremor.so + Geist Sans + next-i
 | Phase | Nama | Tujuan | Estimasi | Status |
 |-------|------|--------|----------|--------|
 | **0** | Audit & Persiapan | Verifikasi semua klaim SOFTCODE_AI_CONFIG vs kode | – | ✅ DONE (read-only, 2026-06-12) — hasil di journal + rekonsiliasi di §1.1 |
-| **1** | SOFTCODE AI Config | Hilangkan hardcode AI, hapus silent fallback (6 sub-phase) | 4-6 jam | 🛠️ in-progress — **1.1 ✅** (LLM + AI Provider Catalog DB-driven) · **1.2 ✅** (niche_fallback, 2026-06-13); 1.3-1.6 pending |
+| **1** | SOFTCODE AI Config | Hilangkan hardcode AI, hapus silent fallback (6 sub-phase) | 4-6 jam | 🛠️ in-progress — **1.1 ✅** (LLM+catalog) · **1.2 ✅** (niche_fallback) · **1.3 ✅** (image catalog→DB, 2026-06-13); 1.4-1.6 pending |
 | **2** | Error Mgmt Terpusat | `src/exceptions.py` + structured error flow | 2 jam | 🔒 Blocked by Phase 1 |
 | **3** | Pipeline Run Logs (DB) | `pipeline_run_logs` table, RLS-ready, UI-facing | 2 jam | 🔒 Blocked by Phase 2 |
 | **4** | BYO-CC Phase 1 | `tenant_credentials` + Fernet + auth foundation | 1 minggu | 🔒 Blocked by Phase 3 |
@@ -236,7 +236,7 @@ Perluasan produk: menampung **banyak kategori creator short faceless** (mystery/
 | Komponen | Sisi-tenant `tenant_configs` | Catalog-wired? | Tindak lanjut |
 |---|---|---|---|
 | **LLM** | `llm_library`+`llm_models` | ✅ DONE (1.1) | — |
-| **Image** | `visual_provider`/`visual_ai_model` (flat legacy) | ❌ | **Phase 1.3** |
+| **Image** | `visual_provider`=`ai_image:<model_key>` (rujuk katalog) | ✅ DONE (1.3) | — (harmonisasi penuh tenant_configs opsional) |
 | **TTS** | `tts_provider`/`tts_voice` (flat legacy) | ❌ | **Phase 1.4** |
 | **Video (ai_video BYOK)** | belum ada kolom | ❌ | **Multi-Format fase C** |
 
@@ -342,6 +342,12 @@ Perluasan produk: menampung **banyak kategori creator short faceless** (mystery/
 - `visual_assembler.py` — hapus default `"gpt-image-1-mini"`
 
 **Validation gate:** 1 production run sukses dengan model dipilih via DB row.
+
+> ### ✅ 1.3 STATUS — DONE + TERVALIDASI STRUKTURAL (2026-06-13)
+> Pakai **`ai_models` terunifikasi** (component='image') — BUKAN tabel `ai_image_models` terpisah (selaras AI Provider Catalog, satu katalog semua komponen). Migration `0004` (provider `replicate` + 3 model image) applied v2.
+> - `ai_image.py`: hapus dict hardcode `AI_IMAGE_MODELS` → load `model_config` (platform=provider_key, model_id, size) dari katalog DB via loader. Model tak dikenal → fail-loud `VisualError`. `visual_assembler.py:217`: buang default `gpt-image-1-mini` → `''`.
+> - **Bukti:** compile ✅ · grep `AI_IMAGE_MODELS`=0 ✅ · `AIImageProvider` resolve `gpt-image-1-mini`(openai) + `flux-schnell`(replicate) dari DB ✅ · unknown→fail-loud ✅. Katalog v2: 3 provider / 7 model (4 llm + 3 image).
+> - **Belum:** real image-gen run (butuh key OpenAI/Replicate + biaya) — resolusi katalog terbukti; generate aktual = saat full-pipeline run.
 
 ### 1.4 — TTS Fallback Softcode
 **Scope:**
@@ -554,6 +560,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 | 2026-06-13 | 1.2 (niche_fallback) | — (struktural) | ✅ PARTIAL | Applied v2: migr 0003 (`niche_fallback` nullable). Best-practice: gate-enforcement + fail-loud, no global default. compile OK · grep site produksi=0 · resolver OK · `ryan_andrian` niche non-empty → no breakage. Real production-run BELUM. |
 | 2026-06-13 | 1.1 (LLM + AI Catalog) | — (round-trip) | ✅ **HIJAU** | **Production-run LLM-path GREEN.** v2 ryan dibelokkan ke OpenAI (key Anthropic clone-v1 mati → 401; OpenAI key valid di `visual_api_key`). catalog(DB)→`OpenAIChatAdapter`("OpenAI GPT" dari DB)→**REAL OpenAI API**→`{"ok":true,"engine":"openai"}` parsed ✓. **Membuktikan: ganti provider = 1 baris config DB (`llm_library`), nol perubahan kode.** Key Anthropic invalid = isu kredensial bukan bug. |
 | 2026-06-13 | (config v2) | — | ⚠️ TEMP | **v2 ryan_andrian dibelokkan ke OpenAI sementara** (`llm_library=openai`, `llm_api_key←visual_api_key`, `llm_models→gpt-4o/4o-mini`) — krn key Anthropic v2 mati (v1 produksi juga fall back ke OpenAI). **Revert** saat key Anthropic baru tersedia: `llm_library=anthropic` + key valid + `llm_models` Claude. **v1 TIDAK disentuh.** |
+| 2026-06-13 | 1.3 (image catalog) | — (struktural) | ✅ | Applied v2 migr 0004 (provider replicate + 3 model image). `ai_image` load `model_config` dari `ai_models` DB; `AI_IMAGE_MODELS` hardcode dihapus. compile OK · resolve openai+replicate dari DB OK · unknown→fail-loud OK. Real image-gen BELUM (butuh key+biaya). |
 | 2026-06-13 | 1.1 commit | branch `v2-backend` `f7e9832` | ✅ | Commit ke **branch v2-backend** (BUKAN main — `src/` tak di-exclude sparse-checkout → lindungi v1). `main` tetap `31a558b`. |
 | 2026-06-10 09:31 | Pre-Phase-0 | #96 | ✅ SUCCESS | OpenAI billing aktif, pipeline normal, dipakai sebagai baseline |
 | 2026-06-10 05:30 | — | #95 | ❌ FAILED | OpenAI 429 billing_not_active — root cause yang memicu refactor |

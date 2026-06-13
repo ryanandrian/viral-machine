@@ -18,25 +18,8 @@ from loguru import logger
 from src.providers.visual.base import VisualProvider, VideoClip, VisualError
 
 
-# Model registry
-AI_IMAGE_MODELS = {
-    "flux-schnell": {
-        "platform":    "replicate",
-        "model_id":    "black-forest-labs/flux-schnell",
-        "description": "Tercepat, kualitas sangat baik",
-    },
-    "gpt-image-1-mini": {
-        "platform":    "openai",
-        "model_id":    "gpt-image-1-mini",
-        "description": "GPT Image 1 Mini, low quality",
-        "size":        "1024x1536",
-    },
-    "stable-diffusion": {
-        "platform":    "replicate",
-        "model_id":    "stability-ai/stable-diffusion:db21e45d3f7023abc2a46ee38a23973f6dce16bb082a930b0c49861f96d1e5bf",
-        "description": "Alternatif Replicate",
-    },
-}
+# Katalog model image = DB (ai_models, component='image') — admin-managed via migration/DB.
+# Tidak ada registry hardcode di sini; di-load lewat catalog loader (Phase 1.3).
 
 # Default quality tags dan negative prompt — dipakai jika niche belum punya custom value.
 # Per-niche value disimpan di tabel niches Supabase (kolom image_quality_tags / image_negative_prompt).
@@ -63,17 +46,27 @@ class AIImageProvider(VisualProvider):
     def __init__(self, config: dict):
         super().__init__(config)
 
-        provider_str  = config.get("visual_provider", "ai_image:flux-schnell")
+        provider_str  = config.get("visual_provider") or ""
         parts         = provider_str.split(":", 1)
-        self.ai_model = parts[1] if len(parts) > 1 else "flux-schnell"
-
-        if self.ai_model not in AI_IMAGE_MODELS:
+        self.ai_model = parts[1] if len(parts) > 1 else ""
+        if not self.ai_model:
             raise VisualError(
-                f"AI Image model '{self.ai_model}' tidak dikenal. "
-                f"Pilihan: {list(AI_IMAGE_MODELS.keys())}"
+                "Model image belum diset (visual_provider='ai_image:<model_key>')."
             )
 
-        self.model_config       = AI_IMAGE_MODELS[self.ai_model]
+        # Katalog model image dari DB (ai_models, component='image') — config-driven,
+        # admin-managed. Dispatch generate pakai platform = provider_key.
+        from src.providers.llm.catalog import get_models
+        _row = get_models().get(self.ai_model)
+        if not _row or _row.get("component") != "image":
+            raise VisualError(
+                f"Model image '{self.ai_model}' tidak ada / non-aktif di katalog ai_models."
+            )
+        self.model_config = {
+            "platform": _row["provider_key"],
+            "model_id": _row["model_id"],
+            "size":     (_row.get("default_params") or {}).get("size", "1024x1536"),
+        }
         self.image_quality      = config.get("image_quality", "low")
         self.niche              = config.get("niche", "universe_mysteries")
         # Niche visual data — dari Supabase via TenantRunConfig (tidak hardcode)
