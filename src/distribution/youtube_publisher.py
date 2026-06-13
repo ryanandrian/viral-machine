@@ -170,12 +170,24 @@ class YouTubePublisher:
                 "defaultAudioLanguage": "en"
             },
             "status": {
-                "privacyStatus":           "public",
+                # Config-driven (no-hardcode): default 'public'; override utk test/staging.
+                # Sumber: tenant_config.publish_privacy → env YOUTUBE_PRIVACY_STATUS → 'public'.
+                "privacyStatus":           self._privacy_status(tenant_config),
                 "selfDeclaredMadeForKids": False,
                 "madeForKids":             False
             }
         }
 
+
+    @staticmethod
+    def _privacy_status(tenant_config) -> str:
+        """privacyStatus config-driven: tenant_config.publish_privacy → env → 'public'.
+        Hanya menerima nilai sah YouTube; selain itu fallback 'public' (fail-safe)."""
+        val = (getattr(tenant_config, "publish_privacy", None)
+               or os.getenv("YOUTUBE_PRIVACY_STATUS")
+               or "public")
+        val = str(val).strip().lower()
+        return val if val in ("public", "private", "unlisted") else "public"
 
     def publish(self, video_path: str, script: dict,
                 tenant_config: TenantConfig,

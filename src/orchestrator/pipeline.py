@@ -509,40 +509,49 @@ class Pipeline:
 
     def _pre_publish_qc(self, video_path: str, duration_secs, clip_count: int = None) -> tuple:
         """
-        Fase 7 s71: Lightweight pre-publish quality control.
-        Empat check cepat (<2 detik) sebelum upload ke YouTube.
+        Pre-publish QC = gate INTEGRITAS RENDER, bukan penilaian konten.
 
-        Checks:
-          1. File size > 5 MB      — render tidak korup/kosong
-          2. Durasi >= 45 detik    — minimum Shorts yang layak
-          3. Durasi <= 180 detik   — maksimum YouTube Shorts
-          4. clip_count >= 6       — semua visual scene berhasil
+        Kualitas konten SUDAH di-gate di STEP 3 (ScriptAnalyzer, ambang ≥80/100).
+        QC di sini hanya mendeteksi render yang RUSAK/TIDAK LENGKAP sebelum upload —
+        jangan membuang video yang baik (+biaya render) atas dasar penghakiman konten.
 
-        Returns: (passed: bool, reason: str)
-        Jika passed=False → video tidak dipublish, dicatat qc_failed.
-        Pipeline tidak crash — lanjut ke run berikutnya.
+        Checks (semua ambang CONFIG-DRIVEN, no-hardcode):
+          1. File size  >= QC_MIN_SIZE_MB (default 5)    — render tidak korup/kosong
+          2. Durasi     >= QC_MIN_DURATION (default 20)   — deteksi render TERPOTONG (bukan "layak")
+          3. Durasi     <= QC_MAX_DURATION (default 180)  — batas platform Shorts
+          4. clip_count >= QC_MIN_CLIPS (default 6)       — semua visual scene berhasil
+
+        Catatan: QC_MIN_DURATION sengaja rendah (integritas, bukan konten). Bila ingin
+        kebijakan "durasi minimal untuk engagement", itu target SOFT di script word-count
+        (STEP 3), BUKAN hard-discard setelah render dibayar.
+
+        Returns: (passed, reason). passed=False → tidak dipublish, dicatat qc_failed (no crash).
         """
-        # Check 1: File size
+        min_size_mb = float(os.getenv("QC_MIN_SIZE_MB", "5"))
+        min_dur     = float(os.getenv("QC_MIN_DURATION", "20"))
+        max_dur     = float(os.getenv("QC_MAX_DURATION", "180"))
+        min_clips   = int(os.getenv("QC_MIN_CLIPS", "6"))
+
+        # Check 1: File size — render korup/kosong
         try:
             size_mb = os.path.getsize(video_path) / (1024 * 1024)
-            if size_mb < 5.0:
-                return False, f"File terlalu kecil: {size_mb:.1f}MB < 5MB (render gagal?)"
+            if size_mb < min_size_mb:
+                return False, f"File terlalu kecil: {size_mb:.1f}MB < {min_size_mb}MB (render gagal?)"
         except Exception as e:
             return False, f"Tidak bisa baca file video: {e}"
 
         # Check 2 & 3: Durasi (skip jika ffprobe tidak tersedia)
         if duration_secs is not None:
-            if duration_secs < 45:
-                return False, f"Durasi terlalu pendek: {duration_secs:.1f}s < 45s"
-            if duration_secs > 180:
-                return False, f"Durasi terlalu panjang: {duration_secs:.1f}s > 180s (bukan Shorts)"
+            if duration_secs < min_dur:
+                return False, f"Durasi tak wajar (render terpotong?): {duration_secs:.1f}s < {min_dur}s"
+            if duration_secs > max_dur:
+                return False, f"Durasi terlalu panjang: {duration_secs:.1f}s > {max_dur}s (bukan Shorts)"
 
-        # Check 4: Jumlah clips — semua scene harus berhasil
-        # s71b: mencegah video dengan visual tidak lengkap dipublish
-        if clip_count is not None and clip_count < 6:
+        # Check 4: Jumlah clips — semua scene harus berhasil (cegah visual tidak lengkap)
+        if clip_count is not None and clip_count < min_clips:
             return False, (
-                f"Visual tidak lengkap: {clip_count}/6 clips berhasil. "
-                f"Scene gagal kemungkinan ditolak DALL-E 3 content policy."
+                f"Visual tidak lengkap: {clip_count}/{min_clips} clips berhasil "
+                f"(scene gagal kemungkinan ditolak content policy provider gambar)."
             )
 
         return True, "ok"
