@@ -13,8 +13,8 @@
 - **DB v2 = punya sendiri** (clone penuh skema+data dari v1) — bukan DB v1. **v2 REPLACE v1 penuh di VPS yang sama saat proven.**
 
 **🎯 THREAD AKTIF = BACKEND Phase 1 (SOFTCODE AI Config). Frontend track ✅ DITUTUP (28 screen ter-port).**
-- **Terakhir selesai (2026-06-13):** Phase **1.1** (LLM softcode+catalog) **+1.2** (niche_fallback fail-loud) **+1.3** (image catalog→DB) **+1.4** (TTS chain config-driven). Provider/model LLM&image 100% katalog DB; TTS chain dari config (no silent cross-vendor); niche tenant-specific. Re-audit hardcode global ✅ + app bersih (no junk/dead-code). **Committed** branch `v2-backend`. Production-run LLM-path HIJAU. VPS-pull safety terverifikasi.
-- **Berikutnya PER RENCANA (jangan keluar jalur):** **Phase 1.6** (bugfix bundle: dispatcher timezone WIB + `AIImageProvider._generate_image()` signature mismatch). Lalu Phase 1 SELESAI → Phase 2 (Error Mgmt). Follow-up tertunda di §"AI PROVIDER CATALOG" (A/B/C) + gate enforcement niche (Phase 5/9) + TTS provider/voice catalog-wiring.
+- **✅ PHASE 1 SELESAI (2026-06-13):** 1.1 LLM softcode+catalog · 1.2 niche_fallback fail-loud · 1.3 image catalog→DB · 1.4 TTS chain config-driven · 1.5 music/R2 · 1.6 bugfix (`_generate_image` fixed; dispatcher-tz re-klasifikasi Phase 5). Semua AI config-driven (katalog DB `ai_providers`/`ai_models`), nol silent cross-provider, app bersih + re-audit hardcode bersih. **Committed branch `v2-backend`** (8 commit); `main` aman; production-run LLM HIJAU; VPS-pull terverifikasi.
+- **Berikutnya PER RENCANA (jangan keluar jalur):** **Phase 2 — Error Management Terpusat** (`src/exceptions.py` hierarchy + typed errors + log/Telegram/`pipeline_errors`). Follow-up tertunda di §"AI PROVIDER CATALOG" (A/B/C) + gate enforcement niche (Phase 5/9) + TTS provider/voice catalog-wiring + **Bug 1 dispatcher-tz (Phase 5 publisher)**.
 - **Gate user:** (1) real production-run ke v2; (2) commit/push fase 1.1.
 
 **JANGAN diulang (sudah dikerjakan):** Phase 0 audit ✅ (selesai 2026-06-12, hasil di journal + rekonsiliasi Phase 1.1); framing v1/v2 (terkunci); **frontend track ✅ semua screen desain ter-port (28 done)**. **JANGAN** usulkan deploy backend ke VPS — backend v2 belum mulai & DB clone belum ada.
@@ -168,7 +168,7 @@ Next.js 15 (App Router) + shadcn/ui + Tailwind + tremor.so + Geist Sans + next-i
 | Phase | Nama | Tujuan | Estimasi | Status |
 |-------|------|--------|----------|--------|
 | **0** | Audit & Persiapan | Verifikasi semua klaim SOFTCODE_AI_CONFIG vs kode | – | ✅ DONE (read-only, 2026-06-12) — hasil di journal + rekonsiliasi di §1.1 |
-| **1** | SOFTCODE AI Config | Hilangkan hardcode AI, hapus silent fallback (6 sub-phase) | 4-6 jam | 🛠️ in-progress — **1.1–1.5 ✅** (LLM+catalog · niche_fallback · image catalog · TTS chain · music/R2, 2026-06-13); **1.6 pending** (bugfix bundle) |
+| **1** | SOFTCODE AI Config | Hilangkan hardcode AI, hapus silent fallback (6 sub-phase) | 4-6 jam | ✅ **DONE (2026-06-13)** — 1.1-1.5 softcode + 1.6 bugfix (Bug 2 `_generate_image` fixed). Bug 1 dispatcher-timezone = **pg_cron DB v1 (bukan kode repo)** → re-klasifikasi **Phase 5** (publisher v2 timezone-aware). |
 | **2** | Error Mgmt Terpusat | `src/exceptions.py` + structured error flow | 2 jam | 🔒 Blocked by Phase 1 |
 | **3** | Pipeline Run Logs (DB) | `pipeline_run_logs` table, RLS-ready, UI-facing | 2 jam | 🔒 Blocked by Phase 2 |
 | **4** | BYO-CC Phase 1 | `tenant_credentials` + Fernet + auth foundation | 1 minggu | 🔒 Blocked by Phase 3 |
@@ -383,6 +383,11 @@ Perluasan produk: menampung **banyak kategori creator short faceless** (mystery/
 
 **Validation gate:** dispatcher fire pada slot WIB yang benar + hook_frame generated tanpa warning.
 
+> ### ✅ 1.6 STATUS — DONE (2026-06-13)
+> - **Bug 2 (FIXED):** `visual_assembler:318` panggil `_generate_image(prompt, img_path)` kurang arg → `_build_image_prompt(prompt)` lalu `_generate_image(positive, negative, img_path)`. Validasi: compile + signature/arity match (inspect.bind) ✓. (Tanpa real image-gen — butuh key.)
+> - **Bug 1 (RE-KLASIFIKASI, bukan skip):** `dispatch_pipeline_jobs()` timezone = **pg_cron SQL function di DB v1**, BUKAN kode Python repo (verified: grep repo-wide kosong; MESIN_VIRAL:184 "publish_slots = jam UTC"). **Tak di-clone ke v2; ada di v1-produksi (jangan disentuh).** → jadi **requirement Phase 5** (publisher v2 decouple, timezone-aware by-design per [[decisions_production_scaling]]). Tak bisa & tak boleh difix sebagai kode v2 sekarang.
+> - **Phase 1 SOFTCODE = SELESAI.** Semua komponen AI (LLM/image/TTS/niche/music/R2) config-driven; nol silent cross-provider fallback; katalog DB-driven.
+
 ---
 
 ## 🔁 GitHub Workflow Per Sub-Phase
@@ -518,9 +523,9 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 | # | Issue | Severity | Phase | Notes |
 |---|---|---|---|---|
 | 1 | NicheSelector/HookOptimizer/ScriptAnalyzer hardcode OpenAI meskipun config Claude | 🔴 Critical | Phase 1.1 | Root cause kegagalan job 94 & 95 hari ini |
-| 2 | Dispatcher `dispatch_pipeline_jobs()` tidak hormati `tenant_configs.timezone` — publish_slots di-treat UTC | 🟠 High | Phase 1.6 | publish_slots `[14:00, 23:00]` WIB sebenarnya fire pada 05:30 & 20:30 WIB karena UTC interpretation |
-| 3 | `AIImageProvider._generate_image()` signature mismatch saat hook_frame | 🟡 Medium | Phase 1.6 | Non-fatal, fallback ke clip[0] |
-| 4 | `tenant_configs.publish_slots` setting WIB tapi treated UTC | 🟠 High | Phase 1.6 | Bagian dari issue #2 |
+| 2 | Dispatcher `dispatch_pipeline_jobs()` tidak hormati `tenant_configs.timezone` — publish_slots di-treat UTC | 🟠 High | **→ Phase 5** | **pg_cron DB v1 (bukan kode repo), tak di-clone v2, v1 jangan disentuh** → requirement publisher v2 (timezone-aware by-design) |
+| 3 | `AIImageProvider._generate_image()` signature mismatch saat hook_frame | 🟡 Medium | 1.6 | ✅ **FIXED (2026-06-13)** — `_build_image_prompt` + 3-arg call |
+| 4 | `tenant_configs.publish_slots` setting WIB tapi treated UTC | 🟠 High | **→ Phase 5** | Bagian dari #2 (pg_cron DB) |
 
 ---
 
@@ -569,6 +574,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 | 2026-06-13 | 1.2 (niche_fallback) | — (struktural) | ✅ PARTIAL | Applied v2: migr 0003 (`niche_fallback` nullable). Best-practice: gate-enforcement + fail-loud, no global default. compile OK · grep site produksi=0 · resolver OK · `ryan_andrian` niche non-empty → no breakage. Real production-run BELUM. |
 | 2026-06-13 | 1.1 (LLM + AI Catalog) | — (round-trip) | ✅ **HIJAU** | **Production-run LLM-path GREEN.** v2 ryan dibelokkan ke OpenAI (key Anthropic clone-v1 mati → 401; OpenAI key valid di `visual_api_key`). catalog(DB)→`OpenAIChatAdapter`("OpenAI GPT" dari DB)→**REAL OpenAI API**→`{"ok":true,"engine":"openai"}` parsed ✓. **Membuktikan: ganti provider = 1 baris config DB (`llm_library`), nol perubahan kode.** Key Anthropic invalid = isu kredensial bukan bug. |
 | 2026-06-13 | (config v2) | — | ⚠️ TEMP | **v2 ryan_andrian dibelokkan ke OpenAI sementara** (`llm_library=openai`, `llm_api_key←visual_api_key`, `llm_models→gpt-4o/4o-mini`) — krn key Anthropic v2 mati (v1 produksi juga fall back ke OpenAI). **Revert** saat key Anthropic baru tersedia: `llm_library=anthropic` + key valid + `llm_models` Claude. **v1 TIDAK disentuh.** |
+| 2026-06-13 | 1.6 (bugfix) → **Phase 1 SELESAI** | — (struktural) | ✅ | Bug 2 `_generate_image` signature FIXED (compile + arity match). Bug 1 dispatcher-tz = pg_cron DB v1 (bukan repo) → re-klasifikasi Phase 5. Phase 1 SOFTCODE komplit (1.1-1.6). |
 | 2026-06-13 | 1.5 (music/R2) | — (struktural) | ✅ | Migr 0005 (`music_default_mood`). mood `'dramatic'` → config (threaded); R2_BUCKET default `'viral-machine'` dihapus → fail-loud. compile OK · grep dramatic/bucket=0 · runtime mood threading OK. Real music-gen BELUM (R2 keys absen di .env dev). |
 | 2026-06-13 | 1.4 (TTS chain) | — (struktural) | ✅ | TTS chain hardcode dihapus → config-driven (`tts_provider`+`tts_fallback_provider`, no migrasi per §1.1). No silent cross-vendor (elevenlabs→edge_tts default). compile OK · grep chain hardcode=0 · simulasi chain OK. Real TTS-gen BELUM (butuh key+biaya). Catalog-wiring TTS = follow-up. |
 | 2026-06-13 | RE-AUDIT 1.1/1.2/1.3 | commits `8e40fd8`,`3fb8cbb` | ✅ | Sweep adversarial global (user skeptis). Fix miss: default niche di 6 file provider; default `openai`/model di visual_assembler; **layer legacy tenant_config** (llm_model_for/effective/loader/dataclass → ''/None fail-loud; llm_script_fallback DEAD→None). grep default provider/model business-logic=0. PENDING (bukan miss): TTS chain `tts_engine:154/156` = Phase 1.4. |

@@ -315,7 +315,11 @@ class VisualAssembler:
             hook_duration = clip_durs[0] if clip_durs else 3.0
 
             import asyncio
-            asyncio.run(provider._generate_image(prompt, img_path))
+            # Fix s1.6: _generate_image(prompt, negative_prompt, output_path) — sebelumnya
+            # kurang arg negative_prompt → "missing output_path". Pakai _build_image_prompt
+            # (quality tags + negative) konsisten dgn flow normal ai_image.
+            positive, negative = provider._build_image_prompt(prompt)
+            asyncio.run(provider._generate_image(positive, negative, img_path))
             provider._image_to_video(img_path, clip_path, duration=hook_duration)
 
             from src.providers.visual.base import VideoClip
