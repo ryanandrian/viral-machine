@@ -61,6 +61,7 @@ def _detect_mood_from_script(
     script: dict,
     mood_keywords: dict,
     niche_mood_priority: list,
+    music_default_mood: str | None = None,
 ) -> tuple[str, dict]:
     """
     Analisa konten script → deteksi mood terbaik via keyword matching.
@@ -85,8 +86,8 @@ def _detect_mood_from_script(
     best_score = scores.get(best_mood, 0) if best_mood else 0
 
     if not best_mood or best_score == 0:
-        best_mood = niche_mood_priority[0] if niche_mood_priority else "dramatic"
-        logger.info(f"[MusicSelector] No keyword match — pakai mood_priority: {best_mood}")
+        best_mood = niche_mood_priority[0] if niche_mood_priority else (music_default_mood or "")
+        logger.info(f"[MusicSelector] No keyword match — fallback mood: {best_mood or '(any-active)'}")
     else:
         logger.info(f"[MusicSelector] Mood detected: {best_mood} (score={best_score})")
 
@@ -190,7 +191,9 @@ def _download_from_r2(r2_key: str, output_path: Path) -> bool:
             config                = Config(signature_version="s3v4"),
             region_name           = "auto",
         )
-        bucket = os.getenv("R2_BUCKET", "viral-machine")
+        bucket = os.getenv("R2_BUCKET")
+        if not bucket:
+            raise ValueError("R2_BUCKET tidak diset di .env — wajib untuk download musik dari R2 (no default).")
         s3.download_file(bucket, r2_key, str(output_path))
         return output_path.exists()
 
@@ -220,6 +223,7 @@ def select_and_download(
     niche: str,
     output_dir: str = "logs",
     audio_duration: float = 55.0,
+    music_default_mood: str | None = None,
 ) -> str | None:
     """
     Main entry point: pilih track terbaik → download → return local path.
@@ -239,7 +243,7 @@ def select_and_download(
     niche_mood_priority = _load_niche_mood_priority(niche)
 
     # 3. Detect mood dari konten script
-    mood, scores = _detect_mood_from_script(script, mood_keywords, niche_mood_priority)
+    mood, scores = _detect_mood_from_script(script, mood_keywords, niche_mood_priority, music_default_mood)
 
     # Fallback moods: mood_priority niche dulu (lebih kontekstual),
     # baru keyword matches dari script sebagai safety net tambahan.

@@ -32,7 +32,7 @@ class SystemConfig:
     r2_endpoint: str = field(default_factory=lambda: os.getenv("R2_ENDPOINT", ""))
     r2_access_key: str = field(default_factory=lambda: os.getenv("R2_ACCESS_KEY", ""))
     r2_secret_key: str = field(default_factory=lambda: os.getenv("R2_SECRET_KEY", ""))
-    r2_bucket: str = field(default_factory=lambda: os.getenv("R2_BUCKET", "viral-machine"))
+    r2_bucket: str = field(default_factory=lambda: os.getenv("R2_BUCKET", ""))  # WAJIB di .env; kosong → raise saat R2 dipakai (no default)
 
 VIRAL_SCORE_WEIGHTS = {
     "search_volume": 0.25,

@@ -809,6 +809,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                     audio_duration=audio_duration,
                     total_duration=total_duration,
                     music_volume=float(getattr(rc, "music_volume", 0.10)),
+                    music_default_mood=getattr(rc, "music_default_mood", None),
                 )
         except Exception as e:
             logger.warning(f"[Renderer] Music mixing skipped: {e}")
@@ -939,6 +940,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         audio_duration: float,
         total_duration: float,
         music_volume: float = 0.10,
+        music_default_mood: str | None = None,
     ) -> str:
         """
         Fase 6C s6c4: Mix background music ke video.
@@ -951,6 +953,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             niche=niche,
             output_dir=output_dir,
             audio_duration=audio_duration,
+            music_default_mood=music_default_mood,
         )
 
         if not music_path or not os.path.exists(music_path):

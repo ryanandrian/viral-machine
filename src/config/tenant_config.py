@@ -107,6 +107,7 @@ class TenantRunConfig:
     tts_voice_per_niche:    Optional[dict] = None
     music_enabled:          bool           = False
     music_volume:           float          = 0.10
+    music_default_mood:     Optional[str]  = None   # Phase 1.5: fallback mood; kosong → any-active (no global default)
     tts_voice_settings:     dict           = None
     niche_mode:             str            = "fixed"
     niche_pool:             list           = None
@@ -477,6 +478,7 @@ class TenantConfigManager:
                 tts_voice_per_niche=row.get("tts_voice_per_niche") if isinstance(row.get("tts_voice_per_niche"), dict) else None,
                 music_enabled=row.get("music_enabled", False),
                 music_volume=float(row.get("music_volume", 0.10)),
+                music_default_mood=row.get("music_default_mood"),
                 tts_voice_settings=row.get("tts_voice_settings") or {},
                 niche_mode=row.get("niche_mode", "fixed") or "fixed",
                 niche_pool=list(row.get("niche_pool") or []),
@@ -528,6 +530,7 @@ class TenantConfigManager:
             script_max_retry=3,
             music_enabled=False,
                 music_volume=0.10,
+                music_default_mood=None,
                 tts_voice_settings={},
                 niche_mode="fixed",
                 niche_pool=[],

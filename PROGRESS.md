@@ -14,7 +14,7 @@
 
 **🎯 THREAD AKTIF = BACKEND Phase 1 (SOFTCODE AI Config). Frontend track ✅ DITUTUP (28 screen ter-port).**
 - **Terakhir selesai (2026-06-13):** Phase **1.1** (LLM softcode+catalog) **+1.2** (niche_fallback fail-loud) **+1.3** (image catalog→DB) **+1.4** (TTS chain config-driven). Provider/model LLM&image 100% katalog DB; TTS chain dari config (no silent cross-vendor); niche tenant-specific. Re-audit hardcode global ✅ + app bersih (no junk/dead-code). **Committed** branch `v2-backend`. Production-run LLM-path HIJAU. VPS-pull safety terverifikasi.
-- **Berikutnya PER RENCANA (jangan keluar jalur):** Phase 1.5 (music/R2 default→config) → 1.6 (bugfix bundle: dispatcher timezone + hook_frame signature). Lihat §"AI PROVIDER CATALOG" follow-up A/B/C + gate enforcement niche (Phase 5/9) + **TTS provider/voice catalog-wiring (deeper, follow-up)**.
+- **Berikutnya PER RENCANA (jangan keluar jalur):** **Phase 1.6** (bugfix bundle: dispatcher timezone WIB + `AIImageProvider._generate_image()` signature mismatch). Lalu Phase 1 SELESAI → Phase 2 (Error Mgmt). Follow-up tertunda di §"AI PROVIDER CATALOG" (A/B/C) + gate enforcement niche (Phase 5/9) + TTS provider/voice catalog-wiring.
 - **Gate user:** (1) real production-run ke v2; (2) commit/push fase 1.1.
 
 **JANGAN diulang (sudah dikerjakan):** Phase 0 audit ✅ (selesai 2026-06-12, hasil di journal + rekonsiliasi Phase 1.1); framing v1/v2 (terkunci); **frontend track ✅ semua screen desain ter-port (28 done)**. **JANGAN** usulkan deploy backend ke VPS — backend v2 belum mulai & DB clone belum ada.
@@ -168,7 +168,7 @@ Next.js 15 (App Router) + shadcn/ui + Tailwind + tremor.so + Geist Sans + next-i
 | Phase | Nama | Tujuan | Estimasi | Status |
 |-------|------|--------|----------|--------|
 | **0** | Audit & Persiapan | Verifikasi semua klaim SOFTCODE_AI_CONFIG vs kode | – | ✅ DONE (read-only, 2026-06-12) — hasil di journal + rekonsiliasi di §1.1 |
-| **1** | SOFTCODE AI Config | Hilangkan hardcode AI, hapus silent fallback (6 sub-phase) | 4-6 jam | 🛠️ in-progress — **1.1✅** (LLM+catalog) · **1.2✅** (niche_fallback) · **1.3✅** (image catalog) · **1.4✅** (TTS chain, 2026-06-13); 1.5-1.6 pending |
+| **1** | SOFTCODE AI Config | Hilangkan hardcode AI, hapus silent fallback (6 sub-phase) | 4-6 jam | 🛠️ in-progress — **1.1–1.5 ✅** (LLM+catalog · niche_fallback · image catalog · TTS chain · music/R2, 2026-06-13); **1.6 pending** (bugfix bundle) |
 | **2** | Error Mgmt Terpusat | `src/exceptions.py` + structured error flow | 2 jam | 🔒 Blocked by Phase 1 |
 | **3** | Pipeline Run Logs (DB) | `pipeline_run_logs` table, RLS-ready, UI-facing | 2 jam | 🔒 Blocked by Phase 2 |
 | **4** | BYO-CC Phase 1 | `tenant_credentials` + Fernet + auth foundation | 1 minggu | 🔒 Blocked by Phase 3 |
@@ -369,6 +369,10 @@ Perluasan produk: menampung **banyak kategori creator short faceless** (mystery/
 
 **Validation gate:** start worker tanpa `R2_BUCKET` → error message jelas + tenant pakai mood dari config.
 
+> ### ✅ 1.5 STATUS — DONE + TERVALIDASI STRUKTURAL (2026-06-13)
+> Migrasi `0005` (`music_default_mood` nullable, applied v2). `music_selector.py`: mood hardcode `"dramatic"` → config `music_default_mood` (threaded video_renderer→_mix_music→select_and_download→_detect_mood); kosong → mood any-active (graceful, no global default). `R2_BUCKET`: default `"viral-machine"` DIHAPUS di `music_selector` (→ raise jelas jika kosong saat download) + `intelligence/config.py` (→ `""`).
+> - **Bukti:** compile ✅ · grep `'dramatic'`=0 + bucket-default=0 ✅ · runtime: mood pakai config / fallback any-active ✅.
+
 ### 1.6 — Bug Fixes Bundle (pasangan refactor hari ini)
 - **Dispatcher timezone bug**: `dispatch_pipeline_jobs()` saat ini compare publish_slots dengan UTC, tidak hormati `tenant_configs.timezone`. Fix: konversi target ke timezone tenant sebelum compare.
 - **`AIImageProvider._generate_image()` signature mismatch**: warning saat hook_frame generation:
@@ -565,6 +569,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 | 2026-06-13 | 1.2 (niche_fallback) | — (struktural) | ✅ PARTIAL | Applied v2: migr 0003 (`niche_fallback` nullable). Best-practice: gate-enforcement + fail-loud, no global default. compile OK · grep site produksi=0 · resolver OK · `ryan_andrian` niche non-empty → no breakage. Real production-run BELUM. |
 | 2026-06-13 | 1.1 (LLM + AI Catalog) | — (round-trip) | ✅ **HIJAU** | **Production-run LLM-path GREEN.** v2 ryan dibelokkan ke OpenAI (key Anthropic clone-v1 mati → 401; OpenAI key valid di `visual_api_key`). catalog(DB)→`OpenAIChatAdapter`("OpenAI GPT" dari DB)→**REAL OpenAI API**→`{"ok":true,"engine":"openai"}` parsed ✓. **Membuktikan: ganti provider = 1 baris config DB (`llm_library`), nol perubahan kode.** Key Anthropic invalid = isu kredensial bukan bug. |
 | 2026-06-13 | (config v2) | — | ⚠️ TEMP | **v2 ryan_andrian dibelokkan ke OpenAI sementara** (`llm_library=openai`, `llm_api_key←visual_api_key`, `llm_models→gpt-4o/4o-mini`) — krn key Anthropic v2 mati (v1 produksi juga fall back ke OpenAI). **Revert** saat key Anthropic baru tersedia: `llm_library=anthropic` + key valid + `llm_models` Claude. **v1 TIDAK disentuh.** |
+| 2026-06-13 | 1.5 (music/R2) | — (struktural) | ✅ | Migr 0005 (`music_default_mood`). mood `'dramatic'` → config (threaded); R2_BUCKET default `'viral-machine'` dihapus → fail-loud. compile OK · grep dramatic/bucket=0 · runtime mood threading OK. Real music-gen BELUM (R2 keys absen di .env dev). |
 | 2026-06-13 | 1.4 (TTS chain) | — (struktural) | ✅ | TTS chain hardcode dihapus → config-driven (`tts_provider`+`tts_fallback_provider`, no migrasi per §1.1). No silent cross-vendor (elevenlabs→edge_tts default). compile OK · grep chain hardcode=0 · simulasi chain OK. Real TTS-gen BELUM (butuh key+biaya). Catalog-wiring TTS = follow-up. |
 | 2026-06-13 | RE-AUDIT 1.1/1.2/1.3 | commits `8e40fd8`,`3fb8cbb` | ✅ | Sweep adversarial global (user skeptis). Fix miss: default niche di 6 file provider; default `openai`/model di visual_assembler; **layer legacy tenant_config** (llm_model_for/effective/loader/dataclass → ''/None fail-loud; llm_script_fallback DEAD→None). grep default provider/model business-logic=0. PENDING (bukan miss): TTS chain `tts_engine:154/156` = Phase 1.4. |
 | 2026-06-13 | 1.3 (image catalog) | — (struktural) | ✅ | Applied v2 migr 0004 (provider replicate + 3 model image). `ai_image` load `model_config` dari `ai_models` DB; `AI_IMAGE_MODELS` hardcode dihapus. compile OK · resolve openai+replicate dari DB OK · unknown→fail-loud OK. Real image-gen BELUM (butuh key+biaya). |
