@@ -192,6 +192,7 @@ class Pipeline:
             if not optimized:
                 raise LLMError("Hook optimization failed", step="hook")
             script       = optimized[0]
+            result["script"] = script  # Phase 5.3: ekspos full script dict (producer simpan utk publisher)
             winner_score = script.get("hook_data", {}).get("winner", {}).get("scroll_stop_power", 0)
             result["steps"]["hook"] = {
                 "status": "ok",
