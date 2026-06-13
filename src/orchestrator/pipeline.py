@@ -262,7 +262,16 @@ class Pipeline:
             video_duration = self._get_video_duration(video_path)
             file_size_mb   = round(os.path.getsize(video_path) / (1024 * 1024), 1)
 
-            qc_passed, qc_reason = self._pre_publish_qc(video_path, video_duration, clip_count)
+            # QC relatif Duration Preset (§8) bila channel set preset; else interim integritas.
+            _preset = getattr(tenant_config, "duration_preset", None)
+            _beats  = None
+            if _preset:
+                from src.config.format_catalog import preset_visual_beats
+                _beats = preset_visual_beats(_preset)
+            qc_passed, qc_reason = self._pre_publish_qc(
+                video_path, video_duration, clip_count,
+                target_seconds=_preset, expected_beats=_beats,
+            )
             result["steps"]["qc"] = {
                 "passed":   qc_passed,
                 "reason":   qc_reason,
@@ -507,7 +516,8 @@ class Pipeline:
             logger.warning(f"[Pipeline] Thumbnail copy gagal: {e}")
             return ""
 
-    def _pre_publish_qc(self, video_path: str, duration_secs, clip_count: int = None) -> tuple:
+    def _pre_publish_qc(self, video_path: str, duration_secs, clip_count: int = None,
+                        target_seconds=None, expected_beats=None) -> tuple:
         """
         Pre-publish QC = gate INTEGRITAS RENDER, bukan penilaian konten.
 
@@ -527,14 +537,12 @@ class Pipeline:
 
         Returns: (passed, reason). passed=False → tidak dipublish, dicatat qc_failed (no crash).
         """
-        # INTERIM (lihat QC_CONTENT_ARCHITECTURE.md): floor durasi DITURUNKAN ke ≈3s (integritas,
-        # BUKAN "kelayakan") supaya TIDAK menolak preset ultra-short (8s/15s) saat field Duration
-        # Preset nanti aktif. min_dur kini hanya deteksi render kosong/terpotong-total. size & clips
-        # tetap nilai produksi 6-scene sekarang; akan jadi relatif-preset di redesign QC v2.
+        # Ambang config-driven. Bila Duration Preset di-set (target_seconds) → QC RELATIF (§8):
+        # durasi |aktual−target| ≤ ±QC_DURATION_TOLERANCE + clip_count = visual_beats preset.
+        # Tanpa preset → interim: floor integritas (deteksi render terpotong) + clips env default.
         min_size_mb = float(os.getenv("QC_MIN_SIZE_MB", "5"))
-        min_dur     = float(os.getenv("QC_MIN_DURATION", "3"))
         max_dur     = float(os.getenv("QC_MAX_DURATION", "180"))
-        min_clips   = int(os.getenv("QC_MIN_CLIPS", "6"))
+        min_clips   = int(expected_beats) if expected_beats else int(os.getenv("QC_MIN_CLIPS", "6"))
 
         # Check 1: File size — render korup/kosong
         try:
@@ -544,14 +552,24 @@ class Pipeline:
         except Exception as e:
             return False, f"Tidak bisa baca file video: {e}"
 
-        # Check 2 & 3: Durasi (skip jika ffprobe tidak tersedia)
+        # Check 2 & 3: Durasi
         if duration_secs is not None:
-            if duration_secs < min_dur:
-                return False, f"Durasi tak wajar (render terpotong?): {duration_secs:.1f}s < {min_dur}s"
+            if target_seconds:
+                # QC RELATIF ke Duration Preset (§8) — bukan floor absolut
+                tol    = float(os.getenv("QC_DURATION_TOLERANCE", "0.15"))
+                lo, hi = target_seconds * (1 - tol), target_seconds * (1 + tol)
+                if not (lo <= duration_secs <= hi):
+                    return False, (f"Durasi {duration_secs:.1f}s di luar ±{int(tol*100)}% target preset "
+                                   f"{target_seconds}s (boleh {lo:.0f}–{hi:.0f}s)")
+            else:
+                # Interim (tanpa preset): floor integritas (deteksi render terpotong-total)
+                min_dur = float(os.getenv("QC_MIN_DURATION", "3"))
+                if duration_secs < min_dur:
+                    return False, f"Durasi tak wajar (render terpotong?): {duration_secs:.1f}s < {min_dur}s"
             if duration_secs > max_dur:
                 return False, f"Durasi terlalu panjang: {duration_secs:.1f}s > {max_dur}s (bukan Shorts)"
 
-        # Check 4: Jumlah clips — semua scene harus berhasil (cegah visual tidak lengkap)
+        # Check 4: Jumlah clips — semua scene berhasil (relatif preset visual_beats bila ada)
         if clip_count is not None and clip_count < min_clips:
             return False, (
                 f"Visual tidak lengkap: {clip_count}/{min_clips} clips berhasil "
