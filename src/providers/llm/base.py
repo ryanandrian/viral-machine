@@ -17,10 +17,9 @@ import re
 from abc import ABC, abstractmethod
 
 
-class LLMError(Exception):
-    """Error pada LLM provider. Caller memutuskan (stop + notify Telegram),
-    bukan diam-diam pindah provider."""
-    pass
+# LLMError di-RE-EXPORT dari hierarki terpusat (Phase 2) — kini PipelineError subclass.
+# Import lama `from src.providers.llm.base import LLMError` tetap jalan.
+from src.exceptions import LLMError  # noqa: E402,F401
 
 
 def parse_json_lenient(raw: str) -> dict:

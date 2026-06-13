@@ -93,6 +93,5 @@ class VisualProvider(ABC):
         pass
 
 
-class VisualError(Exception):
-    """Exception untuk error pada Visual provider."""
-    pass
+# VisualError di-RE-EXPORT dari hierarki terpusat (Phase 2) — kini PipelineError subclass.
+from src.exceptions import VisualError  # noqa: E402,F401

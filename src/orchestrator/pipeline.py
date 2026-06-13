@@ -32,6 +32,7 @@ from src.utils.storage_cleaner import StorageCleaner
 from src.utils.supabase_writer import SupabaseWriter
 from src.utils.telegram_notifier import TelegramNotifier
 from src.intelligence.schedule_manager import ScheduleManager
+from src.exceptions import PipelineError, LLMError, TTSError, VisualError, RenderError
 
 load_dotenv()
 
@@ -153,7 +154,7 @@ class Pipeline:
             logger.info("STEP 2/7 | Selecting best topic...")
             topics = self.niche_selector.select(signals, tenant_config, focus=niche_focus)
             if not topics:
-                raise Exception("No topics selected")
+                raise LLMError("No topics selected", step="niche")
             result["steps"]["topic_selection"] = {
                 "status": "ok",
                 "topics": len(topics),
@@ -168,7 +169,7 @@ class Pipeline:
             logger.info("STEP 3/7 | Generating script...")
             scripts = self.script_engine.generate_batch(topics, tenant_config, count=1)
             if not scripts:
-                raise Exception("Script generation failed")
+                raise LLMError("Script generation failed", step="script")
             result["steps"]["script"] = {
                 "status":       "ok",
                 "title":        scripts[0].get("title", ""),
@@ -181,7 +182,7 @@ class Pipeline:
             logger.info("STEP 4/7 | Optimizing hook...")
             optimized = self.hook_optimizer.optimize_batch(scripts, tenant_config)
             if not optimized:
-                raise Exception("Hook optimization failed")
+                raise LLMError("Hook optimization failed", step="hook")
             script       = optimized[0]
             winner_score = script.get("hook_data", {}).get("winner", {}).get("scroll_stop_power", 0)
             result["steps"]["hook"] = {
@@ -199,7 +200,7 @@ class Pipeline:
                 else (tts_result, [])
             )
             if not audio_path:
-                raise Exception("TTS generation failed")
+                raise TTSError("TTS generation failed", step="tts")
             ts_info = f"{len(word_timestamps)} word timestamps" if word_timestamps else "no timestamps (estimasi)"
             result["steps"]["tts"] = {"status": "ok", "path": audio_path, "timestamps": len(word_timestamps)}
             logger.info(f"STEP 5 DONE | Audio: {audio_path} | {ts_info}")
@@ -210,7 +211,7 @@ class Pipeline:
             logger.info(f"[Pipeline] Audio duration: {audio_duration:.1f}s — scaling clips")
             clips = self.visual_assembler.assemble(script, tenant_config, audio_duration=audio_duration)
             if not clips:
-                raise Exception("Visual assembly failed — no clips downloaded")
+                raise VisualError("Visual assembly failed — no clips downloaded", step="visual")
             clip_count = len(clips)
             result["steps"]["visuals"] = {"status": "ok", "clips": clip_count}
             logger.info(f"STEP 6 DONE | {clip_count} clips ready")
@@ -223,7 +224,7 @@ class Pipeline:
                 run_id=run_id,
             )
             if not video_path:
-                raise Exception("Video rendering failed")
+                raise RenderError("Video rendering failed", step="render")
             size_mb = os.path.getsize(video_path) / (1024 * 1024)
             result["steps"]["render"] = {
                 "status":  "ok",
@@ -419,8 +420,14 @@ class Pipeline:
             elapsed          = round(time.time() - start_time, 1)
             result["status"] = "failed"
             result["error"]  = str(e) if not is_interrupt else "Interrupted (KeyboardInterrupt/SystemExit)"
+            # Phase 2: kategori + step terstruktur (PipelineError) untuk log/notify/persist.
+            result["error_category"] = getattr(e, "category", "interrupt" if is_interrupt else "unknown")
+            result["error_step"]     = getattr(e, "step", None)
             result["elapsed_seconds"] = elapsed
-            logger.exception(f"PIPELINE FAILED | {elapsed}s | Error: {e}")
+            logger.exception(
+                f"PIPELINE FAILED | {elapsed}s | [{result['error_category']}"
+                f"{('/' + result['error_step']) if result['error_step'] else ''}] Error: {e}"
+            )
 
             # ── s71: Catat pipeline failure ke Supabase ───────────────
             # Skip Supabase write jika interrupt — koneksi mungkin sudah mati

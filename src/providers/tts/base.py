@@ -62,6 +62,5 @@ class TTSProvider(ABC):
         pass
 
 
-class TTSError(Exception):
-    """Exception untuk error pada TTS provider."""
-    pass
+# TTSError di-RE-EXPORT dari hierarki terpusat (Phase 2) — kini PipelineError subclass.
+from src.exceptions import TTSError  # noqa: E402,F401
