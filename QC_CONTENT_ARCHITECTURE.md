@@ -1,0 +1,142 @@
+# QC & Content-Quality Architecture — MesinViral v2
+
+> **Living document.** Tujuan: arsitektur khusus untuk *quality control* + *self-improvement* yang **terus dievaluasi & di-improve** sampai ideal. Cakupan: **dari ScriptAnalyzer → seluruh tahap produksi → file hasil (pra-submit)** + **loop self-analyzer/self-improvement** (janji landing page: "robot pintar, makin pintar tiap hari").
+>
+> Status LIVE per-fase = `PROGRESS.md`. Pondasi multi-format = `MULTI_FORMAT_STUDIO.md`. Prinsip: [[feedback_no_hardcode]] · [[feedback_analysis_discipline]].
+>
+> **Aturan dokumen ini:** setiap perubahan QC/quality WAJIB lewat sini dulu (propose → approve → implement). Jangan ubah ambang QC di kode tanpa update dokumen ini.
+
+---
+
+## 0. Prinsip dasar (kontrak arsitektur)
+
+1. **QC ≠ penilaian konten.** Kualitas konten (hook, retensi, CTA) dinilai **di hulu** oleh `ScriptAnalyzer` (ambang ≥80). QC pra-submit hanya menjawab: *"apakah FILE hasil render utuh, sesuai NIAT produksi, dan sah untuk platform?"* — bukan "apakah kontennya bagus".
+2. **Relatif, bukan absolut.** Tidak ada angka ajaib global (mis. "≥45s"). Ambang diturunkan dari **Duration Preset** + **Format Profile** tenant (8/15/30/45/60/75/90s). Floor absolut = anti-pattern yang membuang video valid + biaya render.
+3. **Config-driven, no-hardcode.** Semua ambang dari config/DB/env, dapat ditambah super-admin. Tidak ada nama provider/angka tertanam di pesan error.
+4. **Fail-soft yang jujur.** Kegagalan komponen (mis. TTS) → fallback yang dicatat, bukan diam-diam. QC-fail → video TIDAK dibuang membabi-buta; lihat §5 (kebijakan retry/quarantine).
+5. **Self-improving.** Output nyata (analytics) harus mengalir balik menaikkan kualitas generasi berikutnya — terukur, bukan klaim.
+
+---
+
+## 1. Rantai kualitas SAAT INI (kondisi nyata, dengan rujukan kode)
+
+Pipeline `src/orchestrator/pipeline.py` (7 step) dengan gate kualitas di beberapa titik:
+
+| # | Tahap | Gate kualitas saat ini | File |
+|---|---|---|---|
+| 1 | Trend scan | — (kumpul sinyal) | `intelligence/trend_radar.py` |
+| 2 | Niche/topic select | **insights-driven** (smart focus dari grade) + dedup topik 30d | `intelligence/niche_selector.py` |
+| 3 | **Script gen + ANALISIS** | **`ScriptAnalyzer` skor 6-dimensi, ambang ≥80, retry s/d 3× dgn feedback** | `intelligence/script_engine.py`, `script_analyzer.py` |
+| 4 | Hook optimize | generate N hook → skor → pilih winner; inject *historical top hooks* | `intelligence/hook_optimizer.py` |
+| 5 | TTS | chain config-driven primary→fallback (fail-soft) | `production/tts_engine.py` |
+| 6 | Visual assembly | N clip (saat ini **hardcode 6**), hook-frame | `production/visual_assembler.py` |
+| 7 | Render | xfade + caption (karaoke ASS) + music ducking | `production/video_renderer.py` |
+| 7.5 | **Pre-publish QC** | **integritas file (size/durasi/clip_count)** — lihat §2 | `pipeline.py::_pre_publish_qc` |
+
+### 1a. ScriptAnalyzer — gate kualitas konten utama (HULU)
+`VIRAL_DIMENSIONS` berbobot (`script_analyzer.py`):
+- `hook_power` 25% · `curiosity_gap` 20% · `retention_arc` 20% · `emotional_peak` 20% · `information_density` 10% · `cta_strength` 5%
+- Ambang lulus **80/100**; di bawah → retry s/d 3× dengan **feedback per-dimensi** (ScriptEngine `generate`). Kriteria `emotional_peak` diambil dari **niche profile (Supabase)** → sudah config-driven.
+- **Inilah penilai "konten bagus".** QC pra-submit TIDAK boleh menduplikasi peran ini.
+
+### 1b. Self-improvement loop yang SUDAH ADA (parsial)
+Janji landing "self-improve tiap hari" **sudah berdiri sebagian**:
+```
+video nyata → video_analytics (views, watch_time, avg_view_pct, ctr, subscriber_gain)
+   → PerformanceAnalyzer.compute_and_store()  [scripts/compute_insights.sh — cron harian]
+   → channel_insights (grade, niche_weights, top_hooks[by CTR], avoid_patterns, content_types)
+   → di-inject balik ke: NicheSelector (smart focus) · ScriptEngine (top hooks/content types) · HookOptimizer (historical hooks)
+```
+**Grade tiers** (`performance_analyzer.py`): `insufficient_data` (<5 video → estimasi AI murni) · `learning` (5–20 → inject top topics, belum adjust skor) · `peak` (50+ → ekstraksi pola hook + A/B ready). Sumber analytics: `analytics/channel_analytics.py` (YouTube Analytics) → `video_analytics`.
+
+---
+
+## 2. QC pra-submit SAAT INI + masalahnya
+
+`_pre_publish_qc(video_path, duration_secs, clip_count)` — 4 cek:
+1. size ≥ `QC_MIN_SIZE_MB` (default 5)
+2. durasi ≥ `QC_MIN_DURATION` (**interim default 3** — sebelumnya 45 lalu sempat 20)
+3. durasi ≤ `QC_MAX_DURATION` (default 180)
+4. clip_count ≥ `QC_MIN_CLIPS` (default 6)
+
+### Masalah arsitektur (yang sedang diperbaiki)
+- 🔴 **Floor durasi absolut.** `<45s` (warisan v1) **memblokir preset 8s/15s** — `MULTI_FORMAT_STUDIO.md` baris 16 menandai ini "blocker", baris 53 minta **"QC relatif"**. Sempat saya turunkan ke 20s → **tetap memblokir 8/15s** (bug yang sama, angka beda). **Sekarang interim 3s** (hanya deteksi render kosong) sampai redesign §3.
+- 🔴 **Mencampur integritas & konten.** "Durasi layak" itu penilaian konten, bukan integritas. Konten sudah di-gate ScriptAnalyzer.
+- 🟡 **`clip_count` & `size` absolut.** 6-clip & 5MB benar untuk produksi 6-scene saat ini, tapi salah untuk preset ultra-short (2–3 beat, file lebih kecil — `MULTI_FORMAT_STUDIO.md` baris 53).
+- 🟡 **QC-fail = buang total.** Video QC-fail dihapus + biaya render hangus, tanpa retry/quarantine cerdas.
+- 🟡 **Tidak ada cek konformitas teknis** (aspect ratio 9:16, ada stream audio+video, codec) — render bisa "lolos size" tapi rusak senyap.
+
+---
+
+## 3. ARSITEKTUR TARGET — QC v2 (spec-aware, relatif, berlapis)
+
+QC menjadi **3 lapis**, semua ambang config-driven, ambang relatif diturunkan dari **Duration Preset × Format Profile** run tsb.
+
+### Lapis 1 — Integritas render ("file-nya rusak/kosong tidak?")
+- size > `QC_MIN_SIZE_KB` (kecil, anti file-kosong)
+- ffprobe: **ada stream video DAN audio**
+- durasi > floor integritas kecil (≈3s) — deteksi render terpotong-total
+- **(baru)** codec/container valid, tak ada error decode
+
+### Lapis 2 — Konformitas ke PRESET ("sesuai NIAT produksi?")
+- `|durasi_aktual − target_preset| / target_preset ≤ QC_DURATION_TOLERANCE` (mis. 0.20)
+  → preset 15s lolos ~12–18s; preset 60s lolos ~48–72s. **Tanpa floor absolut.**
+- **aspect ratio == target** (9:16 untuk Shorts/Reels/TikTok)
+- `clip_count == expected_beats(preset)` — semua visual beat preset berhasil (bukan hardcode 6)
+
+### Lapis 3 — Batas platform ("sah untuk platform tujuan?")
+- durasi ≤ `platform_max` per-platform (YouTube Shorts ≤180s, dst — config-driven)
+- resolusi/fps sesuai spek platform
+
+### Di LUAR QC (tetap di hulu)
+- Kualitas naratif (hook/retensi/emosi/CTA) = **ScriptAnalyzer ≥80** (STEP 3). QC tak menilai ini.
+
+### Sumber `target_preset` & `expected_beats`
+Dari **Duration Preset tenant** — mekanisme di `MULTI_FORMAT_STUDIO.md §3` (8/15/30/45/60/75/90s; word_budget = detik×WPS; visual beat per preset). **Belum ada field-nya di `tenant_configs`** → QC v2 **mendarat bersama** field preset. Interim sekarang (§2) aman karena produksi aktif ~40s/6-clip.
+
+### Kebijakan QC-fail (target)
+- **Quarantine, bukan buang buta.** QC-fail → status `qc_failed` + simpan diagnosa; bila penyebab transient (mis. fallback TTS bikin durasi meleset) → **re-generate terarah** (mis. minta script lebih panjang) alih-alih hangus.
+- Catat **alasan terstruktur** (lapis+metrik) ke `pipeline_run_logs` untuk feedback ke §4.
+
+---
+
+## 4. Self-analyzer & self-improvement — roadmap (janji landing "makin pintar tiap hari")
+
+Tujuan: tutup loop tidak hanya di **input** (script/hook dari analytics) tapi juga di **output** (kualitas file & performa nyata), terukur harian.
+
+| Kapabilitas | Sekarang | Target |
+|---|---|---|
+| Insight dari performa nyata | ✅ `PerformanceAnalyzer` harian → grade/top_hooks/avoid | tambah sinyal: hook retention-curve, drop-off per-detik, thumbnail CTR |
+| Inject insight ke generasi | ✅ NicheSelector/ScriptEngine/HookOptimizer | tambah: voice/pacing/visual-style per performa; per-preset learning |
+| **QC sebagai sumber belajar** | 🔴 belum | feed alasan QC-fail → tuning otomatis word_budget/section_timing preset |
+| **Self-critic pra-submit** | 🔴 belum | agen "tonton" hasil render (frame+caption sync, keterbacaan, brand-safety) sebelum publish |
+| A/B & bandit | 🟡 "peak" A/B-ready | uji hook/thumbnail varian → pilih pemenang otomatis |
+| Closed-loop akurasi durasi | 🟡 deviasi ±5–15%, one-shot | retry render terarah sampai durasi ≈ target preset (`MULTI_FORMAT_STUDIO.md` baris 18) |
+| Transparansi ke tenant | 🔴 belum | dashboard "apa yang dipelajari robot minggu ini" (mendukung klaim landing) |
+
+---
+
+## 5. Rencana eksekusi (fase — diisi/di-update saat dikerjakan)
+
+- **F0 (DONE):** QC interim aman (floor 3s) — tak memblokir preset; produksi aktif tetap terlindungi.
+- **F1:** Field **Duration Preset + Format Profile** di `tenant_configs` (+ seed preset 8/15/30/45/60/75/90s). Prasyarat QC v2 & multi-format.
+- **F2:** **QC v2 Lapis 1–3** (spec-aware, relatif) menggantikan `_pre_publish_qc`; `expected_beats`/`target_preset` dari preset; tambah cek aspect/stream.
+- **F3:** Kebijakan **quarantine + re-generate terarah** (ganti buang-buta) + diagnosa terstruktur ke `pipeline_run_logs`.
+- **F4:** **Self-critic pra-submit** (review render: caption-sync, keterbacaan, brand-safety).
+- **F5:** Loop belajar dari QC-fail → auto-tune word_budget/section_timing per preset; A/B hook/thumbnail.
+- **F6:** Dashboard "robot belajar apa" untuk tenant (transparansi klaim landing).
+
+> Urutan & detail tiap fase **diputuskan bersama owner** sebelum koding (propose-first).
+
+---
+
+## 6. Pertanyaan terbuka (perlu keputusan owner)
+1. `QC_DURATION_TOLERANCE` ideal — 15%? 20%? per-preset beda?
+2. QC-fail: quarantine+retry (boros biaya, kualitas terjaga) vs buang (hemat, bisa kehilangan slot)? batas retry?
+3. Self-critic pra-submit pakai LLM-vision (biaya) atau heuristik murah dulu?
+4. Prioritas: F1+F2 (QC benar) dulu, atau F4 (self-critic) yang paling "wow" untuk jualan?
+
+---
+
+### Changelog
+- 2026-06-13 — dibuat. Kondisi awal terdokumentasi; QC interim floor 3s; QC v2 + self-improvement roadmap diusulkan (menunggu keputusan owner per §6).

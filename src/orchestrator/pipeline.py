@@ -527,8 +527,12 @@ class Pipeline:
 
         Returns: (passed, reason). passed=False → tidak dipublish, dicatat qc_failed (no crash).
         """
+        # INTERIM (lihat QC_CONTENT_ARCHITECTURE.md): floor durasi DITURUNKAN ke ≈3s (integritas,
+        # BUKAN "kelayakan") supaya TIDAK menolak preset ultra-short (8s/15s) saat field Duration
+        # Preset nanti aktif. min_dur kini hanya deteksi render kosong/terpotong-total. size & clips
+        # tetap nilai produksi 6-scene sekarang; akan jadi relatif-preset di redesign QC v2.
         min_size_mb = float(os.getenv("QC_MIN_SIZE_MB", "5"))
-        min_dur     = float(os.getenv("QC_MIN_DURATION", "20"))
+        min_dur     = float(os.getenv("QC_MIN_DURATION", "3"))
         max_dur     = float(os.getenv("QC_MAX_DURATION", "180"))
         min_clips   = int(os.getenv("QC_MIN_CLIPS", "6"))
 

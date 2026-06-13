@@ -76,3 +76,14 @@ def delete(s3_key: str) -> None:
         logger.info(f"[s3_buffer] delete: {s3_key}")
     except Exception as e:
         logger.warning(f"[s3_buffer] delete gagal ({s3_key}, non-fatal): {e}")
+
+
+def list_keys(prefix: str = "") -> list:
+    """List objek buffer → [(key, size_bytes, last_modified_utc)]. Untuk janitor/rekonsiliasi."""
+    out = []
+    cl = _client()
+    paginator = cl.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=_bucket(), Prefix=prefix):
+        for o in page.get("Contents", []):
+            out.append((o["Key"], o.get("Size", 0), o.get("LastModified")))
+    return out

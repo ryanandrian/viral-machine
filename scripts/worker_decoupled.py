@@ -30,7 +30,7 @@ from loguru import logger
 
 def main() -> None:
     from src.utils.db_log_sink import setup_db_logging
-    from src.orchestrator import producer, publisher
+    from src.orchestrator import producer, publisher, buffer_janitor
 
     setup_db_logging()
 
@@ -44,13 +44,14 @@ def main() -> None:
     signal.signal(signal.SIGINT, _shutdown)
 
     logger.info("[WorkerV2] ══════════════════════════════════════════")
-    logger.info("[WorkerV2] DECOUPLED — Producer + Publisher loop konkuren (§12c)")
+    logger.info("[WorkerV2] DECOUPLED — Producer + Publisher + Janitor loop konkuren (§12c)")
     logger.info(f"[WorkerV2] MAX_CONCURRENT_RENDER={producer.max_concurrent_render()} (core)")
     logger.info("[WorkerV2] ══════════════════════════════════════════")
 
     threads = [
         threading.Thread(target=producer.run_forever, name="producer", daemon=True),
         threading.Thread(target=publisher.run_forever, name="publisher", daemon=True),
+        threading.Thread(target=buffer_janitor.run_forever, name="janitor", daemon=True),
     ]
     for t in threads:
         t.start()

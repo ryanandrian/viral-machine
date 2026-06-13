@@ -1,0 +1,110 @@
+"""
+Buffer Janitor — jaga buffer S3 (Biznet) BERSIH, cegah sampah menumpuk (Phase 5.3).
+
+Dua tugas (idempotent, aman dijalankan berkala):
+  1. sweep_stale       : item content_inventory ABANDONED → hapus aset S3 + baris.
+       • ready/failed yang lewat `expires_at`
+       • producing yang NYANGKUT (created_at > PRODUCING_TTL_HOURS — render crash)
+  2. reconcile_orphans : objek S3 yang TIDAK direferensikan baris inventory aktif
+       (ready/producing/publishing) DAN lebih tua dari grace → hapus.
+
+Grace period (ORPHAN_GRACE_MINUTES) mencegah penghapusan upload IN-FLIGHT
+(producer upload → mark_ready ada jeda detik). Config-driven, no-hardcode.
+Dipanggil worker_decoupled via thread `run_forever`.
+"""
+
+import os
+import time
+from datetime import datetime, timedelta, timezone
+
+from loguru import logger
+
+from src.utils import s3_buffer
+
+
+def _sb():
+    from supabase import create_client
+    return create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+
+
+def _parse(ts) -> datetime | None:
+    """ISO timestamp (Supabase / boto3) → datetime tz-aware UTC."""
+    if ts is None:
+        return None
+    if isinstance(ts, datetime):
+        return ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
+    try:
+        dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
+def _keys_of(row: dict) -> list:
+    """Semua key S3 milik 1 baris inventory (video + thumbnail)."""
+    keys = [row.get("s3_key"), (row.get("metadata") or {}).get("thumb_s3")]
+    return [k for k in keys if k]
+
+
+def sweep_stale(sb=None) -> dict:
+    sb = sb or _sb()
+    now = datetime.now(timezone.utc)
+    producing_cutoff = now - timedelta(hours=float(os.getenv("PRODUCING_TTL_HOURS", "3")))
+
+    rows = sb.table("content_inventory").select("*").in_("status", ["ready", "failed"]).execute().data or []
+    stale = [r for r in rows if (_parse(r.get("expires_at")) or now + timedelta(days=3650)) < now]
+
+    prod = sb.table("content_inventory").select("*").eq("status", "producing").execute().data or []
+    stuck = [r for r in prod if (_parse(r.get("created_at")) or now) < producing_cutoff]
+
+    deleted_assets = purged_rows = 0
+    for r in stale + stuck:
+        for k in _keys_of(r):
+            s3_buffer.delete(k); deleted_assets += 1
+        sb.table("content_inventory").delete().eq("id", r["id"]).execute()
+        purged_rows += 1
+    if purged_rows:
+        logger.info(f"[janitor] sweep_stale: {purged_rows} baris abandoned + {deleted_assets} aset S3 dihapus")
+    return {"purged_rows": purged_rows, "deleted_assets": deleted_assets}
+
+
+def reconcile_orphans(sb=None, grace_minutes=None) -> dict:
+    sb = sb or _sb()
+    grace = float(grace_minutes if grace_minutes is not None else os.getenv("ORPHAN_GRACE_MINUTES", "60"))
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=grace)
+
+    rows = sb.table("content_inventory").select("s3_key,metadata,status").in_(
+        "status", ["ready", "producing", "publishing"]).execute().data or []
+    referenced = set()
+    for r in rows:
+        referenced.update(_keys_of(r))
+
+    deleted = 0
+    for key, _size, lm in s3_buffer.list_keys():
+        if key in referenced:
+            continue
+        lm = _parse(lm)
+        if lm and lm > cutoff:        # in-flight → lindungi (grace)
+            continue
+        s3_buffer.delete(key); deleted += 1
+    if deleted:
+        logger.info(f"[janitor] reconcile_orphans: {deleted} objek S3 yatim dihapus (grace={grace}m)")
+    return {"deleted_orphans": deleted}
+
+
+def run_once(sb=None) -> dict:
+    sb = sb or _sb()
+    return {**sweep_stale(sb), **reconcile_orphans(sb)}
+
+
+def run_forever(interval_seconds=None) -> None:
+    """Loop persisten janitor — dipanggil worker_decoupled sebagai thread."""
+    sb = _sb()
+    interval = int(interval_seconds or os.getenv("JANITOR_INTERVAL_SEC", "1800"))
+    logger.info(f"[janitor] start | tiap {interval}s (sweep stale + reconcile orphan)")
+    while True:
+        try:
+            run_once(sb)
+        except Exception as e:
+            logger.error(f"[janitor] loop error: {e}")
+        time.sleep(interval)

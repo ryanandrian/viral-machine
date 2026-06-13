@@ -8,7 +8,15 @@ mark_published (+ hapus S3) / revert_to_ready (gagal). Pakai Supabase REST servi
 """
 
 import os
+from datetime import datetime, timedelta, timezone
 from loguru import logger
+
+
+def _default_expiry_iso() -> str:
+    """TTL buffer default (config-driven BUFFER_TTL_HOURS, default 168j=7hr). Item ready yang
+    tak pernah ter-publish akan disapu janitor setelah lewat ini → cegah sampah S3 menumpuk."""
+    hours = float(os.getenv("BUFFER_TTL_HOURS", "168"))
+    return (datetime.now(timezone.utc) + timedelta(hours=hours)).isoformat()
 
 
 def _sb():
@@ -31,8 +39,7 @@ def mark_ready(inv_id: int, s3_key: str, target_slot=None, expires_at=None,
     upd = {"status": "ready", "s3_key": s3_key, "produced_at": "now()"}
     if target_slot is not None:
         upd["target_slot"] = target_slot
-    if expires_at is not None:
-        upd["expires_at"] = expires_at
+    upd["expires_at"] = expires_at if expires_at is not None else _default_expiry_iso()
     if metadata is not None:
         upd["metadata"] = metadata
     # produced_at = now() via DB default tak bisa lewat REST string → pakai timestamp app-side
