@@ -262,7 +262,7 @@ Setelah Phase 1-4 + alignment (migr 0010). **DB = lengkap untuk semua domain; ba
 | OAuth/credentials | `tenant_credentials` ✅ | crypto+loader ✅ | onboarding C3 | DB/BE ✅ · FE wiring (P9); seed token ryan pending |
 | Logs/live-tail | `pipeline_run_logs` ✅ | db_log_sink ✅ | D5 (simulasi) | DB/BE ✅ · FE live-tail wiring (P9) |
 | Auth/isolasi | `auth.users`+`tenant_id=auth.uid()`+RLS ✅ | RLS+service_role ✅ | B1-B4 (mock) | DB/BE ✅ · FE Supabase Auth (P9) |
-| Multi-Format | `format_profiles` ❌ | epic | screen baru (Hybrid) | epik MULTI_FORMAT (fase C) |
+| Multi-Format | `format_profiles`+`duration_presets` ✅ (0012/0013) | F1 ✅ · F2 logika in-progress | **screen baru BELUM ada** (format/preset picker — Hybrid §11) | DB ✅ · BE in-progress · **FE gap (screen baru, Phase 9-10)** |
 
 **Kesimpulan:** tak ada misalignment diam — semua gap = (a) frontend mock→wiring **Phase 9**, atau (b) backend helper/inject di fasenya (pricing P8, content-lang P5/6), atau (c) epik (format_profiles). Tertuang semua.
 
