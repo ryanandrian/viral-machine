@@ -246,6 +246,24 @@ Perluasan produk: menampung **banyak kategori creator short faceless** (mystery/
 - **(B) Frontend** (saat wiring / Phase 9-10) — (1) **Admin E2 Catalog**: tambah manajemen **PROVIDER** (`ai_providers` CRUD: adapter/base_url/auth/`request_param_schema`) — sekarang UI hanya kelola MODEL. (2) **Tenant "AI Engines"**: ganti radio provider hardcoded `[Anthropic,OpenAI]` + model statik → **dinamis dari katalog** + tampilkan **quality/cost**. (Clone v2 sudah ada → guardrail wiring terbuka.)
 - **(C) S3 buffer / `content_inventory`** — sudah tercatat di §"Arsitektur Produksi & Scaling" (placement Phase 5), belum mulai.
 
+### 🔗 KESELARASAN DB ↔ BACKEND ↔ FRONTEND (audit 2026-06-13)
+Setelah Phase 1-4 + alignment (migr 0010). **DB = lengkap untuk semua domain; backend selaras untuk fase selesai; frontend = mock, wiring di Phase 9 (gap ter-track, bukan drift diam).**
+
+| Domain | DB | Backend | Frontend (apps/web) | Status |
+|---|---|---|---|---|
+| LLM provider/model | `ai_providers`/`ai_models`+`llm_library`/`llm_models` ✅ | factory katalog ✅ | AI Engines (radio hardcoded) | DB/BE ✅ · FE perlu dinamis (B, P9) |
+| Image | `ai_models`(image) ✅ | ai_image load DB ✅ | E2 Catalog (model) | ✅ · provider-mgmt UI gap (B) |
+| TTS | `tenant_configs.tts_*` ✅ | chain config ✅ | Voice/AI Engines | BE ✅ · voice catalog-wiring (follow-up) |
+| Niche | `niches`+`niche_fallback`/`niche_pool` ✅ | resolver fail-loud ✅ | D18 Niches | ✅ · gate enforcement (P5/9) |
+| Pricing | **`pricing_config` ✅ (0010)** | helper `src/utils/pricing.py` ❌ | `{{pricing.*}}` + E5 | DB ✅ · BE helper+FE wiring (P8/9) |
+| Content language | **`content_languages` ✅ (0010)** | inject ke script ❌ | landing/C4/E2.5 | DB ✅ · BE inject (P5/6) + FE wiring (P9) |
+| OAuth/credentials | `tenant_credentials` ✅ | crypto+loader ✅ | onboarding C3 | DB/BE ✅ · FE wiring (P9); seed token ryan pending |
+| Logs/live-tail | `pipeline_run_logs` ✅ | db_log_sink ✅ | D5 (simulasi) | DB/BE ✅ · FE live-tail wiring (P9) |
+| Auth/isolasi | `auth.users`+`tenant_id=auth.uid()`+RLS ✅ | RLS+service_role ✅ | B1-B4 (mock) | DB/BE ✅ · FE Supabase Auth (P9) |
+| Multi-Format | `format_profiles` ❌ | epic | screen baru (Hybrid) | epik MULTI_FORMAT (fase C) |
+
+**Kesimpulan:** tak ada misalignment diam — semua gap = (a) frontend mock→wiring **Phase 9**, atau (b) backend helper/inject di fasenya (pricing P8, content-lang P5/6), atau (c) epik (format_profiles). Tertuang semua.
+
 **⚠️ Catatan infra v2 (verified 2026-06-13):** `tenant_configs` RLS=ON (policy `auth.uid()`) → **worker v2 WAJIB pakai SUPABASE service_role key** (anon/publishable ke-block, tak bisa baca row tenant). Katalog `ai_providers`/`ai_models` = public-read (OK dgn anon). **LLM v2 = OpenAI** (pilihan owner saat ini). Key Anthropic clone-v1 mati, **tapi BUKAN masalah / di luar plan** — owner sengaja pakai OpenAI; ganti ke Claude = **test SETELAH v2 go-live** (bukti "ganti provider = 1 baris config DB" sudah ada). Saat wiring frontend→Supabase pakai anon+RLS (`auth.uid()`); worker/backend pakai service_role.
 
 ---
