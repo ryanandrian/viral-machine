@@ -64,7 +64,10 @@ video nyata → video_analytics (views, watch_time, avg_view_pct, ctr, subscribe
 - 🔴 **Mencampur integritas & konten.** "Durasi layak" itu penilaian konten, bukan integritas. Konten sudah di-gate ScriptAnalyzer.
 - 🟡 **`clip_count` & `size` absolut.** 6-clip & 5MB benar untuk produksi 6-scene saat ini, tapi salah untuk preset ultra-short (2–3 beat, file lebih kecil — `MULTI_FORMAT_STUDIO.md` baris 53).
 - 🟡 **QC-fail = buang total.** Video QC-fail dihapus + biaya render hangus, tanpa retry/quarantine cerdas.
-- 🟡 **Tidak ada cek konformitas teknis** (aspect ratio 9:16, ada stream audio+video, codec) — render bisa "lolos size" tapi rusak senyap.
+- ✅ **(DIFIX) Cek integritas teknis** — kini `_pre_publish_qc` cek stream video+audio + aspect 9:16 (config `QC_REQUIRE_AUDIO`/`QC_ASPECT`/`QC_ASPECT_TOLERANCE`). Tervalidasi: render tanpa-audio & aspect salah ditolak; 9:16+audio lolos.
+
+### Root cause DURASI (tervalidasi 2026-06-13 — koreksi penting)
+Bukan sekadar "LLM kurang nulis". **`WPS=2.4` hardcode (`script_engine.py:207`) ≠ kecepatan bicara nyata**, yang bervariasi per provider/rate: edge+15%=2,41 · edge+5%=1,85 · ElevenLabs 0,86=1,67 (3 data run nyata). Budget kata (122@2,4 utk 51s) tak cocok → durasi meleset −5%..−31%, **beda per provider**. ⚠️ "Paksa LLM nulis lebih banyak" bisa **OVERSHOOT** provider lambat. Fix benar = **kalibrasi WPS per-provider + closed-loop G-audio**, BUKAN prompt-hack. **Blocked:** butuh data ukur WPS (perlu run; ElevenLabs lapse) + validasi render (biaya) → jangan dikoding di atas data tipis.
 
 ---
 
@@ -151,7 +154,7 @@ Tujuan: tutup loop tidak hanya di **input** (script/hook dari analytics) tapi ju
 
 - **F0 (DONE):** QC interim aman (floor 3s) — tak memblokir preset; produksi aktif tetap terlindungi.
 - **F1:** Field **Duration Preset + Format Profile** di `tenant_configs` (+ seed preset 8/15/30/45/60/75/90s). Prasyarat QC v2 & multi-format.
-- **F2:** **QC v2 Lapis 1–3** (spec-aware, relatif) menggantikan `_pre_publish_qc`; `expected_beats`/`target_preset` dari preset; tambah cek aspect/stream.
+- **F2:** **QC v2 Lapis 1–3** (spec-aware, relatif) menggantikan `_pre_publish_qc`; `expected_beats`/`target_preset` dari preset. ✅ **Lapis-1/3 integritas (stream video+audio + aspect 9:16) SUDAH masuk** (2026-06-13, tervalidasi klip uji); Lapis-2 konformitas-durasi-relatif menyusul bersama F1 + kalibrasi WPS.
 - **F3:** Kebijakan **quarantine + re-generate terarah** (ganti buang-buta) + diagnosa terstruktur ke `pipeline_run_logs`.
 - **F4:** **Self-critic pra-submit** (review render: caption-sync, keterbacaan, brand-safety).
 - **F5:** Loop belajar dari QC-fail → auto-tune word_budget/section_timing per preset; A/B hook/thumbnail.
@@ -162,15 +165,21 @@ Tujuan: tutup loop tidak hanya di **input** (script/hook dari analytics) tapi ju
 
 ---
 
-## 6. Pertanyaan terbuka (perlu keputusan owner)
-1. `QC_DURATION_TOLERANCE` ideal — 15%? 20%? per-preset beda?
-2. QC-fail: quarantine+retry (boros biaya, kualitas terjaga) vs buang (hemat, bisa kehilangan slot)? batas retry?
-3. Self-critic pra-submit pakai LLM-vision (biaya) atau heuristik murah dulu?
-4. Prioritas: F1+F2 (QC benar) dulu, atau F4 (self-critic) yang paling "wow" untuk jualan?
-5. **Default fallback (§4b): stop atau lanjut** untuk provider premium berbayar? Per-komponen sama atau beda?
+## 6. Keputusan (2026-06-13, expert) + yang masih perlu data
+**DIPUTUSKAN** (owner delegasi keputusan teknis — [[feedback_owner_delegates_expert_decisions]]):
+1. `QC_DURATION_TOLERANCE` = **20%** (per-preset bila perlu nanti).
+2. QC-fail = **quarantine + retry maks 1×** → lalu accept-flag / stop. **Bukan loop** (anti bakar-kredit di skala ribuan tenant).
+3. Self-critic = **heuristik dulu**; LLM-vision ditunda (biaya × ribuan tenant).
+4. Prioritas = **G-final integritas dulu (✅ DONE)** → QC-relatif nyusul bersama field Preset (F1).
+5. Default fallback = **stop** untuk provider premium berbayar (nilai jual = kualitas); per-komponen bisa beda (Visual ai_image→Pexels boleh).
+
+**Masih perlu DATA/biaya (jangan dikoding buta):**
+- Kalibrasi WPS per-provider + G-audio loop → butuh ukur WPS (run; ElevenLabs lapse) + validasi render (biaya owner).
+- Rekonsiliasi akurasi edge_tts (95% vs 80%).
 
 ---
 
 ### Changelog
 - 2026-06-13 — dibuat. Kondisi awal terdokumentasi; QC interim floor 3s; QC v2 + self-improvement roadmap diusulkan (menunggu keputusan owner per §6).
-- 2026-06-13 — **§4b Consent & Transparency Fallback** ditambah (disetujui owner): umum TTS+Visual, model A (transparansi wajib) + B (checkbox lanjut-vs-stop), tier black-screen selalu stop, flag→QC. + F7. **Validasi staged-QC** (deviasi durasi nyata 5–31% vs target 51s; risiko regenerate-loop; G-audio feasible krn `target_duration` `script_engine.py:206` + `audio_duration` `pipeline.py:219` sebelum step mahal) — belum di-fold ke §3/§5, menunggu go owner.
+- 2026-06-13 — **§4b Consent & Transparency Fallback** ditambah (disetujui owner): umum TTS+Visual, model A (transparansi wajib) + B (checkbox lanjut-vs-stop), tier black-screen selalu stop, flag→QC. + F7. **Validasi staged-QC** (deviasi durasi nyata 5–31% vs target 51s; risiko regenerate-loop; G-audio feasible krn `target_duration` `script_engine.py:206` + `audio_duration` `pipeline.py:219` sebelum step mahal).
+- 2026-06-13 — **Keputusan §6 direkam** (owner delegasi). **Root cause durasi tervalidasi** = WPS 2,4 hardcode ≠ delivery nyata per-provider (1,67–2,41) → folded ke §2. **G-final integritas (Lapis-1/3) DIIMPLEMENTASI + tervalidasi** (`_pre_publish_qc` cek stream audio/video + aspect 9:16, config-driven; klip uji lokal). Fix durasi penuh = blocked data/biaya.

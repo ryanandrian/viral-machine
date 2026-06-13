@@ -558,7 +558,53 @@ class Pipeline:
                 f"(scene gagal kemungkinan ditolak content policy provider gambar)."
             )
 
+        # Check 5 (integritas render — QC v2 Lapis 1/3): render bisa "lolos size" tapi RUSAK
+        # senyap — tanpa stream audio, atau aspect bukan vertikal. Config-driven; bila ffprobe
+        # gagal probe → SKIP (fail-open, jangan blokir produksi karena tool error).
+        streams = self._probe_streams(video_path)
+        if streams is not None:
+            if not streams["has_video"]:
+                return False, "Render rusak: tidak ada stream VIDEO"
+            if os.getenv("QC_REQUIRE_AUDIO", "true").lower() != "false" and not streams["has_audio"]:
+                return False, "Render rusak: tidak ada stream AUDIO (TTS tak ter-mux?)"
+            w, h = streams["width"], streams["height"]
+            if w and h:
+                target = self._aspect_ratio(os.getenv("QC_ASPECT", "9:16"))   # w/h
+                tol    = float(os.getenv("QC_ASPECT_TOLERANCE", "0.05"))
+                if target and abs((w / h) - target) > tol:
+                    return False, f"Aspect salah: {w}x{h} (rasio {w/h:.3f}) ≠ target {os.getenv('QC_ASPECT','9:16')} ({target:.3f})"
+
         return True, "ok"
+
+    @staticmethod
+    def _aspect_ratio(spec: str) -> float | None:
+        """Parse 'W:H' (mis. '9:16') → rasio w/h (0.5625). None bila tak valid."""
+        try:
+            w, h = [float(x) for x in str(spec).split(":")[:2]]
+            return w / h if h else None
+        except Exception:
+            return None
+
+    def _probe_streams(self, video_path: str):
+        """Cek stream via ffprobe → {has_video, has_audio, width, height}. None bila probe gagal."""
+        import subprocess
+        import json as _json
+        try:
+            cmd = ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_streams", video_path]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            if res.returncode != 0:
+                return None
+            streams = _json.loads(res.stdout).get("streams", [])
+            v = next((s for s in streams if s.get("codec_type") == "video"), None)
+            return {
+                "has_video": v is not None,
+                "has_audio": any(s.get("codec_type") == "audio" for s in streams),
+                "width":     int(v["width"]) if v and v.get("width") else 0,
+                "height":    int(v["height"]) if v and v.get("height") else 0,
+            }
+        except Exception as e:
+            logger.warning(f"[Pipeline] _probe_streams gagal (skip cek stream/aspect): {e}")
+            return None
 
     def _get_video_duration(self, video_path: str):
         """
