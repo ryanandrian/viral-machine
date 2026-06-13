@@ -153,7 +153,7 @@ Tujuan: tutup loop tidak hanya di **input** (script/hook dari analytics) tapi ju
 ## 5. Rencana eksekusi (fase — diisi/di-update saat dikerjakan)
 
 - **F0 (DONE):** QC interim aman (floor 3s) — tak memblokir preset; produksi aktif tetap terlindungi.
-- **F1:** Field **Duration Preset + Format Profile** di `tenant_configs` (+ seed preset 8/15/30/45/60/75/90s). Prasyarat QC v2 & multi-format.
+- **F1 ✅ DONE (2026-06-14):** katalog **`format_profiles`** (WPS per-format §4: energik/listicle 2.4, edukasi 2.2, motivasi 1.6 + section_template/cta/render) + **`duration_presets`** (8/15/30/45/60/75/90s + visual_beats §3) + field `channels.duration_preset`/`format_profile` (NULLABLE = non-breaking). Migr `0012`, public-read, tervalidasi v2. Prasyarat QC v2 & multi-format. *(field di channels, bukan tenant_configs — per-channel, selaras niche/content_language.)*
 - **F2:** **QC v2 Lapis 1–3** (spec-aware, relatif) menggantikan `_pre_publish_qc`; `expected_beats`/`target_preset` dari preset. ✅ **Lapis-1/3 integritas (stream video+audio + aspect 9:16) SUDAH masuk** (2026-06-13, tervalidasi klip uji); Lapis-2 konformitas-durasi-relatif menyusul bersama F1 + kalibrasi WPS.
 - **F3:** Kebijakan **quarantine + re-generate terarah** (ganti buang-buta) + diagnosa terstruktur ke `pipeline_run_logs`.
 - **F4:** **Self-critic pra-submit** (review render: caption-sync, keterbacaan, brand-safety).

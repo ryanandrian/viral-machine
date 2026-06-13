@@ -198,7 +198,7 @@ Perluasan produk: menampung **banyak kategori creator short faceless** (mystery/
 | Item | Feasibility | Status |
 |---|---|---|
 | QC window relatif · link deskripsi · logo overlay · soft-sell CTA | ✅ murah (~20-50 LOC each) | ⏳ Phase 1.x |
-| Durasi 30–75s (section_timing preset + compression-map) | 🟡 medium | ⏳ Phase 1.x |
+| Durasi 30–75s (section_timing preset + compression-map) | 🟡 medium | 🛠️ **F1 ✅** (katalog format_profiles+duration_presets + field channel, migr 0012) — F2 logika (word-budget→preset + QC relatif) berikutnya |
 | Closed-loop akurasi durasi (speed-adjust Edge/ElevenLabs) | 🟡 medium | ⏳ setelah cheap wins |
 | Variable visual beats · katalog `ai_models` (konsolidasi Phase 1.3) | 🟡 medium | ⏳ |
 | **ai_video (BYOK)** + ultra-short 8–15s | 🟡 berat (`ai_video.py` DISABLED; redesign section) | ⏳ fase C |
