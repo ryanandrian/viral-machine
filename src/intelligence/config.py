@@ -20,6 +20,9 @@ class TenantConfig:
     style: str = "educational_entertaining"
     hook_style: str = "question"
     video_duration: int = 58
+    # Multi-Format (per-channel, MULTI_FORMAT §3) — None → perilaku lama (timing niche, WPS 2.4)
+    duration_preset: int | None = None     # detik (rujuk duration_presets); null = legacy
+    format_profile:  str | None = None     # rujuk format_profiles.format_key (sumber WPS)
 
 @dataclass
 class SystemConfig:

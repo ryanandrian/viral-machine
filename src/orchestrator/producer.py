@@ -44,7 +44,9 @@ def produce_one(channel_row: dict) -> int | None:
     inv_id = inventory.record_producing(tenant_id, channel_id, niche,
                                         {"channel": channel_row.get("channel_name")})
     try:
-        tc = TenantConfig(tenant_id=tenant_id, niche=niche)
+        tc = TenantConfig(tenant_id=tenant_id, niche=niche,
+                          duration_preset=channel_row.get("duration_preset"),
+                          format_profile=channel_row.get("format_profile"))
         result = Pipeline().run(tc, publish=False)   # PRODUCE-ONLY
         if (result.get("status") != "success" or not result.get("video_path")
                 or not result.get("steps", {}).get("qc", {}).get("passed")):

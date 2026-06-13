@@ -487,9 +487,11 @@ class ScriptEngine:
         # API key + SDK client — di sini tak ada nama SDK/provider/model.
         llm          = run_config.get_llm_provider()      if run_config else None
         script_model = run_config.llm_model_for("script") if run_config else ""
-        # Duration Preset per-channel (opsional). None s/d F2b wiring run_config → non-breaking.
-        preset_seconds = getattr(run_config, "duration_preset", None) if run_config else None
-        format_wps     = (run_config.format_wps() if (run_config and hasattr(run_config, "format_wps")) else None)
+        # Duration Preset per-channel (MULTI_FORMAT §3) — dari tenant_config (konteks channel).
+        # null → legacy (timing niche, WPS 2.4) = non-breaking. WPS = properti format (admin).
+        from src.config.format_catalog import format_wps as _fmt_wps
+        preset_seconds = getattr(tenant_config, "duration_preset", None)
+        format_wps     = _fmt_wps(getattr(tenant_config, "format_profile", None)) if preset_seconds else None
 
         # S1-B: load channel insights — inject ke semua attempt jika grade cukup
         insights       = self._load_insights(tenant_config.tenant_id)
