@@ -32,7 +32,7 @@ from src.utils.storage_cleaner import StorageCleaner
 from src.utils.supabase_writer import SupabaseWriter
 from src.utils.telegram_notifier import TelegramNotifier
 from src.intelligence.schedule_manager import ScheduleManager
-from src.exceptions import PipelineError, LLMError, TTSError, VisualError, RenderError
+from src.exceptions import PipelineError, ConfigError, LLMError, TTSError, VisualError, RenderError
 
 load_dotenv()
 
@@ -138,6 +138,14 @@ class Pipeline:
         result["niche"] = tenant_config.niche
 
         try:
+            # ── STEP 0: Validasi kredensial wajib (fail-loud SEBELUM produksi 35 mnt) ──
+            _missing = run_config.missing_credentials() if run_config else []
+            if _missing:
+                raise ConfigError(
+                    "Kredensial wajib belum lengkap: " + "; ".join(_missing),
+                    step="validation",
+                )
+
             # ── STEP 1: Trend Scan ──────────────────────────────────
             logger.info("STEP 1/7 | Scanning trends...")
             signals = self.trend_radar.scan(

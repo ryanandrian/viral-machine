@@ -308,6 +308,19 @@ class TenantRunConfig:
             return self.niche_pool[0]
         return ""
 
+    def missing_credentials(self) -> list[str]:
+        """Phase 4.5: daftar key WAJIB yang belum diisi, per provider terpilih tenant.
+        Dipakai pipeline utk fail-loud SEBELUM produksi (35 mnt). Provider gratis
+        (edge_tts/pexels) tak perlu key. YouTube OAuth dicek di publish (tenant_credentials/file)."""
+        missing = []
+        if not (self.llm_api_key or "").strip():
+            missing.append(f"llm_api_key (LLM: {self.effective_llm_provider() or '?'})")
+        if (self.tts_provider or "") in ("elevenlabs", "openai_tts") and not (self.tts_api_key or "").strip():
+            missing.append(f"tts_api_key ({self.tts_provider})")
+        if (self.visual_provider or "").startswith("ai_image:") and not (self.visual_api_key or "").strip():
+            missing.append("visual_api_key (image generation)")
+        return missing
+
 
 class TenantConfigManager:
     """
