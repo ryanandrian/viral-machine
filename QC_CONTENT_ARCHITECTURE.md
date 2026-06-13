@@ -116,6 +116,37 @@ Tujuan: tutup loop tidak hanya di **input** (script/hook dari analytics) tapi ju
 
 ---
 
+## 4b. Consent & Transparency untuk Fallback (TTS + Visual)
+
+> **Prinsip (kuatkan §0.4): TIDAK ada degradasi kualitas yang SENYAP.** Setiap fallback ke provider cadangan = penurunan kualitas yang tenant **bayar** untuk dihindari (mis. suara premium ElevenLabs → edge_tts). Diam-diam menurunkannya = pelanggaran kepercayaan + kualitas.
+
+### Kondisi nyata (tervalidasi 2026-06-13, vs kode)
+- **TTS fallback SILENT** — `tts_engine.generate` hanya `logger.warning` saat fallback; **tak ada notifikasi tenant**. Field `tts_fallback_provider` ADA (default `edge_tts`).
+- **Visual juga fallback** (bukan TTS saja): `visual_assembler` ai_image → **Pexels** → **black-screen**. Jadi kebijakan ini **umum**, bukan TTS-only.
+- **Konsekuensi kualitas edge_tts nyata**: timestamp **aproksimasi** (interpolasi batas-kalimat) → sinkron caption ~80% vs ElevenLabs char-level ~98%. ⚠️ *Inkonsistensi kode: docstring edge_tts klaim ~95%, engine label ~80% — REKONSILIASI dulu (verifikasi angka nyata) sebelum dipakai sebagai janji.*
+
+### Model: dua sumbu, JANGAN disatukan jadi satu toggle
+**A) Transparansi — WAJIB di KEDUA mode (tak bisa di-opt-out):**
+- Fallback aktif → **notifikasi tenant** (Telegram — `telegram_notifier` sudah ada) + **flag output** di `content_inventory.metadata` (`fallback_used=true`, `provider_used`, `quality_note`).
+- Flag ini = **sinyal QC** → tampil di dashboard + (idealnya) tercatat di QC akhir. Tidak pernah senyap.
+
+**B) Lanjut-vs-stop — INI yang jadi checkbox per-komponen (frontend):**
+- ☑ **Izinkan fallback** → produksi lanjut pakai cadangan (tenant terima konsekuensi yang dijelaskan eksplisit).
+- ☐ **Tidak diizinkan** → komponen utama gagal → **item DIHENTIKAN** (status blocked) + **alert keras** ("kredit ElevenLabs habis — inject sekarang"). Tak ada konten turun-kualitas tayang. Terhubung ke **monitor kredit BYOK**.
+
+### Tier fallback (acceptability BERBEDA)
+| Komponen | Rantai | Boleh tayang (bila diizinkan)? |
+|---|---|---|
+| TTS | ElevenLabs → edge_tts | ✅ degradasi wajar (caption ~80%, suara generik) |
+| Visual | ai_image → Pexels | ✅ wajar (stock, bukan bespoke) |
+| Visual | … → **black-screen** | ❌ **TIDAK PERNAH** — itu video rusak; **selalu stop**, lepas dari checkbox |
+
+### Default & teknis
+- **Default** (keputusan owner — lihat §6): rekomendasi **stop** untuk provider **premium berbayar** (nilai jual = kualitas premium).
+- **Pendaratan:** config per-komponen (TTS: `tts_fallback_provider` + boolean allow; Visual: kebijakan `visual_fallback`); **frontend checkbox + penjelasan konsekuensi spesifik**; wiring `telegram_notifier`; flag `content_inventory.metadata`.
+
+---
+
 ## 5. Rencana eksekusi (fase — diisi/di-update saat dikerjakan)
 
 - **F0 (DONE):** QC interim aman (floor 3s) — tak memblokir preset; produksi aktif tetap terlindungi.
@@ -125,6 +156,7 @@ Tujuan: tutup loop tidak hanya di **input** (script/hook dari analytics) tapi ju
 - **F4:** **Self-critic pra-submit** (review render: caption-sync, keterbacaan, brand-safety).
 - **F5:** Loop belajar dari QC-fail → auto-tune word_budget/section_timing per preset; A/B hook/thumbnail.
 - **F6:** Dashboard "robot belajar apa" untuk tenant (transparansi klaim landing).
+- **F7 (§4b):** **Consent & Transparency Fallback** (TTS+Visual) — notifikasi+flag WAJIB; checkbox lanjut-vs-stop per-komponen; tier (black-screen selalu stop); alert "inject kredit". Rekonsiliasi dulu angka akurasi edge_tts (95% vs 80%).
 
 > Urutan & detail tiap fase **diputuskan bersama owner** sebelum koding (propose-first).
 
@@ -135,8 +167,10 @@ Tujuan: tutup loop tidak hanya di **input** (script/hook dari analytics) tapi ju
 2. QC-fail: quarantine+retry (boros biaya, kualitas terjaga) vs buang (hemat, bisa kehilangan slot)? batas retry?
 3. Self-critic pra-submit pakai LLM-vision (biaya) atau heuristik murah dulu?
 4. Prioritas: F1+F2 (QC benar) dulu, atau F4 (self-critic) yang paling "wow" untuk jualan?
+5. **Default fallback (§4b): stop atau lanjut** untuk provider premium berbayar? Per-komponen sama atau beda?
 
 ---
 
 ### Changelog
 - 2026-06-13 — dibuat. Kondisi awal terdokumentasi; QC interim floor 3s; QC v2 + self-improvement roadmap diusulkan (menunggu keputusan owner per §6).
+- 2026-06-13 — **§4b Consent & Transparency Fallback** ditambah (disetujui owner): umum TTS+Visual, model A (transparansi wajib) + B (checkbox lanjut-vs-stop), tier black-screen selalu stop, flag→QC. + F7. **Validasi staged-QC** (deviasi durasi nyata 5–31% vs target 51s; risiko regenerate-loop; G-audio feasible krn `target_duration` `script_engine.py:206` + `audio_duration` `pipeline.py:219` sebelum step mahal) — belum di-fold ke §3/§5, menunggu go owner.
