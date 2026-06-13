@@ -245,6 +245,8 @@ Perluasan produk: menampung **banyak kategori creator short faceless** (mystery/
 - **(B) Frontend** (saat wiring / Phase 9-10) — (1) **Admin E2 Catalog**: tambah manajemen **PROVIDER** (`ai_providers` CRUD: adapter/base_url/auth/`request_param_schema`) — sekarang UI hanya kelola MODEL. (2) **Tenant "AI Engines"**: ganti radio provider hardcoded `[Anthropic,OpenAI]` + model statik → **dinamis dari katalog** + tampilkan **quality/cost**. (Clone v2 sudah ada → guardrail wiring terbuka.)
 - **(C) S3 buffer / `content_inventory`** — sudah tercatat di §"Arsitektur Produksi & Scaling" (placement Phase 5), belum mulai.
 
+**⚠️ Catatan infra v2 (verified 2026-06-13):** `tenant_configs` RLS=ON (policy `auth.uid()`) → **worker v2 WAJIB pakai SUPABASE service_role key** (anon/publishable ke-block, tak bisa baca row tenant). Katalog `ai_providers`/`ai_models` = public-read (OK dgn anon). **Key BYOK Anthropic di v2 (clone v1) = invalid/expired** → perlu di-update sebelum production-run sukses (bukan bug kode). Saat wiring frontend→Supabase pakai anon+RLS (`auth.uid()`); worker/backend pakai service_role.
+
 ---
 
 ## 🔍 PHASE 0 — Audit & Persiapan
@@ -550,7 +552,8 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 | Tanggal | Phase | Job ID | Hasil | Notes |
 |---------|-------|--------|-------|-------|
 | 2026-06-13 | 1.2 (niche_fallback) | — (struktural) | ✅ PARTIAL | Applied v2: migr 0003 (`niche_fallback` nullable). Best-practice: gate-enforcement + fail-loud, no global default. compile OK · grep site produksi=0 · resolver OK · `ryan_andrian` niche non-empty → no breakage. Real production-run BELUM. |
-| 2026-06-13 | 1.1 (LLM + AI Catalog) | — (struktural) | ✅ PARTIAL | Applied v2: migr 0001 backfill + 0002 catalog. `py_compile` OK · katalog REST+RLS OK · `build_llm_provider` resolve adapter dari DB OK · backfill `ryan_andrian` OK. **Real production-run BELUM** (gate user: API key+biaya). |
+| 2026-06-13 | 1.1 (LLM + AI Catalog) | — (LLM-path) | ✅ kode lolos / ⚠️ key | **Production-run LLM-path:** catalog→`AnthropicMessagesAdapter`→**API Anthropic nyata** OK (request well-formed, routing Claude, model dari katalog, zero OpenAI). Balik **401 invalid x-api-key** → **key BYOK v2 (clone dari v1) invalid/expired** = isu kredensial, BUKAN bug. Round-trip sukses tinggal update key v2. |
+| 2026-06-13 | 1.1 commit | branch `v2-backend` `f7e9832` | ✅ | Commit ke **branch v2-backend** (BUKAN main — `src/` tak di-exclude sparse-checkout → lindungi v1). `main` tetap `31a558b`. |
 | 2026-06-10 09:31 | Pre-Phase-0 | #96 | ✅ SUCCESS | OpenAI billing aktif, pipeline normal, dipakai sebagai baseline |
 | 2026-06-10 05:30 | — | #95 | ❌ FAILED | OpenAI 429 billing_not_active — root cause yang memicu refactor |
 | 2026-06-09 20:30 | — | #94 | ❌ FAILED | Same as #95 |
