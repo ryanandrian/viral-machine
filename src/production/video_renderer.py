@@ -824,6 +824,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         except Exception as e:
             logger.warning(f"[Renderer] Loop ending skipped: {e}")
 
+        # ── FB4: Branded logo overlay (MULTI_FORMAT §6) — pass terpisah, fail-soft, hanya jika brand_logo ──
+        try:
+            output_path = self._overlay_logo(output_path, tenant_config, output_dir)
+        except Exception as e:
+            logger.warning(f"[Renderer] Logo overlay skipped: {e}")
+
         return output_path
 
     def _add_loop_ending(
@@ -929,6 +935,73 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             f"[LoopEnding] ✅ Loop ending added: +{loop_duration}s "
             f"| xfade={xfade_dur}s | {size_mb:.1f} MB"
         )
+        return video_path
+
+    @staticmethod
+    def _resolve_logo(logo_ref: str, output_dir: str):
+        """Resolve brand_logo → file lokal. Path lokal → langsung; http(s) → download.
+        (Upload via Supabase storage = Phase 9; di sini dukung path/URL.) None bila gagal."""
+        try:
+            if logo_ref and os.path.exists(logo_ref):
+                return logo_ref
+            if str(logo_ref).startswith(("http://", "https://")):
+                import urllib.request
+                dst = os.path.join(output_dir, "brand_logo_dl.png")
+                urllib.request.urlretrieve(logo_ref, dst)
+                return dst if os.path.exists(dst) else None
+        except Exception as e:
+            logger.warning(f"[Renderer] resolve logo gagal: {e}")
+        return None
+
+    def _overlay_logo(self, video_path: str, tenant_config, output_dir: str) -> str:
+        """FB4 (§6): overlay logo brand (posisi/ukuran/opacity config-driven). FAIL-SOFT —
+        gagal → video asli (tak crash). Pass terpisah; tak menyentuh filter chain lain.
+        brand_logo None → no-op (non-breaking)."""
+        logo_ref = getattr(tenant_config, "brand_logo", None)
+        if not logo_ref:
+            return video_path
+        logo_path = self._resolve_logo(logo_ref, output_dir)
+        if not logo_path:
+            logger.warning("[Renderer] brand_logo tak ter-resolve — skip overlay")
+            return video_path
+
+        size_frac = float(getattr(tenant_config, "logo_size", 0.12) or 0.12)
+        opacity   = float(getattr(tenant_config, "logo_opacity", 0.85) or 0.85)
+        pos       = (getattr(tenant_config, "logo_position", "top-right") or "top-right").lower()
+        m = 28
+        xy = {
+            "top-right":    f"W-w-{m}:{m}",
+            "top-left":     f"{m}:{m}",
+            "bottom-right": f"W-w-{m}:H-h-{m}",
+            "bottom-left":  f"{m}:H-h-{m}",
+        }.get(pos, f"W-w-{m}:{m}")
+
+        # lebar logo = fraksi lebar video (probe width; fallback 1080 = 9:16 standar)
+        import json as _json
+        vw = 1080
+        try:
+            pr = subprocess.run(["ffprobe", "-v", "quiet", "-select_streams", "v:0",
+                                 "-show_entries", "stream=width", "-of", "json", video_path],
+                                capture_output=True, text=True, timeout=15)
+            if pr.returncode == 0:
+                vw = int(_json.loads(pr.stdout)["streams"][0]["width"])
+        except Exception:
+            pass
+        logo_w = max(1, round(vw * size_frac))
+
+        out = video_path.replace(".mp4", "_logo.mp4")
+        filt = (f"[1:v]scale={logo_w}:-1,format=rgba,colorchannelmixer=aa={opacity}[lgo];"
+                f"[0:v][lgo]overlay={xy}[vout]")
+        cmd = ["ffmpeg", "-y", "-i", video_path, "-i", logo_path,
+               "-filter_complex", filt, "-map", "[vout]", "-map", "0:a?",
+               "-c:v", "libx264", "-preset", "fast", "-b:v", self.VIDEO_BITRATE,
+               "-c:a", "copy", out]
+        r = subprocess.run(cmd, capture_output=True, text=True)
+        if r.returncode != 0 or not os.path.exists(out):
+            logger.warning(f"[Renderer] logo overlay gagal: {r.stderr[-300:]}")
+            return video_path
+        os.remove(video_path); os.rename(out, video_path)
+        logger.info(f"[Renderer] ✅ Logo overlay: {pos} w={logo_w}px opacity={opacity}")
         return video_path
 
     def _mix_music(
