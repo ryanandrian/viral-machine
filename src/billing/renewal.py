@@ -34,8 +34,8 @@ def next_status(row: dict, now: datetime) -> str | None:
     if is_comp_account(row):
         return None
     status = row.get("subscription_status") or "active"
-    if status in ("suspended", "cancelled"):
-        return None
+    if status in ("suspended", "cancelled", "trial_expired"):
+        return None   # status final (reaktivasi hanya via webhook bayar)
     pe = row.get("current_period_end")
     if not pe:
         return None
@@ -45,6 +45,10 @@ def next_status(row: dict, now: datetime) -> str | None:
             end = end.replace(tzinfo=timezone.utc)
     except Exception:
         return None
+    if status == "trial":
+        # Trial habis (durasi lewat) → 'trial_expired' (non-producing + LEAD marketing utk follow-up/feedback).
+        # Beda dari 'suspended' (paid lapse). TANPA grace (tak ada pembayaran utk di-retry).
+        return None if now <= end else "trial_expired"
     if now <= end:
         return "active"   # periode masih berjalan (sudah renew)
     if now <= end + timedelta(days=_grace_days()):

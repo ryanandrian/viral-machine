@@ -145,6 +145,8 @@
 
 **7 hari free trial, no credit card required, full feature, limit 5 video total.**
 
+> 🔄 **UPDATE 2026-06-14 (owner, SUPERSEDE detail di bawah + §5 platform-managed trial):** Trial = **BYOK** (tenant pakai key AI sendiri sejak trial — bukan platform-managed). Alasan: insentif abuse runtuh (abuser bayar AI sendiri), infra simpel (tak ada platform-key), trial = produk asli kualitas penuh, filter ICP. Trial jadi **tier `'trial'`** di `plan_limits` (caps **1 channel, 1 video/hari**, admin-editable) + **durasi 7 hari** di `app_config` (admin-editable). Lapse tanpa upgrade → status **`trial_expired`** (non-producing) = **lead marketing** (kontak + usage utk follow-up/feedback; retensi data dalam grace). Tetap **bukan free-tier permanen**. Implementasi: migr 0023/0024, `src/billing/{limits,renewal}.py`, `src/config/app_config.py`.
+
 **Alasan:**
 - 5 video cukup untuk merasakan: 1 setup result + 4 next-day publish + dashboard analytics
 - No CC required = lower friction (acquisition>>conversion at low ARPU)

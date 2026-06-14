@@ -55,6 +55,32 @@ def channel_quota(tenant_row: dict, plan_limits: dict) -> int:
     return int((plan_limits.get(plan) or {}).get("max_channels", 1) or 1)
 
 
+# ── Trial = TIER 'trial' (BYOK, time-boxed 7 hari). Caps via plan_limits['trial'] (1ch/1vid-hari).
+#    Durasi via app_config (admin-editable). Lapse → trial_expired (lead marketing). DESAIN §3. ─────
+def trial_days() -> int:
+    """Lama trial (hari) — ADMIN-EDITABLE via app_config (no-hardcode)."""
+    from src.config.app_config import get_int
+    return get_int("trial_duration_days", 7)
+
+
+def start_trial(sb, tenant_id: str) -> dict:
+    """
+    Mulai trial (dipanggil saat signup, Phase 9). Set tier 'trial' + status 'trial' + anchor + period_end.
+    Caps (1ch/1vid-hari) otomatis dari plan_limits['trial']. BYOK — tak ada platform key.
+    """
+    from datetime import timedelta
+    now = datetime.now(timezone.utc)
+    end = now + timedelta(days=trial_days())
+    sb.table("tenant_configs").update({
+        "plan_type":           "trial",
+        "subscription_status": "trial",
+        "trial_started_at":    now.isoformat(),
+        "current_period_end":  end.isoformat(),
+    }).eq("tenant_id", tenant_id).execute()
+    logger.info(f"[Limits] trial started tenant={tenant_id} → end {end.date()} (tier 'trial', caps dari plan_limits)")
+    return {"trial_ends": end.isoformat()}
+
+
 def published_today_count(sb, channel_id: str) -> int:
     """Jumlah video PUBLISHED hari ini (UTC) untuk channel — utk enforce cap harian."""
     if not sb or not channel_id:
@@ -76,7 +102,7 @@ def _tenant_gate_row(sb, tenant_id: str) -> dict:
         return {}
     try:
         res = (sb.table("tenant_configs")
-               .select("subscription_status,plan_type,videos_per_day,max_videos_per_day,is_developer,discount_pct")
+               .select("subscription_status,plan_type,videos_per_day,max_videos_per_day,is_developer,discount_pct,trial_started_at")
                .eq("tenant_id", tenant_id).limit(1).execute())
         return (res.data or [{}])[0]
     except Exception as e:
@@ -96,7 +122,8 @@ def gate_for_channel(sb, channel_row: dict) -> dict:
     comp   = is_comp_account(trow)
     limits = _get_plan_limits() or {}
     return {
-        # comp/developer (always-free) → SELALU producing, lepas dari status langganan.
+        # comp/developer (always-free) → SELALU producing. Trial = tier 'trial' (producing),
+        # caps (1ch/1vid-hari) via plan_limits['trial'] di daily_publish_cap. trial_expired → blocked.
         "can_produce": comp or can_produce(status),
         "daily_cap":   daily_publish_cap(trow, limits),
         "status":      status,
