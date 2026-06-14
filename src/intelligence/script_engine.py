@@ -203,11 +203,13 @@ def _build_insights_block(insights: dict) -> str:
 
 
 def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, insights_block=None,
-                       preset_seconds=None, format_wps=None):
+                       preset_seconds=None, format_wps=None,
+                       cta_mode="implicit", brand_name=None, brand_cta_text=None):
     """
     Build prompt. Jika feedback ada (dari retry), sisipkan sebagai instruksi perbaikan.
     niche_visual_style: dict dari tabel niches (base_style, color_palette, atmosphere).
     preset_seconds/format_wps: Duration Preset per-channel (MULTI_FORMAT §3). None → perilaku lama.
+    cta_mode/brand_name: Branded Content (§6) — 'soft_sell' izinkan SATU sebutan brand halus.
     """
     profile        = _get_profile(niche)
     niches         = get_niches()
@@ -250,6 +252,17 @@ VISUAL DIRECTION — apply to all visual_suggestions prompts:
     if insights_block:
         insights_section = f"\n{insights_block}\n"
 
+    # Branded Content §6 — soft-sell: izinkan SATU sebutan brand halus di CTA (anti-hard-sell TETAP).
+    soft_sell_block = ""
+    if cta_mode == "soft_sell" and brand_name:
+        soft_sell_block = f"""
+SOFT-SELL MODE (anti-hard-sell TETAP berlaku): KHUSUS di bagian CTA, kamu BOLEH menyisipkan
+SATU sebutan brand yang HALUS & natural untuk "{brand_name}" — terasa seperti pemikiran tulus,
+bukan iklan. Pola contoh (jangan salin mentah, adaptasi ke topik): "… bersama {brand_name}."
+DILARANG hard-sell: tanpa "beli", "diskon", "promo", "klik link sekarang", tanpa imperative jualan.
+Maksimal SATU sebutan brand di seluruh script.{(' Arahan brand: ' + brand_cta_text) if brand_cta_text else ''}
+"""
+
     return f"""Write a viral short-form video script.
 
 TOPIC: {topic.get('topic', '')}
@@ -261,7 +274,7 @@ STYLE: {profile['style']}
 AVOID: {profile['avoid']}
 EMOTION ARC: {profile['emotion_arc']}
 HOOK FORMULA: {profile['hook_style']}
-{visual_direction_block}{insights_section}{feedback_block}
+{visual_direction_block}{insights_section}{soft_sell_block}{feedback_block}
 Write all 8 sections. Each has ONE job. Be specific to this topic — no generic phrases:
 
 1. HOOK ({section_timing['hook']}s ~{words['hook']} words)
@@ -421,7 +434,8 @@ class ScriptEngine:
 
     def _generate_one(self, provider, model, topic, niche, attempt,
                       niche_visual_style=None, feedback=None, insights_block=None,
-                      preset_seconds=None, format_wps=None):
+                      preset_seconds=None, format_wps=None,
+                      cta_mode="implicit", brand_name=None, brand_cta_text=None):
         """Satu attempt generate script via LLMProvider (config-driven).
 
         Provider memegang SDK client + format API spesifik vendor — di sini tak
@@ -439,6 +453,7 @@ class ScriptEngine:
                 user=_build_user_prompt(
                     topic, niche, niche_visual_style, feedback, insights_block,
                     preset_seconds=preset_seconds, format_wps=format_wps,
+                    cta_mode=cta_mode, brand_name=brand_name, brand_cta_text=brand_cta_text,
                 ),
                 model=model,
                 temperature=1.0,
@@ -494,6 +509,10 @@ class ScriptEngine:
         preset_seconds = getattr(tenant_config, "duration_preset", None)
         _tts_provider  = getattr(run_config, "tts_provider", None) if run_config else None
         format_wps     = _eff_wps(getattr(tenant_config, "format_profile", None), _tts_provider) if preset_seconds else None
+        # Branded Content §6 — soft-sell (opsional; implicit → tanpa brand)
+        _cta_mode  = getattr(tenant_config, "cta_mode", "implicit") or "implicit"
+        _brand     = getattr(tenant_config, "brand_name", None)
+        _brand_cta = getattr(tenant_config, "brand_cta_text", None)
 
         # S1-B: load channel insights — inject ke semua attempt jika grade cukup
         insights       = self._load_insights(tenant_config.tenant_id)
@@ -546,6 +565,7 @@ class ScriptEngine:
                 llm, script_model, topic, tenant_config.niche, attempt,
                 niche_visual_style, feedback, insights_block,
                 preset_seconds=preset_seconds, format_wps=format_wps,
+                cta_mode=_cta_mode, brand_name=_brand, brand_cta_text=_brand_cta,
             )
 
             if not script:
