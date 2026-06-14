@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { Zap, Moon, Sun, Eye, EyeOff, Command, CheckCircle, Bell, ArrowLeft, ArrowRight, Star } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 import "./auth.css";
 
 // B1-B4 Auth (PoC) — port dari design-source/Auth.html. Multi-view (signup/login/forgot/verify),
@@ -52,7 +53,54 @@ export default function AuthPage() {
   }, []);
 
   function switchLang(l: "id" | "en") { setLang(l); document.documentElement.lang = l; localStorage.setItem("mv-lang", l); }
-  const go = (v: View) => { setView(v); window.scrollTo(0, 0); };
+  const go = (v: View) => { setView(v); setErr(null); window.scrollTo(0, 0); };
+
+  // ── Supabase Auth (Phase 9.1) — email flows. signUp → provisioning otomatis via trigger 0028.
+  const [email, setEmail] = useState("");
+  const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const supabase = createClient();
+  const origin = () => (typeof window !== "undefined" ? window.location.origin : "");
+
+  async function doSignup() {
+    setErr(null);
+    if (pw.length < 8) return setErr(lang === "id" ? "Password minimal 8 karakter." : "Password must be at least 8 characters.");
+    if (pw !== pw2) return setErr(lang === "id" ? "Konfirmasi password tidak cocok." : "Passwords do not match.");
+    setBusy(true);
+    const { error } = await supabase.auth.signUp({ email, password: pw, options: { emailRedirectTo: `${origin()}/auth?view=verified` } });
+    setBusy(false);
+    if (error) return setErr(error.message);
+    go("verify");
+  }
+  async function doLogin() {
+    setErr(null); setBusy(true);
+    const { error } = await supabase.auth.signInWithPassword({ email, password: pw });
+    setBusy(false);
+    if (error) return setErr(error.message);
+    window.location.href = "/dashboard";  // full reload → middleware sinkron session
+  }
+  async function doForgot() {
+    setErr(null); setBusy(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${origin()}/auth?view=login` });
+    setBusy(false);
+    if (error) return setErr(error.message);
+    go("forgot-sent");
+  }
+  async function doResend() {
+    if (!email) return setErr(lang === "id" ? "Masukkan email dulu." : "Enter your email first.");
+    setErr(null); setBusy(true);
+    const { error } = await supabase.auth.resend({ type: "signup", email });
+    setBusy(false);
+    if (error) setErr(error.message);
+  }
+  async function doGoogle() {
+    setErr(null);
+    const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${origin()}/dashboard` } });
+    if (error) setErr(error.message);  // aktif setelah provider Google dikonfigurasi di Supabase
+  }
+  const ErrBox = () => err ? <div style={{ color: "var(--danger, #ef4444)", fontSize: "var(--text-sm)", marginTop: "0.5rem" }}>{err}</div> : null;
 
   const Stars = () => <div className="stars">{Array.from({ length: 5 }).map((_, i) => <Star key={i} size={15} fill="#FBBF24" color="#FBBF24" />)}</div>;
 
@@ -78,17 +126,17 @@ export default function AuthPage() {
             <div className="auth-card">
               <h1><Bi id="Mulai gratis 7 hari" en="Start your 7-day trial" /></h1>
               <p className="lead"><Bi id="5 video gratis, tanpa kartu kredit." en="5 free videos, no credit card." /></p>
-              <button className="oauth-btn"><GoogleLogo /><Bi id="Daftar dengan Google" en="Sign up with Google" /></button>
+              <button className="oauth-btn" onClick={doGoogle}><GoogleLogo /><Bi id="Daftar dengan Google" en="Sign up with Google" /></button>
               <div className="divider"><Bi id="atau pakai email" en="or use email" /></div>
               <div className="form-stack">
-                <div><label className="label">Email</label><input className="input" type="email" placeholder="riko@channel.id" /></div>
+                <div><label className="label">Email</label><input className="input" type="email" placeholder="riko@channel.id" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
                 <div><label className="label">Password</label>
-                  <PwInput id="pw1" placeholder="Min. 8 karakter" />
-                  <div className="pw-meter"><span style={{ background: "var(--success)" }} /><span style={{ background: "var(--success)" }} /><span style={{ background: "var(--warning)" }} /><span /></div>
+                  <PwInput id="pw1" placeholder="Min. 8 karakter" value={pw} onChange={(e) => setPw(e.target.value)} />
                 </div>
-                <div><label className="label"><Bi id="Konfirmasi password" en="Confirm password" /></label><PwInput id="pw2" /></div>
+                <div><label className="label"><Bi id="Konfirmasi password" en="Confirm password" /></label><PwInput id="pw2" value={pw2} onChange={(e) => setPw2(e.target.value)} /></div>
                 <label className="terms"><input type="checkbox" defaultChecked /><Bi id="Saya setuju dengan Ketentuan Layanan dan Kebijakan Privasi MesinViral." en="I agree to MesinViral's Terms of Service and Privacy Policy." /></label>
-                <a href="/onboarding" className="btn btn-default btn-lg" style={{ width: "100%" }}><Bi id="Buat Akun" en="Create account" /></a>
+                <button className="btn btn-default btn-lg" style={{ width: "100%" }} onClick={doSignup} disabled={busy}>{busy ? "…" : <Bi id="Buat Akun" en="Create account" />}</button>
+                <ErrBox />
               </div>
               <div className="auth-foot"><Bi id="Sudah punya akun?" en="Already have an account?" /> <a className="link" onClick={() => go("login")}><Bi id="Masuk" en="Sign in" /></a></div>
             </div>
@@ -99,15 +147,16 @@ export default function AuthPage() {
             <div className="auth-card">
               <h1><Bi id="Selamat datang kembali" en="Welcome back" /></h1>
               <p className="lead"><Bi id="Masuk untuk lanjut ke dashboard Anda." en="Sign in to continue to your dashboard." /></p>
-              <button className="oauth-btn"><GoogleLogo /><Bi id="Masuk dengan Google" en="Sign in with Google" /></button>
+              <button className="oauth-btn" onClick={doGoogle}><GoogleLogo /><Bi id="Masuk dengan Google" en="Sign in with Google" /></button>
               <div className="divider"><Bi id="atau pakai email" en="or use email" /></div>
               <div className="form-stack">
-                <div><label className="label">Email</label><input className="input" type="email" defaultValue="riko@misterisamudra.id" /></div>
+                <div><label className="label">Email</label><input className="input" type="email" placeholder="riko@channel.id" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
                 <div>
                   <div className="row-between" style={{ marginBottom: "0.4375rem" }}><label className="label" style={{ margin: 0 }}>Password</label><a className="link" style={{ fontSize: "var(--text-xs)" }} onClick={() => go("forgot")}><Bi id="Lupa password?" en="Forgot password?" /></a></div>
-                  <PwInput id="pw3" defaultValue="password" />
+                  <PwInput id="pw3" value={pw} onChange={(e) => setPw(e.target.value)} />
                 </div>
-                <a href="/dashboard" className="btn btn-default btn-lg" style={{ width: "100%" }}><Bi id="Masuk" en="Sign in" /></a>
+                <button className="btn btn-default btn-lg" style={{ width: "100%" }} onClick={doLogin} disabled={busy}>{busy ? "…" : <Bi id="Masuk" en="Sign in" />}</button>
+                <ErrBox />
               </div>
               <div className="auth-foot"><Bi id="Belum punya akun?" en="No account yet?" /> <a className="link" onClick={() => go("signup")}><Bi id="Daftar gratis" en="Sign up free" /></a></div>
             </div>
@@ -120,8 +169,9 @@ export default function AuthPage() {
               <h1><Bi id="Reset password" en="Reset password" /></h1>
               <p className="lead"><Bi id="Masukkan email Anda, kami kirim link untuk reset password." en="Enter your email and we'll send a reset link." /></p>
               <div className="form-stack">
-                <div><label className="label">Email</label><input className="input" type="email" placeholder="riko@channel.id" /></div>
-                <button className="btn btn-default btn-lg" style={{ width: "100%" }} onClick={() => go("forgot-sent")}><Bi id="Kirim link reset" en="Send reset link" /></button>
+                <div><label className="label">Email</label><input className="input" type="email" placeholder="riko@channel.id" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+                <button className="btn btn-default btn-lg" style={{ width: "100%" }} onClick={doForgot} disabled={busy}>{busy ? "…" : <Bi id="Kirim link reset" en="Send reset link" />}</button>
+                <ErrBox />
               </div>
               <div className="auth-foot"><a className="link" onClick={() => go("login")}><ArrowLeft size={14} style={{ verticalAlign: -2 }} /> <Bi id="Kembali ke masuk" en="Back to sign in" /></a></div>
             </div>
@@ -133,7 +183,8 @@ export default function AuthPage() {
               <div className="state-ico" style={{ background: "var(--success-soft)", color: "var(--success)" }}><CheckCircle size={28} /></div>
               <h1><Bi id="Cek email Anda" en="Check your email" /></h1>
               <p className="lead"><span data-id>Kami sudah mengirim link reset ke <b style={{ color: "var(--text-primary)" }}>riko@channel.id</b>. Cek folder spam jika tidak ada.</span><span data-en>We sent a reset link to <b style={{ color: "var(--text-primary)" }}>riko@channel.id</b>. Check spam if you don&apos;t see it.</span></p>
-              <button className="btn btn-secondary btn-lg" style={{ width: "100%" }}><Bi id="Kirim ulang link" en="Resend link" /></button>
+              <button className="btn btn-secondary btn-lg" style={{ width: "100%" }} onClick={doForgot} disabled={busy}><Bi id="Kirim ulang link" en="Resend link" /></button>
+              <ErrBox />
               <div className="auth-foot"><a className="link" onClick={() => go("login")}><ArrowLeft size={14} style={{ verticalAlign: -2 }} /> <Bi id="Kembali ke masuk" en="Back to sign in" /></a></div>
             </div>
           )}
@@ -144,8 +195,9 @@ export default function AuthPage() {
               <div className="state-ico" style={{ background: "var(--info-soft)", color: "var(--info)" }}><Bell size={26} /></div>
               <h1><Bi id="Verifikasi email Anda" en="Verify your email" /></h1>
               <p className="lead"><Bi id="Kami kirim link verifikasi ke email Anda. Klik untuk mengaktifkan akun." en="We sent a verification link to your email. Click it to activate your account." /></p>
-              <button className="btn btn-secondary btn-lg" style={{ width: "100%", marginBottom: "0.75rem" }}><Bi id="Kirim ulang email" en="Resend email" /></button>
-              <button className="btn btn-ghost" style={{ width: "100%" }} onClick={() => go("verified")}><Bi id="(Demo) Simulasikan verifikasi →" en="(Demo) Simulate verified →" /></button>
+              <button className="btn btn-secondary btn-lg" style={{ width: "100%", marginBottom: "0.75rem" }} onClick={doResend} disabled={busy}><Bi id="Kirim ulang email" en="Resend email" /></button>
+              <ErrBox />
+              <div className="auth-foot"><a className="link" onClick={() => go("login")}><ArrowLeft size={14} style={{ verticalAlign: -2 }} /> <Bi id="Kembali ke masuk" en="Back to sign in" /></a></div>
             </div>
           )}
 
