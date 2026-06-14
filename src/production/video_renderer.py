@@ -965,32 +965,32 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             logger.warning("[Renderer] brand_logo tak ter-resolve — skip overlay")
             return video_path
 
-        size_frac = float(getattr(tenant_config, "logo_size", 0.12) or 0.12)
-        opacity   = float(getattr(tenant_config, "logo_opacity", 0.85) or 0.85)
-        pos       = (getattr(tenant_config, "logo_position", "top-right") or "top-right").lower()
-        m = 28
+        # UKURAN = bounds PLATFORM (branding_config admin, DB) — tenant ikut. POSISI = tenant
+        # (channel.logo_position, DB). Margin/opacity dari config → koordinat BUKAN hardcode.
+        from src.config.format_catalog import branding_config
+        bc = branding_config()
+        max_w, min_w = int(bc["logo_max_w_px"]), int(bc["logo_min_w_px"])
+        max_h, min_h = int(bc["logo_max_h_px"]), int(bc["logo_min_h_px"])
+        margin       = int(bc["logo_margin_px"])
+        opacity      = float(bc["logo_default_opacity"])
+        pos          = (getattr(tenant_config, "logo_position", "top-right") or "top-right").lower()
         xy = {
-            "top-right":    f"W-w-{m}:{m}",
-            "top-left":     f"{m}:{m}",
-            "bottom-right": f"W-w-{m}:H-h-{m}",
-            "bottom-left":  f"{m}:H-h-{m}",
-        }.get(pos, f"W-w-{m}:{m}")
+            "top-right":    f"W-w-{margin}:{margin}",
+            "top-left":     f"{margin}:{margin}",
+            "bottom-right": f"W-w-{margin}:H-h-{margin}",
+            "bottom-left":  f"{margin}:H-h-{margin}",
+        }.get(pos, f"W-w-{margin}:{margin}")
 
-        # lebar logo = fraksi lebar video (probe width; fallback 1080 = 9:16 standar)
-        import json as _json
-        vw = 1080
-        try:
-            pr = subprocess.run(["ffprobe", "-v", "quiet", "-select_streams", "v:0",
-                                 "-show_entries", "stream=width", "-of", "json", video_path],
-                                capture_output=True, text=True, timeout=15)
-            if pr.returncode == 0:
-                vw = int(_json.loads(pr.stdout)["streams"][0]["width"])
-        except Exception:
-            pass
-        logo_w = max(1, round(vw * size_frac))
+        # Fit dimensi NATIVE logo ke dalam bounds platform (jaga aspect; hormati min)
+        lw, lh = self._probe_dims(logo_path) or (max_w, max_h)
+        fit = min(max_w / lw, max_h / lh)
+        tw, th = max(1, round(lw * fit)), max(1, round(lh * fit))
+        if tw < min_w or th < min_h:
+            up = max(min_w / tw, min_h / th)
+            tw, th = min(max_w, round(tw * up)), min(max_h, round(th * up))
 
         out = video_path.replace(".mp4", "_logo.mp4")
-        filt = (f"[1:v]scale={logo_w}:-1,format=rgba,colorchannelmixer=aa={opacity}[lgo];"
+        filt = (f"[1:v]scale={tw}:{th},format=rgba,colorchannelmixer=aa={opacity}[lgo];"
                 f"[0:v][lgo]overlay={xy}[vout]")
         cmd = ["ffmpeg", "-y", "-i", video_path, "-i", logo_path,
                "-filter_complex", filt, "-map", "[vout]", "-map", "0:a?",
@@ -1001,8 +1001,23 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             logger.warning(f"[Renderer] logo overlay gagal: {r.stderr[-300:]}")
             return video_path
         os.remove(video_path); os.rename(out, video_path)
-        logger.info(f"[Renderer] ✅ Logo overlay: {pos} w={logo_w}px opacity={opacity}")
+        logger.info(f"[Renderer] ✅ Logo overlay: {pos} {tw}x{th}px (bounds platform) opacity={opacity}")
         return video_path
+
+    @staticmethod
+    def _probe_dims(path):
+        """(width,height) stream video/gambar via ffprobe. None bila gagal."""
+        import json as _json
+        try:
+            pr = subprocess.run(["ffprobe", "-v", "quiet", "-select_streams", "v:0",
+                                 "-show_entries", "stream=width,height", "-of", "json", path],
+                                capture_output=True, text=True, timeout=15)
+            if pr.returncode == 0:
+                s = _json.loads(pr.stdout)["streams"][0]
+                return int(s["width"]), int(s["height"])
+        except Exception:
+            pass
+        return None
 
     def _mix_music(
         self,

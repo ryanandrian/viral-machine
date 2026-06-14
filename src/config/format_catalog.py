@@ -11,7 +11,9 @@ import time
 from loguru import logger
 
 _TTL = 300
-_CACHE = {"profiles": None, "presets": None, "tts": None, "ts": 0.0}
+_CACHE = {"profiles": None, "presets": None, "tts": None, "branding": None, "ts": 0.0}
+_BRANDING_DEFAULTS = {"logo_max_w_px": 220, "logo_min_w_px": 96, "logo_max_h_px": 220,
+                      "logo_min_h_px": 48, "logo_margin_px": 28, "logo_default_opacity": 0.85}
 
 
 def _sb():
@@ -27,11 +29,13 @@ def _load() -> None:
         profiles = {r["format_key"]: r for r in sb.table("format_profiles").select("*").execute().data}
         presets = {int(r["seconds"]): r for r in sb.table("duration_presets").select("*").execute().data}
         tts = {r["provider_key"]: r for r in sb.table("tts_profiles").select("*").execute().data}
-        _CACHE.update(profiles=profiles, presets=presets, tts=tts, ts=time.time())
+        brow = sb.table("branding_config").select("*").eq("id", 1).execute().data or []
+        _CACHE.update(profiles=profiles, presets=presets, tts=tts,
+                      branding=(brow[0] if brow else {}), ts=time.time())
     except Exception as e:
         logger.warning(f"[format_catalog] load gagal ({e}) — pakai fallback default")
         if _CACHE["profiles"] is None:
-            _CACHE.update(profiles={}, presets={}, tts={})
+            _CACHE.update(profiles={}, presets={}, tts={}, branding={})
 
 
 def format_wps(format_key, default: float = 2.4) -> float:
@@ -89,6 +93,18 @@ def tts_class(tts_provider, default: str = "timed") -> str:
     _load()
     tp = (_CACHE["tts"] or {}).get(tts_provider)
     return (tp.get("tts_class") if tp else None) or default
+
+
+def branding_config() -> dict:
+    """Bounds UKURAN logo + margin + opacity = PLATFORM (admin, DB). Tenant ikut (tak set ukuran).
+    Fallback default bila tabel/baris tak ada. Koordinat overlay diturunkan dari sini + posisi tenant."""
+    _load()
+    out = dict(_BRANDING_DEFAULTS)
+    b = _CACHE.get("branding") or {}
+    for k in _BRANDING_DEFAULTS:
+        if b.get(k) is not None:
+            out[k] = b[k]
+    return out
 
 
 def tts_speed_param(tts_provider):
