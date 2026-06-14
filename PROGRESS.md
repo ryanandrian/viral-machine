@@ -198,7 +198,7 @@ Perluasan produk: menampung **banyak kategori creator short faceless** (mystery/
 | Item | Feasibility | Status |
 |---|---|---|
 | QC window relatif · link deskripsi · logo overlay · soft-sell CTA | ✅ murah (~20-50 LOC each) | ⏳ Phase 1.x |
-| Durasi 30–75s (section_timing preset + compression-map) | 🟡 medium | 🛠️ **F1 ✅** (katalog format_profiles+duration_presets + field channel, migr 0012) — F2 logika (word-budget→preset + QC relatif) berikutnya |
+| Durasi 30–75s (section_timing preset + compression-map) | 🟡 medium | ✅ **F1+F2 DONE** — katalog (0012/0013) + scaling/word-budget (F2a) + wiring channel→tc (F2b) + QC relatif ±15% (F2c) + LLM-QC length-gate (F2d) + **effective-WPS per kelas TTS (F2e, 0014)**. Tervalidasi LIVE (ryan 60s konvergen). Closed-loop speed-adjust (poles edge + presisi) = pasca-ElevenLabs aktif. |
 | Closed-loop akurasi durasi (speed-adjust Edge/ElevenLabs) | 🟡 medium | ⏳ setelah cheap wins |
 | Variable visual beats · katalog `ai_models` (konsolidasi Phase 1.3) | 🟡 medium | ⏳ |
 | **ai_video (BYOK)** + ultra-short 8–15s | 🟡 berat (`ai_video.py` DISABLED; redesign section) | ⏳ fase C |
@@ -262,7 +262,7 @@ Setelah Phase 1-4 + alignment (migr 0010). **DB = lengkap untuk semua domain; ba
 | OAuth/credentials | `tenant_credentials` ✅ | crypto+loader ✅ | onboarding C3 | DB/BE ✅ · FE wiring (P9); seed token ryan pending |
 | Logs/live-tail | `pipeline_run_logs` ✅ | db_log_sink ✅ | D5 (simulasi) | DB/BE ✅ · FE live-tail wiring (P9) |
 | Auth/isolasi | `auth.users`+`tenant_id=auth.uid()`+RLS ✅ | RLS+service_role ✅ | B1-B4 (mock) | DB/BE ✅ · FE Supabase Auth (P9) |
-| Multi-Format | `format_profiles`+`duration_presets` ✅ (0012/0013) | F1 ✅ · F2 logika in-progress | **screen baru BELUM ada** (format/preset picker — Hybrid §11) | DB ✅ · BE in-progress · **FE gap (screen baru, Phase 9-10)** |
+| Multi-Format | `format_profiles`+`duration_presets`+`tts_profiles` ✅ (0012-0014) | **F1+F2 ✅** (word-budget per preset×kelas-TTS, QC relatif, length-gate) | **screen baru BELUM ada** (format/preset picker — Hybrid §11) | DB ✅ · BE ✅ (open-loop) · **FE gap (screen baru, Phase 9-10)** · closed-loop pasca-ElevenLabs |
 
 **Kesimpulan:** tak ada misalignment diam — semua gap = (a) frontend mock→wiring **Phase 9**, atau (b) backend helper/inject di fasenya (pricing P8, content-lang P5/6), atau (c) epik (format_profiles). Tertuang semua.
 
