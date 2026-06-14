@@ -11,9 +11,14 @@ import time
 from loguru import logger
 
 _TTL = 300
-_CACHE = {"profiles": None, "presets": None, "tts": None, "branding": None, "ts": 0.0}
+_CACHE = {"profiles": None, "presets": None, "tts": None, "branding": None, "diversity": None, "ts": 0.0}
 _BRANDING_DEFAULTS = {"logo_max_w_px": 220, "logo_min_w_px": 96, "logo_max_h_px": 220,
                       "logo_min_h_px": 48, "logo_margin_px": 28, "logo_default_opacity": 0.85}
+_DIVERSITY_DEFAULTS = {"lookback_window": 6, "voice_rotation_enabled": True,
+                       "hook_rotation_enabled": True, "music_rotation_enabled": True,
+                       "visual_rotation_enabled": True,
+                       "hook_pattern_pool": ["question", "impossible_claim", "you_dont_know",
+                                             "number_shock", "story_open"]}
 
 
 def _sb():
@@ -30,12 +35,14 @@ def _load() -> None:
         presets = {int(r["seconds"]): r for r in sb.table("duration_presets").select("*").execute().data}
         tts = {r["provider_key"]: r for r in sb.table("tts_profiles").select("*").execute().data}
         brow = sb.table("branding_config").select("*").eq("id", 1).execute().data or []
+        drow = sb.table("diversity_config").select("*").eq("id", 1).execute().data or []
         _CACHE.update(profiles=profiles, presets=presets, tts=tts,
-                      branding=(brow[0] if brow else {}), ts=time.time())
+                      branding=(brow[0] if brow else {}),
+                      diversity=(drow[0] if drow else {}), ts=time.time())
     except Exception as e:
         logger.warning(f"[format_catalog] load gagal ({e}) — pakai fallback default")
         if _CACHE["profiles"] is None:
-            _CACHE.update(profiles={}, presets={}, tts={}, branding={})
+            _CACHE.update(profiles={}, presets={}, tts={}, branding={}, diversity={})
 
 
 def format_wps(format_key, default: float = 2.4) -> float:
@@ -104,6 +111,18 @@ def branding_config() -> dict:
     for k in _BRANDING_DEFAULTS:
         if b.get(k) is not None:
             out[k] = b[k]
+    return out
+
+
+def diversity_config() -> dict:
+    """Config Diversity Engine (Phase 6.2, §9.1) = PLATFORM (admin, DB single-row).
+    lookback + toggle per-dimensi + hook_pattern_pool. Fallback default bila tabel/baris tak ada."""
+    _load()
+    out = dict(_DIVERSITY_DEFAULTS)
+    d = _CACHE.get("diversity") or {}
+    for k in _DIVERSITY_DEFAULTS:
+        if d.get(k) is not None:
+            out[k] = d[k]
     return out
 
 
