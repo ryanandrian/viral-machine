@@ -231,7 +231,7 @@ export default function LandingPage() {
           </div>
           <div className="pcard">
             <div className="pn">Business</div><div className="pp">Rp 699K<small>/bln</small></div><div className="ptag"><Bi id="Untuk agency & power user" en="For agencies & power users" /></div>
-            <ul><li><Check size={15} /> 10 channel</li><li><Check size={15} /> 24 video / <Bi id="hari" en="day" /></li><li><Check size={15} /> Priority queue</li><li><Check size={15} /> Team access</li></ul>
+            <ul><li><Check size={15} /> 10 channel</li><li><Check size={15} /> 24 video / <Bi id="hari" en="day" /></li><li><Check size={15} /> Priority queue</li><li><Check size={15} /> Cross-channel insights</li></ul>
             <a href="/auth?view=signup" className="btn btn-outline" style={{ width: "100%" }}><Bi id="Pilih Business" en="Choose Business" /></a>
           </div>
         </div>

@@ -18,7 +18,7 @@ type Tier = { n: string; m: number; ttId: string; ttEn: string; feats: string[];
 const TIERS: Tier[] = [
   { n: "Starter", m: 149, ttId: "Untuk mulai scaling 1 channel", ttEn: "To start scaling 1 channel", feats: ["1 channel", "5 video / hari", "Niche dasar", "Self-learning", "Telegram notif"], ctaId: "Pilih Starter", ctaEn: "Choose Starter", pop: false },
   { n: "Pro", m: 349, ttId: "Paling diminati creator serius", ttEn: "Most chosen by serious creators", feats: ["3 channel", "10 video / hari", "Semua niche", "Quality Gate + Compliance", "Custom voice", "Captions & hashtags"], ctaId: "Pilih Pro", ctaEn: "Choose Pro", pop: true },
-  { n: "Business", m: 699, ttId: "Untuk agency & power user", ttEn: "For agencies & power users", feats: ["10 channel", "24 video / hari", "Priority queue", "Team access", "Webhook & API", "Quiet hours"], ctaId: "Pilih Business", ctaEn: "Choose Business", pop: false },
+  { n: "Business", m: 699, ttId: "Untuk agency & power user", ttEn: "For agencies & power users", feats: ["10 channel", "24 video / hari", "Priority queue", "Cross-channel insights", "Webhook & API", "Quiet hours"], ctaId: "Pilih Business", ctaEn: "Choose Business", pop: false },
 ];
 
 type FRow = { grp: [string, string] } | { row: [string, boolean | string, boolean | string, boolean | string, boolean | string] };
@@ -39,7 +39,6 @@ const FCMP: FRow[] = [
   { grp: ["Kolaborasi & Integrasi", "Collaboration & Integrations"] },
   { row: ["Telegram & Email notif", true, true, true, true] },
   { row: ["Webhook", false, false, true, true] },
-  { row: ["Team seats", "1", "1", "5", "custom"] },
   { row: ["Priority queue", false, false, true, true] },
   { row: ["API access", false, false, true, true] },
   { grp: ["Dukungan", "Support"] },

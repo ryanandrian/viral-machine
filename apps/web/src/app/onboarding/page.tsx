@@ -28,7 +28,7 @@ const STEPS = [
 const PLANS = [
   { name: "Starter", price: "Rp 149K", feats: ["1 channel", "5 video / hari", "Niche dasar", "Self-learning"] },
   { name: "Pro", price: "Rp 349K", popular: true, feats: ["3 channel", "10 video / hari", "Semua niche", "Quality Gate", "Compliance detail"] },
-  { name: "Business", price: "Rp 699K", feats: ["10 channel", "24 video / hari", "Priority queue", "Custom voice", "Team access"] },
+  { name: "Business", price: "Rp 699K", feats: ["10 channel", "24 video / hari", "Priority queue", "Custom voice", "Cross-channel insights"] },
 ];
 
 const YT: [string, string, boolean][] = [
