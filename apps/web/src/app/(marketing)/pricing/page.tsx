@@ -18,7 +18,7 @@ type Tier = { n: string; m: number; ttId: string; ttEn: string; feats: string[];
 const TIERS: Tier[] = [
   { n: "Starter", m: 149, ttId: "Untuk mulai scaling 1 channel", ttEn: "To start scaling 1 channel", feats: ["1 channel", "5 video / hari", "Niche dasar", "Self-learning", "Telegram notif"], ctaId: "Pilih Starter", ctaEn: "Choose Starter", pop: false },
   { n: "Pro", m: 349, ttId: "Paling diminati creator serius", ttEn: "Most chosen by serious creators", feats: ["3 channel", "10 video / hari", "Semua niche", "Quality Gate + Compliance", "Custom voice", "Captions & hashtags"], ctaId: "Pilih Pro", ctaEn: "Choose Pro", pop: true },
-  { n: "Scale", m: 699, ttId: "Untuk agency & power user", ttEn: "For agencies & power users", feats: ["10 channel", "24 video / hari", "Priority queue", "Team access", "Webhook & API", "Quiet hours"], ctaId: "Pilih Scale", ctaEn: "Choose Scale", pop: false },
+  { n: "Business", m: 699, ttId: "Untuk agency & power user", ttEn: "For agencies & power users", feats: ["10 channel", "24 video / hari", "Priority queue", "Team access", "Webhook & API", "Quiet hours"], ctaId: "Pilih Business", ctaEn: "Choose Business", pop: false },
 ];
 
 type FRow = { grp: [string, string] } | { row: [string, boolean | string, boolean | string, boolean | string, boolean | string] };
@@ -124,7 +124,7 @@ export default function PricingPage() {
         <div className="mk-center" style={{ marginBottom: "2rem" }}><h2 className="mk-h2"><Bi id="Bandingkan semua fitur" en="Compare all features" /></h2></div>
         <div className="fcmp-wrap">
           <table className="fcmp">
-            <thead><tr><th></th><th>Starter</th><th className="pop">Pro</th><th>Scale</th><th>Enterprise</th></tr></thead>
+            <thead><tr><th></th><th>Starter</th><th className="pop">Pro</th><th>Business</th><th>Enterprise</th></tr></thead>
             <tbody>{FCMP.map((r, i) => "grp" in r ? (
               <tr className="grp" key={i}><td colSpan={5}><Bi id={r.grp[0]} en={r.grp[1]} /></td></tr>
             ) : (

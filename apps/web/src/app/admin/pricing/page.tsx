@@ -16,7 +16,7 @@ type Cat = "Subscription" | "Add-on" | "One-time" | "Discount";
 const ROWS: [string, string, Cat, string, string, boolean][] = [
   ["plan_starter", "Langganan Starter / bulan", "Subscription", "149.000", "931", true],
   ["plan_pro", "Langganan Pro / bulan", "Subscription", "349.000", "2181", true],
-  ["plan_scale", "Langganan Scale / bulan", "Subscription", "699.000", "4369", true],
+  ["plan_business", "Langganan Business / bulan", "Subscription", "699.000", "4369", true],
   ["custom_niche_public_90d", "Niche custom public (90d exclusive)", "Add-on", "299.000", "1869", true],
   ["custom_niche_private", "Niche custom permanen private", "Add-on", "1.499.000", "9369", true],
   ["voice_pack", "Voice pack premium", "Add-on", "199.000", "1244", true],
@@ -81,7 +81,7 @@ export default function AdminPricingPage() {
             <h3><Bi id="Tier langganan" en="Subscription tiers" /></h3>
             <div className="pr-qrow"><span className="nm mono">plan_starter</span><input className="pr-val-edit" defaultValue="Rp 149.000" /><input className="pr-val-edit" defaultValue="$9.31" /></div>
             <div className="pr-qrow"><span className="nm mono">plan_pro</span><input className="pr-val-edit" defaultValue="Rp 349.000" /><input className="pr-val-edit" defaultValue="$21.81" /></div>
-            <div className="pr-qrow"><span className="nm mono">plan_scale</span><input className="pr-val-edit" defaultValue="Rp 699.000" /><input className="pr-val-edit" defaultValue="$43.69" /></div>
+            <div className="pr-qrow"><span className="nm mono">plan_business</span><input className="pr-val-edit" defaultValue="Rp 699.000" /><input className="pr-val-edit" defaultValue="$43.69" /></div>
             <button className="btn btn-default btn-sm" style={{ marginTop: "0.75rem" }} onClick={showToast}><Bi id="Simpan semua" en="Save all" /></button>
           </div>
         </div>

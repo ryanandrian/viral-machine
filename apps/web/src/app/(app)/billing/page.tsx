@@ -52,7 +52,7 @@ export default function BillingPage() {
                 <div className="muted" style={{ fontSize: "var(--text-sm)", marginTop: "0.5rem" }}><Bi id="Diperbarui otomatis 25 Juni 2026" en="Auto-renews June 25, 2026" /></div>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                <button className="btn btn-default"><Zap size={15} /> <Bi id="Upgrade ke Scale" en="Upgrade to Scale" /></button>
+                <button className="btn btn-default"><Zap size={15} /> <Bi id="Upgrade ke Business" en="Upgrade to Business" /></button>
                 <button className="btn btn-ghost btn-sm"><Bi id="Downgrade paket" en="Downgrade plan" /></button>
               </div>
             </div>

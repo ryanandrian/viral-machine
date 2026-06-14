@@ -136,7 +136,7 @@
 │     - INI MOMEN AHA: tenant rasakan self-learning real                    │
 │                                ▼                                           │
 │  7. EXPANSION (upsell trigger)                                            │
-│     - Tenant butuh tambah channel → upgrade ke Pro/Scale                  │
+│     - Tenant butuh tambah channel → upgrade ke Pro/Business                  │
 │     - Agency case → contact sales untuk Enterprise                        │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
@@ -165,9 +165,11 @@
 
 ## 4. BUSINESS MODEL — PRICING VALIDATED
 
+> 🔄 **UPDATE 2026-06-14 (owner):** tangga tier V2 = **Trial → Starter → Pro → Business** (tier tertinggi = **Business**; nama lama "Scale"/"agency" disatukan ke **Business** di FE+DB+pricing+caps). **Enterprise = ditunda ke V3** (kolom Enterprise di tabel = referensi masa depan, BUKAN self-serve V2). **Caps per-tier (channel + video/hari) = ADMIN-EDITABLE via `plan_limits` (DB), no-hardcode** — disesuaikan kondisi pasar tanpa redeploy. Trial = BYOK time-boxed (lihat §3 update).
+
 ### Struktur Paket (REVISI berdasarkan market data Juni 2026)
 
-| | **Starter** | **Pro** | **Scale** | **Enterprise** |
+| | **Starter** | **Pro** | **Business** | **Enterprise** |
 |---|---|---|---|---|
 | **Harga IDR** | **Rp 149K** | **Rp 349K** | **Rp 699K** | Custom |
 | **Harga USD** | ~$9 | ~$22 | ~$44 | – |
@@ -194,7 +196,7 @@
 | OpusClip | Pro | $29 (Rp 460K) | 300 (credits) | $0.10 |
 | **MesinViral** | **Starter** | **$9 (Rp 149K)** | **150** | **$0.06** |
 | **MesinViral** | **Pro** | **$22 (Rp 349K)** | **900** | **$0.024** |
-| **MesinViral** | **Scale** | **$44 (Rp 699K)** | **7,200** | **$0.006** |
+| **MesinViral** | **Business** | **$44 (Rp 699K)** | **7,200** | **$0.006** |
 
 **MesinViral Starter = 7.5× lebih murah per video** dari AutoShorts Hardcore (kompetitor terdekat).
 

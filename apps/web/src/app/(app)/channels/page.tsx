@@ -97,7 +97,7 @@ export default function ChannelsPage() {
         <Tv size={16} style={{ color: "var(--text-muted)" }} />
         <span><b style={{ fontWeight: 600 }}>3 dari 3</b> channel terpakai <span className="muted">(Pro plan)</span></span>
         <div className="progress bar"><span style={{ width: "100%", background: "var(--warning)" }} /></div>
-        <a href="#" className="btn btn-secondary btn-sm up"><Zap size={14} /> <Bi id="Upgrade ke Scale" en="Upgrade to Scale" /></a>
+        <a href="#" className="btn btn-secondary btn-sm up"><Zap size={14} /> <Bi id="Upgrade ke Business" en="Upgrade to Business" /></a>
       </div>
 
       <div className="ch-filters">

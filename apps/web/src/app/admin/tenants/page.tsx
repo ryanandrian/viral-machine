@@ -17,11 +17,11 @@ type Status = "active" | "trial" | "suspended";
 type Tenant = { name: string; email: string; plan: string; status: Status; mrr: string; joined: string; activity: string; av: string; channels: number };
 const TENANTS: Tenant[] = [
   { name: "Riko Pratama", email: "riko@misterisamudra.id", plan: "Pro", status: "active", mrr: "Rp 548K", joined: "12 Jan 2026", activity: "2 jam lalu", av: "RP", channels: 3 },
-  { name: "Sarah Wibowo", email: "sarah@agensikonten.id", plan: "Scale", status: "active", mrr: "Rp 1.2JT", joined: "3 Feb 2026", activity: "15 menit lalu", av: "SW", channels: 8 },
+  { name: "Sarah Wibowo", email: "sarah@agensikonten.id", plan: "Business", status: "active", mrr: "Rp 1.2JT", joined: "3 Feb 2026", activity: "15 menit lalu", av: "SW", channels: 8 },
   { name: "Dimas Aryo", email: "dimas@faktamikir.id", plan: "Pro", status: "active", mrr: "Rp 349K", joined: "22 Mar 2026", activity: "1 jam lalu", av: "DA", channels: 2 },
   { name: "Bagus Pratomo", email: "bagus@jejakkelam.id", plan: "Starter", status: "trial", mrr: "Rp 0", joined: "8 Jun 2026", activity: "30 menit lalu", av: "BP", channels: 1 },
   { name: "Lina Hartati", email: "lina@kontenviral.id", plan: "Starter", status: "active", mrr: "Rp 149K", joined: "15 Apr 2026", activity: "3 jam lalu", av: "LH", channels: 1 },
-  { name: "Andi Saputra", email: "andi@shortsfactory.id", plan: "Scale", status: "suspended", mrr: "Rp 0", joined: "5 Des 2025", activity: "12 hari lalu", av: "AS", channels: 6 },
+  { name: "Andi Saputra", email: "andi@shortsfactory.id", plan: "Business", status: "suspended", mrr: "Rp 0", joined: "5 Des 2025", activity: "12 hari lalu", av: "AS", channels: 6 },
   { name: "Maya Putri", email: "maya@ceritamaya.id", plan: "Pro", status: "trial", mrr: "Rp 0", joined: "9 Jun 2026", activity: "5 menit lalu", av: "MP", channels: 2 },
   { name: "Rendi Gunawan", email: "rendi@viralhub.id", plan: "Starter", status: "active", mrr: "Rp 149K", joined: "28 Feb 2026", activity: "1 hari lalu", av: "RG", channels: 1 },
 ];

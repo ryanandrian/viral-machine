@@ -45,16 +45,14 @@ def _now() -> datetime:
 
 
 def plan_price_idr(sb, plan_type: str) -> int:
-    """Harga paket (IDR) dari pricing_config (no-hardcode). agency↔scale alias. Tak ada → raise."""
-    alias = {"agency": "scale", "scale": "agency"}.get(plan_type)
-    for key in [f"plan_{plan_type}"] + ([f"plan_{alias}"] if alias else []):
-        try:
-            res = (sb.table("pricing_config").select("value_idr")
-                   .eq("key", key).eq("active", True).limit(1).execute())
-            if res.data:
-                return int(res.data[0]["value_idr"])
-        except Exception as e:
-            logger.debug(f"[Midtrans] pricing lookup {key} gagal: {e}")
+    """Harga paket (IDR) dari pricing_config key `plan_{tier}` (no-hardcode). Tak ada → raise."""
+    try:
+        res = (sb.table("pricing_config").select("value_idr")
+               .eq("key", f"plan_{plan_type}").eq("active", True).limit(1).execute())
+        if res.data:
+            return int(res.data[0]["value_idr"])
+    except Exception as e:
+        logger.debug(f"[Midtrans] pricing lookup plan_{plan_type} gagal: {e}")
     raise ValueError(f"Harga paket '{plan_type}' tak ada di pricing_config — set dulu (no-hardcode).")
 
 

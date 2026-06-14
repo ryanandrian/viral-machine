@@ -230,9 +230,9 @@ export default function LandingPage() {
             <a href="/auth?view=signup" className="btn btn-default" style={{ width: "100%" }}><Bi id="Pilih Pro" en="Choose Pro" /></a>
           </div>
           <div className="pcard">
-            <div className="pn">Scale</div><div className="pp">Rp 699K<small>/bln</small></div><div className="ptag"><Bi id="Untuk agency & power user" en="For agencies & power users" /></div>
+            <div className="pn">Business</div><div className="pp">Rp 699K<small>/bln</small></div><div className="ptag"><Bi id="Untuk agency & power user" en="For agencies & power users" /></div>
             <ul><li><Check size={15} /> 10 channel</li><li><Check size={15} /> 24 video / <Bi id="hari" en="day" /></li><li><Check size={15} /> Priority queue</li><li><Check size={15} /> Team access</li></ul>
-            <a href="/auth?view=signup" className="btn btn-outline" style={{ width: "100%" }}><Bi id="Pilih Scale" en="Choose Scale" /></a>
+            <a href="/auth?view=signup" className="btn btn-outline" style={{ width: "100%" }}><Bi id="Pilih Business" en="Choose Business" /></a>
           </div>
         </div>
         <div className="mk-center" style={{ marginTop: "1.75rem" }}><a href="/pricing" style={{ color: "var(--brand)", textDecoration: "none", fontWeight: 500 }}><Bi id="Lihat semua paket & fitur" en="See all plans & features" /> →</a></div>

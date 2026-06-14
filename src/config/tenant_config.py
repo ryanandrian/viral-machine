@@ -23,12 +23,13 @@ load_dotenv()
 # Niche Registry — fully Supabase-driven via get_niches()
 # Tidak ada hardcode di sini. Admin tambah/nonaktifkan niche via tabel niches di Supabase.
 
-# Plan limits — Supabase-driven (tabel plan_limits).
-# Fallback dipakai hanya jika Supabase tidak tersedia.
+# Plan limits — Supabase-driven (tabel plan_limits) = ADMIN-EDITABLE (channel + video/hari per tier,
+# tunable lihat-kondisi-pasar tanpa redeploy). Fallback HANYA bila Supabase down (safety net, bukan hardcode caps).
 _PLAN_LIMITS_FALLBACK = {
-    "starter": {"max_videos_per_day": 1,  "max_channels": 1},
-    "pro":     {"max_videos_per_day": 3,  "max_channels": 3},
-    "agency":  {"max_videos_per_day": 5,  "max_channels": 10},
+    "trial":    {"max_videos_per_day": 1, "max_channels": 1},
+    "starter":  {"max_videos_per_day": 1, "max_channels": 1},
+    "pro":      {"max_videos_per_day": 3, "max_channels": 3},
+    "business": {"max_videos_per_day": 5, "max_channels": 10},
 }
 _plan_limits_cache: Optional[dict] = None
 

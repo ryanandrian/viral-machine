@@ -18,7 +18,7 @@ const TICKETS: Ticket[] = [
   { av: "RP", c: "#1d4ed8", name: "Riko Pratama", plan: "Pro", subj: "Pertanyaan tentang billing", prev: "Halo, saya mau tanya soal invoice bulan ini yang...", time: "12m", tags: ["billing", "midtrans"] },
   { av: "BP", c: "#9f1239", name: "Bagus Pratomo", plan: "Trial", subj: "Cara connect channel kedua", prev: "Saya sudah connect 1 channel, gimana cara...", time: "1j", tags: ["onboarding"] },
   { av: "MP", c: "#047857", name: "Maya Putri", plan: "Pro", subj: "API key OpenAI gagal test", prev: "Pas saya test koneksi muncul error 401...", time: "2j", tags: ["api-keys", "urgent"] },
-  { av: "AS", c: "#7c3aed", name: "Andi Saputra", plan: "Scale", subj: "Request refund", prev: "Akun saya kena suspend tapi saya sudah bayar...", time: "3j", tags: ["billing", "refund"] },
+  { av: "AS", c: "#7c3aed", name: "Andi Saputra", plan: "Business", subj: "Request refund", prev: "Akun saya kena suspend tapi saya sudah bayar...", time: "3j", tags: ["billing", "refund"] },
 ];
 const CONVO: ["them" | "me", string, string][] = [
   ["them", "Halo, saya mau tanya soal invoice bulan ini. Kenapa jumlahnya Rp 548K, bukan Rp 349K seperti biasa?", "12:02"],
