@@ -33,6 +33,8 @@ class TenantConfig:
     logo_position:  str = "top-right"
     logo_size:      float = 0.12
     logo_opacity:   float = 0.85
+    # Publish privacy per-channel (trial-safe) — DEFAULT private; tenant ubah ke public saat config cocok
+    publish_privacy: str = "private"   # private | public | unlisted
 
 def tenant_config_from_channel(channel_row: dict, niche=None) -> "TenantConfig":
     """Bangun TenantConfig dari row `channels` — thread field Multi-Format + Branded sekaligus.
@@ -51,6 +53,7 @@ def tenant_config_from_channel(channel_row: dict, niche=None) -> "TenantConfig":
         logo_position   = channel_row.get("logo_position") or "top-right",
         logo_size       = float(channel_row.get("logo_size") or 0.12),
         logo_opacity    = float(channel_row.get("logo_opacity") or 0.85),
+        publish_privacy = channel_row.get("publish_privacy") or "private",
     )
 
 
