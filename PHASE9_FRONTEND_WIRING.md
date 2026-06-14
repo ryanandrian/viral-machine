@@ -23,7 +23,54 @@
 - **Pola:** ganti mock per-komponen (mock tetap fallback saat data kosong → SSR-safe deterministik).
 - **Payment:** Snap.js (client key) → redirect; status via webhook backend (sudah ada). Billing baca `payments`/`tenant_configs`.
 
-## 2. Sub-phase (urutan = leverage tertinggi → beta tercepat)
+## 1.5 — ALUR BUSINESS-PROCESS per AREA (peta KELENGKAPAN)
+> **View komplementer** dgn §2 (urutan eksekusi). §1.5 = jaminan **tiap area lengkap & koheren** sbg workflow (FE = realisasi alur bisnis; sumber: `DESAIN §3 Customer Journey` + `§7 IA` + BRIEF). §2 = **urutan build** (leverage→beta) yang MENARIK dari peta ini. Status LIVE = `PROGRESS.md`.
+>
+> Legenda: **🔑 beta-prereq** = wajib ada untuk jalankan beta 10 tenant · ⏳ mock ported belum wired · ✅ wired+validated.
+
+### AREA 1 — MARKETING / LANDING (`mesinviral.com`, PUBLIK, no-auth) — funnel akuisisi
+Actor: calon tenant (visitor). Proses: **Discover → Evaluate → Learn → Convert(→signup)**. Hampir 100% read publik; tabel public-read (anon OK), **nol write**.
+
+| Tahap | Layar | Sumber data | Beta-prereq | Status |
+|---|---|---|---|---|
+| Discover | A1 Landing | statis + `pricing_config` (harga preview) | — (beta = invite langsung) | ⏳ (harga literal→`{{pricing}}` belum di-wire) |
+| Evaluate | A2 Pricing | `pricing_config` + `plan_limits` (harga+caps dinamis) | — | ⏳ |
+| Learn | A3 Demo · A4 Docs · A5 Blog · A6 About/Contact/Status/Legal | statis | — | ⏳ |
+| Convert | CTA → `/auth` | — (handoff ke Area 2) | — | ✅ (auth 9.1) |
+| Error | A8 404/500 | — | — | ✅ |
+**Wiring inti area ini = harga dinamis dari `pricing_config`** (sumber tunggal, dipakai juga billing+onboarding). Minim risiko. **Prioritas rendah utk beta**, naik utk **public launch (Phase 12)**.
+
+### AREA 2 — TENANT PANEL (`app.mesinviral.com`, AUTH, RLS=`auth.uid()`) — lifecycle tenant
+Actor: tenant (creator). Proses: **Aktivasi → Operasi harian → Konfigurasi → Akun/komersial**.
+
+| Sub-alur | Layar | Tabel (RLS) | Write-policy diperlukan | Beta-prereq | Status |
+|---|---|---|---|---|---|
+| **2.1 Aktivasi/Onboarding** | B1-B4 Auth · C1 paket/trial · C2 connect YouTube · C3 BYOK keys · C4 niche+bahasa+voice · C5 jadwal | `auth.users` · `tenant_configs` · `channels` · **`tenant_credentials`** · katalog niche/lang/voice · `production_schedules` | tenant_configs UPDATE · channels INSERT/UPDATE · **`tenant_credentials` = service_role-only (Phase 4.1) → C2/C3 WAJIB lewat server-route, BUKAN anon** (⚠️ lihat nuansa lintas-area #1) | 🔑 **YA (inti)** | auth ✅ · onboarding ⏳ |
+| **2.2 Operasi harian** | D1 Dashboard · D2/D3 Channels · D4/D5 Runs (live-tail) · D6 Analytics · D21 Insights · D20 Compliance | `videos` · `production_runs` · **`pipeline_run_logs`** (Realtime) · `channel_insights`(+`.compliance`) · `video_analytics` · `content_inventory` | (read-only; D3 settings = channels UPDATE ✅) | 🔑 dashboard+runs YA · analytics/insights/compliance = data terisi pasca-produksi | D2 ✅ · sisa ⏳ |
+| **2.3 Konfigurasi** | D8-D19 Config · D7 Schedule | `tenant_configs` (+branded/preset/privacy/disclosure) · katalog `ai_providers`/`ai_models` · `production_schedules` | tenant_configs UPDATE · schedules INSERT/UPDATE | 🔑 sebagian (AI engines/API keys/voice/niche utk produksi) · sisanya tuning | ⏳ |
+| **2.4 Akun/komersial** | D13 Billing · D14/B5 Settings | `payments` · `tenant_configs`(plan/status) · `pricing_config` · `auth.users` | (billing tulis via Snap+webhook; settings = auth API + tenant_configs UPDATE) | 🔑 billing YA (konversi trial→paid) | ⏳ |
+
+### AREA 3 — ADMIN PANEL (`admin.mesinviral.com`, SUPER-ADMIN via `app_metadata`, bypass RLS) — operasi internal
+Actor: staf MesinViral. Proses: **Kelola tenant → Kurasi katalog (supply) → Set komersial → Support → Monitor sistem**. **⚠️ Sebagian = PRASYARAT beta, BUKAN polish** (lihat insight bawah).
+
+| Sub-alur | Layar | Tabel | Beta-prereq | Status |
+|---|---|---|---|---|
+| **3.1 Tenant-mgmt** | E1 Tenants (suspend/refund/detail) + **Trial-Leads** (`trial_expired`) | `tenant_configs` · `payments` | 🔑 **YA** (kelola 10 tenant + follow-up lead) | ⏳ |
+| **3.2 Kurasi katalog** | E2 Catalog (E2.1 AI models · E2.2 Music · E2.3 Niche+is_base+release · E2.4 Voice · E2.5 Languages) | `ai_providers`/`ai_models` · `music_library` · `niches` · `content_languages` | 🔑 niche+is_base YA · AI provider-mgmt = gap §AI-CATALOG | ⏳ |
+| **3.3 Komersial** | E5 Pricing (inline-edit) | `pricing_config` · `plan_limits` · `app_config` | 🔑 **YA** (sumber harga SELURUH sistem — landing+billing+onboarding) | ⏳ |
+| **3.4 Support** | E4 Support (tiket/chat) | (tiket — tabel TBD) | — (beta = manual/email) | ⏳ |
+| **3.5 System health** | E3 System (worker/queue/DB/error) | `pipeline_run_logs` · `production_runs` · `content_inventory` | berguna (monitor worker) | ⏳ |
+
+### ⚠️ Nuansa LINTAS-AREA (wajib diputuskan saat wiring area terkait)
+1. **`tenant_credentials` (OAuth+API keys) = RLS service_role-only** (Phase 4.1, sensitif). Onboarding C2/C3 **tak boleh tulis via anon client** → butuh **server-route/route-handler** (Next) yang enkripsi Fernet + tulis pakai service_role (atau RPC SECURITY DEFINER). **Keputusan arsitektur sebelum 9.3 onboarding.**
+2. **Admin auth-gating BELUM ADA** — route `/admin/*` saat ini mock/terbuka. Butuh **gate super-admin** (cek `app_metadata.role` di middleware + akses data bypass-RLS lewat server/service_role). Beda jalur dari auth tenant. **Keputusan sebelum Area-3 wiring.**
+3. **Write-policy per-tabel** (temuan 9.2): Phase 4.3 cuma SELECT → tiap tabel yang ditulis FE butuh policy INSERT/UPDATE `tenant_id=(auth.uid())::text` (onboarding, config, dst).
+4. **Harga = `pricing_config`** (single source) menyentuh **3 area** (landing A2 + tenant billing D13 + admin E5) → wire helper baca pricing sekali, pakai bertiga.
+
+### 🎯 INSIGHT (lensa proses bisnis mengubah prioritas)
+Urutan "leverage" (§2) menaruh **semua Admin di Phase 10 (polish)** — itu **keliru** dilihat dari proses bisnis: **E1 tenant-mgmt + E5 pricing + E2.3 niche/is_base = PRASYARAT menjalankan beta** (set harga, kelola tenant, kurasi niche yang dikonsumsi onboarding). → **§2 9.3 di-perluas**: tarik admin-beta-prereq (E1/E5/E2.3 + Trial-Leads) ke jalur beta, sisanya (E2.1 provider-mgmt/E3/E4 + marketing + polish) tetap di Phase 10.
+
+## 2. Sub-phase (urutan = leverage tertinggi → beta tercepat) — MENARIK dari peta §1.5
 
 ### 9.1 — FONDASI (unblock semua) 🔴 FIRST
 - ✅ **DONE (2026-06-14):** deps `@supabase/supabase-js`+`@supabase/ssr` · `src/lib/supabase/{client,server,middleware}.ts` (anon+RLS, pola @supabase/ssr Next-16 async cookies) · `src/middleware.ts` (refresh session, **NON-BREAKING** belum hard-redirect) · `.env.local` v2 (anon/publishable, gitignored) + `.env.local.example`. **Validasi:** `npm run build` PASS · anon-key v2 konek (plan_limits public=4) · **RLS isolasi** (tenant_configs/videos=0 tanpa auth). Commit `f1a9b8f`/`252a704`.
@@ -50,21 +97,23 @@
 - **🔑 POLA untuk fan-out (penting):** tabel tenant HANYA punya SELECT policy (Phase 4.3) → **tiap layar yang WRITE wajib tambah policy UPDATE/INSERT** `tenant_id=(auth.uid())::text` per-tabel (spt `channels_tenant_update`). Realtime per-tabel = tambah ke publication `supabase_realtime` + RLS men-scope event. Client component: `createClient()` browser + `useEffect` load + `.channel().on('postgres_changes').subscribe()` + cleanup `removeChannel`.
 - ⏳ Browser-render visual (setelah login) = owner check (mekanik data-layer sudah tervalidasi penuh via supabase-py anon + RLS yang identik dgn FE).
 
-### 9.3 — BETA-CRITICAL PATH (cukup utk beta 10 tenant)
-- **C1-C5 Onboarding** (signup→**BYOK keys**→YouTube OAuth→niche+bahasa+voice→jadwal). **Trial wajib BYOK upfront** (hapus "skip keys"). Tulis `tenant_configs`/`channels`/`tenant_credentials`.
-- **D2/D3 Channels** (list+detail, RLS) · **D4/D5 Runs** (list + live-tail Realtime `pipeline_run_logs`).
-- **D1 Dashboard** (KPI real) · **D13 Billing** (Snap checkout + `payments` history + plan/usage).
-- **B5 Settings** (profil/keamanan/integrasi).
+### 9.3 — BETA-CRITICAL PATH (cukup utk beta 10 tenant) — Area 2 (tenant) + Area 3 admin-prereq
+> Menarik dari §1.5: **Area 2.1 aktivasi + 2.2 operasi + 2.4 billing** + **Area 3 prasyarat-beta** (insight §1.5). Sisanya → 9.4/10.
+- **[Area 2.1] C1-C5 Onboarding** (signup→**BYOK keys**→YouTube OAuth→niche+bahasa+voice→jadwal). **Trial wajib BYOK upfront** (hapus "skip keys"). Tulis `tenant_configs`/`channels`/`tenant_credentials`. ⚠️ **`tenant_credentials` lewat server-route** (nuansa lintas-area #1) + tambah write-policy per-tabel (#3).
+- **[Area 2.2] D2/D3 Channels** (D2 ✅; D3 detail, RLS) · **D4/D5 Runs** (list + live-tail Realtime `pipeline_run_logs`) · **D1 Dashboard** (KPI real).
+- **[Area 2.4] D13 Billing** (Snap checkout + `payments` history + plan/usage) · **B5 Settings** (profil/keamanan/integrasi).
+- **[Area 3 — admin PRASYARAT beta] 🔑** (insight §1.5 — bukan polish): admin auth-gate (nuansa #2) + **E1 Tenants + Trial-Leads** (kelola 10 tenant) + **E5 Pricing** (sumber harga sistem) + **E2.3 Niche/is_base** (katalog yang dikonsumsi onboarding C4).
 
-### 9.4 — CONFIG & ANALYTICS
+### 9.4 — CONFIG & ANALYTICS — Area 2.3 (konfigurasi) + sisa Area 2.2 (analytics)
 - **Config D8-D19** (`/config/*` write ke `tenant_configs`: AI engines/voice/visual/music/captions/quality/hashtags/niches/notif + **format/preset picker + Branded panel + privacy toggle + AI-disclosure toggle** = FE gap dari Multi-Format/6.3).
 - **🎯 Niche access model (backend siap, FE gating P9-10):** niche-picker filter by tier via `limits.available_niches(plan_type)` — **trial/starter → niche dasar (`is_base`) saja · pro/business → semua aktif**. **Pengajuan CUSTOM niche** (add-on: public-90d/private — [[decisions_niche_model]]) via `limits.can_request_custom_niche` → **starter/pro/business YA, trial TIDAK**. Admin set `niches.is_base` (migr 0026) + harga add-on `pricing_config`. **⚠️ Sistem custom-niche PENUH** (schema `niches.access_type`/`exclusive_*` BELUM ada di v2 + request-flow D18 + admin E2.3 + add-on payment) = fitur tersendiri per `decisions_niche_model` (build di fase niches).
 - **D6 Analytics** + **D20 Compliance** (baca `channel_insights.compliance`) + **D21 Insights** (`channel_insights`).
 
-### 10 — ADMIN & POLISH
-- **Admin E1-E5** (`/admin/*`): Tenants + **Trial-Leads** (status `trial_expired` → kontak+usage) · Catalog (ai_providers/models CRUD = gap §AI-CATALOG) · Pricing E5 (`pricing_config`/`plan_limits`/`app_config`) · System health · Support.
-- **A1-A8 Marketing** (sebagian besar statis; pricing dari `pricing_config`).
-- next-intl rework · PWA · responsive harmonisasi.
+### 10 — SISA ADMIN + MARKETING + POLISH — sisa Area 3 + Area 1 + infra
+> Admin **prasyarat-beta** (E1/E5/E2.3/Trial-Leads) sudah ditarik ke 9.3. Di sini = SISANYA.
+- **[sisa Area 3] Admin**: E2.1 Catalog AI provider-mgmt (ai_providers/models CRUD = gap §AI-CATALOG) · E2.2 Music · E2.4 Voice · E2.5 Languages · **E3 System health** · **E4 Support**.
+- **[Area 1] A1-A8 Marketing** (sebagian besar statis; **harga dari `pricing_config`** = nuansa lintas-area #4) — naik prioritas saat **public launch (Phase 12)**.
+- **Polish**: next-intl rework · PWA · responsive harmonisasi.
 
 ## 3. Peta layar → sumber data (RLS) — turunan matriks keselarasan PROGRESS
 | Layar | Tabel (RLS `auth.uid()`) | R/W |
@@ -100,3 +149,4 @@
 - 2026-06-15 — auth page **runtime-validated** (signup→provision→login OK; reset kena rate-limit env). Catat go-live: Supabase Auth custom SMTP → lumite.
 - 2026-06-15 — **SISA 9.1 selesai + runtime-validated**: `/auth/callback` route, middleware hard-redirect, view `reset` (updateUser), login onboarded-check. 9.1 = TUNTAS (kecuali gate owner: OAuth provider config).
 - 2026-06-15 — **9.2 VERTICAL SLICE DONE + runtime-validated**: D2 Channels wired (read+write+realtime, RLS) + migr 0029 (realtime publication + channels UPDATE policy). Pola stack de-risked untuk fan-out. Next = 9.3 beta-path.
+- 2026-06-15 — **+§1.5 Peta Alur Business-Process per Area** (Marketing/Tenant/Admin) — actor→tahap→layar→tabel/RLS→write-policy→beta-prereq→status; +nuansa lintas-area (tenant_credentials server-route, admin auth-gate, write-policy per-tabel, pricing single-source); insight: admin E1/E5/E2.3+Trial-Leads = PRASYARAT beta → ditarik ke §2 9.3. §2 di-tag per area. (owner: plan harus refleksikan alur bisnis tiap area.)
