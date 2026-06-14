@@ -149,6 +149,17 @@ class YouTubePublisher:
         else:
             description = f"{hook_block.strip()}{footer}"
         description = description[:MAX_DESC]
+
+        # Branded Content (§6): sisipkan landing_link di deskripsi (top|bottom). Pinned comment
+        # mustahil via API → pakai link deskripsi. cta soft-sell brand = di script (cta_mode).
+        link = getattr(tenant_config, "landing_link", None)
+        if link:
+            pos = (getattr(tenant_config, "link_position", "bottom") or "bottom").lower()
+            if pos == "top":
+                description = f"{link}\n\n{description}"[:MAX_DESC]
+            else:
+                room = max(0, MAX_DESC - len(link) - 2)
+                description = f"{description[:room]}\n\n{link}"
         tags = list(self.NICHE_BASE_TAGS.get(niche, []))
         for tag in hashtags:
             clean = tag.replace("#", "").strip().lower()

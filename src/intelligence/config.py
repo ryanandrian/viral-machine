@@ -23,6 +23,36 @@ class TenantConfig:
     # Multi-Format (per-channel, MULTI_FORMAT §3) — None → perilaku lama (timing niche, WPS 2.4)
     duration_preset: int | None = None     # detik (rujuk duration_presets); null = legacy
     format_profile:  str | None = None     # rujuk format_profiles.format_key (sumber WPS)
+    # Branded Content (per-channel, MULTI_FORMAT §6) — None/implicit → tanpa branding (non-breaking)
+    landing_link:   str | None = None      # URL di deskripsi
+    link_position:  str = "bottom"         # top | bottom
+    cta_mode:       str = "implicit"       # implicit | soft_sell
+    brand_name:     str | None = None
+    brand_cta_text: str | None = None
+    brand_logo:     str | None = None      # path/URL logo utk overlay
+    logo_position:  str = "top-right"
+    logo_size:      float = 0.12
+    logo_opacity:   float = 0.85
+
+def tenant_config_from_channel(channel_row: dict, niche=None) -> "TenantConfig":
+    """Bangun TenantConfig dari row `channels` — thread field Multi-Format + Branded sekaligus.
+    Dipakai producer & publisher → SATU sumber threading (hindari duplikasi/drift)."""
+    return TenantConfig(
+        tenant_id       = channel_row["tenant_id"],
+        niche           = niche if niche is not None else (channel_row.get("niche") or ""),
+        duration_preset = channel_row.get("duration_preset"),
+        format_profile  = channel_row.get("format_profile"),
+        landing_link    = channel_row.get("landing_link"),
+        link_position   = channel_row.get("link_position") or "bottom",
+        cta_mode        = channel_row.get("cta_mode") or "implicit",
+        brand_name      = channel_row.get("brand_name"),
+        brand_cta_text  = channel_row.get("brand_cta_text"),
+        brand_logo      = channel_row.get("brand_logo"),
+        logo_position   = channel_row.get("logo_position") or "top-right",
+        logo_size       = float(channel_row.get("logo_size") or 0.12),
+        logo_opacity    = float(channel_row.get("logo_opacity") or 0.85),
+    )
+
 
 @dataclass
 class SystemConfig:

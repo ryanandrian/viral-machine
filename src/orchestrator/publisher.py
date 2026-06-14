@@ -96,12 +96,12 @@ def publish_due_for_channel(sb, channel_row: dict, now_utc: datetime | None = No
 
 def _publish_from_buffer(sb, channel_row: dict, item: dict) -> None:
     """Download video+thumbnail dari S3 → publish via youtube_publisher (reuse). Raise bila gagal."""
-    from src.intelligence.config import TenantConfig
+    from src.intelligence.config import tenant_config_from_channel
     from src.distribution.youtube_publisher import YouTubePublisher
 
     meta = item.get("metadata") or {}
     script = meta.get("script") or {}
-    tc = TenantConfig(tenant_id=channel_row["tenant_id"], niche=item.get("niche") or channel_row.get("niche"))
+    tc = tenant_config_from_channel(channel_row, niche=item.get("niche") or channel_row.get("niche"))
 
     tmp = tempfile.mkdtemp()
     video_path = os.path.join(tmp, "video.mp4")
