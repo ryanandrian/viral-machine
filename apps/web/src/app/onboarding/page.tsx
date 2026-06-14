@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
+import { createClient } from "@/lib/supabase/client";
 import {
   Zap, HelpCircle, Moon, Sun, Play, Info, ShieldCheck, Sparkles, Check, CheckCircle,
   ExternalLink, ChevronDown, Plus, ArrowLeft, ArrowRight, Loader2, Video,
@@ -45,11 +46,12 @@ const SVCS = [
   { key: "elevenlabs", name: "ElevenLabs", meta: "TTS · Voice", req: false, c: "var(--elevenlabs)", glyph: "11", ph: "…" },
 ];
 
+// key = niche key di DB (niches.niche/channels.niche). Display (id/en) ≠ key.
 const NICHES = [
-  { id: "Misteri Alam Semesta", en: "Universe Mysteries", desc: "Luar angkasa, kosmos, fenomena", cols: ["#1e1b4b", "#312e81", "#4338ca"] },
-  { id: "Sejarah Kelam", en: "Dark History", desc: "Peristiwa gelap masa lalu", cols: ["#450a0a", "#7f1d1d", "#991b1b"] },
-  { id: "Misteri Samudra", en: "Ocean Mysteries", desc: "Laut dalam & makhluk misterius", cols: ["#082f49", "#0c4a6e", "#075985"] },
-  { id: "Fakta Menarik", en: "Fun Facts", desc: "Fakta sains & kehidupan", cols: ["#052e16", "#14532d", "#166534"] },
+  { key: "universe_mysteries", id: "Misteri Alam Semesta", en: "Universe Mysteries", desc: "Luar angkasa, kosmos, fenomena", cols: ["#1e1b4b", "#312e81", "#4338ca"] },
+  { key: "dark_history", id: "Sejarah Kelam", en: "Dark History", desc: "Peristiwa gelap masa lalu", cols: ["#450a0a", "#7f1d1d", "#991b1b"] },
+  { key: "ocean_mysteries", id: "Misteri Samudra", en: "Ocean Mysteries", desc: "Laut dalam & makhluk misterius", cols: ["#082f49", "#0c4a6e", "#075985"] },
+  { key: "fun_facts", id: "Fakta Menarik", en: "Fun Facts", desc: "Fakta sains & kehidupan", cols: ["#052e16", "#14532d", "#166534"] },
 ];
 
 // Content language catalog (mock = content-languages.js → prod content_languages DB table)
@@ -90,6 +92,9 @@ export default function OnboardingPage() {
   const [curLang, setCurLang] = useState("id-ID");
   const [voice, setVoice] = useState(0);
   const [color, setColor] = useState(0);
+  const [supabase] = useState(() => createClient());
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -103,7 +108,33 @@ export default function OnboardingPage() {
     setCur(i);
     const c = document.querySelector(".ob-content"); if (c) c.scrollTop = 0;
   }
-  function next() { if (cur < STEPS.length - 1) goto(cur + 1); else router.push("/dashboard"); }
+  function next() { if (cur < STEPS.length - 1) goto(cur + 1); else finish(); }
+
+  // C4 → buat channel pertama (tulisan AMAN client-RLS: channels = kolom config, tanpa privilege).
+  // tenant_configs (AI keys/voice) + tenant_credentials (OAuth) = increment 2 (server-route whitelist).
+  async function finish() {
+    setErr(null); setBusy(true);
+    const sel = NICHES.filter((_, i) => niches[i]);
+    const keys = (sel.length ? sel : [NICHES[2]]).map((n) => n.key);
+    const firstName = (sel[0] ?? NICHES[2]).en;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setBusy(false); window.location.href = "/auth?view=login"; return; }
+    const { error } = await supabase.from("channels").insert({
+      tenant_id: user.id,
+      channel_name: firstName,
+      channel_group: "default", // NOT NULL
+      niche: keys[0],
+      niche_pool: keys,
+      niche_mode: keys.length > 1 ? "random" : "fixed", // chk_niche_mode ∈ {fixed,random}
+      content_language: curLang,
+      platform: "youtube",
+      publish_privacy: "private", // trial-safe (decisions: default private)
+      is_active: true,
+    });
+    setBusy(false);
+    if (error) { setErr(error.message); return; }
+    router.push("/dashboard"); // channel ada → onboarded-check lolos
+  }
 
   function connectYt() {
     setYtState("verifying");
@@ -327,9 +358,10 @@ export default function OnboardingPage() {
       <div className="ob-foot">
         <a href="/dashboard" className="skip"><Bi id="Lewati semua, lakukan nanti" en="Skip all, do it later" /></a>
         <div className="nav">
-          {cur > 0 && <button className="btn btn-secondary" onClick={() => goto(cur - 1)}><ArrowLeft size={15} /> <Bi id="Kembali" en="Back" /></button>}
-          <button className={last ? "btn btn-ai" : "btn btn-default"} onClick={next}>
-            {last ? <Bi id="Selesai Setup! Lihat Dashboard" en="Finish! Open dashboard" /> : <Bi id="Lanjut" en="Next" />} <ArrowRight size={15} />
+          {err && <span style={{ color: "var(--danger, #ef4444)", fontSize: "var(--text-sm)", alignSelf: "center", marginRight: "0.75rem" }}>{err}</span>}
+          {cur > 0 && <button className="btn btn-secondary" onClick={() => goto(cur - 1)} disabled={busy}><ArrowLeft size={15} /> <Bi id="Kembali" en="Back" /></button>}
+          <button className={last ? "btn btn-ai" : "btn btn-default"} onClick={next} disabled={busy}>
+            {busy ? <Loader2 size={15} className="spin" /> : <>{last ? <Bi id="Selesai Setup! Lihat Dashboard" en="Finish! Open dashboard" /> : <Bi id="Lanjut" en="Next" />} <ArrowRight size={15} /></>}
           </button>
         </div>
       </div>
