@@ -67,6 +67,15 @@ def publish_due_for_channel(sb, channel_row: dict, now_utc: datetime | None = No
     slot_dt = slot_due(channel_row.get("publish_slots") or [], tz, now_utc)
     if slot_dt is None:
         return None
+    # Phase 8a — gate monetisasi: status langganan + cap harian (§4/§8). Cek hanya saat ada slot due.
+    from src.billing.limits import gate_for_channel, published_today_count
+    gate = gate_for_channel(sb, channel_row)
+    if not gate["can_produce"]:
+        logger.info(f"[Publisher] skip ch={channel_id} — subscription '{gate['status']}' (tidak publish)")
+        return "subscription_inactive"
+    if published_today_count(sb, channel_id) >= gate["daily_cap"]:
+        logger.info(f"[Publisher] cap harian tercapai ch={channel_id} ({gate['daily_cap']}/hari) — skip slot")
+        return "daily_cap_reached"
     if _already_handled(sb, channel_id, slot_dt):
         return "already_handled"
 

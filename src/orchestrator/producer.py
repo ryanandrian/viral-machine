@@ -116,8 +116,13 @@ def plan_and_submit(sb, pool: ThreadPoolExecutor, sem: threading.Semaphore, dept
     """Satu siklus: hitung defisit buffer per-channel → submit produksi sampai slot core habis.
     Return jumlah job di-submit. Rem: hanya submit bila semaphore (core) tersedia (anti-overload)."""
     channels = _active_channels(sb)
+    from src.billing.limits import gate_for_channel
     deficits = []
     for ch in channels:
+        # Phase 8a — gate monetisasi: jangan produksi (buang compute) utk tenant suspended/cancelled.
+        if not gate_for_channel(sb, ch)["can_produce"]:
+            logger.info(f"[Producer] skip ch={ch.get('id')} tenant={ch.get('tenant_id')} — subscription tidak aktif")
+            continue
         cid = str(ch.get("id"))
         stok = inventory.buffer_depth(cid, "ready") + inventory.buffer_depth(cid, "producing")
         target = ch.get("buffer_depth") or depth
