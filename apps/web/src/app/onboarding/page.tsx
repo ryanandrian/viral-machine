@@ -92,6 +92,7 @@ export default function OnboardingPage() {
   const [curLang, setCurLang] = useState("id-ID");
   const [voice, setVoice] = useState(0);
   const [color, setColor] = useState(0);
+  const [svcKeys, setSvcKeys] = useState<Record<string, string>>({});
   const [supabase] = useState(() => createClient());
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -110,18 +111,30 @@ export default function OnboardingPage() {
   }
   function next() { if (cur < STEPS.length - 1) goto(cur + 1); else finish(); }
 
-  // C4 → buat channel pertama (tulisan AMAN client-RLS: channels = kolom config, tanpa privilege).
-  // tenant_configs (AI keys/voice) + tenant_credentials (OAuth) = increment 2 (server-route whitelist).
+  // Persist onboarding. Urutan: (1) config via RPC whitelist (IDEMPOTEN, aman dari escalation),
+  // lalu (2) INSERT channel (final, non-idempoten) → sukses → /dashboard. Retry aman bila gagal di (1).
+  // tenant_credentials (OAuth C2, Fernet) = increment 2b (gate owner Google).
   async function finish() {
     setErr(null); setBusy(true);
-    const sel = NICHES.filter((_, i) => niches[i]);
-    const keys = (sel.length ? sel : [NICHES[2]]).map((n) => n.key);
-    const firstName = (sel[0] ?? NICHES[2]).en;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setBusy(false); window.location.href = "/auth?view=login"; return; }
-    const { error } = await supabase.from("channels").insert({
+
+    // (1) AI keys + voice + timezone → tenant_configs lewat SECURITY DEFINER RPC (whitelist kolom).
+    const voiceName = (VOICES[curLang] || VOICES["id-ID"])[voice]?.[0] ?? null;
+    const cfg: Record<string, string | null> = { p_timezone: "Asia/Jakarta", p_tts_voice: voiceName };
+    const ak = svcKeys.anthropic?.trim(), ok = svcKeys.openai?.trim(), ek = svcKeys.elevenlabs?.trim();
+    if (ak) { cfg.p_llm_api_key = ak; cfg.p_llm_library = "anthropic"; }
+    if (ok) cfg.p_visual_api_key = ok;
+    if (ek) { cfg.p_tts_api_key = ek; cfg.p_tts_provider = "elevenlabs"; }
+    const { error: eCfg } = await supabase.rpc("set_tenant_config", cfg);
+    if (eCfg) { setBusy(false); setErr(eCfg.message); return; }
+
+    // (2) channel pertama (client-RLS; channels = kolom config, aman).
+    const sel = NICHES.filter((_, i) => niches[i]);
+    const keys = (sel.length ? sel : [NICHES[2]]).map((n) => n.key);
+    const { error: eCh } = await supabase.from("channels").insert({
       tenant_id: user.id,
-      channel_name: firstName,
+      channel_name: (sel[0] ?? NICHES[2]).en,
       channel_group: "default", // NOT NULL
       niche: keys[0],
       niche_pool: keys,
@@ -132,7 +145,7 @@ export default function OnboardingPage() {
       is_active: true,
     });
     setBusy(false);
-    if (error) { setErr(error.message); return; }
+    if (eCh) { setErr(eCh.message); return; }
     router.push("/dashboard"); // channel ada → onboarded-check lolos
   }
 
@@ -265,7 +278,7 @@ export default function OnboardingPage() {
                             <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "0.875rem" }}><Bi id="Buat akun → tambah billing → generate API key. " en="Create account → add billing → generate API key. " /><a href="#" className="link" style={{ fontSize: "var(--text-xs)" }}>▶ Tutorial 2 menit</a></div>
                             <label className="label">API Key</label>
                             <div style={{ display: "flex", gap: "0.5rem" }}>
-                              <input className="input input-mono" type="password" placeholder={s.ph} />
+                              <input className="input input-mono" type="password" placeholder={s.ph} value={svcKeys[s.key] || ""} onChange={(e) => setSvcKeys((k) => ({ ...k, [s.key]: e.target.value }))} />
                               <button className="btn btn-secondary" disabled={st === "testing"} onClick={() => testSvc(s.key)}>{st === "testing" ? <Loader2 size={14} className="spin" /> : <Bi id="Test koneksi" en="Test connection" />}</button>
                             </div>
                             {st === "ok" && (
