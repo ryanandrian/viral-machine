@@ -69,6 +69,15 @@ class PerformanceAnalyzer:
         channel_id = channel_id or tenant_id
         logger.info(f"[Analyzer] Computing insights | tenant={tenant_id}")
 
+        # Compliance Score (Phase 7, §9.3) — dari `videos` (produksi), INDEPENDEN grade analytics.
+        # Selalu dihitung (compliance ≠ performa) → feed widget D20. Fail-soft.
+        try:
+            from src.analytics.compliance import ComplianceScorer
+            compliance = ComplianceScorer(self._supabase).compute_for_channel(tenant_id, channel_id)
+        except Exception as _ce:
+            logger.warning(f"[Analyzer] compliance compute gagal (non-fatal): {_ce}")
+            compliance = {}
+
         # 1. Ambil semua video analytics yang punya data cukup
         rows = self._fetch_analytics(tenant_id)
         n = len(rows)
@@ -89,8 +98,9 @@ class PerformanceAnalyzer:
                 "content_type_perf": {},
                 "avoid_patterns":    [],
                 "top_topics":        [],
+                "compliance":        compliance,
             })
-            return {"grade": grade, "videos_analyzed": n}
+            return {"grade": grade, "videos_analyzed": n, "compliance": compliance}
 
         # 2. Compute semua insights
         niche_weights     = self._compute_niche_weights(rows)
@@ -107,6 +117,7 @@ class PerformanceAnalyzer:
             "content_type_perf": content_type_perf,
             "avoid_patterns":    avoid_patterns,
             "top_topics":        top_topics,
+            "compliance":        compliance,
         }
 
         self._upsert_insights(tenant_id, channel_id, insights)
@@ -122,6 +133,7 @@ class PerformanceAnalyzer:
             "top_hooks_count":        len(top_hooks),
             "avoid_patterns_count":   len(avoid_patterns),
             "content_types_analyzed": len(content_type_perf),
+            "compliance":             compliance,
         }
 
     # ── Data fetching ─────────────────────────────────────────────────────
@@ -411,6 +423,7 @@ class PerformanceAnalyzer:
                 "content_type_perf": insights["content_type_perf"],
                 "avoid_patterns":    insights["avoid_patterns"],
                 "top_topics":        insights["top_topics"],
+                "compliance":        insights.get("compliance") or {},
             }
             self._supabase.table("channel_insights").insert(row).execute()
             logger.info(
