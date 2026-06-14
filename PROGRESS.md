@@ -229,7 +229,7 @@ Perluasan produk: menampung **banyak kategori creator short faceless** (mystery/
 
 **Placement:** optimasi render + paralel image + swap → **Phase 1.x** (murah, dampak terbesar, prasyarat scale). Decouple + buffer S3 + content_inventory + orkestrator multi-node → arsitektur dekat **Phase 5** / sebelum scale tenant.
 
-**Status (update 2026-06-13):** ✅ **DECOUPLE TERBUKTI end-to-end nyata.** Dibangun+tervalidasi: `content_inventory` + buffer **Biznet Gio S3** + `producer`(semaphore=core) + `publisher`(timezone-aware) + `worker_decoupled.py` + **S3 janitor** (sweep+reconcile) — full loop → publish YouTube private. S3 secret/bucket resolved. **Sisa:** **5.5 optimasi render** (35→13mnt, BELUM — `decisions_production_scaling`, jangan analisa ulang) + **cutover deploy** ke VPS (owner). "tobe_submitted" lama (video numpuk VPS `logs/`) digantikan buffer S3 saat cutover.
+**Status (update 2026-06-13):** ✅ **DECOUPLE TERBUKTI end-to-end nyata.** Dibangun+tervalidasi: `content_inventory` + buffer **Biznet Gio S3** + `producer`(semaphore=core) + `publisher`(timezone-aware) + `worker_decoupled.py` + **S3 janitor** (sweep+reconcile) — full loop → publish YouTube private. S3 secret/bucket resolved. **5.5 optimasi render (35→13mnt) — in-progress:** ✅ **5.5a DONE** (paralel image-gen `asyncio.gather`, I/O paralel + convert CPU sekuensial anti-OOM; mock-validated; commit `7271b8c`). 🔬 **5.5b command PROVEN** (A/B render-only sintetis: merge Step A xfade + Step B subtitle+audio+tpad → 1 `filter_complex` = struktural identik 2-pass) — **sisa = wiring ke `render()` dgn safety-net fallback ke 2-pass + preset config-driven**. **Sisa lain:** **cutover deploy** ke VPS (owner). "tobe_submitted" lama (video numpuk VPS `logs/`) digantikan buffer S3 saat cutover.
 
 ---
 
