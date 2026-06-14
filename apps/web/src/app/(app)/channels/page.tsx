@@ -1,61 +1,79 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Plus, Tv, Zap, ArrowRight, MoreVertical, Check, Clock } from "lucide-react";
+import { Plus, Tv, Zap, ArrowRight, Pause, Play } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 import "./channels.css";
 
-// D2 Channels List — port dari design-source/Channels.html (Hybrid). Sidebar "Kanal".
-// Spark = SVG area+line hand-drawn (gradient id deterministik per index). Mock deterministik (SSR-safe).
-// Nol wiring Supabase. "Kelola" → /channels/[id] (D3).
+// D2 Channels List — Phase 9.2 VERTICAL SLICE (wired ke Supabase v2, anon + RLS).
+// Membuktikan pola stack untuk fan-out 28 layar: READ (RLS) + WRITE (toggle is_active,
+// optimistic) + REALTIME (subscribe perubahan `channels`, tenant-scoped via RLS).
+// Stats per-channel (views/CTR/subs/spark) BELUM ada sumber real → placeholder "—"
+// (video historis ryan channel_id=null; analytics timeseries di-wire fase 9.4). Jujur, bukan mock.
 
 function Bi({ id, en }: { id: string; en: string }) {
   return (<><span data-id>{id}</span><span data-en>{en}</span></>);
 }
 
-type Channel = { id: number; name: string; handle: string; c: string; i: string; niches: string[]; videos: number; views: string; ctr: string; subs: string; spark: number[] };
-const CHANNELS: Channel[] = [
-  { id: 1, name: "Misteri Samudra", handle: "@misterisamudra", c: "#1d4ed8", i: "MS", niches: ["Misteri Samudra", "Fakta Menarik"], videos: 284, views: "1.4M", ctr: "6.8%", subs: "12.4K", spark: [8, 10, 9, 14, 12, 18, 16, 22, 20, 26, 24, 30] },
-  { id: 2, name: "Fakta Yang Bikin Mikir", handle: "@faktabikinmikir", c: "#047857", i: "FB", niches: ["Fakta Menarik", "Sains"], videos: 512, views: "4.2M", ctr: "9.1%", subs: "32.7K", spark: [20, 24, 22, 30, 28, 34, 40, 38, 46, 52, 49, 58] },
-  { id: 3, name: "Jejak Kelam Sejarah", handle: "@jejakkelam", c: "#9f1239", i: "JS", niches: ["Sejarah Kelam", "Misteri Alam Semesta"], videos: 176, views: "820K", ctr: "5.4%", subs: "8.2K", spark: [6, 7, 6, 9, 8, 11, 10, 9, 12, 14, 13, 16] },
-];
+// ── row DB (RLS: tenant_id = auth.uid()) → bentuk kartu
+type ChannelRow = {
+  id: string;
+  channel_name: string | null;
+  platform_channel_id: string | null;
+  niche: string | null;
+  niche_pool: string[] | null;
+  is_active: boolean | null;
+};
 
-function SparkArea({ d, col, gid }: { d: number[]; col: string; gid: string }) {
-  const W = 120, H = 34, max = Math.max(...d), min = Math.min(...d);
-  const x = (i: number) => i * (W / (d.length - 1));
-  const y = (v: number) => H - 3 - ((v - min) / ((max - min) || 1)) * (H - 8);
-  const line = d.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
-  const area = `${line} L${W} ${H} L0 ${H} Z`;
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={34} preserveAspectRatio="none">
-      <defs><linearGradient id={gid} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={col} stopOpacity={0.3} /><stop offset="1" stopColor={col} stopOpacity={0} /></linearGradient></defs>
-      <path d={area} fill={`url(#${gid})`} /><path d={line} fill="none" stroke={col} strokeWidth={1.8} />
-    </svg>
-  );
+const PALETTE = ["#6366F1", "#047857", "#9f1239", "#b45309", "#1d4ed8", "#7c3aed"];
+function colorFor(id: string) {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return PALETTE[h % PALETTE.length];
+}
+function initials(name: string) {
+  const parts = name.trim().split(/[\s—-]+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? "C") + (parts[1]?.[0] ?? "")).toUpperCase();
+}
+function prettyNiche(key: string) {
+  return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function ChannelCard({ ch }: { ch: Channel }) {
+const PLAN_LABEL: Record<string, string> = { trial: "Trial", starter: "Starter", pro: "Pro", business: "Business" };
+
+function ChannelCard({ ch, busy, onToggle }: { ch: ChannelRow; busy: boolean; onToggle: (ch: ChannelRow) => void }) {
+  const name = ch.channel_name || "Channel";
+  const col = colorFor(ch.id);
+  const niches = (ch.niche_pool?.length ? ch.niche_pool : ch.niche ? [ch.niche] : []).map(prettyNiche);
+  const active = ch.is_active ?? false;
   return (
     <div className="ch-card">
       <div className="ch-card-top">
-        <span className="ch-logo" style={{ background: ch.c }}>{ch.i}</span>
+        <span className="ch-logo" style={{ background: col }}>{initials(name)}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="ch-name">{ch.name}</div>
-          <div className="ch-handle"><span className="yt" /> {ch.handle}</div>
+          <div className="ch-name">{name}</div>
+          <div className="ch-handle"><span className="yt" /> {ch.platform_channel_id ? `@${ch.platform_channel_id}` : <span className="muted"><Bi id="belum terhubung" en="not connected" /></span>}</div>
         </div>
-        <span className="badge badge-success"><span className="dot" />Active</span>
+        {active
+          ? <span className="badge badge-success"><span className="dot" />Active</span>
+          : <span className="badge badge-warning"><span className="dot" />Paused</span>}
       </div>
-      <div className="niche-row">{ch.niches.map((n) => <span key={n} className="badge badge-default">{n}</span>)}</div>
-      <div className="ch-chart"><SparkArea d={ch.spark} col={ch.c === "#1d4ed8" ? "#6366F1" : ch.c} gid={`chspark${ch.id}`} /><div className="muted" style={{ fontSize: "0.625rem", marginTop: 2 }}><Bi id="Views 30 hari terakhir" en="Views last 30 days" /></div></div>
+      <div className="niche-row">{niches.length ? niches.map((n) => <span key={n} className="badge badge-default">{n}</span>) : <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Belum ada niche" en="No niche set" /></span>}</div>
+      <div className="ch-chart" style={{ display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: "0.625rem" }}>
+        <Bi id="Statistik 30 hari — segera" en="30-day stats — coming soon" />
+      </div>
       <div className="ch-stats">
-        <div className="ch-stat"><div className="v">{ch.videos}</div><div className="l">Video</div></div>
-        <div className="ch-stat"><div className="v">{ch.views}</div><div className="l">Views</div></div>
-        <div className="ch-stat"><div className="v">{ch.ctr}</div><div className="l">CTR</div></div>
-        <div className="ch-stat"><div className="v">{ch.subs}</div><div className="l">Subs</div></div>
+        <div className="ch-stat"><div className="v">—</div><div className="l">Video</div></div>
+        <div className="ch-stat"><div className="v">—</div><div className="l">Views</div></div>
+        <div className="ch-stat"><div className="v">—</div><div className="l">CTR</div></div>
+        <div className="ch-stat"><div className="v">—</div><div className="l">Subs</div></div>
       </div>
       <div className="ch-foot">
         <Link href={`/channels/${ch.id}`} className="btn btn-secondary btn-sm" style={{ flex: 1 }}><Bi id="Kelola" en="Manage" /> <ArrowRight size={14} /></Link>
-        <button className="btn btn-ghost btn-icon btn-sm"><MoreVertical size={14} /></button>
+        <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => onToggle(ch)} aria-label={active ? "Pause" : "Activate"}>
+          {active ? <><Pause size={14} /> <Bi id="Jeda" en="Pause" /></> : <><Play size={14} /> <Bi id="Aktifkan" en="Activate" /></>}
+        </button>
       </div>
     </div>
   );
@@ -66,26 +84,72 @@ function IncompleteCard() {
     <div className="ch-card incomplete">
       <div className="ch-card-top">
         <span className="ch-logo" style={{ background: "#52525b" }}><Plus size={22} /></span>
-        <div style={{ flex: 1 }}><div className="ch-name" style={{ color: "var(--text-secondary)" }}>Channel Baru</div><div className="ch-handle"><Bi id="Belum terhubung" en="Not connected" /></div></div>
+        <div style={{ flex: 1 }}><div className="ch-name" style={{ color: "var(--text-secondary)" }}><Bi id="Channel Baru" en="New Channel" /></div><div className="ch-handle"><Bi id="Belum terhubung" en="Not connected" /></div></div>
         <span className="badge badge-warning"><span className="dot" />Setup</span>
       </div>
       <div className="setup-body">
-        <div className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Selesaikan langkah untuk mengaktifkan:" en="Steps left to activate:" /></div>
-        <div className="setup-steps">
-          <div className="setup-step"><span className="c" style={{ background: "var(--success-soft)", color: "var(--success)" }}><Check size={11} /></span><Bi id="YouTube terhubung" en="YouTube connected" /></div>
-          <div className="setup-step"><span className="c" style={{ background: "var(--surface-2)", color: "var(--text-muted)" }}><Clock size={11} /></span><Bi id="API keys belum lengkap" en="API keys incomplete" /></div>
-          <div className="setup-step"><span className="c" style={{ background: "var(--surface-2)", color: "var(--text-muted)" }}><Clock size={11} /></span><Bi id="Niche & voice belum dipilih" en="Niche & voice not set" /></div>
-        </div>
+        <div className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Selesaikan setup channel pertama Anda." en="Finish setting up your first channel." /></div>
         <Link href="/onboarding" className="btn btn-default btn-sm" style={{ width: "100%" }}><Bi id="Lanjutkan setup" en="Continue setup" /> <ArrowRight size={14} /></Link>
       </div>
     </div>
   );
 }
 
-const FILTERS: [string, string, string][] = [["all", "Semua", "All"], ["active", "Active", "Active"], ["incomplete", "Setup belum selesai", "Setup incomplete"], ["suspended", "Suspended", "Suspended"]];
+const FILTERS: [string, string, string][] = [["all", "Semua", "All"], ["active", "Active", "Active"], ["paused", "Paused", "Paused"]];
 
 export default function ChannelsPage() {
+  const [supabase] = useState(() => createClient());
+  const [channels, setChannels] = useState<ChannelRow[]>([]);
+  const [plan, setPlan] = useState<string>("");
+  const [maxCh, setMaxCh] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [f, setF] = useState("all");
+
+  const COLS = "id,channel_name,platform_channel_id,niche,niche_pool,is_active";
+
+  const load = useCallback(async () => {
+    const [{ data: chs, error: e1 }, { data: tc }] = await Promise.all([
+      supabase.from("channels").select(COLS).order("created_at", { ascending: true }),
+      supabase.from("tenant_configs").select("plan_type").maybeSingle(),
+    ]);
+    if (e1) { setErr(e1.message); setLoading(false); return; }
+    setChannels((chs as ChannelRow[]) ?? []);
+    const pt = (tc as { plan_type?: string } | null)?.plan_type ?? "";
+    setPlan(pt);
+    if (pt) {
+      const { data: pl } = await supabase.from("plan_limits").select("max_channels").eq("plan_type", pt).maybeSingle();
+      setMaxCh((pl as { max_channels?: number } | null)?.max_channels ?? null);
+    }
+    setLoading(false);
+  }, [supabase]);
+
+  useEffect(() => {
+    load();
+    // REALTIME: perubahan row channels (RLS men-scope ke tenant ini) → re-sync.
+    const ch = supabase
+      .channel("rt-channels")
+      .on("postgres_changes", { event: "*", schema: "public", table: "channels" }, () => { load(); })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [supabase, load]);
+
+  async function toggleActive(c: ChannelRow) {
+    setBusyId(c.id);
+    const next = !(c.is_active ?? false);
+    setChannels((prev) => prev.map((x) => (x.id === c.id ? { ...x, is_active: next } : x))); // optimistic
+    const { error } = await supabase.from("channels").update({ is_active: next }).eq("id", c.id);
+    if (error) {
+      setChannels((prev) => prev.map((x) => (x.id === c.id ? { ...x, is_active: !next } : x))); // revert
+      setErr(error.message);
+    }
+    setBusyId(null);
+  }
+
+  const shown = channels.filter((c) => f === "all" || (f === "active" ? c.is_active : !c.is_active));
+  const used = channels.length;
+
   return (
     <>
       <div className="ch-head">
@@ -93,24 +157,29 @@ export default function ChannelsPage() {
         <button className="btn btn-default"><Plus size={16} /> <Bi id="Tambah Channel" en="Add Channel" /></button>
       </div>
 
-      <div className="quota">
-        <Tv size={16} style={{ color: "var(--text-muted)" }} />
-        <span><b style={{ fontWeight: 600 }}>3 dari 3</b> channel terpakai <span className="muted">(Pro plan)</span></span>
-        <div className="progress bar"><span style={{ width: "100%", background: "var(--warning)" }} /></div>
-        <a href="#" className="btn btn-secondary btn-sm up"><Zap size={14} /> <Bi id="Upgrade ke Business" en="Upgrade to Business" /></a>
-      </div>
+      {maxCh != null && (
+        <div className="quota">
+          <Tv size={16} style={{ color: "var(--text-muted)" }} />
+          <span><b style={{ fontWeight: 600 }}>{used} dari {maxCh}</b> <Bi id="channel terpakai" en="channels used" /> <span className="muted">({PLAN_LABEL[plan] ?? plan})</span></span>
+          <div className="progress bar"><span style={{ width: `${Math.min(100, maxCh ? (used / maxCh) * 100 : 0)}%`, background: used >= maxCh ? "var(--warning)" : "var(--brand)" }} /></div>
+          {used >= maxCh && plan !== "business" && <a href="#" className="btn btn-secondary btn-sm up"><Zap size={14} /> <Bi id="Upgrade" en="Upgrade" /></a>}
+        </div>
+      )}
+
+      {err && <div style={{ color: "var(--danger, #ef4444)", fontSize: "var(--text-sm)", marginBottom: "1rem" }}>{err}</div>}
 
       <div className="ch-filters">
         <div className="segmented">{FILTERS.map(([k, id, en]) => <button key={k} aria-selected={f === k} onClick={() => setF(k)}><Bi id={id} en={en} /></button>)}</div>
       </div>
 
       <div className="ch-grid">
-        {f === "suspended"
-          ? <div className="muted" style={{ padding: "2rem", gridColumn: "1/-1", textAlign: "center" }}><Bi id="Tidak ada channel suspended." en="No suspended channels." /></div>
-          : <>
-              {(f === "all" || f === "active") && CHANNELS.map((ch) => <ChannelCard key={ch.id} ch={ch} />)}
-              {(f === "all" || f === "incomplete") && <IncompleteCard />}
-            </>}
+        {loading
+          ? <div className="muted" style={{ padding: "2rem", gridColumn: "1/-1", textAlign: "center" }}><Bi id="Memuat channel…" en="Loading channels…" /></div>
+          : channels.length === 0
+            ? <IncompleteCard />
+            : shown.length === 0
+              ? <div className="muted" style={{ padding: "2rem", gridColumn: "1/-1", textAlign: "center" }}><Bi id="Tidak ada channel pada filter ini." en="No channels in this filter." /></div>
+              : shown.map((c) => <ChannelCard key={c.id} ch={c} busy={busyId === c.id} onToggle={toggleActive} />)}
       </div>
     </>
   );

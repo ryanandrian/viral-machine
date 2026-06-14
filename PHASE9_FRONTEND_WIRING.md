@@ -40,9 +40,15 @@
   - ⏳ **Sisa kecil (gate owner):** Google OAuth baru aktif setelah provider dikonfig di Supabase dashboard. Happy-path cookie-session→200 di protected route butuh sesi browser (tercakup di 9.2 vertical-slice / test manual owner).
 - **Gate:** RLS test — tenant A login hanya lihat data A; anon → 0 (fondasi + middleware-redirect terbukti). ✅
 
-### 9.2 — VERTICAL SLICE (buktikan pola e2e) 🔴
-- 1 layar authed baca data v2 NYATA: **D1 Dashboard** atau **D2 Channels** (read) + 1 write (mis. toggle config) + 1 Realtime (D5 live-tail).
-- Tujuan: de-risk stack (client+RLS+read+write+realtime) sebelum fan-out.
+### 9.2 — VERTICAL SLICE (buktikan pola e2e) ✅ DONE (2026-06-15) — RUNTIME-VALIDATED
+- **Layar = D2 Channels** (`apps/web/src/app/(app)/channels/page.tsx`) — mock diganti data v2 NYATA:
+  - **READ** (RLS, anon): `from('channels').select()` + `tenant_configs.plan_type` + `plan_limits.max_channels` → kartu real (channel_name, niche/niche_pool→badge, is_active→status) + quota real (X dari max, plan). Stats views/CTR/subs/spark = placeholder `—` (belum ada sumber timeseries; video historis ryan `channel_id=null`) — JUJUR, bukan mock. Empty (0 channel) → IncompleteCard→/onboarding.
+  - **WRITE** (RLS): toggle `is_active` (Jeda/Aktifkan) optimistic + persist + revert-on-error.
+  - **REALTIME**: subscribe `channels` postgres_changes (tenant-scoped via RLS) → live re-sync.
+- **migr `0029`** (applied v2): (a) `channels` → publication `supabase_realtime`; (b) **policy `channels_tenant_update`** (UPDATE, `tenant_id=(auth.uid())::text`) — Phase 4.3 cuma bikin SELECT → write FE ke-block tanpa ini.
+- **Validasi runtime (anon key FE, temp authed user):** build PASS · **RLS read isolasi PASS** (lihat hanya channel sendiri, bukan ryan) · quota read PASS · **WRITE toggle PASS** · **cross-tenant write guard PASS** (tak bisa ubah channel ryan) · **REALTIME websocket receipt PASS** (event UPDATE diterima, RLS-scoped) · cleanup bersih.
+- **🔑 POLA untuk fan-out (penting):** tabel tenant HANYA punya SELECT policy (Phase 4.3) → **tiap layar yang WRITE wajib tambah policy UPDATE/INSERT** `tenant_id=(auth.uid())::text` per-tabel (spt `channels_tenant_update`). Realtime per-tabel = tambah ke publication `supabase_realtime` + RLS men-scope event. Client component: `createClient()` browser + `useEffect` load + `.channel().on('postgres_changes').subscribe()` + cleanup `removeChannel`.
+- ⏳ Browser-render visual (setelah login) = owner check (mekanik data-layer sudah tervalidasi penuh via supabase-py anon + RLS yang identik dgn FE).
 
 ### 9.3 — BETA-CRITICAL PATH (cukup utk beta 10 tenant)
 - **C1-C5 Onboarding** (signup→**BYOK keys**→YouTube OAuth→niche+bahasa+voice→jadwal). **Trial wajib BYOK upfront** (hapus "skip keys"). Tulis `tenant_configs`/`channels`/`tenant_credentials`.
@@ -93,3 +99,4 @@
 - 2026-06-14 — dibuat (rencana breakdown Phase 9-10 wiring). Menunggu review/approval owner sebelum eksekusi 9.1.
 - 2026-06-15 — auth page **runtime-validated** (signup→provision→login OK; reset kena rate-limit env). Catat go-live: Supabase Auth custom SMTP → lumite.
 - 2026-06-15 — **SISA 9.1 selesai + runtime-validated**: `/auth/callback` route, middleware hard-redirect, view `reset` (updateUser), login onboarded-check. 9.1 = TUNTAS (kecuali gate owner: OAuth provider config).
+- 2026-06-15 — **9.2 VERTICAL SLICE DONE + runtime-validated**: D2 Channels wired (read+write+realtime, RLS) + migr 0029 (realtime publication + channels UPDATE policy). Pola stack de-risked untuk fan-out. Next = 9.3 beta-path.
