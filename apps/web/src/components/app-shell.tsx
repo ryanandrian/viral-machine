@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
   LayoutDashboard, Tv, List, BarChart3, Calendar, ShieldCheck, Sparkles,
-  Command, Mic, Image as ImageIcon, CreditCard, Users, Settings, HelpCircle,
+  Command, Mic, Image as ImageIcon, CreditCard, Settings, HelpCircle,
   Menu, Search, Bell, ChevronsUpDown, Zap, Moon, Sun, ChevronRight,
 } from "lucide-react";
 
@@ -36,7 +36,7 @@ const NAV: NavEntry[] = [
   { id: "visual", icon: ImageIcon, idL: "Visual", en: "Visual", href: "/config/visual" },
   { section: { id: "Akun", en: "Account" } },
   { id: "billing", icon: CreditCard, idL: "Tagihan", en: "Billing", href: "/billing" },
-  { id: "team", icon: Users, idL: "Tim", en: "Team", href: "#" },
+  // nav "Tim/Team" DIHAPUS — fitur team di-take-down untuk V2 (1 user=1 tenant, no multi-user — decisions_auth_rbac). Jangan tambah lagi s/d V3.
   { id: "settings", icon: Settings, idL: "Pengaturan", en: "Settings", href: "/settings" },
 ];
 
