@@ -127,56 +127,27 @@ class AIImageProvider(VisualProvider):
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        clips: list[VideoClip] = []
+        def _dur(i: int) -> float:
+            """Durasi per clip dari section_durations (s6c2); fallback 5.0s."""
+            return clip_durations[i] if (clip_durations and i < len(clip_durations)) else 5.0
 
-        for i, keyword in enumerate(keywords[:count]):
+        async def _gen_image(i: int, keyword: str) -> tuple[int, "Path | None", str]:
+            """
+            Hasilkan 1 IMAGE (I/O-bound). Retry attempt 2-3 = LLM rewrite dgn rejection_history
+            (makin tahu apa yang dihindari). TIDAK ada fallback provider/visual_fallbacks — visual
+            harus relevan + kualitas non-negotiable. Gagal 3× → (i, None) (scene di-skip).
+            Return (i, image_path|None, source_tag). NB: image→video (CPU) dilakukan TERPISAH (Phase 2).
+            """
+            positive_prompt, negative_prompt = self._build_image_prompt(keyword)
+            img_path = output_dir / f"ai_img_{i+1:02d}.jpg"
+            logger.info(f"[AIImage:{self.ai_model}] Scene {i+1}/{count} | duration={_dur(i)}s")
+            logger.debug(f"[AIImage] Prompt: {positive_prompt[:120]}...")
             try:
-                positive_prompt, negative_prompt = self._build_image_prompt(keyword)
-
-                # Durasi per clip dari section_durations (s6c2)
-                # Fallback ke 5.0 jika tidak tersedia
-                if clip_durations and i < len(clip_durations):
-                    duration = clip_durations[i]
-                else:
-                    duration = 5.0
-
-                logger.info(
-                    f"[AIImage:{self.ai_model}] Scene {i+1}/{count} | duration={duration}s"
-                )
-                logger.debug(f"[AIImage] Prompt: {positive_prompt[:120]}...")
-
-                img_path  = output_dir / f"ai_img_{i+1:02d}.jpg"
-                clip_path = output_dir / f"clip_{i+1:02d}_ai.mp4"
-
                 await self._generate_image(positive_prompt, negative_prompt, img_path)
-
-                self._image_to_video(img_path, clip_path, duration=duration, clip_index=i)
-
-                size_mb = clip_path.stat().st_size / (1024 * 1024)
-
-                clips.append(VideoClip(
-                    path=clip_path,
-                    duration=duration,
-                    width=1080,
-                    height=1920,
-                    file_size_mb=round(size_mb, 1),
-                    source_url=f"ai_generated:{self.ai_model}",
-                    provider=self.provider_name,
-                ))
-                logger.info(
-                    f"[AIImage] ✓ Scene {i+1}: {clip_path.name} ({size_mb:.1f}MB) {duration}s"
-                )
-
+                return (i, img_path, f"ai_generated:{self.ai_model}")
             except Exception as e:
-                # ── Retry loop ────────────────────────────────────────────────────────
-                # Attempt 2-3: Claude/LLM rewrite dengan accumulated rejection_history.
-                # Setiap iterasi Claude makin tahu apa yang harus dihindari.
-                # Tidak ada fallback ke visual_fallbacks — visual harus relevan dengan narasi.
-                # Tidak ada fallback ke provider lain — kualitas konten non-negotiable.
-                # Jika semua attempt gagal: scene di-skip, pipeline laporkan ke Telegram.
                 rejection_history = [{"prompt": positive_prompt, "rejection": str(e)}]
-                succeeded = False
-                safe_positive = positive_prompt  # fallback jika rewrite belum assign                
+                safe_positive = positive_prompt
                 for attempt in range(2, 4):  # attempt 2 dan 3
                     try:
                         logger.warning(
@@ -184,38 +155,49 @@ class AIImageProvider(VisualProvider):
                             f"rewrite via {self.llm_provider} (attempt {attempt}/3)"
                         )
                         rewritten_main = await self._ai_rewrite_on_rejection(
-                            original_keyword=keyword,
-                            section_index=i,
+                            original_keyword=keyword, section_index=i,
                             rejection_history=rejection_history,
                         )
                         safe_positive, safe_negative = self._build_image_prompt(rewritten_main)
-                        safe_output = output_dir / f"clip_{i+1:02d}_attempt{attempt}.jpg"
-                        safe_clip   = output_dir / f"clip_{i+1:02d}_attempt{attempt}.mp4"
-                        target_dur  = clip_durations[i] if clip_durations and i < len(clip_durations) else 5.0
+                        safe_output = output_dir / f"ai_img_{i+1:02d}_attempt{attempt}.jpg"
                         await self._generate_image(safe_positive, safe_negative, safe_output)
-                        self._image_to_video(safe_output, safe_clip, duration=target_dur, clip_index=i)
-                        size_mb = safe_clip.stat().st_size / (1024 * 1024)
-                        clips.append(VideoClip(
-                            path=safe_clip, duration=target_dur,
-                            width=1080, height=1920,
-                            file_size_mb=round(size_mb, 1),
-                            source_url=f"ai_generated:retry_{attempt}",
-                            provider=self.provider_name,
-                        ))
-                        logger.info(f"[AIImage] ✅ Scene {i+1} berhasil pada attempt {attempt}")
-                        succeeded = True
-                        break
+                        logger.info(f"[AIImage] ✅ Scene {i+1} image berhasil pada attempt {attempt}")
+                        return (i, safe_output, f"ai_generated:retry_{attempt}")
                     except Exception as retry_err:
                         rejection_history.append({"prompt": safe_positive, "rejection": str(retry_err)})
                         logger.warning(f"[AIImage] Scene {i+1} attempt {attempt} gagal: {retry_err}")
+                logger.error(f"[AIImage] Scene {i+1} GAGAL setelah 3 attempt — scene di-skip")
+                return (i, None, "")
 
-                if not succeeded:
-                    logger.error(
-                        f"[AIImage] Scene {i+1} GAGAL setelah 3 attempt — scene di-skip"
-                    )
-                    continue
+        # ── Phase 1: generate SEMUA image KONKUREN (I/O-bound — decisions_production_scaling §5: 10→2mnt).
+        #    Aman: ini tunggu API (bukan CPU); concurrency I/O boleh tinggi (§3).
+        gen_results = await asyncio.gather(*[
+            _gen_image(i, kw) for i, kw in enumerate(keywords[:count])
+        ])
 
-        logger.info(f"[AIImage] Complete: {len(clips)}/{count} clips")
+        # ── Phase 2: image→video Ken Burns SEKUENSIAL (CPU-bound ffmpeg).
+        #    SENGAJA tidak diparalelkan → jaga rem anti-OOM "concurrency render = core" (§3);
+        #    paralel ffmpeg di sini = spike CPU yang dilarang arsitektur produksi.
+        clips: list[VideoClip] = []
+        for i, img_path, source_tag in sorted(gen_results, key=lambda r: r[0]):
+            if img_path is None:
+                continue
+            duration  = _dur(i)
+            clip_path = output_dir / f"clip_{i+1:02d}_ai.mp4"
+            try:
+                self._image_to_video(img_path, clip_path, duration=duration, clip_index=i)
+                size_mb = clip_path.stat().st_size / (1024 * 1024)
+                clips.append(VideoClip(
+                    path=clip_path, duration=duration, width=1080, height=1920,
+                    file_size_mb=round(size_mb, 1), source_url=source_tag,
+                    provider=self.provider_name,
+                ))
+                logger.info(f"[AIImage] ✓ Scene {i+1}: {clip_path.name} ({size_mb:.1f}MB) {duration}s")
+            except Exception as e:
+                logger.error(f"[AIImage] Scene {i+1} image→video gagal: {e} — scene di-skip")
+                continue
+
+        logger.info(f"[AIImage] Complete: {len(clips)}/{count} clips (image-gen paralel I/O, convert sekuensial CPU)")
         return clips
 
     def extract_keywords_from_script(self, script: dict, niche: str) -> list[str]:
