@@ -30,7 +30,7 @@ from loguru import logger
 
 def main() -> None:
     from src.utils.db_log_sink import setup_db_logging
-    from src.orchestrator import producer, publisher, buffer_janitor
+    from src.orchestrator import producer, publisher, buffer_janitor, self_learning
 
     setup_db_logging()
 
@@ -52,6 +52,7 @@ def main() -> None:
         threading.Thread(target=producer.run_forever, name="producer", daemon=True),
         threading.Thread(target=publisher.run_forever, name="publisher", daemon=True),
         threading.Thread(target=buffer_janitor.run_forever, name="janitor", daemon=True),
+        threading.Thread(target=self_learning.run_forever, name="self_learning", daemon=True),
     ]
     for t in threads:
         t.start()
