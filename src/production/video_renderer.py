@@ -494,118 +494,97 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         )
         return srt_path
 
-    def render(
-        self,
-        script: dict,
-        audio_path: str,
-        clips: list,
-        tenant_config: TenantConfig,
-        output_dir: str = "logs",
-        word_timestamps: list[dict] | None = None,
-        run_id: str = "",
+    def _render_preset(self) -> str:
+        """Preset x264 = config-driven (no-hardcode → admin tune per-node/GPU = scale). Default veryfast (§5.5)."""
+        return os.getenv("RENDER_PRESET", "veryfast")
+
+    def _single_pass_concat(
+        self, clips, clip_list_path, audio_path, output_path,
+        sub_path, use_ass, caption_style,
+        audio_duration, total_duration, trailing_silence,
+    ) -> bool:
+        """
+        5.5b — gabung Step A (scale+xfade) + Step B (audio+subtitle+tpad) → SATU encode (1 pass).
+        Hanya kasus xfade (>=2 clip + durasi valid); else False → caller fallback ke 2-pass proven (nol regresi).
+        Output struktural IDENTIK 2-pass (terbukti A/B render-only). Preset config-driven.
+        """
+        if len(clips) < 2:
+            return False
+        clip_durations_actual = []
+        try:
+            with open(clip_list_path) as f:
+                for cl in f:
+                    cl = cl.strip()
+                    if cl.startswith("duration"):
+                        clip_durations_actual.append(float(cl.split()[1]))
+        except Exception as e:
+            logger.warning(f"[5.5b] baca durasi clip gagal: {e} — fallback 2-pass")
+            return False
+        if len(clip_durations_actual) != len(clips):
+            return False
+
+        preset       = self._render_preset()
+        scale_filter = (
+            f"scale={self.OUTPUT_WIDTH}:{self.OUTPUT_HEIGHT}"
+            f":force_original_aspect_ratio=increase,"
+            f"crop={self.OUTPUT_WIDTH}:{self.OUTPUT_HEIGHT},setsar=1,fps={self.FPS}"
+        )
+        XFADE_DUR = 0.4
+
+        cmd = ["ffmpeg", "-y"]
+        for clip_path in clips:
+            cmd += ["-i", str(clip_path)]
+        audio_idx = len(clips)
+        cmd += ["-i", audio_path]
+
+        parts  = [f"[{i}:v]{scale_filter}[v{i}]" for i in range(len(clips))]
+        offset = 0.0
+        prev   = "v0"
+        for idx in range(1, len(clips)):
+            offset += clip_durations_actual[idx - 1] - XFADE_DUR
+            offset  = max(0, round(offset, 3))
+            out     = f"xf{idx}" if idx < len(clips) - 1 else "vxf"
+            parts.append(
+                f"[{prev}][v{idx}]xfade=transition=fade:duration={XFADE_DUR}:offset={offset}[{out}]"
+            )
+            prev = out
+
+        # tpad freeze + subtitle (ASS karaoke / SRT) pada hasil xfade — sama semantik Step B
+        vchain = f"[{prev}]tpad=stop_mode=clone:stop_duration={trailing_silence}"
+        if sub_path and os.path.exists(sub_path):
+            abs_sub = os.path.abspath(sub_path)
+            if use_ass:
+                vchain += f",ass='{abs_sub}'"
+            else:
+                vchain += f",subtitles='{abs_sub}':force_style='{self._build_srt_style(caption_style)}'"
+        vchain += "[vout]"
+        parts.append(vchain)
+        parts.append(f"[{audio_idx}:a]apad=pad_dur={trailing_silence}[aout]")
+
+        cmd += [
+            "-filter_complex", ";".join(parts),
+            "-map", "[vout]", "-map", "[aout]",
+            "-t", str(total_duration),
+            "-c:v", "libx264", "-preset", preset, "-b:v", self.VIDEO_BITRATE,
+            "-c:a", "aac", "-b:a", self.AUDIO_BITRATE,
+            output_path,
+        ]
+        logger.info(f"[5.5b] single-pass concat: {len(clips)} clips, preset={preset} (1 encode)")
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0 or not os.path.exists(output_path):
+            logger.warning(f"[5.5b] single-pass gagal → fallback 2-pass: {result.stderr[-300:]}")
+            return False
+        return True
+
+    def _concat_two_pass(
+        self, clips, clip_list_path, clip_list_target, audio_path, temp_path, output_path,
+        sub_path, use_ass, caption_style, audio_duration, total_duration, trailing_silence,
     ) -> str:
         """
-        Render video final.
-
-        Caption mode (otomatis dipilih):
-          - word_timestamps tersedia (ElevenLabs) → ASS karaoke (~98% akurasi)
-          - word_timestamps kosong                → SRT estimasi (~60-70%)
-        Caption style dibaca dari tenant_configs.caption_style — multi-tenant.
+        2-pass concat PROVEN (Step A xfade → temp, Step B audio+subtitle+tpad → output).
+        Fallback dari _single_pass_concat (5.5b) — robust untuk semua kasus (incl <2 clip, xfade-fail).
+        Return output_path (sukses) atau "" (gagal). Logika tak diubah dari versi inline lama.
         """
-        if not clips:
-            logger.error("No video clips available")
-            return ""
-        if not audio_path or not os.path.exists(audio_path):
-            logger.error("Audio file not found")
-            return ""
-
-        logger.info("Getting audio duration...")
-        audio_duration = self._get_audio_duration(audio_path)
-        logger.info(f"Audio duration: {audio_duration:.1f}s")
-
-        # ── s72b: trailing_silence — baca dari Supabase config ──
-        try:
-            from src.config.tenant_config import load_tenant_config
-            rc = load_tenant_config(tenant_config.tenant_id)
-            trailing_silence = float(getattr(rc, "trailing_silence", 2.5))
-        except Exception:
-            trailing_silence = 2.5
-        total_duration = audio_duration + trailing_silence
-        logger.info(
-            f"[Renderer] trailing_silence={trailing_silence}s "
-            f"| total_duration={total_duration:.1f}s"
-        )
-
-        # ── s72: Hook title overlay pada clip 1 ─────────────────
-        hook_title_style = self._load_hook_title_style(tenant_config)
-        hook_text_raw    = script.get("hook", "")
-        if clips and hook_text_raw and hook_title_style.get("enabled", True):
-            titled_clip_0 = self._add_hook_title(
-                clips[0], hook_text_raw, hook_title_style, output_dir
-            )
-            clips = [titled_clip_0] + list(clips[1:])
-
-        logger.info("Creating clip list...")
-        section_durs   = script.get("section_durations", {})
-        clip_durations = None
-        if section_durs and len(section_durs) >= 6:
-            sd        = section_durs
-            hook      = float(sd.get("hook", 3))
-            mystery   = float(sd.get("mystery_drop", 5))
-            buildup   = float(sd.get("build_up", 12))
-            interrupt = float(sd.get("pattern_interrupt", 2))
-            core      = float(sd.get("core_facts", 15))
-            bridge    = float(sd.get("curiosity_bridge", 3))
-            climax    = float(sd.get("climax", 8))
-            cta       = float(sd.get("cta", 3))
-            clip_durations = [
-                hook,
-                mystery,
-                buildup,
-                round(interrupt + core / 2, 2),
-                round(core / 2 + bridge, 2),
-                round(climax + cta, 2),
-            ]
-            logger.info(f"[Renderer] section_durations: {clip_durations}")
-        # clip_list harus kompensasi xfade loss agar Step A output = audio_duration
-        # Step A xfade: (n-1) × 0.4s loss → target harus audio_duration + loss
-        # Sehingga: Step B tpad(trailing_silence) → total_duration = audio sync sempurna
-        _xfade_loss = (len(clips) - 1) * 0.4 if len(clips) >= 2 else 0
-        clip_list_target = audio_duration + _xfade_loss
-        clip_list_path = self._create_clip_list(clips, clip_list_target, output_dir, clip_durations, run_id=run_id)
-
-        # Load caption style dari tenant_configs
-        caption_style = self._load_caption_style(tenant_config)
-
-        # Generate subtitle — pilih mode berdasarkan ketersediaan timestamps
-        logger.info("Generating captions...")
-        use_ass = False
-        if word_timestamps and len(word_timestamps) > 0:
-            logger.info(
-                f"[Caption] Mode: KARAOKE ASS "
-                f"({len(word_timestamps)} words, ~98% akurasi)"
-            )
-            sub_path = self._generate_karaoke_ass(
-                word_timestamps, output_dir, caption_style, run_id=run_id
-            )
-            use_ass = True
-        else:
-            logger.warning(
-                "[Caption] Mode: SRT estimasi (~60-70%) — "
-                "aktifkan ElevenLabs untuk karaoke akurat"
-            )
-            sub_path = self._generate_subtitles_estimated(
-                script, audio_duration, output_dir, run_id=run_id
-            )
-            use_ass = False
-
-        timestamp   = int(time.time())
-        os.makedirs(output_dir, exist_ok=True)
-        output_path = os.path.join(
-            output_dir, f"video_{tenant_config.tenant_id}_{timestamp}.mp4"
-        )
-        temp_path = os.path.join(output_dir, f"temp_{timestamp}.mp4")
-
         # ── Step A: Concat + scale clips dengan crossfade transition ────
         logger.info("Step A: Concatenating clips with crossfade transition...")
 
@@ -778,6 +757,131 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
         if result.returncode != 0:
             logger.error(f"Final render failed: {result.stderr[-500:]}")
+            return ""
+        return output_path
+
+    def render(
+        self,
+        script: dict,
+        audio_path: str,
+        clips: list,
+        tenant_config: TenantConfig,
+        output_dir: str = "logs",
+        word_timestamps: list[dict] | None = None,
+        run_id: str = "",
+    ) -> str:
+        """
+        Render video final.
+
+        Caption mode (otomatis dipilih):
+          - word_timestamps tersedia (ElevenLabs) → ASS karaoke (~98% akurasi)
+          - word_timestamps kosong                → SRT estimasi (~60-70%)
+        Caption style dibaca dari tenant_configs.caption_style — multi-tenant.
+        """
+        if not clips:
+            logger.error("No video clips available")
+            return ""
+        if not audio_path or not os.path.exists(audio_path):
+            logger.error("Audio file not found")
+            return ""
+
+        logger.info("Getting audio duration...")
+        audio_duration = self._get_audio_duration(audio_path)
+        logger.info(f"Audio duration: {audio_duration:.1f}s")
+
+        # ── s72b: trailing_silence — baca dari Supabase config ──
+        try:
+            from src.config.tenant_config import load_tenant_config
+            rc = load_tenant_config(tenant_config.tenant_id)
+            trailing_silence = float(getattr(rc, "trailing_silence", 2.5))
+        except Exception:
+            trailing_silence = 2.5
+        total_duration = audio_duration + trailing_silence
+        logger.info(
+            f"[Renderer] trailing_silence={trailing_silence}s "
+            f"| total_duration={total_duration:.1f}s"
+        )
+
+        # ── s72: Hook title overlay pada clip 1 ─────────────────
+        hook_title_style = self._load_hook_title_style(tenant_config)
+        hook_text_raw    = script.get("hook", "")
+        if clips and hook_text_raw and hook_title_style.get("enabled", True):
+            titled_clip_0 = self._add_hook_title(
+                clips[0], hook_text_raw, hook_title_style, output_dir
+            )
+            clips = [titled_clip_0] + list(clips[1:])
+
+        logger.info("Creating clip list...")
+        section_durs   = script.get("section_durations", {})
+        clip_durations = None
+        if section_durs and len(section_durs) >= 6:
+            sd        = section_durs
+            hook      = float(sd.get("hook", 3))
+            mystery   = float(sd.get("mystery_drop", 5))
+            buildup   = float(sd.get("build_up", 12))
+            interrupt = float(sd.get("pattern_interrupt", 2))
+            core      = float(sd.get("core_facts", 15))
+            bridge    = float(sd.get("curiosity_bridge", 3))
+            climax    = float(sd.get("climax", 8))
+            cta       = float(sd.get("cta", 3))
+            clip_durations = [
+                hook,
+                mystery,
+                buildup,
+                round(interrupt + core / 2, 2),
+                round(core / 2 + bridge, 2),
+                round(climax + cta, 2),
+            ]
+            logger.info(f"[Renderer] section_durations: {clip_durations}")
+        # clip_list harus kompensasi xfade loss agar Step A output = audio_duration
+        # Step A xfade: (n-1) × 0.4s loss → target harus audio_duration + loss
+        # Sehingga: Step B tpad(trailing_silence) → total_duration = audio sync sempurna
+        _xfade_loss = (len(clips) - 1) * 0.4 if len(clips) >= 2 else 0
+        clip_list_target = audio_duration + _xfade_loss
+        clip_list_path = self._create_clip_list(clips, clip_list_target, output_dir, clip_durations, run_id=run_id)
+
+        # Load caption style dari tenant_configs
+        caption_style = self._load_caption_style(tenant_config)
+
+        # Generate subtitle — pilih mode berdasarkan ketersediaan timestamps
+        logger.info("Generating captions...")
+        use_ass = False
+        if word_timestamps and len(word_timestamps) > 0:
+            logger.info(
+                f"[Caption] Mode: KARAOKE ASS "
+                f"({len(word_timestamps)} words, ~98% akurasi)"
+            )
+            sub_path = self._generate_karaoke_ass(
+                word_timestamps, output_dir, caption_style, run_id=run_id
+            )
+            use_ass = True
+        else:
+            logger.warning(
+                "[Caption] Mode: SRT estimasi (~60-70%) — "
+                "aktifkan ElevenLabs untuk karaoke akurat"
+            )
+            sub_path = self._generate_subtitles_estimated(
+                script, audio_duration, output_dir, run_id=run_id
+            )
+            use_ass = False
+
+        timestamp   = int(time.time())
+        os.makedirs(output_dir, exist_ok=True)
+        output_path = os.path.join(
+            output_dir, f"video_{tenant_config.tenant_id}_{timestamp}.mp4"
+        )
+        temp_path = os.path.join(output_dir, f"temp_{timestamp}.mp4")
+
+        # ── Concat clips + audio + caption → output_path ──────────────────
+        #    5.5b: coba 1-encode single-pass (gabung Step A xfade + Step B audio/subtitle/tpad);
+        #    gagal / precondition tak penuh → fallback ke 2-pass PROVEN (_concat_two_pass) — NOL regresi.
+        if self._single_pass_concat(clips, clip_list_path, audio_path, output_path,
+                                    sub_path, use_ass, caption_style,
+                                    audio_duration, total_duration, trailing_silence):
+            logger.info("[Renderer] 5.5b single-pass concat OK — 2-pass dilewati")
+        elif not self._concat_two_pass(clips, clip_list_path, clip_list_target, audio_path,
+                                       temp_path, output_path, sub_path, use_ass, caption_style,
+                                       audio_duration, total_duration, trailing_silence):
             return ""
 
         if not os.path.exists(output_path):
