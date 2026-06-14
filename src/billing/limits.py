@@ -27,6 +27,20 @@ def can_produce(subscription_status) -> bool:
     return (subscription_status or "active") in PRODUCING_STATUSES
 
 
+def is_comp_account(tenant_row: dict) -> bool:
+    """
+    Comp/internal account = GRATIS SELAMANYA, bypass siklus billing (DESAIN: akun developer owner).
+    Sumber: is_developer=True ATAU discount_pct>=100. Implikasi: SELALU producing, TAK PERNAH
+    suspended/expired/ditagih, current_period_end boleh null (perpetual). Renewal-checker WAJIB exempt ini.
+    """
+    if tenant_row.get("is_developer"):
+        return True
+    try:
+        return int(tenant_row.get("discount_pct") or 0) >= 100
+    except Exception:
+        return False
+
+
 def daily_publish_cap(tenant_row: dict, plan_limits: dict) -> int:
     """Batas publish per hari per channel = min(rate pilihan tenant, ceiling paket). Min 1."""
     plan      = tenant_row.get("plan_type") or "starter"
@@ -62,7 +76,7 @@ def _tenant_gate_row(sb, tenant_id: str) -> dict:
         return {}
     try:
         res = (sb.table("tenant_configs")
-               .select("subscription_status,plan_type,videos_per_day,max_videos_per_day")
+               .select("subscription_status,plan_type,videos_per_day,max_videos_per_day,is_developer,discount_pct")
                .eq("tenant_id", tenant_id).limit(1).execute())
         return (res.data or [{}])[0]
     except Exception as e:
@@ -79,10 +93,13 @@ def gate_for_channel(sb, channel_row: dict) -> dict:
     tid    = channel_row.get("tenant_id")
     trow   = _tenant_gate_row(sb, tid)
     status = trow.get("subscription_status") or "active"
+    comp   = is_comp_account(trow)
     limits = _get_plan_limits() or {}
     return {
-        "can_produce": can_produce(status),
+        # comp/developer (always-free) → SELALU producing, lepas dari status langganan.
+        "can_produce": comp or can_produce(status),
         "daily_cap":   daily_publish_cap(trow, limits),
         "status":      status,
         "plan_type":   trow.get("plan_type") or "starter",
+        "is_comp":     comp,
     }
