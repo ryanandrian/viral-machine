@@ -29,8 +29,16 @@
 - ✅ **DONE (2026-06-14):** deps `@supabase/supabase-js`+`@supabase/ssr` · `src/lib/supabase/{client,server,middleware}.ts` (anon+RLS, pola @supabase/ssr Next-16 async cookies) · `src/middleware.ts` (refresh session, **NON-BREAKING** belum hard-redirect) · `.env.local` v2 (anon/publishable, gitignored) + `.env.local.example`. **Validasi:** `npm run build` PASS · anon-key v2 konek (plan_limits public=4) · **RLS isolasi** (tenant_configs/videos=0 tanpa auth). Commit `f1a9b8f`/`252a704`.
 - ✅ **Provisioning signup DONE (2026-06-15, fork A=DB trigger):** migr `0028` trigger `on_auth_user_created` (auth.users insert → `tenant_configs` row + trial mulai; durasi dari app_config). e2e penuh (create test-user → row trial/trial + gate can_produce/cap-1 + niche 3-base + no-custom → cleanup). Provisioning = idiomatic, RLS langsung valid.
 - ✅ **Auth page wired DONE (2026-06-15):** `auth/page.tsx` 6 view → `supabase.auth.signUp`(emailRedirect→verified)/`signInWithPassword`(→/dashboard)/`resetPasswordForEmail`/`resend`/`signInWithOAuth`(google). Input controlled + busy/error state; demo-bypass dibuang. build PASS. (Pakai `window.location` redirect — hindari API Next-16-spesifik.)
-- ⏳ **SISA 9.1 (next):** (1) **auth callback route handler** (`/auth/confirm` PKCE exchangeCodeForSession + OAuth callback + reset-password landing) — **butuh Next-16 route-handler docs (AGENTS.md)**. (2) **hard-redirect proteksi** `(app)/*` (no session → /auth) di `middleware.ts`. (3) Google OAuth aktif setelah provider dikonfig di Supabase (gate owner). (4) login redirect → cek onboarded (→/onboarding vs /dashboard).
-- **Gate:** RLS test — tenant A login hanya lihat data A; anon → 0 (fondasi sudah terbukti isolasi).
+  - ✅ **RUNTIME-VALIDATED (2026-06-15, anon key FE):** alur nyata via supabase-py anon: `sign_up`→**trigger provision `trial/trial`** ✓ · login pre-confirm→ditolak "Email not confirmed" ✓ (error-path) · login post-confirm→**session token** ✓ · cleanup (ryan-only) ✓. **Verdict: signup→provision→login 100% jalan.** `reset` call benar tapi kena **429 email-rate-limit Supabase** (env, BUKAN bug kode).
+  - 🚩 **Go-live (gate owner):** konfig **Supabase Auth → custom SMTP `mail.lumite.biz.id`** → hilangkan rate-limit email default Supabase + email auth (confirm/reset) ber-brand. (SMTP sudah tersedia di `S3-CONNECTION.md`.)
+- ✅ **SISA 9.1 DONE (2026-06-15) — RUNTIME-VALIDATED:**
+  - (1) **`/auth/callback/route.ts`** (Next-16 route handler, baca docs dulu): `exchangeCodeForSession(code)` (PKCE email-verify + OAuth) + `verifyOtp(token_hash,type)` fallback + guard open-redirect (`next` wajib `/`-prefix) → set session cookie server-side. Email/reset/OAuth redirect di-retarget LEWAT callback (bukan langsung ke page).
+  - (2) **Hard-redirect proteksi** di `lib/supabase/middleware.ts`: prefix `dashboard/channels/runs/analytics/insights/compliance/config/schedule/settings/billing/onboarding/admin` → no-session redirect `/auth?view=login&next=<path>`. Marketing + `/auth` + `/auth/callback` publik.
+  - (3) **Reset-password lengkap** (gap desain ditutup, approved owner): view `reset` baru di `auth/page.tsx` (`updateUser({password})`) — reset link → callback(recovery) → form pw baru → /dashboard.
+  - (4) **Login → onboarded-check**: honor `?next` (dari middleware) lalu fallback query `channels` count (RLS) → 0 ⇒ `/onboarding`, >0 ⇒ `/dashboard`.
+  - **Validasi runtime (server `next start`):** publik 200 · protected 307→/auth?next · callback no-code/bad-code → error redirect (**bad-code balas error PKCE asli Supabase = exchange beneran jalan**) · onboarded-check: ryan(1 ch)→/dashboard, tenant baru(0 ch, trigger trial)→/onboarding · cleanup bersih. `npm run build` PASS.
+  - ⏳ **Sisa kecil (gate owner):** Google OAuth baru aktif setelah provider dikonfig di Supabase dashboard. Happy-path cookie-session→200 di protected route butuh sesi browser (tercakup di 9.2 vertical-slice / test manual owner).
+- **Gate:** RLS test — tenant A login hanya lihat data A; anon → 0 (fondasi + middleware-redirect terbukti). ✅
 
 ### 9.2 — VERTICAL SLICE (buktikan pola e2e) 🔴
 - 1 layar authed baca data v2 NYATA: **D1 Dashboard** atau **D2 Channels** (read) + 1 write (mis. toggle config) + 1 Realtime (D5 live-tail).
@@ -83,3 +91,5 @@
 ---
 ### Changelog
 - 2026-06-14 — dibuat (rencana breakdown Phase 9-10 wiring). Menunggu review/approval owner sebelum eksekusi 9.1.
+- 2026-06-15 — auth page **runtime-validated** (signup→provision→login OK; reset kena rate-limit env). Catat go-live: Supabase Auth custom SMTP → lumite.
+- 2026-06-15 — **SISA 9.1 selesai + runtime-validated**: `/auth/callback` route, middleware hard-redirect, view `reset` (updateUser), login onboarded-check. 9.1 = TUNTAS (kecuali gate owner: OAuth provider config).

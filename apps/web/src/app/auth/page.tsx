@@ -9,7 +9,7 @@ import "./auth.css";
 // B1-B4 Auth (PoC) — port dari design-source/Auth.html. Multi-view (signup/login/forgot/verify),
 // deep-link ?view=. Standalone (tanpa AppShell/MarketingShell). Auth nyata = Supabase Auth (Phase 4+).
 
-type View = "signup" | "login" | "forgot" | "forgot-sent" | "verify" | "verified";
+type View = "signup" | "login" | "forgot" | "forgot-sent" | "verify" | "verified" | "reset";
 
 function Bi({ id, en }: { id: string; en: string }) {
   return (<><span data-id>{id}</span><span data-en>{en}</span></>);
@@ -48,8 +48,11 @@ export default function AuthPage() {
     setMounted(true);
     const saved = (localStorage.getItem("mv-lang") as "id" | "en") || "id";
     setLang(saved); document.documentElement.lang = saved;
-    const v = new URLSearchParams(window.location.search).get("view") as View | null;
-    if (v && ["signup", "login", "forgot", "forgot-sent", "verify", "verified"].includes(v)) setView(v);
+    const qs = new URLSearchParams(window.location.search);
+    const v = qs.get("view") as View | null;
+    if (v && ["signup", "login", "forgot", "forgot-sent", "verify", "verified", "reset"].includes(v)) setView(v);
+    const e = qs.get("error");
+    if (e) setErr(e); // error dari /auth/callback (link kedaluwarsa, dll)
   }, []);
 
   function switchLang(l: "id" | "en") { setLang(l); document.documentElement.lang = l; localStorage.setItem("mv-lang", l); }
@@ -69,7 +72,9 @@ export default function AuthPage() {
     if (pw.length < 8) return setErr(lang === "id" ? "Password minimal 8 karakter." : "Password must be at least 8 characters.");
     if (pw !== pw2) return setErr(lang === "id" ? "Konfirmasi password tidak cocok." : "Passwords do not match.");
     setBusy(true);
-    const { error } = await supabase.auth.signUp({ email, password: pw, options: { emailRedirectTo: `${origin()}/auth?view=verified` } });
+    // emailRedirectTo → /auth/callback (tukar PKCE code → session cookie) → lalu view=verified.
+    const after = `${origin()}/auth/callback?next=${encodeURIComponent("/auth?view=verified")}`;
+    const { error } = await supabase.auth.signUp({ email, password: pw, options: { emailRedirectTo: after } });
     setBusy(false);
     if (error) return setErr(error.message);
     go("verify");
@@ -77,16 +82,32 @@ export default function AuthPage() {
   async function doLogin() {
     setErr(null); setBusy(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password: pw });
-    setBusy(false);
-    if (error) return setErr(error.message);
-    window.location.href = "/dashboard";  // full reload → middleware sinkron session
+    if (error) { setBusy(false); return setErr(error.message); }
+    // Honor ?next (dari middleware redirect) bila path valid; else onboarded-check.
+    const nextParam = new URLSearchParams(window.location.search).get("next");
+    if (nextParam && nextParam.startsWith("/")) { window.location.href = nextParam; return; }
+    // Onboarded? punya channel → dashboard; belum → onboarding. (RLS: query ter-scope auth.uid())
+    const { count } = await supabase.from("channels").select("id", { count: "exact", head: true });
+    window.location.href = (count ?? 0) > 0 ? "/dashboard" : "/onboarding"; // full reload → middleware sinkron
   }
   async function doForgot() {
     setErr(null); setBusy(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${origin()}/auth?view=login` });
+    // reset link → /auth/callback (recovery session) → form set password baru (view=reset).
+    const after = `${origin()}/auth/callback?next=${encodeURIComponent("/auth?view=reset")}`;
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: after });
     setBusy(false);
     if (error) return setErr(error.message);
     go("forgot-sent");
+  }
+  async function doReset() {
+    setErr(null);
+    if (pw.length < 8) return setErr(lang === "id" ? "Password minimal 8 karakter." : "Password must be at least 8 characters.");
+    if (pw !== pw2) return setErr(lang === "id" ? "Konfirmasi password tidak cocok." : "Passwords do not match.");
+    setBusy(true);
+    const { error } = await supabase.auth.updateUser({ password: pw });
+    setBusy(false);
+    if (error) return setErr(error.message);
+    window.location.href = "/dashboard"; // recovery session aktif → langsung masuk
   }
   async function doResend() {
     if (!email) return setErr(lang === "id" ? "Masukkan email dulu." : "Enter your email first.");
@@ -97,7 +118,8 @@ export default function AuthPage() {
   }
   async function doGoogle() {
     setErr(null);
-    const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${origin()}/dashboard` } });
+    const after = `${origin()}/auth/callback?next=${encodeURIComponent("/dashboard")}`;
+    const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: after } });
     if (error) setErr(error.message);  // aktif setelah provider Google dikonfigurasi di Supabase
   }
   const ErrBox = () => err ? <div style={{ color: "var(--danger, #ef4444)", fontSize: "var(--text-sm)", marginTop: "0.5rem" }}>{err}</div> : null;
@@ -208,6 +230,26 @@ export default function AuthPage() {
               <h1><Bi id="Email berhasil diverifikasi!" en="Email verified!" /></h1>
               <p className="lead"><Bi id="Akun Anda aktif. Mari mulai setup channel pertama." en="Your account is active. Let's set up your first channel." /></p>
               <a href="/onboarding" className="btn btn-default btn-lg" style={{ width: "100%" }}><Bi id="Lanjut ke setup" en="Continue to setup" /> <ArrowRight size={16} /></a>
+            </div>
+          )}
+
+          {/* RESET — set password baru (landing dari link reset, recovery session aktif) */}
+          {view === "reset" && (
+            <div className="auth-card">
+              <div className="state-ico" style={{ background: "var(--brand-soft)", color: "var(--brand)" }}><Command size={26} /></div>
+              <h1><Bi id="Buat password baru" en="Set a new password" /></h1>
+              <p className="lead"><Bi id="Masukkan password baru untuk akun Anda." en="Enter a new password for your account." /></p>
+              <div className="form-stack">
+                <div><label className="label"><Bi id="Password baru" en="New password" /></label>
+                  <PwInput id="pwr1" placeholder="Min. 8 karakter" value={pw} onChange={(e) => setPw(e.target.value)} />
+                </div>
+                <div><label className="label"><Bi id="Konfirmasi password" en="Confirm password" /></label>
+                  <PwInput id="pwr2" value={pw2} onChange={(e) => setPw2(e.target.value)} />
+                </div>
+                <button className="btn btn-default btn-lg" style={{ width: "100%" }} onClick={doReset} disabled={busy}>{busy ? "…" : <Bi id="Simpan password" en="Save password" />}</button>
+                <ErrBox />
+              </div>
+              <div className="auth-foot"><a className="link" onClick={() => go("login")}><ArrowLeft size={14} style={{ verticalAlign: -2 }} /> <Bi id="Kembali ke masuk" en="Back to sign in" /></a></div>
             </div>
           )}
         </div>
