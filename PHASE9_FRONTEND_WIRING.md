@@ -27,7 +27,8 @@
 
 ### 9.1 — FONDASI (unblock semua) 🔴 FIRST
 - ✅ **DONE (2026-06-14):** deps `@supabase/supabase-js`+`@supabase/ssr` · `src/lib/supabase/{client,server,middleware}.ts` (anon+RLS, pola @supabase/ssr Next-16 async cookies) · `src/middleware.ts` (refresh session, **NON-BREAKING** belum hard-redirect) · `.env.local` v2 (anon/publishable, gitignored) + `.env.local.example`. **Validasi:** `npm run build` PASS · anon-key v2 konek (plan_limits public=4) · **RLS isolasi** (tenant_configs/videos=0 tanpa auth). Commit `f1a9b8f`/`252a704`.
-- ⏳ **SISA 9.1 (next):** wire **Auth B1-B4** (`/auth`): signup→`start_trial`(BYOK) / login / verify / reset — `supabase.auth.*` (ganti mock). Lalu **hard-redirect proteksi** `(app)/*` (no session → /auth) di `middleware.ts`.
+- ✅ **Provisioning signup DONE (2026-06-15, fork A=DB trigger):** migr `0028` trigger `on_auth_user_created` (auth.users insert → `tenant_configs` row + trial mulai; durasi dari app_config). e2e penuh (create test-user → row trial/trial + gate can_produce/cap-1 + niche 3-base + no-custom → cleanup). Provisioning = idiomatic, RLS langsung valid.
+- ⏳ **SISA 9.1 (next):** wire **Auth B1-B4** (`/auth`): signup→`supabase.auth.signUp` (provisioning otomatis via trigger) / login `signInWithPassword` / forgot `resetPasswordForEmail` / verify — ganti mock. Lalu **hard-redirect proteksi** `(app)/*` (no session → /auth) di `middleware.ts`.
 - **Gate:** RLS test — tenant A login hanya lihat data A; anon → 0 (fondasi sudah terbukti isolasi).
 
 ### 9.2 — VERTICAL SLICE (buktikan pola e2e) 🔴
