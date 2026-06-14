@@ -51,6 +51,7 @@ class ChannelAnalytics:
         tenant_id:  jika diisi, resolve path via konvensi tokens/{tenant_id}.json
         Fallback:   token_youtube.json (backward compatible)
         """
+        self._tenant_id  = tenant_id
         self._token_path = self._resolve_token_path(token_path, tenant_id)
         self._supabase   = self._init_supabase()
         self._creds      = None
@@ -116,16 +117,24 @@ class ChannelAnalytics:
             logger.error(f"[Analytics] API client init gagal: {e}")
 
     def _load_credentials(self):
-        """Load dan refresh OAuth credentials dari token_youtube.json."""
-        if not os.path.exists(self._token_path):
-            logger.error(f"[Analytics] Token tidak ditemukan: {self._token_path}")
-            return None
+        """OAuth credentials — DB-first (tenant_credentials, Phase 4.4) → fallback file."""
         try:
             from google.oauth2.credentials import Credentials
             from google.auth.transport.requests import Request
 
-            with open(self._token_path) as f:
-                token_data = json.load(f)
+            token_data = None
+            if self._tenant_id:
+                try:
+                    from src.utils.tenant_credentials import load_google_credentials
+                    token_data = load_google_credentials(self._tenant_id)
+                except Exception as e:
+                    logger.warning(f"[Analytics] DB creds gagal ({e}) — coba file")
+            if not token_data:
+                if not os.path.exists(self._token_path):
+                    logger.error(f"[Analytics] OAuth tak ada (tenant_credentials & file {self._token_path})")
+                    return None
+                with open(self._token_path) as f:
+                    token_data = json.load(f)
 
             creds = Credentials(
                 token         = token_data.get("token"),
@@ -139,9 +148,17 @@ class ChannelAnalytics:
             if creds.expired and creds.refresh_token:
                 logger.info("[Analytics] Refreshing token...")
                 creds.refresh(Request())
-                token_data["token"] = creds.token
-                with open(self._token_path, "w") as f:
-                    json.dump(token_data, f)
+                # Simpan access_token baru: DB (tenant_credentials) bila ada tenant; else file.
+                if self._tenant_id:
+                    try:
+                        from src.utils.tenant_credentials import save_google_access_token
+                        save_google_access_token(self._tenant_id, creds.token)
+                    except Exception as e:
+                        logger.warning(f"[Analytics] simpan token DB gagal (non-fatal): {e}")
+                elif os.path.exists(self._token_path):
+                    token_data["token"] = creds.token
+                    with open(self._token_path, "w") as f:
+                        json.dump(token_data, f)
                 logger.info("[Analytics] Token refreshed")
 
             return creds
