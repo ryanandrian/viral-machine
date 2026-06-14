@@ -185,7 +185,10 @@ class YouTubePublisher:
                 # Sumber: tenant_config.publish_privacy → env YOUTUBE_PRIVACY_STATUS → 'public'.
                 "privacyStatus":           self._privacy_status(tenant_config),
                 "selfDeclaredMadeForKids": False,
-                "madeForKids":             False
+                "madeForKids":             False,
+                # Phase 6.3 (§9.2) — disclosure Altered/Synthetic content (field RESMI YouTube API,
+                # sejak 2024-10-30; wajib kebijakan Mei 2025). Per-channel, default ON (compliance-first).
+                "containsSyntheticMedia":  bool(getattr(tenant_config, "ai_disclosure", True)),
             }
         }
 

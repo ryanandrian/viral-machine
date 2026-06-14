@@ -35,6 +35,8 @@ class TenantConfig:
     logo_opacity:   float = 0.85
     # Publish privacy per-channel (trial-safe) — DEFAULT private; tenant ubah ke public saat config cocok
     publish_privacy: str = "private"   # private | public | unlisted
+    # AI Disclosure (Phase 6.3, §9.2) — YouTube status.containsSyntheticMedia. DEFAULT True (compliance-first).
+    ai_disclosure: bool = True
     # Diversity Engine (Phase 6.2, AI Slop Defense §9.1) — hint TRANSIEN per-run, diset producer via
     # DiversityEngine (BUKAN dari channel_row). None → tanpa rotasi (non-breaking, perilaku lama).
     channel_id:             str | None = None   # untuk lookback rotasi per-channel
@@ -60,6 +62,7 @@ def tenant_config_from_channel(channel_row: dict, niche=None) -> "TenantConfig":
         logo_size       = float(channel_row.get("logo_size") or 0.12),
         logo_opacity    = float(channel_row.get("logo_opacity") or 0.85),
         publish_privacy = channel_row.get("publish_privacy") or "private",
+        ai_disclosure   = (channel_row.get("ai_disclosure") if channel_row.get("ai_disclosure") is not None else True),
         channel_id      = (str(channel_row["id"]) if channel_row.get("id") is not None
                            else (str(channel_row["channel_id"]) if channel_row.get("channel_id") is not None else None)),
     )
