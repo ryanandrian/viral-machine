@@ -26,10 +26,9 @@
 ## 2. Sub-phase (urutan = leverage tertinggi → beta tercepat)
 
 ### 9.1 — FONDASI (unblock semua) 🔴 FIRST
-- env v2 + Supabase client util + provider session.
-- **Auth B1-B4** (`/auth`): signup→trial (panggil `start_trial` pola), login, verify, reset — Supabase Auth nyata (ganti mock).
-- Middleware proteksi route `(app)/*` (redirect ke /auth bila no session).
-- **Gate:** RLS test — tenant A login hanya lihat data A; anon → 0.
+- ✅ **DONE (2026-06-14):** deps `@supabase/supabase-js`+`@supabase/ssr` · `src/lib/supabase/{client,server,middleware}.ts` (anon+RLS, pola @supabase/ssr Next-16 async cookies) · `src/middleware.ts` (refresh session, **NON-BREAKING** belum hard-redirect) · `.env.local` v2 (anon/publishable, gitignored) + `.env.local.example`. **Validasi:** `npm run build` PASS · anon-key v2 konek (plan_limits public=4) · **RLS isolasi** (tenant_configs/videos=0 tanpa auth). Commit `f1a9b8f`/`252a704`.
+- ⏳ **SISA 9.1 (next):** wire **Auth B1-B4** (`/auth`): signup→`start_trial`(BYOK) / login / verify / reset — `supabase.auth.*` (ganti mock). Lalu **hard-redirect proteksi** `(app)/*` (no session → /auth) di `middleware.ts`.
+- **Gate:** RLS test — tenant A login hanya lihat data A; anon → 0 (fondasi sudah terbukti isolasi).
 
 ### 9.2 — VERTICAL SLICE (buktikan pola e2e) 🔴
 - 1 layar authed baca data v2 NYATA: **D1 Dashboard** atau **D2 Channels** (read) + 1 write (mis. toggle config) + 1 Realtime (D5 live-tail).
