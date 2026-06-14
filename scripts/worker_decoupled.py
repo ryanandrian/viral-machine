@@ -31,6 +31,7 @@ from loguru import logger
 def main() -> None:
     from src.utils.db_log_sink import setup_db_logging
     from src.orchestrator import producer, publisher, buffer_janitor, self_learning
+    from src.billing import renewal as billing_renewal
 
     setup_db_logging()
 
@@ -53,6 +54,7 @@ def main() -> None:
         threading.Thread(target=publisher.run_forever, name="publisher", daemon=True),
         threading.Thread(target=buffer_janitor.run_forever, name="janitor", daemon=True),
         threading.Thread(target=self_learning.run_forever, name="self_learning", daemon=True),
+        threading.Thread(target=billing_renewal.run_forever, name="billing_renewal", daemon=True),
     ]
     for t in threads:
         t.start()
