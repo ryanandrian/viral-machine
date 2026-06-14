@@ -55,6 +55,49 @@ def channel_quota(tenant_row: dict, plan_limits: dict) -> int:
     return int((plan_limits.get(plan) or {}).get("max_channels", 1) or 1)
 
 
+# ── Akses niche per-tier ("niche dasar", DESAIN §6) — admin set niches.is_base ──────
+BASE_NICHE_TIERS = {"trial", "starter"}  # tier ini → HANYA niche is_base (niche dasar)
+
+
+def is_base_tier(plan_type) -> bool:
+    return (plan_type or "starter") in BASE_NICHE_TIERS
+
+
+def base_niches(sb) -> list:
+    """niche_id `is_base=true` & aktif (admin-editable via panel niches). Niche dasar utk trial/starter."""
+    if not sb:
+        return []
+    try:
+        res = sb.table("niches").select("niche_id").eq("is_active", True).eq("is_base", True).execute()
+        return [r["niche_id"] for r in (res.data or [])]
+    except Exception as e:
+        logger.debug(f"[Limits] base_niches gagal: {e}")
+        return []
+
+
+def available_niches(sb, plan_type: str) -> list:
+    """Niche INCLUDED per tier: trial/starter → is_base saja; pro/business → semua aktif (katalog).
+    NB: ini niche katalog-included; pengajuan CUSTOM niche terpisah → can_request_custom_niche()."""
+    if not sb:
+        return []
+    try:
+        q = sb.table("niches").select("niche_id").eq("is_active", True)
+        if is_base_tier(plan_type):
+            q = q.eq("is_base", True)
+        return [r["niche_id"] for r in (q.execute().data or [])]
+    except Exception as e:
+        logger.debug(f"[Limits] available_niches {plan_type} gagal: {e}")
+        return []
+
+
+def can_request_custom_niche(plan_type) -> bool:
+    """
+    Boleh AJUKAN custom niche (add-on berbayar: public-after-90d / private-permanent — [[decisions_niche_model]]).
+    starter/pro/business = YA · trial = TIDAK. (Ini ENTITLEMENT pengajuan, bukan akses katalog included.)
+    """
+    return (plan_type or "starter") in {"starter", "pro", "business"}
+
+
 # ── Trial = TIER 'trial' (BYOK, time-boxed 7 hari). Caps via plan_limits['trial'] (1ch/1vid-hari).
 #    Durasi via app_config (admin-editable). Lapse → trial_expired (lead marketing). DESAIN §3. ─────
 def trial_days() -> int:
