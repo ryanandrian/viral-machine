@@ -49,9 +49,14 @@ def produce_one(channel_row: dict) -> int | None:
         # PREFERENSI saja (quality tetap di-gate ScriptAnalyzer/skor hook); fail-soft → None.
         try:
             from src.intelligence.diversity import DiversityEngine
+            from src.intelligence.config import get_niches
             _div = DiversityEngine()
             tc.preferred_hook_pattern = _div.pick_hook_pattern(channel_id)
             tc.visual_seed = _div.pick_seed(channel_id)
+            # Music-mood rotation (§9.1): kandidat = niches.mood_priority (semua niche-appropriate,
+            # admin-kurasi) → LRU per-channel. Tak ada pool → None (perilaku lama, non-breaking).
+            _mood_pool = (get_niches().get(niche) or {}).get("mood_priority") or []
+            tc.preferred_music_mood = _div.pick(channel_id, "music", _mood_pool) if _mood_pool else None
         except Exception as _de:
             logger.debug(f"[Producer] diversity hint skip (ch={channel_id}): {_de}")
         result = Pipeline().run(tc, publish=False)   # PRODUCE-ONLY
@@ -82,7 +87,9 @@ def produce_one(channel_row: dict) -> int | None:
             # Dimensi diversity (Phase 6.2) → publisher tulis ke `videos` (histori lookback berikutnya)
             "hook_pattern": _winner.get("formula"),
             "visual_seed":  tc.visual_seed,
-            "music_mood":   _script.get("background_music_mood"),
+            # mood AKTUAL = mood rotasi yang di-inject ke music_selector (bukan saran LLM
+            # background_music_mood yang TAK dipakai music_selector). Null bila niche tanpa mood_priority.
+            "music_mood":   tc.preferred_music_mood,
             "viral_score":  _script.get("viral_score"),
             "insights_grade": _script.get("insights_grade", ""),
         })

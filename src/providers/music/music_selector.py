@@ -224,11 +224,13 @@ def select_and_download(
     output_dir: str = "logs",
     audio_duration: float = 55.0,
     music_default_mood: str | None = None,
+    preferred_mood: str | None = None,
 ) -> str | None:
     """
     Main entry point: pilih track terbaik → download → return local path.
 
-    Mood dideteksi dari konten script via keyword matching (keywords dari moods table).
+    Mood: bila `preferred_mood` diset (Diversity Engine §9.1 — mood LRU dari niches.mood_priority,
+    niche-safe) → pakai langsung. Else deteksi dari konten script via keyword matching (moods table).
     Query musik berdasarkan niche + mood — config-driven, tidak ada hardcode.
 
     Returns:
@@ -239,11 +241,15 @@ def select_and_download(
     # 1. Load mood keywords dari moods table
     mood_keywords = _load_mood_keywords()
 
-    # 2. Load mood_priority dari niches table (safety net)
+    # 2. Load mood_priority dari niches table (safety net + sumber rotasi)
     niche_mood_priority = _load_niche_mood_priority(niche)
 
-    # 3. Detect mood dari konten script
-    mood, scores = _detect_mood_from_script(script, mood_keywords, niche_mood_priority, music_default_mood)
+    # 3. Tentukan mood — rotasi diversity (§9.1) menang bila diset, else deteksi keyword
+    if preferred_mood:
+        mood, scores = preferred_mood, {}
+        logger.info(f"[MusicSelector] Diversity rotation mood (§9.1, niche-safe): {mood}")
+    else:
+        mood, scores = _detect_mood_from_script(script, mood_keywords, niche_mood_priority, music_default_mood)
 
     # Fallback moods: mood_priority niche dulu (lebih kontekstual),
     # baru keyword matches dari script sebagai safety net tambahan.
