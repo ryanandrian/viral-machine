@@ -45,6 +45,15 @@ def produce_one(channel_row: dict) -> int | None:
                                         {"channel": channel_row.get("channel_name")})
     try:
         tc = tenant_config_from_channel(channel_row, niche=niche)
+        # Diversity Engine (Phase 6.2, DESAIN §9.1) — hint rotasi per-channel (LRU lookback).
+        # PREFERENSI saja (quality tetap di-gate ScriptAnalyzer/skor hook); fail-soft → None.
+        try:
+            from src.intelligence.diversity import DiversityEngine
+            _div = DiversityEngine()
+            tc.preferred_hook_pattern = _div.pick_hook_pattern(channel_id)
+            tc.visual_seed = _div.pick_seed(channel_id)
+        except Exception as _de:
+            logger.debug(f"[Producer] diversity hint skip (ch={channel_id}): {_de}")
         result = Pipeline().run(tc, publish=False)   # PRODUCE-ONLY
         if (result.get("status") != "success" or not result.get("video_path")
                 or not result.get("steps", {}).get("qc", {}).get("passed")):
@@ -62,12 +71,20 @@ def produce_one(channel_row: dict) -> int | None:
             s3_buffer.upload(thumb, tkey)
 
         # Persist SEMUA input publish (publisher = proses terpisah, tak punya file lokal)
+        _script = result.get("script", {}) or {}
+        _winner = (_script.get("hook_data") or {}).get("winner") or {}
         inventory.mark_ready(inv_id, vkey, metadata={
             "run_id":    run_id,
             "video_s3":  vkey,
             "thumb_s3":  tkey,
-            "script":    result.get("script", {}),
+            "script":    _script,
             "niche":     result.get("niche"),
+            # Dimensi diversity (Phase 6.2) → publisher tulis ke `videos` (histori lookback berikutnya)
+            "hook_pattern": _winner.get("formula"),
+            "visual_seed":  tc.visual_seed,
+            "music_mood":   _script.get("background_music_mood"),
+            "viral_score":  _script.get("viral_score"),
+            "insights_grade": _script.get("insights_grade", ""),
         })
         # Aset berat sudah di buffer → bersihkan lokal
         for p in (video, thumb):

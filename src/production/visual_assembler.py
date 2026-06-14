@@ -223,6 +223,7 @@ class VisualAssembler:
                 "niche_visual_style":     run_config.get("niche_visual_style") or {},
                 "niche_visual_fallbacks": run_config.get("niche_visual_fallbacks") or [],
                 "image_quality":          run_config.get("image_quality") or "",
+                "visual_seed":            getattr(tenant_config, "visual_seed", None),  # Diversity §9.1
             }
             provider  = AIImageProvider(config)
             keywords  = provider.extract_keywords_from_script(script, tenant_config.niche)

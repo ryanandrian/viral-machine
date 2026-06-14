@@ -180,6 +180,52 @@ IMPORTANT: Return ONLY the JSON object. No markdown, no explanation, no extra te
         logger.error(f"All {self.MAX_RETRIES} attempts failed. Last error: {last_error}")
         return {}
 
+    def _resolve_formula(self, winner: dict, hooks: list) -> str:
+        """Formula winner; bila winner tak bawa 'formula', cocokkan via text ke daftar hooks."""
+        f = winner.get("formula")
+        if f:
+            return f
+        wt = (winner.get("text") or "").strip()
+        for h in hooks or []:
+            if (h.get("text") or "").strip() == wt and h.get("formula"):
+                return h["formula"]
+        return ""
+
+    def _select_winner(self, tenant_config: TenantConfig, hook_data: dict) -> dict:
+        """
+        Diversity Engine (Phase 6.2, DESAIN §9.1 hook-style variation) — QUALITY-FIRST.
+        Default = winner skor tertinggi (pilihan LLM). Bila `preferred_hook_pattern` diset (LRU
+        per-channel) DAN ada varian dgn formula itu yang skornya dalam HOOK_DIVERSITY_TOLERANCE
+        dari winner → pilih varian itu (rotasi tanpa korbankan kualitas). Else tetap winner.
+        """
+        winner = dict(hook_data["winner"])
+        hooks  = hook_data.get("hooks") or []
+        winner.setdefault("formula", self._resolve_formula(winner, hooks))
+
+        target = getattr(tenant_config, "preferred_hook_pattern", None)
+        if not target or len(hooks) < 2 or winner.get("formula") == target:
+            return winner
+
+        tol = float(os.getenv("HOOK_DIVERSITY_TOLERANCE", "8"))
+        top = float(winner.get("scroll_stop_power", 0) or 0)
+        cands = [h for h in hooks if h.get("formula") == target and (h.get("text") or "").strip()]
+        if not cands:
+            return winner
+        best = max(cands, key=lambda h: float(h.get("scroll_stop_power", 0) or 0))
+        if top - float(best.get("scroll_stop_power", 0) or 0) <= tol:
+            logger.info(
+                f"[HookOptimizer] diversity rotate: '{winner.get('formula')}'→'{target}' "
+                f"(skor {top:.0f}→{best.get('scroll_stop_power')}, dalam toleransi {tol:.0f})"
+            )
+            best = dict(best)
+            best.setdefault("formula", target)
+            return best
+        logger.info(
+            f"[HookOptimizer] diversity: pertahankan '{winner.get('formula')}' "
+            f"(varian '{target}' skor {best.get('scroll_stop_power')} < winner {top:.0f}−{tol:.0f}) — kualitas diutamakan"
+        )
+        return winner
+
     def optimize(self, script: dict, tenant_config: TenantConfig) -> dict:
         logger.info(f"Optimizing hooks for: {script.get('topic', '')[:50]}...")
         # LLM provider tenant (config-driven, BYOK) — model task 'utility'.
@@ -214,7 +260,8 @@ IMPORTANT: Return ONLY the JSON object. No markdown, no explanation, no extra te
             logger.warning("Hook optimization failed — keeping original hook")
             return script
 
-        winner = hook_data["winner"]
+        winner = self._select_winner(tenant_config, hook_data)
+        hook_data["winner"] = winner   # rekam pilihan final (formula → videos.hook_pattern)
         script["original_hook"]  = script.get("hook", "")
         script["optimized_hook"] = winner["text"]
         script["hook"]           = winner["text"]

@@ -68,6 +68,7 @@ class AIImageProvider(VisualProvider):
             "size":     (_row.get("default_params") or {}).get("size", "1024x1536"),
         }
         self.image_quality      = config.get("image_quality") or "low"  # tenant setting (DB default 'low')
+        self.visual_seed        = config.get("visual_seed")  # Diversity §9.1 — fingerprint; None=acak provider
         self.niche              = config.get("niche") or ""
         # Niche visual data — dari Supabase via TenantRunConfig (tidak hardcode)
         self.niche_visual_style     = config.get("niche_visual_style") or {}
@@ -361,14 +362,17 @@ class AIImageProvider(VisualProvider):
             raise VisualError("replicate tidak terinstall. Jalankan: pip install replicate")
 
         os.environ["REPLICATE_API_TOKEN"] = self.api_key
+        _input = {
+            "prompt":          prompt,
+            "negative_prompt": negative_prompt,
+            "aspect_ratio":    "9:16",
+        }
+        if self.visual_seed is not None:
+            _input["seed"] = int(self.visual_seed)   # Diversity §9.1 — frame fingerprint per video
         output = await asyncio.to_thread(
             replicate.run,
             self.model_config["model_id"],
-            input={
-                "prompt":          prompt,
-                "negative_prompt": negative_prompt,
-                "aspect_ratio":    "9:16",
-            }
+            input=_input,
         )
         img_url = output[0] if isinstance(output, list) else str(output)
         async with httpx.AsyncClient(timeout=60) as client:

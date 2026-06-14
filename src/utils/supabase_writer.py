@@ -103,6 +103,10 @@ class SupabaseWriter:
         channel_id:     Optional[str]   = None,
         topic_scores:   Optional[dict]  = None,
         insights_grade: Optional[str]   = None,
+        voice_id:       Optional[str]   = None,
+        hook_pattern:   Optional[str]   = None,
+        music_mood:     Optional[str]   = None,
+        visual_seed:    Optional[int]   = None,
     ) -> Optional[dict]:
         """
         INSERT video yang berhasil dipublish.
@@ -135,6 +139,11 @@ class SupabaseWriter:
         }
         if channel_id:
             record["channel_id"] = channel_id
+        # Dimensi diversity (Phase 6.2, migr 0018) — hanya tulis bila ada (kolom nullable, non-breaking)
+        for _k, _v in (("voice_id", voice_id), ("hook_pattern", hook_pattern),
+                       ("music_mood", music_mood), ("visual_seed", visual_seed)):
+            if _v is not None:
+                record[_k] = _v
 
         try:
             result = self._client.table("videos").insert(record).execute()

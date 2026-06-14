@@ -115,6 +115,35 @@ def _publish_from_buffer(sb, channel_row: dict, item: dict) -> None:
                                     thumbnail_path=thumb_path, content_type="short")
     if not yt.get("video_id"):
         raise RuntimeError(yt.get("error", "YouTube publish gagal"))
+
+    # Tutup gap Phase-5 decoupled: di mode ini PUBLISHER = penulis row `videos` (pipeline.run
+    # publish=False tak menulisnya). Sekaligus rekam dimensi diversity (Phase 6.2, migr 0018)
+    # → jadi HISTORI lookback rotasi berikutnya. Non-fatal (publish sudah sukses).
+    try:
+        from src.utils.supabase_writer import SupabaseWriter
+        _size_mb = (round(os.path.getsize(video_path) / (1024 * 1024), 2)
+                    if os.path.exists(video_path) else None)
+        SupabaseWriter().write_video(
+            run_id        = meta.get("run_id", ""),
+            tenant_id     = channel_row["tenant_id"],
+            platform      = "youtube",
+            video_id      = yt["video_id"],
+            url           = yt.get("url", ""),
+            title         = yt.get("title", script.get("title", "")),
+            hook          = script.get("hook", ""),
+            topic         = script.get("topic", ""),
+            niche         = tc.niche,
+            viral_score   = float(meta.get("viral_score") or script.get("viral_score") or 0),
+            file_size_mb  = _size_mb,
+            channel_id    = tc.channel_id,
+            insights_grade= meta.get("insights_grade", ""),
+            hook_pattern  = meta.get("hook_pattern"),
+            visual_seed   = meta.get("visual_seed"),
+            music_mood    = meta.get("music_mood"),
+        )
+    except Exception as _we:
+        logger.warning(f"[Publisher] write_video (videos row) gagal — non-fatal: {_we}")
+
     _notify(channel_row["tenant_id"], f"✅ Published: {yt.get('url')}")
 
 

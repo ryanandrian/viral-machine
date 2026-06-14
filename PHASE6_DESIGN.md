@@ -39,5 +39,17 @@
 3. AI disclosure: wajib semua video atau toggle tenant?
 
 ---
+## ✅ STATUS 6.2 — increment #1 DONE (2026-06-14)
+Anchor: **DESAIN §9.1** (Diversity Layer). Migrasi `0018` (videos += voice_id/hook_pattern/music_mood/visual_seed + `diversity_config` single-row) + `src/intelligence/diversity.py` (`DiversityEngine` LRU per-channel, config-driven, fail-soft) + integrasi:
+- ✅ **Hook-pattern rotation** — `producer` set `preferred_hook_pattern` (LRU pool) → `hook_optimizer._select_winner` re-pilih winner ke arah itu **HANYA bila skor dalam `HOOK_DIVERSITY_TOLERANCE` (default 8)** → quality-first (tak korbankan hook unggul). Unit-test 6/6.
+- ✅ **Visual-seed rotation** — `producer.pick_seed` → `visual_seed` thread ke `ai_image` (Replicate `input.seed`; OpenAI tak punya param = fail-soft abaikan). Frame fingerprint unik §9.1.
+- ✅ **Tutup gap Phase-5 decoupled** — `publisher._publish_from_buffer` kini **menulis row `videos`** (sebelumnya tak ada di mode decoupled → niche-guard & diversity tak punya histori) + rekam 4 dimensi → loop lookback berikutnya terisi.
+- ✅ **Niche rotation** = sudah ada (`schedule_manager._apply_diversity_guard`, tak diubah).
+- 🟡 **Voice rotation = DEFERRED (jujur, bukan skip diam):** `DiversityEngine` siap dimensi 'voice', TAPI belum di-wire di produce — channel kini hanya 1 voice (TenantRunConfig/niche-map), butuh **voice-pool catalog** (nyambung TTS catalog-wiring) + surfacing voice_id terpakai. Aktif saat voice-catalog ada. `voice_id` di `videos` = null s/d itu.
+- 🟡 **Music-mood rotation = DEFERRED:** terikat deteksi mood LLM dari script (`background_music_mood`) → memaksa rotasi = risiko mood mismatch (langgar quality-first). `music_mood` DICATAT (proxy = mood script) agar rotasi masa depan punya data. Aktifkan setelah ada strategi mood-compatible (mis. LRU atas `niches.mood_priority`).
+
+**Validasi murah (tanpa render/API):** py_compile 9 file ✅ · import 9 modul ✅ · DiversityEngine LRU (rotasi tak ulang ≤N, seed hindari recent, graceful) ✅ · `_select_winner` 6/6 (rotate dalam-toleransi / keep quality / resolve-formula) ✅ · `channel_id` threaded + write_video dims ✅. Applied v2 migr 0018 idempotent.
+
 ### Changelog
 - 2026-06-14 — dibuat. Kondisi-nyata (sebagian besar EXISTS) + gap (6.1-6.4) + sub-phase. Menunggu nod owner sebelum implementasi.
+- 2026-06-14 — **6.2 increment #1 DONE** (hook + visual-seed + tutup gap write_video; voice/music deferred dgn alasan). Anchor DESAIN §9.1. Validasi murah hijau.
