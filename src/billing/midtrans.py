@@ -159,6 +159,15 @@ def handle_notification(sb, payload: dict) -> dict:
     # (cek current_period_end periodik — follow-up 8 polish, bukan dari 1 notif checkout gagal).
 
     sb.table("payments").update(upd).eq("order_id", order_id).execute()
+
+    # Receipt email (8c) — HANYA saat transisi BARU ke aktif (idempotent thd retry webhook). Fail-soft.
+    if activated and order.get("status") not in ("settlement", "capture"):
+        try:
+            from src.utils.email import notify_payment_receipt
+            notify_payment_receipt(order["tenant_id"], order.get("plan_type"), order.get("gross_amount") or 0, sb)
+        except Exception as _ee:
+            logger.debug(f"[Midtrans] receipt email skip (non-fatal): {_ee}")
+
     logger.info(f"[Midtrans] notif order={order_id} txn={txn} fraud={fraud} activated={activated}")
     return {"ok": True, "order_id": order_id, "transaction_status": txn,
             "tenant_id": order["tenant_id"], "activated": activated}

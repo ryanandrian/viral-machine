@@ -73,6 +73,16 @@ def sweep_subscriptions(sb) -> dict:
             sb.table("tenant_configs").update({"subscription_status": tgt}).eq("tenant_id", r["tenant_id"]).execute()
             logger.info(f"[Billing] {r['tenant_id']}: {cur} → {tgt} (period_end lewat)")
             changed += 1
+            # Notif email (8c) — HANYA saat transisi (sekali, bukan tiap sweep). Fail-soft.
+            try:
+                if tgt == "trial_expired":
+                    from src.utils.email import notify_trial_lapse
+                    notify_trial_lapse(r["tenant_id"], sb)
+                elif tgt == "grace":
+                    from src.utils.email import notify_suspend_warning
+                    notify_suspend_warning(r["tenant_id"], _grace_days(), sb)
+            except Exception as _ee:
+                logger.debug(f"[Billing] notif email skip (non-fatal): {_ee}")
     logger.info(f"[Billing] renewal sweep: {len(rows)} tenant | changed={changed} | comp-exempt={exempt}")
     return {"checked": len(rows), "changed": changed, "exempt": exempt}
 
