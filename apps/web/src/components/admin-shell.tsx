@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
-  Users, HelpCircle, Activity, List, Target, DollarSign, Shield, LogOut,
+  Users, HelpCircle, Activity, List, Target, DollarSign, Shield, LogOut, UserCog,
   Menu, Search, Moon, Sun, ChevronRight,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -76,6 +76,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
         <div className="sb-bottom">
+          <Link className={`sb-item${pathname.startsWith("/admin/account") ? " active" : ""}`} href="/admin/account" title="Akun">
+            <UserCog size={18} /><span className="sb-label"><Bi id="Akun" en="Account" /></span>
+          </Link>
           <button
             className="sb-item"
             onClick={async () => { await createClient().auth.signOut(); window.location.href = "/admin/login"; }}
