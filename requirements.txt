@@ -37,6 +37,14 @@ google-auth==2.49.1
 google-auth-oauthlib==1.3.1
 google-api-python-client==2.193.0
 
+# Webhook/OAuth service (src/billing/webhook_app.py) — Midtrans webhook + YouTube OAuth + keys-vault.
+# WAJIB di VPS saat cutover (worker loop tak butuh, tapi webhook_app butuh).
+fastapi==0.137.1
+uvicorn[standard]==0.34.0
+
+# Enkripsi kredensial tenant (Fernet) — src/utils/crypto.py. Eksplisit (jangan andalkan transitif).
+cryptography==46.0.5
+
 # AI Image / Video
 replicate==1.0.7
 
