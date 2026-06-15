@@ -33,14 +33,17 @@ const FAIL_COLOR: Record<string, string> = { "TTS/timeout": "#ef4444", "Rate lim
 
 export default async function AdminSystemPage() {
   const a = createAdminClient();
-  const [hb, queue, runs, vids, analytics, channels] = await Promise.all([
+  const [hb, queue, runs, vids, analytics, channels, direct] = await Promise.all([
     a.from("worker_heartbeats").select("*").order("worker_name"),
     a.from("pipeline_queue").select("created_at, status"),
     a.from("production_runs").select("created_at, status, error_message"),
     a.from("videos").select("id", { count: "exact", head: true }),
     a.from("video_analytics").select("id", { count: "exact", head: true }),
     a.from("channels").select("id", { count: "exact", head: true }),
+    a.from("direct_jobs").select("status, job_type, created_at").order("created_at", { ascending: false }).limit(50),
   ]);
+  const djRows = direct.data ?? [];
+  const dj = { pending: djRows.filter((d) => d.status === "pending").length, producing: djRows.filter((d) => d.status === "producing").length, published: djRows.filter((d) => d.status === "published").length, failed: djRows.filter((d) => d.status === "failed").length };
 
   const now = Date.now();
   const hourly = (rows: { created_at: string }[], pred: (r: never) => boolean = () => true) => {
@@ -109,6 +112,15 @@ export default async function AdminSystemPage() {
         </div>
         <div className="card card-pad"><h3 className="card-title" style={{ marginBottom: "1rem" }}><Command size={16} /> Database (skala data) · {completed} runs sukses</h3>
           {DB.map(([k, v]) => (<div className="sys-db-stat" key={k}><span className="muted">{k}</span><span>{v}</span></div>))}
+        </div>
+      </div>
+
+      <div className="card card-pad" style={{ marginTop: "1rem" }}>
+        <h3 className="card-title" style={{ marginBottom: "1rem" }}><Server size={16} /> Direct Jobs (on-demand) · {djRows.length} terbaru</h3>
+        <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap" }}>
+          {([["Antre", dj.pending, "var(--info)"], ["Berjalan", dj.producing, "var(--warning)"], ["Selesai", dj.published, "var(--success)"], ["Gagal", dj.failed, "var(--error)"]] as [string, number, string][]).map(([l, n, c]) => (
+            <div key={l}><div style={{ fontSize: "var(--text-2xl)", fontWeight: 700, color: c }}>{n}</div><div className="muted" style={{ fontSize: "var(--text-xs)" }}>{l}</div></div>
+          ))}
         </div>
       </div>
     </>

@@ -18,7 +18,7 @@ import "./run-detail.css";
 type StepState = "completed" | "running" | "pending" | "failed";
 type LogRow = { id: number | string; level: string | null; step: string | null; category: string | null; message: string | null; created_at: string };
 type RunRow = {
-  id: string; queue_id: string | number | null; run_id: string | null; topic: string | null; niche: string | null;
+  id: string; queue_id: string | number | null; run_id: string | null; channel_id: string | null; topic: string | null; niche: string | null;
   status: string | null; youtube_url: string | null; viral_score: number | null; elapsed_seconds: string | null;
   error_message: string | null; llm_provider: string | null; created_at: string;
 };
@@ -70,34 +70,49 @@ export default function RunDetailPage() {
   const [filter, setFilter] = useState("");
   const logRef = useRef<HTMLDivElement>(null);
   const pausedRef = useRef(paused); pausedRef.current = paused;
+  const [retryMsg, setRetryMsg] = useState<string | null>(null);
+
+  // Jalankan ulang run yang gagal — direct_job retry (mis. setelah beli kredit AI).
+  async function retry() {
+    if (!run?.channel_id) { setRetryMsg("Channel run ini tak diketahui — tak bisa retry."); return; }
+    setRetryMsg(null);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setRetryMsg("Sesi tak valid"); return; }
+    const { error } = await supabase.from("direct_jobs").insert({
+      tenant_id: user.id, channel_id: run.channel_id, job_type: "retry",
+      source_run_id: run.run_id, niche: run.niche, requested_by: user.id,
+    });
+    setRetryMsg(error ? `Gagal: ${error.message}` : "Diantre ulang — pantau di Runs (Antre→Berjalan).");
+  }
 
   const load = useCallback(async () => {
     const { data } = await supabase.from("production_runs")
-      .select("id,queue_id,run_id,topic,niche,status,youtube_url,viral_score,elapsed_seconds,error_message,llm_provider,created_at")
+      .select("id,queue_id,run_id,channel_id,topic,niche,status,youtube_url,viral_score,elapsed_seconds,error_message,llm_provider,created_at")
       .eq("id", id).maybeSingle();
     const r = data as RunRow | null;
     setRun(r);
-    if (r?.queue_id != null) {
-      const { data: lg } = await supabase.from("pipeline_run_logs")
-        .select("id,level,step,category,message,created_at")
-        .eq("queue_id", String(r.queue_id)).order("created_at", { ascending: true }).limit(2000);
-      setLogs((lg as LogRow[]) ?? []);
-    }
+    // live-tail by queue_id (scheduled) ATAU run_id (direct job, queue_id null)
+    let q = supabase.from("pipeline_run_logs").select("id,level,step,category,message,created_at");
+    if (r?.queue_id != null) q = q.eq("queue_id", String(r.queue_id));
+    else if (r?.run_id) q = q.eq("run_id", r.run_id);
+    else q = null as never;
+    if (q) { const { data: lg } = await q.order("created_at", { ascending: true }).limit(2000); setLogs((lg as LogRow[]) ?? []); }
     setLoading(false);
   }, [supabase, id]);
 
   useEffect(() => { load(); }, [load]);
 
-  // REALTIME live-tail: INSERT pipeline_run_logs untuk queue_id ini (RLS men-scope tenant).
+  // REALTIME live-tail: by queue_id (scheduled) ATAU run_id (direct job). RLS men-scope tenant.
   useEffect(() => {
-    const qid = run?.queue_id;
-    if (qid == null) return;
-    const chan = supabase.channel(`rt-logs-${qid}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "pipeline_run_logs", filter: `queue_id=eq.${qid}` },
+    const col = run?.queue_id != null ? "queue_id" : run?.run_id ? "run_id" : null;
+    const val = run?.queue_id != null ? String(run.queue_id) : run?.run_id;
+    if (!col || !val) return;
+    const chan = supabase.channel(`rt-logs-${val}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "pipeline_run_logs", filter: `${col}=eq.${val}` },
         (payload) => { setLogs((prev) => [...prev, payload.new as LogRow]); })
       .subscribe();
     return () => { supabase.removeChannel(chan); };
-  }, [supabase, run?.queue_id]);
+  }, [supabase, run?.queue_id, run?.run_id]);
 
   useEffect(() => { if (!pausedRef.current && logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [logs]);
 
@@ -145,10 +160,12 @@ export default function RunDetailPage() {
         </div>
       </div>
 
-      {st === "failed" && run.error_message && (
-        <div style={{ display: "flex", gap: "0.625rem", padding: "0.875rem 1.25rem", background: "var(--error-soft)", border: "1px solid color-mix(in srgb,var(--error) 30%,transparent)", borderRadius: "var(--r-md)", marginBottom: "1rem" }}>
+      {st === "failed" && (
+        <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", flexWrap: "wrap", padding: "0.875rem 1.25rem", background: "var(--error-soft)", border: "1px solid color-mix(in srgb,var(--error) 30%,transparent)", borderRadius: "var(--r-md)", marginBottom: "1rem" }}>
           <AlertTriangle size={16} style={{ color: "var(--error)", flex: "none" }} />
-          <span style={{ fontSize: "var(--text-sm)" }}>{run.error_message}</span>
+          <span style={{ fontSize: "var(--text-sm)", flex: 1 }}>{run.error_message || "Produksi gagal."}</span>
+          <button className="btn btn-secondary btn-sm" onClick={retry} disabled={!run.channel_id} title={run.channel_id ? "Produksi ulang job ini" : "Channel tak diketahui"}><RefreshCw size={14} /> <span data-id>Jalankan ulang</span><span data-en>Re-run</span></button>
+          {retryMsg && <span style={{ flexBasis: "100%", fontSize: "var(--text-xs)", color: "var(--text-secondary)" }}>{retryMsg}</span>}
         </div>
       )}
 

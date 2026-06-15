@@ -85,6 +85,13 @@ export default function AdminNichesPage() {
     setBusy(false);
     if (r.ok) { setToast("Tersimpan"); setSel(null); await load(); } else setToast("Gagal menyimpan");
   }
+  async function testNiche(id: string) {
+    setBusy(true);
+    const r = await fetch(`/api/admin/niches/${id}/test`, { method: "POST" });
+    setBusy(false);
+    const j = await r.json().catch(() => ({}));
+    setToast(r.ok ? "Test niche diantre (channel admin-test, private) — pantau di Runs/System Health" : `Gagal: ${j.error ?? r.status}`);
+  }
   async function transition(id: string) {
     setBusy(true);
     const r = await fetch(`/api/admin/niches/${id}/transition`, { method: "POST" });
@@ -205,6 +212,7 @@ export default function AdminNichesPage() {
           </div>
           <div style={{ padding: "1rem 1.25rem", borderTop: "1px solid var(--border-subtle)", display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
             <button className="btn btn-ghost" onClick={() => setSel(null)}><Bi id="Batal" en="Cancel" /></button>
+            <button className="btn btn-secondary" disabled={busy} onClick={() => testNiche(cur.niche_id)} title="Produksi 1 video uji di channel admin-test (private)"><Bi id="Test niche" en="Test niche" /></button>
             {dtab !== 4 && <button className="btn btn-default" disabled={busy} onClick={save}><Bi id="Simpan" en="Save" /></button>}
           </div>
         </>)}

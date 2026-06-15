@@ -87,7 +87,7 @@ export default function DashboardPage() {
           <h1><Bi id={`Halo${handle ? ", " + handle : ""}`} en={`Hello${handle ? ", " + handle : ""}`} /></h1>
           <div className="sub"><span>{today}</span></div>
         </div>
-        <button className="btn btn-ai btn-lg"><Zap size={18} /> <Bi id="Jalankan Sekarang" en="Run Now" /></button>
+        <a href="/channels" className="btn btn-secondary btn-lg"><Zap size={18} /> <Bi id="Kelola Kanal" en="Manage channels" /></a>
       </div>
 
       <div className="kpi-row">

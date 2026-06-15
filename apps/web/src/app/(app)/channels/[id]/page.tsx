@@ -57,6 +57,19 @@ export default function ChannelDetailPage() {
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [testMsg, setTestMsg] = useState<string | null>(null);
+
+  // Test sekarang (private) — direct_job: produksi 1 dgn config channel ini, publish private (preview).
+  async function testNow() {
+    setTestMsg(null); setBusy(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setBusy(false); return setTestMsg("Sesi tak valid"); }
+    const { error } = await supabase.from("direct_jobs").insert({
+      tenant_id: user.id, channel_id: id, job_type: "test", publish_privacy: "private", requested_by: user.id,
+    });
+    setBusy(false);
+    setTestMsg(error ? `Gagal: ${error.message}` : "Diantre — produksi 1 video (private). Pantau di Runs (Antre→Berjalan).");
+  }
 
   const load = useCallback(async () => {
     const { data } = await supabase.from("channels")
@@ -111,8 +124,9 @@ export default function ChannelDetailPage() {
         </div>
         <div style={{ display: "flex", gap: "0.5rem" }}>
           <button className="btn btn-secondary" onClick={() => setTab("settings")}><Settings size={15} /> <Bi id="Pengaturan" en="Settings" /></button>
-          <button className="btn btn-ai"><Zap size={15} /> <Bi id="Jalankan" en="Run" /></button>
+          <button className="btn btn-ai" disabled={busy} onClick={testNow} title="Produksi 1 video private untuk preview config"><Zap size={15} /> <Bi id="Test sekarang (private)" en="Test now (private)" /></button>
         </div>
+        {testMsg && <div style={{ flexBasis: "100%", fontSize: "var(--text-xs)", color: "var(--text-secondary)", marginTop: ".5rem" }}>{testMsg}</div>}
       </div>
 
       <div className="cd-tabs">

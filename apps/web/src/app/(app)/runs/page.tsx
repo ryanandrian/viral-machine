@@ -66,18 +66,29 @@ export default function RunsListPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<StKey | "all">("all");
   const [selected, setSelected] = useState<RunRow | null>(null);
+  const [direct, setDirect] = useState<{ id: string; status: string; job_type: string; niche: string | null }[]>([]);
 
   const load = useCallback(async () => {
-    const [{ data: runs }, { data: chs }] = await Promise.all([
+    const [{ data: runs }, { data: chs }, { data: dj }] = await Promise.all([
       supabase.from("production_runs").select("id,channel_id,niche,topic,status,elapsed_seconds,youtube_url,viral_score,created_at").order("created_at", { ascending: false }).limit(100),
       supabase.from("channels").select("id,channel_name"),
+      supabase.from("direct_jobs").select("id,status,job_type,niche").in("status", ["pending", "producing"]).order("created_at", { ascending: false }),
     ]);
+    setDirect(dj ?? []);
     setData((runs as RunRow[]) ?? []);
     const m: Record<string, string> = {};
     (chs as { id: string; channel_name: string | null }[] ?? []).forEach((c) => { m[c.id] = c.channel_name || "Channel"; });
     setChMap(m);
     setLoading(false);
   }, [supabase]);
+
+  function exportCsv() {
+    const head = ["id", "channel", "niche", "topic", "status", "viral_score", "youtube_url", "created_at"];
+    const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const rows = data.map((r) => [r.id, chMap[r.channel_id ?? ""] ?? "", r.niche ?? "", r.topic ?? "", r.status ?? "", r.viral_score ?? "", r.youtube_url ?? "", r.created_at].map(esc).join(","));
+    const blob = new Blob([[head.join(","), ...rows].join("\n")], { type: "text/csv" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `runs-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(a.href);
+  }
 
   useEffect(() => {
     load();
@@ -114,10 +125,22 @@ export default function RunsListPage() {
           <div className="sub" dangerouslySetInnerHTML={{ __html: `<b>${done}</b> run sukses · <b>${fail}</b> gagal` }} />
         </div>
         <div style={{ display: "flex", gap: "0.5rem" }}>
-          <button className="btn btn-secondary"><Download size={15} /> Export CSV</button>
-          <button className="btn btn-ai"><Zap size={15} /> <span data-id>Jalankan Sekarang</span><span data-en>Run Now</span></button>
+          <button className="btn btn-secondary" disabled={!data.length} onClick={exportCsv}><Download size={15} /> Export CSV</button>
         </div>
       </div>
+
+      {direct.length > 0 && (
+        <div className="card card-pad" style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: ".75rem", flexWrap: "wrap" }}>
+          <Zap size={15} style={{ color: "var(--accent)" }} />
+          <span style={{ fontSize: "var(--text-sm)", fontWeight: 600 }}><span data-id>Produksi langsung</span><span data-en>Direct produce</span></span>
+          {direct.map((d) => (
+            <span key={d.id} className={`badge ${d.status === "producing" ? "badge-warning" : "badge-info"}`} style={{ fontSize: "0.6875rem" }}>
+              <span className="dot" />{d.status === "producing" ? "Berjalan" : "Antre"} · {d.job_type}{d.niche ? ` · ${prettyNiche(d.niche)}` : ""}
+            </span>
+          ))}
+          <span className="muted" style={{ fontSize: "var(--text-xs)" }}><span data-id>diproses worker → progress muncul di sini</span><span data-en>processed by worker → progress appears here</span></span>
+        </div>
+      )}
 
       <div className="filters">
         <div className="segmented">
