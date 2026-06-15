@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
-  Users, HelpCircle, Activity, List, Target, DollarSign, Shield, LogOut, UserCog, FlaskConical,
+  Users, HelpCircle, Activity, List, Target, DollarSign, Shield, LogOut, UserCog, FlaskConical, FileText,
   Menu, Search, Moon, Sun, ChevronRight,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -21,6 +21,7 @@ const NAV: NavEntry[] = [
   { id: "tenants", icon: Users, idL: "Tenant", en: "Tenants", href: "/admin/tenants" },
   { id: "support", icon: HelpCircle, idL: "Dukungan", en: "Support", href: "/admin/support", badge: "4" },
   { id: "system", icon: Activity, idL: "Kesehatan Sistem", en: "System Health", href: "/admin/system" },
+  { id: "content", icon: FileText, idL: "Konten (CMS)", en: "Content (CMS)", href: "/admin/content" },
   { section: { id: "Katalog", en: "Catalog" } },
   { id: "catalog", icon: List, idL: "Katalog", en: "Catalog", href: "/admin/catalog" },
   { id: "niches", icon: Target, idL: "Pustaka Niche", en: "Niche Library", href: "/admin/niches" },
