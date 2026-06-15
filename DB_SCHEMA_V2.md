@@ -453,14 +453,18 @@
 - tenant_id text NOT NULL
 - tts_provider text = 'edge_tts'::text
 - tts_voice text = 'en-US-GuyNeural'::text
-- tts_api_key text
+- tts_api_key text  ⚠️ DEPRECATED-plaintext (migr 0044) → pakai tts_api_key_enc; di-null pasca-migrasi
+- tts_api_key_enc text  ← Fernet (migr 0044); tulis via vault /api/keys/set; baca via _eff_key
 - visual_provider text = 'pexels'::text
 - visual_max_clip_mb integer = 50
-- visual_api_key text
+- visual_api_key text  ⚠️ DEPRECATED-plaintext (migr 0044) → visual_api_key_enc
+- visual_api_key_enc text  ← Fernet (migr 0044)
 - visual_ai_model text
 - llm_provider text = 'openai'::text
 - llm_model text = 'gpt-4o-mini'::text
-- llm_api_key text
+- llm_api_key text  ⚠️ DEPRECATED-plaintext (migr 0044) → llm_api_key_enc
+- llm_api_key_enc text  ← Fernet (migr 0044)
+- youtube_api_key_enc text  ← Fernet (migr 0044; pasangan youtube_api_key plaintext di bawah)
 - niche text = 'universe_mysteries'::text
 - videos_per_day integer = 1
 - publish_platforms _text[] = '{youtube}'::text[]
