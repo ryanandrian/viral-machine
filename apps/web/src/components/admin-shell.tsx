@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
-  Users, HelpCircle, Activity, List, Target, DollarSign, Shield, LogOut, UserCog,
+  Users, HelpCircle, Activity, List, Target, DollarSign, Shield, LogOut, UserCog, FlaskConical,
   Menu, Search, Moon, Sun, ChevronRight,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -25,6 +25,7 @@ const NAV: NavEntry[] = [
   { id: "catalog", icon: List, idL: "Katalog", en: "Catalog", href: "/admin/catalog" },
   { id: "niches", icon: Target, idL: "Pustaka Niche", en: "Niche Library", href: "/admin/niches" },
   { id: "pricing", icon: DollarSign, idL: "Konfigurasi Harga", en: "Pricing Config", href: "/admin/pricing" },
+  { id: "test-lab", icon: FlaskConical, idL: "Test Lab", en: "Test Lab", href: "/admin/test-lab" },
 ];
 
 function Bi({ id, en }: { id: string; en: string }) {
