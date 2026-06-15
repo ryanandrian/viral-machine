@@ -100,19 +100,22 @@ function AiEngines() {
   const [has, setHas] = useState<{ llm: boolean; tts: boolean; visual: boolean }>({ llm: false, tts: false, visual: false });
   const [saving, setSaving] = useState(false); const [saved, setSaved] = useState<string | null>(null);
   useEffect(() => {
-    supabase.from("tenant_configs").select("llm_library, llm_api_key, tts_api_key, visual_api_key").maybeSingle().then(({ data }) => {
-      if (data) { setLib((data.llm_library as "anthropic" | "openai") || "openai"); setHas({ llm: !!data.llm_api_key, tts: !!data.tts_api_key, visual: !!data.visual_api_key }); }
+    // Presence-check via kolom TERENKRIPSI (*_enc, migr 0044) — plaintext sudah di-null-kan.
+    supabase.from("tenant_configs").select("llm_library, llm_api_key_enc, tts_api_key_enc, visual_api_key_enc").maybeSingle().then(({ data }) => {
+      if (data) { setLib((data.llm_library as "anthropic" | "openai") || "openai"); setHas({ llm: !!data.llm_api_key_enc, tts: !!data.tts_api_key_enc, visual: !!data.visual_api_key_enc }); }
     });
   }, [supabase]);
   async function save() {
     setSaving(true); setSaved(null);
-    const p: Record<string, unknown> = { p_llm_library: lib };
-    if (llmKey.trim()) p.p_llm_api_key = llmKey.trim();
-    if (ttsKey.trim()) p.p_tts_api_key = ttsKey.trim();
-    if (visualKey.trim()) p.p_visual_api_key = visualKey.trim();
-    const { error } = await supabase.rpc("set_tenant_config", p);
-    setSaving(false); setSaved(error ? "Gagal menyimpan" : "Tersimpan (key terenkripsi, tak di-log)");
-    if (!error) { setLlmKey(""); setTtsKey(""); setVisualKey(""); setHas({ llm: has.llm || !!p.p_llm_api_key, tts: has.tts || !!p.p_tts_api_key, visual: has.visual || !!p.p_visual_api_key }); }
+    // API key (rahasia) → vault TERENKRIPSI Fernet (server pemegang-kunci). llm_library = passthrough.
+    const payload: Record<string, string> = { llm_library: lib };
+    if (llmKey.trim()) payload.llm_api_key = llmKey.trim();
+    if (ttsKey.trim()) payload.tts_api_key = ttsKey.trim();
+    if (visualKey.trim()) payload.visual_api_key = visualKey.trim();
+    const r = await fetch("/api/keys/set", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    const ok = r.ok;
+    setSaving(false); setSaved(ok ? "Tersimpan (key terenkripsi Fernet, tak di-log)" : "Gagal menyimpan");
+    if (ok) { setHas({ llm: has.llm || !!payload.llm_api_key, tts: has.tts || !!payload.tts_api_key, visual: has.visual || !!payload.visual_api_key }); setLlmKey(""); setTtsKey(""); setVisualKey(""); }
   }
   const ph = (set: boolean) => set ? "•••••••• (tersimpan — isi untuk ganti)" : "Tempel API key";
   return (
@@ -135,12 +138,12 @@ function AiEngines() {
 function ApiKeys() {
   const supabase = createClient();
   const [cfg, setCfg] = useState<Record<string, unknown> | null>(null);
-  useEffect(() => { supabase.from("tenant_configs").select("llm_api_key, visual_api_key, tts_api_key, youtube_api_key, telegram_chat_id, llm_library, tts_provider").maybeSingle().then(({ data }) => setCfg(data ?? {})); }, [supabase]);
+  useEffect(() => { supabase.from("tenant_configs").select("llm_api_key_enc, visual_api_key_enc, tts_api_key_enc, youtube_api_key_enc, telegram_chat_id, llm_library, tts_provider").maybeSingle().then(({ data }) => setCfg(data ?? {})); }, [supabase]);
   const rows: [string, string, string, boolean][] = cfg ? [
-    ["A", `LLM (${(cfg.llm_library as string) || "—"})`, "var(--anthropic)", !!cfg.llm_api_key],
-    ["AI", "Visual (OpenAI)", "var(--openai)", !!cfg.visual_api_key],
-    ["11", `TTS (${(cfg.tts_provider as string) || "—"})`, "var(--elevenlabs)", !!cfg.tts_api_key],
-    ["YT", "YouTube Data API", "var(--yt)", !!cfg.youtube_api_key],
+    ["A", `LLM (${(cfg.llm_library as string) || "—"})`, "var(--anthropic)", !!cfg.llm_api_key_enc],
+    ["AI", "Visual (OpenAI)", "var(--openai)", !!cfg.visual_api_key_enc],
+    ["11", `TTS (${(cfg.tts_provider as string) || "—"})`, "var(--elevenlabs)", !!cfg.tts_api_key_enc],
+    ["YT", "YouTube Data API", "var(--yt)", !!cfg.youtube_api_key_enc],
     ["TG", "Telegram", "var(--telegram)", !!cfg.telegram_chat_id],
   ] : [];
   const st = (ok: boolean) => ok

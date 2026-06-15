@@ -19,6 +19,21 @@ from loguru import logger
 load_dotenv()
 
 
+def _eff_key(row: dict, name: str) -> Optional[str]:
+    """Key API efektif: prefer kolom TERENKRIPSI (*_enc, Fernet — migr 0044) lalu fallback plaintext
+    (kompat transisi). Master key (ENCRYPTION_KEY) ada di worker/backend; dekripsi hanya di sini.
+    Plaintext dikosongkan pasca-migrasi → effektif selalu lewat *_enc."""
+    enc = row.get(f"{name}_enc")
+    if enc:
+        try:
+            from src.utils.crypto import decrypt
+            return decrypt(enc)
+        except Exception as e:
+            logger.error(f"[TenantConfig] dekripsi {name}_enc gagal: {e}")
+            return None
+    return row.get(name)
+
+
 # ──────────────────────────────────────────────────────────
 # Niche Registry — fully Supabase-driven via get_niches()
 # Tidak ada hardcode di sini. Admin tambah/nonaktifkan niche via tabel niches di Supabase.
@@ -472,18 +487,18 @@ class TenantConfigManager:
                 peak_region=row.get("peak_region", "us"),
                 tts_provider=row.get("tts_provider", "edge_tts"),
                 tts_voice=row.get("tts_voice", "en-US-GuyNeural"),
-                tts_api_key=row.get("tts_api_key"),
+                tts_api_key=_eff_key(row, "tts_api_key"),
                 visual_provider=row.get("visual_provider", "pexels"),
                 visual_max_clip_mb=row.get("visual_max_clip_mb", 50),
-                visual_api_key=row.get("visual_api_key"),
+                visual_api_key=_eff_key(row, "visual_api_key"),
                 visual_ai_model=row.get("visual_ai_model"),
                 image_quality=row.get("image_quality", "low"),
                 llm_provider=row.get("llm_provider"),
                 llm_model=row.get("llm_model"),
-                llm_api_key=row.get("llm_api_key"),
+                llm_api_key=_eff_key(row, "llm_api_key"),
                 llm_library=row.get("llm_library"),
                 llm_models=row.get("llm_models") if isinstance(row.get("llm_models"), dict) else None,
-                youtube_api_key=row.get("youtube_api_key"),
+                youtube_api_key=_eff_key(row, "youtube_api_key"),
                 visual_mode=row.get("visual_mode", "video"),
                 is_developer=row.get("is_developer", False),
                 discount_pct=row.get("discount_pct", 0),

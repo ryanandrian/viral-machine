@@ -95,6 +95,20 @@ try:
     app.add_api_route("/api/youtube/oauth/disconnect", _yt_disconnect, methods=["POST"])
     app.add_api_route("/api/youtube/oauth/status", _yt_status, methods=["POST"])
 
+    # ── Vault API key AI (migr 0044): enkripsi Fernet + tulis *_enc (master key hanya di sini) ──
+    async def _keys_set(request: "Request"):
+        if not _internal_ok(request):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        from src.utils.api_key_vault import set_api_keys
+        try:
+            body = await request.json()
+            return set_api_keys(body.get("tenant_id"), body)
+        except Exception as e:
+            logger.warning(f"[key-vault] set gagal: {e}")
+            return JSONResponse({"error": str(e)}, status_code=400)
+
+    app.add_api_route("/api/keys/set", _keys_set, methods=["POST"])
+
 except ImportError:
     # fastapi belum terinstall di env dev — endpoint diaktifkan saat cutover (tambah ke requirements).
     app = None

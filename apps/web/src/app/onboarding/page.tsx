@@ -128,15 +128,20 @@ export default function OnboardingPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setBusy(false); window.location.href = "/auth?view=login"; return; }
 
-    // (1) AI keys + voice + timezone → tenant_configs lewat SECURITY DEFINER RPC (whitelist kolom).
+    // (1a) Config NON-rahasia (voice + timezone) → SECURITY DEFINER RPC whitelist.
     const voiceName = (VOICES[curLang] || VOICES["id-ID"])[voice]?.[0] ?? null;
-    const cfg: Record<string, string | null> = { p_timezone: "Asia/Jakarta", p_tts_voice: voiceName };
-    const ak = svcKeys.anthropic?.trim(), ok = svcKeys.openai?.trim(), ek = svcKeys.elevenlabs?.trim();
-    if (ak) { cfg.p_llm_api_key = ak; cfg.p_llm_library = "anthropic"; }
-    if (ok) cfg.p_visual_api_key = ok;
-    if (ek) { cfg.p_tts_api_key = ek; cfg.p_tts_provider = "elevenlabs"; }
-    const { error: eCfg } = await supabase.rpc("set_tenant_config", cfg);
+    const { error: eCfg } = await supabase.rpc("set_tenant_config", { p_timezone: "Asia/Jakarta", p_tts_voice: voiceName });
     if (eCfg) { setBusy(false); setErr(eCfg.message); return; }
+    // (1b) API key (RAHASIA) → vault TERENKRIPSI Fernet (migr 0044); master key tak pernah ke Next.
+    const ak = svcKeys.anthropic?.trim(), ok = svcKeys.openai?.trim(), ek = svcKeys.elevenlabs?.trim();
+    const keyPayload: Record<string, string> = {};
+    if (ak) { keyPayload.llm_api_key = ak; keyPayload.llm_library = "anthropic"; }
+    if (ok) keyPayload.visual_api_key = ok;
+    if (ek) { keyPayload.tts_api_key = ek; keyPayload.tts_provider = "elevenlabs"; }
+    if (Object.keys(keyPayload).length) {
+      const rk = await fetch("/api/keys/set", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(keyPayload) });
+      if (!rk.ok) { setBusy(false); const j = await rk.json().catch(() => ({})); setErr(j.error || "Gagal menyimpan API key"); return; }
+    }
 
     // (2) channel pertama (client-RLS; channels = kolom config, aman).
     const sel = NICHES.filter((_, i) => niches[i]);
