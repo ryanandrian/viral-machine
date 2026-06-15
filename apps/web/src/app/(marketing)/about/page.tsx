@@ -19,7 +19,7 @@ export default function AboutPage() {
   function sendContact() {
     const subject = encodeURIComponent(`[Kontak] ${cf.name || "Pengunjung"}`);
     const body = encodeURIComponent(`Nama: ${cf.name}\nEmail: ${cf.email}\n\n${cf.msg}`);
-    window.location.href = `mailto:halo@mesinviral.com?subject=${subject}&body=${body}`;
+    window.location.href = `mailto:mesinviral@lumite.biz.id?subject=${subject}&body=${body}`;
   }
   return (
     <div className="mk-container">
@@ -42,7 +42,7 @@ export default function AboutPage() {
         <div className="ab-hero"><h1 style={{ fontSize: "var(--text-4xl)" }}><Bi id="Hubungi kami" en="Contact us" /></h1></div>
         <div className="ab-contact-grid">
           <div>
-            <div className="ab-contact-item"><span className="ic"><Mail size={18} /></span><div><div style={{ fontWeight: 500, fontSize: "var(--text-sm)" }}>Email</div><div className="muted" style={{ fontSize: "var(--text-sm)" }}>halo@mesinviral.com</div></div></div>
+            <div className="ab-contact-item"><span className="ic"><Mail size={18} /></span><div><div style={{ fontWeight: 500, fontSize: "var(--text-sm)" }}>Email</div><div className="muted" style={{ fontSize: "var(--text-sm)" }}>mesinviral@lumite.biz.id</div></div></div>
             <div className="ab-contact-item"><span className="ic"><MessageCircle size={18} /></span><div><div style={{ fontWeight: 500, fontSize: "var(--text-sm)" }}>WhatsApp Support</div><div className="muted" style={{ fontSize: "var(--text-sm)" }}>+62 811-2345-6789</div></div></div>
             <div className="ab-contact-item"><span className="ic"><Tv size={18} /></span><div><div style={{ fontWeight: 500, fontSize: "var(--text-sm)" }}><Bi id="Alamat" en="Address" /></div><div className="muted" style={{ fontSize: "var(--text-sm)" }}>Jakarta Selatan, Indonesia</div></div></div>
           </div>
