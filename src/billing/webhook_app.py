@@ -20,7 +20,9 @@ def _sb():
 
 
 try:
+    import hmac as _hmac
     from fastapi import FastAPI, Request
+    from fastapi.responses import JSONResponse, RedirectResponse
 
     app = FastAPI(title="MesinViral Webhooks", docs_url=None, redoc_url=None)
 
@@ -42,6 +44,56 @@ try:
                "/api/webhooks/midtrans/account"):
         app.add_api_route(_p, _midtrans_notify, methods=["POST"])
     app.add_api_route("/health", _health, methods=["GET"])
+
+    # ── YouTube OAuth BYO-CC (Opsi A: server ini memegang Fernet + dance OAuth) ──────────
+    # init/disconnect/status = server-to-server dari Next, di-AUTH via X-Internal-Secret
+    # (== MV_INTERNAL_SECRET). Next sudah verifikasi sesi Supabase tenant SEBELUM memanggil →
+    # tenant_id yg dikirim sudah ter-otentikasi. callback = redirect dari Google (publik).
+    def _internal_ok(request: "Request") -> bool:
+        want = os.getenv("MV_INTERNAL_SECRET") or ""
+        got = request.headers.get("x-internal-secret") or ""
+        return bool(want) and _hmac.compare_digest(want, got)
+
+    async def _yt_init(request: "Request"):
+        if not _internal_ok(request):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        from src.billing.youtube_oauth import init_connection
+        try:
+            body = await request.json()
+            url = init_connection(
+                body.get("tenant_id"), body.get("client_id"),
+                body.get("client_secret"), ret=body.get("ret", "/settings"),
+            )
+            return {"authorize_url": url}
+        except Exception as e:
+            logger.warning(f"[yt-oauth] init gagal: {e}")
+            return JSONResponse({"error": str(e)}, status_code=400)
+
+    async def _yt_callback(request: "Request"):
+        from src.billing.youtube_oauth import handle_callback
+        q = request.query_params
+        url = handle_callback(q.get("code"), q.get("state"), q.get("error"))
+        return RedirectResponse(url, status_code=302)
+
+    async def _yt_disconnect(request: "Request"):
+        if not _internal_ok(request):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        from src.billing.youtube_oauth import disconnect
+        body = await request.json()
+        disconnect(body.get("tenant_id"))
+        return {"ok": True}
+
+    async def _yt_status(request: "Request"):
+        if not _internal_ok(request):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        from src.billing.youtube_oauth import connection_status
+        body = await request.json()
+        return connection_status(body.get("tenant_id"))
+
+    app.add_api_route("/api/youtube/oauth/init", _yt_init, methods=["POST"])
+    app.add_api_route("/api/youtube/oauth/callback", _yt_callback, methods=["GET"])
+    app.add_api_route("/api/youtube/oauth/disconnect", _yt_disconnect, methods=["POST"])
+    app.add_api_route("/api/youtube/oauth/status", _yt_status, methods=["POST"])
 
 except ImportError:
     # fastapi belum terinstall di env dev — endpoint diaktifkan saat cutover (tambah ke requirements).

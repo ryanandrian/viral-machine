@@ -86,6 +86,9 @@ export default function OnboardingPage() {
   const [plan, setPlan] = useState(0);
   const [ytChecks, setYtChecks] = useState<boolean[]>(YT.map(([, , d]) => d));
   const [ytState, setYtState] = useState<"idle" | "verifying" | "connected" | "deferred">("idle");
+  const [ytClientId, setYtClientId] = useState("");
+  const [ytClientSecret, setYtClientSecret] = useState("");
+  const [ytErr, setYtErr] = useState<string | null>(null);
   const [openSvc, setOpenSvc] = useState<Record<string, boolean>>({ anthropic: true });
   const [svcState, setSvcState] = useState<Record<string, "idle" | "testing" | "ok" | "fail">>({});
   const [svcMsg, setSvcMsg] = useState<Record<string, string>>({});
@@ -102,6 +105,11 @@ export default function OnboardingPage() {
     setMounted(true);
     const saved = (localStorage.getItem("mv-lang") as "id" | "en") || "id";
     setLang(saved); document.documentElement.lang = saved;
+    // Kembali dari Google OAuth (ret=/onboarding). Tampilkan hasil + lompat ke langkah berikutnya bila sukses.
+    const sp = new URLSearchParams(window.location.search);
+    const yt = sp.get("youtube");
+    if (yt === "connected") { setYtState("connected"); setCur(2); window.history.replaceState({}, "", "/onboarding"); }
+    else if (yt === "error") { setYtState("idle"); setYtErr(`OAuth gagal: ${sp.get("reason") || "unknown"}`); setCur(1); window.history.replaceState({}, "", "/onboarding"); }
   }, []);
 
   function switchLang(l: "id" | "en") { setLang(l); document.documentElement.lang = l; localStorage.setItem("mv-lang", l); }
@@ -150,9 +158,31 @@ export default function OnboardingPage() {
     router.push("/dashboard"); // channel ada → onboarded-check lolos
   }
 
-  // YouTube connect = BYO-CC Google OAuth (butuh app Google tenant). Alur OAuth web sedang disiapkan →
-  // JUJUR: tandai 'deferred' (hubungkan nanti di Settings), TIDAK fake-success. Tenant tetap bisa lanjut.
-  function connectYt() { setYtState("deferred"); }
+  // YouTube connect = BYO-CC Google OAuth NYATA. Tenant bawa OAuth app sendiri (client_id+secret).
+  // POST ke /api/youtube/connect (authed) → vault Python simpan secret terenkripsi + balas consent URL
+  // → redirect ke Google. Sekembalinya: /onboarding?youtube=connected|error (di-handle useEffect mount).
+  // Channel ID dideteksi otomatis pasca-consent (channels.list mine=true) — tak perlu input manual.
+  async function connectYt() {
+    setYtErr(null);
+    if (!ytClientId.trim() || !ytClientSecret.trim()) {
+      setYtErr(lang === "id" ? "Isi Client ID & Client Secret dulu." : "Enter Client ID & Client Secret first.");
+      return;
+    }
+    setYtState("verifying");
+    try {
+      const r = await fetch("/api/youtube/connect", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_id: ytClientId, client_secret: ytClientSecret, ret: "/onboarding" }),
+      });
+      const j = await r.json();
+      if (r.ok && j.authorize_url) { window.location.href = j.authorize_url; return; }
+      setYtState("idle");
+      setYtErr(j.error || (lang === "id" ? "Gagal memulai koneksi." : "Failed to start connection."));
+    } catch {
+      setYtState("idle");
+      setYtErr(lang === "id" ? "Server tak terjangkau." : "Server unreachable.");
+    }
+  }
 
   // Test koneksi API key — VALIDASI NYATA via /api/validate-key (panggil provider). Bukan simulasi.
   async function testSvc(provider: string) {
@@ -246,17 +276,28 @@ export default function OnboardingPage() {
                   ))}
                 </div>
                 <div className="form-stack" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                  <div><label className="label">Google Client ID</label><input className="input input-mono" placeholder="xxxxx.apps.googleusercontent.com" /></div>
-                  <div><label className="label">Google Client Secret</label><input className="input input-mono" type="password" placeholder="GOCSPX-xxxxxxxx" /></div>
-                  <div><label className="label">YouTube Channel ID</label><input className="input input-mono" placeholder="UCxxxxxxxxxxxxxxxx" /></div>
-                  <button className="btn btn-default" style={{ width: "fit-content" }} onClick={connectYt}><Video size={16} /> <Bi id="Hubungkan via Google" en="Connect via Google" /></button>
+                  <div><label className="label">Google Client ID</label><input className="input input-mono" placeholder="xxxxx.apps.googleusercontent.com" value={ytClientId} onChange={(e) => setYtClientId(e.target.value)} disabled={ytState === "verifying" || ytState === "connected"} /></div>
+                  <div><label className="label">Google Client Secret</label><input className="input input-mono" type="password" placeholder="GOCSPX-xxxxxxxx" value={ytClientSecret} onChange={(e) => setYtClientSecret(e.target.value)} disabled={ytState === "verifying" || ytState === "connected"} /></div>
+                  <div className="note-box ai" style={{ fontSize: "var(--text-xs)" }}><ShieldCheck size={14} style={{ color: "var(--accent)" }} /><Bi id="Daftarkan Redirect URI ini di OAuth app Anda: " en="Register this Redirect URI in your OAuth app: " /><code style={{ marginLeft: 4 }}>{process.env.NEXT_PUBLIC_YT_REDIRECT_URI || "(lihat dokumentasi)"}</code></div>
+                  {ytState !== "connected" && (
+                    <button className="btn btn-default" style={{ width: "fit-content" }} onClick={connectYt} disabled={ytState === "verifying"}>
+                      <Video size={16} /> {ytState === "verifying" ? <Bi id="Menghubungkan…" en="Connecting…" /> : <Bi id="Hubungkan via Google" en="Connect via Google" />}
+                    </button>
+                  )}
                 </div>
-                {ytState === "deferred" && (
-                  <div style={{ marginTop: "1rem", display: "flex", gap: "0.625rem", padding: "0.875rem 1.25rem", background: "var(--accent-soft)", border: "1px solid color-mix(in srgb,var(--accent) 25%,transparent)", borderRadius: "var(--r-md)", fontSize: "var(--text-sm)" }}>
-                    <ShieldCheck size={16} style={{ color: "var(--accent)", flex: "none" }} />
-                    <span><Bi id="Alur OAuth Google (BYO-CC) sedang disiapkan. Lewati langkah ini sekarang — hubungkan channel YouTube nanti di Pengaturan. Konfigurasi lain tetap berjalan." en="Google OAuth (BYO-CC) flow is being prepared. Skip this step for now — connect your YouTube channel later in Settings. Other config still applies." /></span>
+                {ytErr && (
+                  <div style={{ marginTop: "1rem", padding: "0.75rem 1rem", background: "color-mix(in srgb,var(--danger) 10%,transparent)", border: "1px solid color-mix(in srgb,var(--danger) 30%,transparent)", borderRadius: "var(--r-md)", fontSize: "var(--text-sm)", color: "var(--danger)" }}>{ytErr}</div>
+                )}
+                {ytState === "connected" && (
+                  <div style={{ marginTop: "1rem", display: "flex", gap: "0.625rem", padding: "0.875rem 1.25rem", background: "color-mix(in srgb,var(--success,#16a34a) 12%,transparent)", border: "1px solid color-mix(in srgb,var(--success,#16a34a) 30%,transparent)", borderRadius: "var(--r-md)", fontSize: "var(--text-sm)" }}>
+                    <Check size={16} style={{ color: "var(--success,#16a34a)", flex: "none" }} />
+                    <span><Bi id="Channel YouTube tersambung. Anda bisa kelola/putus di Pengaturan." en="YouTube channel connected. Manage/disconnect in Settings." /></span>
                   </div>
                 )}
+                <div style={{ marginTop: "0.875rem", display: "flex", gap: "0.625rem", padding: "0.875rem 1.25rem", background: "var(--accent-soft)", border: "1px solid color-mix(in srgb,var(--accent) 25%,transparent)", borderRadius: "var(--r-md)", fontSize: "var(--text-sm)" }}>
+                  <ShieldCheck size={16} style={{ color: "var(--accent)", flex: "none" }} />
+                  <span><Bi id="Opsional sekarang — Anda juga bisa melewati langkah ini dan menghubungkan channel YouTube nanti di Pengaturan. Konfigurasi lain tetap berjalan." en="Optional now — you can skip this and connect your YouTube channel later in Settings. Other config still applies." /></span>
+                </div>
               </div>
             )}
 
