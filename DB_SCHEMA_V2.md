@@ -1,7 +1,7 @@
 # DB_SCHEMA_V2 — Introspeksi penuh (atliatnjhysdibmfypul)
-> Auto-generated 2026-06-15. 39 tabel. SUMBER KEBENARAN struktur DB v2 (migrasi 0001-0043).
+> Auto-generated 2026-06-15 (update 2026-06-16: migr 0044-0045). 40 tabel. SUMBER KEBENARAN struktur DB v2 (migrasi 0001-0045).
 
-**Tabel:** admin_audit, ai_models, ai_providers, app_config, blog_posts, branding_config, channel_insights, channels, content_inventory, content_languages, demo_tours, direct_jobs, diversity_config, docs_articles, duration_presets, email_outbox, fonts, format_profiles, moods, music_library, niche_releases, niches, payments, pipeline_queue, pipeline_run_logs, plan_limits, pricing_audit, pricing_config, production_runs, production_schedules, support_messages, support_tickets, tenant_configs, tenant_credentials, tts_profiles, video_analytics, videos, voice_catalog, worker_heartbeats
+**Tabel:** admin_audit, ai_models, ai_providers, app_config, blog_posts, branding_config, channel_insights, channels, content_inventory, content_languages, demo_tours, direct_jobs, diversity_config, docs_articles, duration_presets, email_outbox, fonts, format_profiles, moods, music_library, niche_releases, niche_requests, niches, payments, pipeline_queue, pipeline_run_logs, plan_limits, pricing_audit, pricing_config, production_runs, production_schedules, support_messages, support_tickets, tenant_configs, tenant_credentials, tts_profiles, video_analytics, videos, voice_catalog, worker_heartbeats
 
 ## admin_audit  (rows=4, RLS=ON)
 - id uuid NOT NULL = gen_random_uuid()
@@ -123,6 +123,7 @@
 - publish_privacy text = 'private'::text
 - ai_disclosure boolean = true
 - content_language text
+- buffer_depth integer  ← target stok ready per-channel (§12c; NULL→default env). migr 0045
   - FK: FOREIGN KEY (tenant_id) REFERENCES tenant_configs(tenant_id) ON DELETE CASCADE
   - CHECK: CHECK ((niche_mode = ANY (ARRAY['fixed'::text, 'random'::text])))
   - CHECK: CHECK ((platform = ANY (ARRAY['youtube'::text, 'tiktok'::text, 'instagram'::text])))
@@ -294,6 +295,22 @@
 - created_by text
 - created_at timestamp with time zone NOT NULL = now()
   - FK: FOREIGN KEY (niche_id) REFERENCES niches(niche_id) ON DELETE CASCADE
+
+## niche_requests  (rows=0, RLS=ON) — migr 0045: pengajuan custom niche oleh tenant (form C4)
+- request_id uuid NOT NULL = gen_random_uuid()
+- tenant_id text NOT NULL
+- channel_id uuid  (FK channels.id ON DELETE SET NULL, opsional)
+- request_type text NOT NULL  (CHECK: public_90d | private)
+- title text NOT NULL
+- clues jsonb NOT NULL = '{}'::jsonb  ← referensi/gaya/keyword/contoh dari tenant
+- status text NOT NULL = 'pending'::text  (CHECK: pending|approved|rejected|live)
+- price_key text  (key pricing_config)
+- niche_id text  (diisi admin saat niche dibuat)
+- admin_note text
+- created_at timestamptz NOT NULL = now()
+- updated_at timestamptz NOT NULL = now()
+  - FK: FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE SET NULL
+  - RLS: niche_requests_tenant_read(r, tenant_id=auth.uid()), niche_requests_tenant_insert(a, tenant_id=auth.uid()); UPDATE/DELETE=service_role
 
 ## niches  (rows=4, RLS=OFF)
 - niche_id character varying NOT NULL

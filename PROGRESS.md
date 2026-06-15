@@ -52,9 +52,9 @@
 - **Entitlement niche tenant** = niche dasar (trial/starter) / semua-aktif (pro/business) + custom/private milik tenant.
 
 ### A. DB
-- [ ] **A1** — Tambah `channels.buffer_depth` (target stok ready per-channel, §12c "tren=1/evergreen=3-5"; default dari env). *(BE sudah baca `ch.get("buffer_depth")` → sekarang selalu default krn kolom tak ada.)*
-- [ ] **A2** — Tambah `niches.exclusive_tenant_id` (penanda niche custom/private MILIK tenant siapa) — prasyarat entitlement + private niche.
-- [ ] **A3** — Tabel baru `niche_requests` (pengajuan custom niche): `tenant_id, channel_id(null), request_type(public_90d|private), title, clues jsonb (masukan/referensi tenant), status(pending|approved|rejected|live), price_key, created_at` + RLS tenant-own (insert/read).
+- [x] **A1** — Tambah `channels.buffer_depth` (target stok ready per-channel, §12c "tren=1/evergreen=3-5"; NULL→default env). migr 0045, verified. *(2026-06-16)*
+- [x] **A2** — ~~Tambah `niches.exclusive_tenant_id`~~ → **DIBATALKAN**: kolom pemilik niche **SUDAH ADA** = `niches.exclusive_to` (+ `exclusive_until`/`released_at`/`access_type`, migr 0037). Pakai itu; tak perlu kolom baru. *(2026-06-16)*
+- [x] **A3** — Tabel baru `niche_requests` (pengajuan custom niche): `tenant_id, channel_id, request_type(public_90d|private), title, clues jsonb, status, price_key, niche_id, admin_note, ...` + RLS tenant-own (insert/read), admin via service_role. migr 0045. **Validated** (temp authed user: insert own ✓, read scoped ✓, cross-tenant insert blocked ✓). *(2026-06-16)*
 - [ ] **A4** — Migrasi data: pastikan tiap channel punya `publish_slots` (isi default bila kosong); rapikan/buang baris `production_schedules` stale (channel_id string lama → tak match UUID).
 - [ ] **A5** — Pensiunkan fosil V1 (setelah BE+FE lepas): drop `production_schedules`; drop/abaikan `tenant_configs.publish_slots`, `channels.production_cron`, `tenant_configs.production_cron`/`analytics_cron`; deprecate `channels.niche_pool` (random kini = seluruh entitlement, bukan subset per-channel).
 - *(Di luar scope: `niches.tag_pool` / Layer-2 sub-tag = epik terpisah.)*
