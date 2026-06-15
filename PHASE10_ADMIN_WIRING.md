@@ -76,11 +76,16 @@ Gate sudah ada (sesi sebelumnya): middleware + `admin/(panel)/layout.tsx` cek `a
 
 Urutan: leverage (E1/E5/niche dulu = beta-prereq), lalu katalog ringan, lalu yang sentuh storage/worker/subsistem besar (music-upload, heartbeat, support).
 
-## STATUS (live)
-- ✅ **10.0 Fondasi** (2026-06-15) — admin.ts service_role + guard requireSuperAdmin + /api/admin/whoami + /admin/account change-password + admin_audit (0034) + env key. Validated: unauth 401, service_role read, build.
-- ✅ **10.1 E1 Tenants + Leads** (2026-06-15) — routes list/detail/suspend/email; real data + suspend/unsuspend + email compose (antre email_outbox 0035 → worker dispatcher); add-credit/impersonate dibuang; super-admin↔tenant separation. Validated: unauth 401, service_role data layer, email dispatcher e2e (resolve+attempt, SMTP dev-blocked), build.
-- ⏳ **10.2 E5 Pricing** — berikutnya.
-- Migrasi v2 = **0001-0035**.
+## STATUS (live) — ✅ PHASE 10 SELESAI (2026-06-15), semua runtime-validated + pushed
+- ✅ **10.0 Fondasi** — admin.ts service_role + guard requireSuperAdmin + /api/admin/whoami + /admin/account change-password + admin_audit (migr 0034).
+- ✅ **10.1 E1 Tenants + Leads** — list/detail/suspend/email(antre email_outbox 0035→worker dispatcher); add-credit/impersonate DIBUANG; super-admin↔tenant separation (middleware).
+- ✅ **10.2 E5 Pricing** — inline-edit pricing_config/plan_limits/app_config + audit/rollback (migr 0036 pricing_audit).
+- ✅ **10.3 E2.3 Niches** — fields + exclusivity/release (migr 0037) + transition; tag-pool ditunda (epik pipeline).
+- ✅ **10.4-10.7 Catalog** — ai_models/ai_providers/music_library/content_languages/voice_catalog(migr 0038)/tts_profiles via whitelisted generic route + toggles + add.
+- ✅ **10.8 E3 System Health** — queue/error/DB real (Server Component service_role) + worker_heartbeats (migr 0039) + worker hook.
+- ✅ **10.9 E4 Support** — support_tickets/messages (migr 0040) + RLS + realtime + tenant /support page + admin inbox/reply/resolve.
+- **Migrasi v2 = 0001-0040.** Akun super-admin `mesinviral@lumite.biz.id`. Worker baru: email_outbox dispatcher + heartbeat thread.
+- **Gate/cutover tersisa:** SMTP egress dari host produksi (email_outbox + 8c) · worker v2 deploy (heartbeat terisi) · review owner.
 
 ## 6. VALIDASI (disiplin terbukti)
 
