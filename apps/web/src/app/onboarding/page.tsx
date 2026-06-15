@@ -6,7 +6,7 @@ import { useTheme } from "next-themes";
 import { createClient } from "@/lib/supabase/client";
 import {
   Zap, HelpCircle, Moon, Sun, Play, Info, ShieldCheck, Sparkles, Check, CheckCircle,
-  ExternalLink, ChevronDown, Plus, ArrowLeft, ArrowRight, Loader2, Video,
+  ExternalLink, ChevronDown, Plus, ArrowLeft, ArrowRight, Loader2, Video, X,
 } from "lucide-react";
 import "./onboarding.css";
 
@@ -85,9 +85,10 @@ export default function OnboardingPage() {
 
   const [plan, setPlan] = useState(0);
   const [ytChecks, setYtChecks] = useState<boolean[]>(YT.map(([, , d]) => d));
-  const [ytState, setYtState] = useState<"idle" | "verifying" | "connected">("idle");
+  const [ytState, setYtState] = useState<"idle" | "verifying" | "connected" | "deferred">("idle");
   const [openSvc, setOpenSvc] = useState<Record<string, boolean>>({ anthropic: true });
-  const [svcState, setSvcState] = useState<Record<string, "idle" | "testing" | "ok">>({});
+  const [svcState, setSvcState] = useState<Record<string, "idle" | "testing" | "ok" | "fail">>({});
+  const [svcMsg, setSvcMsg] = useState<Record<string, string>>({});
   const [niches, setNiches] = useState<boolean[]>(NICHES.map((_, i) => i === 2));
   const [curLang, setCurLang] = useState("id-ID");
   const [voice, setVoice] = useState(0);
@@ -149,13 +150,23 @@ export default function OnboardingPage() {
     router.push("/dashboard"); // channel ada → onboarded-check lolos
   }
 
-  function connectYt() {
-    setYtState("verifying");
-    setTimeout(() => setYtState("connected"), 1400);
-  }
-  function testSvc(key: string) {
-    setSvcState((s) => ({ ...s, [key]: "testing" }));
-    setTimeout(() => setSvcState((s) => ({ ...s, [key]: "ok" })), 1200);
+  // YouTube connect = BYO-CC Google OAuth (butuh app Google tenant). Alur OAuth web sedang disiapkan →
+  // JUJUR: tandai 'deferred' (hubungkan nanti di Settings), TIDAK fake-success. Tenant tetap bisa lanjut.
+  function connectYt() { setYtState("deferred"); }
+
+  // Test koneksi API key — VALIDASI NYATA via /api/validate-key (panggil provider). Bukan simulasi.
+  async function testSvc(provider: string) {
+    const key = (svcKeys[provider] || "").trim();
+    if (!key) { setSvcState((s) => ({ ...s, [provider]: "fail" })); setSvcMsg((m) => ({ ...m, [provider]: "Isi key dulu" })); return; }
+    setSvcState((s) => ({ ...s, [provider]: "testing" }));
+    try {
+      const r = await fetch("/api/validate-key", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider, key }) });
+      const j = await r.json();
+      setSvcState((s) => ({ ...s, [provider]: j.ok ? "ok" : "fail" }));
+      setSvcMsg((m) => ({ ...m, [provider]: j.msg || (j.ok ? "valid" : "gagal") }));
+    } catch {
+      setSvcState((s) => ({ ...s, [provider]: "fail" })); setSvcMsg((m) => ({ ...m, [provider]: "error jaringan" }));
+    }
   }
 
   const last = cur === STEPS.length - 1;
@@ -238,19 +249,12 @@ export default function OnboardingPage() {
                   <div><label className="label">Google Client ID</label><input className="input input-mono" placeholder="xxxxx.apps.googleusercontent.com" /></div>
                   <div><label className="label">Google Client Secret</label><input className="input input-mono" type="password" placeholder="GOCSPX-xxxxxxxx" /></div>
                   <div><label className="label">YouTube Channel ID</label><input className="input input-mono" placeholder="UCxxxxxxxxxxxxxxxx" /></div>
-                  {ytState !== "connected" && (
-                    <button className="btn btn-default" style={{ width: "fit-content" }} disabled={ytState === "verifying"} onClick={connectYt}>
-                      {ytState === "verifying" ? <><Loader2 size={16} className="spin" /> Verifying…</> : <><Video size={16} /> Connect &amp; Verify</>}
-                    </button>
-                  )}
+                  <button className="btn btn-default" style={{ width: "fit-content" }} onClick={connectYt}><Video size={16} /> <Bi id="Hubungkan via Google" en="Connect via Google" /></button>
                 </div>
-                {ytState === "connected" && (
-                  <div style={{ marginTop: "1rem" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.875rem", padding: "1rem 1.25rem", background: "var(--success-soft)", border: "1px solid color-mix(in srgb,var(--success) 30%,transparent)", borderRadius: "var(--r-md)" }}>
-                      <span style={{ width: 44, height: 44, borderRadius: "50%", background: "#1d4ed8", display: "grid", placeItems: "center", color: "#fff", fontWeight: 700, flex: "none" }}>MS</span>
-                      <div style={{ flex: 1 }}><div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: "0.5rem" }}>Misteri Samudra <CheckCircle size={16} /></div><div className="muted" style={{ fontSize: "var(--text-xs)" }}>youtube.com/@misterisamudra · 12.4K subscribers</div></div>
-                      <span className="badge badge-success"><span className="dot" />Terhubung</span>
-                    </div>
+                {ytState === "deferred" && (
+                  <div style={{ marginTop: "1rem", display: "flex", gap: "0.625rem", padding: "0.875rem 1.25rem", background: "var(--accent-soft)", border: "1px solid color-mix(in srgb,var(--accent) 25%,transparent)", borderRadius: "var(--r-md)", fontSize: "var(--text-sm)" }}>
+                    <ShieldCheck size={16} style={{ color: "var(--accent)", flex: "none" }} />
+                    <span><Bi id="Alur OAuth Google (BYO-CC) sedang disiapkan. Lewati langkah ini sekarang — hubungkan channel YouTube nanti di Pengaturan. Konfigurasi lain tetap berjalan." en="Google OAuth (BYO-CC) flow is being prepared. Skip this step for now — connect your YouTube channel later in Settings. Other config still applies." /></span>
                   </div>
                 )}
               </div>
@@ -281,9 +285,9 @@ export default function OnboardingPage() {
                               <input className="input input-mono" type="password" placeholder={s.ph} value={svcKeys[s.key] || ""} onChange={(e) => setSvcKeys((k) => ({ ...k, [s.key]: e.target.value }))} />
                               <button className="btn btn-secondary" disabled={st === "testing"} onClick={() => testSvc(s.key)}>{st === "testing" ? <Loader2 size={14} className="spin" /> : <Bi id="Test koneksi" en="Test connection" />}</button>
                             </div>
-                            {st === "ok" && (
-                              <div style={{ marginTop: "0.75rem" }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "var(--text-sm)", color: "var(--success)" }}><CheckCircle size={16} /> <Bi id="Terhubung · $0.00 terpakai · baru saja" en="Connected · $0.00 spent · just now" /></div>
+                            {(st === "ok" || st === "fail") && (
+                              <div style={{ marginTop: "0.75rem", display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "var(--text-sm)", color: st === "ok" ? "var(--success)" : "var(--danger)" }}>
+                                {st === "ok" ? <CheckCircle size={16} /> : <X size={16} />} {svcMsg[s.key] || (st === "ok" ? "valid" : "gagal")}
                               </div>
                             )}
                           </div>
