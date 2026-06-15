@@ -76,6 +76,12 @@ Gate sudah ada (sesi sebelumnya): middleware + `admin/(panel)/layout.tsx` cek `a
 
 Urutan: leverage (E1/E5/niche dulu = beta-prereq), lalu katalog ringan, lalu yang sentuh storage/worker/subsistem besar (music-upload, heartbeat, support).
 
+## STATUS (live)
+- ✅ **10.0 Fondasi** (2026-06-15) — admin.ts service_role + guard requireSuperAdmin + /api/admin/whoami + /admin/account change-password + admin_audit (0034) + env key. Validated: unauth 401, service_role read, build.
+- ✅ **10.1 E1 Tenants + Leads** (2026-06-15) — routes list/detail/suspend/email; real data + suspend/unsuspend + email compose (antre email_outbox 0035 → worker dispatcher); add-credit/impersonate dibuang; super-admin↔tenant separation. Validated: unauth 401, service_role data layer, email dispatcher e2e (resolve+attempt, SMTP dev-blocked), build.
+- ⏳ **10.2 E5 Pricing** — berikutnya.
+- Migrasi v2 = **0001-0035**.
+
 ## 6. VALIDASI (disiplin terbukti)
 
 Tiap layar: route-handler super-admin gate (curl: non-admin→403, admin→200) · service_role read/write lintas-tenant benar · cross-check RLS tenant tak bocor · build PASS · update PROGRESS+PHASE10+journal. Migrasi via psycopg2 pooler (lanjut 0034+).
