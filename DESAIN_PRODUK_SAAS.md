@@ -391,11 +391,18 @@ app.mesinviral.com (Tenant — auth required)
   ├─ /team (multi-user — Enterprise)
   ├─ /settings (profile, security, integrations, Telegram)
 
-admin.mesinviral.com (Internal — staff only)
-  ├─ /tenants (list, suspend, refund, support tickets)
-  ├─ /catalog (manage AI model catalog, music library, niche library)
-  ├─ /system (worker status, queue health, error tracking)
+admin.mesinviral.com (Internal — super-admin only; login terpisah /admin/login; bypass RLS via service_role)
+  ├─ /admin/tenants (list, suspend/unsuspend, kirim email→worker, trial-leads) [E1]
+  ├─ /admin/pricing (inline-edit pricing_config + plan_limits + app_config + audit/rollback) [E5]
+  ├─ /admin/niches (niche + is_base + eksklusivitas/monthly-release + Test niche) [E2.3]
+  ├─ /admin/catalog (AI models/providers, music, voice_catalog, languages, tts) [E2.x]
+  ├─ /admin/system (queue/error real + worker_heartbeats + Direct Jobs panel) [E3]
+  ├─ /admin/support (tiket: inbox/reply/resolve) [E4]
+  ├─ /admin/content (CMS: kelola Blog/Docs/Demo — markdown, draft/publish)   ← konten landing/marketing
+  ├─ /admin/test-lab (kredensial channel internal + "Test semua kredensial" NYATA)
+  └─ /admin/account (ganti password admin)
 ```
+> **STATUS v2 (2026-06-15): admin panel SELESAI + tervalidasi.** Super-admin = `app_metadata.role='super_admin'` (akun terpisah, BUKAN tenant). Semua data lintas-tenant via **service_role server-route ber-gate** (`/api/admin/*`), bukan anon+RLS. Detail: `PHASE10_ADMIN_WIRING.md`.
 
 ### Visual Style
 
@@ -832,6 +839,22 @@ Interval = **default beralasan, config-driven** (ubah tanpa deploy), diturunkan 
 - **Optimasi render = prioritas #1** (lever terbesar, murah, prasyarat scale).
 
 Detail lengkap + bukti file:line: memory `decisions_production_scaling` · status/roadmap: `PROGRESS.md`.
+
+---
+
+## 12d. FITUR v2 TERBANGUN (2026-06-15) — admin, direct-produce, CMS, landing
+
+> Ringkasan fitur yang sudah dibangun + tervalidasi (branch `v2-backend`, migrasi 0001-0043). Detail teknis: `PHASE10_ADMIN_WIRING.md` + `progress_journal`.
+
+**A. Direct / On-demand Produce ("1 mesin, 2 mode") — pengganti "Run Now" ambigu.** Satu MESIN pipeline, dua MODE: (1) **Scheduled** (producer jaga buffer → publisher slot, §12c) + (2) **Direct** (`direct_jobs` di-drain producer SEBELUM stok-buffer, **semaphore core SAMA → anti-OOM utuh**). 3 pemicu kontekstual: **tenant** "Test sekarang (private)" (Channel Detail — preview config sebelum jadwal) · **tenant** "Jalankan ulang" (Run Detail gagal — mis. setelah top-up kredit AI) · **admin** "Test niche" (uji niche baru di channel internal `admin-test`). Progress live di `/runs/[id]` (D5, live-tail run_id), status Antre/Berjalan di Runs + panel admin System Health. Diproses worker v2 saat cutover.
+
+**B. Admin Panel penuh** (lihat §7 IA): Tenants/Pricing/Niches/Catalog/System/Support/Content/Test-Lab/Account — semua wired ke DB (service_role gated). Caps/harga/niche/katalog/kredensial-test admin-editable.
+
+**C. CMS — landing/marketing content admin-editable.** Halaman **Blog, Docs, Demo** kini DB-backed (`blog_posts`/`docs_articles`/`demo_tours`), dikelola admin via `/admin/content` (editor markdown, draft/publish). Publik baca yang published (RLS sembunyikan draft). **Harga landing/pricing (A1/A2) = dari `pricing_config`** (no-hardcode terpenuhi). Halaman statik lain (About/Contact) = mailto nyata. **Catatan:** admin tak perlu ngoding/deploy untuk update konten.
+
+**D. Validasi kredensial NYATA.** Onboarding "Test koneksi" + admin Test Lab benar-benar memanggil API provider (OpenAI/Anthropic/ElevenLabs) → ok/gagal (bukan simulasi). **YouTube connect (BYO-CC OAuth) = jujur-deferred** (real-build tersisa; tenant bawa Google OAuth app sendiri).
+
+**Prinsip ditegakkan owner (2026-06-15):** nol komponen FE fake/non-functional (yang tanpa backend ditandai jujur "segera"/disembunyikan) · no-hardcode · service_role hanya server-route admin · semua keputusan via expert + validasi runtime.
 
 ❓ **Q13:** Setuju prioritas: Phase 6 (Self-Learning + Diversity) di-prioritaskan SETELAH foundation backend (Phase 1-5) — sebelum payment & UI?
 
