@@ -1,186 +1,139 @@
 "use client";
 
-import { useState } from "react";
-import { Download, FileText, Calendar, ChevronDown, Tv, Filter, Activity, BarChart3, Play, Target, Zap, Eye, TrendingUp, Users, DollarSign, ArrowUp, ArrowDown, Clock, Sparkles, Check } from "lucide-react";
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { Calendar, Activity, BarChart3, Play, Target, Zap, Eye, TrendingUp, Users, MessageSquare, Sparkles, ArrowRight } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 import "./analytics.css";
 
-// D6 Analytics — port dari design-source/Analytics.html (Hybrid). Sidebar "Analitik".
-// Chart = SVG hand-drawn (views multi-line + CTR histogram) + bar CSS + heatmap deterministik (ganti Math.random).
-// Mock deterministik (SSR-safe); nol wiring Supabase. Class prefix an- (anti bentrok CSS antar-route SPA).
+// D6 Analytics (Phase 9.4) — DATA NYATA dari video_analytics (RLS auth.uid()). Dedupe latest per video_id
+// (views kumulatif → max). KPIs/niche/top/CTR/views-line real; retensi/biaya/heatmap = jujur bila tak ada sumber.
 
-function Bi({ id, en }: { id: string; en: string }) {
-  return (<><span data-id>{id}</span><span data-en>{en}</span></>);
-}
+function Bi({ id, en }: { id: string; en: string }) { return (<><span data-id>{id}</span><span data-en>{en}</span></>); }
+const fmtK = (n: number) => n >= 1_000_000 ? `${(n / 1e6).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
 
-const KPI: { Icon: typeof Play; lId: string; lEn: string; v: string; d: string; up: boolean }[] = [
-  { Icon: Play, lId: "Video Published", lEn: "Videos Published", v: "128", d: "+12%", up: true },
-  { Icon: Eye, lId: "Total Views", lEn: "Total Views", v: "342K", d: "+24%", up: true },
-  { Icon: TrendingUp, lId: "Avg CTR", lEn: "Avg CTR", v: "7.1%", d: "+0.6%", up: true },
-  { Icon: Activity, lId: "Avg Retensi", lEn: "Avg Retention", v: "58%", d: "-2%", up: false },
-  { Icon: Users, lId: "Subs Gained", lEn: "Subs Gained", v: "+1.9K", d: "+18%", up: true },
-  { Icon: DollarSign, lId: "Total Biaya AI", lEn: "Total AI Cost", v: "$43", d: "Rp 688K", up: true },
-];
+type VA = { video_id: string; views: number; likes: number; comments: number; subscriber_gain: number; ctr: number; avg_view_pct: number; niche: string | null; title: string | null; hook_text: string | null; published_at: string | null };
 
-function ViewsChart() {
-  const A = [12, 14, 13, 18, 16, 22, 20, 26, 24, 30, 28, 34], B = [20, 22, 21, 26, 28, 30, 34, 32, 40, 44, 42, 52], C = [6, 7, 6, 9, 8, 11, 10, 9, 12, 14, 13, 16];
-  const W = 640, H = 230, pad = 12, max = Math.max(...A, ...B, ...C);
-  const x = (i: number) => pad + i * (W - pad * 2) / (A.length - 1);
+function ViewsChart({ pts }: { pts: number[] }) {
+  const W = 640, H = 230, pad = 12, max = Math.max(1, ...pts);
+  const x = (i: number) => pad + i * (W - pad * 2) / Math.max(1, pts.length - 1);
   const y = (v: number) => H - 22 - (v / max) * (H - 40);
-  const line = (d: number[]) => d.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(0)} ${y(v).toFixed(0)}`).join(" ");
+  const line = pts.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(0)} ${y(v).toFixed(0)}`).join(" ");
   return (
-    <svg id="views-chart" viewBox="0 0 640 230" style={{ width: "100%", height: "auto" }}>
+    <svg viewBox="0 0 640 230" style={{ width: "100%", height: "auto" }}>
       <defs><linearGradient id="an-ag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#6366F1" stopOpacity={0.25} /><stop offset="1" stopColor="#6366F1" stopOpacity={0} /></linearGradient></defs>
-      {[0, 10, 20, 30, 40, 50].map((v) => (<g key={v}><line x1={pad} y1={y(v)} x2={W - pad} y2={y(v)} stroke="var(--grid-line)" /><text x={pad} y={y(v) - 3} fontSize={9} fill="var(--text-muted)" fontFamily="JetBrains Mono">{v}K</text></g>))}
-      <path d={line(B)} fill="none" stroke="#10B981" strokeWidth={2} />
-      <path d={line(C)} fill="none" stroke="#EC4899" strokeWidth={2} />
-      <path d={`${line(A)} L${x(A.length - 1)} ${H - 22} L${pad} ${H - 22} Z`} fill="url(#an-ag)" />
-      <path d={line(A)} fill="none" stroke="#6366F1" strokeWidth={2} />
+      {[0, 0.5, 1].map((f) => { const v = max * f; return (<g key={f}><line x1={pad} y1={y(v)} x2={W - pad} y2={y(v)} stroke="var(--grid-line)" /><text x={pad} y={y(v) - 3} fontSize={9} fill="var(--text-muted)" fontFamily="JetBrains Mono">{fmtK(Math.round(v))}</text></g>); })}
+      {pts.length > 1 && <><path d={`${line} L${x(pts.length - 1)} ${H - 22} L${pad} ${H - 22} Z`} fill="url(#an-ag)" /><path d={line} fill="none" stroke="#6366F1" strokeWidth={2} /></>}
     </svg>
   );
 }
-
-function CtrHist() {
-  const bins: [string, number][] = [["2-4%", 8], ["4-6%", 22], ["6-8%", 38], ["8-10%", 24], ["10%+", 9]];
-  const W = 300, H = 230, pad = 24, max = Math.max(...bins.map((b) => b[1])), bw = (W - pad * 2) / bins.length;
+function CtrHist({ bins }: { bins: [string, number][] }) {
+  const W = 300, H = 230, pad = 24, max = Math.max(1, ...bins.map((b) => b[1])), bw = (W - pad * 2) / bins.length;
   return (
     <svg viewBox="0 0 300 230" style={{ width: "100%", height: "auto" }}>
       {bins.map(([l, v], i) => { const h = (v / max) * (H - 50), bx = pad + i * bw; return (
-        <g key={l}>
-          <rect x={bx + 6} y={H - 30 - h} width={bw - 12} height={h} rx={4} fill={i === 2 ? "#6366F1" : "var(--surface-3)"} />
-          <text x={bx + bw / 2} y={H - 14} fontSize={9} fill="var(--text-muted)" textAnchor="middle" fontFamily="JetBrains Mono">{l}</text>
-          <text x={bx + bw / 2} y={H - 36 - h} fontSize={10} fill="var(--text-secondary)" textAnchor="middle">{v}</text>
-        </g>
+        <g key={l}><rect x={bx + 6} y={H - 30 - h} width={bw - 12} height={h} rx={4} fill="#6366F1" /><text x={bx + bw / 2} y={H - 14} fontSize={9} fill="var(--text-muted)" textAnchor="middle" fontFamily="JetBrains Mono">{l}</text><text x={bx + bw / 2} y={H - 36 - h} fontSize={10} fill="var(--text-secondary)" textAnchor="middle">{v}</text></g>
       ); })}
     </svg>
   );
 }
 
-const NICHE: [string, string, number][] = [["Misteri Samudra", "#6366F1", 88], ["Fakta Menarik", "#10B981", 76], ["Sejarah Kelam", "#EC4899", 54], ["Misteri Alam Semesta", "#F59E0B", 41]];
-const HOOK: [string, string, number][] = [["Gap question", "#10B981", 92], ["Surprise stat", "#6366F1", 71], ["Contrarian", "#6366F1", 63], ["Story bait", "#6366F1", 55], ["Time pressure", "#F59E0B", 34]];
-const TV: [string, string, string, string, string][] = [
-  ["Kapal Hilang di Segitiga Bermuda", "Misteri Samudra", "58.2K", "9.1%", "64%"],
-  ["Kenapa Otak Lupa Mimpi?", "Fakta Menarik", "51.4K", "8.7%", "61%"],
-  ["Suara Aneh Palung Mariana", "Misteri Samudra", "41.7K", "7.4%", "59%"],
-  ["Penjara Bawah Tanah Romawi", "Sejarah Kelam", "33.5K", "6.9%", "55%"],
-  ["Mengapa Kucing Takut Timun", "Fakta Menarik", "29.1K", "8.2%", "57%"],
-];
-const heatColor = (v: number) => `color-mix(in srgb, #6366F1 ${Math.round(v * 100)}%, var(--surface-2))`;
-const DAYS = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
-const SLOTS = ["08", "11", "14", "17", "20"];
-// deterministik (ganti Math.random): pola stabil + slot 14:00 (idx2) & 20:00 (idx4) lebih panas
-const heatVal = (di: number, si: number): number => {
-  if (si === 2) return Math.min(1, 0.7 + ((di * 11) % 30) / 100);
-  if (si === 4) return Math.min(1, 0.6 + ((di * 17) % 35) / 100);
-  return 0.32 + ((di * 7 + si * 13) % 45) / 100;
-};
-const MOODS: [string, number][] = [["Tegang", 0.9], ["Misterius", 0.82], ["Epik", 0.7], ["Tenang", 0.45], ["Ceria", 0.38], ["Sedih", 0.3]];
-
-type Ins = { tId: string; tEn: string; meta: string; applied: boolean };
-const INS: Ins[] = [
-  { tId: 'Niche <b>"Misteri Samudra"</b> perform <b>1.5× lebih baik</b> dari "Sejarah Kelam" — mesin menambah bobotnya.', tEn: 'Niche <b>"Ocean Mysteries"</b> performs <b>1.5× better</b> than "Dark History" — engine raised its weight.', meta: "23 video · p=0.96", applied: true },
-  { tId: 'Hook <b>"time pressure"</b> under-perform — mesin men-deprioritize ke 5%.', tEn: 'Hook <b>"time pressure"</b> under-performs — engine deprioritized it to 5%.', meta: "18 video · p=0.91", applied: false },
-  { tId: 'Slot publish <b>14:00 WIB</b> punya engagement 30% lebih tinggi — disarankan tambah slot.', tEn: 'The <b>14:00 WIB</b> slot has 30% higher engagement — adding a slot suggested.', meta: "42 video · p=0.94", applied: false },
-];
-
 export default function AnalyticsPage() {
-  const [decision, setDecision] = useState<Record<number, "accepted" | "rejected">>({});
+  const supabase = createClient();
+  const [rows, setRows] = useState<VA[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase.from("video_analytics").select("video_id, views, likes, comments, subscriber_gain, ctr, avg_view_pct, niche, title, hook_text, published_at").then(({ data }) => {
+      // dedupe latest per video_id (views kumulatif → max)
+      const byVid = new Map<string, VA>();
+      (data ?? []).forEach((r) => { const cur = byVid.get(r.video_id); if (!cur || (r.views ?? 0) >= (cur.views ?? 0)) byVid.set(r.video_id, r as VA); });
+      setRows([...byVid.values()]); setLoading(false);
+    });
+  }, [supabase]);
+
+  const totalViews = rows.reduce((s, r) => s + (r.views ?? 0), 0);
+  const totalLikes = rows.reduce((s, r) => s + (r.likes ?? 0), 0);
+  const totalComments = rows.reduce((s, r) => s + (r.comments ?? 0), 0);
+  const subs = rows.reduce((s, r) => s + (r.subscriber_gain ?? 0), 0);
+  const ctrs = rows.filter((r) => (r.ctr ?? 0) > 0).map((r) => r.ctr);
+  const avgCtr = ctrs.length ? (ctrs.reduce((a, b) => a + b, 0) / ctrs.length) : 0;
+  const rets = rows.filter((r) => (r.avg_view_pct ?? 0) > 0).map((r) => r.avg_view_pct);
+  const avgRet = rets.length ? Math.round(rets.reduce((a, b) => a + b, 0) / rets.length) : null;
+
+  const KPI = [
+    { Icon: Play, l: ["Video dianalisis", "Videos analyzed"], v: String(rows.length) },
+    { Icon: Eye, l: ["Total Views", "Total Views"], v: fmtK(totalViews) },
+    { Icon: TrendingUp, l: ["Avg CTR", "Avg CTR"], v: avgCtr ? `${avgCtr.toFixed(1)}%` : "—" },
+    { Icon: Activity, l: ["Avg Retensi", "Avg Retention"], v: avgRet != null ? `${avgRet}%` : "—" },
+    { Icon: Users, l: ["Subs", "Subs Gained"], v: `+${fmtK(subs)}` },
+    { Icon: MessageSquare, l: ["Komentar", "Comments"], v: fmtK(totalComments) },
+  ];
+
+  // niche distribution (views), top videos, CTR bins, views-over-time (by published month)
+  const nicheViews = new Map<string, number>();
+  rows.forEach((r) => { if (r.niche) nicheViews.set(r.niche, (nicheViews.get(r.niche) ?? 0) + (r.views ?? 0)); });
+  const nicheTop = [...nicheViews.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const nicheMax = Math.max(1, ...nicheTop.map((n) => n[1]));
+  const NCOL = ["#6366F1", "#10B981", "#EC4899", "#F59E0B", "#0ea5e9", "#a855f7"];
+
+  const hookViews = new Map<string, number>();
+  rows.forEach((r) => { if (r.hook_text) { const k = r.hook_text.slice(0, 40); hookViews.set(k, (hookViews.get(k) ?? 0) + (r.views ?? 0)); } });
+  const hookTop = [...hookViews.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const hookMax = Math.max(1, ...hookTop.map((h) => h[1]));
+
+  const topVideos = [...rows].sort((a, b) => (b.views ?? 0) - (a.views ?? 0)).slice(0, 6);
+
+  const binDefs: [string, (c: number) => boolean][] = [["0-2%", (c) => c < 2], ["2-4%", (c) => c >= 2 && c < 4], ["4-6%", (c) => c >= 4 && c < 6], ["6-8%", (c) => c >= 6 && c < 8], ["8%+", (c) => c >= 8]];
+  const ctrBins: [string, number][] = binDefs.map(([l, f]) => [l, rows.filter((r) => f((r.ctr ?? 0))).length]);
+
+  const monthViews = new Map<string, number>();
+  rows.forEach((r) => { if (r.published_at) { const m = r.published_at.slice(0, 7); monthViews.set(m, (monthViews.get(m) ?? 0) + (r.views ?? 0)); } });
+  const viewsLine = [...monthViews.entries()].sort().map((e) => e[1]);
 
   return (
     <>
       <div className="an-head">
-        <div>
-          <h1>Analytics</h1>
-          <div className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Performa lintas channel · 1–10 Juni 2026" en="Cross-channel performance · Jun 1–10, 2026" /></div>
-        </div>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          <button className="btn btn-secondary"><Download size={15} /> CSV</button>
-          <button className="btn btn-secondary"><FileText size={15} /> <Bi id="Laporan PDF" en="PDF Report" /></button>
-        </div>
+        <div><h1>Analytics</h1><div className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Performa channel dari data nyata" en="Real channel performance" /></div></div>
       </div>
 
-      <div className="an-filters">
-        <div className="an-selbox"><Calendar size={14} /> 10 hari terakhir <ChevronDown size={14} /></div>
-        <div className="an-selbox"><Tv size={14} /> <Bi id="3 channel" en="3 channels" /> <ChevronDown size={14} /></div>
-        <div className="an-selbox"><Filter size={14} /> <Bi id="Semua niche" en="All niches" /> <ChevronDown size={14} /></div>
-      </div>
+      <div className="an-filters"><div className="an-selbox"><Calendar size={14} /> {loading ? "Memuat…" : `${rows.length} video`}</div></div>
 
       <div className="an-kpi-strip">
-        {KPI.map((k) => (
-          <div className="an-kpic" key={k.lId}><div className="l"><k.Icon size={13} /> <Bi id={k.lId} en={k.lEn} /></div><div className="v">{k.v}</div><div className={`d ${k.up ? "up" : "down"}`}>{k.up ? <ArrowUp size={11} /> : <ArrowDown size={11} />} {k.d}</div></div>
-        ))}
+        {KPI.map((k, i) => (<div className="an-kpic" key={i}><div className="l"><k.Icon size={13} /> <Bi id={k.l[0]} en={k.l[1]} /></div><div className="v">{k.v}</div></div>))}
       </div>
 
       <div className="an-grid">
-        <div className="card">
-          <div className="card-head"><h3 className="card-title"><Activity size={16} /> <Bi id="Views dari waktu ke waktu" en="Views over time" /></h3>
-            <div className="an-legend"><span><i style={{ background: "#6366F1" }} />Misteri Samudra</span><span><i style={{ background: "#10B981" }} />Fakta</span><span><i style={{ background: "#EC4899" }} />Sejarah</span></div>
-          </div>
-          <div className="card-body"><ViewsChart /></div>
-        </div>
-        <div className="card">
-          <div className="card-head"><h3 className="card-title"><BarChart3 size={16} /> <Bi id="Distribusi CTR" en="CTR distribution" /></h3></div>
-          <div className="card-body"><CtrHist /></div>
-        </div>
+        <div className="card"><div className="card-head"><h3 className="card-title"><Activity size={16} /> <Bi id="Views per bulan" en="Views per month" /></h3></div><div className="card-body">{viewsLine.length > 1 ? <ViewsChart pts={viewsLine} /> : <div className="muted" style={{ padding: "2rem", textAlign: "center", fontSize: "var(--text-sm)" }}>Belum cukup rentang waktu.</div>}</div></div>
+        <div className="card"><div className="card-head"><h3 className="card-title"><BarChart3 size={16} /> <Bi id="Distribusi CTR" en="CTR distribution" /></h3></div><div className="card-body"><CtrHist bins={ctrBins} />{!avgCtr && <div className="muted" style={{ fontSize: "var(--text-xs)", padding: "0 1rem 0.75rem" }}>CTR=0 mayoritas (analytics-scope belum di-fetch penuh — self-learning loop harian akan mengisi).</div>}</div></div>
       </div>
 
       <div className="an-grid-3">
         <div className="card card-pad">
-          <h3 className="card-title" style={{ marginBottom: "1rem" }}><Target size={16} /> <Bi id="Niche teratas" en="Top niches" /></h3>
-          {NICHE.map(([n, c, v]) => (<div className="an-bar-row" key={n}><span className="lab">{n}</span><div className="an-bar-track"><span style={{ width: `${v}%`, background: c }} /></div><span className="val">{v}</span></div>))}
+          <h3 className="card-title" style={{ marginBottom: "1rem" }}><Target size={16} /> <Bi id="Niche teratas (views)" en="Top niches (views)" /></h3>
+          {nicheTop.length === 0 ? <div className="muted" style={{ fontSize: "var(--text-sm)" }}>—</div> : nicheTop.map(([n, v], i) => (<div className="an-bar-row" key={n}><span className="lab">{n}</span><div className="an-bar-track"><span style={{ width: `${Math.round((v / nicheMax) * 100)}%`, background: NCOL[i % NCOL.length] }} /></div><span className="val">{fmtK(v)}</span></div>))}
         </div>
         <div className="card card-pad">
-          <h3 className="card-title" style={{ marginBottom: "1rem" }}><Zap size={16} /> <Bi id="Performa hook style" en="Hook style performance" /></h3>
-          {HOOK.map(([n, c, v]) => (<div className="an-bar-row" key={n}><span className="lab">{n}</span><div className="an-bar-track"><span style={{ width: `${v}%`, background: c }} /></div><span className="val">{v}</span></div>))}
-        </div>
-      </div>
-
-      <div className="an-grid-3">
-        <div className="card card-pad">
-          <h3 className="card-title" style={{ marginBottom: "0.25rem" }}><Clock size={16} /> <Bi id="Waktu publish × engagement" en="Publish time × engagement" /></h3>
-          <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "1rem" }}><Bi id="Engagement rata-rata per slot waktu (WIB)" en="Avg engagement per time slot (WIB)" /></div>
-          {DAYS.map((d, di) => (
-            <div className="an-heat-row" key={d}><span className="ylab">{d}</span><div className="an-heat" style={{ gridTemplateColumns: `repeat(${SLOTS.length},1fr)` }}>{SLOTS.map((s, si) => (<div className="cell" key={s} style={{ background: heatColor(heatVal(di, si)) }} />))}</div></div>
-          ))}
-          <div className="an-heat-row"><span className="ylab" /><div className="an-heat-labels-x" style={{ gridTemplateColumns: `repeat(${SLOTS.length},1fr)` }}>{SLOTS.map((s) => (<span key={s}>{s}:00</span>))}</div></div>
-        </div>
-        <div className="card card-pad">
-          <h3 className="card-title" style={{ marginBottom: "0.25rem" }}><Play size={16} /> <Bi id="Mood musik × performa" en="Music mood × performance" /></h3>
-          <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "1rem" }}><Bi id="Skor performa rata-rata per mood" en="Avg performance score per mood" /></div>
-          <div className="an-heat" style={{ gridTemplateColumns: "repeat(3,1fr)", gap: 6 }}>
-            {MOODS.map(([m, v]) => (<div key={m} style={{ background: heatColor(v), borderRadius: "var(--r-md)", padding: "0.875rem 0.5rem", textAlign: "center" }}><div style={{ fontSize: "var(--text-lg)", fontWeight: 700, color: "#fff" }}>{Math.round(v * 100)}</div><div style={{ fontSize: "var(--text-xs)", color: "rgba(255,255,255,0.8)" }}>{m}</div></div>))}
-          </div>
+          <h3 className="card-title" style={{ marginBottom: "1rem" }}><Zap size={16} /> <Bi id="Hook teratas (views)" en="Top hooks (views)" /></h3>
+          {hookTop.length === 0 ? <div className="muted" style={{ fontSize: "var(--text-sm)" }}>—</div> : hookTop.map(([n, v]) => (<div className="an-bar-row" key={n}><span className="lab" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n}</span><div className="an-bar-track"><span style={{ width: `${Math.round((v / hookMax) * 100)}%`, background: "#6366F1" }} /></div><span className="val">{fmtK(v)}</span></div>))}
         </div>
       </div>
 
       <div className="an-grid" style={{ marginTop: "1rem" }}>
         <div className="card">
-          <div className="card-head"><h3 className="card-title"><TrendingUp size={16} /> <Bi id="Video teratas" en="Top videos" /></h3><span className="card-sub">30 hari</span></div>
+          <div className="card-head"><h3 className="card-title"><TrendingUp size={16} /> <Bi id="Video teratas" en="Top videos" /></h3></div>
           <div style={{ overflowX: "auto" }}><table className="tbl">
-            <thead><tr><th></th><th>Topic</th><th>Channel</th><th className="num">Views</th><th className="num">CTR</th><th className="num">Retensi</th></tr></thead>
-            <tbody>{TV.map(([t, ch, v, c, r]) => (<tr key={t}><td><span className="an-vthumb" /></td><td style={{ color: "var(--text-primary)" }}>{t}</td><td className="muted">{ch}</td><td className="num"><b style={{ color: "var(--text-primary)", fontWeight: 600 }}>{v}</b></td><td className="num muted">{c}</td><td className="num muted">{r}</td></tr>))}</tbody>
+            <thead><tr><th>Topic</th><th>Niche</th><th className="num">Views</th><th className="num">CTR</th></tr></thead>
+            <tbody>
+              {topVideos.length === 0 && <tr><td colSpan={4} className="muted" style={{ padding: "1rem", textAlign: "center" }}>{loading ? "Memuat…" : "Belum ada data."}</td></tr>}
+              {topVideos.map((r) => (<tr key={r.video_id}><td style={{ color: "var(--text-primary)" }}>{r.title || r.video_id}</td><td className="muted">{r.niche || "—"}</td><td className="num"><b style={{ color: "var(--text-primary)", fontWeight: 600 }}>{fmtK(r.views ?? 0)}</b></td><td className="num muted">{(r.ctr ?? 0) > 0 ? `${r.ctr.toFixed(1)}%` : "—"}</td></tr>))}
+            </tbody>
           </table></div>
         </div>
         <div className="card card-pad">
-          <h3 className="card-title" style={{ marginBottom: "1rem" }}><Sparkles size={16} /> <Bi id="Insight Self-Learning" en="Self-Learning Insights" /></h3>
-          {INS.map((x, i) => (
-            <div className="an-insight" key={i}>
-              <span className="ic"><TrendingUp size={16} /></span>
-              <div className="body">
-                <div className="t"><span data-id dangerouslySetInnerHTML={{ __html: x.tId }} /><span data-en dangerouslySetInnerHTML={{ __html: x.tEn }} /></div>
-                <div className="meta">{x.meta}</div>
-                <div className="acts">
-                  {x.applied || decision[i] === "accepted"
-                    ? <span className="badge badge-success"><span className="dot" />{x.applied ? <Bi id="Diterapkan otomatis" en="Auto-applied" /> : <Bi id="Diterima" en="Accepted" />}</span>
-                    : decision[i] === "rejected"
-                      ? <span className="badge badge-default"><Bi id="Ditolak" en="Rejected" /></span>
-                      : <>
-                          <button className="btn btn-default btn-sm" onClick={() => setDecision((s) => ({ ...s, [i]: "accepted" }))}><Check size={13} /> <Bi id="Terima" en="Accept" /></button>
-                          <button className="btn btn-ghost btn-sm" onClick={() => setDecision((s) => ({ ...s, [i]: "rejected" }))}><Bi id="Tolak" en="Reject" /></button>
-                        </>}
-                </div>
-              </div>
-            </div>
-          ))}
+          <h3 className="card-title" style={{ marginBottom: "0.75rem" }}><Sparkles size={16} /> <Bi id="Insight Self-Learning" en="Self-Learning Insights" /></h3>
+          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}><Bi id="Adaptasi niche/hook per-channel ada di halaman Wawasan." en="Per-channel niche/hook adaptation lives on the Insights page." /></p>
+          <Link href="/insights" className="btn btn-secondary btn-sm"><Bi id="Buka Wawasan" en="Open Insights" /> <ArrowRight size={14} /></Link>
         </div>
       </div>
     </>
