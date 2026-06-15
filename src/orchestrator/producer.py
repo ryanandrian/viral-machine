@@ -108,6 +108,85 @@ def produce_one(channel_row: dict) -> int | None:
         return None
 
 
+# ── DIRECT / ON-DEMAND (V2 "1 mesin, 2 mode") ──────────────────────────────
+# Jalur prioritas: tenant/admin minta produksi 1 job SEKARANG (test/retry/admin_test).
+# Di-drain SEBELUM stok-buffer, pakai semaphore+pool yang SAMA (anti-OOM utuh). Mesin = pipeline.run().
+def run_direct(sb, job: dict) -> None:
+    """Eksekusi 1 direct_job: produce + publish (privacy sesuai job) + tulis production_runs.
+    Context run_id → pipeline_run_logs (live-tail D5). Tandai status di direct_jobs."""
+    from datetime import datetime, timezone
+    from src.intelligence.config import tenant_config_from_channel
+    from src.orchestrator.pipeline import Pipeline
+
+    jid = job["id"]
+    tenant_id = job["tenant_id"]
+    run_id = f"direct-{str(jid)[:8]}"
+    _now = lambda: datetime.now(timezone.utc).isoformat()
+
+    ch = (sb.table("channels").select("*").eq("id", job["channel_id"]).limit(1).execute().data or [None])[0]
+    if not ch:
+        sb.table("direct_jobs").update({"status": "failed", "error": "channel tak ditemukan", "completed_at": _now()}).eq("id", jid).execute()
+        return
+    sb.table("direct_jobs").update({"run_id": run_id}).eq("id", jid).execute()
+
+    niche = job.get("niche") or ch.get("niche")
+    status, yt_url, err = "failed", None, None
+    try:
+        tc = tenant_config_from_channel(ch, niche=niche)
+        try:
+            tc.publish_privacy = job.get("publish_privacy") or "private"
+        except Exception:
+            pass
+        with logger.contextualize(tenant_id=tenant_id, run_id=run_id):
+            result = Pipeline().run(tc, publish=True)
+        ok = bool(result.get("published", {}).get("youtube") or result.get("qc_passed"))
+        status = "success" if result.get("qc_passed") else "failed"
+        yt_url = (result.get("published", {}).get("youtube") or {}).get("url")
+        if not result.get("qc_passed"):
+            err = result.get("qc_reason") or "QC gagal"
+    except Exception as e:
+        err = str(e)
+        logger.error(f"[Direct] job {jid} gagal: {e}")
+
+    # Tulis production_runs (muncul di Runs/D5). queue_id NULL (bukan jalur pipeline_queue).
+    try:
+        sb.table("production_runs").insert({
+            "tenant_id": tenant_id, "run_id": run_id, "channel_id": str(job["channel_id"]),
+            "niche": niche, "status": status, "youtube_url": yt_url,
+            "qc_passed": status == "success", "error_message": err,
+            "run_metadata": {"direct": True, "job_type": job.get("job_type")},
+        }).execute()
+    except Exception as e:
+        logger.warning(f"[Direct] tulis production_runs gagal: {e}")
+
+    sb.table("direct_jobs").update({
+        "status": "published" if status == "success" else "failed",
+        "error": err, "completed_at": _now(),
+    }).eq("id", jid).execute()
+
+
+def drain_direct(sb, pool: ThreadPoolExecutor, sem: threading.Semaphore) -> int:
+    """Drain direct_jobs pending SEBELUM stok-buffer. Acquire semaphore yang SAMA (≤core → anti-OOM).
+    Idle → diproses tick berikut (≤idle_seconds); sibuk → paling depan saat 1 core bebas. Return jumlah submit."""
+    jobs = (sb.table("direct_jobs").select("*").eq("status", "pending").order("created_at").limit(64).execute().data) or []
+    from datetime import datetime, timezone
+    submitted = 0
+    for job in jobs:
+        if not sem.acquire(blocking=False):
+            break   # semua core sibuk → tunggu tick berikut (rem sama)
+        sb.table("direct_jobs").update({"status": "producing", "started_at": datetime.now(timezone.utc).isoformat()}).eq("id", job["id"]).execute()
+
+        def _task(job=job):
+            try:
+                run_direct(sb, job)
+            finally:
+                sem.release()
+
+        pool.submit(_task)
+        submitted += 1
+    return submitted
+
+
 def _active_channels(sb) -> list:
     return sb.table("channels").select("*").eq("is_active", True).execute().data or []
 
@@ -156,7 +235,8 @@ def run_forever(idle_seconds: int = 10) -> None:
     with ThreadPoolExecutor(max_workers=MAX, thread_name_prefix="producer") as pool:
         while True:
             try:
-                plan_and_submit(sb, pool, sem, depth)
+                drain_direct(sb, pool, sem)     # jalur prioritas (test/retry/admin) — semaphore SAMA
+                plan_and_submit(sb, pool, sem, depth)   # stok-buffer dgn slot core sisa
             except Exception as e:
                 logger.error(f"[Producer] loop error: {e}")
             time.sleep(idle_seconds)
