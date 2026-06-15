@@ -15,6 +15,12 @@ const SVC: [string, string, number][] = [["API Produksi", "Production API", 1], 
 
 export default function AboutPage() {
   const [tab, setTab] = useState("about");
+  const [cf, setCf] = useState({ name: "", email: "", msg: "" });
+  function sendContact() {
+    const subject = encodeURIComponent(`[Kontak] ${cf.name || "Pengunjung"}`);
+    const body = encodeURIComponent(`Nama: ${cf.name}\nEmail: ${cf.email}\n\n${cf.msg}`);
+    window.location.href = `mailto:halo@mesinviral.com?subject=${subject}&body=${body}`;
+  }
   return (
     <div className="mk-container">
       <div className="ab-tabs">{TABS.map(([v, id, en]) => <button key={v} className={`ab-tab${tab === v ? " sel" : ""}`} onClick={() => { setTab(v); window.scrollTo(0, 0); }}><Bi id={id} en={en} /></button>)}</div>
@@ -42,9 +48,9 @@ export default function AboutPage() {
           </div>
           <div className="card card-pad">
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}><div><label className="label"><Bi id="Nama" en="Name" /></label><input className="input" /></div><div><label className="label">Email</label><input className="input" /></div></div>
-              <div><label className="label"><Bi id="Pesan" en="Message" /></label><textarea className="textarea" rows={4} /></div>
-              <button className="btn btn-default"><Bi id="Kirim pesan" en="Send message" /></button>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}><div><label className="label"><Bi id="Nama" en="Name" /></label><input className="input" value={cf.name} onChange={(e) => setCf({ ...cf, name: e.target.value })} /></div><div><label className="label">Email</label><input className="input" value={cf.email} onChange={(e) => setCf({ ...cf, email: e.target.value })} /></div></div>
+              <div><label className="label"><Bi id="Pesan" en="Message" /></label><textarea className="textarea" rows={4} value={cf.msg} onChange={(e) => setCf({ ...cf, msg: e.target.value })} /></div>
+              <button className="btn btn-default" disabled={!cf.msg.trim()} onClick={sendContact}><Bi id="Kirim pesan" en="Send message" /></button>
             </div>
           </div>
         </div>
