@@ -5,9 +5,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
-  Users, HelpCircle, Activity, List, Target, DollarSign, Shield, ArrowLeft,
+  Users, HelpCircle, Activity, List, Target, DollarSign, Shield, LogOut,
   Menu, Search, Moon, Sun, ChevronRight,
 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 // Port MVAdmin (design-source/styles/admin-shell.js) → React. admin.mesinviral.com.
 // Reuse app-shell.css (.app/.sidebar/.sb-*/.topbar). Nav admin distinct + badge ADMIN amber.
@@ -75,7 +76,13 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
         <div className="sb-bottom">
-          <Link className="sb-item" href="/dashboard"><ArrowLeft size={18} /><span className="sb-label"><Bi id="Ke app tenant" en="To tenant app" /></span></Link>
+          <button
+            className="sb-item"
+            onClick={async () => { await createClient().auth.signOut(); window.location.href = "/admin/login"; }}
+            style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", font: "inherit", color: "inherit" }}
+          >
+            <LogOut size={18} /><span className="sb-label"><Bi id="Keluar" en="Sign out" /></span>
+          </button>
         </div>
       </aside>
 

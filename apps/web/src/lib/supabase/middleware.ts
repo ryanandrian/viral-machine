@@ -4,11 +4,12 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-// Prefix yang WAJIB login. (app) route-group tak muncul di URL → cek path nyata tiap layar.
+// Prefix yang WAJIB login tenant. (app) route-group tak muncul di URL → cek path nyata tiap layar.
+// /admin DITANGANI TERPISAH (gate super-admin di bawah), BUKAN di sini.
 const PROTECTED = [
   "/dashboard", "/channels", "/runs", "/analytics", "/insights",
   "/compliance", "/config", "/schedule", "/settings", "/billing",
-  "/onboarding", "/admin",
+  "/onboarding",
 ];
 
 export async function updateSession(request: NextRequest) {
@@ -36,8 +37,38 @@ export async function updateSession(request: NextRequest) {
   // WAJIB: refresh token (jangan ada logika antara createServerClient & getUser — pola @supabase/ssr).
   const { data: { user } } = await supabase.auth.getUser();
 
-  // Hard-redirect: route ter-proteksi tanpa session → /auth (simpan tujuan di ?next).
   const path = request.nextUrl.pathname;
+  const isSuperAdmin = user?.app_metadata?.role === "super_admin";
+
+  // ── Gate ADMIN (super-admin only) ──
+  // /admin/login = PUBLIK (jalur masuk admin). Sudah super-admin → langsung ke panel.
+  if (path === "/admin/login") {
+    if (isSuperAdmin) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/admin/tenants";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    return response;
+  }
+  // /admin/* lain: wajib super-admin. No session → /admin/login; tenant biasa → /dashboard (bukan miliknya).
+  if (path === "/admin" || path.startsWith("/admin/")) {
+    if (!user) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/admin/login";
+      url.search = `?next=${encodeURIComponent(path)}`;
+      return NextResponse.redirect(url);
+    }
+    if (!isSuperAdmin) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/dashboard";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    return response;
+  }
+
+  // ── Hard-redirect: route tenant ter-proteksi tanpa session → /auth (simpan tujuan di ?next). ──
   const isProtected = PROTECTED.some((p) => path === p || path.startsWith(`${p}/`));
   if (isProtected && !user) {
     const url = request.nextUrl.clone();
