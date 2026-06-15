@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { fetchPricing, idrK } from "@/lib/pricing";
 import {
   Users, Check, X, ChevronDown, Info, DollarSign,
   Wand2, Mic, HelpCircle, Zap, Gauge, ShieldCheck, type LucideIcon,
@@ -51,13 +52,14 @@ function Fc({ v, pop }: { v: boolean | string; pop?: boolean }) {
   return <span style={pop ? { color: "var(--brand)", fontWeight: 600 } : undefined}>{v}</span>;
 }
 
-const ADDONS: [LucideIcon, string, string, string][] = [
-  [Wand2, "Niche Pack", "Rp 299K", "Niche kustom dibuat sesuai brief Anda, 3–5 hari delivery."],
-  [Mic, "Voice Pack", "Rp 199K", "Koleksi 10 voice premium ElevenLabs untuk variasi channel."],
-  [HelpCircle, "Concierge Setup", "Rp 499K", "Tim kami setup channel, API keys, & schedule untuk Anda."],
-  [Zap, "Priority Queue", "Rp 149K/bln", "Run Anda diproses paling depan saat traffic tinggi."],
-  [Gauge, "Channel Audit", "Rp 349K", "Analisis mendalam + rekomendasi growth dari ahli."],
-  [ShieldCheck, "Extra Compliance", "Rp 99K/bln", "Monitoring compliance lebih ketat + alert prioritas."],
+// [icon, label, pricing_config key ("" = pakai fallback literal), suffix, fallback, desc]
+const ADDONS: [LucideIcon, string, string, string, string, string][] = [
+  [Wand2, "Niche Pack", "custom_niche_public_90d", "", "Rp 299K", "Niche kustom dibuat sesuai brief Anda, 3–5 hari delivery."],
+  [Mic, "Voice Pack", "voice_pack", "", "Rp 99K", "Koleksi voice premium ElevenLabs untuk variasi channel."],
+  [HelpCircle, "Concierge Setup", "concierge_setup", "", "Rp 399K", "Tim kami setup channel, API keys, & schedule untuk Anda."],
+  [Zap, "Priority Queue", "priority_queue", "/bln", "Rp 99K/bln", "Run Anda diproses paling depan saat traffic tinggi."],
+  [Gauge, "Channel Audit", "niche_audit", "", "Rp 499K", "Analisis mendalam + rekomendasi growth dari ahli."],
+  [ShieldCheck, "Extra Compliance", "", "", "Rp 99K/bln", "Monitoring compliance lebih ketat + alert prioritas."],
 ];
 
 const FAQ: [string, string][] = [
@@ -72,6 +74,9 @@ export default function PricingPage() {
   const [annual, setAnnual] = useState(false);
   const [vids, setVids] = useState(5);
   const [faqOpen, setFaqOpen] = useState(0);
+  const [pricing, setPricing] = useState<Record<string, number>>({});
+  useEffect(() => { fetchPricing().then(setPricing); }, []);
+  const tierK = (t: Tier) => { const v = pricing[`plan_${t.n.toLowerCase()}`]; return v ? Math.round(v / 1000) : t.m; };
 
   const month = vids * 30 * 0.34;
   const ant = month * 0.21, el = month * 0.53, oai = month * 0.26;
@@ -93,13 +98,14 @@ export default function PricingPage() {
 
         <div className="tiers">
           {TIERS.map((t) => {
-            const price = annual ? Math.round(t.m * 0.8) : t.m;
+            const baseK = tierK(t);
+            const price = annual ? Math.round(baseK * 0.8) : baseK;
             return (
               <div className={`tier${t.pop ? " pop" : ""}`} key={t.n}>
                 {t.pop && <span className="pop-badge">Most Popular</span>}
                 <div className="tn">{t.n}</div>
                 <div className="tt"><Bi id={t.ttId} en={t.ttEn} /></div>
-                <div className="tp-strike">{annual ? `Rp ${t.m}K` : ""}</div>
+                <div className="tp-strike">{annual ? `Rp ${baseK}K` : ""}</div>
                 <div className="tp">Rp {price}K<small>/bln</small></div>
                 <div className="muted" style={{ fontSize: "var(--text-xs)" }}>{annual ? <Bi id="ditagih tahunan" en="billed annually" /> : " "}</div>
                 <ul>{t.feats.map((f, k) => <li key={k}><Check size={15} /> {f}</li>)}</ul>
@@ -164,8 +170,8 @@ export default function PricingPage() {
       <section className="mk-section"><div className="mk-container">
         <div className="mk-center" style={{ marginBottom: "2rem" }}><h2 className="mk-h2">Add-ons</h2></div>
         <div className="addons">
-          {ADDONS.map(([Icon, n, pr, d], i) => (
-            <div className="addon" key={i}><span className="ai"><Icon size={20} /></span><h4>{n}</h4><div className="pr">{pr}</div><p>{d}</p></div>
+          {ADDONS.map(([Icon, n, key, suffix, fallback, d], i) => (
+            <div className="addon" key={i}><span className="ai"><Icon size={20} /></span><h4>{n}</h4><div className="pr">{key && pricing[key] ? `Rp ${idrK(pricing[key])}${suffix}` : fallback}</div><p>{d}</p></div>
           ))}
         </div>
       </div></section>

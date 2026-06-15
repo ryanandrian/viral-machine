@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { fetchPricing, idrK } from "@/lib/pricing";
 import {
   Sparkles, ArrowRight, Play, CheckCircle, Check, Clock, BarChart3, XCircle,
   Command, ShieldCheck, Tv, Zap, X, Loader2, ChevronDown, Star,
@@ -60,6 +61,9 @@ const FAQ: [string, string][] = [
 
 export default function LandingPage() {
   const [faqOpen, setFaqOpen] = useState(0);
+  const [pricing, setPricing] = useState<Record<string, number>>({});
+  useEffect(() => { fetchPricing().then(setPricing); }, []);
+  const pk = (k: string, fb: string) => pricing[k] ? `Rp ${idrK(pricing[k])}` : fb;
 
   return (
     <>
@@ -219,18 +223,18 @@ export default function LandingPage() {
         </div>
         <div className="price-grid reveal">
           <div className="pcard">
-            <div className="pn">Starter</div><div className="pp">Rp 149K<small>/bln</small></div><div className="ptag"><Bi id="Untuk mulai scaling" en="To start scaling" /></div>
+            <div className="pn">Starter</div><div className="pp">{pk("plan_starter", "Rp 149K")}<small>/bln</small></div><div className="ptag"><Bi id="Untuk mulai scaling" en="To start scaling" /></div>
             <ul><li><Check size={15} /> 1 channel</li><li><Check size={15} /> 5 video / <Bi id="hari" en="day" /></li><li><Check size={15} /> <Bi id="Niche dasar" en="Core niches" /></li><li><Check size={15} /> Self-learning</li></ul>
             <a href="/auth?view=signup" className="btn btn-outline" style={{ width: "100%" }}><Bi id="Pilih Starter" en="Choose Starter" /></a>
           </div>
           <div className="pcard pop">
             <span className="pop-badge">Most Popular</span>
-            <div className="pn">Pro</div><div className="pp">Rp 349K<small>/bln</small></div><div className="ptag"><Bi id="Paling diminati creator" en="Most chosen by creators" /></div>
+            <div className="pn">Pro</div><div className="pp">{pk("plan_pro", "Rp 349K")}<small>/bln</small></div><div className="ptag"><Bi id="Paling diminati creator" en="Most chosen by creators" /></div>
             <ul><li><Check size={15} /> 3 channel</li><li><Check size={15} /> 10 video / <Bi id="hari" en="day" /></li><li><Check size={15} /> <Bi id="Semua niche" en="All niches" /></li><li><Check size={15} /> Quality Gate + Compliance</li><li><Check size={15} /> Custom voice</li></ul>
             <a href="/auth?view=signup" className="btn btn-default" style={{ width: "100%" }}><Bi id="Pilih Pro" en="Choose Pro" /></a>
           </div>
           <div className="pcard">
-            <div className="pn">Business</div><div className="pp">Rp 699K<small>/bln</small></div><div className="ptag"><Bi id="Untuk agency & power user" en="For agencies & power users" /></div>
+            <div className="pn">Business</div><div className="pp">{pk("plan_business", "Rp 699K")}<small>/bln</small></div><div className="ptag"><Bi id="Untuk agency & power user" en="For agencies & power users" /></div>
             <ul><li><Check size={15} /> 10 channel</li><li><Check size={15} /> 24 video / <Bi id="hari" en="day" /></li><li><Check size={15} /> Priority queue</li><li><Check size={15} /> Cross-channel insights</li></ul>
             <a href="/auth?view=signup" className="btn btn-outline" style={{ width: "100%" }}><Bi id="Pilih Business" en="Choose Business" /></a>
           </div>
