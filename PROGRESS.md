@@ -70,7 +70,7 @@
 - [x] **C1** — Halaman Jadwal di-rewrite: channel-centric, baca/tulis **`channels.publish_slots`** (JAM saja, zona tenant) via RPC `set_channel_publish_slots` (validasi N ≤ tier). `production_schedules` & niche **dilepas** dari UI. build PASS. *(2026-06-16)*
 - [x] **C2** — Onboarding + `/channels/new`: INSERT channel kini set `publish_slots: ["13:00"]` (default ≤ semua tier) → channel baru punya jadwal. build PASS.
 - [x] **C3** — Editor niche per-channel di **Channel Detail** (Settings): pilih `niche_mode` fixed/random + niche (opsi **dari entitlement** tenant) → RPC `set_channel_niche`. Menggantikan "niche write-once". build PASS.
-- [x] **C4** — Form ajukan custom niche (Config→Niches) **FUNGSIONAL**: type public-90d/private + judul + clue (audiens/referensi/angle) → insert `niche_requests` (harga dari `pricing_config`). build PASS.
+- [x] **C4** — Form ajukan custom niche (Config→Niches) **FUNGSIONAL**: type public-90d/private + judul + clue → insert `niche_requests`. **+ Admin panel (E2.3, `/api/admin/niche-requests`):** antrian request + approve (buat niche `exclusive_to`=tenant, public_90d→`exclusive_until`=+90h / private→permanen) / reject. **Loop e2e LULUS**: tenant ajukan → admin approve → entitlement tenant bertambah → tenant set channel ke niche custom-nya. Admin route 401-gated. build PASS (51 route).
 - [x] **C5** — Batas tier tampil: Jadwal "max N/hari/channel" + "N/cap slot"; opsi niche dibatasi entitlement. *(via C1+C3)*
 
 ### D. Validasi e2e — ✅ SEMUA LULUS (temp authed user, key+RLS identik FE; 2026-06-16)
@@ -80,7 +80,7 @@
 - [x] Ajukan custom niche → `niche_requests` terisi (judul+clue) + **admin melihatnya** (audience/refs/angle).
 - [x] Cap tier: 1 slot trial ok / 2 ditolak. Channel orang lain ditolak. py_compile BE OK · build FE PASS · grep `production_schedules` di kode = komentar saja.
 
-**🎉 PERBAIKAN PRODUCE & PUBLISH SELESAI 100% (A+B+C+D, 2026-06-16).** Migr v2 = 0001-0047. GATE CUTOVER boleh dijalankan.
+**🎉 PERBAIKAN PRODUCE & PUBLISH SELESAI 100% (A+B+C+D + admin niche-requests, 2026-06-16).** Migr v2 = 0001-0047. **Loop custom-niche tertutup penuh** (tenant ajukan → admin proses → eksklusif → entitlement). GATE CUTOVER boleh dijalankan.
 
 ---
 

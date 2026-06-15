@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Calendar, Plus, X, Clock } from "lucide-react";
+import { Calendar, Plus, X, Clock, Sparkles, Check } from "lucide-react";
 import "./niches.css";
 
 // E2.3 Admin Niche Library (Phase 10.3) — DATA NYATA via /api/admin/niches (service_role).
@@ -41,13 +41,26 @@ export default function AdminNichesPage() {
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [sched, setSched] = useState<{ niche_id: string; date: string }>({ niche_id: "", date: "" });
+  type NReq = { request_id: string; tenant_id: string; tenant_email: string | null; request_type: string; title: string; clues: Record<string, string>; status: string; created_at: string; niche_id: string | null };
+  const [reqs, setReqs] = useState<NReq[]>([]);
+  const [appr, setAppr] = useState<{ req: NReq; niche_id: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const r = await fetch("/api/admin/niches");
+    const [r, rq] = await Promise.all([fetch("/api/admin/niches"), fetch("/api/admin/niche-requests")]);
     if (r.ok) { const j = await r.json(); setNiches(j.niches); setReleases(j.releases); }
+    if (rq.ok) { const j = await rq.json(); setReqs(j.requests ?? []); }
     setLoading(false);
   }, []);
+
+  async function processReq(request_id: string, action: "approve" | "reject", niche_id?: string) {
+    setBusy(true);
+    const r = await fetch("/api/admin/niche-requests", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ request_id, action, niche_id }) });
+    setBusy(false); setAppr(null);
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) { setToast(action === "approve" ? `Niche dibuat: ${j.niche_id}` : "Request ditolak"); await load(); }
+    else setToast(j.error || "Gagal");
+  }
   useEffect(() => { load(); }, [load]);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2400); return () => clearTimeout(t); }, [toast]);
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") setSel(null); }; document.addEventListener("keydown", k); return () => document.removeEventListener("keydown", k); }, []);
@@ -139,6 +152,43 @@ export default function AdminNichesPage() {
           ))}
         </tbody>
       </table></div></div>
+
+      <div className="nl-section-title"><Sparkles size={18} style={{ color: "var(--accent)" }} /> <Bi id="Pengajuan Custom Niche" en="Custom Niche Requests" /> {reqs.filter((r) => r.status === "pending").length > 0 && <span className="badge badge-info">{reqs.filter((r) => r.status === "pending").length} pending</span>}</div>
+      <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl">
+        <thead><tr><th>Tenant</th><th>Tipe</th><th><Bi id="Ide & clue" en="Idea & clues" /></th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          {reqs.length === 0 && <tr><td colSpan={5} className="muted" style={{ padding: "1.25rem", textAlign: "center" }}><Bi id="Belum ada pengajuan." en="No requests yet." /></td></tr>}
+          {reqs.map((r) => (
+            <tr key={r.request_id}>
+              <td style={{ fontSize: "var(--text-xs)" }}>{r.tenant_email ?? r.tenant_id.slice(0, 8)}</td>
+              <td><span className={`badge ${r.request_type === "private" ? "badge-brand" : "badge-default"}`}>{r.request_type === "private" ? "🔒 Private" : "🌍 90d"}</span></td>
+              <td style={{ maxWidth: 360 }}><div style={{ color: "var(--text-primary)", fontWeight: 500 }}>{r.title}</div><div className="muted" style={{ fontSize: "0.6875rem" }}>{[r.clues?.audience, r.clues?.references, r.clues?.viral_angle].filter(Boolean).join(" · ") || "—"}</div></td>
+              <td><span className={`badge ${r.status === "pending" ? "badge-info" : r.status === "live" ? "badge-success" : "badge-default"}`}>{r.status}{r.niche_id ? ` · ${r.niche_id}` : ""}</span></td>
+              <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                {r.status === "pending" && <>
+                  <button className="btn btn-default btn-sm" disabled={busy} onClick={() => setAppr({ req: r, niche_id: r.title.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 40) })}><Check size={13} /> Approve</button>
+                  <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => processReq(r.request_id, "reject")}>Tolak</button>
+                </>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table></div></div>
+
+      {appr && (
+        <div onClick={(e) => { if (e.target === e.currentTarget) setAppr(null); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem" }}>
+          <div className="card card-pad" style={{ maxWidth: 460, width: "100%" }}>
+            <h3 className="card-title" style={{ marginBottom: ".75rem" }}><Bi id="Buat niche eksklusif" en="Create exclusive niche" /></h3>
+            <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: ".75rem" }}>{appr.req.title} · {appr.req.request_type === "private" ? "permanen private" : "exclusive 90 hari → public"} · untuk {appr.req.tenant_email ?? appr.req.tenant_id.slice(0, 8)}</p>
+            <label className="label">niche_id (slug a-z0-9_)</label>
+            <input className="input input-mono" value={appr.niche_id} onChange={(e) => setAppr({ ...appr, niche_id: e.target.value })} />
+            <div style={{ display: "flex", gap: ".5rem", justifyContent: "flex-end", marginTop: "1rem" }}>
+              <button className="btn btn-ghost" onClick={() => setAppr(null)}>Batal</button>
+              <button className="btn btn-default" disabled={busy || !/^[a-z0-9_]+$/.test(appr.niche_id)} onClick={() => processReq(appr.req.request_id, "approve", appr.niche_id)}><Check size={14} /> Buat & tetapkan eksklusif</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="nl-section-title"><Calendar size={18} style={{ color: "var(--accent)" }} /> <Bi id="Jadwal Rilis Bulanan" en="Monthly Release Scheduler" /></div>
       <div className="card card-pad">
