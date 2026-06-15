@@ -31,9 +31,9 @@ export function Markdown({ source }: { source: string }) {
     }
     const h = ln.match(/^(#{1,3})\s+(.*)$/);
     if (h) {
-      flush(); const lvl = h[1].length;
-      const props = { key: key++, dangerouslySetInnerHTML: { __html: inline(h[2]) } };
-      out.push(lvl === 1 ? <h1 {...props} /> : lvl === 2 ? <h2 {...props} /> : <h3 {...props} />);
+      flush(); const lvl = h[1].length; const k = key++;
+      const html = { __html: inline(h[2]) };
+      out.push(lvl === 1 ? <h1 key={k} dangerouslySetInnerHTML={html} /> : lvl === 2 ? <h2 key={k} dangerouslySetInnerHTML={html} /> : <h3 key={k} dangerouslySetInnerHTML={html} />);
       i++; continue;
     }
     if (/^[-*]\s+/.test(ln)) { list.push(ln.replace(/^[-*]\s+/, "")); i++; continue; }
