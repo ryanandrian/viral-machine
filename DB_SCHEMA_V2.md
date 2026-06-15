@@ -1,7 +1,7 @@
 # DB_SCHEMA_V2 — Introspeksi penuh (atliatnjhysdibmfypul)
-> Auto-generated 2026-06-15 (update 2026-06-16: migr 0044-0045). 40 tabel. SUMBER KEBENARAN struktur DB v2 (migrasi 0001-0045).
+> Auto-generated 2026-06-15 (update 2026-06-16: migr 0044-0047). 39 tabel (production_schedules di-drop migr 0047). SUMBER KEBENARAN struktur DB v2 (migrasi 0001-0047).
 
-**Tabel:** admin_audit, ai_models, ai_providers, app_config, blog_posts, branding_config, channel_insights, channels, content_inventory, content_languages, demo_tours, direct_jobs, diversity_config, docs_articles, duration_presets, email_outbox, fonts, format_profiles, moods, music_library, niche_releases, niche_requests, niches, payments, pipeline_queue, pipeline_run_logs, plan_limits, pricing_audit, pricing_config, production_runs, production_schedules, support_messages, support_tickets, tenant_configs, tenant_credentials, tts_profiles, video_analytics, videos, voice_catalog, worker_heartbeats
+**Tabel:** admin_audit, ai_models, ai_providers, app_config, blog_posts, branding_config, channel_insights, channels, content_inventory, content_languages, demo_tours, direct_jobs, diversity_config, docs_articles, duration_presets, email_outbox, fonts, format_profiles, moods, music_library, niche_releases, niche_requests, niches, payments, pipeline_queue, pipeline_run_logs, plan_limits, pricing_audit, pricing_config, production_runs, support_messages, support_tickets, tenant_configs, tenant_credentials, tts_profiles, video_analytics, videos, voice_catalog, worker_heartbeats
 
 ## admin_audit  (rows=4, RLS=ON)
 - id uuid NOT NULL = gen_random_uuid()
@@ -430,18 +430,7 @@
   - FK: FOREIGN KEY (queue_id) REFERENCES pipeline_queue(id)
   - RLS: production_runs_tenant_read(r)
 
-## production_schedules  (rows=5, RLS=ON)
-- schedule_id uuid NOT NULL = gen_random_uuid()
-- channel_id character varying NOT NULL
-- tenant_id text NOT NULL
-- cron_expression character varying NOT NULL
-- niche_id character varying
-- niche_focus text
-- is_active boolean = true
-- created_at timestamp without time zone = now()
-- content_type character varying = 'short'::character varying
-  - FK: FOREIGN KEY (niche_id) REFERENCES niches(niche_id)
-  - RLS: production_schedules_tenant_insert(a), production_schedules_tenant_read(r), production_schedules_tenant_update(w)
+## ~~production_schedules~~ — DI-DROP (migr 0047). Fosil V1 (sumber kebingungan FE↔BE). Jadwal kanonik = `channels.publish_slots`.
 
 ## support_messages  (rows=0, RLS=ON)
 - id uuid NOT NULL = gen_random_uuid()

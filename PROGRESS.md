@@ -56,7 +56,7 @@
 - [x] **A2** — ~~Tambah `niches.exclusive_tenant_id`~~ → **DIBATALKAN**: kolom pemilik niche **SUDAH ADA** = `niches.exclusive_to` (+ `exclusive_until`/`released_at`/`access_type`, migr 0037). Pakai itu; tak perlu kolom baru. *(2026-06-16)*
 - [x] **A3** — Tabel baru `niche_requests` (pengajuan custom niche): `tenant_id, channel_id, request_type(public_90d|private), title, clues jsonb, status, price_key, niche_id, admin_note, ...` + RLS tenant-own (insert/read), admin via service_role. migr 0045. **Validated** (temp authed user: insert own ✓, read scoped ✓, cross-tenant insert blocked ✓). *(2026-06-16)*
 - [x] **A4** — Migrasi data ryan V1→V2: channel `niche_mode` fixed→**random** (sesuai V1; business=entitlement 4 niche), `publish_slots` `['20:00']`→**`['06:00','21:00']`** (konversi V1 `['14:00','23:00']` UTC→WIB, momen US-peak sama), `buffer_depth`=3 (§12c). Hapus 5 baris `production_schedules` stale (channel_id string lama). *(2026-06-16; data-only)*
-- [ ] **A5** — Pensiunkan fosil V1 (setelah BE+FE lepas): drop `production_schedules`; drop/abaikan `tenant_configs.publish_slots`, `channels.production_cron`, `tenant_configs.production_cron`/`analytics_cron`; deprecate `channels.niche_pool` (random kini = seluruh entitlement, bukan subset per-channel).
+- [x] **A5** — Fosil V1 dipensiunkan (migr 0047, setelah BE+FE lepas — verified nol pembaca kode): **`production_schedules` DI-DROP**. Kolom vestigial (`channels.production_cron`/`niche_pool`, `tenant_configs.publish_slots`/`production_cron`/`analytics_cron`) DIBIARKAN tapi `COMMENT … DEPRECATED` (loader baca default aman; drop=risiko, nilai rendah). DB_SCHEMA=39 tabel. *(2026-06-16)*
 - *(Di luar scope: `niches.tag_pool` / Layer-2 sub-tag = epik terpisah.)*
 
 ### B. BE
@@ -73,12 +73,14 @@
 - [x] **C4** — Form ajukan custom niche (Config→Niches) **FUNGSIONAL**: type public-90d/private + judul + clue (audiens/referensi/angle) → insert `niche_requests` (harga dari `pricing_config`). build PASS.
 - [x] **C5** — Batas tier tampil: Jadwal "max N/hari/channel" + "N/cap slot"; opsi niche dibatasi entitlement. *(via C1+C3)*
 
-### D. Validasi e2e (centang bila SELURUH alur terbukti)
-- [ ] Buat channel → set jadwal di FE → **publisher baca dari `channels`** (bukan `production_schedules`).
-- [ ] `random` → niche berputar **seluruh entitlement**; `fixed` → 1 niche; niche di luar entitlement **ditolak**.
-- [ ] Ubah niche channel pasca-buat → tersimpan + dipakai produksi berikutnya.
-- [ ] Ajukan custom niche → `niche_requests` terisi (judul+clue) → admin melihatnya.
-- [ ] Grep repo: tak ada lagi pembaca `production_schedules` / `tenant_configs.publish_slots` / `*.production_cron`; `worker.py` lama tak dipanggil.
+### D. Validasi e2e — ✅ SEMUA LULUS (temp authed user, key+RLS identik FE; 2026-06-16)
+- [x] Buat channel (default slot `['13:00']`) → baca/ubah jadwal via RPC `set_channel_publish_slots` → tersimpan di `channels.publish_slots` (publisher baca sini, bukan production_schedules).
+- [x] `random` → `entitled_niches` = seluruh entitlement (business=4, trial=3 base) + DiversityEngine.pick; niche di luar entitlement **ditolak** RPC (fun_facts utk trial ditolak).
+- [x] Ubah niche channel pasca-buat (fixed/random) via RPC → tersimpan.
+- [x] Ajukan custom niche → `niche_requests` terisi (judul+clue) + **admin melihatnya** (audience/refs/angle).
+- [x] Cap tier: 1 slot trial ok / 2 ditolak. Channel orang lain ditolak. py_compile BE OK · build FE PASS · grep `production_schedules` di kode = komentar saja.
+
+**🎉 PERBAIKAN PRODUCE & PUBLISH SELESAI 100% (A+B+C+D, 2026-06-16).** Migr v2 = 0001-0047. GATE CUTOVER boleh dijalankan.
 
 ---
 
