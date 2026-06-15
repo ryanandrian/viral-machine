@@ -7,7 +7,7 @@ import { useTheme } from "next-themes";
 import {
   LayoutDashboard, Tv, List, BarChart3, Calendar, ShieldCheck, Sparkles,
   Command, Mic, Image as ImageIcon, CreditCard, Settings, HelpCircle,
-  Menu, Search, Bell, ChevronsUpDown, Zap, Moon, Sun, ChevronRight,
+  Menu, Search, Bell, ChevronsUpDown, Moon, Sun, ChevronRight,
 } from "lucide-react";
 
 // Port MVShell (design-source/styles/shell.js) → React. Sidebar + topbar.
@@ -80,7 +80,7 @@ export function AppShell({
     <div className={`app${collapsed ? " collapsed" : ""}`}>
       <aside className="sidebar">
         <div className="sb-top">
-          <span className="sb-logo"><Zap size={17} /></span>
+          <img src="/mesinviral_logo512.png" alt="MesinViral" style={{ width: 30, height: 30, objectFit: "contain", flex: "none" }} />
           <span className="sb-name">MesinViral</span>
         </div>
         <div className="sb-tenant" title="Ganti tenant">

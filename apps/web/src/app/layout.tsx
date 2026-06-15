@@ -13,6 +13,7 @@ export const metadata: Metadata = {
   title: "MesinViral — Mesin produksi video YouTube otomatis",
   description:
     "SaaS produksi video YouTube Shorts otomatis berbasis AI — self-learning, BYOK, multi-channel.",
+  icons: { icon: "/mesinviral_logo512.png", apple: "/mesinviral_logo512.png" },
 };
 
 export default function RootLayout({

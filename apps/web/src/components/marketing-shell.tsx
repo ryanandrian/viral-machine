@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
-import { Zap, Moon, Sun, Menu } from "lucide-react";
+import { Moon, Sun, Menu } from "lucide-react";
 
 // Port MVMarketing (design-source/styles/marketing.js) → React. Nav + footer untuk halaman publik.
 // Brand icons (youtube/telegram) tak ada di lucide → substitusi Video/Send.
@@ -53,7 +53,7 @@ export function MarketingShell({ children, active }: { children: React.ReactNode
     <>
       <header className={`mk-nav${scrolled ? " scrolled" : ""}`}>
         <div className="mk-nav-inner">
-          <a href="/" className="mk-brand"><span className="mk-logo"><Zap size={17} color="#fff" /></span> MesinViral</a>
+          <a href="/" className="mk-brand"><img src="/mesinviral_logo512.png" alt="MesinViral" style={{ width: 30, height: 30, objectFit: "contain", flex: "none" }} /> MesinViral</a>
           <nav className={`mk-links${menuOpen ? " open" : ""}`}>
             {NAV_LINKS.map((l) => (
               <a key={l.id} href={l.href} className={active === l.id ? "active" : ""}><Bi id={l.id} en={l.en} /></a>
@@ -80,7 +80,7 @@ export function MarketingShell({ children, active }: { children: React.ReactNode
         <div className="mk-foot-inner">
           <div className="mk-foot-top">
             <div className="mk-fbrand">
-              <a href="/" className="mk-brand"><span className="mk-logo"><Zap size={17} color="#fff" /></span> MesinViral</a>
+              <a href="/" className="mk-brand"><img src="/mesinviral_logo512.png" alt="MesinViral" style={{ width: 30, height: 30, objectFit: "contain", flex: "none" }} /> MesinViral</a>
               <p data-id>Mesin produksi video YouTube otomatis yang belajar dari channelmu sendiri.</p>
               <p data-en>The automated YouTube video machine that learns from your own channel.</p>
               {/* sosial disembunyikan s/d URL channel tersedia (no link mati) */}

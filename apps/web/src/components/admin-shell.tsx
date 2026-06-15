@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
-  Users, HelpCircle, Activity, List, Target, DollarSign, Shield, LogOut, UserCog, FlaskConical, FileText,
+  Users, HelpCircle, Activity, List, Target, DollarSign, LogOut, UserCog, FlaskConical, FileText,
   Menu, Search, Moon, Sun, ChevronRight,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -59,7 +59,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     <div className={`app${collapsed ? " collapsed" : ""}`}>
       <aside className="sidebar">
         <div className="sb-top">
-          <span className="sb-logo" style={{ background: "linear-gradient(135deg,#F59E0B,#D97757)" }}><Shield size={17} /></span>
+          <img src="/mesinviral_logo512.png" alt="MesinViral" style={{ width: 30, height: 30, objectFit: "contain", flex: "none" }} />
           <span className="sb-name">MesinViral</span>
           <span className="badge" style={{ background: "var(--warning-soft)", color: "var(--warning)", fontSize: "0.5625rem", padding: "2px 5px", marginLeft: 2 }}>ADMIN</span>
         </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Shield, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import "../../auth/auth.css";
 
@@ -48,12 +48,7 @@ export default function AdminLoginPage() {
     >
       <div className="auth-card" style={{ width: "min(400px, 100%)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", marginBottom: "1rem" }}>
-          <span
-            className="sb-logo"
-            style={{ background: "linear-gradient(135deg,#F59E0B,#D97757)", width: 34, height: 34, display: "inline-grid", placeItems: "center", borderRadius: 9 }}
-          >
-            <Shield size={18} />
-          </span>
+          <img src="/mesinviral_logo512.png" alt="MesinViral" style={{ width: 34, height: 34, objectFit: "contain", flex: "none" }} />
           <strong style={{ fontSize: "1.0625rem" }}>MesinViral</strong>
           <span
             className="badge"

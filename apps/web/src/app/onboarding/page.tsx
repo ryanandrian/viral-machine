@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { createClient } from "@/lib/supabase/client";
 import {
-  Zap, HelpCircle, Moon, Sun, Play, Info, ShieldCheck, Sparkles, Check, CheckCircle,
+  HelpCircle, Moon, Sun, Play, Info, ShieldCheck, Sparkles, Check, CheckCircle,
   ExternalLink, ChevronDown, Plus, ArrowLeft, ArrowRight, Loader2, Video, X,
 } from "lucide-react";
 import "./onboarding.css";
@@ -210,7 +210,7 @@ export default function OnboardingPage() {
   return (
     <div className="ob-root">
       <div className="ob-top">
-        <div className="brandmark"><span className="logo-glyph"><Zap size={16} color="#fff" /></span> MesinViral</div>
+        <div className="brandmark"><img src="/mesinviral_logo512.png" alt="MesinViral" style={{ width: 28, height: 28, objectFit: "contain", flex: "none" }} /> MesinViral</div>
         <div className="steps-bar">
           {STEPS.map((s, i) => {
             const cls = i < cur ? "done" : i === cur ? "current" : "";

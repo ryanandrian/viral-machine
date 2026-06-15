@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
-import { Zap, Moon, Sun, Eye, EyeOff, Command, CheckCircle, Bell, ArrowLeft, ArrowRight, Star } from "lucide-react";
+import { Moon, Sun, Eye, EyeOff, Command, CheckCircle, Bell, ArrowLeft, ArrowRight, Star } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import "./auth.css";
 
@@ -130,7 +130,7 @@ export default function AuthPage() {
     <div className="auth">
       <div className="auth-left">
         <div className="auth-top">
-          <a href="/" className="brandmark"><span className="logo-glyph"><Zap size={17} color="#fff" /></span> MesinViral</a>
+          <a href="/" className="brandmark"><img src="/mesinviral_logo512.png" alt="MesinViral" style={{ width: 30, height: 30, objectFit: "contain", flex: "none" }} /> MesinViral</a>
           <div className="auth-tools">
             <div className="segmented">
               <button aria-selected={lang === "id"} onClick={() => switchLang("id")}>ID</button>
