@@ -108,7 +108,7 @@ export function AppShell({
           })}
         </nav>
         <div className="sb-bottom">
-          <a className="sb-item" href="#"><HelpCircle size={18} />
+          <a className="sb-item" href="/support"><HelpCircle size={18} />
             <span className="sb-label"><Bi id="Bantuan" en="Help" /></span>
           </a>
         </div>

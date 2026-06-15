@@ -154,7 +154,7 @@ export default function ChannelsPage() {
     <>
       <div className="ch-head">
         <h1>Channels</h1>
-        <button className="btn btn-default"><Plus size={16} /> <Bi id="Tambah Channel" en="Add Channel" /></button>
+        <a href="/channels/new" className="btn btn-default"><Plus size={16} /> <Bi id="Tambah Channel" en="Add Channel" /></a>
       </div>
 
       {maxCh != null && (
@@ -162,7 +162,7 @@ export default function ChannelsPage() {
           <Tv size={16} style={{ color: "var(--text-muted)" }} />
           <span><b style={{ fontWeight: 600 }}>{used} dari {maxCh}</b> <Bi id="channel terpakai" en="channels used" /> <span className="muted">({PLAN_LABEL[plan] ?? plan})</span></span>
           <div className="progress bar"><span style={{ width: `${Math.min(100, maxCh ? (used / maxCh) * 100 : 0)}%`, background: used >= maxCh ? "var(--warning)" : "var(--brand)" }} /></div>
-          {used >= maxCh && plan !== "business" && <a href="#" className="btn btn-secondary btn-sm up"><Zap size={14} /> <Bi id="Upgrade" en="Upgrade" /></a>}
+          {used >= maxCh && plan !== "business" && <a href="/billing" className="btn btn-secondary btn-sm up"><Zap size={14} /> <Bi id="Upgrade" en="Upgrade" /></a>}
         </div>
       )}
 

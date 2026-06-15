@@ -113,7 +113,7 @@ export default function ChannelDetailPage() {
             ? <span className="badge badge-success" style={{ fontSize: "var(--text-xs)" }}><span className="dot" />Active</span>
             : <span className="badge badge-warning" style={{ fontSize: "var(--text-xs)" }}><span className="dot" />Paused</span>}</h1>
           {ch.platform_channel_id
-            ? <a href="#" className="cd-yt-link"><span className="yt" /> youtube.com/@{ch.platform_channel_id} <ExternalLink size={13} /></a>
+            ? <a href={`https://youtube.com/channel/${ch.platform_channel_id}`} target="_blank" rel="noopener noreferrer" className="cd-yt-link"><span className="yt" /> youtube.com/channel/{ch.platform_channel_id} <ExternalLink size={13} /></a>
             : <span className="cd-yt-link muted"><span className="yt" /> <Bi id="YouTube belum terhubung" en="YouTube not connected" /></span>}
           <div className="cd-kpi-strip">
             <div className="item"><div className="v">—</div><div className="l"><Bi id="Total video" en="Total videos" /></div></div>
