@@ -1,16 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTheme } from "next-themes";
-import { User, Shield, Command, Bell, Globe, AlertTriangle, Upload, Download, ExternalLink, Send, Moon, Monitor } from "lucide-react";
+import { User, Shield, Command, Bell, Globe, AlertTriangle, Send, Moon, Monitor, Check, Loader2 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 import "./settings.css";
 
-// B5 Settings (PoC) — port dari design-source/Settings.html. Tab nav (profile/security/integrations/
-// notif/language/danger). Form mock — persist nyata = Supabase Phase 4+. Lang/theme = client toggle.
+// B5 Settings — Phase 9.3 (wired Supabase v2). Profil (email read + display_handle via RPC),
+// Keamanan (ganti password via supabase.auth.updateUser — NYATA), Integrasi Telegram (RPC).
+// Lang/theme = client toggle. 2FA/sesi/notif-email/danger = placeholder/gate. Config-write lewat
+// RPC whitelist set_tenant_config (aman dari escalation).
 
-function Bi({ id, en }: { id: string; en: string }) {
-  return (<><span data-id>{id}</span><span data-en>{en}</span></>);
-}
+function Bi({ id, en }: { id: string; en: string }) { return (<><span data-id>{id}</span><span data-en>{en}</span></>); }
 
 type Tab = "profile" | "security" | "integrations" | "notif" | "language" | "danger";
 const NAV: [Tab, React.ReactNode, string, string][] = [
@@ -22,123 +23,148 @@ const NAV: [Tab, React.ReactNode, string, string][] = [
   ["danger", <AlertTriangle size={18} key="d" />, "Zona berbahaya", "Danger zone"],
 ];
 
-function Switch({ checked }: { checked?: boolean }) {
-  return (<label className="switch"><input type="checkbox" defaultChecked={checked} /><span className="track" /><span className="thumb" /></label>);
-}
+function Saved({ on }: { on: boolean }) { return on ? <span style={{ color: "var(--success)", fontSize: "var(--text-xs)", display: "inline-flex", alignItems: "center", gap: "0.25rem" }}><Check size={13} /> <Bi id="Tersimpan" en="Saved" /></span> : null; }
+function Err({ msg }: { msg: string | null }) { return msg ? <span style={{ color: "var(--danger,#ef4444)", fontSize: "var(--text-xs)" }}>{msg}</span> : null; }
 
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
+  const [supabase] = useState(() => createClient());
   const [tab, setTab] = useState<Tab>("profile");
   const [lang, setLang] = useState<"id" | "en">("id");
 
-  useEffect(() => {
-    const saved = (localStorage.getItem("mv-lang") as "id" | "en") || "id";
-    setLang(saved); document.documentElement.lang = saved;
-  }, []);
+  const [email, setEmail] = useState("");
+  const [handle, setHandle] = useState("");
+  const [tgChat, setTgChat] = useState("");
+  const [tgEnabled, setTgEnabled] = useState(false);
+  const [pw, setPw] = useState(""); const [pw2, setPw2] = useState("");
+  const [busy, setBusy] = useState(""); // which action busy
+  const [saved, setSaved] = useState(""); // which saved
+  const [err, setErr] = useState<{ k: string; m: string } | null>(null);
 
-  function pickLang(l: "id" | "en") {
-    setLang(l); document.documentElement.lang = l; localStorage.setItem("mv-lang", l);
+  const load = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    setEmail(user?.email ?? "");
+    const { data } = await supabase.from("tenant_configs").select("display_handle,telegram_chat_id,telegram_enabled").maybeSingle();
+    const t = data as { display_handle?: string; telegram_chat_id?: string; telegram_enabled?: boolean } | null;
+    setHandle(t?.display_handle ?? ""); setTgChat(t?.telegram_chat_id ?? ""); setTgEnabled(!!t?.telegram_enabled);
+  }, [supabase]);
+  useEffect(() => {
+    load();
+    const s = (localStorage.getItem("mv-lang") as "id" | "en") || "id"; setLang(s); document.documentElement.lang = s;
+  }, [load]);
+
+  function pickLang(l: "id" | "en") { setLang(l); document.documentElement.lang = l; localStorage.setItem("mv-lang", l); }
+  const flash = (k: string) => { setSaved(k); setTimeout(() => setSaved(""), 2500); };
+
+  async function saveProfile() {
+    setErr(null); setBusy("profile");
+    const { error } = await supabase.rpc("set_tenant_config", { p_display_handle: handle.trim() });
+    setBusy(""); if (error) return setErr({ k: "profile", m: error.message }); flash("profile");
+  }
+  async function updatePassword() {
+    setErr(null);
+    if (pw.length < 8) return setErr({ k: "security", m: "Password minimal 8 karakter." });
+    if (pw !== pw2) return setErr({ k: "security", m: "Konfirmasi tidak cocok." });
+    setBusy("security");
+    const { error } = await supabase.auth.updateUser({ password: pw });
+    setBusy(""); if (error) return setErr({ k: "security", m: error.message });
+    setPw(""); setPw2(""); flash("security");
+  }
+  async function saveTelegram() {
+    setErr(null); setBusy("tg");
+    const { error } = await supabase.rpc("set_tenant_config", { p_telegram_chat_id: tgChat.trim(), p_telegram_enabled: tgEnabled });
+    setBusy(""); if (error) return setErr({ k: "tg", m: error.message }); flash("tg");
   }
 
   return (
     <>
       <div className="page-head"><h1><Bi id="Pengaturan" en="Settings" /></h1></div>
-
       <div className="set-layout">
         <nav className="set-nav">
           {NAV.map(([id, ic, t, en]) => (
-            <div key={id} className={`set-item${id === "danger" ? " danger" : ""}${tab === id ? " active" : ""}`} onClick={() => { setTab(id); window.scrollTo(0, 0); }}>
-              {ic}<span><Bi id={t} en={en} /></span>
-            </div>
+            <div key={id} className={`set-item${id === "danger" ? " danger" : ""}${tab === id ? " active" : ""}`} onClick={() => { setTab(id); window.scrollTo(0, 0); }}>{ic}<span><Bi id={t} en={en} /></span></div>
           ))}
         </nav>
 
         <main className="set-main">
-          {/* PROFILE */}
           {tab === "profile" && (
             <>
               <div className="sec-card">
                 <h2><Bi id="Profil" en="Profile" /></h2>
                 <p className="desc"><Bi id="Informasi akun Anda." en="Your account information." /></p>
-                <div style={{ display: "flex", alignItems: "center", gap: "1.25rem", marginBottom: "1.5rem" }}>
-                  <span className="avatar-lg">RP</span>
-                  <div><button className="btn btn-secondary btn-sm"><Upload size={14} /> <Bi id="Ganti foto" en="Change photo" /></button><div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.5rem" }}>JPG/PNG · max 2MB</div></div>
-                </div>
                 <div className="fld-2">
-                  <div className="fld"><label className="label"><Bi id="Nama lengkap" en="Full name" /></label><input className="input" defaultValue="Riko Pratama" /></div>
-                  <div className="fld"><label className="label">Email</label><input className="input" defaultValue="riko@misterisamudra.id" /></div>
+                  <div className="fld"><label className="label"><Bi id="Nama tampilan" en="Display name" /></label><input className="input" value={handle} onChange={(e) => setHandle(e.target.value)} placeholder="display_handle" /></div>
+                  <div className="fld"><label className="label">Email</label><input className="input" value={email} readOnly style={{ opacity: 0.7 }} /><div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.375rem" }}><Bi id="Email tak bisa diubah di sini." en="Email can't be changed here." /></div></div>
                 </div>
-                <div className="fld"><label className="label"><Bi id="Nomor telepon" en="Phone number" /></label><input className="input" defaultValue="+62 812-3456-7890" /></div>
               </div>
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}><button className="btn btn-ghost"><Bi id="Batal" en="Cancel" /></button><button className="btn btn-default"><Bi id="Simpan perubahan" en="Save changes" /></button></div>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", alignItems: "center" }}>
+                <Err msg={err?.k === "profile" ? err.m : null} /><Saved on={saved === "profile"} />
+                <button className="btn btn-default" onClick={saveProfile} disabled={busy === "profile"}>{busy === "profile" ? <Loader2 size={15} className="spin" /> : <Bi id="Simpan perubahan" en="Save changes" />}</button>
+              </div>
             </>
           )}
 
-          {/* SECURITY */}
           {tab === "security" && (
             <>
               <div className="sec-card">
                 <h2><Bi id="Password" en="Password" /></h2>
                 <p className="desc"><Bi id="Ubah password akun Anda." en="Change your account password." /></p>
-                <div className="fld"><label className="label"><Bi id="Password saat ini" en="Current password" /></label><input className="input" type="password" defaultValue="password" /></div>
-                <div className="fld-2"><div className="fld"><label className="label"><Bi id="Password baru" en="New password" /></label><input className="input" type="password" /></div><div className="fld"><label className="label"><Bi id="Konfirmasi" en="Confirm" /></label><input className="input" type="password" /></div></div>
-                <button className="btn btn-default btn-sm" style={{ marginTop: "0.5rem" }}><Bi id="Perbarui password" en="Update password" /></button>
+                <div className="fld-2"><div className="fld"><label className="label"><Bi id="Password baru" en="New password" /></label><input className="input" type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="Min. 8 karakter" /></div><div className="fld"><label className="label"><Bi id="Konfirmasi" en="Confirm" /></label><input className="input" type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} /></div></div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "0.5rem" }}>
+                  <button className="btn btn-default btn-sm" onClick={updatePassword} disabled={busy === "security"}>{busy === "security" ? <Loader2 size={14} className="spin" /> : <Bi id="Perbarui password" en="Update password" />}</button>
+                  <Err msg={err?.k === "security" ? err.m : null} /><Saved on={saved === "security"} />
+                </div>
               </div>
               <div className="sec-card">
-                <h2>2FA</h2>
-                <p className="desc"><Bi id="Tambah lapisan keamanan ekstra." en="Add an extra layer of security." /></p>
-                <div className="row-between"><div><div className="t"><Bi id="Autentikasi dua faktor" en="Two-factor authentication" /></div><div className="s"><Bi id="Via aplikasi authenticator" en="Via authenticator app" /></div></div><Switch /></div>
-              </div>
-              <div className="sec-card">
-                <h2><Bi id="Sesi aktif" en="Active sessions" /></h2>
-                <p className="desc"><Bi id="Perangkat yang sedang login." en="Devices currently logged in." /></p>
-                <div className="session"><span className="ic"><Monitor size={16} /></span><div style={{ flex: 1 }}><div className="t">Chrome · macOS <span className="badge badge-success" style={{ marginLeft: "0.375rem" }}><span className="dot" /><Bi id="Sekarang" en="Current" /></span></div><div className="s">Jakarta, ID · 11 Jun 2026</div></div></div>
-                <div className="session"><span className="ic"><Monitor size={16} /></span><div style={{ flex: 1 }}><div className="t">Safari · iPhone</div><div className="s">Jakarta, ID · 10 Jun 2026</div></div><button className="btn btn-ghost btn-sm" style={{ color: "var(--error)" }}><Bi id="Keluar" en="Revoke" /></button></div>
+                <h2>2FA · <Bi id="Sesi aktif" en="Active sessions" /></h2>
+                <p className="desc"><Bi id="Segera — 2FA & manajemen sesi belum aktif di rilis ini." en="Coming soon — 2FA & session management not in this release." /></p>
+                <div className="session"><span className="ic"><Monitor size={16} /></span><div style={{ flex: 1 }}><div className="t"><Bi id="Sesi ini" en="This session" /> <span className="badge badge-success" style={{ marginLeft: "0.375rem" }}><span className="dot" /><Bi id="Aktif" en="Current" /></span></div></div></div>
               </div>
             </>
           )}
 
-          {/* INTEGRATIONS */}
           {tab === "integrations" && (
             <div className="sec-card">
               <h2><Bi id="Integrasi" en="Integrations" /></h2>
               <p className="desc"><Bi id="Hubungkan layanan eksternal." en="Connect external services." /></p>
-              <div className="row-between"><div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}><span style={{ width: 36, height: 36, borderRadius: "var(--r-md)", background: "var(--telegram)", display: "grid", placeItems: "center", color: "#fff" }}><Send size={18} /></span><div><div className="t">Telegram</div><div className="s">@MesinViralBot · <Bi id="terhubung" en="connected" /></div></div></div><button className="btn btn-secondary btn-sm"><Bi id="Kelola" en="Manage" /></button></div>
-              <div className="row-between"><div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}><span style={{ width: 36, height: 36, borderRadius: "var(--r-md)", background: "var(--surface-2)", display: "grid", placeItems: "center", color: "var(--text-secondary)" }}><ExternalLink size={16} /></span><div><div className="t">Webhook URL</div><div className="s"><span className="badge badge-brand" style={{ fontSize: "0.625rem" }}>Enterprise</span></div></div></div><button className="btn btn-secondary btn-sm" disabled><Bi id="Atur" en="Setup" /></button></div>
-              <div className="row-between"><div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}><span style={{ width: 36, height: 36, borderRadius: "var(--r-md)", background: "#4A154B", display: "grid", placeItems: "center", color: "#fff", fontWeight: 700 }}>S</span><div><div className="t">Slack</div><div className="s"><span className="badge badge-brand" style={{ fontSize: "0.625rem" }}>Enterprise</span></div></div></div><button className="btn btn-secondary btn-sm" disabled><Bi id="Hubungkan" en="Connect" /></button></div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.875rem" }}>
+                <span style={{ width: 36, height: 36, borderRadius: "var(--r-md)", background: "var(--telegram)", display: "grid", placeItems: "center", color: "#fff" }}><Send size={18} /></span>
+                <div><div className="t">Telegram</div><div className="s"><Bi id="Notif real-time per run ke chat Anda" en="Real-time per-run notifications to your chat" /></div></div>
+                <label className="switch" style={{ marginLeft: "auto" }}><input type="checkbox" checked={tgEnabled} onChange={(e) => setTgEnabled(e.target.checked)} /><span className="track" /><span className="thumb" /></label>
+              </div>
+              <div className="fld"><label className="label">Telegram Chat ID</label><input className="input input-mono" value={tgChat} onChange={(e) => setTgChat(e.target.value)} placeholder="mis. 123456789" /></div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "0.75rem" }}>
+                <button className="btn btn-default btn-sm" onClick={saveTelegram} disabled={busy === "tg"}>{busy === "tg" ? <Loader2 size={14} className="spin" /> : <Bi id="Simpan Telegram" en="Save Telegram" />}</button>
+                <Err msg={err?.k === "tg" ? err.m : null} /><Saved on={saved === "tg"} />
+              </div>
+              <div className="row-between" style={{ marginTop: "1rem", opacity: 0.6 }}><div><div className="t">Webhook · Slack</div><div className="s"><span className="badge badge-brand" style={{ fontSize: "0.625rem" }}>Enterprise</span> <Bi id="(belum di rilis ini)" en="(not in this release)" /></div></div></div>
             </div>
           )}
 
-          {/* NOTIFICATIONS */}
           {tab === "notif" && (
             <div className="sec-card">
               <h2><Bi id="Preferensi notifikasi" en="Notification preferences" /></h2>
-              <p className="desc"><Bi id="Pengaturan cepat. Detail lengkap di Config → Notifikasi." en="Quick settings. Full matrix in Config → Notifications." /></p>
-              <div className="row-between"><div><div className="t">Email</div><div className="s"><Bi id="Ringkasan & peringatan penting" en="Digests & important alerts" /></div></div><Switch checked /></div>
-              <div className="row-between"><div><div className="t">Telegram</div><div className="s"><Bi id="Notif real-time per run" en="Real-time per-run notifications" /></div></div><Switch checked /></div>
-              <div className="row-between"><div><div className="t">In-app</div><div className="s"><Bi id="Lonceng notifikasi" en="Notification bell" /></div></div><Switch checked /></div>
-              <a href="/config?tab=notifications" className="link" style={{ color: "var(--brand)", textDecoration: "none", fontSize: "var(--text-sm)", display: "inline-block", marginTop: "1rem" }}><Bi id="Buka matriks notifikasi lengkap" en="Open full notification matrix" /> →</a>
+              <p className="desc"><Bi id="Toggle Telegram ada di tab Integrasi. Matriks lengkap di Config → Notifikasi." en="Telegram toggle is in Integrations. Full matrix in Config → Notifications." /></p>
+              <a href="/config/notifications" className="link" style={{ color: "var(--brand)", textDecoration: "none", fontSize: "var(--text-sm)", display: "inline-block", marginTop: "0.5rem" }}><Bi id="Buka matriks notifikasi" en="Open notification matrix" /> →</a>
             </div>
           )}
 
-          {/* LANGUAGE */}
           {tab === "language" && (
             <div className="sec-card">
               <h2><Bi id="Bahasa & tema" en="Language & theme" /></h2>
-              <p className="desc"><Bi id="Pilih bahasa antarmuka." en="Choose your interface language." /></p>
+              <p className="desc"><Bi id="Bahasa antarmuka (UI) — terpisah dari bahasa konten channel." en="Interface (UI) language — separate from channel content language." /></p>
               <div className={`lang-opt${lang === "id" ? " sel" : ""}`} onClick={() => pickLang("id")}><span className="flag">🇮🇩</span><div><div className="t">Bahasa Indonesia</div><div className="s">Default</div></div><span className="radio" /></div>
               <div className={`lang-opt${lang === "en" ? " sel" : ""}`} onClick={() => pickLang("en")}><span className="flag">🇬🇧</span><div><div className="t">English</div><div className="s">English (US)</div></div><span className="radio" /></div>
               <div className="row-between" style={{ marginTop: "0.5rem" }}><div><div className="t"><Bi id="Tema" en="Theme" /></div><div className="s"><Bi id="Dark / Light mode" en="Dark / Light mode" /></div></div><button className="btn btn-secondary btn-sm" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}><Moon size={14} /> <Bi id="Ganti tema" en="Toggle theme" /></button></div>
             </div>
           )}
 
-          {/* DANGER */}
           {tab === "danger" && (
             <div className="sec-card danger-zone">
               <h2 style={{ color: "var(--error)" }}><Bi id="Zona berbahaya" en="Danger zone" /></h2>
-              <p className="desc"><Bi id="Aksi permanen. Hati-hati." en="Permanent actions. Proceed carefully." /></p>
-              <div className="danger-row"><div><div className="t"><Bi id="Ekspor data" en="Export data" /></div><div className="s"><Bi id="Unduh semua data channel & run (CSV/JSON)" en="Download all channel & run data (CSV/JSON)" /></div></div><button className="btn btn-outline btn-sm"><Download size={14} /> <Bi id="Ekspor" en="Export" /></button></div>
-              <div className="danger-row"><div><div className="t" style={{ color: "var(--error)" }}><Bi id="Hapus akun" en="Delete account" /></div><div className="s"><Bi id="Hapus akun & semua data secara permanen" en="Permanently delete account & all data" /></div></div><button className="btn btn-destructive btn-sm"><Bi id="Hapus akun" en="Delete account" /></button></div>
+              <p className="desc"><Bi id="Ekspor & hapus akun belum aktif di rilis ini (butuh alur konfirmasi aman)." en="Export & account deletion not in this release (needs a safe confirmation flow)." /></p>
+              <div className="danger-row" style={{ opacity: 0.6 }}><div><div className="t"><Bi id="Ekspor data" en="Export data" /></div><div className="s"><Bi id="Segera" en="Coming soon" /></div></div><button className="btn btn-outline btn-sm" disabled><Bi id="Ekspor" en="Export" /></button></div>
+              <div className="danger-row" style={{ opacity: 0.6 }}><div><div className="t" style={{ color: "var(--error)" }}><Bi id="Hapus akun" en="Delete account" /></div><div className="s"><Bi id="Segera" en="Coming soon" /></div></div><button className="btn btn-destructive btn-sm" disabled><Bi id="Hapus akun" en="Delete account" /></button></div>
             </div>
           )}
         </main>
