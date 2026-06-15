@@ -9,7 +9,7 @@ import { NextResponse, type NextRequest } from "next/server";
 const PROTECTED = [
   "/dashboard", "/channels", "/runs", "/analytics", "/insights",
   "/compliance", "/config", "/schedule", "/settings", "/billing",
-  "/onboarding",
+  "/onboarding", "/support",
 ];
 
 export async function updateSession(request: NextRequest) {

@@ -38,6 +38,7 @@ const NAV: NavEntry[] = [
   { id: "billing", icon: CreditCard, idL: "Tagihan", en: "Billing", href: "/billing" },
   // nav "Tim/Team" DIHAPUS — fitur team di-take-down untuk V2 (1 user=1 tenant, no multi-user — decisions_auth_rbac). Jangan tambah lagi s/d V3.
   { id: "settings", icon: Settings, idL: "Pengaturan", en: "Settings", href: "/settings" },
+  { id: "support", icon: HelpCircle, idL: "Bantuan", en: "Support", href: "/support" },
 ];
 
 function Bi({ id, en }: { id: string; en: string }) {

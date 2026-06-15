@@ -1,94 +1,128 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
-import { ArrowRight, Plus } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import "./support.css";
 
-// E4 Admin Support — port dari design-source/Admin Support.html (Hybrid). /admin/support.
-// Inbox 3-kolom (tiket/percakapan/konteks). Mock deterministik; nol wiring Supabase. Prefix sup-.
-// xendit→midtrans (keputusan final).
+// E4 Admin Support (Phase 10.9) — DATA NYATA via /api/admin/support (service_role). Inbox 3-kolom.
+// Admin bukan tenant → RLS realtime tak berlaku; admin POLL detail tiap 5s untuk balasan tenant. Prefix sup-.
 
 function Bi({ id, en }: { id: string; en: string }) {
   return (<><span data-id>{id}</span><span data-en>{en}</span></>);
 }
 
-type Ticket = { av: string; c: string; name: string; plan: string; subj: string; prev: string; time: string; tags: string[] };
-const TICKETS: Ticket[] = [
-  { av: "RP", c: "#1d4ed8", name: "Riko Pratama", plan: "Pro", subj: "Pertanyaan tentang billing", prev: "Halo, saya mau tanya soal invoice bulan ini yang...", time: "12m", tags: ["billing", "midtrans"] },
-  { av: "BP", c: "#9f1239", name: "Bagus Pratomo", plan: "Trial", subj: "Cara connect channel kedua", prev: "Saya sudah connect 1 channel, gimana cara...", time: "1j", tags: ["onboarding"] },
-  { av: "MP", c: "#047857", name: "Maya Putri", plan: "Pro", subj: "API key OpenAI gagal test", prev: "Pas saya test koneksi muncul error 401...", time: "2j", tags: ["api-keys", "urgent"] },
-  { av: "AS", c: "#7c3aed", name: "Andi Saputra", plan: "Business", subj: "Request refund", prev: "Akun saya kena suspend tapi saya sudah bayar...", time: "3j", tags: ["billing", "refund"] },
-];
-const CONVO: ["them" | "me", string, string][] = [
-  ["them", "Halo, saya mau tanya soal invoice bulan ini. Kenapa jumlahnya Rp 548K, bukan Rp 349K seperti biasa?", "12:02"],
-  ["me", "Halo Riko! Selisih Rp 199K itu dari add-on Voice Pack yang aktif bulan ini. Mau saya kirim rincian invoice-nya?", "12:05"],
-  ["them", "Oh begitu, iya boleh tolong dikirim. Terima kasih!", "12:06"],
-];
+type Ticket = { id: string; tenant_id: string; tenant_handle: string; subject: string; status: string; preview: string; messages: number; updated_at: string };
+type Msg = { id: string; sender: string; body: string; created_at: string };
+type Detail = { ticket: Ticket; messages: Msg[]; tenant: { display_handle: string; plan_type: string; subscription_status: string; created_at: string } | null; channels: number };
+
 const QR = ["Terima kasih sudah menghubungi!", "Sedang kami cek, mohon tunggu.", "Sudah kami selesaikan ✅", "Bisa kirim screenshot?"];
+const AVC = ["#1d4ed8", "#9f1239", "#047857", "#7c3aed", "#b45309"];
+const ini = (s: string) => (s || "?").slice(0, 2).toUpperCase();
 
 export default function AdminSupportPage() {
-  const [sel, setSel] = useState(0);
-  const [reply, setReply] = useState("");
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [counts, setCounts] = useState<{ open: number; pending: number; resolved: number }>({ open: 0, pending: 0, resolved: 0 });
   const [filter, setFilter] = useState("open");
-  const t = TICKETS[sel];
+  const [sel, setSel] = useState<string | null>(null);
+  const [detail, setDetail] = useState<Detail | null>(null);
+  const [reply, setReply] = useState("");
+  const [busy, setBusy] = useState(false);
+  const endRef = useRef<HTMLDivElement | null>(null);
+
+  const loadList = useCallback(async () => {
+    const r = await fetch("/api/admin/support");
+    if (r.ok) { const j = await r.json(); setTickets(j.tickets); setCounts(j.counts); }
+  }, []);
+  useEffect(() => { loadList(); }, [loadList]);
+
+  const loadDetail = useCallback(async (id: string) => {
+    const r = await fetch(`/api/admin/support/${id}`);
+    if (r.ok) setDetail(await r.json());
+  }, []);
+  useEffect(() => {
+    if (!sel) { setDetail(null); return; }
+    loadDetail(sel);
+    const poll = setInterval(() => loadDetail(sel), 5000);  // admin poll (RLS realtime = tenant-only)
+    return () => clearInterval(poll);
+  }, [sel, loadDetail]);
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [detail?.messages.length]);
+
+  const view = tickets.filter((t) => t.status === filter);
+
+  async function sendReply() {
+    if (!reply.trim() || !sel) return;
+    setBusy(true);
+    const r = await fetch(`/api/admin/support/${sel}/reply`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ body: reply.trim() }) });
+    setBusy(false);
+    if (r.ok) { setReply(""); await loadDetail(sel); await loadList(); }
+  }
+  async function setStatus(status: string) {
+    if (!sel) return;
+    setBusy(true);
+    await fetch(`/api/admin/support/${sel}/status`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
+    setBusy(false); await loadDetail(sel); await loadList();
+  }
+
+  const idx = view.findIndex((t) => t.id === sel);
+
   return (
     <div className="sup-layout">
       <div className="sup-inbox">
         <div className="sup-inbox-head">
           <h1>Support</h1>
           <div className="segmented">
-            <button aria-selected={filter === "open"} onClick={() => setFilter("open")}>Open <span style={{ opacity: 0.6 }}>4</span></button>
-            <button aria-selected={filter === "pending"} onClick={() => setFilter("pending")}>Pending</button>
-            <button aria-selected={filter === "resolved"} onClick={() => setFilter("resolved")}>Resolved</button>
+            <button aria-selected={filter === "open"} onClick={() => setFilter("open")}>Open <span style={{ opacity: 0.6 }}>{counts.open}</span></button>
+            <button aria-selected={filter === "pending"} onClick={() => setFilter("pending")}>Pending <span style={{ opacity: 0.6 }}>{counts.pending}</span></button>
+            <button aria-selected={filter === "resolved"} onClick={() => setFilter("resolved")}>Resolved <span style={{ opacity: 0.6 }}>{counts.resolved}</span></button>
           </div>
         </div>
         <div className="sup-inbox-list">
-          {TICKETS.map((tk, i) => (
-            <div className={`sup-ticket${sel === i ? " active" : ""}`} key={tk.name} onClick={() => setSel(i)}>
-              <div className="t-top"><span className="sup-av" style={{ background: tk.c }}>{tk.av}</span><span className="t-name">{tk.name}</span><span className="t-time">{tk.time}</span></div>
-              <div className="t-subj">{tk.subj}</div><div className="t-prev">{tk.prev}</div>
-              <div className="t-tags">{tk.tags.map((tag) => <span key={tag} className={`badge ${tag === "urgent" ? "badge-error" : "badge-default"}`} style={{ fontSize: "0.5625rem" }}>{tag}</span>)}</div>
+          {view.length === 0 && <div className="muted" style={{ padding: "1.25rem", textAlign: "center", fontSize: "var(--text-sm)" }}>Tidak ada tiket {filter}.</div>}
+          {view.map((tk, i) => (
+            <div className={`sup-ticket${sel === tk.id ? " active" : ""}`} key={tk.id} onClick={() => setSel(tk.id)}>
+              <div className="t-top"><span className="sup-av" style={{ background: AVC[i % AVC.length] }}>{ini(tk.tenant_handle)}</span><span className="t-name">{tk.tenant_handle}</span><span className="t-time">{new Date(tk.updated_at).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}</span></div>
+              <div className="t-subj">{tk.subject}</div><div className="t-prev">{tk.preview}</div>
             </div>
           ))}
         </div>
       </div>
 
       <div className="sup-convo">
-        <div className="sup-convo-head">
-          <span className="sup-av" style={{ width: 34, height: 34, fontSize: "var(--text-xs)", background: t.c }}>{t.av}</span>
-          <div style={{ flex: 1 }}><div style={{ fontWeight: 600, fontSize: "var(--text-sm)" }}>{t.subj}</div><div className="muted" style={{ fontSize: "var(--text-xs)" }}>{t.name} · {t.plan}</div></div>
-          <span className="badge badge-warning"><span className="dot" />Open</span>
-          <button className="btn btn-secondary btn-sm"><Bi id="Tandai selesai" en="Resolve" /></button>
-        </div>
-        <div className="sup-convo-body">
-          {CONVO.map(([who, txt, time], i) => (
-            <div className={`sup-msg ${who}`} key={i}><div className="bubble">{txt}</div><div className="meta">{who === "me" ? "Admin" : t.name} · {time}</div></div>
-          ))}
-        </div>
-        <div className="sup-convo-foot">
-          <div className="sup-qr-row">{QR.map((q) => <span key={q} className="sup-qr" onClick={() => setReply(q)}>{q}</span>)}</div>
-          <div className="sup-reply-box"><input className="input" placeholder="Tulis balasan…" style={{ flex: 1 }} value={reply} onChange={(e) => setReply(e.target.value)} /><button className="btn btn-default"><ArrowRight size={15} /></button></div>
-        </div>
+        {!detail ? <div className="muted" style={{ padding: "2rem", textAlign: "center" }}>Pilih tiket.</div> : (<>
+          <div className="sup-convo-head">
+            <span className="sup-av" style={{ width: 34, height: 34, fontSize: "var(--text-xs)", background: AVC[Math.max(0, idx) % AVC.length] }}>{ini(detail.ticket.tenant_handle)}</span>
+            <div style={{ flex: 1 }}><div style={{ fontWeight: 600, fontSize: "var(--text-sm)" }}>{detail.ticket.subject}</div><div className="muted" style={{ fontSize: "var(--text-xs)" }}>{detail.ticket.tenant_handle} · {detail.tenant?.plan_type ?? "—"}</div></div>
+            <span className={`badge ${detail.ticket.status === "open" ? "badge-info" : detail.ticket.status === "pending" ? "badge-warning" : "badge-success"}`}><span className="dot" />{detail.ticket.status}</span>
+            {detail.ticket.status !== "resolved"
+              ? <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => setStatus("resolved")}><Bi id="Tandai selesai" en="Resolve" /></button>
+              : <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => setStatus("open")}><Bi id="Buka lagi" en="Reopen" /></button>}
+          </div>
+          <div className="sup-convo-body">
+            {detail.messages.map((m) => (
+              <div className={`sup-msg ${m.sender === "admin" ? "me" : "them"}`} key={m.id}><div className="bubble">{m.body}</div><div className="meta">{m.sender === "admin" ? "Admin" : detail.ticket.tenant_handle} · {new Date(m.created_at).toLocaleString("id-ID", { hour: "2-digit", minute: "2-digit" })}</div></div>
+            ))}
+            <div ref={endRef} />
+          </div>
+          {detail.ticket.status !== "resolved" && (
+            <div className="sup-convo-foot">
+              <div className="sup-qr-row">{QR.map((q) => <span key={q} className="sup-qr" onClick={() => setReply(q)}>{q}</span>)}</div>
+              <form className="sup-reply-box" onSubmit={(e) => { e.preventDefault(); if (!busy) sendReply(); }}><input className="input" placeholder="Tulis balasan…" style={{ flex: 1 }} value={reply} onChange={(e) => setReply(e.target.value)} /><button className="btn btn-default" type="submit" disabled={busy || !reply.trim()}><ArrowRight size={15} /></button></form>
+            </div>
+          )}
+        </>)}
       </div>
 
       <aside className="sup-ctx">
         <h3><Bi id="Konteks tenant" en="Tenant context" /></h3>
-        <div className="kv"><span className="k">Plan</span><span className="v"><span className="badge badge-brand">{t.plan}</span></span></div>
-        <div className="kv"><span className="k">MRR</span><span className="v">Rp 548K</span></div>
-        <div className="kv"><span className="k">Channels</span><span className="v">3</span></div>
-        <div className="kv"><span className="k"><Bi id="Bergabung" en="Joined" /></span><span className="v">12 Jan 2026</span></div>
-        <hr className="hr" style={{ margin: "1rem 0" }} />
-        <h3><Bi id="Run terbaru" en="Recent runs" /></h3>
-        <div style={{ fontSize: "var(--text-xs)", color: "var(--text-secondary)", lineHeight: 1.9 }}>
-          <div>✅ Kapal Hilang Bermuda · 2j</div>
-          <div>✅ Suara Palung Mariana · 5j</div>
-          <div style={{ color: "var(--error)" }}>❌ Pulau Hantu · 6j</div>
-        </div>
-        <hr className="hr" style={{ margin: "1rem 0" }} />
-        <h3>Tags</h3>
-        <div style={{ display: "flex", gap: "0.375rem", flexWrap: "wrap" }}><span className="badge badge-default">billing</span><span className="badge badge-default">midtrans</span><button className="btn btn-ghost btn-icon btn-sm"><Plus size={13} /></button></div>
-        <Link href="/admin/tenants" className="btn btn-secondary btn-sm" style={{ width: "100%", marginTop: "1.25rem" }}><Bi id="Buka profil tenant" en="Open tenant profile" /> <ArrowRight size={14} /></Link>
+        {detail?.tenant ? (<>
+          <div className="kv"><span className="k">Handle</span><span className="v">{detail.tenant.display_handle}</span></div>
+          <div className="kv"><span className="k">Plan</span><span className="v"><span className="badge badge-brand">{detail.tenant.plan_type}</span></span></div>
+          <div className="kv"><span className="k">Status</span><span className="v">{detail.tenant.subscription_status}</span></div>
+          <div className="kv"><span className="k">Channels</span><span className="v">{detail.channels}</span></div>
+          <div className="kv"><span className="k"><Bi id="Bergabung" en="Joined" /></span><span className="v">{new Date(detail.tenant.created_at).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</span></div>
+          <Link href="/admin/tenants" className="btn btn-secondary btn-sm" style={{ width: "100%", marginTop: "1.25rem" }}><Bi id="Buka profil tenant" en="Open tenant profile" /> <ArrowRight size={14} /></Link>
+        </>) : <div className="muted" style={{ fontSize: "var(--text-xs)" }}>Pilih tiket untuk melihat konteks.</div>}
       </aside>
     </div>
   );
