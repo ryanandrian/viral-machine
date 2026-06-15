@@ -852,7 +852,12 @@ Detail lengkap + bukti file:line: memory `decisions_production_scaling` · statu
 
 **C. CMS — landing/marketing content admin-editable.** Halaman **Blog, Docs, Demo** kini DB-backed (`blog_posts`/`docs_articles`/`demo_tours`), dikelola admin via `/admin/content` (editor markdown, draft/publish). Publik baca yang published (RLS sembunyikan draft). **Harga landing/pricing (A1/A2) = dari `pricing_config`** (no-hardcode terpenuhi). Halaman statik lain (About/Contact) = mailto nyata. **Catatan:** admin tak perlu ngoding/deploy untuk update konten.
 
-**D. Validasi kredensial NYATA.** Onboarding "Test koneksi" + admin Test Lab benar-benar memanggil API provider (OpenAI/Anthropic/ElevenLabs) → ok/gagal (bukan simulasi). **YouTube connect (BYO-CC OAuth) = jujur-deferred** (real-build tersisa; tenant bawa Google OAuth app sendiri).
+**D. Validasi kredensial NYATA.** Onboarding "Test koneksi" + admin Test Lab benar-benar memanggil API provider (OpenAI/Anthropic/ElevenLabs) → ok/gagal (bukan simulasi).
+
+**E. Keamanan kredensial tenant (2026-06-15) — nilai jual.** Owner: "seluruh kredensial tenant AMAN".
+- **YouTube OAuth BYO-CC = TERBANGUN** (Opsi A, owner-approved): tenant bawa Google OAuth app sendiri (client_id+secret) → consent → refresh_token. **SELURUH enkripsi (Fernet) + tukar-token + tulis `tenant_credentials` terjadi di server Python (`webhook_app`)**; Next hanya proxy authed (sesi Supabase→tenant_id) → master key (`ENCRYPTION_KEY`) **TAK pernah ke frontend/Vercel**. State HMAC anti-CSRF. Entry: onboarding + Settings→Integrasi (connect/disconnect/status). Sisa = deploy `webhook_app` ke VPS + 1× uji consent dgn GCP-app nyata.
+- **SEMUA API key AI terenkripsi at-rest** (migr 0044): `llm/visual/tts/youtube_api_key` plaintext → kolom `*_enc` (Fernet). Tulis via vault `/api/keys/set` (server pemegang-kunci); `set_tenant_config` RPC **tak bisa lagi** tulis key plaintext (param key dibuang). Worker dekripsi saat baca (`tenant_config._eff_key`). Plaintext lama dimigrasi + di-null.
+- **Isolasi:** `tenant_credentials` = RLS service_role-only; `tenant_configs` = RLS per-tenant; key tak pernah di-log/ditampilkan ulang. **Landing** punya section "Keamanan kredensial" (klaim hanya yang benar).
 
 **Prinsip ditegakkan owner (2026-06-15):** nol komponen FE fake/non-functional (yang tanpa backend ditandai jujur "segera"/disembunyikan) · no-hardcode · service_role hanya server-route admin · semua keputusan via expert + validasi runtime.
 
