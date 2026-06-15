@@ -31,7 +31,6 @@ from src.distribution.youtube_publisher import YouTubePublisher
 from src.utils.storage_cleaner import StorageCleaner
 from src.utils.supabase_writer import SupabaseWriter
 from src.utils.telegram_notifier import TelegramNotifier
-from src.intelligence.schedule_manager import ScheduleManager
 from src.exceptions import PipelineError, ConfigError, LLMError, TTSError, VisualError, RenderError
 
 load_dotenv()
@@ -55,7 +54,6 @@ class Pipeline:
         self.storage_cleaner    = StorageCleaner(base_dir="logs")
         self.supabase_writer    = SupabaseWriter()
         self.telegram           = TelegramNotifier()
-        self.schedule_manager   = ScheduleManager()
 
     def _load_tenant_run_config(self, tenant_config: TenantConfig):
         """
@@ -98,26 +96,31 @@ class Pipeline:
         # Load config dari Supabase
         run_config = self._load_tenant_run_config(tenant_config)
 
-        # ── s84/s92: Resolve niche + focus + content_type dari production_schedules ──
-        resolved_content_type = "short"  # default
+        # ── Resolusi niche (model terkunci §12c, [[decisions_niche_model]]) ──
+        # niche & jadwal TERPISAH. niche_mode='fixed' → pakai channel.niche apa adanya.
+        # niche_mode='random' → rotasi LRU dari SELURUH ENTITLEMENT tenant (katalog per-tier +
+        # niche custom/private milik tenant). TIDAK lagi pakai production_schedules (niche-per-jam).
+        niche_focus = None
+        resolved_content_type = "short"
         try:
-            channel_id   = getattr(run_config, "channel_id", None) or tenant_config.tenant_id
-            resolved_niche, niche_focus, resolved_content_type = self.schedule_manager.resolve_slot(
-                tenant_id  = tenant_config.tenant_id,
-                channel_id = channel_id,
-            )
-            if resolved_niche and resolved_niche != tenant_config.niche:
-                logger.info(
-                    f"[Pipeline] Niche override: "
-                    f"{tenant_config.niche} → {resolved_niche}"
-                )
-                tenant_config.niche = resolved_niche
-            if niche_focus:
-                logger.info(f"[Pipeline] Niche focus: '{niche_focus}'")
-            logger.info(f"[Pipeline] Content type: '{resolved_content_type}'")
+            mode = (getattr(run_config, "niche_mode", None) or "fixed").lower()
+            if mode == "random":
+                from supabase import create_client
+                from src.billing.limits import entitled_niches
+                from src.intelligence.diversity import DiversityEngine
+                sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+                entitled = entitled_niches(sb, getattr(run_config, "plan_type", "starter"),
+                                           tenant_config.tenant_id)
+                channel_id = getattr(run_config, "channel_id", None) or tenant_config.tenant_id
+                chosen = DiversityEngine().pick(channel_id, "niche", entitled) if entitled else None
+                if chosen and chosen != tenant_config.niche:
+                    logger.info(f"[Pipeline] Niche rotasi (random, entitlement): "
+                                f"{tenant_config.niche} → {chosen}")
+                    tenant_config.niche = chosen
+            else:
+                logger.info(f"[Pipeline] Niche fixed: '{tenant_config.niche}'")
         except Exception as _se:
-            logger.warning(f"[Pipeline] ScheduleManager gagal ({_se}) — pakai niche default")
-            niche_focus = None
+            logger.warning(f"[Pipeline] resolusi niche gagal ({_se}) — pakai channel.niche")
         # ────────────────────────────────────────────────────────────
 
         result = {

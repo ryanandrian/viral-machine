@@ -60,11 +60,11 @@
 - *(Di luar scope: `niches.tag_pool` / Layer-2 sub-tag = epik terpisah.)*
 
 ### B. BE
-- [ ] **B1** — Pemilihan niche: **buang ScheduleManager Layer 1 (`production_schedules` niche-per-jam)**. `niche_mode=fixed` → `channels.niche`; `niche_mode=random` → rotasi **SELURUH entitlement tenant** (`available_niches`) via DiversityEngine. Lepas dependensi `production_schedules` di `pipeline.py`.
-- [ ] **B2** — Producer baca `channels.buffer_depth` per-channel (verifikasi default + override jalan).
-- [ ] **B3** — Validasi entitlement di jalur tulis: niche channel WAJIB ⊆ entitlement tenant (tolak bila bukan haknya).
-- [ ] **B4** — Publisher: konfirmasi tetap baca `channels.publish_slots` + `tenant_configs.timezone` + cap tier (`daily_publish_cap`) — nol regresi.
-- [ ] **B5** — Bersihkan kode V1 tak terpakai: arsip/hapus `scripts/worker.py` (monolit) + `schedule_manager.py` (bila sudah tak dipakai pasca-B1).
+- [x] **B1** — niche: ScheduleManager Layer-1 (`production_schedules`) **DIBUANG** dari `pipeline.py`. `niche_mode=fixed`→`channels.niche`; `random`→rotasi **seluruh entitlement** (`entitled_niches` = katalog per-tier + `exclusive_to`) via `DiversityEngine.pick(channel,"niche",...)`. helper baru `limits.entitled_niches`. **Validated** (business=4, trial=3 base, pick OK). *(2026-06-16)*
+- [x] **B2** — Producer baca `channels.buffer_depth` (kode `ch.get("buffer_depth") or default`; ryan=3 verified).
+- [x] **B3** — RPC `set_channel_niche` (niche ⊆ entitlement) + `set_channel_publish_slots` (≤ tier cap), SECURITY DEFINER scope auth.uid() (migr 0046). **Validated** (base ok/non-base trial ditolak · 1 slot ok/2 ditolak · channel-bukan-milik ditolak · persist).
+- [x] **B4** — Publisher TANPA perubahan (tetap baca `channels.publish_slots`+`tenant_configs.timezone`+`daily_publish_cap`) → nol regresi. compileall src PASS.
+- [x] **B5** — Hapus `scripts/worker.py` (monolit V1) + `src/intelligence/schedule_manager.py` (nol importer pasca-B1; `production_schedules` tak lagi dibaca BE). *(2026-06-16)*
 
 ### C. FE
 - [ ] **C1** — Halaman Jadwal (D7): tulis/baca **`channels.publish_slots`** (JAM saja, per-channel, zona tenant) lewat RPC whitelist (validasi N ≤ tier). Lepas `production_schedules`. **Hapus niche dari UI jadwal** (jadwal = jam saja).

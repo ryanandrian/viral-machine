@@ -641,3 +641,13 @@
 - current_job text
 - node text
 - last_heartbeat_at timestamp with time zone NOT NULL = now()
+
+---
+
+## RPC (SECURITY DEFINER) — jalur tulis ber-validasi (FE = anon, panggil via supabase.rpc)
+> Bukan tabel; dicatat di sini karena tiap migrasi RPC update dok ini (aturan owner).
+- `set_tenant_config(...)` — config non-rahasia tenant (whitelist; migr 0031/0033/0044). API key TIDAK lagi via sini (→ vault).
+- `set_tenant_content_config(p jsonb)` — config konten tenant (whitelist; migr 0041).
+- `set_channel_publish_slots(p_channel_id uuid, p_slots text[])` — **migr 0046**: jadwal publish channel; validasi jumlah slot ≤ tier (`plan_limits.max_videos_per_day`) + channel milik `auth.uid()`.
+- `set_channel_niche(p_channel_id uuid, p_niche text, p_niche_mode text)` — **migr 0046**: niche channel; validasi niche ∈ ENTITLEMENT tenant (katalog per-tier + `exclusive_to`) + channel milik `auth.uid()`.
+- `handle_new_tenant()` (trigger on_auth_user_created, migr 0028) — provision tenant_configs + trial saat signup.
