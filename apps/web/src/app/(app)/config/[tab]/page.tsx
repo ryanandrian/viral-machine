@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { fetchPricing, idrK } from "@/lib/pricing";
 import {
   Sparkles, Command, Mic, Image as ImageIcon, Music, FileText, Gauge, List, Target, Bell, Shield,
   ChevronDown, CheckCircle, Loader2, Play, Pause, Settings, X, Clock, Wand2, Plus, Tv,
@@ -304,7 +306,18 @@ function QHist({ thr }: { thr: number }) {
 }
 
 function Quality() {
+  const supabase = createClient();
   const [score, setScore] = useState(75); const [retry, setRetry] = useState(3); const [fail, setFail] = useState(0); const [locked, setLocked] = useState(false);
+  const [saving, setSaving] = useState(false); const [saved, setSaved] = useState<string | null>(null);
+  useEffect(() => {
+    supabase.from("tenant_configs").select("script_min_viral_score, script_max_retry").maybeSingle()
+      .then(({ data }) => { if (data) { if (data.script_min_viral_score != null) setScore(data.script_min_viral_score); if (data.script_max_retry != null) setRetry(data.script_max_retry); } });
+  }, [supabase]);
+  async function save() {
+    setSaving(true); setSaved(null);
+    const { error } = await supabase.rpc("set_tenant_content_config", { p: { script_min_viral_score: score, script_max_retry: retry } });
+    setSaving(false); setSaved(error ? "Gagal menyimpan" : "Tersimpan");
+  }
   const pass = Math.max(20, Math.round(100 - (score - 50) * 1.7));
   const dims: [string, number][] = [["Hook Power", 80], ["Curiosity Gap", 80], ["Retention Arc", 80], ["Emotional Peak", 80], ["Information Density", 75], ["CTA Strength", 70]];
   const fails: [string, number, string][] = [["Emotional Peak", 60, "var(--error)"], ["Hook Power", 25, "var(--warning)"], ["Lainnya", 15, "var(--text-muted)"]];
@@ -345,6 +358,7 @@ function Quality() {
           </div>
         </div>
       </div>
+      <div className="save-bar"><span className="muted">{saved ?? <Bi id="Threshold disimpan ke channel" en="Thresholds save to channel" />}</span><button className="btn btn-default" disabled={saving || locked} onClick={save}>{saving ? "Menyimpan…" : <Bi id="Simpan" en="Save" />}</button></div>
     </>
   );
 }
@@ -389,6 +403,8 @@ function Mood({ cols }: { cols: string[] }) {
 function Niches() {
   const [seg, setSeg] = useState(0);
   const [modal, setModal] = useState(false);
+  const [pricing, setPricing] = useState<Record<string, number>>({});
+  useEffect(() => { fetchPricing().then(setPricing); }, []);
   const active: [string, string[], string[], string][] = [
     ["Misteri Samudra", ["#082f49", "#0c4a6e", "#0ea5e9"], ["#laut", "#misteri", "#samudra"], "47 video · avg 2.3K"],
     ["Fakta Menarik", ["#052e16", "#14532d", "#22c55e"], ["#fakta", "#sains", "#tahukah"], "63 video · avg 3.1K"],
@@ -444,13 +460,13 @@ function Niches() {
         <div className="grid-2">
           <div className="card card-pad">
             <div style={{ display: "flex", alignItems: "center", gap: ".5rem", fontWeight: 600, marginBottom: ".375rem" }}>🌍 <Bi id="Public Niche" en="Public Niche" /></div>
-            <div className="price-dyn" style={{ fontSize: "var(--text-xl)", fontWeight: 700 }}>{"{{pricing.custom_niche_public_90d}}"}<span className="ex">≈ Rp 299K</span></div>
+            <div className="price-dyn" style={{ fontSize: "var(--text-xl)", fontWeight: 700 }}>{pricing.custom_niche_public_90d ? `Rp ${idrK(pricing.custom_niche_public_90d)}` : "Rp 299K"}</div>
             <div className="muted" style={{ fontSize: "var(--text-xs)", margin: ".625rem 0 1rem" }}><Bi id="90 hari exclusive untuk channel-mu, lalu masuk public catalog. Affordable, cocok untuk solo creator." en="90 days exclusive to your channel, then enters the public catalog. Affordable, great for solo creators." /></div>
             <button className="btn btn-default btn-sm" style={{ width: "100%" }} onClick={() => setModal(true)}><Bi id="Request Public Niche" en="Request Public Niche" /></button>
           </div>
           <div className="card card-pad" style={{ borderColor: "color-mix(in srgb,var(--accent) 35%,transparent)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: ".5rem", fontWeight: 600, marginBottom: ".375rem" }}>🔒 <Bi id="Permanent Private" en="Permanent Private" /> <span className="badge badge-brand" style={{ fontSize: ".625rem" }}>Premium</span></div>
-            <div className="price-dyn" style={{ fontSize: "var(--text-xl)", fontWeight: 700, color: "var(--accent)" }}>{"{{pricing.custom_niche_private}}"}<span className="ex">≈ Rp 1.499K</span></div>
+            <div className="price-dyn" style={{ fontSize: "var(--text-xl)", fontWeight: 700, color: "var(--accent)" }}>{pricing.custom_niche_private ? `Rp ${idrK(pricing.custom_niche_private)}` : "Rp 1.499K"}</div>
             <div className="muted" style={{ fontSize: "var(--text-xs)", margin: ".625rem 0 1rem" }}><Bi id="Tidak pernah public. Exclusive permanen untuk channel-mu. Positioning premium untuk agency." en="Never public. Permanently exclusive to your channel. Premium positioning for agencies." /></div>
             <button className="btn btn-ai btn-sm" style={{ width: "100%" }} onClick={() => setModal(true)}><Bi id="Request Private Niche" en="Request Private Niche" /></button>
           </div>
