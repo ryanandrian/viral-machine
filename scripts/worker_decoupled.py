@@ -30,7 +30,7 @@ from loguru import logger
 
 def main() -> None:
     from src.utils.db_log_sink import setup_db_logging
-    from src.orchestrator import producer, publisher, buffer_janitor, self_learning, email_outbox
+    from src.orchestrator import producer, publisher, buffer_janitor, self_learning, email_outbox, heartbeat
     from src.billing import renewal as billing_renewal
 
     setup_db_logging()
@@ -60,8 +60,21 @@ def main() -> None:
     for t in threads:
         t.start()
 
+    # Heartbeat ke worker_heartbeats (E3 System Health) — tiap HEARTBEAT_INTERVAL_SEC.
+    sb_hb = None
+    try:
+        from supabase import create_client
+        sb_hb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+    except Exception as e:
+        logger.warning(f"[Heartbeat] init gagal: {e}")
+    beat_interval = int(os.getenv("HEARTBEAT_INTERVAL_SEC", "15"))
+
+    n = 0
     while not stop.is_set():
         time.sleep(1)
+        n += 1
+        if sb_hb is not None and n % beat_interval == 0:
+            heartbeat.record(sb_hb, threads)
     logger.info("[WorkerV2] shutdown selesai")
 
 
