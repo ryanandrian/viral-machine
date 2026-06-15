@@ -156,6 +156,7 @@ export default function OnboardingPage() {
       content_language: curLang,
       platform: "youtube",
       publish_privacy: "private", // trial-safe (decisions: default private)
+      publish_slots: ["13:00"],   // C2: jadwal default (1 slot, ≤ semua tier) — atur di /schedule
       is_active: true,
     });
     setBusy(false);

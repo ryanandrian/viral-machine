@@ -67,11 +67,11 @@
 - [x] **B5** — Hapus `scripts/worker.py` (monolit V1) + `src/intelligence/schedule_manager.py` (nol importer pasca-B1; `production_schedules` tak lagi dibaca BE). *(2026-06-16)*
 
 ### C. FE
-- [ ] **C1** — Halaman Jadwal (D7): tulis/baca **`channels.publish_slots`** (JAM saja, per-channel, zona tenant) lewat RPC whitelist (validasi N ≤ tier). Lepas `production_schedules`. **Hapus niche dari UI jadwal** (jadwal = jam saja).
-- [ ] **C2** — Onboarding + `/channels/new`: **isi `publish_slots` saat channel dibuat** (default sesuai tier) → channel baru langsung punya jadwal (tak ada lagi channel "tanpa jadwal").
-- [ ] **C3** — **Editor niche per-channel** (Channel Detail): tenant ubah `niche` (fixed) / `niche_mode` (fixed/random) **kapan saja**, pilihan **hanya dari entitlement tenant** (random = seluruh entitlement) — lewat RPC (validasi entitlement). Mengakhiri "niche write-once".
-- [ ] **C4** — **Form ajukan custom niche** (Config Niches/D18): tenant pilih type (public-90d / private), isi **judul + masukan/clue** (referensi gaya/keyword/contoh) → insert `niche_requests` + gate pembayaran (harga dari `pricing_config`). Admin proses di E2.3.
-- [ ] **C5** — Tampilkan batas tier (N slot/hari, jumlah channel) + daftar entitlement niche di UI terkait.
+- [x] **C1** — Halaman Jadwal di-rewrite: channel-centric, baca/tulis **`channels.publish_slots`** (JAM saja, zona tenant) via RPC `set_channel_publish_slots` (validasi N ≤ tier). `production_schedules` & niche **dilepas** dari UI. build PASS. *(2026-06-16)*
+- [x] **C2** — Onboarding + `/channels/new`: INSERT channel kini set `publish_slots: ["13:00"]` (default ≤ semua tier) → channel baru punya jadwal. build PASS.
+- [x] **C3** — Editor niche per-channel di **Channel Detail** (Settings): pilih `niche_mode` fixed/random + niche (opsi **dari entitlement** tenant) → RPC `set_channel_niche`. Menggantikan "niche write-once". build PASS.
+- [x] **C4** — Form ajukan custom niche (Config→Niches) **FUNGSIONAL**: type public-90d/private + judul + clue (audiens/referensi/angle) → insert `niche_requests` (harga dari `pricing_config`). build PASS.
+- [x] **C5** — Batas tier tampil: Jadwal "max N/hari/channel" + "N/cap slot"; opsi niche dibatasi entitlement. *(via C1+C3)*
 
 ### D. Validasi e2e (centang bila SELURUH alur terbukti)
 - [ ] Buat channel → set jadwal di FE → **publisher baca dari `channels`** (bukan `production_schedules`).

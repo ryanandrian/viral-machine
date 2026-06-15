@@ -58,7 +58,7 @@ export default function NewChannelPage() {
     const { data, error } = await supabase.from("channels").insert({
       tenant_id: user.id, channel_group: "default", channel_name: name.trim(), platform,
       niche: sel[0], niche_pool: sel, niche_mode: sel.length > 1 ? "random" : "fixed",
-      content_language: clang, publish_privacy: privacy, is_active: true,
+      content_language: clang, publish_privacy: privacy, publish_slots: ["13:00"], is_active: true,
     }).select("id").single();
     setBusy(false);
     if (error) return setErr(error.message);

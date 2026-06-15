@@ -485,9 +485,31 @@ function Mood({ cols }: { cols: string[] }) {
 }
 
 function Niches() {
+  const supabase = createClient();
   const [seg, setSeg] = useState(0);
   const [modal, setModal] = useState(false);
   const [pricing, setPricing] = useState<Record<string, number>>({});
+  // C4: form ajukan custom niche → insert niche_requests (judul + clue/masukan tenant).
+  const [reqType, setReqType] = useState<"public_90d" | "private">("public_90d");
+  const [rTitle, setRTitle] = useState(""); const [rAudience, setRAudience] = useState("");
+  const [rRefs, setRRefs] = useState(""); const [rAngle, setRAngle] = useState("");
+  const [rBusy, setRBusy] = useState(false); const [rMsg, setRMsg] = useState<string | null>(null);
+  function openReq(t: "public_90d" | "private") { setReqType(t); setRMsg(null); setModal(true); }
+  async function submitReq() {
+    if (!rTitle.trim()) { setRMsg("Isi ide niche dulu"); return; }
+    setRBusy(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setRBusy(false); setRMsg("Sesi tak valid"); return; }
+    const { error } = await supabase.from("niche_requests").insert({
+      tenant_id: user.id, request_type: reqType, title: rTitle.trim(),
+      clues: { audience: rAudience.trim(), references: rRefs.trim(), viral_angle: rAngle.trim() },
+      price_key: reqType === "public_90d" ? "custom_niche_public_90d" : "custom_niche_private",
+    });
+    setRBusy(false);
+    if (error) { setRMsg(`Gagal: ${error.message}`); return; }
+    setRMsg("ok"); setRTitle(""); setRAudience(""); setRRefs(""); setRAngle("");
+    setTimeout(() => { setModal(false); setRMsg(null); }, 1400);
+  }
   useEffect(() => { fetchPricing().then(setPricing); }, []);
   const active: [string, string[], string[], string][] = [
     ["Misteri Samudra", ["#082f49", "#0c4a6e", "#0ea5e9"], ["#laut", "#misteri", "#samudra"], "47 video · avg 2.3K"],
@@ -515,7 +537,7 @@ function Niches() {
   return (
     <>
       <div className="muted" style={{ fontSize: "var(--text-xs)", padding: ".625rem .875rem", background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", borderRadius: "var(--r-md)", marginBottom: "1rem" }}>
-        <Bi id="Katalog niche & aktivasi dikelola tim (Admin Niches) + entitlement per-tier. Harga request custom di bawah = nyata dari pricing_config. Alur request custom-niche = fitur terjadwal." en="Niche catalog & activation are team-managed (Admin Niches) + per-tier entitlement. Custom-request prices below are live from pricing_config. The custom-niche request flow is a scheduled feature." />
+        <Bi id="Katalog & aktivasi niche dikelola tim (Admin Niches) + entitlement per-tier. Niche channel diatur di Channel Detail. Harga request custom = nyata dari pricing_config; pengajuan di bawah TERSIMPAN & diproses admin." en="Niche catalog & activation are team-managed (Admin Niches) + per-tier entitlement. Per-channel niche is set in Channel Detail. Custom-request prices are live from pricing_config; requests below are saved & processed by admin." />
       </div>
       <div className="grid-4">
         {active.map(([n, cols, chips, stat]) => (
@@ -549,13 +571,13 @@ function Niches() {
             <div style={{ display: "flex", alignItems: "center", gap: ".5rem", fontWeight: 600, marginBottom: ".375rem" }}>🌍 <Bi id="Public Niche" en="Public Niche" /></div>
             <div className="price-dyn" style={{ fontSize: "var(--text-xl)", fontWeight: 700 }}>{pricing.custom_niche_public_90d ? `Rp ${idrK(pricing.custom_niche_public_90d)}` : "Rp 299K"}</div>
             <div className="muted" style={{ fontSize: "var(--text-xs)", margin: ".625rem 0 1rem" }}><Bi id="90 hari exclusive untuk channel-mu, lalu masuk public catalog. Affordable, cocok untuk solo creator." en="90 days exclusive to your channel, then enters the public catalog. Affordable, great for solo creators." /></div>
-            <button className="btn btn-default btn-sm" style={{ width: "100%" }} onClick={() => setModal(true)}><Bi id="Request Public Niche" en="Request Public Niche" /></button>
+            <button className="btn btn-default btn-sm" style={{ width: "100%" }} onClick={() => openReq("public_90d")}><Bi id="Request Public Niche" en="Request Public Niche" /></button>
           </div>
           <div className="card card-pad" style={{ borderColor: "color-mix(in srgb,var(--accent) 35%,transparent)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: ".5rem", fontWeight: 600, marginBottom: ".375rem" }}>🔒 <Bi id="Permanent Private" en="Permanent Private" /> <span className="badge badge-brand" style={{ fontSize: ".625rem" }}>Premium</span></div>
             <div className="price-dyn" style={{ fontSize: "var(--text-xl)", fontWeight: 700, color: "var(--accent)" }}>{pricing.custom_niche_private ? `Rp ${idrK(pricing.custom_niche_private)}` : "Rp 1.499K"}</div>
             <div className="muted" style={{ fontSize: "var(--text-xs)", margin: ".625rem 0 1rem" }}><Bi id="Tidak pernah public. Exclusive permanen untuk channel-mu. Positioning premium untuk agency." en="Never public. Permanently exclusive to your channel. Premium positioning for agencies." /></div>
-            <button className="btn btn-ai btn-sm" style={{ width: "100%" }} onClick={() => setModal(true)}><Bi id="Request Private Niche" en="Request Private Niche" /></button>
+            <button className="btn btn-ai btn-sm" style={{ width: "100%" }} onClick={() => openReq("private")}><Bi id="Request Private Niche" en="Request Private Niche" /></button>
           </div>
         </div>
         <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "1rem", display: "flex", alignItems: "center", gap: ".4rem" }}><Clock size={13} /> <Bi id="SLA: 3–5 hari delivery" en="SLA: 3–5 day delivery" /></div>
@@ -574,14 +596,15 @@ function Niches() {
       {modal && (
         <div onClick={(e) => { if (e.target === e.currentTarget) setModal(false); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem" }}>
           <div className="card" style={{ maxWidth: 520, width: "100%", maxHeight: "90vh", overflow: "auto" }}>
-            <div className="card-head"><h3 className="card-title"><Bi id="Request niche custom" en="Request custom niche" /></h3><button className="btn btn-ghost btn-icon btn-sm" onClick={() => setModal(false)}><X size={16} /></button></div>
+            <div className="card-head"><h3 className="card-title"><Bi id="Request niche custom" en="Request custom niche" /> · {reqType === "private" ? "🔒 Private" : "🌍 Public-90d"}</h3><button className="btn btn-ghost btn-icon btn-sm" onClick={() => setModal(false)}><X size={16} /></button></div>
             <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              <div><label className="label"><Bi id="Ide niche" en="Niche idea" /></label><textarea className="textarea" rows={2} placeholder="mis. Misteri kapal selam Perang Dunia II" /></div>
-              <div><label className="label"><Bi id="Target audiens" en="Target audience" /></label><div className="chip-input"><span className="chip">pria 18-34</span><span className="chip">pecinta sejarah</span><input style={{ border: "none", background: "none", outline: "none", color: "var(--text-primary)", fontSize: "var(--text-xs)", flex: 1, minWidth: 80 }} placeholder="+ tambah" /></div></div>
-              <div><label className="label"><Bi id="Channel YouTube referensi" en="Reference YouTube channels" /></label><input className="input input-mono" placeholder="youtube.com/@..." /></div>
-              <div><label className="label"><Bi id="Angle viral & use case" en="Viral angle & use case" /></label><textarea className="textarea" rows={2} /></div>
+              <div><label className="label"><Bi id="Ide niche" en="Niche idea" /> *</label><textarea className="textarea" rows={2} value={rTitle} onChange={(e) => setRTitle(e.target.value)} placeholder="mis. Misteri kapal selam Perang Dunia II" /></div>
+              <div><label className="label"><Bi id="Target audiens" en="Target audience" /></label><input className="input" value={rAudience} onChange={(e) => setRAudience(e.target.value)} placeholder="mis. pria 18-34, pecinta sejarah" /></div>
+              <div><label className="label"><Bi id="Channel/referensi" en="Reference channels" /></label><input className="input input-mono" value={rRefs} onChange={(e) => setRRefs(e.target.value)} placeholder="youtube.com/@... , contoh gaya" /></div>
+              <div><label className="label"><Bi id="Angle viral & use case" en="Viral angle & use case" /></label><textarea className="textarea" rows={2} value={rAngle} onChange={(e) => setRAngle(e.target.value)} placeholder="clue/masukan untuk tim saat membuat niche ini" /></div>
+              {rMsg && <div style={{ fontSize: "var(--text-sm)", color: rMsg === "ok" ? "var(--success)" : "var(--danger,#ef4444)" }}>{rMsg === "ok" ? "✓ Request terkirim — tim akan memproses." : rMsg}</div>}
             </div>
-            <div className="card-foot" style={{ display: "flex", gap: ".5rem", justifyContent: "flex-end" }}><button className="btn btn-ghost" onClick={() => setModal(false)}><Bi id="Batal" en="Cancel" /></button><button className="btn btn-default" onClick={() => setModal(false)}><Bi id="Kirim request" en="Submit request" /></button></div>
+            <div className="card-foot" style={{ display: "flex", gap: ".5rem", justifyContent: "flex-end" }}><button className="btn btn-ghost" onClick={() => setModal(false)}><Bi id="Batal" en="Cancel" /></button><button className="btn btn-default" disabled={rBusy} onClick={submitReq}><Bi id="Kirim request" en="Submit request" /></button></div>
           </div>
         </div>
       )}

@@ -2,131 +2,120 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { Plus, Sparkles, X } from "lucide-react";
+import { Plus, Sparkles, X, Clock } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import "./schedule.css";
 
-// D7 Schedule (Phase 9.4) — DATA NYATA dari production_schedules (RLS r/w) + channels. cron→jam.
-// Toggle is_active (UPDATE RLS) + tambah slot (INSERT, cron "M H * * *"). Banner → link Insights (jujur).
+// D7 Schedule — model terkunci §12c: jadwal = JAM PUBLISH per-channel di `channels.publish_slots`
+// (zona TENANT). Tulis via RPC set_channel_publish_slots (validasi jumlah ≤ tier max_videos_per_day).
+// TIDAK pakai production_schedules (fosil V1) & TIDAK ada niche di sini (niche dikelola di Channel Detail).
 
 function Bi({ id, en }: { id: string; en: string }) { return (<><span data-id>{id}</span><span data-en>{en}</span></>); }
-const DAYS = [["Sen", "Mon"], ["Sel", "Tue"], ["Rab", "Wed"], ["Kam", "Thu"], ["Jum", "Fri"], ["Sab", "Sat"], ["Min", "Sun"]];
 const CCOL = ["#6366F1", "#10B981", "#EC4899", "#F59E0B", "#0ea5e9"];
 
-type Sched = { schedule_id: string; channel_id: string; cron_expression: string; niche_id: string | null; niche_focus: string | null; is_active: boolean; content_type: string | null };
-type Ch = { id: string; channel_name: string };
+type Ch = { id: string; channel_name: string; publish_slots: string[] | null };
 
-function cronTime(expr: string): string {
-  const p = (expr || "").trim().split(/\s+/);
-  if (p.length < 2) return "—";
-  const h = p[1] === "*" ? "0" : p[1].split(",")[0];
-  const m = p[0] === "*" ? "0" : p[0].split(",")[0];
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}
-function cronDaily(expr: string): boolean { const p = (expr || "").trim().split(/\s+/); return !p[4] || p[4] === "*"; }
+function norm(t: string): string { const [h, m] = (t || "").split(":"); return `${String(+h || 0).padStart(2, "0")}:${String(+m || 0).padStart(2, "0")}`; }
 
 export default function SchedulePage() {
   const supabase = createClient();
-  const [view, setView] = useState<"week" | "list">("list");
-  const [scheds, setScheds] = useState<Sched[]>([]);
   const [channels, setChannels] = useState<Ch[]>([]);
-  const [uid, setUid] = useState("");
+  const [cap, setCap] = useState(1);          // max video/hari per channel (tier)
+  const [tz, setTz] = useState("UTC");
   const [loading, setLoading] = useState(true);
-  const [add, setAdd] = useState<{ channel_id: string; time: string; niche: string } | null>(null);
+  const [busy, setBusy] = useState("");
+  const [add, setAdd] = useState<{ channel_id: string; time: string } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [{ data: s }, { data: c }] = await Promise.all([
-      supabase.from("production_schedules").select("schedule_id, channel_id, cron_expression, niche_id, niche_focus, is_active, content_type"),
-      supabase.from("channels").select("id, channel_name"),
+    const [{ data: c }, { data: cfg }] = await Promise.all([
+      supabase.from("channels").select("id, channel_name, publish_slots").order("created_at"),
+      supabase.from("tenant_configs").select("plan_type, timezone").maybeSingle(),
     ]);
-    setScheds(s ?? []); setChannels(c ?? []); setLoading(false);
+    setChannels(c ?? []);
+    const tier = (cfg as { plan_type?: string; timezone?: string } | null)?.plan_type ?? "starter";
+    setTz((cfg as { timezone?: string } | null)?.timezone ?? "UTC");
+    const { data: pl } = await supabase.from("plan_limits").select("max_videos_per_day").eq("plan_type", tier).maybeSingle();
+    setCap((pl as { max_videos_per_day?: number } | null)?.max_videos_per_day ?? 1);
+    setLoading(false);
   }, [supabase]);
-  useEffect(() => { supabase.auth.getUser().then(({ data }) => setUid(data.user?.id ?? "")); load(); }, [supabase, load]);
-  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2200); return () => clearTimeout(t); }, [toast]);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2600); return () => clearTimeout(t); }, [toast]);
 
-  const chName = (id: string) => channels.find((c) => c.id === id)?.channel_name ?? id.slice(0, 6);
   const chColor = (id: string) => CCOL[Math.max(0, channels.findIndex((c) => c.id === id)) % CCOL.length];
-  const active = scheds.filter((s) => s.is_active).length;
 
-  async function toggle(s: Sched) {
-    const { error } = await supabase.from("production_schedules").update({ is_active: !s.is_active }).eq("schedule_id", s.schedule_id);
-    if (!error) { setScheds((arr) => arr.map((x) => x.schedule_id === s.schedule_id ? { ...x, is_active: !x.is_active } : x)); } else setToast("Gagal (RLS)");
+  async function saveSlots(channel_id: string, slots: string[]) {
+    setBusy(channel_id);
+    const sorted = Array.from(new Set(slots.map(norm))).sort();
+    const { error } = await supabase.rpc("set_channel_publish_slots", { p_channel_id: channel_id, p_slots: sorted });
+    setBusy("");
+    if (error) { setToast(error.message.includes("melebihi") ? `Melebihi batas tier (${cap}/hari)` : `Gagal: ${error.message}`); return false; }
+    setChannels((arr) => arr.map((c) => c.id === channel_id ? { ...c, publish_slots: sorted } : c));
+    return true;
   }
   async function addSlot() {
-    if (!add?.channel_id || !add.time || !uid) return;
-    const [h, m] = add.time.split(":");
-    const cron = `${parseInt(m || "0", 10)} ${parseInt(h || "0", 10)} * * *`;
-    const { error } = await supabase.from("production_schedules").insert({ tenant_id: uid, channel_id: add.channel_id, cron_expression: cron, niche_id: add.niche || null, is_active: true, content_type: "short" });
-    if (!error) { setAdd(null); setToast("Slot ditambah"); await load(); } else setToast(`Gagal: ${error.message}`);
+    if (!add?.channel_id || !add.time) return;
+    const ch = channels.find((c) => c.id === add.channel_id); if (!ch) return;
+    const cur = ch.publish_slots ?? [];
+    if (cur.length >= cap) { setToast(`Channel ini sudah ${cap}/${cap} slot (batas tier)`); return; }
+    if (await saveSlots(add.channel_id, [...cur, add.time])) { setAdd(null); setToast("Jadwal disimpan"); }
+  }
+  async function removeSlot(channel_id: string, time: string) {
+    const ch = channels.find((c) => c.id === channel_id); if (!ch) return;
+    await saveSlots(channel_id, (ch.publish_slots ?? []).filter((t) => t !== time));
   }
 
-  const Slot = ({ s }: { s: Sched }) => (
-    <div className={`slot${s.is_active ? "" : " paused"}`}>
-      <div className="st">{cronTime(s.cron_expression)} <label className="switch" style={{ width: "1.75rem", height: "1rem" }} onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={s.is_active} onChange={() => toggle(s)} /><span className="track" /><span className="thumb" style={{ width: "0.75rem", height: "0.75rem" }} /></label></div>
-      <div className="sn">{chName(s.channel_id)}</div>
-      <div className="sc"><span className="dot-ch" style={{ background: chColor(s.channel_id) }} />{s.niche_id || s.content_type || "auto"} · WIB</div>
-    </div>
-  );
+  const totalSlots = channels.reduce((n, c) => n + (c.publish_slots?.length ?? 0), 0);
 
   return (
     <>
       <div className="page-head">
-        <div><h1><Bi id="Jadwal" en="Schedule" /></h1><div className="muted" style={{ fontSize: "var(--text-sm)" }}>{loading ? "Memuat…" : <><b>{active}</b> slot aktif · {channels.length} channel</>}</div></div>
-        <button className="btn btn-default" onClick={() => setAdd({ channel_id: channels[0]?.id ?? "", time: "13:00", niche: "" })}><Plus size={16} /> <Bi id="Tambah Slot" en="Add Slot" /></button>
+        <div><h1><Bi id="Jadwal" en="Schedule" /></h1><div className="muted" style={{ fontSize: "var(--text-sm)" }}>{loading ? "Memuat…" : <><b>{totalSlots}</b> slot · {channels.length} channel · max <b>{cap}</b>/hari/channel (tier)</>}</div></div>
       </div>
 
       <div className="opt-banner">
         <span className="ic"><Sparkles size={18} /></span>
-        <div className="t"><Bi id="Slot optimal dipelajari mesin dari analytics channelmu." en="Optimal slots are learned by the engine from your channel analytics." /></div>
+        <div className="t"><Bi id="Jadwal = JAM PUBLISH per channel (zona waktu Anda). Produksi dijaga otomatis di buffer; video terbit saat slot tiba." en="Schedule = PUBLISH times per channel (your timezone). Production is auto-buffered; videos go live at each slot." /></div>
         <Link href="/insights" className="btn btn-secondary btn-sm"><Bi id="Lihat Wawasan" en="See Insights" /></Link>
       </div>
 
-      <div className="toolbar">
-        <div className="segmented">
-          <button aria-selected={view === "list"} onClick={() => setView("list")}>List</button>
-          <button aria-selected={view === "week"} onClick={() => setView("week")}><Bi id="Minggu" en="Week" /></button>
-        </div>
-      </div>
+      {!loading && channels.length === 0 && <div className="card card-pad muted" style={{ textAlign: "center" }}><Bi id="Belum ada channel. Buat channel dulu." en="No channel yet. Create a channel first." /> <Link href="/channels/new" className="link">+ Channel</Link></div>}
 
-      {!loading && scheds.length === 0 && <div className="card card-pad muted" style={{ textAlign: "center" }}>Belum ada jadwal. Tambah slot untuk mulai.</div>}
-
-      {view === "list" && scheds.length > 0 && (
-        <div>
-          {scheds.map((s) => (
-            <div className="list-slot" key={s.schedule_id}>
-              <div style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{cronTime(s.cron_expression)}<span className="muted" style={{ fontSize: "0.625rem" }}> WIB</span></div>
-              <div><div style={{ fontSize: "var(--text-sm)", color: "var(--text-primary)" }}>{chName(s.channel_id)}</div><div className="muted" style={{ fontSize: "var(--text-xs)" }}>{s.niche_id || "auto-rotation"} · {cronDaily(s.cron_expression) ? "harian" : "mingguan"}</div></div>
-              <span className="badge badge-default" style={{ fontSize: "0.625rem" }}>{s.content_type || "short"}</span>
-              <label className="switch" onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={s.is_active} onChange={() => toggle(s)} /><span className="track" /><span className="thumb" /></label>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {view === "week" && scheds.length > 0 && (
-        <div className="week">
-          {DAYS.map(([dn], di) => (
-            <div className="day" key={di}>
-              <div className="day-h"><div className="dn">{dn}</div></div>
-              <div className="day-body">
-                {scheds.filter((s) => cronDaily(s.cron_expression)).map((s) => <Slot key={s.schedule_id} s={s} />)}
+      <div style={{ display: "grid", gap: "1rem" }}>
+        {channels.map((c) => {
+          const slots = (c.publish_slots ?? []).map(norm).sort();
+          const full = slots.length >= cap;
+          return (
+            <div className="card card-pad" key={c.id}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.75rem" }}>
+                <span className="dot-ch" style={{ background: chColor(c.id), width: 10, height: 10, borderRadius: "50%" }} />
+                <b style={{ color: "var(--text-primary)" }}>{c.channel_name}</b>
+                <span className="muted" style={{ fontSize: "var(--text-xs)", marginLeft: "auto" }}>{slots.length}/{cap} slot/hari · {tz}</span>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
+                {slots.length === 0 && <span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Belum ada jam tayang." en="No publish time yet." /></span>}
+                {slots.map((t) => (
+                  <span key={t} className="badge" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)", padding: "0.3rem 0.5rem" }}>
+                    <Clock size={13} /> {t}
+                    <button className="btn btn-ghost btn-icon" style={{ width: 18, height: 18 }} disabled={busy === c.id} onClick={() => removeSlot(c.id, t)} title="Hapus"><X size={12} /></button>
+                  </span>
+                ))}
+                <button className="btn btn-secondary btn-sm" disabled={full || busy === c.id} title={full ? `Batas tier ${cap}/hari` : ""} onClick={() => setAdd({ channel_id: c.id, time: "13:00" })}><Plus size={14} /> <Bi id="Jam" en="Time" /></button>
               </div>
             </div>
-          ))}
-        </div>
-      )}
+          );
+        })}
+      </div>
 
       {add && (
         <>
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 60 }} onClick={() => setAdd(null)} />
-          <div className="card" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(420px,92vw)", zIndex: 61, padding: "1.25rem" }}>
-            <div style={{ display: "flex", alignItems: "center", marginBottom: "0.75rem" }}><strong>Tambah slot</strong><button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} onClick={() => setAdd(null)}><X size={16} /></button></div>
+          <div className="card" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(380px,92vw)", zIndex: 61, padding: "1.25rem" }}>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: "0.75rem" }}><strong><Bi id="Tambah jam publish" en="Add publish time" /></strong><button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} onClick={() => setAdd(null)}><X size={16} /></button></div>
             <div style={{ display: "grid", gap: "0.625rem" }}>
-              <div><label className="label">Channel</label><select className="input" value={add.channel_id} onChange={(e) => setAdd({ ...add, channel_id: e.target.value })}>{channels.map((c) => <option key={c.id} value={c.id}>{c.channel_name}</option>)}</select></div>
-              <div><label className="label">Jam (WIB)</label><input className="input" type="time" value={add.time} onChange={(e) => setAdd({ ...add, time: e.target.value })} /></div>
-              <div><label className="label">Niche (opsional)</label><input className="input" placeholder="kosong = auto-rotation" value={add.niche} onChange={(e) => setAdd({ ...add, niche: e.target.value })} /></div>
-              <button className="btn btn-primary btn-sm" style={{ justifySelf: "end" }} disabled={!add.channel_id} onClick={addSlot}>Simpan slot</button>
+              <div><label className="label"><Bi id="Jam" en="Time" /> ({tz})</label><input className="input" type="time" value={add.time} onChange={(e) => setAdd({ ...add, time: e.target.value })} /></div>
+              <p className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Bidik audiens lokal? Pakai jam Anda. Bidik luar negeri? Geser jam-nya sesuai zona target." en="Targeting local audience? Use your time. Targeting abroad? Offset the time to the target zone." /></p>
+              <button className="btn btn-primary btn-sm" style={{ justifySelf: "end" }} disabled={busy !== ""} onClick={addSlot}><Bi id="Simpan" en="Save" /></button>
             </div>
           </div>
         </>

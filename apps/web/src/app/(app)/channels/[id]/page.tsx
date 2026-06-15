@@ -18,14 +18,13 @@ function Bi({ id, en }: { id: string; en: string }) {
 
 type ChannelRow = {
   id: string; channel_name: string | null; platform_channel_id: string | null;
-  niche: string | null; niche_pool: string[] | null; content_language: string | null;
+  niche: string | null; niche_pool: string[] | null; niche_mode: string | null; content_language: string | null;
   is_active: boolean | null; publish_privacy: string | null;
 };
 
 const PALETTE = ["#6366F1", "#047857", "#9f1239", "#b45309", "#1d4ed8", "#7c3aed"];
 function colorFor(id: string) { let h = 0; for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0; return PALETTE[h % PALETTE.length]; }
 function initials(n: string) { const p = n.trim().split(/[\s—-]+/).filter(Boolean); return ((p[0]?.[0] ?? "C") + (p[1]?.[0] ?? "")).toUpperCase(); }
-function prettyNiche(k: string) { return k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()); }
 
 const LANGS: [string, string][] = [["id-ID", "🇮🇩 Bahasa Indonesia"], ["en-US", "🇬🇧 English"], ["ms-MY", "🇲🇾 Bahasa Malaysia"], ["fil-PH", "🇵🇭 Filipino"], ["th-TH", "🇹🇭 ภาษาไทย"], ["vi-VN", "🇻🇳 Tiếng Việt"]];
 const PRIVACY: [string, string, string][] = [["private", "Privat", "Private"], ["unlisted", "Tak terdaftar", "Unlisted"], ["public", "Publik", "Public"]];
@@ -59,6 +58,21 @@ export default function ChannelDetailPage() {
   const [err, setErr] = useState<string | null>(null);
   const [testMsg, setTestMsg] = useState<string | null>(null);
 
+  // C3: editor niche per-channel (fixed/random) — opsi dari ENTITLEMENT tenant; tulis via RPC.
+  const [nicheMode, setNicheMode] = useState<"fixed" | "random">("fixed");
+  const [niche, setNiche] = useState("");
+  const [nicheOpts, setNicheOpts] = useState<{ id: string; name: string }[]>([]);
+  const [nicheMsg, setNicheMsg] = useState<string | null>(null);
+  const [savingNiche, setSavingNiche] = useState(false);
+
+  async function saveNiche() {
+    setNicheMsg(null); setSavingNiche(true);
+    const { error } = await supabase.rpc("set_channel_niche", { p_channel_id: id, p_niche: niche, p_niche_mode: nicheMode });
+    setSavingNiche(false);
+    setNicheMsg(error ? (error.message.includes("entitlement") ? "Niche itu di luar paket Anda" : `Gagal: ${error.message}`) : "Niche tersimpan");
+    if (!error) load();
+  }
+
   // Test sekarang (private) — direct_job: produksi 1 dgn config channel ini, publish private (preview).
   async function testNow() {
     setTestMsg(null); setBusy(true);
@@ -72,15 +86,26 @@ export default function ChannelDetailPage() {
   }
 
   const load = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
     const { data } = await supabase.from("channels")
-      .select("id,channel_name,platform_channel_id,niche,niche_pool,content_language,is_active,publish_privacy")
+      .select("id,channel_name,platform_channel_id,niche,niche_pool,niche_mode,content_language,is_active,publish_privacy")
       .eq("id", id).maybeSingle();
     const c = data as ChannelRow | null;
     setCh(c);
     if (c) {
       setName(c.channel_name ?? ""); setClang(c.content_language ?? "id-ID");
       setPrivacy(c.publish_privacy ?? "private"); setActive(c.is_active ?? true);
+      setNicheMode((c.niche_mode === "random" ? "random" : "fixed")); setNiche(c.niche ?? "");
     }
+    // Opsi niche = ENTITLEMENT tenant (katalog per-tier + niche custom/private milik tenant).
+    const { data: cfg } = await supabase.from("tenant_configs").select("plan_type").maybeSingle();
+    const tier = (cfg as { plan_type?: string } | null)?.plan_type ?? "starter";
+    const { data: nrows } = await supabase.from("niches").select("niche_id,name,is_base,access_type,exclusive_to").eq("is_active", true);
+    const me = user?.id ?? "";
+    const opts = (nrows ?? []).filter((n: { access_type: string; is_base: boolean; exclusive_to: string | null }) =>
+      n.exclusive_to === me || (n.access_type === "public" && (["pro", "business"].includes(tier) || n.is_base))
+    ).map((n: { niche_id: string; name: string }) => ({ id: n.niche_id, name: n.name }));
+    setNicheOpts(opts);
     setLoading(false);
   }, [supabase, id]);
 
@@ -102,7 +127,6 @@ export default function ChannelDetailPage() {
   );
 
   const name0 = ch.channel_name || "Channel";
-  const niches = (ch.niche_pool?.length ? ch.niche_pool : ch.niche ? [ch.niche] : []).map(prettyNiche);
 
   return (
     <>
@@ -166,11 +190,26 @@ export default function ChannelDetailPage() {
               <span className="switch"><input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /><span className="track" /><span className="thumb" /></span>
               <Bi id="Channel aktif (produksi berjalan)" en="Channel active (production runs)" />
             </label>
-            <div><label className="label"><Bi id="Niche aktif" en="Active niches" /></label>
-              <div style={{ display: "flex", gap: "0.375rem", flexWrap: "wrap", alignItems: "center" }}>
-                {niches.length ? niches.map((n) => <span key={n} className="badge badge-brand">{n}</span>) : <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Belum ada" en="None" /></span>}
-                <Link href="/config/niches" className="btn btn-secondary btn-sm"><Bi id="Kelola di Config → Niches" en="Manage in Config → Niches" /></Link>
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
+              <label className="label"><Bi id="Niche channel" en="Channel niche" /></label>
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center", marginBottom: "0.5rem" }}>
+                <select className="input" value={nicheMode} onChange={(e) => setNicheMode(e.target.value as "fixed" | "random")} style={{ width: "fit-content" }}>
+                  <option value="fixed">Fixed — 1 niche</option>
+                  <option value="random">Random — putar semua niche paket</option>
+                </select>
+                {nicheMode === "fixed" && (
+                  <select className="input" value={niche} onChange={(e) => setNiche(e.target.value)} style={{ width: "fit-content" }}>
+                    <option value="">— pilih niche —</option>
+                    {nicheOpts.map((n) => <option key={n.id} value={n.id}>{n.name}</option>)}
+                  </select>
+                )}
+                <button className="btn btn-secondary btn-sm" onClick={saveNiche} disabled={savingNiche || (nicheMode === "fixed" && !niche)}>{savingNiche ? <Loader2 size={14} className="spin" /> : <Bi id="Simpan niche" en="Save niche" />}</button>
               </div>
+              <div className="muted" style={{ fontSize: "var(--text-xs)" }}>
+                <Bi id="Random = putar otomatis SELURUH niche yang jadi hak paket Anda. Pilihan terbatas pada entitlement Anda." en="Random = auto-rotate ALL niches your plan entitles. Options are limited to your entitlement." />
+                {" "}<Link href="/config/niches" className="link"><Bi id="Ajukan niche khusus →" en="Request custom niche →" /></Link>
+              </div>
+              {nicheMsg && <div style={{ fontSize: "var(--text-sm)", marginTop: "0.4rem", color: nicheMsg.includes("tersimpan") ? "var(--success)" : "var(--danger,#ef4444)" }}>{nicheMsg}</div>}
             </div>
             {err && <div style={{ color: "var(--danger, #ef4444)", fontSize: "var(--text-sm)" }}>{err}</div>}
             {saved && <div style={{ color: "var(--success)", fontSize: "var(--text-sm)", display: "flex", alignItems: "center", gap: "0.375rem" }}><Check size={14} /> <Bi id="Tersimpan" en="Saved" /></div>}
