@@ -6,6 +6,7 @@ import {
   Sparkles, ArrowRight, Play, CheckCircle, Check, Clock, BarChart3, XCircle,
   Command, ShieldCheck, Tv, Zap, X, Loader2, ChevronDown, Star,
   Radar, Target, FileText, AudioLines, Image as ImageIcon, Film, Upload, type LucideIcon,
+  Lock, KeyRound, EyeOff, Server,
 } from "lucide-react";
 import "./landing.css";
 
@@ -172,6 +173,21 @@ export default function LandingPage() {
           <div className="feat"><span className="fic"><Zap size={22} /></span><h3><Bi id="5–24 Video / Hari" en="5–24 Videos / Day" /></h3><p><Bi id="Multi-channel paralel. Scale produksi tanpa hire tim editor." en="Parallel multi-channel. Scale production without hiring an editing team." /></p></div>
           <div className="feat"><span className="fic" style={{ background: "var(--warning-soft)", color: "var(--warning)" }}><Tv size={22} /></span><h3>🇮🇩 <Bi id="Indonesia-First" en="Indonesia-First" /></h3><p><Bi id="UI Bahasa Indonesia, pembayaran Midtrans, suara lokal, dan support lokal yang paham creator Indonesia." en="Bahasa Indonesia UI, Midtrans payments, local voices, and local support that understands Indonesian creators." /></p></div>
           <div className="feat"><span className="fic" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}><Zap size={22} /></span><h3>🌐 <Bi id="Konten Multi-Bahasa" en="Multi-Language Content" /></h3><p><Bi id="Produksi narasi + caption dalam Bahasa Indonesia, English, dan bahasa Asia Tenggara. Pilih bahasa per channel — jangkau audiens lintas negara dari satu platform." en="Produce narration + captions in Indonesian, English, and Southeast Asian languages. Pick a language per channel — reach cross-border audiences from one platform." /></p><div style={{ display: "flex", gap: "0.4rem", marginTop: "0.875rem", fontSize: "var(--text-lg)" }}>🇮🇩 🇬🇧 🇲🇾 🇵🇭 🇹🇭 🇻🇳</div></div>
+        </div>
+      </div></section>
+
+      {/* SECURITY — kredensial tenant (klaim hanya yang BENAR: BYOK + Fernet + isolasi + no-log) */}
+      <section className="mk-section" id="security"><div className="mk-container">
+        <div className="mk-center reveal" style={{ marginBottom: "2.5rem" }}>
+          <span className="mk-kicker"><Lock size={13} /> <Bi id="Keamanan kredensial" en="Credential security" /></span>
+          <h2 className="mk-h2"><Bi id="Kredensial Anda, terkunci" en="Your credentials, locked down" /></h2>
+          <p className="mk-lead"><Bi id="BYOK/BYO-CC: semua kunci & akun milik Anda sendiri. Kami menyimpannya terenkripsi — dan tidak pernah menyentuh konten Anda." en="BYOK/BYO-CC: every key and account is yours. We store them encrypted — and never touch your content." /></p>
+        </div>
+        <div className="feat-grid reveal">
+          <div className="feat"><span className="fic" style={{ background: "var(--success-soft)", color: "var(--success)" }}><KeyRound size={22} /></span><h3><Bi id="Kunci milik Anda (BYOK/BYO-CC)" en="Your own keys (BYOK/BYO-CC)" /></h3><p><Bi id="API key Anthropic/OpenAI/ElevenLabs dan akun Google/YouTube pakai milik Anda sendiri. Biaya AI dibayar langsung ke provider — transparan, tanpa markup." en="Your own Anthropic/OpenAI/ElevenLabs keys and Google/YouTube account. AI cost is billed straight to the provider — transparent, no markup." /></p></div>
+          <div className="feat"><span className="fic"><Lock size={22} /></span><h3><Bi id="Dienkripsi (AES/Fernet)" en="Encrypted (AES/Fernet)" /></h3><p><Bi id="Setiap kredensial sensitif — API key maupun token Google — disimpan terenkripsi. Kunci master enkripsi ada di server kami dan tidak pernah menyentuh browser." en="Every sensitive credential — API keys and Google tokens alike — is stored encrypted. The master key lives on our server and never touches the browser." /></p></div>
+          <div className="feat"><span className="fic" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}><Server size={22} /></span><h3><Bi id="Isolasi per-tenant" en="Per-tenant isolation" /></h3><p><Bi id="Data tiap tenant terpisah ketat di tingkat database (RLS). Kredensial paling sensitif hanya bisa diakses layanan backend — tak pernah dari sisi publik." en="Each tenant's data is strictly isolated at the database level (RLS). The most sensitive credentials are reachable only by backend services — never from the public side." /></p></div>
+          <div className="feat"><span className="fic"><EyeOff size={22} /></span><h3><Bi id="Tidak pernah di-log / ditampilkan" en="Never logged or shown" /></h3><p><Bi id="Setelah disimpan, nilai kunci tidak pernah ditampilkan ulang atau ditulis ke log. Anda bisa memutus sambungan kapan saja." en="Once saved, key values are never displayed again or written to logs. You can disconnect anytime." /></p></div>
         </div>
       </div></section>
 
