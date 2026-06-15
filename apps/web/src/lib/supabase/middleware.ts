@@ -68,8 +68,17 @@ export async function updateSession(request: NextRequest) {
     return response;
   }
 
-  // ── Hard-redirect: route tenant ter-proteksi tanpa session → /auth (simpan tujuan di ?next). ──
+  // ── Route TENANT ter-proteksi ──
   const isProtected = PROTECTED.some((p) => path === p || path.startsWith(`${p}/`));
+  // Super-admin TIDAK boleh masuk panel tenant (jalur terpisah — owner 2026-06-15) → balik ke /admin.
+  // Mau rasakan sisi tenant = pakai akun tenant khusus, bukan akun admin.
+  if (isProtected && isSuperAdmin) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/admin/tenants";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+  // Hard-redirect: tanpa session → /auth (simpan tujuan di ?next).
   if (isProtected && !user) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth";

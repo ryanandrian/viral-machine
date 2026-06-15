@@ -32,7 +32,7 @@ Gate sudah ada (sesi sebelumnya): middleware + `admin/(panel)/layout.tsx` cek `a
 
 | # | Layar | WIRE | BUILD |
 |---|---|---|---|
-| 10.1 | **E1 Tenants + Trial-Leads** | list/detail `tenant_configs`+`payments`+`production_runs`/`channels` per-tenant; MRR=derive `pricing_config[plan_<tier>]`×aktif; **suspend** (`subscription_status`); leads (`subscription_status='trial_expired'`); **kirim email** (`src/utils/email.py` — jalan dari prod); KPI (total/MRR/trials/churn dari data nyata) | **add-credit** (`tenant_credits` ledger / extend `current_period_end`) · **impersonate** (+audit) |
+| 10.1 | **E1 Tenants + Trial-Leads** | list/detail `tenant_configs`+`payments`+`production_runs`/`channels` per-tenant; MRR=derive `pricing_config[plan_<tier>]`×aktif; **suspend** (`subscription_status`); leads (`subscription_status='trial_expired'`); KPI (total/MRR/trials/churn dari data nyata); ryan=comp gratis tetap | **kirim email** = antre `email_outbox` → worker kirim. ❌ **add-credit DIBUANG** (BYOK, tak ada kredit — owner) · ❌ **impersonate DIBUANG** (admin tak boleh masuk panel tenant; pakai akun tenant khusus — owner) |
 | 10.2 | **E5 Pricing** | inline-edit `pricing_config` (value_idr/usd/active/desc/category) via RPC/route; schedule (`effective_from/until` ADA); `plan_limits`+`app_config` editor | **`pricing_audit`** (riwayat + rollback nyata; `updated_by/at` ada tapi tanpa history) |
 | 10.3 | **E2.3 Niches** | identity/voice/visual/musik/keywords/hashtags/`is_active`/`is_base` (niches) | **kolom eksklusivitas** (`access_type`/`exclusive_to`/`exclusive_until`/`released_at`) + **`niche_releases`** (monthly-release scheduler). **Tag-pool = TIDAK (epik pipeline terpisah — §4).** |
 | 10.4 | **E2.1 AI Models + Providers** | `ai_models` CRUD/toggle + **`ai_providers` CRUD** (gap §AI-CATALOG di PROGRESS: adapter/base_url/auth/`request_param_schema`) | — |
@@ -48,8 +48,9 @@ Gate sudah ada (sesi sebelumnya): middleware + `admin/(panel)/layout.tsx` cek `a
 
 > Konvensi dipatuhi: `tenant_id` TEXT = `auth.uid()::text`; PK uuid `gen_random_uuid()` utk tabel transaksional; RLS tenant = SELECT `tenant_id=(auth.uid())::text` (+INSERT WITH CHECK utk yg tenant tulis); admin tulis via service_role. Tak ada FK ke `auth.users` (Supabase-managed; pola existing pakai tenant_id text).
 
-- **`admin_audit`** (uuid id, admin_uid text, action text, target_tenant text, detail jsonb, created_at) — RLS: tak ada policy (service_role only).
-- **`tenant_credits`** (uuid id, tenant_id text, amount_idr int, reason text, created_by text, created_at) — admin tulis (service_role); RLS SELECT tenant-own (tenant lihat kredit sendiri di billing). Apply = extend `current_period_end` atau diskon invoice berikut.
+- **`admin_audit`** (uuid id, admin_uid text, action text, target_tenant text, detail jsonb, created_at) — RLS: tak ada policy (service_role only). ✅ migr 0034.
+- ~~`tenant_credits`~~ **DIBUANG** (owner: BYOK, tak ada konsep kredit; tenant bayar per tier + upgrade).
+- **`email_outbox`** (uuid id, tenant_id text, subject text, body text, status text default 'pending' [pending/sent/failed], created_by text, created_at, sent_at, error text) — service_role only. Admin enqueue via route; **worker Python proses** (resolve email via Auth admin API `email.py:tenant_email` → `send_email` → mark sent/failed, fail-soft).
 - **`pricing_audit`** (uuid id, key text, old jsonb, new jsonb, changed_by text, changed_at) — service_role only. Rollback = tulis balik old.
 - **niches +kolom:** `access_type` text default `'public'` (CHECK public/pending/private), `exclusive_to` text null, `exclusive_until` timestamptz null, `released_at` timestamptz null, `release_scheduled_at` timestamptz null. **`niche_releases`** (uuid id, niche_id varchar FK niches, scheduled_at, announced bool, status text). (RLS niches saat ini OFF — admin via service_role; public-read onboarding tetap.)
 - **`voice_catalog`** (text voice_key PK, provider_key text, display_name, locale text, gender text, niche_default text null, preview_url text, is_active bool, sort_order int).
@@ -61,7 +62,9 @@ Gate sudah ada (sesi sebelumnya): middleware + `admin/(panel)/layout.tsx` cek `a
 ## 4. KEPUTUSAN FORK (expert, berbasis dokumen — bukan asumsi)
 
 - **Tag-pool niche → DITUNDA sbg epik terpisah.** `MULTI_FORMAT_STUDIO §0` + `PROGRESS` (Phase 6.4) mengunci: tag-pool = Layer-2 (`videos.topic_tags` + assignment **di pipeline produksi**) = "fase berat C", mengubah mesin konten yang sudah jalan → risiko. Layar niche tetap fungsional penuh tanpa tab tag (eksklusivitas+release dibangun).
-- **Impersonate → DIBANGUN + audit wajib** (`admin_audit`). Berguna support; tercatat penuh.
+- **Impersonate → DIBUANG** (owner 2026-06-15): admin = jalur+akun terpisah; admin TAK boleh masuk panel tenant. Mau rasakan sisi tenant → pakai **akun tenant khusus** (bukan akun admin). **+Perkuat pemisahan:** middleware blokir super-admin dari route tenant (`/dashboard` dll) → redirect `/admin`. (ryan = comp gratis selamanya, tetap.)
+- **Add-credit → DIBUANG** (owner): BYOK, tenant bayar per tier; tak ada kredit. Diskusi terpisah bila perlu.
+- **Kirim email → antre `email_outbox` → worker** (owner pilih platform-queue, bukan mailto).
 - **Worker heartbeat → DIBANGUN** (`worker_heartbeats` + hook worker v2). Additif, aman (worker belum di VPS).
 - **Support → PENUH** (tenant create + admin manage).
 
