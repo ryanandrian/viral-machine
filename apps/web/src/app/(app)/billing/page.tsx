@@ -1,37 +1,70 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Zap, CreditCard, FileText, Plus, X, DollarSign, Download, Mic, Wand2, HelpCircle, Gauge, ShieldCheck } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Zap, CreditCard, FileText, Plus, X, DollarSign, ShieldCheck } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 import "./billing.css";
 
-// D13 Billing — port dari design-source/Billing.html (Hybrid). Sidebar "Tagihan".
-// Pricing = {{pricing.*}} placeholder (no-hardcode); Xendit→Midtrans (keputusan final).
-// Mock deterministik (SSR-safe); nol wiring Supabase. Webhook Midtrans = Phase 8.
+// D13 Billing — Phase 9.3 (wired Supabase v2, anon + RLS). Plan/status/usage = NYATA
+// (tenant_configs + channels + production_runs); HARGA dari pricing_config (no-hardcode);
+// invoice dari payments (RLS); add-on katalog dari pricing_config. Comp account (is_developer
+// / discount≥100) ditandai gratis. Snap checkout = GATE cutover (butuh backend webhook_app).
+// BYOK cost = placeholder (belum ada sumber metadata produksi).
 
-function Bi({ id, en }: { id: string; en: string }) {
-  return (<><span data-id>{id}</span><span data-en>{en}</span></>);
-}
+function Bi({ id, en }: { id: string; en: string }) { return (<><span data-id>{id}</span><span data-en>{en}</span></>); }
+function fmtIDR(n: number | null | undefined) { return n == null ? "—" : `Rp ${Number(n).toLocaleString("id-ID")}`; }
+const PLAN_LABEL: Record<string, string> = { trial: "Trial", starter: "Starter", pro: "Pro", business: "Business" };
 
-const INV: [string, string, string][] = [
-  ["INV-2026-06", "25 Jun 2026", "Rp 548K"], ["INV-2026-05", "25 Mei 2026", "Rp 548K"],
-  ["INV-2026-04", "25 Apr 2026", "Rp 349K"], ["INV-2026-03", "25 Mar 2026", "Rp 349K"],
-  ["INV-2026-02", "25 Feb 2026", "Rp 349K"], ["INV-2026-01", "25 Jan 2026", "Rp 149K"],
-];
-
-const CAT: { Icon: typeof Wand2; name: string; key: string; ex: string; descId: string; descEn: string }[] = [
-  { Icon: Wand2, name: "Niche Pack", key: "{{pricing.custom_niche_public_90d}}", ex: "≈ Rp 299K", descId: "Niche kustom sesuai brief, 3–5 hari.", descEn: "Custom niche to your brief, 3–5 days." },
-  { Icon: HelpCircle, name: "Concierge Setup", key: "{{pricing.concierge_setup}}", ex: "≈ Rp 499K", descId: "Tim kami setup channel & API untuk Anda.", descEn: "We set up your channel & APIs for you." },
-  { Icon: Gauge, name: "Channel Audit", key: "{{pricing.niche_audit}}", ex: "≈ Rp 349K", descId: "Analisis mendalam + rekomendasi growth.", descEn: "Deep analysis + growth recommendations." },
-  { Icon: ShieldCheck, name: "Extra Compliance", key: "—", ex: "≈ Rp 99K/bln", descId: "Monitoring compliance lebih ketat.", descEn: "Stricter compliance monitoring." },
-];
+type Pricing = { key: string; value_idr: number; description: string; category: string };
+type Payment = { order_id: string; plan_type: string | null; gross_amount: number | null; currency: string | null; status: string | null; created_at: string };
 
 export default function BillingPage() {
+  const [supabase] = useState(() => createClient());
   const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [plan, setPlan] = useState<{ plan_type: string; subscription_status: string; current_period_end: string | null; is_developer: boolean; discount_pct: number } | null>(null);
+  const [prices, setPrices] = useState<Record<string, Pricing>>({});
+  const [addons, setAddons] = useState<Pricing[]>([]);
+  const [maxCh, setMaxCh] = useState<number | null>(null);
+  const [maxVid, setMaxVid] = useState<number | null>(null);
+  const [chUsed, setChUsed] = useState(0);
+  const [vidMonth, setVidMonth] = useState(0);
+  const [invoices, setInvoices] = useState<Payment[]>([]);
+
+  const load = useCallback(async () => {
+    const monthStart = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString(); })();
+    const [{ data: tc }, { data: pc }, { count: chCount }, { count: vidCount }, { data: pay }] = await Promise.all([
+      supabase.from("tenant_configs").select("plan_type,subscription_status,current_period_end,is_developer,discount_pct").maybeSingle(),
+      supabase.from("pricing_config").select("key,value_idr,description,category").eq("active", true),
+      supabase.from("channels").select("id", { count: "exact", head: true }),
+      supabase.from("production_runs").select("id", { count: "exact", head: true }).gte("created_at", monthStart),
+      supabase.from("payments").select("order_id,plan_type,gross_amount,currency,status,created_at").order("created_at", { ascending: false }).limit(12),
+    ]);
+    const t = tc as typeof plan; setPlan(t);
+    const pmap: Record<string, Pricing> = {}; const ad: Pricing[] = [];
+    (pc as Pricing[] ?? []).forEach((p) => { pmap[p.key] = p; if (p.category === "add_on" || p.category === "one_time") ad.push(p); });
+    setPrices(pmap); setAddons(ad);
+    setChUsed(chCount ?? 0); setVidMonth(vidCount ?? 0);
+    setInvoices((pay as Payment[]) ?? []);
+    if (t?.plan_type) {
+      const { data: pl } = await supabase.from("plan_limits").select("max_channels,max_videos_per_day").eq("plan_type", t.plan_type).maybeSingle();
+      const l = pl as { max_channels?: number; max_videos_per_day?: number } | null;
+      setMaxCh(l?.max_channels ?? null); setMaxVid(l?.max_videos_per_day ?? null);
+    }
+    setLoading(false);
+  }, [supabase]);
+
   useEffect(() => {
+    load();
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, []);
+  }, [load]);
+
+  const comp = !!plan && (plan.is_developer || (plan.discount_pct ?? 0) >= 100);
+  const planName = plan ? (PLAN_LABEL[plan.plan_type] ?? plan.plan_type) : "—";
+  const planPrice = plan ? prices[`plan_${plan.plan_type}`]?.value_idr : null;
+  const monthCap = maxVid != null ? maxVid * 30 : null;
 
   return (
     <>
@@ -40,89 +73,87 @@ export default function BillingPage() {
         <div className="sub"><Bi id="Kelola langganan, pembayaran, dan invoice" en="Manage subscription, payment, and invoices" /></div>
       </div>
 
+      {loading ? <div className="muted" style={{ padding: "2rem" }}><Bi id="Memuat…" en="Loading…" /></div> : (
       <div className="bl-grid2">
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           {/* current plan */}
           <div className="plan-card">
             <div className="plan-top">
               <div>
-                <div className="plan-name">Pro <span className="badge badge-brand">Most Popular</span></div>
-                <div className="plan-price"><span className="dyn">{"{{pricing.plan_pro}}"}</span><small>/bln</small></div>
-                <div className="price-ex">contoh nilai: Rp 349K · diperbarui dari pricing_config</div>
-                <div className="muted" style={{ fontSize: "var(--text-sm)", marginTop: "0.5rem" }}><Bi id="Diperbarui otomatis 25 Juni 2026" en="Auto-renews June 25, 2026" /></div>
+                <div className="plan-name">{planName} {comp ? <span className="badge badge-success">Comp · Developer</span> : <span className={`badge ${plan?.subscription_status === "active" ? "badge-success" : "badge-warning"}`}>{plan?.subscription_status}</span>}</div>
+                {comp
+                  ? <div className="muted" style={{ fontSize: "var(--text-sm)", marginTop: "0.5rem" }}><Bi id="Akun komplimen / developer — gratis selamanya, tanpa tagihan." en="Complimentary / developer account — free forever, no billing." /></div>
+                  : <>
+                      <div className="plan-price">{fmtIDR(planPrice)}<small>/bln</small></div>
+                      <div className="muted" style={{ fontSize: "var(--text-sm)", marginTop: "0.5rem" }}>{plan?.current_period_end ? <>Periode berakhir {new Date(plan.current_period_end).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</> : <Bi id="Tidak ada periode aktif" en="No active period" />}</div>
+                    </>}
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                <button className="btn btn-default"><Zap size={15} /> <Bi id="Upgrade ke Business" en="Upgrade to Business" /></button>
-                <button className="btn btn-ghost btn-sm"><Bi id="Downgrade paket" en="Downgrade plan" /></button>
-              </div>
+              {!comp && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", alignItems: "flex-end" }}>
+                  <button className="btn btn-default" disabled title="Midtrans Snap aktif saat cutover"><Zap size={15} /> <Bi id="Upgrade" en="Upgrade" /></button>
+                  <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="checkout Midtrans saat cutover" en="Midtrans checkout at cutover" /></span>
+                </div>
+              )}
             </div>
             <div className="usage-row">
-              <div className="usage"><div className="top"><span className="secondary"><Bi id="Penggunaan channel" en="Channel usage" /></span><span className="v">1 / 3</span></div><div className="progress"><span style={{ width: "33%" }} /></div></div>
-              <div className="usage"><div className="top"><span className="secondary"><Bi id="Video bulan ini" en="Videos this month" /></span><span className="v">45 / 900</span></div><div className="progress"><span style={{ width: "5%" }} /></div></div>
+              <div className="usage"><div className="top"><span className="secondary"><Bi id="Penggunaan channel" en="Channel usage" /></span><span className="v">{chUsed} / {maxCh ?? "—"}</span></div><div className="progress"><span style={{ width: `${maxCh ? Math.min(100, (chUsed / maxCh) * 100) : 0}%` }} /></div></div>
+              <div className="usage"><div className="top"><span className="secondary"><Bi id="Video bulan ini" en="Videos this month" /></span><span className="v">{vidMonth} / {monthCap ?? "—"}</span></div><div className="progress"><span style={{ width: `${monthCap ? Math.min(100, (vidMonth / monthCap) * 100) : 0}%` }} /></div></div>
             </div>
           </div>
 
           {/* payment method */}
           <div className="card card-pad">
             <h3 className="card-title" style={{ marginBottom: "1rem" }}><CreditCard size={16} /> <Bi id="Metode pembayaran" en="Payment method" /></h3>
-            <div className="pay-method">
-              <span className="pay-logo">Midtrans</span>
-              <div style={{ flex: 1 }}><div style={{ fontSize: "var(--text-sm)", fontWeight: 500 }}>BCA Virtual Account</div><div className="muted" style={{ fontSize: "var(--text-xs)" }}>•••• 8821 · <Bi id="kedaluwarsa 12/27" en="expires 12/27" /></div></div>
-              <button className="btn btn-secondary btn-sm"><Bi id="Perbarui" en="Update" /></button>
-            </div>
+            {comp
+              ? <div className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Tidak diperlukan — akun gratis." en="Not required — free account." /></div>
+              : <div className="pay-method">
+                  <span className="pay-logo">Midtrans</span>
+                  <div style={{ flex: 1 }}><div style={{ fontSize: "var(--text-sm)", fontWeight: 500 }}><Bi id="Belum ada metode tersimpan" en="No method saved yet" /></div><div className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Dipilih saat checkout (VA / e-wallet / kartu / QRIS)" en="Chosen at checkout (VA / e-wallet / card / QRIS)" /></div></div>
+                </div>}
           </div>
 
           {/* invoices */}
           <div className="card">
-            <div className="card-head"><h3 className="card-title"><FileText size={16} /> <Bi id="Riwayat invoice" en="Invoice history" /></h3><span className="card-sub">12 <Bi id="bulan terakhir" en="months" /></span></div>
-            <div style={{ overflowX: "auto" }}><table className="tbl">
-              <thead><tr><th>Invoice</th><th>Tanggal</th><th className="num">Jumlah</th><th>Status</th><th></th></tr></thead>
-              <tbody>{INV.map(([id, d, amt]) => (
-                <tr key={id}><td className="mono" style={{ color: "var(--text-primary)" }}>{id}</td><td className="muted">{d}</td><td className="num"><b style={{ color: "var(--text-primary)", fontWeight: 600 }}>{amt}</b></td>
-                  <td><span className="badge badge-success"><span className="dot" /><Bi id="Lunas" en="Paid" /></span></td>
-                  <td><button className="btn btn-ghost btn-sm"><Download size={14} /> PDF</button></td></tr>
-              ))}</tbody>
-            </table></div>
+            <div className="card-head"><h3 className="card-title"><FileText size={16} /> <Bi id="Riwayat invoice" en="Invoice history" /></h3></div>
+            {invoices.length === 0
+              ? <div className="card-body" style={{ padding: "1.5rem", textAlign: "center" }}><span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Belum ada invoice." en="No invoices yet." /></span></div>
+              : <div style={{ overflowX: "auto" }}><table className="tbl">
+                  <thead><tr><th>Order</th><th>Tanggal</th><th className="num">Jumlah</th><th>Status</th></tr></thead>
+                  <tbody>{invoices.map((p) => (
+                    <tr key={p.order_id}><td className="mono" style={{ color: "var(--text-primary)" }}>{p.order_id}</td><td className="muted">{new Date(p.created_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}</td><td className="num"><b style={{ color: "var(--text-primary)", fontWeight: 600 }}>{fmtIDR(p.gross_amount)}</b></td>
+                      <td><span className={`badge ${(p.status || "").includes("settle") || (p.status || "").includes("capture") || p.status === "paid" ? "badge-success" : "badge-default"}`}><span className="dot" />{p.status}</span></td></tr>
+                  ))}</tbody>
+                </table></div>}
           </div>
         </div>
 
         {/* right rail */}
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           <div className="card card-pad">
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.875rem" }}><h3 className="card-title"><Plus size={16} /> <Bi id="Add-ons aktif" en="Active add-ons" /></h3><button className="btn btn-secondary btn-sm" onClick={() => setOpen(true)}><Plus size={14} /></button></div>
-            <div className="addon-active"><span className="ic"><Mic size={16} /></span><div style={{ flex: 1 }}><div style={{ fontSize: "var(--text-sm)", fontWeight: 500 }}>Voice Pack</div><div className="muted" style={{ fontSize: "var(--text-xs)" }}><span className="mono">{"{{pricing.voice_pack}}"}</span> · <span className="price-ex">≈ Rp 199K</span></div></div><button className="btn btn-ghost btn-icon btn-sm"><X size={14} /></button></div>
-            <div className="addon-active"><span className="ic"><Zap size={16} /></span><div style={{ flex: 1 }}><div style={{ fontSize: "var(--text-sm)", fontWeight: 500 }}>Priority Queue</div><div className="muted" style={{ fontSize: "var(--text-xs)" }}><span className="mono">{"{{pricing.priority_queue}}"}</span>/bln · <span className="price-ex">≈ Rp 149K</span></div></div><button className="btn btn-ghost btn-icon btn-sm"><X size={14} /></button></div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.875rem" }}><h3 className="card-title"><Plus size={16} /> <Bi id="Add-ons" en="Add-ons" /></h3><button className="btn btn-secondary btn-sm" onClick={() => setOpen(true)}><Plus size={14} /></button></div>
+            <div className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Belum ada add-on aktif. Lihat katalog →" en="No active add-ons. Browse catalog →" /></div>
           </div>
 
           <div className="card card-pad">
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.25rem" }}><h3 className="card-title"><DollarSign size={16} /> <Bi id="Biaya AI (BYOK)" en="AI Cost (BYOK)" /></h3><span className="badge badge-outline">BYOK</span></div>
-            <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "0.75rem" }}><Bi id="Dibayar langsung ke provider — terpisah dari langganan." en="Paid directly to providers — separate from subscription." /></div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: "0.5rem" }}><span style={{ fontSize: "var(--text-3xl)", fontWeight: 700, letterSpacing: "-0.02em" }}>$112</span><span className="muted" style={{ fontSize: "var(--text-sm)" }}>≈ Rp 1.79JT · bulan ini</span></div>
-            <div className="bl-cost-bar"><span style={{ background: "var(--anthropic)", width: "28%" }} /><span style={{ background: "var(--elevenlabs)", width: "34%" }} /><span style={{ background: "var(--openai)", width: "38%" }} /></div>
-            <div className="cost-leg">
-              <div className="r"><span className="sw" style={{ background: "var(--anthropic)" }} />Anthropic<span className="amt">$31</span></div>
-              <div className="r"><span className="sw" style={{ background: "var(--elevenlabs)" }} />ElevenLabs<span className="amt">$38</span></div>
-              <div className="r"><span className="sw" style={{ background: "var(--openai)" }} />OpenAI<span className="amt">$43</span></div>
-            </div>
-            <hr className="hr" style={{ margin: "0.875rem 0 0.75rem" }} />
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--text-xs)", marginBottom: 6 }}><span className="muted"><Bi id="Budget bulanan" en="Monthly budget" /></span><span><b>$112</b> <span className="muted">/ $500</span></span></div>
-            <div className="progress"><span style={{ width: "22%" }} /></div>
+            <p className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.75rem" }}><Bi id="Dibayar langsung ke provider — terpisah dari langganan. Rincian tampil setelah worker mencatat metadata produksi." en="Paid directly to providers — separate from subscription. Breakdown appears once the worker records production metadata." /></p>
           </div>
         </div>
       </div>
+      )}
 
-      {/* add-ons drawer */}
+      {/* add-ons drawer (katalog dari pricing_config) */}
       <div className={`scrim${open ? " open" : ""}`} onClick={() => setOpen(false)} />
       <aside className={`drawer${open ? " open" : ""}`}>
         <div className="drawer-head"><h3 className="card-title"><Bi id="Katalog Add-on" en="Add-on catalog" /></h3><button className="btn btn-ghost btn-icon btn-sm" onClick={() => setOpen(false)}><X size={16} /></button></div>
         <div className="drawer-body">
-          {CAT.map(({ Icon, name, key, ex, descId, descEn }) => (
-            <div className="addon-cat" key={name}><span className="ic"><Icon size={18} /></span><div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: "var(--text-sm)" }}>{name}</div>
-              <div className="muted" style={{ fontSize: "var(--text-xs)", margin: ".25rem 0 .5rem" }}><Bi id={descId} en={descEn} /></div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}><span><span className="mono" style={{ color: "var(--brand)" }}>{key}</span> <span className="price-ex">{ex}</span></span><button className="btn btn-outline btn-sm"><Bi id="Tambah" en="Add" /></button></div>
-            </div></div>
-          ))}
+          {addons.length === 0 ? <div className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Belum ada add-on di katalog." en="No add-ons in catalog." /></div>
+            : addons.map((a) => (
+              <div className="addon-cat" key={a.key}><span className="ic"><ShieldCheck size={18} /></span><div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: "var(--text-sm)" }}>{a.description || a.key}</div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: ".5rem" }}><span style={{ color: "var(--brand)", fontWeight: 600 }}>{fmtIDR(a.value_idr)}{a.category === "add_on" ? "" : ""}</span><button className="btn btn-outline btn-sm" disabled title="checkout saat cutover"><Bi id="Tambah" en="Add" /></button></div>
+              </div></div>
+            ))}
         </div>
       </aside>
     </>
