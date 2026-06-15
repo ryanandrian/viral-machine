@@ -55,7 +55,7 @@
 - [x] **A1** — Tambah `channels.buffer_depth` (target stok ready per-channel, §12c "tren=1/evergreen=3-5"; NULL→default env). migr 0045, verified. *(2026-06-16)*
 - [x] **A2** — ~~Tambah `niches.exclusive_tenant_id`~~ → **DIBATALKAN**: kolom pemilik niche **SUDAH ADA** = `niches.exclusive_to` (+ `exclusive_until`/`released_at`/`access_type`, migr 0037). Pakai itu; tak perlu kolom baru. *(2026-06-16)*
 - [x] **A3** — Tabel baru `niche_requests` (pengajuan custom niche): `tenant_id, channel_id, request_type(public_90d|private), title, clues jsonb, status, price_key, niche_id, admin_note, ...` + RLS tenant-own (insert/read), admin via service_role. migr 0045. **Validated** (temp authed user: insert own ✓, read scoped ✓, cross-tenant insert blocked ✓). *(2026-06-16)*
-- [ ] **A4** — Migrasi data: pastikan tiap channel punya `publish_slots` (isi default bila kosong); rapikan/buang baris `production_schedules` stale (channel_id string lama → tak match UUID).
+- [x] **A4** — Migrasi data ryan V1→V2: channel `niche_mode` fixed→**random** (sesuai V1; business=entitlement 4 niche), `publish_slots` `['20:00']`→**`['06:00','21:00']`** (konversi V1 `['14:00','23:00']` UTC→WIB, momen US-peak sama), `buffer_depth`=3 (§12c). Hapus 5 baris `production_schedules` stale (channel_id string lama). *(2026-06-16; data-only)*
 - [ ] **A5** — Pensiunkan fosil V1 (setelah BE+FE lepas): drop `production_schedules`; drop/abaikan `tenant_configs.publish_slots`, `channels.production_cron`, `tenant_configs.production_cron`/`analytics_cron`; deprecate `channels.niche_pool` (random kini = seluruh entitlement, bukan subset per-channel).
 - *(Di luar scope: `niches.tag_pool` / Layer-2 sub-tag = epik terpisah.)*
 
