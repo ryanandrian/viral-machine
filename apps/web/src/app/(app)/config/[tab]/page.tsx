@@ -94,65 +94,85 @@ function TaskRow({ k, sub, model }: { k: string; sub: string; model: string }) {
 
 // ---------- panels ----------
 function AiEngines() {
+  const supabase = createClient();
+  const [llmKey, setLlmKey] = useState(""); const [ttsKey, setTtsKey] = useState(""); const [visualKey, setVisualKey] = useState("");
+  const [lib, setLib] = useState<"anthropic" | "openai">("openai");
+  const [has, setHas] = useState<{ llm: boolean; tts: boolean; visual: boolean }>({ llm: false, tts: false, visual: false });
+  const [saving, setSaving] = useState(false); const [saved, setSaved] = useState<string | null>(null);
+  useEffect(() => {
+    supabase.from("tenant_configs").select("llm_library, llm_api_key, tts_api_key, visual_api_key").maybeSingle().then(({ data }) => {
+      if (data) { setLib((data.llm_library as "anthropic" | "openai") || "openai"); setHas({ llm: !!data.llm_api_key, tts: !!data.tts_api_key, visual: !!data.visual_api_key }); }
+    });
+  }, [supabase]);
+  async function save() {
+    setSaving(true); setSaved(null);
+    const p: Record<string, unknown> = { p_llm_library: lib };
+    if (llmKey.trim()) p.p_llm_api_key = llmKey.trim();
+    if (ttsKey.trim()) p.p_tts_api_key = ttsKey.trim();
+    if (visualKey.trim()) p.p_visual_api_key = visualKey.trim();
+    const { error } = await supabase.rpc("set_tenant_config", p);
+    setSaving(false); setSaved(error ? "Gagal menyimpan" : "Tersimpan (key terenkripsi, tak di-log)");
+    if (!error) { setLlmKey(""); setTtsKey(""); setVisualKey(""); setHas({ llm: has.llm || !!p.p_llm_api_key, tts: has.tts || !!p.p_tts_api_key, visual: has.visual || !!p.p_visual_api_key }); }
+  }
+  const ph = (set: boolean) => set ? "•••••••• (tersimpan — isi untuk ganti)" : "Tempel API key";
   return (
     <>
-      <Svc mark="A" color="var(--anthropic)" name="Script LLM" meta="Anthropic Claude · script & hook">
-        <div className="fld"><label className="label"><Bi id="Provider" en="Provider" /></label><RadioRow options={["Anthropic", "OpenAI"]} /></div>
-        <TaskRow k="Script generate" sub="Tugas utama" model="Claude Sonnet 4.6" />
-        <TaskRow k="Hook & utility" sub="Cepat & murah" model="Claude Haiku 4.5" />
-        <div className="fld-row"><div className="k">API Key</div><div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}><input className="input input-mono" type="password" defaultValue="sk-ant-api03-xxxxxxxx" /><TestBtn /></div></div>
-        <div className="fld-row"><div className="k"><Bi id="Pemakaian bulan ini" en="Usage this month" /></div><div><b style={{ fontWeight: 600 }}>$24</b> <span className="muted">· 612 requests</span></div></div>
+      <Svc mark="A" color="var(--anthropic)" name="Script LLM" meta="Anthropic / OpenAI · script & hook">
+        <div className="fld"><label className="label"><Bi id="Library" en="Library" /></label><div className="radio-row">{(["anthropic", "openai"] as const).map((o) => <span key={o} className={`radio-pill${lib === o ? " sel" : ""}`} onClick={() => setLib(o)} style={{ textTransform: "capitalize" }}>{o}</span>)}</div></div>
+        <div className="fld-row"><div className="k">API Key (LLM)</div><input className="input input-mono" type="password" placeholder={ph(has.llm)} value={llmKey} onChange={(e) => setLlmKey(e.target.value)} /></div>
       </Svc>
       <Svc mark="11" color="var(--elevenlabs)" name="Text-to-Speech" meta="ElevenLabs · voiceover">
-        <div className="fld"><label className="label"><Bi id="Provider" en="Provider" /></label><RadioRow options={["ElevenLabs", "OpenAI TTS"]} /></div>
-        <TaskRow k="Voiceover" sub="Model TTS" model="Multilingual v2" />
-        <div className="fld-row"><div className="k">API Key</div><div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}><input className="input input-mono" type="password" defaultValue="xxxxxxxx" /><TestBtn /></div></div>
-        <div className="fld-row"><div className="k"><Bi id="Pemakaian bulan ini" en="Usage this month" /></div><div><b style={{ fontWeight: 600 }}>$18</b> <span className="muted">· 430 requests</span></div></div>
+        <div className="fld-row"><div className="k">API Key (TTS)</div><input className="input input-mono" type="password" placeholder={ph(has.tts)} value={ttsKey} onChange={(e) => setTtsKey(e.target.value)} /></div>
       </Svc>
       <Svc mark="AI" color="var(--openai)" name="Visual AI" meta="OpenAI · image generation">
-        <div className="fld"><label className="label"><Bi id="Provider" en="Provider" /></label><RadioRow options={["OpenAI"]} /></div>
-        <TaskRow k="Image generate" sub="Visual per klip" model="gpt-image-1-mini" />
-        <div className="fld-row"><div className="k">API Key</div><div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}><input className="input input-mono" type="password" defaultValue="sk-xxxxxxxx" /><TestBtn /></div></div>
-        <div className="fld-row"><div className="k"><Bi id="Pemakaian bulan ini" en="Usage this month" /></div><div><b style={{ fontWeight: 600 }}>$31</b> <span className="muted">· 720 requests</span></div></div>
+        <div className="fld-row"><div className="k">API Key (Visual)</div><input className="input input-mono" type="password" placeholder={ph(has.visual)} value={visualKey} onChange={(e) => setVisualKey(e.target.value)} /></div>
       </Svc>
-      <div className="save-bar"><span className="muted"><Bi id="Perubahan belum disimpan" en="Unsaved changes" /></span><button className="btn btn-ghost"><Bi id="Reset" en="Reset" /></button><button className="btn btn-default"><Bi id="Simpan" en="Save" /></button></div>
+      <div className="save-bar"><span className="muted">{saved ?? <Bi id="BYOK — key milikmu, terenkripsi Fernet, tak pernah di-log" en="BYOK — your keys, Fernet-encrypted, never logged" />}</span><button className="btn btn-default" disabled={saving} onClick={save}>{saving ? "Menyimpan…" : <Bi id="Simpan" en="Save" />}</button></div>
     </>
   );
 }
 
 function ApiKeys() {
-  const rows: [string, string, string, "connected" | "failed", string, string][] = [
-    ["A", "Anthropic", "var(--anthropic)", "connected", "2 jam lalu", "5 menit lalu"],
-    ["AI", "OpenAI", "var(--openai)", "connected", "2 jam lalu", "12 menit lalu"],
-    ["11", "ElevenLabs", "var(--elevenlabs)", "connected", "1 hari lalu", "5 menit lalu"],
-    ["YT", "YouTube Data API", "var(--yt)", "connected", "3 hari lalu", "baru saja"],
-    ["TG", "Telegram Bot", "var(--telegram)", "failed", "1 hari lalu", "—"],
-  ];
-  const st = (s: "connected" | "failed") => s === "connected"
-    ? <span className="badge badge-success"><span className="dot" />Connected</span>
-    : <span className="badge badge-error"><span className="dot" />Failed</span>;
+  const supabase = createClient();
+  const [cfg, setCfg] = useState<Record<string, unknown> | null>(null);
+  useEffect(() => { supabase.from("tenant_configs").select("llm_api_key, visual_api_key, tts_api_key, youtube_api_key, telegram_chat_id, llm_library, tts_provider").maybeSingle().then(({ data }) => setCfg(data ?? {})); }, [supabase]);
+  const rows: [string, string, string, boolean][] = cfg ? [
+    ["A", `LLM (${(cfg.llm_library as string) || "—"})`, "var(--anthropic)", !!cfg.llm_api_key],
+    ["AI", "Visual (OpenAI)", "var(--openai)", !!cfg.visual_api_key],
+    ["11", `TTS (${(cfg.tts_provider as string) || "—"})`, "var(--elevenlabs)", !!cfg.tts_api_key],
+    ["YT", "YouTube Data API", "var(--yt)", !!cfg.youtube_api_key],
+    ["TG", "Telegram", "var(--telegram)", !!cfg.telegram_chat_id],
+  ] : [];
+  const st = (ok: boolean) => ok
+    ? <span className="badge badge-success"><span className="dot" />Tersimpan</span>
+    : <span className="badge badge-default"><span className="dot" />Belum diisi</span>;
   return (
     <>
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "1rem" }}><TestBtn label={{ id: "Test semua", en: "Test all" }} /></div>
       <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl">
-        <thead><tr><th>Service</th><th>Status</th><th>Last test</th><th>Last used</th><th></th></tr></thead>
-        <tbody>{rows.map(([m, n, c, s, lt, lu]) => (
+        <thead><tr><th>Service</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          {!cfg && <tr><td colSpan={3} className="muted" style={{ padding: "1rem", textAlign: "center" }}>Memuat…</td></tr>}
+          {rows.map(([m, n, c, ok]) => (
           <tr key={n}>
             <td><span style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}><Mark label={m} color={c} size={24} /><b style={{ color: "var(--text-primary)", fontWeight: 500 }}>{n}</b></span></td>
-            <td>{st(s)}</td><td className="muted">{lt}</td><td className="muted">{lu}</td>
-            <td><div style={{ display: "flex", gap: "0.25rem", justifyContent: "flex-end" }}><TestBtn small /><button className="btn btn-ghost btn-icon btn-sm"><Settings size={14} /></button><button className="btn btn-ghost btn-icon btn-sm" style={{ color: "var(--error)" }}><X size={14} /></button></div></td>
+            <td>{st(ok)}</td>
+            <td style={{ textAlign: "right" }}><Link href="/config/ai-engines" className="btn btn-ghost btn-sm"><Settings size={13} /> <Bi id="Kelola" en="Manage" /></Link></td>
           </tr>
-        ))}</tbody></table></div></div>
-      <div className="card card-pad" style={{ marginTop: "1rem" }}><h3 className="card-title" style={{ marginBottom: "0.75rem" }}><Clock size={15} /> <Bi id="Audit log" en="Audit log" /></h3>
-        {["API key Anthropic diperbarui · 2 hari lalu", "Telegram bot token gagal validasi · 1 hari lalu", "API key OpenAI ditambahkan · 5 hari lalu"].map((t) => (
-          <div key={t} style={{ fontSize: "var(--text-sm)", color: "var(--text-secondary)", padding: "0.4rem 0", borderBottom: "1px solid var(--border-subtle)" }}>{t}</div>
-        ))}
-      </div>
+          ))}
+        </tbody></table></div></div>
+      <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".75rem" }}><Bi id="Key di-isi & dienkripsi (Fernet) di tab AI Engines / Notifikasi. Status di atas = ada/tidaknya key tersimpan (nilai tak pernah ditampilkan/di-log). Validasi koneksi nyata = saat run produksi." en="Keys are set & Fernet-encrypted in AI Engines / Notifications. Status above = whether a key is stored (values never shown/logged). Live connection validation happens at production run." /></div>
     </>
   );
 }
 
 function Voice() {
+  const supabase = createClient();
+  const [current, setCurrent] = useState<string>(""); const [saved, setSaved] = useState<string | null>(null);
+  useEffect(() => { supabase.from("tenant_configs").select("tts_voice").maybeSingle().then(({ data }) => setCurrent(data?.tts_voice ?? "")); }, [supabase]);
+  async function useVoice(name: string) {
+    const { error } = await supabase.rpc("set_tenant_config", { p_tts_voice: name });
+    if (!error) { setCurrent(name); setSaved(name); }
+  }
   const filters = ["Style: Semua", "Gender: Semua", "Usia: Semua"];
   const voices: [string, string, string, boolean][] = [
     ["Arya", "Pria · dalam, misterius", "#1d4ed8", true], ["Sari", "Wanita · hangat, naratif", "#9f1239", false],
@@ -167,14 +187,15 @@ function Voice() {
         <span className="badge badge-default" style={{ marginLeft: "auto" }}>🇮🇩 Bahasa Indonesia</span>
       </div>
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1.25rem" }}>{filters.map((f) => (<span key={f} className="selbox" style={{ height: "2rem" }}>{f} <ChevronDown size={13} /></span>))}</div>
-      <div className="grid-3">{voices.map(([n, s, c, sel], idx) => (
+      {saved && <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: ".75rem" }}>Voice aktif: <b style={{ color: "var(--text-primary)" }}>{saved}</b> — tersimpan.</div>}
+      <div className="grid-3">{voices.map(([n, s, c], idx) => { const sel = current === n; return (
         <div key={n} className="card card-pad" style={sel ? { borderColor: "var(--brand)" } : undefined}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.75rem" }}><PlayBtn />
             <div><div style={{ fontWeight: 600, fontSize: "var(--text-sm)" }}>{n}</div><div className="muted" style={{ fontSize: "var(--text-xs)" }}>{s}</div></div></div>
           <div style={{ height: 24, display: "flex", alignItems: "center", gap: 2, marginBottom: "0.75rem" }}>{bars(idx + 1, 32).map((h, i) => (<span key={i} style={{ flex: 1, height: `${h}%`, background: c, opacity: 0.5, borderRadius: 1 }} />))}</div>
-          <button className={`btn ${sel ? "btn-default" : "btn-outline"} btn-sm`} style={{ width: "100%" }}>{sel ? <Bi id="Sedang dipakai" en="In use" /> : <Bi id="Pakai suara ini" en="Use this voice" />}</button>
+          <button className={`btn ${sel ? "btn-default" : "btn-outline"} btn-sm`} style={{ width: "100%" }} onClick={() => useVoice(n)} disabled={sel}>{sel ? <Bi id="Sedang dipakai" en="In use" /> : <Bi id="Pakai suara ini" en="Use this voice" />}</button>
         </div>
-      ))}</div>
+      ); })}</div>
       <div className="card card-pad" style={{ marginTop: "1.25rem" }}><h3 className="card-title" style={{ marginBottom: "1rem" }}><Target size={15} /> <Bi id="Voice default per niche" en="Default voice per niche" /></h3>
         {niches.map(([nc, v]) => (<div key={nc} className="fld-row"><div className="k">{nc}</div><div className="selbox"><Mic size={14} /> {v} <ChevronDown size={14} /></div></div>))}
       </div>
@@ -183,6 +204,11 @@ function Voice() {
 }
 
 function Visual() {
+  const supabase = createClient();
+  const [mode, setMode] = useState("video"); const [quality, setQuality] = useState("low");
+  const [saving, setSaving] = useState(false); const [saved, setSaved] = useState<string | null>(null);
+  useEffect(() => { supabase.from("tenant_configs").select("visual_mode, image_quality").maybeSingle().then(({ data }) => { if (data) { setMode(data.visual_mode ?? "video"); setQuality(data.image_quality ?? "low"); } }); }, [supabase]);
+  async function save() { setSaving(true); setSaved(null); const { error } = await supabase.rpc("set_tenant_content_config", { p: { visual_mode: mode, image_quality: quality } }); setSaving(false); setSaved(error ? "Gagal" : "Tersimpan"); }
   const presets: [string, string[], boolean][] = [
     ["Cinematic Dark", ["#0c1222", "#1e293b", "#334155"], true],
     ["Vibrant", ["#7c3aed", "#db2777", "#f59e0b"], false],
@@ -196,15 +222,22 @@ function Visual() {
   ];
   return (
     <>
-      <div className="grid-4">{presets.map(([n, cols, sel]) => (
-        <div key={n} className="card" style={{ cursor: "pointer", overflow: "hidden", ...(sel ? { borderColor: "var(--brand)" } : {}) }}>
+      <div className="card card-pad" style={{ marginBottom: "1.25rem" }}>
+        <h3 className="card-title" style={{ marginBottom: "0.875rem" }}><Bi id="Mode & kualitas visual" en="Visual mode & quality" /></h3>
+        <div className="fld-row"><div className="k"><Bi id="Mode visual" en="Visual mode" /><div className="sub">video=stok · ai_image=generate</div></div><div className="radio-row">{["video", "ai_image"].map((m) => <span key={m} className={`radio-pill${mode === m ? " sel" : ""}`} onClick={() => setMode(m)}>{m}</span>)}</div></div>
+        <div className="fld-row"><div className="k"><Bi id="Kualitas gambar" en="Image quality" /></div><div className="radio-row">{["low", "standard", "high"].map((q) => <span key={q} className={`radio-pill${quality === q ? " sel" : ""}`} onClick={() => setQuality(q)}>{q}</span>)}</div></div>
+        <div style={{ display: "flex", alignItems: "center", gap: ".75rem", marginTop: ".5rem" }}><button className="btn btn-default btn-sm" disabled={saving} onClick={save}>{saving ? "…" : <Bi id="Simpan" en="Save" />}</button>{saved && <span className="muted" style={{ fontSize: "var(--text-xs)" }}>{saved}</span>}</div>
+      </div>
+      <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: ".5rem" }}><Bi id="Preset gaya & palet di bawah dikelola per-niche (Admin Niches: visual_style)." en="Style presets & palettes below are managed per-niche (Admin Niches: visual_style)." /></div>
+      <div className="grid-4" style={{ opacity: 0.7 }}>{presets.map(([n, cols, sel]) => (
+        <div key={n} className="card" style={{ overflow: "hidden", ...(sel ? { borderColor: "var(--brand)" } : {}) }}>
           <div style={{ height: 90, display: "flex" }}>{cols.map((c) => (<span key={c} style={{ flex: 1, background: c }} />))}</div>
           <div style={{ padding: "0.75rem 1rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}><span style={{ fontSize: "var(--text-sm)", fontWeight: 500 }}>{n}</span>{sel ? <span style={{ color: "var(--brand)" }}><CheckCircle size={16} /></span> : null}</div>
         </div>
       ))}</div>
       <div className="card card-pad" style={{ marginTop: "1.25rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}><h3 className="card-title" style={{ margin: 0 }}><Wand2 size={15} /> <Bi id="Prompt prefix kustom" en="Custom prompt prefix" /></h3><span className="badge badge-brand">Pro+</span></div>
-        <textarea className="textarea input-mono" rows={3} defaultValue="cinematic, dark moody lighting, deep ocean atmosphere, volumetric fog, 9:16 vertical, highly detailed" />
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}><h3 className="card-title" style={{ margin: 0 }}><Wand2 size={15} /> <Bi id="Prompt prefix kustom" en="Custom prompt prefix" /></h3><span className="badge badge-default">Segera</span></div>
+        <textarea className="textarea input-mono" rows={3} disabled placeholder="Prompt visual diatur per-niche (Admin Niches: image_quality_tags / negative_prompt). Override per-tenant = segera." />
       </div>
       <div className="card card-pad" style={{ marginTop: "1rem" }}><h3 className="card-title" style={{ marginBottom: "1rem" }}><Bi id="Palet warna per niche" en="Color palette per niche" /></h3>
         {palettes.map(([n, cols]) => (
@@ -216,6 +249,11 @@ function Visual() {
 }
 
 function MusicPanel() {
+  const supabase = createClient();
+  const [enabled, setEnabled] = useState(false); const [vol, setVol] = useState(0.18); const [defMood, setDefMood] = useState("");
+  const [saving, setSaving] = useState(false); const [saved, setSaved] = useState<string | null>(null);
+  useEffect(() => { supabase.from("tenant_configs").select("music_enabled, music_volume, music_default_mood").maybeSingle().then(({ data }) => { if (data) { setEnabled(data.music_enabled ?? false); setVol(data.music_volume ?? 0.18); setDefMood(data.music_default_mood ?? ""); } }); }, [supabase]);
+  async function save() { setSaving(true); setSaved(null); const { error } = await supabase.rpc("set_tenant_content_config", { p: { music_enabled: enabled, music_volume: vol, music_default_mood: defMood || null } }); setSaving(false); setSaved(error ? "Gagal" : "Tersimpan"); }
   const moods = ["Semua", "Tegang", "Misterius", "Epik", "Tenang", "Ceria"];
   const [mood, setMood] = useState(0);
   const tracks: [string, string, string, string, boolean][] = [
@@ -225,7 +263,15 @@ function MusicPanel() {
   ];
   return (
     <>
-      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1.25rem" }}>{moods.map((m, i) => (<button key={m} className={`radio-pill${i === mood ? " sel" : ""}`} onClick={() => setMood(i)}>{m}</button>))}</div>
+      <div className="card card-pad" style={{ marginBottom: "1.25rem" }}>
+        <h3 className="card-title" style={{ marginBottom: "0.875rem" }}><Bi id="Pengaturan musik channel" en="Channel music settings" /></h3>
+        <div className="fld-row"><div className="k"><Bi id="Aktifkan musik latar" en="Enable background music" /></div><label className="switch"><input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /><span className="track" /><span className="thumb" /></label></div>
+        <div className="fld-row"><div className="k"><Bi id="Volume" en="Volume" /><div className="sub">{Math.round(vol * 100)}%</div></div><input type="range" className="slider" min={0} max={100} value={Math.round(vol * 100)} onChange={(e) => setVol(+e.target.value / 100)} /></div>
+        <div className="fld-row"><div className="k"><Bi id="Mood default (opsional)" en="Default mood (optional)" /></div><div className="radio-row">{["", "tegang", "misterius", "epik", "tenang"].map((m) => <span key={m || "auto"} className={`radio-pill${defMood === m ? " sel" : ""}`} onClick={() => setDefMood(m)}>{m || "auto"}</span>)}</div></div>
+        <div style={{ display: "flex", alignItems: "center", gap: ".75rem", marginTop: ".5rem" }}><button className="btn btn-default btn-sm" disabled={saving} onClick={save}>{saving ? "…" : <Bi id="Simpan" en="Save" />}</button>{saved && <span className="muted" style={{ fontSize: "var(--text-xs)" }}>{saved}</span>}</div>
+      </div>
+      <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: ".5rem" }}><Bi id="Library track di bawah = katalog (dikelola admin); mesin pilih track sesuai mood & niche." en="Track library below = catalog (admin-managed); the engine picks tracks by mood & niche." /></div>
+      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1rem" }}>{moods.map((m, i) => (<button key={m} className={`radio-pill${i === mood ? " sel" : ""}`} onClick={() => setMood(i)}>{m}</button>))}</div>
       <div className="card"><div style={{ padding: "0.5rem" }}>
         {tracks.map(([n, md, dur, c, on], idx) => (
           <div key={n} className="mrow" style={{ display: "grid", gridTemplateColumns: "36px 1fr auto auto auto", alignItems: "center", gap: "0.875rem", padding: "0.625rem 0.75rem", borderRadius: "var(--r-md)" }}>
@@ -233,7 +279,7 @@ function MusicPanel() {
             <div><div style={{ fontSize: "var(--text-sm)", fontWeight: 500 }}>{n}</div><div style={{ height: 14, display: "flex", alignItems: "center", gap: 1, marginTop: 2 }}>{bars(idx + 3, 40).map((h, i) => (<span key={i} style={{ flex: 1, height: `${h}%`, background: c, opacity: 0.4, borderRadius: 1 }} />))}</div></div>
             <span className="badge badge-default">{md}</span>
             <span className="muted mono" style={{ fontSize: "var(--text-xs)" }}>{dur}</span>
-            <label className="switch"><input type="checkbox" defaultChecked={on} /><span className="track" /><span className="thumb" /></label>
+            <span className="badge badge-default" style={{ fontSize: "0.5625rem", opacity: on ? 1 : 0.5 }}>{on ? "library" : "off"}</span>
           </div>
         ))}
       </div></div>
@@ -244,12 +290,32 @@ function MusicPanel() {
 // ===== STAGE 2 panels (port cfg-content.js): Captions, Quality, Hashtags, Niches, Notifications =====
 
 function Captions() {
+  const supabase = createClient();
   const [sub, setSub] = useState<"style" | "position" | "animation">("style");
   const [size, setSize] = useState(119);
   const [textColor, setTextColor] = useState("#FFFFFF");
   const [activeColor, setActiveColor] = useState("#FFD700");
   const [pos, setPos] = useState("bottom");
   const [maxLine, setMaxLine] = useState(2);
+  const [raw, setRaw] = useState<Record<string, unknown>>({});
+  const [saving, setSaving] = useState(false); const [saved, setSaved] = useState<string | null>(null);
+  useEffect(() => {
+    supabase.from("tenant_configs").select("caption_style").maybeSingle().then(({ data }) => {
+      const c = (data?.caption_style ?? {}) as Record<string, unknown>;
+      setRaw(c);
+      if (typeof c.font_size === "number") setSize(c.font_size as number);
+      if (typeof c.color === "string") setTextColor(c.color as string);
+      if (typeof c.active_color === "string") setActiveColor(c.active_color as string);
+      if (typeof c.position === "string") setPos(c.position as string);
+      if (typeof c.max_lines === "number") setMaxLine(c.max_lines as number);
+    });
+  }, [supabase]);
+  async function save() {
+    setSaving(true); setSaved(null);
+    const merged = { ...raw, font_size: size, color: textColor, active_color: activeColor, position: pos, max_lines: maxLine };
+    const { error } = await supabase.rpc("set_tenant_content_config", { p: { caption_style: merged } });
+    setSaving(false); setSaved(error ? "Gagal" : "Tersimpan");
+  }
   return (
     <>
       <div style={{ display: "flex", gap: ".5rem", alignItems: "center", padding: ".625rem .875rem", background: "var(--brand-soft)", border: "1px solid color-mix(in srgb,var(--brand) 25%,transparent)", borderRadius: "var(--r-md)", marginBottom: "1.25rem", fontSize: "var(--text-sm)" }}>
@@ -290,7 +356,7 @@ function Captions() {
           <div className="grid-4">{([["🎬 Cinematic", true], ["✨ Subtle", false], ["🔥 Bold", false], ["🎨 Custom", false]] as [string, boolean][]).map(([n, s]) => <button key={n} className={`radio-pill${s ? " sel" : ""}`} style={{ justifyContent: "center" }}>{n}</button>)}</div>
         </div>
       </div>
-      <div className="save-bar"><span className="muted"><Bi id="Tier Pro: kustomisasi penuh aktif" en="Pro tier: full customization unlocked" /></span><button className="btn btn-ghost"><RefreshCw size={14} /> <Bi id="Reset" en="Reset" /></button><button className="btn btn-secondary"><Play size={14} /> <Bi id="Test di video" en="Test on video" /></button><button className="btn btn-default"><Bi id="Simpan & Terapkan" en="Save & Apply" /></button></div>
+      <div className="save-bar"><span className="muted">{saved ?? <Bi id="Disimpan ke caption_style channel" en="Saves to channel caption_style" />}</span><button className="btn btn-default" disabled={saving} onClick={save}>{saving ? "Menyimpan…" : <Bi id="Simpan & Terapkan" en="Save & Apply" />}</button></div>
     </>
   );
 }
@@ -364,33 +430,48 @@ function Quality() {
 }
 
 function Hashtags() {
-  const niches = ["Misteri Samudra", "Sejarah Kelam", "Fakta Menarik"];
+  const supabase = createClient();
+  const [niches, setNiches] = useState<{ niche_id: string; name: string; default_hashtags: string[] }[]>([]);
   const [ni, setNi] = useState(0);
-  const def = ["#misteri", "#laut", "#samudra", "#fakta", "#shorts", "#viral", "#mariana", "#kapal", "#bermuda", "#oceanmystery"];
-  const [custom, setCustom] = useState(["#misterisamudra", "#fyp", "#kapalhilang", "#segitigabermuda", "#lautdalam", "#mysteryshorts", "#faktalaut", "#viralindonesia"]);
-  const [black, setBlack] = useState(["#prank", "#giveaway"]);
+  const [map, setMap] = useState<Record<string, string[]>>({}); // niche_hashtags jsonb
+  const [draft, setDraft] = useState(""); const [saving, setSaving] = useState(false); const [saved, setSaved] = useState<string | null>(null);
+
+  useEffect(() => {
+    Promise.all([
+      supabase.from("niches").select("niche_id, name, default_hashtags").eq("is_active", true).order("niche_id"),
+      supabase.from("tenant_configs").select("niche_hashtags").maybeSingle(),
+    ]).then(([nq, tc]) => {
+      setNiches((nq.data ?? []).map((n) => ({ niche_id: n.niche_id, name: n.name, default_hashtags: Array.isArray(n.default_hashtags) ? n.default_hashtags : [] })));
+      setMap((tc.data?.niche_hashtags as Record<string, string[]>) ?? {});
+    });
+  }, [supabase]);
+
+  const cur = niches[ni];
+  const custom = (cur && map[cur.niche_id]) || [];
+  const setCustom = (arr: string[]) => { if (cur) setMap({ ...map, [cur.niche_id]: arr }); };
+  async function save() {
+    setSaving(true); setSaved(null);
+    const { error } = await supabase.rpc("set_tenant_content_config", { p: { niche_hashtags: map } });
+    setSaving(false); setSaved(error ? "Gagal" : "Tersimpan");
+  }
+  function addTag() { const t = draft.trim().replace(/^#?/, "#"); if (t.length > 1 && !custom.includes(t)) { setCustom([...custom, t]); setDraft(""); } }
+
+  if (niches.length === 0) return <div className="card card-pad muted">Memuat niche…</div>;
   return (
     <>
-      <div className="segmented" style={{ marginBottom: "1.25rem" }}>{niches.map((n, i) => <button key={n} aria-selected={ni === i} onClick={() => setNi(i)}>{n}</button>)}</div>
+      <div className="segmented" style={{ marginBottom: "1.25rem" }}>{niches.map((n, i) => <button key={n.niche_id} aria-selected={ni === i} onClick={() => setNi(i)}>{n.name}</button>)}</div>
       <div className="grid-2">
         <div className="card card-pad"><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: ".5rem" }}><h3 className="card-title" style={{ margin: 0 }}><Bi id="Pool default" en="Default pool" /></h3><span className="badge badge-default">Read-only</span></div>
-          <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: ".75rem" }}><Bi id="Default oleh MesinViral. Dipakai jika custom kosong." en="Default by MesinViral. Used when custom is empty." /></div>
-          <div className="chip-input" style={{ borderStyle: "dashed" }}>{def.map((t) => <span key={t} className="chip ghost">{t}</span>)}</div>
+          <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: ".75rem" }}><Bi id="Default niche (admin). Dipakai jika custom kosong." en="Niche default (admin). Used when custom is empty." /></div>
+          <div className="chip-input" style={{ borderStyle: "dashed" }}>{cur.default_hashtags.length ? cur.default_hashtags.map((t) => <span key={t} className="chip ghost">{t}</span>) : <span className="muted" style={{ fontSize: "var(--text-xs)" }}>—</span>}</div>
         </div>
-        <div className="card card-pad"><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: ".5rem" }}><h3 className="card-title" style={{ margin: 0 }}><Bi id="Hashtag custom" en="Custom hashtags" /></h3><span className="muted" style={{ fontSize: "var(--text-xs)" }}>{custom.length}/15 (Pro)</span></div>
-          <div className="chip-input">{custom.map((t) => <span key={t} className="chip">{t} <span className="x" onClick={() => setCustom(custom.filter((x) => x !== t))}><X size={11} /></span></span>)}<input style={{ border: "none", background: "none", outline: "none", color: "var(--text-primary)", fontSize: "var(--text-xs)", flex: 1, minWidth: 80 }} placeholder="+ tambah" /></div>
-          <button className="btn btn-ai btn-sm" style={{ marginTop: ".75rem" }}><Sparkles size={14} /> <Bi id="Optimize via AI" en="Optimize via AI" /> <span className="badge badge-brand" style={{ marginLeft: ".25rem" }}>Pro+</span></button>
+        <div className="card card-pad"><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: ".5rem" }}><h3 className="card-title" style={{ margin: 0 }}><Bi id="Hashtag custom" en="Custom hashtags" /></h3><span className="muted" style={{ fontSize: "var(--text-xs)" }}>{custom.length} tag</span></div>
+          <div className="chip-input">{custom.map((t) => <span key={t} className="chip">{t} <span className="x" onClick={() => setCustom(custom.filter((x) => x !== t))}><X size={11} /></span></span>)}<input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }} style={{ border: "none", background: "none", outline: "none", color: "var(--text-primary)", fontSize: "var(--text-xs)", flex: 1, minWidth: 80 }} placeholder="+ tambah (Enter)" /></div>
+          <div style={{ display: "flex", alignItems: "center", gap: ".75rem", marginTop: ".75rem" }}><button className="btn btn-default btn-sm" disabled={saving} onClick={save}>{saving ? "…" : <Bi id="Simpan" en="Save" />}</button>{saved && <span className="muted" style={{ fontSize: "var(--text-xs)" }}>{saved}</span>}</div>
         </div>
       </div>
-      <div className="grid-2" style={{ marginTop: "1rem" }}>
-        <div className="card card-pad"><h3 className="card-title" style={{ marginBottom: ".5rem" }}><XCircle size={15} /> Blacklist</h3>
-          <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: ".75rem" }}><Bi id="Hindari tag demonetized / off-brand." en="Avoid demonetized / off-brand tags." /></div>
-          <div className="chip-input">{black.map((t) => <span key={t} className="chip" style={{ color: "var(--error)" }}>{t} <span className="x" onClick={() => setBlack(black.filter((x) => x !== t))}><X size={11} /></span></span>)}<input style={{ border: "none", background: "none", outline: "none", color: "var(--text-primary)", fontSize: "var(--text-xs)", flex: 1, minWidth: 80 }} placeholder="+ tambah" /></div>
-        </div>
-        <div className="card card-pad" style={{ background: "var(--bg-elevated)" }}><h3 className="card-title" style={{ marginBottom: ".5rem" }}><Eye size={15} /> <Bi id="Preview metadata" en="Metadata preview" /></h3>
-          <div className="mono" style={{ fontSize: "var(--text-xs)", color: "var(--text-secondary)", lineHeight: 1.7 }}>{custom.concat(def.slice(0, 5)).join(" ")}</div>
-          <div style={{ display: "flex", justifyContent: "space-between", marginTop: ".75rem", fontSize: "var(--text-xs)" }}><span className="muted">{custom.length + 5} hashtag</span><span style={{ color: "var(--success)" }}>97/100 char</span></div>
-        </div>
+      <div className="card card-pad" style={{ marginTop: "1rem", background: "var(--bg-elevated)" }}><h3 className="card-title" style={{ marginBottom: ".5rem" }}><Eye size={15} /> <Bi id="Preview metadata" en="Metadata preview" /></h3>
+        <div className="mono" style={{ fontSize: "var(--text-xs)", color: "var(--text-secondary)", lineHeight: 1.7 }}>{(custom.length ? custom : cur.default_hashtags).join(" ") || "—"}</div>
       </div>
     </>
   );
@@ -430,6 +511,9 @@ function Niches() {
       : <button className="btn btn-secondary btn-sm" style={{ width: "100%" }} disabled><Shield size={13} /> Premium</button>;
   return (
     <>
+      <div className="muted" style={{ fontSize: "var(--text-xs)", padding: ".625rem .875rem", background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", borderRadius: "var(--r-md)", marginBottom: "1rem" }}>
+        <Bi id="Katalog niche & aktivasi dikelola tim (Admin Niches) + entitlement per-tier. Harga request custom di bawah = nyata dari pricing_config. Alur request custom-niche = fitur terjadwal." en="Niche catalog & activation are team-managed (Admin Niches) + per-tier entitlement. Custom-request prices below are live from pricing_config. The custom-niche request flow is a scheduled feature." />
+      </div>
       <div className="grid-4">
         {active.map(([n, cols, chips, stat]) => (
           <div key={n} className="card" style={{ overflow: "hidden" }}><Mood cols={cols} /><div style={{ padding: ".875rem 1rem" }}><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}><div style={{ fontWeight: 600, fontSize: "var(--text-sm)" }}>{n}</div><label className="switch" style={{ width: "1.75rem", height: "1rem" }}><input type="checkbox" defaultChecked /><span className="track" /><span className="thumb" style={{ width: ".75rem", height: ".75rem" }} /></label></div>
@@ -517,6 +601,20 @@ function NotifCard({ mark, color, name, meta, badge, children }: { mark: string;
 }
 
 function Notifications() {
+  const supabase = createClient();
+  const [chatId, setChatId] = useState(""); const [tgOn, setTgOn] = useState(true); const [email, setEmail] = useState("");
+  const [saving, setSaving] = useState(false); const [saved, setSaved] = useState<string | null>(null);
+  useEffect(() => {
+    supabase.from("tenant_configs").select("telegram_chat_id, telegram_enabled").maybeSingle().then(({ data }) => {
+      if (data) { setChatId(data.telegram_chat_id ?? ""); setTgOn(data.telegram_enabled ?? true); }
+    });
+    supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? ""));
+  }, [supabase]);
+  async function saveTg() {
+    setSaving(true); setSaved(null);
+    const { error } = await supabase.rpc("set_tenant_config", { p_telegram_chat_id: chatId || null, p_telegram_enabled: tgOn });
+    setSaving(false); setSaved(error ? "Gagal" : "Tersimpan");
+  }
   const events: [string, string, number[]][] = [
     ["✅", "Video Published", [1, 1, 0, 1]], ["❌", "Run Failed", [1, 1, 1, 1]], ["⚠️", "Quality Gate Failed", [1, 0, 0, 1]],
     ["🚫", "Channel Suspended", [1, 1, 0, 1]], ["🛡️", "Compliance Score Low", [1, 1, 0, 1]], ["⏰", "Trial Ending", [0, 1, 0, 1]],
@@ -526,25 +624,24 @@ function Notifications() {
   const okBadge = (t: string) => <span className="badge badge-success" style={{ marginLeft: "auto" }}><span className="dot" />{t}</span>;
   return (
     <>
-      <NotifCard mark="TG" color="var(--telegram)" name="Telegram" meta="@MesinViralBot" badge={okBadge("Connected")}>
-        <div className="fld-row"><div className="k">Chat ID</div><div style={{ display: "flex", gap: ".5rem" }}><input className="input input-mono" defaultValue="-1001234567890" /><button className="btn btn-secondary"><Bi id="Test" en="Test" /></button></div></div>
-        <a href="#" style={{ color: "var(--brand)", fontSize: "var(--text-xs)", textDecoration: "none" }}>📖 <Bi id="Cara setup Telegram chat ID" en="How to set up Telegram chat ID" /></a>
+      <NotifCard mark="TG" color="var(--telegram)" name="Telegram" meta="@MesinViralBot" badge={okBadge(tgOn ? "Aktif" : "Off")}>
+        <div className="fld-row"><div className="k">Chat ID</div><div style={{ display: "flex", gap: ".5rem" }}><input className="input input-mono" value={chatId} onChange={(e) => setChatId(e.target.value)} placeholder="-100..." /></div></div>
+        <div className="fld-row"><div className="k"><Bi id="Aktifkan notif Telegram" en="Enable Telegram notif" /></div><label className="switch"><input type="checkbox" checked={tgOn} onChange={(e) => setTgOn(e.target.checked)} /><span className="track" /><span className="thumb" /></label></div>
+        <div style={{ display: "flex", alignItems: "center", gap: ".75rem", marginTop: ".5rem" }}><button className="btn btn-default btn-sm" disabled={saving} onClick={saveTg}>{saving ? "…" : <Bi id="Simpan" en="Save" />}</button>{saved && <span className="muted" style={{ fontSize: "var(--text-xs)" }}>{saved}</span>}</div>
       </NotifCard>
-      <NotifCard mark="@" color="var(--info)" name="Email" meta="riko@misterisamudra.id" badge={okBadge("Active")}>
-        <div className="fld-row"><div className="k"><Bi id="Email tujuan" en="Destination email" /></div><div style={{ display: "flex", gap: ".5rem" }}><input className="input" defaultValue="riko@misterisamudra.id" /><button className="btn btn-secondary"><Bi id="Test email" en="Test email" /></button></div></div>
+      <NotifCard mark="@" color="var(--info)" name="Email" meta={email || "—"} badge={okBadge("Akun")}>
+        <div className="fld-row"><div className="k"><Bi id="Email akun (transaksional)" en="Account email (transactional)" /></div><input className="input" value={email} disabled /></div>
+        <div className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Email sistem (receipt, trial, suspend) dikirim ke email akun. Ganti email akun di Pengaturan." en="System emails (receipt, trial, suspend) go to your account email. Change it in Settings." /></div>
       </NotifCard>
       <NotifCard mark="{}" color="var(--surface-3)" name="Webhook" meta="" badge={<span className="badge badge-brand" style={{ marginLeft: "auto" }}>Enterprise</span>}>
         <div className="fld-row"><div className="k">URL</div><input className="input input-mono" placeholder="https://..." /></div>
         <div className="fld-row"><div className="k">HMAC secret</div><input className="input input-mono" type="password" placeholder="whsec_..." /></div>
       </NotifCard>
-      <div className="card" style={{ marginTop: "1.25rem" }}><div className="card-head"><h3 className="card-title"><Bell size={15} /> <Bi id="Matriks event" en="Event matrix" /></h3></div>
+      <div className="card" style={{ marginTop: "1.25rem" }}><div className="card-head"><h3 className="card-title"><Bell size={15} /> <Bi id="Matriks event (default sistem)" en="Event matrix (system defaults)" /></h3></div>
         <div style={{ overflowX: "auto" }}><table className="tbl"><thead><tr><th>Event</th>{cols.map((c) => <th key={c} style={{ textAlign: "center" }}>{c}</th>)}</tr></thead>
-          <tbody>{events.map(([e, n, vals]) => <tr key={n}><td><span style={{ color: "var(--text-primary)" }}>{e} {n}</span></td>{vals.map((v, i) => <td key={i} style={{ textAlign: "center" }}><label className="switch" style={{ width: "1.75rem", height: "1rem" }}><input type="checkbox" defaultChecked={!!v} /><span className="track" /><span className="thumb" style={{ width: ".75rem", height: ".75rem" }} /></label></td>)}</tr>)}</tbody></table></div>
+          <tbody>{events.map(([e, n, vals]) => <tr key={n}><td><span style={{ color: "var(--text-primary)" }}>{e} {n}</span></td>{vals.map((v, i) => <td key={i} style={{ textAlign: "center" }}>{v ? <Check size={14} style={{ color: "var(--success)" }} /> : <span className="muted">—</span>}</td>)}</tr>)}</tbody></table></div>
+        <div className="muted" style={{ fontSize: "var(--text-xs)", padding: ".75rem 1rem 0" }}><Bi id="Routing per-event kustom = segera. Saat ini: notif Telegram (diatur di atas) + email sistem transaksional." en="Custom per-event routing = coming soon. Currently: Telegram notif (set above) + transactional system email." /></div>
       </div>
-      <details className="card card-pad" style={{ marginTop: "1rem" }}><summary style={{ cursor: "pointer", fontWeight: 600, fontSize: "var(--text-sm)", listStyle: "none", display: "flex", alignItems: "center", gap: ".5rem" }}><ChevronDown size={16} /> <Bi id="Quiet hours" en="Quiet hours" /> <span className="badge badge-brand" style={{ fontSize: ".625rem" }}>Pro+</span></summary>
-        <div style={{ marginTop: "1rem" }}><div className="fld-row"><div className="k"><Bi id="Aktifkan quiet hours" en="Enable quiet hours" /><div className="sub"><Bi id="Notif di-batch, dikirim pagi hari" en="Batched, sent in the morning" /></div></div><label className="switch"><input type="checkbox" defaultChecked /><span className="track" /><span className="thumb" /></label></div>
-          <div className="fld-row"><div className="k"><Bi id="Rentang waktu" en="Time range" /></div><div style={{ display: "flex", gap: ".5rem", alignItems: "center" }}><input className="input" defaultValue="22:00" style={{ width: 90 }} /><span className="muted">—</span><input className="input" defaultValue="07:00" style={{ width: 90 }} /><span className="muted" style={{ fontSize: "var(--text-xs)" }}>WIB</span></div></div></div>
-      </details>
     </>
   );
 }
