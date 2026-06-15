@@ -12,7 +12,7 @@
 - **v2 = YANG KITA KERJAKAN** — SaaS multi-tenant + Multi-Format Studio + frontend. **SEMUA di local dev ini, BELUM ada yang di-pull ke VPS.** Spec = `DESAIN_PRODUK_SAAS.md` + `MULTI_FORMAT_STUDIO.md` + `design-source/`.
 - **DB v2 = punya sendiri** (clone penuh skema+data dari v1) — bukan DB v1. **v2 REPLACE v1 penuh di VPS yang sama saat proven.**
 
-**🎯 STATUS TERBARU (2026-06-15) — WIRING FE TUNTAS.** Backend Phase 0-8 ✅. **Frontend SEMUA ter-wiring + tervalidasi** ke Supabase v2: tenant (Phase 9: dashboard/channels/runs/analytics/compliance/insights/schedule/billing/settings/support/config-10-tab/onboarding) · admin penuh (Phase 10: tenants/pricing/niches/catalog/system/support/content-CMS/test-lab/account) · marketing (harga dari pricing_config, konten Blog/Docs/Demo DB-backed via CMS). **Fitur baru:** direct-produce (`direct_jobs`, "1 mesin 2 mode", anti-OOM terverifikasi) · admin Test Lab (validasi kredensial NYATA) · `/channels/new` · CMS. **Nol komponen FE fake/non-functional** (audit 3-area, owner-driven). Branch `v2-backend` (pushed, `main` v1-safe). Migrasi v2 = **0001–0044** (skema penuh: `DB_SCHEMA_V2.md`, 39 tabel + 4 kolom `*_enc`). **🔐 KEAMANAN KREDENSIAL (2026-06-15):** **YouTube OAuth BYO-CC = ✅ TERBANGUN** (alur web per-tenant, Opsi A — enkripsi + dance OAuth di server Python `webhook_app`; master key tak pernah ke Vercel) · **SEMUA API key AI kini TERENKRIPSI at-rest** (Fernet, migr 0044; plaintext lama dimigrasi+di-null; tulis via vault `/api/keys/set`; worker dekripsi saat baca) · landing punya section keamanan (klaim jujur). **➡️ BERIKUTNYA = GATE CUTOVER** — checklist tunggal & otoritatif di **§GATE CUTOVER — Go-Live Checklist** (tepat di bawah blok ini). + owner review live. Detail per-fitur: `PHASE10_ADMIN_WIRING.md` + memory `progress_journal` (POSISI TERKINI). *(Catatan historis di bawah = arsip per-phase; status OTORITATIF = baris ini + roadmap §MASTER.)*
+**🎯 STATUS TERBARU (2026-06-15) — WIRING FE TUNTAS.** Backend Phase 0-8 ✅. **Frontend SEMUA ter-wiring + tervalidasi** ke Supabase v2: tenant (Phase 9: dashboard/channels/runs/analytics/compliance/insights/schedule/billing/settings/support/config-10-tab/onboarding) · admin penuh (Phase 10: tenants/pricing/niches/catalog/system/support/content-CMS/test-lab/account) · marketing (harga dari pricing_config, konten Blog/Docs/Demo DB-backed via CMS). **Fitur baru:** direct-produce (`direct_jobs`, "1 mesin 2 mode", anti-OOM terverifikasi) · admin Test Lab (validasi kredensial NYATA) · `/channels/new` · CMS. **Nol komponen FE fake/non-functional** (audit 3-area, owner-driven). Branch `v2-backend` (pushed, `main` v1-safe). Migrasi v2 = **0001–0044** (skema penuh: `DB_SCHEMA_V2.md`, 39 tabel + 4 kolom `*_enc`). **🔐 KEAMANAN KREDENSIAL (2026-06-15):** **YouTube OAuth BYO-CC = ✅ TERBANGUN** (alur web per-tenant, Opsi A — enkripsi + dance OAuth di server Python `webhook_app`; master key tak pernah ke Vercel) · **SEMUA API key AI kini TERENKRIPSI at-rest** (Fernet, migr 0044; plaintext lama dimigrasi+di-null; tulis via vault `/api/keys/set`; worker dekripsi saat baca) · landing punya section keamanan (klaim jujur). **➡️ BERIKUTNYA = §PERBAIKAN PRODUCE & PUBLISH (pra-cutover)** — luruskan DB/BE/FE ke §12c (jadwal `channels.publish_slots`, niche per-channel dari entitlement, buang fosil V1, editor niche + form custom-niche). **WAJIB selesai 100% SEBELUM** §GATE CUTOVER. Kedua checklist ada di bawah blok ini. Detail per-fitur: `PHASE10_ADMIN_WIRING.md` + memory `progress_journal` (POSISI TERKINI). *(Catatan historis di bawah = arsip per-phase; status OTORITATIF = baris ini + roadmap §MASTER.)*
 - **✅ PHASE 0-5 SELESAI:** softcode AI+katalog (1) · exceptions typed (2) · pipeline_run_logs (3) · BYO-CC+Auth(`tenant_id=auth.uid()`)+RLS+OAuth-DB-first (4) · **decouple TERBUKTI end-to-end** (5: producer/publisher/buffer-S3/janitor/worker_decoupled; full loop → publish YouTube private `shorts/7ocW6BPdlVg`).
 - **✅ MULTI-FORMAT §12-A (cheap-wins):** F1+F2 durasi preset + QC-LLM relatif (±15% §8) + **effective-WPS per kelas TTS** (tts_profiles; ElevenLabs-class 1.8/edge 2.6 — solusi gap budget); Branded FB1-4 (link deskripsi + soft-sell CTA + logo overlay: **ukuran=bounds platform `branding_config`, posisi=tenant `channel.logo_position`**).
 - **✅ publish-privacy** per-channel DEFAULT **private** (trial-safe; tenant flip public saat cocok).
@@ -39,9 +39,52 @@
 
 ---
 
+## 🔧 PERBAIKAN PRODUCE & PUBLISH (PRA-CUTOVER) — luruskan DB/BE/FE ke arsitektur §12c
+
+> **WAJIB SELESAI PENUH SEBELUM §GATE CUTOVER dijalankan.** Centang [x] HANYA bila item **sudah dibuat DAN tervalidasi berjalan 100%**. V1 produksi JANGAN disentuh (semua di v2).
+
+**Kenapa ada (akar masalah, ditemukan saat audit wiring 2026-06-16):** "jadwal" tercerai-berai di 3 tabel & **FE menulis ke tabel beda dari yang dibaca BE** (FE→`production_schedules`, BE→`channels.publish_slots`), plus sisa-sisa V1 (`production_schedules` niche-per-jam, `tenant_configs.publish_slots`, `*.production_cron`, `worker.py`) yang melawan §12c. Akibat: jadwal yang diatur tenant tak dipakai mesin, channel baru tak punya jadwal, niche-per-jam bertentangan dgn rotasi pool.
+
+**Model TERKUNCI (acuan perbaikan):**
+- **§12c:** PRODUKSI = digerakkan **defisit buffer** (TANPA jadwal-waktu) · PUBLISH = digerakkan **slot** (jadwal). Hanya PUBLISH yang dijadwalkan.
+- **Hierarki:** TENANT (1 tier, 1 timezone) → **N CHANNEL** (≤ `max_channels`). Tiap channel: **niche** (fixed=1 / random=putar **SELURUH entitlement tenant**) + **jadwal publish** (`publish_slots`, N/hari ≤ `max_videos_per_day`). **Niche & jadwal TERPISAH.**
+- **Sumber kebenaran jadwal = `channels.publish_slots`** (jam, ditafsir di `tenant_configs.timezone`). Ditulis FE ↔ dibaca BE.
+- **Entitlement niche tenant** = niche dasar (trial/starter) / semua-aktif (pro/business) + custom/private milik tenant.
+
+### A. DB
+- [ ] **A1** — Tambah `channels.buffer_depth` (target stok ready per-channel, §12c "tren=1/evergreen=3-5"; default dari env). *(BE sudah baca `ch.get("buffer_depth")` → sekarang selalu default krn kolom tak ada.)*
+- [ ] **A2** — Tambah `niches.exclusive_tenant_id` (penanda niche custom/private MILIK tenant siapa) — prasyarat entitlement + private niche.
+- [ ] **A3** — Tabel baru `niche_requests` (pengajuan custom niche): `tenant_id, channel_id(null), request_type(public_90d|private), title, clues jsonb (masukan/referensi tenant), status(pending|approved|rejected|live), price_key, created_at` + RLS tenant-own (insert/read).
+- [ ] **A4** — Migrasi data: pastikan tiap channel punya `publish_slots` (isi default bila kosong); rapikan/buang baris `production_schedules` stale (channel_id string lama → tak match UUID).
+- [ ] **A5** — Pensiunkan fosil V1 (setelah BE+FE lepas): drop `production_schedules`; drop/abaikan `tenant_configs.publish_slots`, `channels.production_cron`, `tenant_configs.production_cron`/`analytics_cron`; deprecate `channels.niche_pool` (random kini = seluruh entitlement, bukan subset per-channel).
+- *(Di luar scope: `niches.tag_pool` / Layer-2 sub-tag = epik terpisah.)*
+
+### B. BE
+- [ ] **B1** — Pemilihan niche: **buang ScheduleManager Layer 1 (`production_schedules` niche-per-jam)**. `niche_mode=fixed` → `channels.niche`; `niche_mode=random` → rotasi **SELURUH entitlement tenant** (`available_niches`) via DiversityEngine. Lepas dependensi `production_schedules` di `pipeline.py`.
+- [ ] **B2** — Producer baca `channels.buffer_depth` per-channel (verifikasi default + override jalan).
+- [ ] **B3** — Validasi entitlement di jalur tulis: niche channel WAJIB ⊆ entitlement tenant (tolak bila bukan haknya).
+- [ ] **B4** — Publisher: konfirmasi tetap baca `channels.publish_slots` + `tenant_configs.timezone` + cap tier (`daily_publish_cap`) — nol regresi.
+- [ ] **B5** — Bersihkan kode V1 tak terpakai: arsip/hapus `scripts/worker.py` (monolit) + `schedule_manager.py` (bila sudah tak dipakai pasca-B1).
+
+### C. FE
+- [ ] **C1** — Halaman Jadwal (D7): tulis/baca **`channels.publish_slots`** (JAM saja, per-channel, zona tenant) lewat RPC whitelist (validasi N ≤ tier). Lepas `production_schedules`. **Hapus niche dari UI jadwal** (jadwal = jam saja).
+- [ ] **C2** — Onboarding + `/channels/new`: **isi `publish_slots` saat channel dibuat** (default sesuai tier) → channel baru langsung punya jadwal (tak ada lagi channel "tanpa jadwal").
+- [ ] **C3** — **Editor niche per-channel** (Channel Detail): tenant ubah `niche` (fixed) / `niche_mode` (fixed/random) **kapan saja**, pilihan **hanya dari entitlement tenant** (random = seluruh entitlement) — lewat RPC (validasi entitlement). Mengakhiri "niche write-once".
+- [ ] **C4** — **Form ajukan custom niche** (Config Niches/D18): tenant pilih type (public-90d / private), isi **judul + masukan/clue** (referensi gaya/keyword/contoh) → insert `niche_requests` + gate pembayaran (harga dari `pricing_config`). Admin proses di E2.3.
+- [ ] **C5** — Tampilkan batas tier (N slot/hari, jumlah channel) + daftar entitlement niche di UI terkait.
+
+### D. Validasi e2e (centang bila SELURUH alur terbukti)
+- [ ] Buat channel → set jadwal di FE → **publisher baca dari `channels`** (bukan `production_schedules`).
+- [ ] `random` → niche berputar **seluruh entitlement**; `fixed` → 1 niche; niche di luar entitlement **ditolak**.
+- [ ] Ubah niche channel pasca-buat → tersimpan + dipakai produksi berikutnya.
+- [ ] Ajukan custom niche → `niche_requests` terisi (judul+clue) → admin melihatnya.
+- [ ] Grep repo: tak ada lagi pembaca `production_schedules` / `tenant_configs.publish_slots` / `*.production_cron`; `worker.py` lama tak dipanggil.
+
+---
+
 ## 🚀 GATE CUTOVER — Go-Live Checklist (SUMBER KEBENARAN TUNGGAL)
 
-> **Ini SATU-SATUNYA daftar item cutover/go-live.** Catatan lain di dokumen ini hanya MENUNJUK ke sini (tidak menduplikasi). Status kode/fitur = baris STATUS teratas. Belum ada item yang dieksekusi ke VPS (v1 produksi JANGAN disentuh sampai langkah F).
+> **Ini SATU-SATUNYA daftar item cutover/go-live.** Catatan lain di dokumen ini hanya MENUNJUK ke sini (tidak menduplikasi). Status kode/fitur = baris STATUS teratas. Belum ada item yang dieksekusi ke VPS (v1 produksi JANGAN disentuh sampai langkah F). **⛔ PRASYARAT: §PERBAIKAN PRODUCE & PUBLISH (di atas) WAJIB selesai 100% dulu.**
 
 **A. Kode/repo (bisa dikerjakan di dev, tanpa akses VPS)**
 - [x] A1 — `requirements.txt`: `fastapi`+`uvicorn`+`cryptography` (webhook_app butuh saat deploy). ✅ 2026-06-15
