@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
-import { Zap, Moon, Sun, Menu, Video, Send } from "lucide-react";
+import { Zap, Moon, Sun, Menu } from "lucide-react";
 
 // Port MVMarketing (design-source/styles/marketing.js) → React. Nav + footer untuk halaman publik.
 // Brand icons (youtube/telegram) tak ada di lucide → substitusi Video/Send.
@@ -11,8 +11,8 @@ const NAV_LINKS = [
   { id: "Fitur", en: "Features", href: "/#features" },
   { id: "Harga", en: "Pricing", href: "/pricing" },
   { id: "Demo", en: "Demo", href: "/demo" },
-  { id: "Dokumentasi", en: "Docs", href: "#" },
-  { id: "Blog", en: "Blog", href: "#" },
+  { id: "Dokumentasi", en: "Docs", href: "/docs" },
+  { id: "Blog", en: "Blog", href: "/blog" },
 ];
 
 function Bi({ id, en }: { id: string; en: string }) {
@@ -37,12 +37,17 @@ export function MarketingShell({ children, active }: { children: React.ReactNode
 
   function switchLang(l: "id" | "en") { setLang(l); document.documentElement.lang = l; localStorage.setItem("mv-lang", l); }
 
-  const fcol = (titleId: string, titleEn: string, links: [string, string][]) => (
-    <div className="mk-fcol">
-      <div className="mk-ftitle"><Bi id={titleId} en={titleEn} /></div>
-      {links.map(([i, e], k) => <a key={k} href="#"><Bi id={i} en={e} /></a>)}
-    </div>
-  );
+  // [label_id, label_en, href]. href null = belum ada halaman → SEMBUNYIKAN (no link mati).
+  const fcol = (titleId: string, titleEn: string, links: [string, string, string | null][]) => {
+    const live = links.filter(([, , h]) => h);
+    if (live.length === 0) return null;
+    return (
+      <div className="mk-fcol">
+        <div className="mk-ftitle"><Bi id={titleId} en={titleEn} /></div>
+        {live.map(([i, e, h], k) => <a key={k} href={h as string}><Bi id={i} en={e} /></a>)}
+      </div>
+    );
+  };
 
   return (
     <>
@@ -78,22 +83,19 @@ export function MarketingShell({ children, active }: { children: React.ReactNode
               <a href="/" className="mk-brand"><span className="mk-logo"><Zap size={17} color="#fff" /></span> MesinViral</a>
               <p data-id>Mesin produksi video YouTube otomatis yang belajar dari channelmu sendiri.</p>
               <p data-en>The automated YouTube video machine that learns from your own channel.</p>
-              <div className="mk-social">
-                <a href="#" aria-label="YouTube"><Video size={18} /></a>
-                <a href="#" aria-label="Telegram"><Send size={18} /></a>
-              </div>
+              {/* sosial disembunyikan s/d URL channel tersedia (no link mati) */}
             </div>
             <div className="mk-fcols">
-              {fcol("Produk", "Product", [["Fitur", "Features"], ["Harga", "Pricing"], ["Demo", "Demo"], ["Roadmap", "Roadmap"]])}
-              {fcol("Resources", "Resources", [["Dokumentasi", "Docs"], ["Blog", "Blog"], ["Case Studies", "Case Studies"], ["API", "API"]])}
-              {fcol("Perusahaan", "Company", [["Tentang", "About"], ["Kontak", "Contact"], ["Karir", "Careers"]])}
-              {fcol("Legal", "Legal", [["Privacy", "Privacy"], ["Terms", "Terms"], ["Refund", "Refund"]])}
+              {fcol("Produk", "Product", [["Fitur", "Features", "/#features"], ["Harga", "Pricing", "/pricing"], ["Demo", "Demo", "/demo"], ["Roadmap", "Roadmap", null]])}
+              {fcol("Resources", "Resources", [["Dokumentasi", "Docs", "/docs"], ["Blog", "Blog", "/blog"], ["Case Studies", "Case Studies", null], ["API", "API", null]])}
+              {fcol("Perusahaan", "Company", [["Tentang", "About", "/about"], ["Kontak", "Contact", "/about"], ["Karir", "Careers", null]])}
+              {fcol("Legal", "Legal", [["Privacy", "Privacy", "/about"], ["Terms", "Terms", "/about"], ["Refund", "Refund", "/about"]])}
             </div>
           </div>
           <div className="mk-foot-bottom">
             <span>© 2026 MesinViral. <span data-id>Dibuat di Indonesia 🇮🇩</span><span data-en>Made in Indonesia 🇮🇩</span></span>
             <div className="mk-foot-meta">
-              <a href="#"><span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--success)", display: "inline-block", marginRight: 5 }} /><Bi id="Semua sistem normal" en="All systems normal" /></a>
+              <a href="/about"><span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--success)", display: "inline-block", marginRight: 5 }} /><Bi id="Semua sistem normal" en="All systems normal" /></a>
             </div>
           </div>
         </div>

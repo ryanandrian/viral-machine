@@ -32,7 +32,7 @@ export default function DemoPage() {
           <p className="mk-lead mk-center"><Bi id="Tonton walk-through singkat, lalu jelajahi produk aslinya langsung di bawah." en="Watch a short walk-through, then explore the real product right below." /></p>
         </div>
         <div className="dm-video">
-          <button className="dm-play" aria-label="Play"><Play size={28} /></button>
+          <button className="dm-play" aria-label="Play" onClick={() => window.open(t.href, "_blank", "noopener")}><Play size={28} /></button>
           <div className="dm-vmeta"><Play size={14} /> <Bi id="Walk-through produk · 2:14" en="Product walk-through · 2:14" /></div>
         </div>
       </div>

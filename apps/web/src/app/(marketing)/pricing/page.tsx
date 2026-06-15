@@ -120,7 +120,7 @@ export default function PricingPage() {
             <h3>Enterprise</h3>
             <p><Bi id="Butuh lebih dari 10 channel, white-label, atau SLA khusus? Mari bicara — kami susun paket sesuai kebutuhan agency atau tim Anda." en="Need more than 10 channels, white-label, or a custom SLA? Let's talk — we'll tailor a plan for your agency or team." /></p>
           </div>
-          <a href="#" className="btn btn-secondary btn-lg"><Users size={16} /> <Bi id="Hubungi Sales" en="Contact Sales" /></a>
+          <a href="/about" className="btn btn-secondary btn-lg"><Users size={16} /> <Bi id="Hubungi Sales" en="Contact Sales" /></a>
         </div>
       </div>
 
