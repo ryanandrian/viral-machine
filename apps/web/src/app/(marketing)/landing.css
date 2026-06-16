@@ -56,6 +56,27 @@
 .pipe-node:not(:last-child)::after { content: ''; position: absolute; top: 26px; left: calc(50% + 38px); right: calc(-50% + 38px); height: 2px; background: var(--border-strong); }
 .pipe-node.lit:not(:last-child)::after { background: var(--brand); }
 
+/* C — Pipeline looping (8 produksi + 3 simpul umpan-balik → kembali ke Trend Radar) */
+/* Gelombang berjalan infinite: tiap ikon menyala bergiliran (delay = --d per indeks). */
+.pipe-node.anim .ic { animation: pipe-wave 5.5s ease-in-out infinite; animation-delay: var(--d, 0s); }
+@keyframes pipe-wave {
+  0%, 16%, 100% { box-shadow: none; transform: translateY(0); }
+  8%            { box-shadow: var(--glow-brand); transform: translateY(-3px); }
+}
+/* 3 simpul loop = warna accent (umpan-balik) + glow accent + konektor dashed */
+.pipe-node.loop .ic { background: var(--surface-1); color: var(--accent); border-color: var(--accent); }
+.pipe-node.loop.anim .ic { animation-name: pipe-wave-loop; }
+@keyframes pipe-wave-loop {
+  0%, 16%, 100% { box-shadow: none; transform: translateY(0); }
+  8%            { box-shadow: 0 0 18px var(--accent); transform: translateY(-3px); }
+}
+.pipe-node.loop:not(:last-child)::after { background: repeating-linear-gradient(90deg, var(--accent) 0 6px, transparent 6px 12px); }
+.pipe-loopback { display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-top: 1.25rem; font-size: var(--text-sm); font-weight: 600; color: var(--accent); }
+.pipe-loopback svg { animation: spin 6s linear infinite reverse; }
+@media (prefers-reduced-motion: reduce) {
+  .pipe-node.anim .ic, .pipe-loopback svg { animation: none; }
+}
+
 /* FEATURES */
 .feat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.25rem; }
 .feat { padding: 1.75rem; border: 1px solid var(--border); border-radius: var(--r-xl); background: var(--surface-1); position: relative; overflow: hidden; transition: border-color var(--d-fast), transform var(--d-fast); }

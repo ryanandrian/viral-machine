@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type CSSProperties } from "react";
 import { fetchPricing, idrK } from "@/lib/pricing";
 import {
   Sparkles, ArrowRight, Play, CheckCircle, Check, Clock, BarChart3, XCircle,
   Command, ShieldCheck, Tv, Zap, X, Loader2, ChevronDown, Star,
   Radar, Target, FileText, AudioLines, Image as ImageIcon, Film, Upload, type LucideIcon,
-  Lock, KeyRound, EyeOff, Server,
+  Lock, KeyRound, EyeOff, Server, Send, Brain, TrendingUp, RotateCcw,
 } from "lucide-react";
 import "./landing.css";
 
@@ -22,6 +22,11 @@ const PIPE: [LucideIcon, string, string][] = [
   [FileText, "Script", "via Claude"], [Sparkles, "Hook", "Optimasi"],
   [AudioLines, "TTS", "via 11labs"], [ImageIcon, "Visual", "AI image"],
   [Film, "Render", "Compose"], [Upload, "Publish", "YouTube"],
+];
+// 3 simpul loop (umpan balik) — kembali ke Trend Radar: mesin makin pintar tiap siklus.
+const LOOP: [LucideIcon, string, string][] = [
+  [Send, "Report", "ke Telegram"], [Brain, "Self-learning", "dari analytics"],
+  [TrendingUp, "Self-improvement", "tiap siklus"],
 ];
 
 const CMP_COLS = ["AutoShorts", "OpusClip", "Submagic", "Pictory"];
@@ -144,15 +149,16 @@ export default function LandingPage() {
       {/* SOLUTION pipeline */}
       <section className="mk-section" style={{ background: "var(--bg-elevated)", borderBlock: "1px solid var(--border-subtle)" }}><div className="mk-container">
         <div className="mk-center reveal" style={{ marginBottom: "2.5rem" }}>
-          <span className="mk-kicker"><Zap size={13} /> <Bi id="Pipeline AI 8 langkah" en="8-step AI pipeline" /></span>
+          <span className="mk-kicker"><Zap size={13} /> <Bi id="Pipeline AI 11 langkah" en="11-step AI pipeline" /></span>
           <h2 className="mk-h2"><Bi id="Dari tren ke YouTube, otomatis" en="From trend to YouTube, automatically" /></h2>
-          <p className="mk-lead"><Bi id="Setiap video melewati 8 langkah produksi yang sepenuhnya otomatis — dan diperkaya data channelmu." en="Every video flows through 8 fully automated production steps — enriched by your channel's data." /></p>
+          <p className="mk-lead"><Bi id="Setiap video melewati 8 langkah produksi otomatis + 3 simpul umpan-balik (report, self-learning, self-improvement) yang kembali ke Trend Radar — loop tak berujung yang makin pintar tiap siklus." en="Every video flows through 8 automated production steps + 3 feedback nodes (report, self-learning, self-improvement) that loop back into Trend Radar — an endless loop that gets smarter every cycle." /></p>
         </div>
-        <div className="pipe-flow reveal">
-          {PIPE.map(([Icon, n, c], i) => (
-            <div className="pipe-node lit" key={i}><div className="ic"><Icon size={24} /></div><div className="n">{n}</div><div className="c">{c}</div></div>
+        <div className="pipe-flow pipe-loop reveal">
+          {[...PIPE, ...LOOP].map(([Icon, n, c], i) => (
+            <div className={`pipe-node anim${i >= PIPE.length ? " loop" : " lit"}`} key={i} style={{ "--d": `${i * 0.5}s` } as CSSProperties}><div className="ic"><Icon size={24} /></div><div className="n">{n}</div><div className="c">{c}</div></div>
           ))}
         </div>
+        <div className="pipe-loopback reveal"><RotateCcw size={15} /> <Bi id="Hasil nyata kembali ke Trend Radar — robot belajar & membaik tiap siklus" en="Real results feed back into Trend Radar — the robot learns and improves every cycle" /></div>
       </div></section>
 
       {/* FEATURES */}

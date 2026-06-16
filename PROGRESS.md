@@ -105,8 +105,8 @@
 - *(F7 penuh — checkbox consent lanjut-vs-stop per-komponen + flag `content_inventory.metadata` + alert kredit BYOK — = epik terpisah, tetap di `QC §4b/F7`. Di sini hanya transparansi minimal yang menopang advisory.)*
 
 ### C. Landing — pipeline looping 11-simpul (animasi)
-- [ ] **C1** — Marketing page (`apps/web/.../(marketing)/page.tsx`): grafik pipeline jadi **animasi looping**; tambah **3 simpul** — **Report→Telegram**, **Self-learning**, **Self-improvement** — yang **loop balik ke Trend Radar** (cerminkan fitur nyata: `telegram_notifier` + `channel_insights` + loop §4).
-- [ ] **C2** — Label **"Pipeline AI 8 langkah" → "11 langkah"** (8 langkah produksi + 3 simpul loop) + animasi CSS loop. `npm run build` PASS.
+- [x] **C1** — Marketing page (`(marketing)/page.tsx`): array `LOOP` 3 simpul **Report→Telegram** (`Send`) · **Self-learning** (`Brain`) · **Self-improvement** (`TrendingUp`), di-render accent setelah 8 node produksi + baris **`.pipe-loopback` "↺ kembali ke Trend Radar"**. Lead diperbarui (8 produksi + 3 umpan-balik, loop tiap siklus). **build PASS.** *(animasi = review visual owner di dev :3000)* *(2026-06-16)*
+- [x] **C2** — Label **"Pipeline AI 8 langkah"→"11 langkah"** (`8-step`→`11-step`); **animasi CSS loop** di `landing.css` (`pipe-wave`/`pipe-wave-loop` gelombang berjalan infinite via `--d` per indeks, accent untuk simpul loop, `prefers-reduced-motion` aman). `npm run build` **PASS**. *(2026-06-16)*
 
 ### D. Trend Radar — revisi arsitektur + build bertahap — `TREND_RADAR_ARCHITECTURE.md`
 - [ ] **D1** *(doc — owner review)* — Revisi `TREND_RADAR_ARCHITECTURE.md`: **rasio sumber config-driven** (`source_weights`: YouTube > Google Trends > News > Wiki/HN); **verdict efektivitas** (News=moderat niche-dependent · Wikipedia=rendah/noise→filter-only · HN=tech-conditional/kandidat drop); **out-of-the-box** (YouTube-centric velocity mining + Trends-rising + **pola channel-sendiri sbg input primer** + agregat lintas-tenant anonim = moat); **diagram loop self-learning↔radar** yang eksplisit.
