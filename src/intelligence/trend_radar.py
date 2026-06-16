@@ -138,7 +138,29 @@ class TrendRadar:
         if _stale("news_trending"):
             self._write_cache(niche, region_key, "news_trending",
                               self._get_google_news_trending(keywords, geo=region["news_geo"], ceid=region["news_ceid"]), ttl_sec); written += 1
+        if _stale("youtube_autocomplete"):
+            self._write_cache(niche, region_key, "youtube_autocomplete",
+                              self._get_youtube_autocomplete(keywords), ttl_sec); written += 1
         return written
+
+    def _get_youtube_autocomplete(self, keywords: list, limit: int = 10) -> list:
+        """YouTube autocomplete/suggest (endpoint tak-resmi, GRATIS) — query emergent paling dini.
+        TREND_RADAR_ARCHITECTURE.md §2c-C. Pelengkap demand (bukan tulang punggung). Fail-soft."""
+        results, seen = [], set()
+        for kw in (keywords or [])[:3]:
+            try:
+                url = (f"https://suggestqueries.google.com/complete/search"
+                       f"?client=firefox&ds=yt&q={quote_plus(str(kw))}")
+                r = httpx.get(url, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
+                if r.status_code == 200:
+                    data = json.loads(r.text)
+                    for s in (data[1] if len(data) > 1 else [])[:limit]:
+                        if s and s.lower() not in seen and s.lower() != str(kw).lower():
+                            seen.add(s.lower())
+                            results.append({"keyword": kw, "query": s})
+            except Exception as e:
+                logger.warning(f"[TrendRadar] autocomplete '{kw}' gagal: {e}")
+        return results[: limit * 2]
 
     def refresh_global(self, ttl_sec: int, only_stale: bool = True) -> int:
         """Refresh sumber GLOBAL (HackerNews, Wikipedia) — sekali, tak per-niche/geo."""
@@ -431,7 +453,8 @@ class TrendRadar:
             "youtube_search":     [],
             "news_trending":      [],
             "hackernews":         [],
-            "wikipedia_trending": []
+            "wikipedia_trending": [],
+            "youtube_autocomplete": []
         }
 
         # ── F1 (§3 Pilar-1): BACA trend_cache — hot-path TIDAK panggil sumber eksternal ──
@@ -442,6 +465,7 @@ class TrendRadar:
         signals["news_trending"]      = self._read_cache(tenant_config.niche, peak_region, "news_trending")
         signals["hackernews"]         = self._read_cache(self._GLOBAL, self._GLOBAL, "hackernews")
         signals["wikipedia_trending"] = self._read_cache(self._GLOBAL, self._GLOBAL, "wikipedia_trending")
+        signals["youtube_autocomplete"] = self._read_cache(tenant_config.niche, peak_region, "youtube_autocomplete")
 
         total = sum(len(signals[k]) for k in signals if isinstance(signals[k], list))
         if total == 0:

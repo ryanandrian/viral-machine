@@ -34,6 +34,22 @@ class NicheSelector:
             logger.warning(f"[NicheSelector] PerformanceAnalyzer init gagal: {e}")
             return None
 
+    def _source_weights(self) -> dict:
+        """Bobot sumber (persen) — config-driven `app_config.trend_weight_*` (default §2b).
+        Dikalibrasi self-improvement (F4) dari outcome nyata."""
+        w = {"youtube": 45, "trends": 30, "news": 13, "wikipedia": 7, "hackernews": 5}
+        try:
+            cli = get_writer()._client
+            if cli:
+                rows = cli.table("app_config").select("key,value").like("key", "trend_weight_%").execute().data or []
+                for r in rows:
+                    k = r["key"].replace("trend_weight_", "")
+                    if k in w:
+                        w[k] = int(r["value"])
+        except Exception:
+            pass
+        return w
+
     def _prepare_signals_summary(self, signals: dict, tenant_config: TenantConfig) -> str:
         niches     = get_niches()
         niche_data = niches.get(tenant_config.niche) or next(
@@ -41,33 +57,53 @@ class NicheSelector:
         )
         peak_region = signals.get("peak_region", "us")
         audience    = REGION_DISPLAY.get(peak_region, REGION_DISPLAY["us"])
+        weights     = self._source_weights()
+
+        # Filter-niche HackerNews (§2b: HN tech-only) — buang item HN yang tak relevan niche.
+        nkws = [str(k).lower() for k in (niche_data.get("keywords") or [])]
+        nkws += [w.lower() for w in str(niche_data.get("name", "")).split() if len(w) >= 3]
+        def _match_niche(text: str) -> bool:
+            t = (text or "").lower()
+            return any(k in t for k in nkws if len(k) >= 3)
+        def _n(weight: int) -> int:
+            return max(1, round(weight / 6))   # jumlah item ∝ bobot (representasi = pengaruh ke LLM)
+
         lines = [
-            f"NICHE: {niche_data['name']}",
-            f"TARGET EMOTION: {niche_data['target_emotion']}",
+            f"NICHE: {niche_data.get('name','')}",
+            f"TARGET EMOTION: {niche_data.get('target_emotion','')}",
             f"TARGET AUDIENCE: {audience}",
-            ""
+            "",
         ]
 
-        if signals.get("google_trends"):
-            lines.append("=== GOOGLE TRENDS (7 days) ===")
-            for t in signals["google_trends"][:5]:
-                lines.append(f"- {t['keyword']}: interest={t['avg_interest']}, momentum={t['momentum']:+.1f}")
-
+        # Sumber DI-URUTKAN by bobot (§2b): tertinggi tampil pertama = paling berpengaruh ke LLM.
+        blocks = []   # (weight, title, body_lines)
         if signals.get("youtube_search"):
-            lines.append("\n=== YOUTUBE TRENDING VIDEOS ===")
-            for v in signals["youtube_search"][:10]:
-                lines.append(f"- [{v['keyword']}] {v['title'][:80]}")
-
+            body = [f"- [{v.get('keyword','')}] {str(v.get('title',''))[:80]}"
+                    for v in signals["youtube_search"][:_n(weights['youtube'])]]
+            blocks.append((weights["youtube"], "YOUTUBE TRENDING (videos)", body))
+        if signals.get("google_trends"):
+            body = [f"- {t['keyword']}: interest={t['avg_interest']}, momentum={t['momentum']:+.1f}"
+                    for t in signals["google_trends"][:_n(weights['trends'])]]
+            blocks.append((weights["trends"], "GOOGLE TRENDS (7 days)", body))
+        if signals.get("youtube_autocomplete"):
+            body = [f"- {a.get('query','')}" for a in signals["youtube_autocomplete"][:6]]
+            blocks.append((weights["trends"] - 1, "EMERGENT SEARCHES (YouTube autocomplete)", body))
         if signals.get("news_trending"):
-            lines.append("\n=== TRENDING NEWS ===")
-            for n in signals["news_trending"][:10]:
-                lines.append(f"- {n['title'][:80]}")
-
+            body = [f"- {str(n.get('title',''))[:80]}" for n in signals["news_trending"][:_n(weights['news'])]]
+            blocks.append((weights["news"], "TRENDING NEWS", body))
         if signals.get("hackernews"):
-            lines.append("\n=== HACKERNEWS HOT ===")
-            for h in signals["hackernews"][:5]:
-                lines.append(f"- {h['title'][:80]} (score: {h['score']})")
+            hn = [h for h in signals["hackernews"] if _match_niche(h.get("title"))]
+            if hn:
+                body = [f"- {str(h.get('title',''))[:80]} (score: {h.get('score',0)})"
+                        for h in hn[:_n(weights['hackernews'])]]
+                blocks.append((weights["hackernews"], "HACKERNEWS (niche-relevant)", body))
+        # Wikipedia SENGAJA tak dimasukkan (§2b: rendah/noise, kandidat-drop — de-facto sudah unused).
 
+        blocks.sort(key=lambda b: -b[0])
+        for _, title, body in blocks:
+            if body:
+                lines.append(f"\n=== {title} ===")
+                lines.extend(body)
         return "\n".join(lines)
 
     def _clean_json_response(self, raw: str) -> str:
