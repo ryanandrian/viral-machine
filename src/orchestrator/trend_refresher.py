@@ -61,7 +61,11 @@ def run_once(sb, radar=None) -> int:
     radar  = radar or TrendRadar()
     ttl    = _int_config(sb, "trend_cache_ttl_sec", 43200)
     pacing = _int_config(sb, "trend_refresh_pacing_ms", 3000) / 1000.0
-    yt_key = os.getenv("YOUTUBE_API_KEY", "") or os.getenv("YT_PLATFORM_API_KEY", "")
+    # Key platform velocity (nama kanonik = YOUTUBE_PLATFORM_API_KEY, lihat .env/DEPLOY_RUNBOOK/§7).
+    # Fallback nama lain utk kompat. Kosong → fetcher skip velocity (graceful).
+    yt_key = (os.getenv("YOUTUBE_PLATFORM_API_KEY", "")
+              or os.getenv("YT_PLATFORM_API_KEY", "")
+              or os.getenv("YOUTUBE_API_KEY", ""))
 
     niches  = _active_niches(sb)
     regions = _active_region_keys(sb)
