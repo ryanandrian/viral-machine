@@ -153,7 +153,7 @@ export default function LandingPage() {
         <div className="mk-center reveal" style={{ marginBottom: "2.5rem" }}>
           <span className="mk-kicker"><Zap size={13} /> <Bi id="Pipeline AI 11 langkah" en="11-step AI pipeline" /></span>
           <h2 className="mk-h2"><Bi id="Dari tren ke YouTube, otomatis" en="From trend to YouTube, automatically" /></h2>
-          <p className="mk-lead"><Bi id="Setiap video melewati 8 langkah produksi otomatis + 3 simpul umpan-balik (report, self-learning, self-improvement) yang kembali ke Trend Radar — loop tak berujung yang makin pintar tiap siklus." en="Every video flows through 8 automated production steps + 3 feedback nodes (report, self-learning, self-improvement) that loop back into Trend Radar — an endless loop that gets smarter every cycle." /></p>
+          <p className="mk-lead"><Bi id="Setiap video melewati 8 langkah produksi otomatis + 3 simpul umpan-balik (report, self-learning, self-improvement) untuk menghasilkan konten dengan kualitas terbaik dan viral secara otomatis tanpa mengganggu waktu Anda." en="Every video flows through 8 automated production steps + 3 feedback nodes (report, self-learning, self-improvement) to deliver the highest-quality, viral content automatically — without taking up your time." /></p>
         </div>
         <div className="pipe-circuit reveal">
           <div className="pipe-circuit-in">
