@@ -96,10 +96,12 @@ def _detect_mood_from_script(
 
 def _query_tracks(niche: str, mood: str, fallback_moods: list) -> list[dict]:
     """
-    Query music_library dengan fallback cascade:
+    Query music_library dengan fallback cascade (niche-safe diutamakan):
       1. niche + mood (paling spesifik)
+      1b. niche + mood_priority/fallback (track MILIK niche, mood lain) — E2: niche-safe
+          SEBELUM lintas-niche. Cegah ambil track niche lain padahal niche ini punya track.
       2. mood only, any niche (mood sama, niche lain)
-      3. fallback moods (mood berbeda, berurutan dari skor tertinggi)
+      3. fallback moods, any niche (mood berbeda, berurutan dari skor tertinggi)
       4. any active track (last resort)
     """
     try:
@@ -123,7 +125,29 @@ def _query_tracks(niche: str, mood: str, fallback_moods: list) -> list[dict]:
             logger.info(f"[MusicSelector] {len(res.data)} tracks — niche={niche} mood={mood}")
             return res.data
 
-        # 2. mood only (any niche)
+        # 1b. niche + mood lain MILIK niche (E2) — niche-safe SEBELUM lintas-niche.
+        # Bila mood terdeteksi tak ada di niche ini (mis. 'ominous' di universe_mysteries),
+        # pakai track niche-sendiri (mood_priority) ketimbang mencomot track niche lain.
+        for nm in fallback_moods:
+            if nm == mood:
+                continue
+            rn = (
+                sb.table("music_library")
+                .select("*")
+                .eq("niche", niche)
+                .eq("mood", nm)
+                .eq("is_active", True)
+                .order("play_count", desc=False)
+                .execute()
+            )
+            if rn.data:
+                logger.info(
+                    f"[MusicSelector] {len(rn.data)} tracks — niche={niche} mood={nm} "
+                    f"(niche-own fallback; mood terdeteksi '{mood}' tak ada di niche ini)"
+                )
+                return rn.data
+
+        # 2. mood only (any niche) — lintas-niche, hanya bila niche-sendiri tak punya sama sekali
         res2 = (
             sb.table("music_library")
             .select("*")

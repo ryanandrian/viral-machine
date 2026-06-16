@@ -332,9 +332,11 @@ class YouTubePublisher:
             media = MediaFileUpload(
                 upload_path, mimetype="image/jpeg", resumable=False
             )
+            # E1: retry transient (read timeout dll) — samakan resiliensi dgn video upload
+            # (videos.insert pakai retry 3×). num_retries = exponential backoff googleapiclient.
             youtube.thumbnails().set(
                 videoId=video_id, media_body=media
-            ).execute()
+            ).execute(num_retries=3)
             logger.info(f"[YouTube] Thumbnail uploaded OK: {video_id} ({content_type})")
             return True
         except Exception as e:
