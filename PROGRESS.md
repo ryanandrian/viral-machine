@@ -132,6 +132,25 @@
 
 ---
 
+## 🔐 ADMIN SYSTEM SECRETS — editable di panel (RENCANA, PRA-GO-LIVE)
+
+> **Owner 2026-06-16:** platform/system secrets (kini di `S3-CONNECTION.md`/`.env`) sebaiknya **editable di admin panel** (bukan hanya file/env), **termasuk** key lain di S3-CONNECTION. **Minimal direncanakan + dieksekusi SEBELUM go-live.** Centang `[x]` setelah dibuat+validasi 100%.
+
+**Prinsip keamanan — kategori secret (KRUSIAL, jangan dilanggar):**
+- **Kategori A — BOLEH admin-config** (DB Fernet, service-role-only, audit) — integrasi/operasional yang bisa di-rotate tanpa bootstrap: **YouTube platform API key** · **Midtrans** (merchant/client/server) · **SMTP** (host/port/user/pass/from) · **Biznet/Neo S3 buffer** (endpoint/access/secret/bucket) · (opsional) `OAUTH_STATE_SECRET`.
+- **Kategori B — WAJIB tetap ENV/VPS-only** (bootstrap; TAK bisa di-DB): **`ENCRYPTION_KEY`** (master Fernet — chicken-egg, tak bisa simpan terenkripsi pakai dirinya sendiri) · **`SUPABASE_KEY` service_role + DB password** (dibutuhkan untuk MENCAPAI DB tempat secret disimpan) · **`MV_INTERNAL_SECRET`**.
+- **BUKAN bagian ini:** tenant BYOK (AI keys + YouTube OAuth) = TETAP per-tenant (`tenant_credentials`/`tenant_configs`).
+
+**Rencana eksekusi (pra-go-live):**
+- [ ] **S1** — migr `system_secrets` (`key` PK, `value_enc` Fernet, `category`, `updated_by`, `updated_at`) — RLS **service-role only** (pola `tenant_credentials`). + update `DB_SCHEMA_V2.md`.
+- [ ] **S2** — loader `src/config/system_secrets.py`: baca DB (Fernet decrypt) → **fallback env** (transisi mulus; env tetap valid). Worker/webhook pakai untuk Kategori A.
+- [ ] **S3** — admin page `/admin/integrations` (service-role, `requireSuperAdmin`): status (set/kosong, **masked**) + set/rotate per-secret + **"Test koneksi"** (reuse pola Test Lab). Audit→`admin_audit`. Kategori B = read-only note "env-managed" (tak editable).
+- [ ] **S4** — seed nilai env→DB + validasi (worker baca dari DB; rotate dari panel berlaku; restart-safe).
+
+**Status sekarang:** semua secret operasional dari **env/`.env`** (incl. **`YOUTUBE_PLATFORM_API_KEY`** baru ditambah dari S3-CONNECTION, SET). Ini interim sah sampai S1-S4. **Pointer di §GATE CUTOVER.**
+
+---
+
 ## 🚀 GATE CUTOVER — Go-Live Checklist (SUMBER KEBENARAN TUNGGAL)
 
 > **Ini SATU-SATUNYA daftar item cutover/go-live.** Catatan lain di dokumen ini hanya MENUNJUK ke sini (tidak menduplikasi). Status kode/fitur = baris STATUS teratas. Belum ada item yang dieksekusi ke VPS (v1 produksi JANGAN disentuh sampai langkah F). **⛔ PRASYARAT: §PERBAIKAN PRODUCE & PUBLISH (di atas) WAJIB selesai 100% dulu.**
@@ -162,6 +181,7 @@
 - [ ] E1 — **ROTASI semua secret dev**: password DB, service_role, anon, `OAUTH_STATE_SECRET`, `MV_INTERNAL_SECRET`, SMTP, Midtrans, ElevenLabs.
 - [ ] E2 — Isi kredensial channel **admin-test** (Test Lab).
 - [ ] E3 — (kualitas) ElevenLabs ryan lapse→free: re-subscribe untuk voice premium + kalibrasi `tts_profiles.delivery_wps` + closed-loop + self-learning penuh.
+- [ ] E4 — **§ADMIN SYSTEM SECRETS** (build S1-S4, lihat section di atas): system secrets editable di admin panel (Kategori A) sebelum go-live. *(rencana owner 2026-06-16; rotasi E1 mencakup secret-secret ini.)*
 
 **F. Cutover (flip)**
 - [ ] F1 — Stop worker v1 → deploy v2 menunjuk DB v2 → arahkan frontend (Vercel) → **pensiunkan v1**.
