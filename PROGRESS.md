@@ -153,6 +153,15 @@
 
 ---
 
+## 🛑 INSIDEN RUNAWAY PRODUKSI (2026-06-17 malam) — mv-worker DI-STOP, BELUM RESOLVED
+
+> **State kritis.** `mv-worker` **SENGAJA di-stop** (`sudo systemctl stop mv-worker`) untuk hentikan runaway. **Produksi+publish HALTED, nol pembakaran kredit.** ⛔ **JANGAN restart** sebelum #2 & #3 beres. `mv-web` normal.
+- **Gejala:** channel ryan produksi nonstop tiap ~10 mnt. **Akar (verified DB+kode):** `content_inventory` ryan = **29 row SEMUA `failed`, 0 ready**. Tiap produksi hard-fail di **AI image-gen `gpt-image-1-mini`** (semua scene → "no clips" → RenderError). ElevenLabs habis kredit tapi **fallback edge_tts berhasil → bukan penyebab**.
+- **Mekanisme:** produksi = **buffer-deficit-driven, BUTA jadwal** (`producer.py:204 plan_and_submit`, `target=buffer_depth=3`, loop 10s). Gagal → `ready` selamanya 0 → defisit 3 tiap siklus → produksi nonstop. **Satu-satunya rem = buffer terisi; rusak saat gagal; tak ada rem cadangan.** Publish (publisher.py) = schedule-driven terpisah, TAK terlibat.
+- **Lubang = §4b/F7 (QC_CONTENT_ARCHITECTURE) BELUM DIBANGUN** ("komponen gagal → item DIHENTIKAN + alert keras, BUKAN loop bakar-kredit"). Cutover deploy worker live tanpa pengaman ini + tanpa validasi loop-kontinu.
+- **➡️ PRIORITAS (urut):** (1) ⛔ jangan restart mv-worker · (2) **root-cause image-gen** (verifikasi nyata kuota/billing/key OpenAI image — JANGAN asumsi) · (3) **bangun §4b/F7** stop-on-fail di `plan_and_submit` (N gagal→stop channel+alert Telegram+auto-recover, config-driven) · (4) baru restart + lanjut GATE CUTOVER.
+- ✅ Sesi ini juga: fix `channel_analytics impressionClickThroughRate` (`044102e`, deployed ke worker tapi worker stop). Detail lengkap = memory `progress_journal` entri "2026-06-17 (SESI MALAM)".
+
 ## 🚀 GATE CUTOVER — Go-Live Checklist (SUMBER KEBENARAN TUNGGAL)
 
 > **Ini SATU-SATUNYA daftar item cutover/go-live.** Catatan lain di dokumen ini hanya MENUNJUK ke sini (tidak menduplikasi). Status kode/fitur = baris STATUS teratas. Belum ada item yang dieksekusi ke VPS (v1 produksi JANGAN disentuh sampai langkah F). **⛔ PRASYARAT: §PERBAIKAN PRODUCE & PUBLISH (di atas) WAJIB selesai 100% dulu.**
@@ -164,7 +173,7 @@
 
 **B. Deploy ke VPS / Vercel (butuh akses owner)**
 - [x] **B1 — Worker v2 DEPLOYED + LIVE (2026-06-16 CUTOVER).** `~/viral-machine-v2` (clone v2-backend sparse-checkout, venv 109 deps, `.env`→v2). systemd **`mv-worker`** active+enabled (0 restart). **7 thread "up"** di worker_heartbeats. **Test ryan e2e LULUS dari VPS** (`shorts/asGyGt20zH0` privat + QC-fail self-healing + Telegram). **v1 PENSIUN**: worker.py stop, crontab v1 dihapus, `~/viral-machine`+backup-lama dihapus; **disimpan arsip v1 `.tar.gz` + DB v1 utuh**. Update lanjutan v2 = local→validasi→push→`git pull` di `~/viral-machine-v2`+restart.
-  - 🔴 **Bug platform ditemukan saat cutover (fix lokal berikutnya):** `channel_analytics._fetch_video_metrics` minta metrik `impressionClickThroughRate` → **ditolak Analytics API (400 invalid)** → fetch retensi/CTR gagal → self-learning degraded. Bukan blocker (produce/publish jalan).
+  - ✅ **Bug platform `channel_analytics` DONE (2026-06-17, commit `044102e`):** `impressionClickThroughRate` (impression tak tersedia per-video → 400 men-poison query, retensi ikut hilang) **dibuang**; index kolom disesuaikan; retensi/watch/subs recover; CTR per-video jujur 0. Deployed ke `~/viral-machine-v2`. *(Catatan: mv-worker kini STOP karena insiden runaway — fix ada di kode, worker belum jalan.)*
   - *(B2 webhook_app + B3 Vercel/frontend + B4 env-prod-domain = untuk SaaS PUBLIK, belum — ini baru cutover MESIN ryan.)*
 - [ ] B2 — `webhook_app` (uvicorn+nginx) → VPS → Midtrans webhook + YouTube OAuth + `/api/keys/set`.
 - [x] **B3 — Frontend DEPLOYED (2026-06-17) — SELF-HOST di VPS, BUKAN Vercel (keputusan owner: hemat biaya + tanpa akun baru).** `~/mesinviral-web` (clone v2-backend sparse `/apps/web`, `npm ci`+`next build`, systemd **`mv-web`** `next start :3000`). nginx `mesinviral.com`+`www`→:3000. **HTTPS Let's Encrypt (certbot via snap; apt-certbot rusak)** auto-renew, HTTP→HTTPS 301. **`https://mesinviral.com` LIVE + cert valid.** *(Menyimpang dari rencana "Vercel" lama — VPS tak lagi "bersih"; trade-off demi hemat, owner-approved.)*
