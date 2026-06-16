@@ -333,10 +333,14 @@ class ChannelAnalytics:
                         ids     = "channel==MINE",
                         startDate = start_date,
                         endDate   = end_date,
+                        # CATATAN: impressionClickThroughRate DIBUANG — metrik impression
+                        # tidak tersedia pada granularitas per-video (dimensions=video) →
+                        # Analytics API tolak 400 invalid yang men-poison SELURUH query
+                        # (retensi averageViewPercentage ikut hilang). CTR per-video tak
+                        # bisa via API path ini → biarkan ctr=0 jujur (FE tampil "—").
                         metrics = (
                             "views,estimatedMinutesWatched,"
-                            "averageViewPercentage,impressionClickThroughRate,"
-                            "subscribersGained"
+                            "averageViewPercentage,subscribersGained"
                         ),
                         dimensions = "video",
                         filters    = f"video=={video_id}",
@@ -347,20 +351,18 @@ class ChannelAnalytics:
 
                 rows = response.get("rows", [])
                 if rows:
-                    # Column order matches metrics parameter order
+                    # Column order matches metrics parameter order. dimensions=video →
                     # [video_id, views, estimatedMinutesWatched, averageViewPercentage,
-                    #  impressionClickThroughRate, subscribersGained]
+                    #  subscribersGained]. ctr TIDAK di-fetch (lihat catatan di query).
                     row = rows[0]
                     metrics["watch_time_mins"]   = int(row[2])
                     metrics["avg_view_pct"]      = round(float(row[3]), 1)
-                    metrics["ctr"]               = round(float(row[4]) * 100, 2)  # decimal → pct
-                    metrics["subscriber_gain"]   = int(row[5])
+                    metrics["subscriber_gain"]   = int(row[4])
                     metrics["has_full_analytics"] = True
                     logger.debug(
                         f"[Analytics] {video_id}: "
                         f"watch={metrics['watch_time_mins']}min "
                         f"avg_view={metrics['avg_view_pct']}% "
-                        f"ctr={metrics['ctr']}% "
                         f"subs={metrics['subscriber_gain']}"
                     )
             except Exception as e:
