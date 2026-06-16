@@ -27,7 +27,8 @@ Tenant browser ─┬─► Vercel (apps/web, Next.js)        anon key + RLS · 
 **VPS (`.env`, gitignored) — worker + webhook_app:**
 `SUPABASE_URL`, `SUPABASE_KEY`(service_role), `ENCRYPTION_KEY`, `OAUTH_STATE_SECRET`, `MV_INTERNAL_SECRET`,
 `YOUTUBE_OAUTH_REDIRECT_URI`(=callback prod), `APP_BASE_URL`(=`https://app.mesinviral.com`),
-`SMTP_*`, `MIDTRANS_*`(+`MIDTRANS_ENV=production`), AI/storage (OPENAI/ANTHROPIC/PEXELS/REPLICATE + S3/Biznet dari `S3-CONNECTION.md`), `TELEGRAM_*`, opsional `PRODUCER_MAX_RENDER`/`PRODUCER_BUFFER_DEPTH`/`HEARTBEAT_INTERVAL_SEC`.
+`SMTP_*`, `MIDTRANS_*`(+`MIDTRANS_ENV=production`), AI/storage (OPENAI/ANTHROPIC/PEXELS/REPLICATE + S3/Biznet dari `S3-CONNECTION.md`), `TELEGRAM_*`, **`YOUTUBE_PLATFORM_API_KEY`** (velocity mining Trend Radar — di GCP **restrict ke IP VPS** saat prod, lihat `TREND_RADAR_ARCHITECTURE.md §7`), opsional `PRODUCER_MAX_RENDER`/`PRODUCER_BUFFER_DEPTH`/`HEARTBEAT_INTERVAL_SEC`.
+> **Migrasi DB:** v2 DB sudah ter-apply **0001-0049** (incl. 0048 `trend_cache` + 0049 `source_weights`) — worker prod tinggal menunjuk DB v2; **tak ada langkah migrasi terpisah** saat cutover.
 > **⚠️ ROTASI semua secret dev sebelum publik** (DB pw, service_role, anon, OAUTH_STATE_SECRET, MV_INTERNAL_SECRET, SMTP, Midtrans, ElevenLabs) — §GATE CUTOVER E1.
 
 ## A. Persiapan kode di VPS
