@@ -168,7 +168,10 @@
   - *(B2 webhook_app + B3 Vercel/frontend + B4 env-prod-domain = untuk SaaS PUBLIK, belum — ini baru cutover MESIN ryan.)*
 - [ ] B2 — `webhook_app` (uvicorn+nginx) → VPS → Midtrans webhook + YouTube OAuth + `/api/keys/set`.
 - [x] **B3 — Frontend DEPLOYED (2026-06-17) — SELF-HOST di VPS, BUKAN Vercel (keputusan owner: hemat biaya + tanpa akun baru).** `~/mesinviral-web` (clone v2-backend sparse `/apps/web`, `npm ci`+`next build`, systemd **`mv-web`** `next start :3000`). nginx `mesinviral.com`+`www`→:3000. **HTTPS Let's Encrypt (certbot via snap; apt-certbot rusak)** auto-renew, HTTP→HTTPS 301. **`https://mesinviral.com` LIVE + cert valid.** *(Menyimpang dari rencana "Vercel" lama — VPS tak lagi "bersih"; trade-off demi hemat, owner-approved.)*
-  - 🔶 **Follow-up:** `webhook_app`→`api.mesinviral.com` (B2) belum → Connect-YouTube + Midtrans belum jalan. `NEXT_PUBLIC_YT_REDIRECT_URI`/`MV_API_BASE` di build masih dev → rebuild dgn prod (`https://api.mesinviral.com/...`) setelah B2. DNS `api`→VPS sudah di-set.
+  - 🔶 **Follow-up (ATURAN: fix LOKAL→validasi→push→pull VPS+rebuild+restart; JANGAN di VPS):**
+    - **🔴 BUG-1 (tested live ryan 2026-06-17): logout TENANT tak jalan** — `signOut` hanya di `admin-shell.tsx`; **shell tenant (app-shell) belum punya logout**. Fix lokal: wire `createClient().auth.signOut()`+redirect `/auth` di shell tenant.
+    - *(BUKAN bug) `/admin`→`/dashboard` utk ryan = BENAR (super-admin-only; admin via `/admin/login` akun `mesinviral@`).*
+    - `webhook_app`→`api.mesinviral.com` (B2) belum → Connect-YouTube + Midtrans belum jalan. `NEXT_PUBLIC_YT_REDIRECT_URI`/`MV_API_BASE` di build masih dev → rebuild prod (`https://api.mesinviral.com/...`) setelah B2. DNS `api`→VPS sudah di-set.
 - [ ] B4 — Env produksi di VPS: `ENCRYPTION_KEY`, `OAUTH_STATE_SECRET`, `MV_INTERNAL_SECRET`, `YOUTUBE_OAUTH_REDIRECT_URI`(host prod), `APP_BASE_URL`(domain prod), `SUPABASE_*`(service_role), `SMTP_*`, `MIDTRANS_*`.
 
 **C. Konfigurasi akun eksternal (butuh dashboard owner)**
