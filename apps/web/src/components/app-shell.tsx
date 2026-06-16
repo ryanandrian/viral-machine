@@ -7,8 +7,9 @@ import { useTheme } from "next-themes";
 import {
   LayoutDashboard, Tv, List, BarChart3, Calendar, ShieldCheck, Sparkles,
   Command, Mic, Image as ImageIcon, CreditCard, Settings, HelpCircle,
-  Menu, Search, Bell, ChevronsUpDown, Moon, Sun, ChevronRight,
+  Menu, Search, Bell, ChevronsUpDown, Moon, Sun, ChevronRight, LogOut,
 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 // Port MVShell (design-source/styles/shell.js) → React. Sidebar + topbar.
 // i18n sementara pakai pola desain: data-id/data-en + html[lang] (toggle client + localStorage).
@@ -111,6 +112,13 @@ export function AppShell({
           <a className="sb-item" href="/support"><HelpCircle size={18} />
             <span className="sb-label"><Bi id="Bantuan" en="Help" /></span>
           </a>
+          <button
+            className="sb-item"
+            onClick={async () => { await createClient().auth.signOut(); window.location.href = "/auth"; }}
+            style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", font: "inherit", color: "inherit" }}
+          >
+            <LogOut size={18} /><span className="sb-label"><Bi id="Keluar" en="Sign out" /></span>
+          </button>
         </div>
       </aside>
 
