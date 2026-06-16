@@ -78,9 +78,12 @@ class NicheSelector:
         # Sumber DI-URUTKAN by bobot (§2b): tertinggi tampil pertama = paling berpengaruh ke LLM.
         blocks = []   # (weight, title, body_lines)
         if signals.get("youtube_search"):
-            body = [f"- [{v.get('keyword','')}] {str(v.get('title',''))[:80]}"
-                    for v in signals["youtube_search"][:_n(weights['youtube'])]]
-            blocks.append((weights["youtube"], "YOUTUBE TRENDING (videos)", body))
+            body = []
+            for v in signals["youtube_search"][:_n(weights['youtube'])]:
+                vc, vel = int(v.get("view_count", 0) or 0), v.get("velocity_vph", 0)
+                tail = f" — {vc:,} views, {vel}/jam" if vc else ""   # angka NYATA (velocity) → sinyal terkuat
+                body.append(f"- {str(v.get('title',''))[:70]}{tail}")
+            blocks.append((weights["youtube"], "YOUTUBE — SEDANG MELEDAK (urut velocity)", body))
         if signals.get("google_trends"):
             body = [f"- {t['keyword']}: interest={t['avg_interest']}, momentum={t['momentum']:+.1f}"
                     for t in signals["google_trends"][:_n(weights['trends'])]]

@@ -235,51 +235,67 @@ class TrendRadar:
     # ─── SOURCE 2: YouTube Search API ──────────────────────────────────────
 
     def _get_youtube_trending_search(self, keywords: list, region_code: str = "US",
-                                     limit: int = 10, api_key: str = "") -> list:
-        """
-        s82: tambah regionCode dan relevanceLanguage untuk Tier-1 targeting.
-        """
+                                     limit: int = 10, api_key: str = "", days: int = 14) -> list:
+        """VELOCITY MINING (TREND_RADAR_ARCHITECTURE.md §2c-A + §3 Pilar-2) — sinyal PRIMER.
+        Survei SELURUH platform (termasuk creator baru viral): 1 `search` (kw di-OR-join,
+        order=viewCount, shorts, recent) → kumpul videoId → 1 `videos.list?part=statistics`
+        (BATCH ≤50 = 1 unit) → hitung **velocity = views ÷ umur(jam)**. Kuota ~101 unit/niche
+        (frugal §7). Key = platform (YOUTUBE_PLATFORM_API_KEY). Fail-soft."""
+        if not api_key:
+            logger.warning("[TrendRadar] YouTube platform key tak tersedia — skip velocity mining")
+            return []
         try:
-            results        = []
-            seven_days_ago = (datetime.utcnow() - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
-            if not api_key:
-                logger.warning("[TrendRadar] youtube_api_key tidak tersedia — skip YouTube search")
-                return []
-
-            for kw in keywords[:3]:
-                url = (
-                    f"https://www.googleapis.com/youtube/v3/search"
-                    f"?part=snippet&q={quote_plus(kw)}&type=video"
-                    f"&videoDuration=short&order=viewCount"
-                    f"&publishedAfter={seven_days_ago}"
-                    f"&regionCode={region_code}"
-                    f"&relevanceLanguage=en"
-                    f"&maxResults=5&key={api_key}"
+            published_after = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            q = " | ".join([str(k) for k in (keywords or [])[:3]]) or "shorts"   # OR-join → 1 search
+            meta = {}
+            with httpx.Client(timeout=12) as client:
+                search_url = (
+                    f"https://www.googleapis.com/youtube/v3/search?part=snippet"
+                    f"&q={quote_plus(q)}&type=video&videoDuration=short&order=viewCount"
+                    f"&publishedAfter={published_after}&regionCode={region_code or 'US'}"
+                    f"&relevanceLanguage=en&maxResults=25&key={api_key}"
                 )
-                with httpx.Client(timeout=10) as client:
-                    r = client.get(url)
-                    if r.status_code == 200:
-                        items = r.json().get("items", [])
-                        for item in items:
-                            snippet = item.get("snippet", {})
-                            results.append({
-                                "title":       snippet.get("title", ""),
-                                "channel":     snippet.get("channelTitle", ""),
-                                "published":   snippet.get("publishedAt", ""),
-                                "keyword":     kw,
-                                "region_code": region_code,
-                                "source":      "youtube_search"
-                            })
-                    elif r.status_code == 403:
-                        logger.warning("YouTube API: quota habis atau key tidak valid")
-                        break
-                time.sleep(0.5)
+                r = client.get(search_url)
+                if r.status_code == 403:
+                    logger.warning("YouTube API 403: kuota habis / key invalid (search)")
+                    return []
+                if r.status_code != 200:
+                    logger.warning(f"YouTube search HTTP {r.status_code}")
+                    return []
+                for it in r.json().get("items", []):
+                    vid = (it.get("id") or {}).get("videoId")
+                    sn  = it.get("snippet", {})
+                    if vid:
+                        meta[vid] = {"title": sn.get("title", ""), "channel": sn.get("channelTitle", ""),
+                                     "published": sn.get("publishedAt", "")}
+                if not meta:
+                    logger.info(f"YouTube velocity [{region_code}]: 0 video")
+                    return []
+                # BATCH statistics (1 unit, ≤50 id) — penghemat kuota terverifikasi (§7)
+                ids = ",".join(list(meta.keys())[:50])
+                rs  = client.get(f"https://www.googleapis.com/youtube/v3/videos?part=statistics&id={ids}&key={api_key}")
+                stats = {v["id"]: v.get("statistics", {}) for v in (rs.json().get("items", []) if rs.status_code == 200 else [])}
 
-            logger.info(f"YouTube Search [{region_code}]: {len(results)} videos found")
+            now, results = datetime.now(timezone.utc), []
+            for vid, m in meta.items():
+                views = int((stats.get(vid) or {}).get("viewCount", 0) or 0)
+                try:
+                    pub   = datetime.fromisoformat(str(m["published"]).replace("Z", "+00:00"))
+                    hours = max((now - pub).total_seconds() / 3600.0, 1.0)
+                except Exception:
+                    hours = 24.0
+                results.append({
+                    "video_id": vid, "title": m["title"][:120], "channel": m["channel"],
+                    "published": m["published"], "view_count": views,
+                    "velocity_vph": round(views / hours, 1),   # views per jam sejak publish = "kecepatan meledak"
+                    "region_code": region_code, "source": "youtube_search",
+                })
+            results.sort(key=lambda x: x["velocity_vph"], reverse=True)
+            top = results[0]["velocity_vph"] if results else 0
+            logger.info(f"YouTube velocity [{region_code}]: {len(results)} video (top {top}/jam)")
             return results[:limit]
-
         except Exception as e:
-            logger.warning(f"YouTube Search error: {e}")
+            logger.warning(f"YouTube velocity error: {e}")
             return []
 
     # ─── SOURCE 3: Google News RSS ─────────────────────────────────────────
