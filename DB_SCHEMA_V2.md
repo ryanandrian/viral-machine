@@ -1,7 +1,7 @@
 # DB_SCHEMA_V2 — Introspeksi penuh (atliatnjhysdibmfypul)
-> Auto-generated 2026-06-15 (update 2026-06-16: migr 0044-0047). 39 tabel (production_schedules di-drop migr 0047). SUMBER KEBENARAN struktur DB v2 (migrasi 0001-0047).
+> Auto-generated 2026-06-15 (update 2026-06-16: migr 0044-0048). 40 tabel (production_schedules di-drop migr 0047; trend_cache ditambah migr 0048). SUMBER KEBENARAN struktur DB v2 (migrasi 0001-0048).
 
-**Tabel:** admin_audit, ai_models, ai_providers, app_config, blog_posts, branding_config, channel_insights, channels, content_inventory, content_languages, demo_tours, direct_jobs, diversity_config, docs_articles, duration_presets, email_outbox, fonts, format_profiles, moods, music_library, niche_releases, niche_requests, niches, payments, pipeline_queue, pipeline_run_logs, plan_limits, pricing_audit, pricing_config, production_runs, support_messages, support_tickets, tenant_configs, tenant_credentials, tts_profiles, video_analytics, videos, voice_catalog, worker_heartbeats
+**Tabel:** admin_audit, ai_models, ai_providers, app_config, blog_posts, branding_config, channel_insights, channels, content_inventory, content_languages, demo_tours, direct_jobs, diversity_config, docs_articles, duration_presets, email_outbox, fonts, format_profiles, moods, music_library, niche_releases, niche_requests, niches, payments, pipeline_queue, pipeline_run_logs, plan_limits, pricing_audit, pricing_config, production_runs, support_messages, support_tickets, tenant_configs, tenant_credentials, trend_cache, tts_profiles, video_analytics, videos, voice_catalog, worker_heartbeats
 
 ## admin_audit  (rows=4, RLS=ON)
 - id uuid NOT NULL = gen_random_uuid()
@@ -543,6 +543,21 @@
 - scopes jsonb NOT NULL = '[]'::jsonb
 - created_at timestamp with time zone NOT NULL = now()
 - updated_at timestamp with time zone NOT NULL = now()
+
+## trend_cache  (rows=0, RLS=ON)  — migr 0048
+- id bigint NOT NULL = identity (PK)
+- cache_key text NOT NULL  (UNIQUE: "{niche}|{geo}|{source}|{timeframe}")
+- niche text NOT NULL
+- geo text NOT NULL = 'US'
+- source text NOT NULL  (google_trends|youtube|google_news|wikipedia|hackernews|youtube_autocomplete|…)
+- timeframe text
+- signals jsonb NOT NULL = '[]'
+- fetched_at timestamptz NOT NULL = now()
+- ttl_sec integer NOT NULL = 43200  (default 12 jam; refresher pakai app_config.trend_cache_ttl_sec)
+- created_at timestamptz NOT NULL = now()
+  - Index: idx_trend_cache_niche_geo (niche, geo) · idx_trend_cache_fetched (fetched_at)
+  - RLS: ON, **TANPA policy → service-role only** (data SHARED lintas-tenant; worker refresher tulis / produce baca; FE tak akses).
+  - app_config terkait: `trend_cache_ttl_sec`=43200 · `trend_refresh_pacing_ms`=3000 (TrendRefresher, no-hardcode).
 
 ## tts_profiles  (rows=3, RLS=ON)
 - provider_key text NOT NULL
