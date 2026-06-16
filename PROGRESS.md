@@ -163,7 +163,7 @@
 - [x] A3 — rename `src/middleware.ts`→`src/proxy.ts` + fungsi `middleware`→`proxy` (config matcher tetap; Next 16 konvensi). **Auth gate REVALIDATED** (/ 200 · /dashboard→307 /auth · /admin/tenants→307 /admin/login · /auth 200) — nol regresi. Deprecation warning hilang. *(2026-06-16)*
 
 **B. Deploy ke VPS / Vercel (butuh akses owner)**
-- [ ] B1 — Worker v2 (`scripts/worker_decoupled.py`) → VPS (systemd) → aktifkan direct_jobs/heartbeat/email_outbox/buffer-S3.
+- [ ] B1 — Worker v2 (`scripts/worker_decoupled.py`) → VPS (systemd) → aktifkan direct_jobs/heartbeat/email_outbox/buffer-S3/**trend_refresher**. *(Boot-wiring VALIDATED lokal 2026-06-16: 7 thread import+callable, trend_refresher terdaftar, heartbeat tulis worker_heartbeats — nol produksi berbayar. Pre-deploy de-risk ✓.)*
 - [ ] B2 — `webhook_app` (uvicorn+nginx) → VPS → Midtrans webhook + YouTube OAuth + `/api/keys/set`.
 - [ ] B3 — Frontend `apps/web` → Vercel, env menunjuk DB v2 + `MV_API_BASE`(host API VPS) + `MV_INTERNAL_SECRET` + `NEXT_PUBLIC_YT_REDIRECT_URI`. **`ENCRYPTION_KEY` JANGAN ke Vercel** (tetap di VPS).
 - [ ] B4 — Env produksi di VPS: `ENCRYPTION_KEY`, `OAUTH_STATE_SECRET`, `MV_INTERNAL_SECRET`, `YOUTUBE_OAUTH_REDIRECT_URI`(host prod), `APP_BASE_URL`(domain prod), `SUPABASE_*`(service_role), `SMTP_*`, `MIDTRANS_*`.
