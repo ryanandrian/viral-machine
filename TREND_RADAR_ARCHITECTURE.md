@@ -206,9 +206,14 @@ Setiap fase: **validasi nyata sebelum klaim** (sesuai disiplin proyek) + update 
 4. **YouTube velocity = sinyal PRIMER** (bobot terbesar `source_weights` §2b); Trends sekunder; **News moderat/niche-flag · Wikipedia rendah/filter-only · HackerNews tech-niche-only** — Wiki & HN **kandidat di-drop** bila tak membayar dirinya (kontribusi outcome ≈ 0).
 5. **Bobot sumber & dimensi DIKALIBRASI self-improvement** dari outcome nyata per (niche, geo) — bukan angka mati. Default §2b hanya titik awal.
 6. **Pola channel-sendiri + agregat lintas-tenant anonim = moat** (input primer seleksi, bukan tambahan).
+7. **PENDANAAN KUOTA YouTube (owner-confirmed 2026-06-16) = HYBRID:**
+   - **Sinyal PASAR/velocity** (shared cache) → **1 key platform GCP MesinViral**, kuota **GRATIS 10k unit/hari/project** (reset ~14.00 WIB). **TIDAK** dibebankan ke tenant (data shared, bukan per-tenant; konsisten BYOK = tenant bayar GENERASI per-video, bukan data tren).
+   - **Sinyal channel-sendiri** (Analytics retensi/trafficSource/CTR) → **BYO-CC tenant** (data milik tenant; scope `yt-analytics.readonly` sudah ada).
+   - **Aturan desain WAJIB — FRUGAL-FIRST:** utamakan endpoint **1-unit** (`videos.list statistics`, `chart=mostPopular`, `playlistItems` dari channel pesaing terkurasi) → **batasi `search.list` (100u)**. Target ≤ ~50 search/hari. Kuota **tak tumbuh dgn jumlah tenant** (shared §5) — hanya niche×geo×frekuensi (terkendali). Lewat 10k = **quota-increase gratis** (bukan beli kredit; API ini bukan pay-per-unit).
+   - Env worker: `YOUTUBE_PLATFORM_API_KEY` (platform). Refresher graceful bila kosong (skip velocity).
 
 **Perlu data/biaya (jangan dikoding buta):**
-- Kuota YouTube Data API platform (untuk velocity di banyak niche) — hitung biaya kuota.
+- ~~Kuota YouTube Data API platform~~ → **RESOLVED (keputusan 7)**: free 10k/hari/project, **frugal-first** (≤~50 search/hari → ~720-5.700u/hari, aman); tak tumbuh dgn tenant. Quota-increase gratis bila skala ekstrem.
 - Kalibrasi nyata `competition_gap`/`emotional_trigger` dari angka (butuh beberapa run).
 - Kalibrasi `source_weights` nyata (butuh ≥ beberapa minggu outcome lintas-niche) — sebelum itu pakai default §2b.
 
