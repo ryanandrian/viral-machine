@@ -139,11 +139,12 @@ def run_direct(sb, job: dict) -> None:
             pass
         with logger.contextualize(tenant_id=tenant_id, run_id=run_id):
             result = Pipeline().run(tc, publish=True)
-        ok = bool(result.get("published", {}).get("youtube") or result.get("qc_passed"))
-        status = "success" if result.get("qc_passed") else "failed"
+        # Sumber kebenaran sukses direct-publish = ADA URL publish (pipeline tak set "qc_passed").
         yt_url = (result.get("published", {}).get("youtube") or {}).get("url")
-        if not result.get("qc_passed"):
-            err = result.get("qc_reason") or "QC gagal"
+        published_ok = bool(yt_url)
+        status = "success" if published_ok else "failed"
+        if not published_ok:
+            err = result.get("qc_reason") or result.get("error") or "tidak publish (QC/produksi gagal)"
     except Exception as e:
         err = str(e)
         logger.error(f"[Direct] job {jid} gagal: {e}")
