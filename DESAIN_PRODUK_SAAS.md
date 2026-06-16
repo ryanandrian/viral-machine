@@ -363,8 +363,8 @@ Engine "Music" (platform-managed, BUKAN BYOK)
 - **Charts:** tremor.so (dashboard-friendly) atau Recharts
 - **State:** TanStack Query (server state) + Zustand (UI state)
 - **i18n:** next-intl (Indonesia + English)
-- **Deploy:** Vercel
-- **Domain:** mesinviral.com (landing), app.mesinviral.com (dashboard)
+- **Deploy:** ~~Vercel~~ → **SELF-HOST VPS** (2026-06-17, owner: hemat biaya+tanpa akun) — `mv-web` Next.js + nginx + Let's Encrypt.
+- **Domain:** `mesinviral.com` (landing+dashboard+admin, **path-based**, → VPS) + `api.mesinviral.com` (webhook, → VPS). *(bukan subdomain app./admin. terpisah)*
 
 ### Information Architecture
 
@@ -714,10 +714,10 @@ Note: Scale margin lebih rendah karena volume render hit compute lebih keras. Mi
 - ❌ Billing portal
 
 ### Infrastructure
-- ✅ VPS Ubuntu (worker)
-- ✅ Supabase project
-- ❌ Vercel project (frontend) — sign up
-- ❌ Domain + SSL (mesinviral.com + app.mesinviral.com)
+- ✅ VPS Ubuntu (worker `mv-worker` + frontend `mv-web` + nginx) — 2026-06-16/17
+- ✅ Supabase project (v2)
+- ✅ ~~Vercel project~~ → **N/A: frontend SELF-HOST di VPS** (2026-06-17, tanpa Vercel)
+- ✅ Domain + SSL: **`https://mesinviral.com` LIVE** (Let's Encrypt di VPS, auto-renew) · `api.` (webhook) belum
 - ❌ Monitoring (Sentry + BetterStack)
 - ❌ CDN (Cloudflare untuk landing)
 

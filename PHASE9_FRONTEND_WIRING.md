@@ -13,7 +13,7 @@
 - ✅ **Prasyarat terpenuhi:** clone DB v2 ✅, RLS go-live ✅ (Phase 4.3, anon=0 tanpa auth), env v2 siap. Guardrail "jangan wiring sebelum clone" → **terbuka**.
 - **Env FE:** `apps/web/.env.local` → `NEXT_PUBLIC_SUPABASE_URL=https://atliatnjhysdibmfypul.supabase.co` + anon/publishable key (dari `SUPABASE-CONNECTION.md`, gitignored). **JANGAN commit.**
 - ⚠️ **Next 16 breaking changes** (`apps/web/AGENTS.md`) — baca sebelum middleware/routing (next-intl). i18n rework saat wiring (next-intl span-ganda → proper).
-- **Deploy:** Vercel (FE) + VPS (worker/webhook). FE tak pernah ke VPS.
+- **Deploy:** ~~Vercel (FE) + VPS (worker/webhook). FE tak pernah ke VPS.~~ **REVISI 2026-06-17: SEMUA di VPS** — FE (`mv-web`) + worker (`mv-worker`) + webhook + nginx + Let's Encrypt. Self-host (bukan Vercel). `https://mesinviral.com` LIVE.
 
 ## 1. Pendekatan teknis
 - `@supabase/supabase-js` — 1 client util (browser, anon) + helper server-component (RSC) bila perlu.

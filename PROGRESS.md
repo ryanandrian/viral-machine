@@ -254,7 +254,7 @@ Setiap tenant: login → dashboard → config API keys → scheduler → lihat l
 | **Strategi** | **HYBRID** — reuse CSS desain (tokens+components, 0 redesign) + shadcn/Radix HANYA utk komponen interaktif/a11y, di-tema pakai tokens desain. Charts: tremor. |
 | **Repo** | **Monorepo** — frontend di `apps/web/` (Next.js 15) di repo ini. |
 | **Sequencing** | Mulai **SEKARANG dgn MOCK DATA**, paralel/mendahului backend. Wire Supabase saat phase backend mendarat. |
-| **Deploy** | **Vercel** (bukan VPS). VPS tetap bersih runtime Python. |
+| **Deploy** | ~~Vercel~~ → **SELF-HOST di VPS** (2026-06-17, owner: hemat biaya+tanpa akun): `mv-web` Next.js+nginx+Let's Encrypt di VPS. `https://mesinviral.com` LIVE. *(VPS tak lagi Python-only — relax demi hemat.)* |
 | **Data boundary** | **Supabase-first** — frontend→Supabase langsung (client SDK + RLS) + Realtime; **NO API layer Python**; worker = penulis data; endpoint minimal utk webhook Midtrans. |
 | **Responsive + PWA** | Responsive: harmonisasi breakpoint (29/33 screen sudah `@media`) saat port. **PWA installable** (manifest + service worker) ditambah saat implementasi — web-only, no native. |
 
@@ -319,7 +319,7 @@ Detail permanent reference: [[decisions_niche_model]] memory file.
 
 Next.js 15 (App Router) + shadcn/ui + Tailwind + tremor.so + Geist Sans + next-intl (i18n) + Supabase Auth + Supabase Realtime + Vercel deploy. Detail per layer di [[plan_frontend_via_claude_design]].
 
-**Repo structure:** ✅ DIPUTUSKAN (2026-06-11) — **monorepo**, frontend di `apps/web/` di repo ini. `apps/web` di-exclude dari sparse-checkout VPS; deploy ke Vercel.
+**Repo structure:** ✅ DIPUTUSKAN (2026-06-11) — **monorepo**, frontend di `apps/web/` di repo ini. ~~`apps/web` di-exclude dari sparse-checkout VPS; deploy ke Vercel.~~ **REVISI 2026-06-17: frontend SELF-HOST di VPS** (clone terpisah `~/mesinviral-web` sparse `/apps/web`; `mv-web` systemd). Bukan Vercel.
 
 **Domain:** `mesinviral.com` (landing) + `app.mesinviral.com` (dashboard) + `admin.mesinviral.com` (internal).
 

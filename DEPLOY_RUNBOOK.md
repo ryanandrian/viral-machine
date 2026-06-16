@@ -1,12 +1,13 @@
 # DEPLOY RUNBOOK — v2 Cutover (worker_decoupled + webhook_app)
 
-> Panduan eksekusi GATE CUTOVER (§GATE CUTOVER di `PROGRESS.md`). **v1 produksi jangan disentuh sampai langkah F.**
+> ⚠️ **UPDATE 2026-06-17 — ARSITEKTUR HOSTING BERUBAH (keputusan owner): frontend SELF-HOST di VPS, BUKAN Vercel** (hemat biaya + tanpa akun baru). Semua referensi "Vercel" di runbook ini **SUPERSEDED** → baca sebagai "VPS (systemd `mv-web` Next.js :3000 + nginx + Let's Encrypt)". Status real: `https://mesinviral.com` LIVE di VPS (frontend `mv-web` + mesin `mv-worker`). Detail: progress_journal 2026-06-17 + PROGRESS §B3. Webhook (`api.mesinviral.com`) belum.
+>
+> Panduan eksekusi GATE CUTOVER (§GATE CUTOVER di `PROGRESS.md`). **v1 produksi: SUDAH PENSIUN 2026-06-16** (worker v2 live).
 > Catatan: file `.md` **tidak** ikut ke VPS (sparse-checkout exclude `*.md`) — runbook ini dibaca lokal.
-> Prasyarat: §PERBAIKAN PRODUCE & PUBLISH = ✅ selesai.
 
-## Arsitektur deploy (siapa di mana)
+## Arsitektur deploy (siapa di mana) — ⚠️ "Vercel" di bawah = SUPERSEDED → VPS (lihat banner)
 ```
-Tenant browser ─┬─► Vercel (apps/web, Next.js)        anon key + RLS · RPC whitelist
+Tenant browser ─┬─► VPS mv-web (apps/web, Next.js :3000 + nginx)  anon key + RLS · RPC whitelist   [dulu rencana: Vercel]
                 │        │  server-to-server (X-Internal-Secret)
                 │        ▼
                 └─► VPS  ├─ webhook_app (FastAPI/uvicorn:8088)  ← Midtrans webhook + YouTube OAuth + /api/keys/set
