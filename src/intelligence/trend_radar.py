@@ -10,7 +10,7 @@ import os
 import json
 import random
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from urllib.parse import quote_plus
 
 import feedparser
@@ -54,10 +54,13 @@ class TrendRadar:
     GOOGLE_TRENDS_BASE_DELAY  = 5
     GOOGLE_TRENDS_MAX_DELAY   = 60
 
+    _GLOBAL = "_all"   # scope sumber global (HackerNews/Wikipedia — tak per-niche/geo)
+
     def __init__(self):
         # Lazy init — pytrends diinit per-scan berdasarkan region
         self._pytrends = None
         self._pytrends_tz = None
+        self._sbc = None   # F1: client trend_cache (lazy, service_role worker)
 
     def _get_pytrends(self, tz: int = -300) -> TrendReq:
         """Inisialisasi (atau reinit jika tz berubah) TrendReq instance."""
@@ -65,6 +68,87 @@ class TrendRadar:
             self._pytrends    = TrendReq(hl='en-US', tz=tz, timeout=(10, 30))
             self._pytrends_tz = tz
         return self._pytrends
+
+    # ─── F1: trend_cache (TREND_RADAR_ARCHITECTURE.md §3 Pilar-1 — decouple, anti-429 skala) ──
+    # Produce BACA cache (hot-path NOL fetch eksternal); TrendRefresher (worker) yang ISI.
+    def _cache_sb(self):
+        if self._sbc is None:
+            from supabase import create_client
+            self._sbc = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+        return self._sbc
+
+    @staticmethod
+    def _cache_key(niche: str, geo: str, source: str) -> str:
+        return f"{niche}|{geo}|{source}|"
+
+    def _read_cache(self, niche: str, geo: str, source: str) -> list:
+        """Baca sinyal dari trend_cache (apa adanya — produce pakai yang tersedia, graceful)."""
+        try:
+            r = (self._cache_sb().table("trend_cache").select("signals")
+                 .eq("cache_key", self._cache_key(niche, geo, source)).limit(1).execute())
+            if r.data:
+                return r.data[0].get("signals") or []
+        except Exception as e:
+            logger.warning(f"[TrendRadar] read_cache {source} gagal: {e}")
+        return []
+
+    def _cache_age_sec(self, niche: str, geo: str, source: str):
+        """Umur cache (detik), atau None bila belum ada."""
+        try:
+            r = (self._cache_sb().table("trend_cache").select("fetched_at")
+                 .eq("cache_key", self._cache_key(niche, geo, source)).limit(1).execute())
+            if r.data and r.data[0].get("fetched_at"):
+                ts = datetime.fromisoformat(str(r.data[0]["fetched_at"]).replace("Z", "+00:00"))
+                return (datetime.now(timezone.utc) - ts).total_seconds()
+        except Exception:
+            pass
+        return None
+
+    def _write_cache(self, niche: str, geo: str, source: str, signals: list, ttl_sec: int = None) -> None:
+        try:
+            row = {
+                "cache_key": self._cache_key(niche, geo, source),
+                "niche": niche, "geo": geo, "source": source,
+                "signals": signals or [],
+                "fetched_at": datetime.now(timezone.utc).isoformat(),
+            }
+            if ttl_sec:
+                row["ttl_sec"] = int(ttl_sec)
+            self._cache_sb().table("trend_cache").upsert(row, on_conflict="cache_key").execute()
+        except Exception as e:
+            logger.warning(f"[TrendRadar] write_cache {source} gagal: {e}")
+
+    def refresh_niche_geo(self, niche: str, region_key: str, keywords: list,
+                          ttl_sec: int, yt_api_key: str = "", only_stale: bool = True) -> int:
+        """Dipakai TrendRefresher (worker, OFF hot-path). Fetch sumber per-(niche,geo) yang
+        BASI → tulis trend_cache: google_trends, youtube_search, news_trending. Return jumlah ditulis."""
+        region  = REGION_MAP.get(region_key, REGION_MAP["us"])
+        written = 0
+        def _stale(src):
+            if not only_stale:
+                return True
+            age = self._cache_age_sec(niche, region_key, src)
+            return age is None or age > ttl_sec
+        if _stale("google_trends"):
+            self._write_cache(niche, region_key, "google_trends",
+                              self._get_google_trends(keywords, geo=region["geo"], tz=region["tz"]), ttl_sec); written += 1
+        if _stale("youtube_search"):
+            self._write_cache(niche, region_key, "youtube_search",
+                              self._get_youtube_trending_search(keywords, region_code=region["yt_region"] or "US", api_key=yt_api_key), ttl_sec); written += 1
+        if _stale("news_trending"):
+            self._write_cache(niche, region_key, "news_trending",
+                              self._get_google_news_trending(keywords, geo=region["news_geo"], ceid=region["news_ceid"]), ttl_sec); written += 1
+        return written
+
+    def refresh_global(self, ttl_sec: int, only_stale: bool = True) -> int:
+        """Refresh sumber GLOBAL (HackerNews, Wikipedia) — sekali, tak per-niche/geo."""
+        written = 0
+        for src, fetch in (("hackernews", lambda: self._get_hackernews_trending(limit=10)),
+                           ("wikipedia_trending", lambda: self._get_wikipedia_trending(limit=10))):
+            age = self._cache_age_sec(self._GLOBAL, self._GLOBAL, src)
+            if (not only_stale) or age is None or age > ttl_sec:
+                self._write_cache(self._GLOBAL, self._GLOBAL, src, fetch(), ttl_sec); written += 1
+        return written
 
     # ─── SOURCE 1: Google Trends ───────────────────────────────────────────
 
@@ -350,30 +434,22 @@ class TrendRadar:
             "wikipedia_trending": []
         }
 
-        logger.info(f"1/5 Google Trends [geo={geo or 'global'}]...")
-        signals["google_trends"] = self._get_google_trends(keywords, geo=geo, tz=tz)
-
-        logger.info(f"2/5 YouTube Search [regionCode={yt_region or 'global'}]...")
-        _yt_api_key = getattr(run_config, "youtube_api_key", None) or ""
-        signals["youtube_search"] = self._get_youtube_trending_search(
-            keywords, region_code=yt_region or "US", api_key=_yt_api_key
-        )
-
-        logger.info(f"3/5 Google News [geo={news_geo}]...")
-        signals["news_trending"] = self._get_google_news_trending(keywords, geo=news_geo, ceid=news_ceid)
-
-        logger.info("4/5 HackerNews...")
-        signals["hackernews"] = self._get_hackernews_trending(limit=10)
-
-        logger.info("5/5 Wikipedia Trending...")
-        signals["wikipedia_trending"] = self._get_wikipedia_trending(limit=10)
-
-        os.makedirs("logs", exist_ok=True)
-        with open(f"logs/signals_{tenant_config.tenant_id}.json", "w") as f:
-            json.dump(signals, f, ensure_ascii=False, indent=2)
+        # ── F1 (§3 Pilar-1): BACA trend_cache — hot-path TIDAK panggil sumber eksternal ──
+        # (anti-429 skala; TrendRefresher worker yang mengisi cache di luar hot-path).
+        # Per-(niche,geo): google_trends/youtube_search/news_trending · GLOBAL: hackernews/wikipedia.
+        signals["google_trends"]      = self._read_cache(tenant_config.niche, peak_region, "google_trends")
+        signals["youtube_search"]     = self._read_cache(tenant_config.niche, peak_region, "youtube_search")
+        signals["news_trending"]      = self._read_cache(tenant_config.niche, peak_region, "news_trending")
+        signals["hackernews"]         = self._read_cache(self._GLOBAL, self._GLOBAL, "hackernews")
+        signals["wikipedia_trending"] = self._read_cache(self._GLOBAL, self._GLOBAL, "wikipedia_trending")
 
         total = sum(len(signals[k]) for k in signals if isinstance(signals[k], list))
-        logger.info(f"Scan complete: {total} signals | region: {peak_region.upper()}")
+        if total == 0:
+            logger.warning(
+                f"[TrendRadar] trend_cache KOSONG (niche={tenant_config.niche}, geo={peak_region}) — "
+                f"TrendRefresher belum mengisi? Produce lanjut dgn sinyal minim (niche_selector fallback)."
+            )
+        logger.info(f"Scan (cache) complete: {total} signals | niche={tenant_config.niche} | region: {peak_region.upper()}")
         return signals
 
 

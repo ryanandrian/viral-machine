@@ -30,7 +30,7 @@ from loguru import logger
 
 def main() -> None:
     from src.utils.db_log_sink import setup_db_logging
-    from src.orchestrator import producer, publisher, buffer_janitor, self_learning, email_outbox, heartbeat
+    from src.orchestrator import producer, publisher, buffer_janitor, self_learning, email_outbox, heartbeat, trend_refresher
     from src.billing import renewal as billing_renewal
 
     setup_db_logging()
@@ -56,6 +56,7 @@ def main() -> None:
         threading.Thread(target=self_learning.run_forever, name="self_learning", daemon=True),
         threading.Thread(target=billing_renewal.run_forever, name="billing_renewal", daemon=True),
         threading.Thread(target=email_outbox.run_forever, name="email_outbox", daemon=True),
+        threading.Thread(target=trend_refresher.run_forever, name="trend_refresher", daemon=True),
     ]
     for t in threads:
         t.start()
