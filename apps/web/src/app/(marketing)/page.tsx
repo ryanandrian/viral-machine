@@ -19,7 +19,7 @@ function Bi({ id, en }: { id: string; en: string }) {
 
 const PIPE: [LucideIcon, string, string][] = [
   [Radar, "Trend Radar", "Scan tren"], [Target, "Topic Select", "Pilih topik"],
-  [FileText, "Script", "via Claude"], [Sparkles, "Hook", "Optimasi"],
+  [FileText, "Script", "LLM agen"], [Sparkles, "Hook", "Optimasi"],
   [AudioLines, "TTS", "via 11labs"], [ImageIcon, "Visual", "AI image"],
   [Film, "Render", "Compose"], [Upload, "Publish", "YouTube"],
 ];
@@ -158,9 +158,9 @@ export default function LandingPage() {
         <div className="pipe-circuit reveal">
           <div className="pipe-circuit-in">
             {/* Track loop: cahaya mengalir atas(1→8) → turun kanan → bawah(R→L) → naik kiri → balik ke Trend Radar */}
-            <svg className="pipe-track" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-              <rect className="tk-base" x="6.25" y="11" width="87.5" height="63" rx="2.4" ry="9" pathLength={100} />
-              <rect className="tk-flow" x="6.25" y="11" width="87.5" height="63" rx="2.4" ry="9" pathLength={100} />
+            <svg className="pipe-track" viewBox="0 0 100 272" preserveAspectRatio="none" aria-hidden="true">
+              <rect className="tk-base" x="6.25" y="26" width="87.5" height="158" rx="2.4" ry="16" pathLength={100} />
+              <rect className="tk-flow" x="6.25" y="26" width="87.5" height="158" rx="2.4" ry="16" pathLength={100} />
             </svg>
             <div className="pipe-grid top">
               {PIPE.map(([Icon, n, c], i) => (

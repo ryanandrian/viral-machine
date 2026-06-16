@@ -62,7 +62,7 @@
 .pipe-circuit { overflow-x: auto; padding: 0.5rem 0 0.25rem; }
 /* Tinggi & posisi baris DIKUNCI (px) → SVG track selalu sejajar ikon di SEMUA lebar layar.
    Lebar sempit → seluruh circuit scroll horizontal sbg 1 unit (bukan reflow yg merusak). */
-.pipe-circuit-in { position: relative; min-width: 720px; height: 246px; }
+.pipe-circuit-in { position: relative; min-width: 720px; height: 272px; }   /* muat konten baris bawah + hindari scrollbar vertikal (overflow-x:auto memaksa overflow-y:auto) */
 .pipe-track { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
 .pipe-track rect { fill: none; vector-effect: non-scaling-stroke; }
 .pipe-track .tk-base { stroke: var(--border-strong); stroke-width: 2; }
