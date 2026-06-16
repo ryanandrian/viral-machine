@@ -87,7 +87,8 @@
 .feat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.25rem; }
 .feat { padding: 1.75rem; border: 1px solid var(--border); border-radius: var(--r-xl); background: var(--surface-1); position: relative; overflow: hidden; transition: border-color var(--d-fast), transform var(--d-fast); }
 .feat:hover { border-color: var(--border-strong); transform: translateY(-2px); }
-.feat.spotlight { grid-column: span 2; background: linear-gradient(120deg, var(--surface-1), color-mix(in srgb, var(--accent) 8%, var(--surface-1))); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
+/* spotlight TIDAK lagi full-width → 6 kartu rapi 2 kolom × 3 baris (tetap beraksen) */
+.feat.spotlight { background: linear-gradient(120deg, var(--surface-1), color-mix(in srgb, var(--accent) 8%, var(--surface-1))); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
 .feat .fic { width: 48px; height: 48px; border-radius: var(--r-md); display: grid; place-items: center; margin-bottom: 1.125rem; background: var(--brand-soft); color: var(--brand); }
 .feat.spotlight .fic { background: var(--accent-soft); color: var(--accent); }
 .feat h3 { font-size: var(--text-xl); font-weight: 600; margin: 0 0 0.5rem; letter-spacing: -0.01em; }
