@@ -66,8 +66,10 @@ video nyata → video_analytics (views, watch_time, avg_view_pct, ctr, subscribe
 - 🟡 **QC-fail = buang total.** Video QC-fail dihapus + biaya render hangus, tanpa retry/quarantine cerdas.
 - ✅ **(DIFIX) Cek integritas teknis** — kini `_pre_publish_qc` cek stream video+audio + aspect 9:16 (config `QC_REQUIRE_AUDIO`/`QC_ASPECT`/`QC_ASPECT_TOLERANCE`). Tervalidasi: render tanpa-audio & aspect salah ditolak; 9:16+audio lolos.
 
-### Root cause DURASI (tervalidasi 2026-06-13 — koreksi penting)
-Bukan sekadar "LLM kurang nulis". **`WPS=2.4` hardcode (`script_engine.py:207`) ≠ kecepatan bicara nyata**, yang bervariasi per provider/rate: edge+15%=2,41 · edge+5%=1,85 · ElevenLabs 0,86=1,67 (3 data run nyata). Budget kata (122@2,4 utk 51s) tak cocok → durasi meleset −5%..−31%, **beda per provider**. ⚠️ "Paksa LLM nulis lebih banyak" bisa **OVERSHOOT** provider lambat. Fix benar = **kalibrasi WPS per-provider + closed-loop G-audio**, BUKAN prompt-hack. **Blocked:** butuh data ukur WPS (perlu run; ElevenLabs lapse) + validasi render (biaya) → jangan dikoding di atas data tipis.
+### Root cause DURASI (UPDATE 2026-06-16 — WPS 2.4 hardcode SUDAH ditangani; residual = mismatch provider)
+**KOREKSI status:** WPS **bukan lagi** `2.4` hardcode. F1 (migr 0012) memasukkan **`format_wps` per-format/provider** dari `tts_profiles` (`script_engine.py:224` `WPS = format_wps if format_wps else 2.4`; 2.4 kini **fallback legacy** saja; sumber: `_eff_wps(format_profile, tts_provider)` `script_engine.py:511`). `tts_profiles.delivery_wps`: elevenlabs **1.8** · edge_tts/openai_tts **2.6**.
+**Residual (tervalidasi test ryan 2026-06-16):** word-budget pakai `delivery_wps` provider **TERKONFIGURASI** (ryan=elevenlabs→1.8) tapi yang **me-RENDER = edge** (fallback krn ElevenLabs lapse, 2.6) → budget 60×1.8=108 kata, edge bicara 108/2.6 ≈ **43s** untuk target 60s → QC-fail. **Akar = WPS budget ≠ WPS provider AKTUAL (saat fallback).**
+**Fix benar (2 jalur):** (a) WPS budget **ikut provider yang BENAR-BENAR me-render** (termasuk fallback) — bukan provider terkonfigurasi; ATAU (b) cegah fallback senyap (re-subscribe premium / §4b stop-on-fallback). **⛔ BUKAN dengan menurunkan preset** (preset 8/15/30/45/60/75/90 sudah rapat by-design; turunkan preset = output ikut lebih pendek, tetap meleset — keputusan owner 2026-06-16, no preset-hack).
 
 ---
 
@@ -97,8 +99,9 @@ QC menjadi **3 lapis**, semua ambang config-driven, ambang relatif diturunkan da
 ### Sumber `target_preset` & `expected_beats`
 Dari **Duration Preset tenant** — mekanisme di `MULTI_FORMAT_STUDIO.md §3` (8/15/30/45/60/75/90s; word_budget = detik×WPS; visual beat per preset). **Belum ada field-nya di `tenant_configs`** → QC v2 **mendarat bersama** field preset. Interim sekarang (§2) aman karena produksi aktif ~40s/6-clip.
 
-### Kebijakan QC-fail (target)
-- **Quarantine, bukan buang buta.** QC-fail → status `qc_failed` + simpan diagnosa; bila penyebab transient (mis. fallback TTS bikin durasi meleset) → **re-generate terarah** (mis. minta script lebih panjang) alih-alih hangus.
+### Kebijakan QC-fail (DIPUTUSKAN owner 2026-06-16)
+- **Publish PRIVATE + advisory, BUKAN buang.** QC-fail → video tetap di-publish **private** (walau channel public) + status `qc_failed` + diagnosa tersimpan → tenant **lihat hasil** + **advisory** (alasan + rekomendasi config, lewat Telegram/FE) → **tenant putuskan** public/take-down. (Mengganti hapus-video `pipeline.py:317`.)
+- Bila penyebab transient terukur (mis. fallback TTS bikin durasi meleset) → boleh **re-generate terarah** (kalibrasi WPS §2), bukan loop bakar-kredit.
 - Catat **alasan terstruktur** (lapis+metrik) ke `pipeline_run_logs` untuk feedback ke §4.
 
 ---
@@ -154,7 +157,7 @@ Tujuan: tutup loop tidak hanya di **input** (script/hook dari analytics) tapi ju
 
 - **F0 (DONE):** QC interim aman (floor 3s) — tak memblokir preset; produksi aktif tetap terlindungi.
 - **F1 ✅ DONE (2026-06-14):** katalog **`format_profiles`** (WPS per-format §4: energik/listicle 2.4, edukasi 2.2, motivasi 1.6 + section_template/cta/render) + **`duration_presets`** (8/15/30/45/60/75/90s + visual_beats §3) + field `channels.duration_preset`/`format_profile` (NULLABLE = non-breaking). Migr `0012`, public-read, tervalidasi v2. Prasyarat QC v2 & multi-format. *(field di channels, bukan tenant_configs — per-channel, selaras niche/content_language.)*
-- **F2:** **QC v2 Lapis 1–3** (spec-aware, relatif) menggantikan `_pre_publish_qc`; `expected_beats`/`target_preset` dari preset. ✅ **Lapis-1/3 integritas (stream video+audio + aspect 9:16) SUDAH masuk** (2026-06-13, tervalidasi klip uji); Lapis-2 konformitas-durasi-relatif menyusul bersama F1 + kalibrasi WPS.
+- **F2 ✅ DONE (2026-06-16 dikonfirmasi):** **QC v2 Lapis 1–3 SUDAH diterapkan** di `_pre_publish_qc`. Lapis-1/3 integritas (stream video+audio + aspect 9:16). **Lapis-2 konformitas-durasi-relatif AKTIF**: `|durasi−target_preset|/target_preset ≤ QC_DURATION_TOLERANCE` (`pipeline.py:562`, default **0.15**) + clip_count = visual_beats preset. `target_preset` dari `channels.duration_preset` (F1). Terbukti di test ryan (43s vs 60s ditolak, "di luar ±15%"). **Sisa nyata = akurasi durasi (WPS provider-aktual, §2), bukan QC-nya.**
 - **F3:** Kebijakan **quarantine + re-generate terarah** (ganti buang-buta) + diagnosa terstruktur ke `pipeline_run_logs`.
 - **F4:** **Self-critic pra-submit** (review render: caption-sync, keterbacaan, brand-safety).
 - **F5:** Loop belajar dari QC-fail → auto-tune word_budget/section_timing per preset; A/B hook/thumbnail.
@@ -167,8 +170,8 @@ Tujuan: tutup loop tidak hanya di **input** (script/hook dari analytics) tapi ju
 
 ## 6. Keputusan (2026-06-13, expert) + yang masih perlu data
 **DIPUTUSKAN** (owner delegasi keputusan teknis — [[feedback_owner_delegates_expert_decisions]]):
-1. `QC_DURATION_TOLERANCE` = **20%** (per-preset bila perlu nanti).
-2. QC-fail = **quarantine + retry maks 1×** → lalu accept-flag / stop. **Bukan loop** (anti bakar-kredit di skala ribuan tenant).
+1. `QC_DURATION_TOLERANCE` = **0.15 (15%)** — **diselaraskan ke KODE** (`pipeline.py:562`). *(Revisi 2026-06-16: sebelumnya tertulis 20%; owner — toleransi BUKAN lever; akar durasi diperbaiki di WPS §2, bukan dilonggarkan.)*
+2. **QC-fail durasi → PUBLISH PRIVATE + ADVISORY** (keputusan owner 2026-06-16), **bukan dibuang**. Video tetap di-publish **private** (walau channel public) → tenant **lihat hasilnya** + terima **advisory (alasan + rekomendasi config)** → **tenant putuskan** public-kan / take-down. Mengganti perilaku lama (`pipeline.py:317` hapus video). Retry/regenerate = §3/F3 (kalibrasi, bukan loop bakar-kredit).
 3. Self-critic = **heuristik dulu**; LLM-vision ditunda (biaya × ribuan tenant).
 4. Prioritas = **G-final integritas dulu (✅ DONE)** → QC-relatif nyusul bersama field Preset (F1).
 5. Default fallback = **stop** untuk provider premium berbayar (nilai jual = kualitas); per-komponen bisa beda (Visual ai_image→Pexels boleh).
@@ -183,3 +186,4 @@ Tujuan: tutup loop tidak hanya di **input** (script/hook dari analytics) tapi ju
 - 2026-06-13 — dibuat. Kondisi awal terdokumentasi; QC interim floor 3s; QC v2 + self-improvement roadmap diusulkan (menunggu keputusan owner per §6).
 - 2026-06-13 — **§4b Consent & Transparency Fallback** ditambah (disetujui owner): umum TTS+Visual, model A (transparansi wajib) + B (checkbox lanjut-vs-stop), tier black-screen selalu stop, flag→QC. + F7. **Validasi staged-QC** (deviasi durasi nyata 5–31% vs target 51s; risiko regenerate-loop; G-audio feasible krn `target_duration` `script_engine.py:206` + `audio_duration` `pipeline.py:219` sebelum step mahal).
 - 2026-06-13 — **Keputusan §6 direkam** (owner delegasi). **Root cause durasi tervalidasi** = WPS 2,4 hardcode ≠ delivery nyata per-provider (1,67–2,41) → folded ke §2. **G-final integritas (Lapis-1/3) DIIMPLEMENTASI + tervalidasi** (`_pre_publish_qc` cek stream audio/video + aspect 9:16, config-driven; klip uji lokal). Fix durasi penuh = blocked data/biaya.
+- **2026-06-16 — SINKRON ke realita + keputusan owner (test e2e ryan):** (1) §2 root-cause di-update: **WPS bukan lagi 2.4 hardcode** (F1 per-provider `format_wps`); residual = budget pakai WPS provider terkonfigurasi vs provider AKTUAL fallback (EL 1.8 vs edge 2.6 → 43s/60s). (2) **F2/Lapis-2 durasi-relatif KONFIRMASI SUDAH AKTIF** (`QC_DURATION_TOLERANCE` default 0.15). (3) §6.1 toleransi diselaraskan **20%→15%** (sesuai kode; owner: toleransi bukan lever, WPS yang diperbaiki, **no preset-hack**). (4) §6.2/§3 kebijakan QC-fail → **publish PRIVATE + advisory** (bukan buang). (5) **Isu no-hardcode ditemukan**: `tts_engine` concern-messages **hardcode "ElevenLabs"/"Edge"** + hanya ke log (langgar §0.3) → diperbaiki bareng F7/advisory (eksekusi #2).
