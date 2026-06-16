@@ -84,6 +84,46 @@
 
 ---
 
+## 🧠 IMPROVEMENT — QC Self-Healing + Trend Radar (kualitas viral & skala)
+
+> **Plan AKTIF (sumber-kebenaran-tunggal track ini).** Disisip sebelum §GATE CUTOVER. Centang `[x]` **HANYA** bila script/fungsi **sudah dibuat DAN tervalidasi berjalan 100%** (aturan owner 2026-06-16). Desain rinci = `QC_CONTENT_ARCHITECTURE.md` + `TREND_RADAR_ARCHITECTURE.md` (doc = desain/roadmap; PROGRESS = checklist status). Semua angka/sumber/provider **config-driven, no-hardcode**. V1 produksi JANGAN disentuh.
+
+**Relasi ke cutover (anti-ambigu):** ini track **polish kualitas & skala**, BUKAN prasyarat keras single-tenant cutover (beda dari §PERBAIKAN PRODUCE & PUBLISH). Namun: **A+B disarankan mendarat sebelum produksi diandalkan** (dgn ElevenLabs ryan lapse, QC-fail saat ini menghapus video diam-diam — A/B mengubahnya jadi private+advisory). **C** = polish marketing (sebelum publik). **D1 (doc) + D2 (F1 cache)** = **prasyarat sebelum skala banyak tenant** (cegah 429 IP-based), bukan blocker cutover ryan.
+
+**Urutan eksekusi (owner "mulai dari eksekusi 1 lalu 2"):** #1 sinkron doc QC = ✅ DONE (changelog QC 2026-06-16). #2 = **A + B**. Lalu **C**, lalu **D**.
+
+### A. QC-fail → Self-Healing: publish PRIVATE + advisory (Opsi A) — `QC §3/§6.2`
+- [x] **A1** — `pipeline.py` blok QC-fail: **hapus `unlink()` pra-upload** → set `tenant_config.publish_privacy="private"` → publish via `youtube_publisher.publish(...)` (jalan di **kedua** jalur producer `publish=False` & direct `publish=True`) → isi `result["published"]["youtube"]` → `write_qc_failed(url=...)` (videos status qc_failed) → advisory → bersihkan lokal. **Buffer tetap murni** (`produce_one` cek `steps.qc.passed` → QC-fail tak masuk buffer). Publisher tak diubah. **Validated e2e (lihat A4).** *(2026-06-16)*
+- [x] **A2** — Advisory Telegram: `notify_qc_fail` → **"di-publish PRIVAT untuk ditinjau"** + alasan + **rekomendasi DINAMIS** (no-hardcode) + **URL privat** + "Anda putuskan publik/hapus". **Validated** (unit: pesan memuat PRIVAT+url+Saran+putusan; pesan lama "tidak dipublish" hilang). *(2026-06-16)*
+- [x] **A3** — `write_qc_failed` terima `url` → simpan ke `videos` (status `qc_failed`, qc_passed False, +url privat); alasan QC tercatat (logger ctx run_id → pipeline_run_logs, infra existing). **Validated** (unit: record berisi status/qc_passed/url). *(2026-06-16)*
+- [x] **A4** — **e2e nyata LULUS** (2026-06-16, direct-produce ryan, owner-authorized): QC-fail durasi terpicu (`48.3s` di luar ±15% target 60s — skrip 73w < budget 108w) → **publish PRIVAT** `youtube.com/shorts/ermbEg-Qess` (privacy=`private` **terverifikasi via YouTube API**) → **advisory Telegram TERKIRIM** (chat 8699847842, rekomendasi dinamis) → `production_runs.status=qc_failed`/`qc_passed=false`/url terisi (BUKAN mislabel success) → `direct_jobs=published` → video **tidak dihapus**. run_id `direct-0f73a253`.
+
+### B. Transparansi fallback TTS (no-hardcode) — `QC §0.3` + `§4b` (parsial)
+- [x] **B1** — `tts_engine.py`: concern fallback **dinamis** (`_fallback_concern(prev,next)` pakai nama provider dari config) — literal "ElevenLabs"/"Edge"/"OpenAI" **dibuang** dari pesan (sisa hanya docstring/komentar/nama-kelas-import). **Validated** (unit: concern memuat nama dinamis, nol literal vendor). *(2026-06-16)*
+- [x] **B2** — Engine **expose provider aktual**: `last_primary`/`last_provider`/`last_fallback_used` (di-set tiap `generate`) → `pipeline.run` catat ke `result["steps"]["tts"]` (`configured_provider`/`provider_used`/`fallback_used`) → dipakai advisory A1. **Validated** (unit: atribut init + ter-set; py_compile). *(2026-06-16)*
+- [x] **B3** — Validasi unit: TTSEngine attrs + concern dinamis · Telegram advisory · `write_qc_failed(url)` · `run_direct` status-mapping NYATA (success/qc_failed/failed via fake sb+Pipeline). **PASS** (`/tmp/val_qc_advisory.py`). *(2026-06-16)*
+- *(F7 penuh — checkbox consent lanjut-vs-stop per-komponen + flag `content_inventory.metadata` + alert kredit BYOK — = epik terpisah, tetap di `QC §4b/F7`. Di sini hanya transparansi minimal yang menopang advisory.)*
+
+### C. Landing — pipeline looping 11-simpul (animasi)
+- [ ] **C1** — Marketing page (`apps/web/.../(marketing)/page.tsx`): grafik pipeline jadi **animasi looping**; tambah **3 simpul** — **Report→Telegram**, **Self-learning**, **Self-improvement** — yang **loop balik ke Trend Radar** (cerminkan fitur nyata: `telegram_notifier` + `channel_insights` + loop §4).
+- [ ] **C2** — Label **"Pipeline AI 8 langkah" → "11 langkah"** (8 langkah produksi + 3 simpul loop) + animasi CSS loop. `npm run build` PASS.
+
+### D. Trend Radar — revisi arsitektur + build bertahap — `TREND_RADAR_ARCHITECTURE.md`
+- [ ] **D1** *(doc — owner review)* — Revisi `TREND_RADAR_ARCHITECTURE.md`: **rasio sumber config-driven** (`source_weights`: YouTube > Google Trends > News > Wiki/HN); **verdict efektivitas** (News=moderat niche-dependent · Wikipedia=rendah/noise→filter-only · HN=tech-conditional/kandidat drop); **out-of-the-box** (YouTube-centric velocity mining + Trends-rising + **pola channel-sendiri sbg input primer** + agregat lintas-tenant anonim = moat); **diagram loop self-learning↔radar** yang eksplisit.
+- [ ] **D2** — **F1 Decouple + cache** (KRITIKAL skala 429, **nol kredit AI**): tabel `trend_cache` + `TrendRefresher` (thread paced di `worker_decoupled`, TTL config `app_config`) + produce **baca cache** (tak panggil sumber langsung). Validasi: produce nol-fetch-eksternal + refresher tulis cache + resilient saat sumber 429.
+- [ ] **D3** *(propose-first per `TREND_RADAR §6`)* — **F2 Sumber relevan**: Trends `related_queries` rising + filter-niche Wikipedia/HN + YouTube `videos.list?part=statistics` (key platform).
+- [ ] **D4** *(propose-first)* — **F3 Ukur dimensi**: isi `_calculate_viral_score` dari **angka nyata** (search_volume/momentum/competition_gap); LLM hanya meramu **angle**.
+- [ ] **D5** *(propose-first)* — **F4 Self-improvement radar**: umpan balik outcome eksplisit + rising-query→kandidat + agregat lintas-tenant anonim. **F5 transparansi tenant** (sinkron `QC §4/F6`).
+
+### E. Temuan e2e 2026-06-16 (PR to-be-solved — disurvei dgn bukti kode/DB, NOL asumsi)
+> Muncul saat validasi A4 (run `direct-0f73a253`). Akar sudah ditelusuri; perbaikan menunggu giliran. Centang setelah fix + validasi 100%.
+- [ ] **E1 — Thumbnail upload timeout (robustness).** AKAR: `youtube_publisher.publish` video pakai resumable+**retry 3×** (`:244-256`), tapi `_upload_thumbnail` `thumbnails().set().execute()` (`:335`) **tanpa retry & tanpa timeout** → transient *read timeout* → thumbnail dilewati (non-kritis, video tetap publish). FIX: `.execute(num_retries=3)` + set timeout pada `build()`/httplib2. *(Dampak: video tampil pakai auto-thumbnail YouTube; CTR bisa turun. Bukan blocker.)*
+- [ ] **E2 — Music cross-niche fallback.** AKAR (premis "tiap niche punya library" BENAR — universe_mysteries=7 track dramatic/tense/mysterious): (a) **`run_direct` tak inject `preferred_music_mood`** (producer inject dari `niches.mood_priority` LRU=niche-safe; direct tidak) → `_detect_mood_from_script` keyword-match pilih `ominous` (mood milik dark_history); (b) **cascade `_query_tracks`**: step-2 "mood-only lintas-niche" menang sebelum coba track niche-sendiri (mood_priority) → ambil `shadow_empire` (dark_history). FIX: inject preferred_mood di `run_direct` (samakan producer) + reorder cascade (utamakan niche-own mood_priority sebelum lintas-niche) + (opsional) lengkapi gap track `epic`/`ambient` universe. *(Dampak: musik test bisa "rasa" niche lain; produksi terjadwal/producer AMAN krn sudah niche-safe.)*
+- [ ] **E3 — Akurasi durasi: length-gate LLM (akar-b QC §2).** Skrip 73w < budget 108w meski EL jalan → 48.3s. `script_engine` length-gate retry 3× lalu pakai best-available (78/100, tetap pendek). ANALISIS (#5): skor 78 = ScriptAnalyzer (LLM-judge tulisan, BEDA dari skor topik trend-radar 78.6). FIX: length-gate lebih tegas (retry s/d ≥ budget×toleransi atau prompt pemaksa-panjang) + WPS-follow-actual-provider — masuk QC F3/F5 (propose-first). *(Sudah didokumentasikan di `QC_CONTENT_ARCHITECTURE.md §2` akar-KEDUA.)*
+- *(#1 YouTube API quota habis → diselesaikan di **plan D** trend radar. #3 smart-focus insight "0% retention" (avg_view_pct=0) → diselesaikan di **plan D** ATAU **§GATE CUTOVER E3** — diputuskan saat itu, jangan diasumsikan sekarang.)*
+
+---
+
 ## 🚀 GATE CUTOVER — Go-Live Checklist (SUMBER KEBENARAN TUNGGAL)
 
 > **Ini SATU-SATUNYA daftar item cutover/go-live.** Catatan lain di dokumen ini hanya MENUNJUK ke sini (tidak menduplikasi). Status kode/fitur = baris STATUS teratas. Belum ada item yang dieksekusi ke VPS (v1 produksi JANGAN disentuh sampai langkah F). **⛔ PRASYARAT: §PERBAIKAN PRODUCE & PUBLISH (di atas) WAJIB selesai 100% dulu.**

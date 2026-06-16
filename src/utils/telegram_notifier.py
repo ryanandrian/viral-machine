@@ -85,9 +85,11 @@ class TelegramNotifier:
 
     def notify_qc_fail(self, run_id: str, tenant_id: str, topic: str,
                        qc_reason: str, duration_secs, size_mb: float,
-                       run_config=None) -> bool:
+                       run_config=None, url: str = "", recommendation: str = "") -> bool:
         """
-        Kirim alert ketika video gagal QC dan tidak dipublish.
+        ADVISORY (Opsi A — QC_CONTENT_ARCHITECTURE.md §3/§6.2): video gagal QC TIDAK dibuang
+        → di-publish PRIVAT untuk ditinjau tenant. Sertakan alasan + rekomendasi (dinamis,
+        no-hardcode) + URL privat. Tenant putuskan: jadikan publik atau hapus.
         """
         chat_id = self._get_chat_id(run_config)
         if not chat_id:
@@ -96,14 +98,19 @@ class TelegramNotifier:
         channel      = self._channel_name(run_config, {"tenant_id": tenant_id})
         duration_str = f"{duration_secs:.1f}s" if duration_secs else "—"
 
-        text = (
-            f"⚠️ <b>[{channel}] QC GAGAL — Video tidak dipublish</b>\n"
-            f"📋 Topik: <i>{self._escape(str(topic)[:100])}</i>\n"
-            f"❌ Alasan: {self._escape(qc_reason)}\n"
-            f"⏱ Durasi: {duration_str}  |  💾 {size_mb} MB\n"
-            f"<code>{run_id}</code>"
-        )
-        return self._send(chat_id, text)
+        lines = [
+            f"⚠️ <b>[{channel}] QC tak lolos — di-publish PRIVAT untuk Anda tinjau</b>",
+            f"📋 Topik: <i>{self._escape(str(topic)[:100])}</i>",
+            f"❌ Alasan: {self._escape(qc_reason)}",
+            f"⏱ Durasi: {duration_str}  |  💾 {size_mb} MB",
+        ]
+        if url:
+            lines.append(f"🔒 Privat: {url}")
+        if recommendation:
+            lines.append(f"💡 Saran: {self._escape(recommendation)}")
+        lines.append("👉 Anda putuskan: jadikan <b>publik</b> atau <b>hapus</b>.")
+        lines.append(f"<code>{run_id}</code>")
+        return self._send(chat_id, "\n".join(lines))
 
     def notify_publish_fail(self, run_id: str, tenant_id: str, error: str,
                             run_config=None) -> bool:

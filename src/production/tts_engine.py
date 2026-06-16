@@ -20,27 +20,18 @@ from src.intelligence.config import TenantConfig
 
 load_dotenv()
 
-# Concern messages — ditampilkan ke log saat fallback terjadi
-CONCERN_MESSAGES = {
-    "elevenlabs_to_openai": (
-        "⚠️  CONCERN: ElevenLabs gagal → fallback ke OpenAI TTS. "
-        "Kualitas suara menurun, word timestamps tidak tersedia. "
-        "Cek ELEVENLABS_API_KEY atau status akun di elevenlabs.io"
-    ),
-    "elevenlabs_to_edge": (
-        "⚠️  CONCERN: ElevenLabs gagal → fallback ke Edge TTS (gratis). "
-        "Kualitas suara minimal, timestamps estimasi ~80%. "
-        "Cek ELEVENLABS_API_KEY atau upgrade akun ElevenLabs."
-    ),
-    "openai_to_edge": (
-        "⚠️  CONCERN: OpenAI TTS gagal → fallback ke Edge TTS (gratis). "
-        "Kualitas suara minimal. Cek OPENAI_API_KEY."
-    ),
-    "all_failed": (
-        "❌  CRITICAL: Semua TTS provider gagal. "
-        "Cek koneksi internet dan API keys di .env."
-    ),
-}
+# Concern messages — DINAMIS, nama provider TIDAK ditanam (no-hardcode, QC §0.3).
+# Pesan fallback dibangun dari nama provider config (lihat _fallback_concern).
+CONCERN_ALL_FAILED = "❌  CRITICAL: Semua penyedia TTS gagal. Cek koneksi & kredensial penyedia suara."
+
+
+def _fallback_concern(prev_provider: str, next_provider: str) -> str:
+    """Pesan concern fallback DINAMIS — nama provider dari config, bukan literal (§0.3)."""
+    return (
+        f"⚠️  CONCERN: penyedia suara '{prev_provider}' gagal → fallback ke '{next_provider}'. "
+        f"Kualitas suara/timestamp dapat menurun & kecepatan bicara berbeda "
+        f"(durasi bisa meleset dari target preset). Periksa kredensial/saldo akun '{prev_provider}'."
+    )
 
 
 def _build_full_script(script: dict) -> str:
@@ -125,6 +116,14 @@ class TTSEngine:
     Setiap fallback dicatat sebagai concern untuk user.
     """
 
+    def __init__(self):
+        # Transparansi (§4b): dipakai pipeline untuk advisory — provider TERKONFIGURASI
+        # vs yang AKTUAL me-render. Di-set ulang tiap generate().
+        self.last_primary = None
+        self.last_provider = None
+        self.last_fallback_used = False
+        self.last_concern = ""
+
     def generate(
         self,
         script: dict,
@@ -151,6 +150,10 @@ class TTSEngine:
         primary  = config.get("tts_provider") or "edge_tts"
         fallback = config.get("tts_fallback_provider") or "edge_tts"
         logger.info(f"[TTSEngine] Primary: {primary} | fallback: {fallback}")
+        # Transparansi (§4b): catat provider terkonfigurasi sejak awal (utk advisory).
+        self.last_primary = primary
+        self.last_provider = None
+        self.last_fallback_used = False
 
         # Fallback chain CONFIG-DRIVEN (tts_provider + tts_fallback_provider) — BUKAN
         # hardcode. TIDAK ada auto cross-vendor (mis. elevenlabs→openai_tts yang tenant
@@ -165,14 +168,11 @@ class TTSEngine:
         for i, provider_name in enumerate(chain):
             try:
                 if i > 0:
-                    # Ini adalah fallback — log concern
+                    # Fallback aktif → concern DINAMIS (no-hardcode nama provider, §0.3)
                     prev = chain[i-1]
-                    concern_key = f"{prev}_to_{provider_name}"
-                    concern_msg = CONCERN_MESSAGES.get(
-                        concern_key,
-                        f"⚠️  CONCERN: {prev} gagal → fallback ke {provider_name}"
-                    )
+                    concern_msg = _fallback_concern(prev, provider_name)
                     logger.warning(concern_msg)
+                    self.last_concern = concern_msg
 
                 logger.info(f"[TTSEngine] Trying: {provider_name}")
                 audio_path, word_timestamps = _run_provider(
@@ -180,6 +180,9 @@ class TTSEngine:
                 )
 
                 if audio_path and os.path.exists(audio_path):
+                    # Transparansi (§4b): provider yang BENAR-BENAR me-render + apakah fallback.
+                    self.last_provider = provider_name
+                    self.last_fallback_used = (provider_name != primary)
                     size_kb    = os.path.getsize(audio_path) / 1024
                     ts_count   = len(word_timestamps)
                     ts_quality = "~98% akurasi" if provider_name == "elevenlabs" else \
@@ -197,7 +200,7 @@ class TTSEngine:
                 continue
 
         # Semua gagal
-        logger.error(CONCERN_MESSAGES["all_failed"])
+        logger.error(CONCERN_ALL_FAILED)
         logger.error(f"[TTSEngine] Last error: {last_error}")
         return "", []
 

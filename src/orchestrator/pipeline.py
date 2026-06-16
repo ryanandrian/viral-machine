@@ -214,7 +214,13 @@ class Pipeline:
             if not audio_path:
                 raise TTSError("TTS generation failed", step="tts")
             ts_info = f"{len(word_timestamps)} word timestamps" if word_timestamps else "no timestamps (estimasi)"
-            result["steps"]["tts"] = {"status": "ok", "path": audio_path, "timestamps": len(word_timestamps)}
+            result["steps"]["tts"] = {
+                "status": "ok", "path": audio_path, "timestamps": len(word_timestamps),
+                # Transparansi fallback (§4b) — provider TERKONFIGURASI vs yang AKTUAL me-render.
+                "configured_provider": getattr(self.tts_engine, "last_primary", None),
+                "provider_used":       getattr(self.tts_engine, "last_provider", None),
+                "fallback_used":       getattr(self.tts_engine, "last_fallback_used", False),
+            }
             logger.info(f"STEP 5 DONE | Audio: {audio_path} | {ts_info}")
 
             # ── STEP 6: Visual Assembly ─────────────────────────────
@@ -283,7 +289,35 @@ class Pipeline:
             }
 
             if not qc_passed:
-                logger.warning(f"QC FAILED | {qc_reason} — video tidak dipublish")
+                # OPSI A (QC §3/§6.2 + DESAIN §12d.F): JANGAN buang. Publish PRIVATE + advisory
+                # → tenant LIHAT hasil + PUTUSKAN public/take-down. Seragam di KEDUA jalur
+                # (producer publish=False & direct publish=True). Buffer tetap MURNI:
+                # produce_one cek steps.qc.passed → QC-fail TIDAK masuk content_inventory.
+                # Publisher tak berubah. Upload-private = artefak advisory out-of-band.
+                logger.warning(f"QC FAILED | {qc_reason} — publish PRIVATE + advisory (Opsi A)")
+
+                # Force privacy = private (lepas dari setting channel)
+                try:
+                    tenant_config.publish_privacy = "private"
+                except Exception:
+                    pass
+
+                yt_result = self.youtube_publisher.publish(
+                    video_path, script, tenant_config,
+                    thumbnail_path=result.get("thumbnail_path", ""),
+                    content_type=resolved_content_type,
+                )
+                result["published"]["youtube"] = yt_result if isinstance(yt_result, dict) else {}
+                _private_url = result["published"]["youtube"].get("url", "")
+                if _private_url:
+                    logger.info(f"QC FAIL → PUBLISHED PRIVATE (advisory): {_private_url}")
+                else:
+                    logger.warning(
+                        f"QC FAIL → upload PRIVATE gagal: "
+                        f"{result['published']['youtube'].get('error', 'unknown')}"
+                    )
+
+                # Catat kegagalan QC (+ URL privat) ke `videos` (status qc_failed) → feedback §4
                 self.supabase_writer.write_qc_failed(
                     run_id        = run_id,
                     tenant_id     = tenant_config.tenant_id,
@@ -292,21 +326,52 @@ class Pipeline:
                     qc_reason     = qc_reason,
                     duration_secs = video_duration,
                     file_size_mb  = file_size_mb,
+                    url           = _private_url,
                 )
-                # s81: Notifikasi Telegram QC fail
+
+                # Rekomendasi advisory DINAMIS (no-hardcode nama provider — §0.3).
+                # Nama provider diambil dari config run (configured vs aktual), bukan literal.
+                _tts      = result.get("steps", {}).get("tts", {})
+                _reason_l = (qc_reason or "").lower()
+                _conf     = _tts.get("configured_provider")
+                _used     = _tts.get("provider_used")
+                if "dur" in _reason_l or "detik" in _reason_l or "second" in _reason_l:
+                    if _tts.get("fallback_used") and _used and _conf and _used != _conf:
+                        recommendation = (
+                            f"Suara cadangan '{_used}' merender dengan kecepatan berbeda dari suara "
+                            f"utama '{_conf}' → durasi meleset dari target preset. Periksa "
+                            f"kredensial/saldo penyedia suara utama Anda, atau sesuaikan preset "
+                            f"durasi di pengaturan channel."
+                        )
+                    else:
+                        recommendation = (
+                            "Durasi hasil di luar target preset. Sesuaikan preset durasi atau "
+                            "panjang skrip di pengaturan channel."
+                        )
+                elif "aspect" in _reason_l or "9:16" in _reason_l or "rasio" in _reason_l:
+                    recommendation = "Rasio video tidak 9:16. Periksa pengaturan format/visual channel."
+                elif "audio" in _reason_l or "stream" in _reason_l:
+                    recommendation = "Audio/stream video tidak lengkap. Periksa kredensial penyedia suara Anda."
+                else:
+                    recommendation = "Tinjau konfigurasi channel terkait, lalu jalankan ulang produksi."
+
+                # Advisory Telegram: alasan + rekomendasi dinamis + URL privat → tenant putuskan
                 try:
                     self.telegram.notify_qc_fail(
-                        run_id        = run_id,
-                        tenant_id     = tenant_config.tenant_id,
-                        topic         = script.get("topic", ""),
-                        qc_reason     = qc_reason,
-                        duration_secs = video_duration,
-                        size_mb       = file_size_mb,
-                        run_config    = run_config,
+                        run_id         = run_id,
+                        tenant_id      = tenant_config.tenant_id,
+                        topic          = script.get("topic", ""),
+                        qc_reason      = qc_reason,
+                        duration_secs  = video_duration,
+                        size_mb        = file_size_mb,
+                        run_config     = run_config,
+                        url            = _private_url,
+                        recommendation = recommendation,
                     )
                 except Exception as _te:
                     logger.warning(f"[Telegram] notify_qc_fail gagal: {_te}")
-                # Hapus clips dir DAN video final agar tidak bocor disk
+
+                # Aset sudah aman di YouTube (privat) → bersihkan lokal (clips + video final)
                 self.storage_cleaner.cleanup_clips(
                     tenant_id  = tenant_config.tenant_id,
                     video_path = video_path,
@@ -314,9 +379,8 @@ class Pipeline:
                 try:
                     if video_path and Path(video_path).exists():
                         Path(video_path).unlink()
-                        logger.info(f"[Pipeline] QC fail — video dihapus: {video_path}")
                 except Exception as _e:
-                    logger.warning(f"[Pipeline] Gagal hapus video QC fail: {_e}")
+                    logger.warning(f"[Pipeline] Gagal hapus video lokal QC fail: {_e}")
             else:
                 dur_str = f"{video_duration:.1f}" if video_duration is not None else "unknown"
                 logger.info(f"QC PASSED | duration={dur_str}s | size={file_size_mb}MB")
@@ -403,7 +467,7 @@ class Pipeline:
                 result["storage"]["video_cleaned"] = video_cleaned
 
             elif not qc_passed:
-                logger.info("PUBLISH SKIPPED | QC tidak lolos")
+                logger.info("QC tidak lolos — sudah di-publish PRIVATE (advisory, Opsi A)")
             else:
                 logger.info("PUBLISH SKIPPED | publish=False")
 

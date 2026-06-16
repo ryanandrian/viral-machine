@@ -169,10 +169,13 @@ class SupabaseWriter:
         qc_reason:     str,
         duration_secs: Optional[float] = None,
         file_size_mb:  Optional[float] = None,
+        url:           str = "",
     ) -> None:
         """
         Catat video yang gagal QC pre-publish.
         Dipanggil dari pipeline.py saat _pre_publish_qc() return False.
+        Opsi A (QC §3): video tetap di-publish PRIVAT → simpan `url` privat agar tenant
+        bisa menemukannya (selain via advisory Telegram).
         """
         if not self.is_available:
             return
@@ -191,6 +194,8 @@ class SupabaseWriter:
             "file_size_mb":  file_size_mb,
             "published_at":  datetime.utcnow().isoformat(),
         }
+        if url:
+            record["url"] = url
         try:
             self._client.table("videos").insert(record).execute()
             logger.warning(

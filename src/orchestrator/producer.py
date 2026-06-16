@@ -130,7 +130,7 @@ def run_direct(sb, job: dict) -> None:
     sb.table("direct_jobs").update({"run_id": run_id}).eq("id", jid).execute()
 
     niche = job.get("niche") or ch.get("niche")
-    status, yt_url, err = "failed", None, None
+    status, yt_url, err, qc_ok = "failed", None, None, False
     try:
         tc = tenant_config_from_channel(ch, niche=niche)
         try:
@@ -139,12 +139,19 @@ def run_direct(sb, job: dict) -> None:
             pass
         with logger.contextualize(tenant_id=tenant_id, run_id=run_id):
             result = Pipeline().run(tc, publish=True)
-        # Sumber kebenaran sukses direct-publish = ADA URL publish (pipeline tak set "qc_passed").
+        # Sumber kebenaran = ADA URL publish + status QC (pipeline set steps.qc.passed).
+        # Opsi A: QC-fail TETAP menghasilkan URL (di-publish PRIVAT) → JANGAN dilabeli 'success'.
         yt_url = (result.get("published", {}).get("youtube") or {}).get("url")
-        published_ok = bool(yt_url)
-        status = "success" if published_ok else "failed"
-        if not published_ok:
-            err = result.get("qc_reason") or result.get("error") or "tidak publish (QC/produksi gagal)"
+        qc     = result.get("steps", {}).get("qc", {})
+        qc_ok  = bool(qc.get("passed"))
+        if yt_url and qc_ok:
+            status = "success"
+        elif yt_url and not qc_ok:
+            status = "qc_failed"   # di-publish PRIVAT + advisory (tenant putuskan public/take-down)
+            err = qc.get("reason") or "QC tak lolos — di-publish privat untuk ditinjau"
+        else:
+            status = "failed"
+            err = qc.get("reason") or result.get("error") or "tidak publish (QC/produksi gagal)"
     except Exception as e:
         err = str(e)
         logger.error(f"[Direct] job {jid} gagal: {e}")
@@ -154,14 +161,16 @@ def run_direct(sb, job: dict) -> None:
         sb.table("production_runs").insert({
             "tenant_id": tenant_id, "run_id": run_id, "channel_id": str(job["channel_id"]),
             "niche": niche, "status": status, "youtube_url": yt_url,
-            "qc_passed": status == "success", "error_message": err,
+            "qc_passed": qc_ok, "error_message": err,
             "run_metadata": {"direct": True, "job_type": job.get("job_type")},
         }).execute()
     except Exception as e:
         logger.warning(f"[Direct] tulis production_runs gagal: {e}")
 
+    # direct_jobs.status CHECK = pending|producing|published|failed → qc_failed (sudah ter-publish
+    # PRIVAT) dipetakan ke 'published'; nuansa QC-fail ada di production_runs.status + advisory.
     sb.table("direct_jobs").update({
-        "status": "published" if status == "success" else "failed",
+        "status": "published" if status in ("success", "qc_failed") else "failed",
         "error": err, "completed_at": _now(),
     }).eq("id", jid).execute()
 
