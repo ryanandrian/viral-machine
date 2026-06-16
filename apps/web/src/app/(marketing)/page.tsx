@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, type CSSProperties } from "react";
+import { useState, useEffect } from "react";
 import { fetchPricing, idrK } from "@/lib/pricing";
 import {
   Sparkles, ArrowRight, Play, CheckCircle, Check, Clock, BarChart3, XCircle,
@@ -23,10 +23,12 @@ const PIPE: [LucideIcon, string, string][] = [
   [AudioLines, "TTS", "via 11labs"], [ImageIcon, "Visual", "AI image"],
   [Film, "Render", "Compose"], [Upload, "Publish", "YouTube"],
 ];
-// 3 simpul loop (umpan balik) — kembali ke Trend Radar: mesin makin pintar tiap siklus.
+// 3 simpul umpan-balik (baris bawah) — kiri→kanan agar loop rapi (berlawanan arah jarum jam):
+// Self-improvement (kiri, di bawah Trend Radar) → Self-learning (tengah) → Report (kanan, di bawah Publish).
 const LOOP: [LucideIcon, string, string][] = [
-  [Send, "Report", "ke Telegram"], [Brain, "Self-learning", "dari analytics"],
   [TrendingUp, "Self-improvement", "tiap siklus"],
+  [Brain, "Self-learning", "dari analytics"],
+  [Send, "Report", "ke Telegram"],
 ];
 
 const CMP_COLS = ["AutoShorts", "OpusClip", "Submagic", "Pictory"];
@@ -153,10 +155,24 @@ export default function LandingPage() {
           <h2 className="mk-h2"><Bi id="Dari tren ke YouTube, otomatis" en="From trend to YouTube, automatically" /></h2>
           <p className="mk-lead"><Bi id="Setiap video melewati 8 langkah produksi otomatis + 3 simpul umpan-balik (report, self-learning, self-improvement) yang kembali ke Trend Radar — loop tak berujung yang makin pintar tiap siklus." en="Every video flows through 8 automated production steps + 3 feedback nodes (report, self-learning, self-improvement) that loop back into Trend Radar — an endless loop that gets smarter every cycle." /></p>
         </div>
-        <div className="pipe-flow pipe-loop reveal">
-          {[...PIPE, ...LOOP].map(([Icon, n, c], i) => (
-            <div className={`pipe-node anim${i >= PIPE.length ? " loop" : " lit"}`} key={i} style={{ "--d": `${i * 0.5}s` } as CSSProperties}><div className="ic"><Icon size={24} /></div><div className="n">{n}</div><div className="c">{c}</div></div>
-          ))}
+        <div className="pipe-circuit reveal">
+          <div className="pipe-circuit-in">
+            {/* Track loop: cahaya mengalir atas(1→8) → turun kanan → bawah(R→L) → naik kiri → balik ke Trend Radar */}
+            <svg className="pipe-track" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              <rect className="tk-base" x="6.25" y="12" width="87.5" height="62" rx="2.4" ry="9" pathLength={100} />
+              <rect className="tk-flow" x="6.25" y="12" width="87.5" height="62" rx="2.4" ry="9" pathLength={100} />
+            </svg>
+            <div className="pipe-grid top">
+              {PIPE.map(([Icon, n, c], i) => (
+                <div className="pipe-node lit" key={i}><div className="ic"><Icon size={24} /></div><div className="n">{n}</div><div className="c">{c}</div></div>
+              ))}
+            </div>
+            <div className="pipe-grid bottom">
+              {LOOP.map(([Icon, n, c], i) => (
+                <div className="pipe-node loop" key={i}><div className="ic"><Icon size={24} /></div><div className="n">{n}</div><div className="c">{c}</div></div>
+              ))}
+            </div>
+          </div>
         </div>
         <div className="pipe-loopback reveal"><RotateCcw size={15} /> <Bi id="Hasil nyata kembali ke Trend Radar — robot belajar & membaik tiap siklus" en="Real results feed back into Trend Radar — the robot learns and improves every cycle" /></div>
       </div></section>
