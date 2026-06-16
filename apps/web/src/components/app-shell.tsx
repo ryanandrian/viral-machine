@@ -7,7 +7,7 @@ import { useTheme } from "next-themes";
 import {
   LayoutDashboard, Tv, List, BarChart3, Calendar, ShieldCheck, Sparkles,
   Command, Mic, Image as ImageIcon, CreditCard, Settings, HelpCircle,
-  Menu, Search, Bell, ChevronsUpDown, Moon, Sun, ChevronRight, LogOut,
+  Menu, Search, Bell, ChevronsUpDown, Moon, Sun, ChevronRight, LogOut, AlertTriangle,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -26,6 +26,7 @@ const NAV: NavEntry[] = [
   { id: "dashboard", icon: LayoutDashboard, idL: "Beranda", en: "Dashboard", href: "/dashboard" },
   { id: "channels", icon: Tv, idL: "Kanal", en: "Channels", href: "/channels", badge: "3" },
   { id: "runs", icon: List, idL: "Produksi", en: "Runs", href: "/runs" },
+  { id: "review", icon: AlertTriangle, idL: "Perlu Ditinjau", en: "Needs Review", href: "/review" },
   { id: "analytics", icon: BarChart3, idL: "Analitik", en: "Analytics", href: "/analytics" },
   { id: "schedule", icon: Calendar, idL: "Jadwal", en: "Schedule", href: "/schedule" },
   { id: "compliance", icon: ShieldCheck, idL: "Kepatuhan", en: "Compliance", href: "/compliance" },

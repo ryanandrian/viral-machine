@@ -162,6 +162,58 @@
 - **➡️ PRIORITAS (urut):** (1) ⛔ jangan restart mv-worker · (2) **root-cause kegagalan per-kategori** (22 generik "produce/QC gagal" + 4 render + 3 image-gen — verifikasi nyata dari pipeline_run_logs/log, JANGAN asumsi penyebab tunggal) · (3) **bangun §4b/F7** stop-on-fail di `plan_and_submit` (N gagal→stop channel+alert Telegram+auto-recover, config-driven) · (4) baru restart + lanjut GATE CUTOVER.
 - ✅ Sesi ini juga: fix `channel_analytics impressionClickThroughRate` (`044102e`, deployed ke worker tapi worker stop). Detail lengkap = memory `progress_journal` entri "2026-06-17 (SESI MALAM)".
 
+## 🏗️ PERBAIKAN ARSITEKTUR PRODUKSI v2 (OPSI C) — RENCANA KERJA + penutup INSIDEN RUNAWAY
+
+> **Plan AKTIF (sumber-kebenaran-tunggal track ini).** Disetujui owner 2026-06-17. Centang `[x]` **HANYA** bila **dibuat DAN tervalidasi 100%**. Desain = `QC_CONTENT_ARCHITECTURE.md §3/§6.2` + `DESAIN §12d.F`. **Aturan: LOKAL → validasi 100% → (commit saat owner minta) → push → pull VPS + restart. JANGAN ngoding di VPS. v1 jangan disentuh.**
+>
+> **TUJUAN:** ganti Opsi A → **Opsi C** (producer hanya stok; publisher hanya publish `ready`; video bermasalah ditinjau di domain kita, approve→publish ber-kuota, BUKAN auto-upload YouTube; rem alami + circuit-breaker). **KRITERIA-TERIMA UTAMA: otomatis menyetop runaway ryan (insiden 2026-06-17) — loop berhenti ≤ buffer_depth, NOL upload off-schedule, kredit terkurung.**
+>
+> **Feasibility: ✅ 100% TERVALIDASI (2026-06-17)** terhadap kode/DB nyata: `content_inventory.status` tanpa CHECK (status baru gratis) · `limits`/`telegram_notifier`/`s3_buffer`/`youtube_publisher` fungsi tersedia · publisher sudah klaim `ready` saja. Dependensi publish=OAuth tenant (ryan sudah jalan; tenant umum=gate BYO-CC pre-existing).
+
+### Urutan prioritas: P0 dokumen → A DB → B Producer → C Publisher → D Review/Approve → E Janitor → F Fosil → G Validasi+Deploy
+
+**P0 — Dokumen (LANGKAH 2, prasyarat sebelum kode):**
+- [x] Revisi `QC_CONTENT_ARCHITECTURE.md` §3 + §6.2 + changelog → Opsi C *(2026-06-17)*
+- [x] Revisi `DESAIN_PRODUK_SAAS.md §12d.F` → Opsi C *(2026-06-17)*
+- [x] Revisi `DB_SCHEMA_V2.md` (status `ready_with_issues` + kolom/flag baru bila ada) — saat migrasi A dibuat
+- [x] Rencana kerja ini (PROGRESS) *(2026-06-17)*
+
+**A — DB:**
+- [x] A1 — Dukung status `content_inventory.status='ready_with_issues'` (tanpa migrasi constraint — sudah diverifikasi); `mark_*` set `expires_at` (TTL tinjau) untuk issue **dan** `failed` (tutup bug janitor: `failed` NULL expires_at tak pernah disapu).
+- [x] A2 — Mekanisme pause channel (migr **0050** `channels.production_paused*` applied+verified v2) (flag config-driven `production_paused`+reason ATAU derivasi gagal-beruntun dari `content_inventory`) — pilih yang paling sederhana saat implementasi.
+
+**B — BE Producer (inti rem + hentikan producer-publish):**
+- [x] B1 — `pipeline.run`: untuk **producer (publish=False)** saat QC-fail → **JANGAN upload YouTube, JANGAN hapus video**; kembalikan `video_path`+`qc_reason`+`recommendation`. (Hapus jalur Opsi A producer-publish.)
+- [x] B2 — `produce_one`: QC-fail-ada-video → upload S3 + `mark_ready_with_issues` (+metadata issue/koreksi); crash-tanpa-video → `failed` (tak stok).
+- [x] B3 — `plan_and_submit`: `stok = ready + ready_with_issues + producing` (**rem alami**) + **circuit-breaker**: N gagal beruntun/channel (config) → pause + **alarm Telegram SEKETIKA**; auto-recover saat 1 produce sukses.
+
+**C — BE Publisher:**
+- [ ] C1 — Tetap **hanya klaim `ready`** (issue tak auto-tayang); kuota di publish (gate existing); **laporan sukses dikirim saat publish** (pindah dari produce). 
+- [ ] C2 — Reporting **idempoten** (tandai sudah-terlapor sebelum kirim).
+
+**D — Review/Approve (domain kita — tutup cheat di sumber):**
+- [x] D1 — **RPC `approve_inventory_item`/`discard_inventory_item`** (migr **0052**, security-definer, scope `auth.uid()`, grant authenticated/revoke anon — verified). Approve = promote `ready_with_issues→ready` → Publisher publish saat slot **ber-kuota** (tutup cheat: jadi publik HANYA via jalur kita); Discard = tandai buang → janitor hapus S3. *(2026-06-17)*
+- [ ] D2 — Preview video/thumbnail dari S3 (presigned URL). **FOLLOW-UP** (butuh kredensial S3 di env `mv-web` — kini hanya di worker; + presign route). Sementara review jalan via metadata (alasan/koreksi/durasi/topik).
+- [x] D3 — FE `app/(app)/review` (daftar `ready_with_issues` + advisory + tombol **Pakai/Buang** via RPC) + link nav app-shell. **build PASS** (route `/review` ter-prerender). *(2026-06-17)*
+- [x] D4 — Circuit-breaker **alarm Telegram** DONE (B3 `notify_circuit_break`) + laporan sukses publish (C). **Review-request per-issue SENGAJA TIDAK dibuat** (cegah mini-flood): tenant tahu via nav "Perlu Ditinjau" + alarm saat sistemik. *(keputusan 2026-06-17)*
+
+**E — Janitor/TTL:**
+- [x] E1 — `buffer_janitor.sweep_stale` sertakan `ready_with_issues` (hapus S3+baris saat `expires_at` lewat) + fix `failed` ber-`expires_at`.
+
+**F — Bersih fosil (HATI-HATI: pastikan fosil → refactor pembaca → drop → update DB_SCHEMA):**
+- [x] F1 — DROP `tenant_configs.llm_script_fallback` (migr **0051**, re-verified 0 pembaca, applied v2). *(2026-06-17)*
+- [ ] F2 — Refactor pembaca lalu drop: `tenant_configs.{publish_slots,production_cron,analytics_cron,niche_pool,default_niche_rotation,niche_rotation_index}`, `channels.{production_cron,niche_pool}`, kolom plaintext `*_api_key` (sudah NULL). Per-kolom: grep pembaca (src+FE) → lepaskan → drop.
+- [ ] F3 — Evaluasi tabel `pipeline_queue` (fosil V1, FK `production_runs.queue_id` — sangat hati-hati; mungkin sisakan).
+
+**G — Validasi & Deploy (prioritas akhir):**
+- [~] G1 — Validasi LOKAL: **logika inti A+B+E ✅ PASS (2026-06-17)** — compile 6 file + simulasi nol-kredit (streak/rem-alami/circuit-break/produce_one branching). **Sisa: e2e dgn render nyata** (butuh kredit) + uji jalur D (approve/discard) saat D dibangun.
+- [ ] G2 — **KRITERIA-TERIMA: bukti runaway ryan TAK TERULANG** (loop berhenti ≤ buffer_depth, nol upload YouTube off-schedule).
+- [ ] G3 — Bersihkan 29 baris `failed` stale ryan (one-off, setelah janitor E1 jalan).
+- [ ] G4 — Deploy VPS (`git pull` `~/viral-machine-v2` + rebuild) — **HANYA setelah G1/G2 hijau + izin owner**.
+- [ ] G5 — **Restart `mv-worker`** + pantau 1-2 siklus (produksi+publish sesuai jadwal, nol runaway). ⛔ jangan restart sebelum G1-G4.
+
+---
+
 ## 🚀 GATE CUTOVER — Go-Live Checklist (SUMBER KEBENARAN TUNGGAL)
 
 > **Ini SATU-SATUNYA daftar item cutover/go-live.** Catatan lain di dokumen ini hanya MENUNJUK ke sini (tidak menduplikasi). Status kode/fitur = baris STATUS teratas. Belum ada item yang dieksekusi ke VPS (v1 produksi JANGAN disentuh sampai langkah F). **⛔ PRASYARAT: §PERBAIKAN PRODUCE & PUBLISH (di atas) WAJIB selesai 100% dulu.**

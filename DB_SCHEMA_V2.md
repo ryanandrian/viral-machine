@@ -1,5 +1,5 @@
 # DB_SCHEMA_V2 — Introspeksi penuh (atliatnjhysdibmfypul)
-> Auto-generated 2026-06-15 (update 2026-06-16: migr 0044-0048). 40 tabel (production_schedules di-drop migr 0047; trend_cache ditambah migr 0048). SUMBER KEBENARAN struktur DB v2 (migrasi 0001-0048).
+> Auto-generated 2026-06-15 (update 2026-06-17: migr 0044-0050). 40 tabel. **migr 0050**: `channels.production_paused*` (circuit-breaker §4b/F7, OPSI C). `content_inventory.status` dapat nilai baru **`ready_with_issues`** (tanpa migrasi — tanpa CHECK constraint). **migr 0051**: DROP fosil `tenant_configs.llm_script_fallback`. SUMBER KEBENARAN struktur DB v2 (migrasi 0001-0051).
 
 **Tabel:** admin_audit, ai_models, ai_providers, app_config, blog_posts, branding_config, channel_insights, channels, content_inventory, content_languages, demo_tours, direct_jobs, diversity_config, docs_articles, duration_presets, email_outbox, fonts, format_profiles, moods, music_library, niche_releases, niche_requests, niches, payments, pipeline_queue, pipeline_run_logs, plan_limits, pricing_audit, pricing_config, production_runs, support_messages, support_tickets, tenant_configs, tenant_credentials, trend_cache, tts_profiles, video_analytics, videos, voice_catalog, worker_heartbeats
 
@@ -124,6 +124,9 @@
 - ai_disclosure boolean = true
 - content_language text
 - buffer_depth integer  ← target stok ready per-channel (§12c; NULL→default env). migr 0045
+- production_paused boolean NOT NULL = false  ← circuit-breaker §4b/F7 (migr 0050): true=produksi channel dihentikan otomatis (gagal beruntun); dilepas saat 1 direct sukses
+- production_paused_at timestamptz  ← migr 0050
+- production_paused_reason text  ← migr 0050
   - FK: FOREIGN KEY (tenant_id) REFERENCES tenant_configs(tenant_id) ON DELETE CASCADE
   - CHECK: CHECK ((niche_mode = ANY (ARRAY['fixed'::text, 'random'::text])))
   - CHECK: CHECK ((platform = ANY (ARRAY['youtube'::text, 'tiktok'::text, 'instagram'::text])))
@@ -135,8 +138,8 @@
 - channel_id text
 - niche text
 - s3_key text
-- status text NOT NULL = 'producing'::text
-- metadata jsonb NOT NULL = '{}'::jsonb
+- status text NOT NULL = 'producing'::text  ← producing→ready (QC-pass) | **ready_with_issues** (QC-fail, ditinjau tenant — OPSI C, dihitung stok) | publishing→published | failed (crash, tak ada video). TANPA CHECK constraint (nilai bebas).
+- metadata jsonb NOT NULL = '{}'::jsonb  ← OPSI C: simpan qc_reason + recommendation + duration_secs + size_mb utk review
 - produced_at timestamp with time zone
 - target_slot timestamp with time zone
 - expires_at timestamp with time zone
@@ -498,8 +501,7 @@
 - duplicate_lookback_days integer NOT NULL = 30
 - tts_fallback_provider text NOT NULL = 'edge_tts'::text
 - visual_fallback_mode text NOT NULL = 'video'::text
-- llm_script_fallback text NOT NULL = 'gpt-4o-mini'::text
-- production_on_api_error text NOT NULL = 'fallback'::text
+- production_on_api_error text NOT NULL = 'fallback'::text  *(llm_script_fallback DI-DROP migr 0051 — fosil V1, 0 pembaca)*
 - channel_group text NOT NULL = 'default'::text
 - trailing_silence double precision NOT NULL = 2.5
 - thumbnail_enabled boolean NOT NULL = true

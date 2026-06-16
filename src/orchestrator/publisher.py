@@ -88,13 +88,27 @@ def publish_due_for_channel(sb, channel_row: dict, now_utc: datetime | None = No
     # tandai target_slot (dedup) + publish dari buffer
     sb.table("content_inventory").update({"target_slot": slot_dt.isoformat()}).eq("id", item["id"]).execute()
     try:
-        _publish_from_buffer(sb, channel_row, item)
+        _yt = _publish_from_buffer(sb, channel_row, item)
         inventory.mark_published(item["id"])
         # Buang SEMUA aset buffer (video + thumbnail) — cegah .jpg/.mp4 orphan menumpuk.
         for k in (item.get("s3_key"), (item.get("metadata") or {}).get("thumb_s3")):
             if k:
                 s3_buffer.delete(k)
         logger.info(f"[Publisher] published ch={channel_id} inv={item['id']} (buffer dibersihkan)")
+        # OPSI C: laporan SUKSES dikirim DI SINI (saat publish on-schedule), idempoten (sekali
+        # per item — item sudah 'published' → tak diklaim ulang). Producer TIDAK lapor lagi.
+        try:
+            from src.utils.telegram_notifier import TelegramNotifier
+            _meta = item.get("metadata") or {}
+            TelegramNotifier().notify_published(
+                tenant_id = channel_row["tenant_id"],
+                url       = (_yt or {}).get("url", ""),
+                title     = (_yt or {}).get("title") or ((_meta.get("script") or {}).get("title", "")),
+                niche     = item.get("niche") or channel_row.get("niche", ""),
+                run_id    = _meta.get("run_id", ""),
+            )
+        except Exception as _te:
+            logger.warning(f"[Publisher] notify_published gagal (non-fatal): {_te}")
         return "published"
     except Exception as e:
         inventory.revert_to_ready(item["id"])           # kembalikan ke buffer utk retry
@@ -153,7 +167,7 @@ def _publish_from_buffer(sb, channel_row: dict, item: dict) -> None:
     except Exception as _we:
         logger.warning(f"[Publisher] write_video (videos row) gagal — non-fatal: {_we}")
 
-    _notify(channel_row["tenant_id"], f"✅ Published: {yt.get('url')}")
+    return yt
 
 
 def _notify(tenant_id: str, msg: str) -> None:

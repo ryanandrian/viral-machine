@@ -289,48 +289,8 @@ class Pipeline:
             }
 
             if not qc_passed:
-                # OPSI A (QC §3/§6.2 + DESAIN §12d.F): JANGAN buang. Publish PRIVATE + advisory
-                # → tenant LIHAT hasil + PUTUSKAN public/take-down. Seragam di KEDUA jalur
-                # (producer publish=False & direct publish=True). Buffer tetap MURNI:
-                # produce_one cek steps.qc.passed → QC-fail TIDAK masuk content_inventory.
-                # Publisher tak berubah. Upload-private = artefak advisory out-of-band.
-                logger.warning(f"QC FAILED | {qc_reason} — publish PRIVATE + advisory (Opsi A)")
-
-                # Force privacy = private (lepas dari setting channel)
-                try:
-                    tenant_config.publish_privacy = "private"
-                except Exception:
-                    pass
-
-                yt_result = self.youtube_publisher.publish(
-                    video_path, script, tenant_config,
-                    thumbnail_path=result.get("thumbnail_path", ""),
-                    content_type=resolved_content_type,
-                )
-                result["published"]["youtube"] = yt_result if isinstance(yt_result, dict) else {}
-                _private_url = result["published"]["youtube"].get("url", "")
-                if _private_url:
-                    logger.info(f"QC FAIL → PUBLISHED PRIVATE (advisory): {_private_url}")
-                else:
-                    logger.warning(
-                        f"QC FAIL → upload PRIVATE gagal: "
-                        f"{result['published']['youtube'].get('error', 'unknown')}"
-                    )
-
-                # Catat kegagalan QC (+ URL privat) ke `videos` (status qc_failed) → feedback §4
-                self.supabase_writer.write_qc_failed(
-                    run_id        = run_id,
-                    tenant_id     = tenant_config.tenant_id,
-                    niche         = tenant_config.niche,
-                    topic         = script.get("topic", ""),
-                    qc_reason     = qc_reason,
-                    duration_secs = video_duration,
-                    file_size_mb  = file_size_mb,
-                    url           = _private_url,
-                )
-
-                # Rekomendasi advisory DINAMIS (no-hardcode nama provider — §0.3).
-                # Nama provider diambil dari config run (configured vs aktual), bukan literal.
+                # Rekomendasi advisory DINAMIS (no-hardcode nama provider — §0.3) — dihitung utk KEDUA mode.
+                # Provider diambil dari config run (configured vs aktual), bukan literal.
                 _tts      = result.get("steps", {}).get("tts", {})
                 _reason_l = (qc_reason or "").lower()
                 _conf     = _tts.get("configured_provider")
@@ -354,33 +314,76 @@ class Pipeline:
                     recommendation = "Audio/stream video tidak lengkap. Periksa kredensial penyedia suara Anda."
                 else:
                     recommendation = "Tinjau konfigurasi channel terkait, lalu jalankan ulang produksi."
+                result["steps"]["qc"]["recommendation"] = recommendation
 
-                # Advisory Telegram: alasan + rekomendasi dinamis + URL privat → tenant putuskan
-                try:
-                    self.telegram.notify_qc_fail(
-                        run_id         = run_id,
-                        tenant_id      = tenant_config.tenant_id,
-                        topic          = script.get("topic", ""),
-                        qc_reason      = qc_reason,
-                        duration_secs  = video_duration,
-                        size_mb        = file_size_mb,
-                        run_config     = run_config,
-                        url            = _private_url,
-                        recommendation = recommendation,
+                if not publish:
+                    # ── OPSI C (PRODUCER, publish=False) — QC §3/§6.2 + DESAIN §12d.F (2026-06-17) ──
+                    # JANGAN upload YouTube, JANGAN Telegram, JANGAN hapus video. Video JADI →
+                    # produce_one akan upload ke S3 + mark_ready_with_issues (DITINJAU tenant di dashboard,
+                    # approve→publish ber-kuota / buang). Producer TAK PERNAH publish → invariant decouple
+                    # §12c terjaga + RUNAWAY tertutup (issue dihitung stok = rem alami; tak ada upload off-schedule).
+                    logger.warning(
+                        f"QC FAILED (producer) | {qc_reason} — STOK ready_with_issues utk ditinjau "
+                        f"(Opsi C, tanpa upload YouTube). Saran: {recommendation}"
                     )
-                except Exception as _te:
-                    logger.warning(f"[Telegram] notify_qc_fail gagal: {_te}")
-
-                # Aset sudah aman di YouTube (privat) → bersihkan lokal (clips + video final)
-                self.storage_cleaner.cleanup_clips(
-                    tenant_id  = tenant_config.tenant_id,
-                    video_path = video_path,
-                )
-                try:
-                    if video_path and Path(video_path).exists():
-                        Path(video_path).unlink()
-                except Exception as _e:
-                    logger.warning(f"[Pipeline] Gagal hapus video lokal QC fail: {_e}")
+                else:
+                    # ── DIRECT (publish=True, on-demand MANUAL) — tetap publish PRIVATE + advisory ──
+                    # One-shot dipicu tenant (BUKAN loop) → tak ada risiko runaway.
+                    logger.warning(f"QC FAILED (direct) | {qc_reason} — publish PRIVATE + advisory")
+                    try:
+                        tenant_config.publish_privacy = "private"
+                    except Exception:
+                        pass
+                    yt_result = self.youtube_publisher.publish(
+                        video_path, script, tenant_config,
+                        thumbnail_path=result.get("thumbnail_path", ""),
+                        content_type=resolved_content_type,
+                    )
+                    result["published"]["youtube"] = yt_result if isinstance(yt_result, dict) else {}
+                    _private_url = result["published"]["youtube"].get("url", "")
+                    if _private_url:
+                        logger.info(f"QC FAIL → PUBLISHED PRIVATE (advisory): {_private_url}")
+                    else:
+                        logger.warning(
+                            f"QC FAIL → upload PRIVATE gagal: "
+                            f"{result['published']['youtube'].get('error', 'unknown')}"
+                        )
+                    # Catat kegagalan QC (+ URL privat) ke `videos` (status qc_failed) → feedback §4
+                    self.supabase_writer.write_qc_failed(
+                        run_id        = run_id,
+                        tenant_id     = tenant_config.tenant_id,
+                        niche         = tenant_config.niche,
+                        topic         = script.get("topic", ""),
+                        qc_reason     = qc_reason,
+                        duration_secs = video_duration,
+                        file_size_mb  = file_size_mb,
+                        url           = _private_url,
+                    )
+                    # Advisory Telegram: alasan + rekomendasi dinamis + URL privat → tenant putuskan
+                    try:
+                        self.telegram.notify_qc_fail(
+                            run_id         = run_id,
+                            tenant_id      = tenant_config.tenant_id,
+                            topic          = script.get("topic", ""),
+                            qc_reason      = qc_reason,
+                            duration_secs  = video_duration,
+                            size_mb        = file_size_mb,
+                            run_config     = run_config,
+                            url            = _private_url,
+                            recommendation = recommendation,
+                        )
+                    except Exception as _te:
+                        logger.warning(f"[Telegram] notify_qc_fail gagal: {_te}")
+                    # Aset sudah aman di YouTube (privat) → bersihkan lokal (clips + video final)
+                    self.storage_cleaner.cleanup_clips(
+                        tenant_id  = tenant_config.tenant_id,
+                        video_path = video_path,
+                    )
+                    try:
+                        if video_path and Path(video_path).exists():
+                            Path(video_path).unlink()
+                    except Exception as _e:
+                        logger.warning(f"[Pipeline] Gagal hapus video lokal QC fail: {_e}")
             else:
                 dur_str = f"{video_duration:.1f}" if video_duration is not None else "unknown"
                 logger.info(f"QC PASSED | duration={dur_str}s | size={file_size_mb}MB")
@@ -467,7 +470,10 @@ class Pipeline:
                 result["storage"]["video_cleaned"] = video_cleaned
 
             elif not qc_passed:
-                logger.info("QC tidak lolos — sudah di-publish PRIVATE (advisory, Opsi A)")
+                logger.info(
+                    "QC tidak lolos — di-publish PRIVATE (direct)" if publish
+                    else "QC tidak lolos — STOK ready_with_issues utk ditinjau (producer, Opsi C)"
+                )
             else:
                 logger.info("PUBLISH SKIPPED | publish=False")
 

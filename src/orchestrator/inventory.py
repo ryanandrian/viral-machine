@@ -19,6 +19,10 @@ def _default_expiry_iso() -> str:
     return (datetime.now(timezone.utc) + timedelta(hours=hours)).isoformat()
 
 
+def _expiry_iso(hours: float) -> str:
+    return (datetime.now(timezone.utc) + timedelta(hours=hours)).isoformat()
+
+
 def _sb():
     from supabase import create_client
     return create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
@@ -79,8 +83,45 @@ def mark_published(inv_id: int, metadata: dict | None = None) -> None:
 
 
 def mark_failed(inv_id: int, reason: str = "") -> None:
-    _sb().table("content_inventory").update(
-        {"status": "failed", "metadata": {"error": reason[:300]}}).eq("id", inv_id).execute()
+    """Hard-fail (crash, TANPA video) → status failed. Set expires_at (TTL) agar janitor menyapu
+    (fix bug lama: failed ber-expires_at NULL tak pernah disapu = baris menumpuk). Config FAILED_TTL_HOURS."""
+    _sb().table("content_inventory").update({
+        "status": "failed",
+        "metadata": {"error": reason[:300]},
+        "expires_at": _expiry_iso(float(os.getenv("FAILED_TTL_HOURS", "24"))),
+    }).eq("id", inv_id).execute()
+
+
+def mark_ready_with_issues(inv_id: int, s3_key: str, reason: str = "",
+                           recommendation: str = "", metadata: dict | None = None) -> None:
+    """OPSI C: QC-fail TAPI video JADI → STOK untuk DITINJAU tenant (bukan dibuang, bukan auto-upload
+    YouTube). Dihitung sebagai stok (rem alami). TTL ISSUE_REVIEW_TTL_HOURS → janitor auto-buang bila
+    tak ditinjau. Aset video tetap di S3; tenant tinjau dari dashboard, approve→publish / buang."""
+    md = dict(metadata or {})
+    md["qc_reason"] = reason
+    if recommendation:
+        md["recommendation"] = recommendation
+    _sb().table("content_inventory").update({
+        "status": "ready_with_issues",
+        "s3_key": s3_key,
+        "metadata": md,
+        "expires_at": _expiry_iso(float(os.getenv("ISSUE_REVIEW_TTL_HOURS", "72"))),
+    }).eq("id", inv_id).execute()
+
+
+def recent_nonready_streak(channel_id: str, limit: int = 12) -> int:
+    """Hitung kegagalan BERUNTUN terbaru (failed + ready_with_issues) untuk channel — basis
+    circuit-breaker §4b/F7. Streak putus saat ketemu 'ready'/'published'. Hanya baca (read-only)."""
+    res = (_sb().table("content_inventory").select("status")
+           .eq("channel_id", channel_id)
+           .order("created_at", desc=True).limit(limit).execute())
+    streak = 0
+    for row in (res.data or []):
+        if row["status"] in ("failed", "ready_with_issues"):
+            streak += 1
+        else:
+            break
+    return streak
 
 
 def revert_to_ready(inv_id: int) -> None:

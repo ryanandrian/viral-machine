@@ -112,6 +112,51 @@ class TelegramNotifier:
         lines.append(f"<code>{run_id}</code>")
         return self._send(chat_id, "\n".join(lines))
 
+    def notify_circuit_break(self, tenant_id: str, channel_id: str, reason: str) -> bool:
+        """REM DARURAT §4b/F7: produksi channel DIHENTIKAN otomatis (gagal beruntun). Alarm KERAS,
+        dikirim SEKETIKA (tak menunggu slot) — cegah loop bakar-kredit."""
+        chat_id = self._chat_id_for_tenant(tenant_id)
+        if not chat_id:
+            return False
+        text = (
+            f"🛑 <b>Produksi DIHENTIKAN otomatis</b>\n"
+            f"📺 Channel: <code>{self._escape(str(channel_id))}</code>\n"
+            f"⚠️ {self._escape(reason)}\n"
+            f"👉 Perbaiki penyebab (mis. saldo/kredensial AI), lalu tekan <b>Jalankan Ulang</b> untuk melanjutkan."
+        )
+        return self._send(chat_id, text)
+
+    def _chat_id_for_tenant(self, tenant_id: str) -> str:
+        """Resolve chat_id tenant dari tenant_configs (hormati telegram_notify_enabled); fallback system."""
+        try:
+            from supabase import create_client
+            sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+            r = (sb.table("tenant_configs").select("telegram_chat_id,telegram_notify_enabled")
+                 .eq("tenant_id", tenant_id).limit(1).execute())
+            if r.data:
+                row = r.data[0]
+                if row.get("telegram_notify_enabled", True) and row.get("telegram_chat_id"):
+                    return row["telegram_chat_id"]
+        except Exception as e:
+            logger.warning(f"[Telegram] resolve chat_id tenant gagal: {e}")
+        return self.system_chat_id
+
+    def notify_published(self, tenant_id: str, url: str, title: str = "",
+                         niche: str = "", run_id: str = "") -> bool:
+        """OPSI C: laporan SUKSES dikirim saat PUBLISHER benar-benar mempublish (on-schedule),
+        BUKAN saat producer stok. Chat_id resolve dari tenant_configs."""
+        chat_id = self._chat_id_for_tenant(tenant_id)
+        if not chat_id:
+            return False
+        lines = [
+            "✅ <b>Video Published!</b>",
+            f"🎬 <i>{self._escape(str(title)[:120])}</i>" if title else "",
+            f"🏷 Niche: {self._escape(str(niche))}" if niche else "",
+            f"🔗 {url}" if url else "",
+            f"<code>{run_id}</code>" if run_id else "",
+        ]
+        return self._send(chat_id, "\n".join(l for l in lines if l))
+
     def notify_publish_fail(self, run_id: str, tenant_id: str, error: str,
                             run_config=None) -> bool:
         """

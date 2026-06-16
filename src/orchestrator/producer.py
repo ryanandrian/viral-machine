@@ -59,14 +59,15 @@ def produce_one(channel_row: dict) -> int | None:
             tc.preferred_music_mood = _div.pick(channel_id, "music", _mood_pool) if _mood_pool else None
         except Exception as _de:
             logger.debug(f"[Producer] diversity hint skip (ch={channel_id}): {_de}")
-        result = Pipeline().run(tc, publish=False)   # PRODUCE-ONLY
-        if (result.get("status") != "success" or not result.get("video_path")
-                or not result.get("steps", {}).get("qc", {}).get("passed")):
-            inventory.mark_failed(inv_id, result.get("error") or "produce/QC gagal")
+        result = Pipeline().run(tc, publish=False)   # PRODUCE-ONLY (producer TAK pernah publish — §12c)
+        qc    = result.get("steps", {}).get("qc", {})
+        video = result.get("video_path")
+        # HARD-FAIL (crash render/visual, TANPA video jadi) → failed (TIDAK dihitung stok).
+        if result.get("status") != "success" or not video or not os.path.exists(video):
+            inventory.mark_failed(inv_id, result.get("error") or "produksi gagal (tanpa video)")
             return None
 
         run_id = result["run_id"]
-        video  = result["video_path"]
         thumb  = result.get("thumbnail_path")
         vkey = f"{tenant_id}/{channel_id}/{run_id}.mp4"
         s3_buffer.upload(video, vkey)
@@ -78,7 +79,7 @@ def produce_one(channel_row: dict) -> int | None:
         # Persist SEMUA input publish (publisher = proses terpisah, tak punya file lokal)
         _script = result.get("script", {}) or {}
         _winner = (_script.get("hook_data") or {}).get("winner") or {}
-        inventory.mark_ready(inv_id, vkey, metadata={
+        _meta = {
             "run_id":    run_id,
             "video_s3":  vkey,
             "thumb_s3":  tkey,
@@ -92,14 +93,32 @@ def produce_one(channel_row: dict) -> int | None:
             "music_mood":   tc.preferred_music_mood,
             "viral_score":  _script.get("viral_score"),
             "insights_grade": _script.get("insights_grade", ""),
-        })
-        # Aset berat sudah di buffer → bersihkan lokal
-        for p in (video, thumb):
-            try:
-                if p and os.path.exists(p):
-                    os.remove(p)
-            except Exception:
-                pass
+            "duration_secs": qc.get("duration"),
+            "size_mb":       qc.get("size_mb"),
+        }
+
+        def _cleanup_local():
+            for p in (video, thumb):
+                try:
+                    if p and os.path.exists(p):
+                        os.remove(p)
+                except Exception:
+                    pass
+
+        # OPSI C (2026-06-17): QC-fail TAPI video JADI → STOK 'ready_with_issues' (ditinjau tenant di
+        # dashboard, approve→publish ber-kuota / buang). DIHITUNG stok → rem alami (anti-runaway).
+        # Video TIDAK di-upload ke YouTube oleh producer (invariant decouple §12c).
+        if not qc.get("passed"):
+            inventory.mark_ready_with_issues(
+                inv_id, vkey, reason=qc.get("reason", ""),
+                recommendation=qc.get("recommendation", ""), metadata=_meta)
+            _cleanup_local()
+            logger.warning(f"[Producer] ready_with_issues (tinjau): {vkey} (inv {inv_id}) — {qc.get('reason','')}")
+            return inv_id
+
+        # QC-PASS → ready (siap auto-publish saat slot)
+        inventory.mark_ready(inv_id, vkey, metadata=_meta)
+        _cleanup_local()
         logger.info(f"[Producer] buffer ready: {vkey} (inv {inv_id})")
         return inv_id
     except Exception as e:
@@ -174,6 +193,16 @@ def run_direct(sb, job: dict) -> None:
         "error": err, "completed_at": _now(),
     }).eq("id", jid).execute()
 
+    # Circuit-breaker AUTO-RECOVER (§4b/F7): direct yang MENGHASILKAN video (success/qc_failed) =
+    # channel sehat lagi → lepas pause agar producer lanjut jaga buffer.
+    if status in ("success", "qc_failed"):
+        try:
+            sb.table("channels").update(
+                {"production_paused": False, "production_paused_reason": None}
+            ).eq("id", job["channel_id"]).execute()
+        except Exception as e:
+            logger.warning(f"[Direct] gagal lepas pause ch={job.get('channel_id')}: {e}")
+
 
 def drain_direct(sb, pool: ThreadPoolExecutor, sem: threading.Semaphore) -> int:
     """Drain direct_jobs pending SEBELUM stok-buffer. Acquire semaphore yang SAMA (≤core → anti-OOM).
@@ -201,19 +230,55 @@ def _active_channels(sb) -> list:
     return sb.table("channels").select("*").eq("is_active", True).execute().data or []
 
 
+def _pause_channel(sb, ch: dict, reason: str) -> None:
+    """Circuit-breaker §4b/F7: hentikan produksi channel + catat alasan. Auto-recover saat 1 produce
+    sukses (run_direct membersihkan flag). Kolom channels.production_paused* (migr 0050)."""
+    from datetime import datetime, timezone
+    try:
+        sb.table("channels").update({
+            "production_paused": True,
+            "production_paused_at": datetime.now(timezone.utc).isoformat(),
+            "production_paused_reason": reason[:300],
+        }).eq("id", ch["id"]).execute()
+    except Exception as e:
+        logger.error(f"[Producer] gagal set pause ch={ch.get('id')}: {e}")
+
+
 def plan_and_submit(sb, pool: ThreadPoolExecutor, sem: threading.Semaphore, depth: int) -> int:
     """Satu siklus: hitung defisit buffer per-channel → submit produksi sampai slot core habis.
-    Return jumlah job di-submit. Rem: hanya submit bila semaphore (core) tersedia (anti-overload)."""
+    Return jumlah job di-submit. Rem: (1) semaphore=core (anti-OOM); (2) buffer penuh — issue DIHITUNG
+    stok = rem alami; (3) circuit-breaker §4b/F7: N gagal beruntun → STOP channel + alarm (anti-runaway)."""
     channels = _active_channels(sb)
     from src.billing.limits import gate_for_channel
+    fail_stop = int(os.getenv("PRODUCER_FAIL_STREAK_STOP", "3"))
     deficits = []
     for ch in channels:
+        cid = str(ch.get("id"))
+        # Circuit-breaker: channel ter-pause → JANGAN produksi (tunggu tenant perbaiki + Jalankan Ulang/direct).
+        if ch.get("production_paused"):
+            continue
         # Phase 8a — gate monetisasi: jangan produksi (buang compute) utk tenant suspended/cancelled.
         if not gate_for_channel(sb, ch)["can_produce"]:
-            logger.info(f"[Producer] skip ch={ch.get('id')} tenant={ch.get('tenant_id')} — subscription tidak aktif")
+            logger.info(f"[Producer] skip ch={cid} tenant={ch.get('tenant_id')} — subscription tidak aktif")
             continue
-        cid = str(ch.get("id"))
-        stok = inventory.buffer_depth(cid, "ready") + inventory.buffer_depth(cid, "producing")
+        # REM DARURAT (§4b/F7): N produksi beruntun gagal/bermasalah (failed + ready_with_issues) →
+        # STOP channel + alarm SEKETIKA. Cegah loop bakar-kredit saat akar sistemik (mis. ElevenLabs habis).
+        streak = inventory.recent_nonready_streak(cid)
+        if streak >= fail_stop:
+            reason = (f"{streak}x produksi beruntun gagal/bermasalah → produksi channel DIHENTIKAN "
+                      f"otomatis. Periksa kredensial/konfigurasi, lalu Jalankan Ulang (direct).")
+            logger.error(f"[Producer] CIRCUIT-BREAK ch={cid}: {reason}")
+            _pause_channel(sb, ch, reason)
+            try:
+                from src.utils.telegram_notifier import TelegramNotifier
+                TelegramNotifier().notify_circuit_break(tenant_id=ch["tenant_id"], channel_id=cid, reason=reason)
+            except Exception as _te:
+                logger.warning(f"[Producer] alarm circuit-break gagal: {_te}")
+            continue
+        # Stok = ready + ready_with_issues + producing (issue DIHITUNG → rem alami anti-runaway).
+        stok = (inventory.buffer_depth(cid, "ready")
+                + inventory.buffer_depth(cid, "ready_with_issues")
+                + inventory.buffer_depth(cid, "producing"))
         target = ch.get("buffer_depth") or depth
         if stok < target:
             deficits.append((target - stok, ch))
