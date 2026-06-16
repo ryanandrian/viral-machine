@@ -167,7 +167,8 @@
   - 🔴 **Bug platform ditemukan saat cutover (fix lokal berikutnya):** `channel_analytics._fetch_video_metrics` minta metrik `impressionClickThroughRate` → **ditolak Analytics API (400 invalid)** → fetch retensi/CTR gagal → self-learning degraded. Bukan blocker (produce/publish jalan).
   - *(B2 webhook_app + B3 Vercel/frontend + B4 env-prod-domain = untuk SaaS PUBLIK, belum — ini baru cutover MESIN ryan.)*
 - [ ] B2 — `webhook_app` (uvicorn+nginx) → VPS → Midtrans webhook + YouTube OAuth + `/api/keys/set`.
-- [ ] B3 — Frontend `apps/web` → Vercel, env menunjuk DB v2 + `MV_API_BASE`(host API VPS) + `MV_INTERNAL_SECRET` + `NEXT_PUBLIC_YT_REDIRECT_URI`. **`ENCRYPTION_KEY` JANGAN ke Vercel** (tetap di VPS).
+- [x] **B3 — Frontend DEPLOYED (2026-06-17) — SELF-HOST di VPS, BUKAN Vercel (keputusan owner: hemat biaya + tanpa akun baru).** `~/mesinviral-web` (clone v2-backend sparse `/apps/web`, `npm ci`+`next build`, systemd **`mv-web`** `next start :3000`). nginx `mesinviral.com`+`www`→:3000. **HTTPS Let's Encrypt (certbot via snap; apt-certbot rusak)** auto-renew, HTTP→HTTPS 301. **`https://mesinviral.com` LIVE + cert valid.** *(Menyimpang dari rencana "Vercel" lama — VPS tak lagi "bersih"; trade-off demi hemat, owner-approved.)*
+  - 🔶 **Follow-up:** `webhook_app`→`api.mesinviral.com` (B2) belum → Connect-YouTube + Midtrans belum jalan. `NEXT_PUBLIC_YT_REDIRECT_URI`/`MV_API_BASE` di build masih dev → rebuild dgn prod (`https://api.mesinviral.com/...`) setelah B2. DNS `api`→VPS sudah di-set.
 - [ ] B4 — Env produksi di VPS: `ENCRYPTION_KEY`, `OAUTH_STATE_SECRET`, `MV_INTERNAL_SECRET`, `YOUTUBE_OAUTH_REDIRECT_URI`(host prod), `APP_BASE_URL`(domain prod), `SUPABASE_*`(service_role), `SMTP_*`, `MIDTRANS_*`.
 
 **C. Konfigurasi akun eksternal (butuh dashboard owner)**
