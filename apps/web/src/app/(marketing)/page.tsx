@@ -159,8 +159,8 @@ export default function LandingPage() {
           <div className="pipe-circuit-in">
             {/* Track loop: cahaya mengalir atas(1→8) → turun kanan → bawah(R→L) → naik kiri → balik ke Trend Radar */}
             <svg className="pipe-track" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-              <rect className="tk-base" x="6.25" y="12" width="87.5" height="62" rx="2.4" ry="9" pathLength={100} />
-              <rect className="tk-flow" x="6.25" y="12" width="87.5" height="62" rx="2.4" ry="9" pathLength={100} />
+              <rect className="tk-base" x="6.25" y="11" width="87.5" height="63" rx="2.4" ry="9" pathLength={100} />
+              <rect className="tk-flow" x="6.25" y="11" width="87.5" height="63" rx="2.4" ry="9" pathLength={100} />
             </svg>
             <div className="pipe-grid top">
               {PIPE.map(([Icon, n, c], i) => (
