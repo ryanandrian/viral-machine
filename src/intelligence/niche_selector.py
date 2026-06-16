@@ -528,6 +528,45 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
         logger.error(f"All {self.MAX_RETRIES} attempts failed. Last error: {last_error}")
         return []
 
+    def _apply_signal_factor(self, topic: dict, signals: dict) -> dict:
+        """F3b — 'ukur, jangan menebak' (TREND_RADAR §3 Pilar-3): boost viral_score topik yang
+        SELARAS dgn sinyal NYATA yang sedang meledak (YouTube velocity tinggi / Trends momentum
+        positif). Hanya MENAIKKAN (1.0×–1.25×); base score dimensi LLM tetap. Per-topik. Fail-soft.
+        (Konstanta boost = heuristik, tunable.)"""
+        try:
+            text   = " ".join([str(topic.get("topic", "")), str(topic.get("angle", "")), str(topic.get("hook", ""))]).lower()
+            tokens = set(re.findall(r"[a-z0-9]{4,}", text))
+            if not tokens:
+                return topic
+            factor, why = 1.0, None
+
+            # YouTube velocity NYATA: topik yang overlap (≥2 kata) dgn video yang meledak → boost ∝ velocity
+            vids = sorted((signals.get("youtube_search") or []), key=lambda v: v.get("velocity_vph", 0), reverse=True)[:10]
+            vmax = max((v.get("velocity_vph", 0) for v in vids), default=0) or 1
+            for v in vids:
+                vt = set(re.findall(r"[a-z0-9]{4,}", str(v.get("title", "")).lower()))
+                if len(tokens & vt) >= 2:
+                    cand = 1.0 + 0.25 * min(1.0, (v.get("velocity_vph", 0) / vmax))
+                    if cand > factor:
+                        factor, why = cand, f"yt-velocity '{str(v.get('title',''))[:30]}' ({v.get('velocity_vph',0):.0f}/jam)"
+
+            # Google Trends momentum NYATA: keyword niche dgn momentum positif → boost ringan
+            for t in (signals.get("google_trends") or []):
+                kw = str(t.get("keyword", "")).lower().strip()
+                if len(kw) >= 4 and kw in tokens and (t.get("momentum", 0) or 0) > 0:
+                    cand = 1.0 + min(0.10, (t.get("momentum", 0) or 0) / 100.0)
+                    if cand > factor:
+                        factor, why = cand, f"trends-momentum '{kw}' (+{t.get('momentum',0):.0f})"
+
+            if factor > 1.0:
+                base = topic.get("viral_score", 0) or 0
+                topic["viral_score"]   = round(base * factor, 1)
+                topic["signal_factor"] = round(factor, 3)
+                logger.info(f"[NicheSelector] signal_factor ×{factor:.2f} [{why}] → {str(topic.get('topic',''))[:40]}")
+        except Exception as e:
+            logger.debug(f"[NicheSelector] signal_factor skip: {e}")
+        return topic
+
     def select(self, signals: dict, tenant_config: TenantConfig,
                focus: str = None) -> list:
         """
@@ -604,6 +643,10 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
             model=_model,
             recent_topics=_recent_topics,
         )
+
+        # F3b: boost topik yang selaras dgn sinyal NYATA meledak (velocity/momentum) → "ukur, jangan menebak"
+        topics = [self._apply_signal_factor(t, signals) for t in topics]
+        topics = sorted(topics, key=lambda x: x.get("viral_score", 0), reverse=True)
 
         # s84d: apply historical_factor jika grade >= optimizing
         if insights:
