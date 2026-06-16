@@ -378,20 +378,22 @@ class YouTubePublisher:
             creds = self._get_credentials(tenant_config)
             youtube = build("youtube", "v3", credentials=creds)
 
+            # FIX: deskripsi channel = brandingSettings.channel.description (BUKAN snippet — snippet
+            # read-only di channels.update → 400 ERROR_PART_UNEXPECTED). Read-modify-write brandingSettings.
             channel_response = youtube.channels().list(
-                part="snippet", mine=True
+                part="brandingSettings", mine=True
             ).execute()
             if not channel_response.get("items"):
                 logger.warning("[YouTube] Channel tidak ditemukan — skip update description")
                 return False
 
             channel_id = channel_response["items"][0]["id"]
-            snippet = channel_response["items"][0]["snippet"]
-            snippet["description"] = description
+            branding = channel_response["items"][0].get("brandingSettings", {}) or {}
+            branding.setdefault("channel", {})["description"] = description
 
             youtube.channels().update(
-                part="snippet",
-                body={"id": channel_id, "snippet": snippet}
+                part="brandingSettings",
+                body={"id": channel_id, "brandingSettings": branding}
             ).execute()
 
             os.makedirs(".data", exist_ok=True)
