@@ -90,7 +90,7 @@
 
 **A. Kode/repo (bisa dikerjakan di dev, tanpa akses VPS)**
 - [x] A1 — `requirements.txt`: `fastapi`+`uvicorn`+`cryptography` (webhook_app butuh saat deploy). ✅ 2026-06-15
-- [ ] A2 — Runbook deploy + template systemd unit (worker + webhook_app) + snippet nginx (routing webhook Midtrans & callback OAuth). *(belum dibuat)*
+- [x] A2 — **`DEPLOY_RUNBOOK.md`** lengkap: systemd unit (mv-worker + mv-webhook), nginx (api.mesinviral.com→:8088), pemisahan env Vercel/VPS (ENCRYPTION_KEY hanya VPS), smoke test + urutan cutover. *(2026-06-16; tinggal eksekusi B–F = akses owner)*
 - [ ] A3 — (housekeeping) rename Next 16 `middleware`→`proxy` (deprecation; **propose dulu** — berisiko ke flow auth tervalidasi). *(superseded catatan deprecation lama)*
 
 **B. Deploy ke VPS / Vercel (butuh akses owner)**
