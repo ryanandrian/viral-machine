@@ -10,6 +10,20 @@ from src.utils.supabase_writer import _normalize_slug, get_writer
 
 load_dotenv()
 
+# F3a: denylist topik lintas-domain yang PASTI off-niche untuk semua niche faceless kita
+# (game/musik/olahraga). topicDetails YouTube terlalu kasar utk filter POSITIF (data 2026-06-16:
+# konten relevan sering ke-tag 'entertainment'/kosong) → dipakai hanya sbg DENYLIST AMAN.
+# Penilai relevansi UTAMA tetap LLM. Tunable (bisa pindah app_config bila perlu).
+_OFFNICHE_TOPIC_KW = ("game", "music", "sport", "football", "basketball", "athlet")
+
+def _offniche_topic(topics) -> bool:
+    """True bila SEMUA kategori topik video jelas off-domain (game/musik/olahraga) → aman dibuang.
+    Kosong/knowledge/entertainment → False (jangan buang; biar LLM yang nilai)."""
+    if not topics:
+        return False
+    return all(any(kw in str(t).lower() for kw in _OFFNICHE_TOPIC_KW) for t in topics)
+
+
 class NicheSelector:
     """
     Menganalisis sinyal tren dan memilih topik terbaik untuk diproduksi.
@@ -78,8 +92,10 @@ class NicheSelector:
         # Sumber DI-URUTKAN by bobot (§2b): tertinggi tampil pertama = paling berpengaruh ke LLM.
         blocks = []   # (weight, title, body_lines)
         if signals.get("youtube_search"):
+            # F3a: buang noise lintas-domain (game/musik/olahraga) via topicDetails; sisanya LLM yang nilai.
+            yt = [v for v in signals["youtube_search"] if not _offniche_topic(v.get("topic_categories"))]
             body = []
-            for v in signals["youtube_search"][:_n(weights['youtube'])]:
+            for v in yt[:_n(weights['youtube'])]:
                 vc, vel = int(v.get("view_count", 0) or 0), v.get("velocity_vph", 0)
                 tail = f" — {vc:,} views, {vel}/jam" if vc else ""   # angka NYATA (velocity) → sinyal terkuat
                 body.append(f"- {str(v.get('title',''))[:70]}{tail}")

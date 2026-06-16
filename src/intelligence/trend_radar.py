@@ -271,14 +271,23 @@ class TrendRadar:
                 if not meta:
                     logger.info(f"YouTube velocity [{region_code}]: 0 video")
                     return []
-                # BATCH statistics (1 unit, ≤50 id) — penghemat kuota terverifikasi (§7)
+                # BATCH statistics + topicDetails (1 unit, ≤50 id — part tak ubah kuota §7).
+                # topicDetails (F3a) = kategori topik Wikipedia → relevansi-niche ROBUST (bukan keyword judul).
                 ids = ",".join(list(meta.keys())[:50])
-                rs  = client.get(f"https://www.googleapis.com/youtube/v3/videos?part=statistics&id={ids}&key={api_key}")
-                stats = {v["id"]: v.get("statistics", {}) for v in (rs.json().get("items", []) if rs.status_code == 200 else [])}
+                rs  = client.get(f"https://www.googleapis.com/youtube/v3/videos?part=statistics,topicDetails&id={ids}&key={api_key}")
+                detail = {}
+                if rs.status_code == 200:
+                    for v in rs.json().get("items", []):
+                        cats = (v.get("topicDetails") or {}).get("topicCategories") or []
+                        detail[v["id"]] = {
+                            "stats":  v.get("statistics", {}),
+                            "topics": [c.rsplit("/", 1)[-1].replace("_", " ").lower() for c in cats],  # "…/Outer_space" → "outer space"
+                        }
 
             now, results = datetime.now(timezone.utc), []
             for vid, m in meta.items():
-                views = int((stats.get(vid) or {}).get("viewCount", 0) or 0)
+                d = detail.get(vid) or {}
+                views = int((d.get("stats") or {}).get("viewCount", 0) or 0)
                 try:
                     pub   = datetime.fromisoformat(str(m["published"]).replace("Z", "+00:00"))
                     hours = max((now - pub).total_seconds() / 3600.0, 1.0)
@@ -288,6 +297,7 @@ class TrendRadar:
                     "video_id": vid, "title": m["title"][:120], "channel": m["channel"],
                     "published": m["published"], "view_count": views,
                     "velocity_vph": round(views / hours, 1),   # views per jam sejak publish = "kecepatan meledak"
+                    "topic_categories": d.get("topics") or [],  # F3a: utk filter relevansi-niche
                     "region_code": region_code, "source": "youtube_search",
                 })
             results.sort(key=lambda x: x["velocity_vph"], reverse=True)
