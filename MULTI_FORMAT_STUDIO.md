@@ -60,6 +60,8 @@ Word budget = detik × WPS(format). Visual beat = retensi vs biaya.
 
 **Pendekatan section (tervalidasi):** JANGAN rewrite skema jadi arbitrer (40–60% rewrite, risiko analyzer). Pakai **compression-mapping**: 8-section kanonik → kelompokkan jadi N beat sesuai preset (mis. 4 beat = hook / mystery+buildup / interrupt+core / bridge+climax+cta). Plus closed-loop speed-adjust (Edge/ElevenLabs) utk menepatkan durasi.
 
+> ✅ **DIIMPLEMENTASI 2026-06-17 (`script_engine.py`):** compression-mapping LLM per-preset AKTIF. `visual_beats` preset (15→3, 30→5, 45→6, 60→7, 75→8, 90→9) menentukan **N beat narasi = N scene** (`_BEATS_FOR_N`). Prompt `_build_user_prompt` render **BEAT PLAN dinamis** (beat aktif + budget-kata per-beat + intent naratif per-durasi: ultra-short=1 ide tajam … long=arc penuh). word-budget = `detik × WPS provider terdaftar`, didistribusi ke beat aktif. `_validate_and_fix` scene-count = `visual_beats` (selaras QC clip_count). **Validasi LLM-only (topik sama, 2026-06-17): 15/30/45/60/75/90 SEMUA word_count dalam rentang + scene=beats + durasi-EL pas.** 8s = ai_video (di luar image-sequence, epik terpisah).
+
 ## 4. Format Profiles (catalog `format_profiles`, admin-managed)
 | format_key | Arc (scale dgn durasi) | cta_mode | render_mode |
 |---|---|---|---|

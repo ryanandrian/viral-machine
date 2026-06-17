@@ -202,6 +202,45 @@ def _build_insights_block(insights: dict) -> str:
     return "\n".join(lines)
 
 
+# ── Compression-mapping (MULTI_FORMAT §3): N beat per preset = visual_beats = jumlah scene = QC clip.
+# 8s=1 (ai_video, di luar image-sequence). Image-sequence: 3..9 beat. Tiap beat = 1 seksi narasi + 1 scene.
+_BEAT_WEIGHT = {"hook": 3, "mystery_drop": 5, "build_up": 12, "pattern_interrupt": 2,
+                "core_facts": 15, "core_facts_2": 10, "curiosity_bridge": 3, "climax": 8, "cta": 3}
+_BEATS_FOR_N = {
+    3: ["hook", "core_facts", "cta"],
+    4: ["hook", "build_up", "core_facts", "cta"],
+    5: ["hook", "build_up", "core_facts", "climax", "cta"],
+    6: ["hook", "mystery_drop", "build_up", "core_facts", "climax", "cta"],
+    7: ["hook", "mystery_drop", "build_up", "core_facts", "curiosity_bridge", "climax", "cta"],
+    8: ["hook", "mystery_drop", "build_up", "pattern_interrupt", "core_facts", "curiosity_bridge", "climax", "cta"],
+    9: ["hook", "mystery_drop", "build_up", "pattern_interrupt", "core_facts", "core_facts_2", "curiosity_bridge", "climax", "cta"],
+}
+_ROLE_LABEL = {"hook": "HOOK", "mystery_drop": "MYSTERY DROP", "build_up": "BUILD-UP",
+               "pattern_interrupt": "PATTERN INTERRUPT", "core_facts": "CORE FACT", "core_facts_2": "CORE FACT 2",
+               "curiosity_bridge": "CURIOSITY BRIDGE", "climax": "CLIMAX", "cta": "CTA"}
+_ALL_SECTIONS = ["hook", "mystery_drop", "build_up", "pattern_interrupt", "core_facts", "curiosity_bridge", "climax", "cta"]
+
+
+def _active_beats(n_beats: int) -> list:
+    return _BEATS_FOR_N[max(3, min(9, int(n_beats)))]
+
+
+def _distribute_words(active: list, total_words: int) -> dict:
+    tot = sum(_BEAT_WEIGHT.get(b, 5) for b in active) or 1
+    return {b: max(5, round(total_words * _BEAT_WEIGHT.get(b, 5) / tot)) for b in active}
+
+
+def _narrative_intent(target_duration, n_beats) -> str:
+    if n_beats <= 3:
+        return (f"ULTRA-SHORT {target_duration}s: ONE razor-sharp idea. No setup, no padding — "
+                f"hook straight into the single most striking fact, then a resonant close. Every word fights to stay.")
+    if n_beats <= 5:
+        return (f"SHORT {target_duration}s: a tight arc — hook, the core revelation with hard specifics, a landing. Dense, zero filler.")
+    if n_beats <= 7:
+        return (f"{target_duration}s: a full short-form arc — build-up, surprising facts, emotional climax. Develop but stay tight.")
+    return (f"LONG {target_duration}s: the complete arc — layered mystery, multiple distinct facts, build and release with depth. Zero filler.")
+
+
 def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, insights_block=None,
                        preset_seconds=None, format_wps=None,
                        cta_mode="implicit", brand_name=None, brand_cta_text=None):
@@ -226,6 +265,31 @@ def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, ins
     words           = {k: max(4, round(v * WPS)) for k, v in section_timing.items()}
     total_words     = sum(words.values())          # total kata = target_duration × WPS provider terdaftar
     _lo, _hi        = round(total_words * 0.92), round(total_words * 1.12)
+
+    # ── Compression-mapping per-preset (MULTI_FORMAT §3): N beat = visual_beats → narasi + scene + QC.
+    from src.config.format_catalog import preset_visual_beats as _pvb
+    if preset_seconds:
+        total_words = round(preset_seconds * WPS)   # budget BENAR = detik × WPS (bukan sum 8-seksi ber-min-1 yg menggelembung di preset pendek)
+        _lo, _hi    = round(total_words * 0.92), round(total_words * 1.12)
+        n_beats = int(_pvb(preset_seconds))
+        active  = _active_beats(n_beats)            # seksi aktif sesuai jumlah beat preset
+        words   = _distribute_words(active, total_words)   # konsentrasi budget ke beat aktif (bukan sebar 8)
+        n_scenes = len(active)
+        inactive = [s for s in _ALL_SECTIONS if s not in active]
+        _plan_lines = "\n".join(f"   beat {i+1} — {_ROLE_LABEL.get(b, b)} (~{words.get(b, 0)} words)"
+                                for i, b in enumerate(active))
+        beat_plan = (
+            f"\n📐 BEAT PLAN — {target_duration}s video = {len(active)} BEATS (compression-mapping, non-negotiable):\n"
+            f"{_narrative_intent(target_duration, len(active))}\n"
+            f"Write EXACTLY these {len(active)} beats IN ORDER — nothing more, nothing fewer:\n{_plan_lines}\n"
+            + (f"Leave these JSON fields as EMPTY string \"\": {', '.join(inactive)}.\n" if inactive else "")
+            + (f"Also output field \"core_facts_2\" (a SECOND distinct fact).\n" if "core_facts_2" in active else "")
+            + f"visual_suggestions: output EXACTLY {n_scenes} scenes — ONE per beat above, in the same order.\n"
+            f"The numbered section guide below is your CRAFT TOOLBOX — apply only the active beats' techniques.\n"
+        )
+        words = {s: words.get(s, 0) for s in _ALL_SECTIONS}   # panduan ber-nomor (1-8) refs semua 8; inactive→0
+    else:
+        active, n_scenes, beat_plan = list(words.keys()), 6, ""
 
     feedback_block = ""
     if feedback:
@@ -283,8 +347,8 @@ STYLE: {profile['style']}
 AVOID: {profile['avoid']}
 EMOTION ARC: {profile['emotion_arc']}
 HOOK FORMULA: {profile['hook_style']}
-{visual_direction_block}{insights_section}{soft_sell_block}{feedback_block}
-Write all 8 sections. Each has ONE job. Be specific to this topic — no generic phrases:
+{visual_direction_block}{insights_section}{soft_sell_block}{feedback_block}{beat_plan}
+Follow the BEAT PLAN above — write ONLY the active beats (others = empty ""). The numbered guide below is craft reference per section:
 
 1. HOOK ({section_timing['hook']}s ~{words['hook']} words)
    JOB: Stop scroll in the first second. Create an information gap that demands resolution.
@@ -374,7 +438,7 @@ Return ONLY valid JSON — no markdown, no preamble, no explanation:
   "curiosity_bridge": "exact curiosity bridge text",
   "climax": "exact climax text",
   "cta": "exact cta text — must sound human, not scripted",
-  "full_script": "all 8 sections joined as one naturally flowing paragraph, no section labels",
+  "full_script": "ONLY the active beats joined as one naturally flowing paragraph — no section labels, no empty gaps",
   "word_count": 140,
   "estimated_duration_seconds": {target_duration},
   "section_durations": {json.dumps(section_timing)},
@@ -413,31 +477,34 @@ class ScriptEngine:
         raw = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', raw)
         return raw.strip()
 
-    def _validate_and_fix(self, script, topic, section_timing: dict | None = None):
+    def _validate_and_fix(self, script, topic, section_timing: dict | None = None, n_scenes: int = 6):
         if not isinstance(script, dict):
             return None
-        required = ["hook", "build_up", "core_facts", "climax", "cta", "full_script"]
+        # required = beat INTI yang selalu aktif di tiap preset (compression-mapping n≥3): hook+core+cta.
+        # build_up/climax/dll = preset-dependent → tak wajib (preset pendek tak memakainya).
+        required = ["hook", "core_facts", "cta", "full_script"]
         if any(not script.get(f) for f in required):
             logger.warning(f"[ScriptEngine] Missing required fields")
             return None
-        for f in ["mystery_drop", "pattern_interrupt", "curiosity_bridge"]:
+        for f in ["mystery_drop", "build_up", "pattern_interrupt", "curiosity_bridge", "climax", "core_facts_2"]:
             script.setdefault(f, "")
         vs = script.get("visual_suggestions", [])
         if not isinstance(vs, list):
             vs = []
         topic_text = topic.get("topic", "the topic")
-        while len(vs) < 6:
+        _n = max(1, int(n_scenes))   # scene = visual_beats preset (selaras QC clip_count)
+        while len(vs) < _n:
             vs.append(
                 f"Cinematic documentary photograph directly related to {topic_text}. "
                 f"Single powerful focal point, dramatic natural lighting. "
                 f"Vertical 9:16, photorealistic, no text no words no letters no numbers no signs."
             )
-        script["visual_suggestions"] = vs[:6]
+        script["visual_suggestions"] = vs[:_n]
         script.setdefault("section_durations", section_timing or _DEFAULT_SECTION_TIMING)
         if not script.get("full_script"):
             parts = [script.get(s, "") for s in
                      ["hook","mystery_drop","build_up","pattern_interrupt",
-                      "core_facts","curiosity_bridge","climax","cta"]]
+                      "core_facts","core_facts_2","curiosity_bridge","climax","cta"]]
             script["full_script"] = " ".join(p for p in parts if p)
         return script
 
@@ -454,8 +521,11 @@ class ScriptEngine:
         from src.providers.llm import LLMError
 
         section_timing = _get_section_timing(niche)
+        n_scenes = 6
         if preset_seconds:   # selaras dgn prompt (validate pakai timing yg sama)
             section_timing = _scale_section_timing(section_timing, preset_seconds)
+            from src.config.format_catalog import preset_visual_beats as _pvb
+            n_scenes = len(_active_beats(int(_pvb(preset_seconds))))   # scene = jumlah beat aktif preset
         try:
             raw = provider.complete(
                 system=_build_system_prompt(),
@@ -470,7 +540,7 @@ class ScriptEngine:
                 as_json=True,
             )
             script = json.loads(self._clean_json(raw))
-            script = self._validate_and_fix(script, topic, section_timing)
+            script = self._validate_and_fix(script, topic, section_timing, n_scenes=n_scenes)
             if script:
                 logger.info(
                     f"[ScriptEngine] {provider.provider_name} attempt {attempt} "
