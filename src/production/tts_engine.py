@@ -109,40 +109,6 @@ def _run_provider(provider_name: str, text: str, config: dict, output_dir: str) 
     return str(audio), timestamps
 
 
-def _provider_available(provider_name: str, config: dict) -> bool:
-    """True bila provider siap me-render (probe/ketersediaan). Never raises (init/cek gagal → False)."""
-    try:
-        if provider_name == "elevenlabs":
-            from src.providers.tts.elevenlabs import ElevenLabsProvider
-            return ElevenLabsProvider(config).is_available()
-        if provider_name == "openai_tts":
-            from src.providers.tts.openai_tts import OpenAITTSProvider
-            return OpenAITTSProvider(config).is_available()
-        from src.providers.tts.edge_tts import EdgeTTSProvider
-        return EdgeTTSProvider(config).is_available()
-    except Exception as e:
-        logger.info(f"[TTSEngine] '{provider_name}' tak tersedia (init/cek gagal: {str(e)[:50]})")
-        return False
-
-
-def effective_tts_provider(tenant_config) -> str:
-    """QC §2 fix-a: provider yang AKAN benar-benar me-render (cek ketersediaan primary → fallback).
-    Dipakai script_engine agar word-budget pakai delivery_wps provider AKTUAL → durasi pas walau
-    fallback senyap (mis. ElevenLabs lapse → edge). Fail-soft: error → '' (caller pakai default lama)."""
-    try:
-        config = _get_provider_config(tenant_config)
-    except Exception:
-        return ""
-    primary  = config.get("tts_provider") or "edge_tts"
-    fallback = config.get("tts_fallback_provider") or "edge_tts"
-    for p in (primary, fallback):
-        if p and _provider_available(p, config):
-            if p != primary:
-                logger.info(f"[TTSEngine] provider efektif (WPS budget) = '{p}' (primary '{primary}' tak tersedia)")
-            return p
-    return fallback
-
-
 class TTSEngine:
     """
     TTS Engine dengan fallback hierarchy.

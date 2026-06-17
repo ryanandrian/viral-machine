@@ -224,6 +224,8 @@ def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, ins
     WPS             = float(format_wps) if format_wps else 2.4
     target_duration = int(preset_seconds) if preset_seconds else sum(section_timing.values())
     words           = {k: max(4, round(v * WPS)) for k, v in section_timing.items()}
+    total_words     = sum(words.values())          # total kata = target_duration × WPS provider terdaftar
+    _lo, _hi        = round(total_words * 0.92), round(total_words * 1.12)
 
     feedback_block = ""
     if feedback:
@@ -268,7 +270,14 @@ Maksimal SATU sebutan brand di seluruh script.{(' Arahan brand: ' + brand_cta_te
 TOPIC: {topic.get('topic', '')}
 ANGLE: {topic.get('angle', topic.get('topic', ''))}
 NICHE: {niche_data.get('name', niche)}
-TARGET: {target_duration} seconds total
+TARGET DURATION: {target_duration} seconds of spoken narration.
+
+🎯 CRITICAL LENGTH REQUIREMENT — NON-NEGOTIABLE:
+The COMPLETE narration (all sections combined) MUST total {total_words} words (acceptable range {_lo}–{_hi} words).
+This exact word count is what makes the spoken audio last {target_duration} seconds — FEWER words = audio too short = video FAILS and is REJECTED.
+Write full, detailed, specific sentences until you reach {total_words} words. Do NOT be terse. Do NOT stop early.
+The per-section word counts below ADD UP to {total_words} — hit every single one. Before you finish, verify the total is at least {_lo} words.
+
 TONE: {profile['tone']}
 STYLE: {profile['style']}
 AVOID: {profile['avoid']}
@@ -506,13 +515,11 @@ class ScriptEngine:
         # null → legacy (timing niche, WPS 2.4) = non-breaking. WPS EFEKTIF = delivery TTS provider
         # (solusi 2-kelas: ElevenLabs-class ~1.8 vs edge ~2.6) → word-budget pas per kelas.
         from src.config.format_catalog import effective_wps as _eff_wps
-        from src.production.tts_engine import effective_tts_provider as _eff_tts
         preset_seconds = getattr(tenant_config, "duration_preset", None)
-        # QC §2 fix-a: WPS budget IKUT provider yang AKAN benar-benar me-render (cek ketersediaan →
-        # fallback), BUKAN provider terkonfigurasi. Cegah durasi meleset saat fallback senyap
-        # (ElevenLabs lapse → edge). Fail-soft: '' → pakai tts_provider terkonfigurasi (perilaku lama).
-        _eff_prov      = (_eff_tts(tenant_config) if preset_seconds else None)
-        _tts_provider  = _eff_prov or (getattr(run_config, "tts_provider", None) if run_config else None)
+        # Word-budget pakai delivery_wps provider TERDAFTAR tenant (mis. elevenlabs 1.8 → 60s=108 kata).
+        # TTS apa-adanya: premium dulu → bila kredit kurang fallback edge (produk jadi, durasi bisa
+        # tak lolos QC → Opsi C: flagged + tenant putuskan). Akar akurasi durasi = LLM hit word-budget.
+        _tts_provider  = getattr(run_config, "tts_provider", None) if run_config else None
         format_wps     = _eff_wps(getattr(tenant_config, "format_profile", None), _tts_provider) if preset_seconds else None
         # Branded Content §6 — soft-sell (opsional; implicit → tanpa brand)
         _cta_mode  = getattr(tenant_config, "cta_mode", "implicit") or "implicit"
@@ -561,7 +568,7 @@ class ScriptEngine:
         feedback        = None  # Feedback dari attempt sebelumnya
         # F2d — target word-budget (LLM-QC length gate). Aktif hanya bila preset di-set.
         word_budget = round(preset_seconds * float(format_wps)) if (preset_seconds and format_wps) else None
-        _LEN_TOL    = float(os.getenv("SCRIPT_LENGTH_TOLERANCE", "0.25"))
+        _LEN_TOL    = float(os.getenv("SCRIPT_LENGTH_TOLERANCE", "0.12"))  # ketat: jaga durasi pas (was 0.25 → terlalu longgar, 82w lolos 108-budget → video pendek)
 
         for attempt in range(1, max_retry + 1):
             logger.info(f"[ScriptEngine] Attempt {attempt}/{max_retry} via {llm_provider}")
@@ -624,14 +631,21 @@ class ScriptEngine:
                 wc = len((script.get("full_script") or "").split())
                 if abs(wc - word_budget) / word_budget > _LEN_TOL:
                     length_ok = False
-                    feedback = (feedback or []) + [
-                        f"LENGTH: script ~{wc} words but target ~{word_budget} words for a "
-                        f"{preset_seconds}s video. " + (
-                            "Expand — add more specific facts/depth, not filler."
-                            if wc < word_budget else
-                            "Tighten — cut weakest lines, keep it dense.")
-                    ]
-                    logger.info(f"[ScriptEngine] length-gate: {wc}w vs target {word_budget}w → retry")
+                    _floor = round(word_budget * (1 - _LEN_TOL))
+                    if wc < word_budget:
+                        _need = word_budget - wc
+                        _msg = (
+                            f"LENGTH FAIL (WAJIB diperbaiki): naskahmu hanya {wc} kata — terlalu PENDEK "
+                            f"untuk video {preset_seconds} detik (butuh {word_budget} kata, kurang {_need} kata). "
+                            f"TAMBAHKAN ~{_need} kata: perdalam tiap seksi dengan fakta spesifik, angka, "
+                            f"detail konkret, kalimat utuh — BUKAN filler/pengulangan. JANGAN kembalikan "
+                            f"naskah di bawah {_floor} kata. Hitung jumlah katamu sebelum selesai."
+                        )
+                    else:
+                        _msg = (f"LENGTH: {wc} kata, terlalu PANJANG vs target {word_budget} — "
+                                f"pangkas baris terlemah, jaga padat (≤ {round(word_budget*(1+_LEN_TOL))} kata).")
+                    feedback = (feedback or []) + [_msg]
+                    logger.info(f"[ScriptEngine] length-gate: {wc}w vs target {word_budget}w (floor {_floor}) → retry")
 
             if score > best_score:
                 best_score  = score

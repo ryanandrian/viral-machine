@@ -173,36 +173,6 @@ class ElevenLabsProvider(TTSProvider):
         except Exception as e:
             raise TTSError(f"ElevenLabs generation failed: {e}") from e
 
-    def is_available(self) -> bool:
-        """Cek SISA KUOTA via endpoint subscription (murah, non-sintesis). True hanya bila sisa kredit
-        ≥ ambang (cukup utk 1 video). False bila kuota tipis (quota_exceeded) / 401/403. Dipakai
-        resolusi 'provider efektif' → word-budget pakai WPS provider AKTUAL (QC §2 fix-a).
-        CATATAN: probe karakter-mungil SALAH (lolos walau sisa kuota < kebutuhan video nyata) → pakai
-        sisa-kuota. Fail-OPEN saat error jaringan ambigu (jangan blokir; runtime TTS yang putuskan)."""
-        import os as _os
-        import requests
-        try:
-            r = requests.get(
-                "https://api.elevenlabs.io/v1/user/subscription",
-                headers={"xi-api-key": self.api_key or ""}, timeout=8,
-            )
-            if r.status_code in (401, 403):
-                logger.info(f"[ElevenLabs] is_available=False (HTTP {r.status_code} — kredensial)")
-                return False
-            if r.status_code != 200:
-                logger.warning(f"[ElevenLabs] cek kuota HTTP {r.status_code} — fail-open True")
-                return True
-            d = r.json()
-            remaining = int(d.get("character_limit", 0)) - int(d.get("character_count", 0))
-            margin = int(_os.getenv("ELEVENLABS_MIN_CHARS", "1000"))  # ~cukup utk 1 video
-            if remaining < margin:
-                logger.info(f"[ElevenLabs] is_available=False (sisa kuota {remaining} < {margin} char)")
-                return False
-            return True
-        except Exception as e:
-            logger.warning(f"[ElevenLabs] cek kuota gagal ({e}) — fail-open True")
-            return True
-
     def get_word_timestamps(self) -> list[dict] | None:
         return self._word_timestamps
 
