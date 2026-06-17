@@ -204,6 +204,14 @@ class Pipeline:
             }
             logger.info(f"STEP 4 DONE | Hook [{winner_score}/100]: {script.get('hook', '')[:60]}")
 
+            # ── STEP 4.5: Image-prompt generation (Opsi A — Tahap-2) ────
+            # LLM TERDEDIKASI membuat prompt image per-beat dari narasi FINAL (hook sudah di-optimize STEP 4).
+            # Niche-aware (visual_style + nama niche dari DB). Set script['visual_suggestions'] + ['thumbnail_concept'].
+            logger.info("STEP 4.5/7 | Generating per-beat image prompts (dedicated LLM)...")
+            script = self.script_engine.generate_visual_prompts(script, tenant_config)
+            result["script"] = script
+            logger.info(f"STEP 4.5 DONE | {len(script.get('visual_suggestions', []))} image prompts (niche-aware)")
+
             # ── STEP 5: TTS Audio ───────────────────────────────────
             logger.info("STEP 5/7 | Generating TTS audio...")
             tts_result = self.tts_engine.generate(script, tenant_config)
@@ -227,6 +235,12 @@ class Pipeline:
             logger.info("STEP 6/7 | Assembling visuals...")
             audio_duration = self.tts_engine.get_duration(audio_path)
             logger.info(f"[Pipeline] Audio duration: {audio_duration:.1f}s — scaling clips")
+            # Image-gen per-preset (MULTI_FORMAT §3): durasi per-beat (1 image/beat) dari word_timestamps
+            # NYATA → sinkron TTS. SUMBER TUNGGAL: dikonsumsi visual_assembler (bake) & video_renderer (concat).
+            from src.intelligence.script_engine import compute_beat_durations
+            script["beat_durations"] = compute_beat_durations(script, word_timestamps, audio_duration)
+            logger.info(f"[Pipeline] beat_durations ({len(script['beat_durations'])}): "
+                        f"{[round(d,1) for d in script['beat_durations']]} = {sum(script['beat_durations']):.1f}s")
             clips = self.visual_assembler.assemble(script, tenant_config, audio_duration=audio_duration)
             if not clips:
                 raise VisualError("Visual assembly failed — no clips downloaded", step="visual")

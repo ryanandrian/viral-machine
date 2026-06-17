@@ -23,3 +23,6 @@ SUPABASE-CONNECTION.md
 .env.clone
 *.secret
 S3-CONNECTION.md
+
+# folder review sementara (artefak validasi lokal)
+_validasi_visual_dna/

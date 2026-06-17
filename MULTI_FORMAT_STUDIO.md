@@ -62,6 +62,16 @@ Word budget = detik × WPS(format). Visual beat = retensi vs biaya.
 
 > ✅ **DIIMPLEMENTASI 2026-06-17 (`script_engine.py`):** compression-mapping LLM per-preset AKTIF. `visual_beats` preset (15→3, 30→5, 45→6, 60→7, 75→8, 90→9) menentukan **N beat narasi = N scene** (`_BEATS_FOR_N`). Prompt `_build_user_prompt` render **BEAT PLAN dinamis** (beat aktif + budget-kata per-beat + intent naratif per-durasi: ultra-short=1 ide tajam … long=arc penuh). word-budget = `detik × WPS provider terdaftar`, didistribusi ke beat aktif. `_validate_and_fix` scene-count = `visual_beats` (selaras QC clip_count). **Validasi LLM-only (topik sama, 2026-06-17): 15/30/45/60/75/90 SEMUA word_count dalam rentang + scene=beats + durasi-EL pas.** 8s = ai_video (di luar image-sequence, epik terpisah).
 
+> ✅ **DIIMPLEMENTASI 2026-06-17 (Opsi A — image-gen per-preset + VISUAL DNA; validated-lokal):** Pembuatan prompt visual dipisah **DUA TAHAP** (akar Cacat A "prompt asal jadi"):
+> - **Tahap-1** (`script_engine._generate_one`) = NARASI saja — skema JSON bersih (buang visual_suggestions dari call narasi; slot `core_facts_2`; guard tiap beat aktif non-kosong).
+> - **Tahap-2** (`script_engine.generate_visual_prompts`, dipanggil pipeline **STEP 4.5** SETELAH hook-optimize → grounded ke hook FINAL) = 1 LLM call TERDEDIKASI: baca narasi final per-beat → `thumbnail_concept` (hook-frame, ruang-negatif judul) + N−1 prompt scene KONKRET. **Clue per-scene = teks beat FINAL + VISUAL DNA niche + peran arc.** Sanitize + fallback ekstraktif (nol "N/A"/echo → tahan model image murah).
+>
+> **VISUAL DNA (no-hardcode, admin-curated):** kolom `niches.visual_style` di-perkaya jadi **kamus property bebas** (base_style, color_palette, atmosphere, **lighting, camera, composition, realism, reference, color_grading, motion**, …). Tahap-2 meng-inject **SELURUH key generik** (blok "VISUAL DNA") + `style_exemplars` (eks-`visual_fallbacks`, di-repurpose jadi few-shot acuan kualitas) + mandat "beauty-first". **Admin tambah/ubah key di `/admin/niches` → langsung berpengaruh, TANPA ubah kode.** `ai_image._build_image_prompt` tetap menempel `image_quality_tags`+`image_negative_prompt` per-niche. **Keempat base-niche terisi DNA 10-key.** Pipeline visual = **100% niche-applied** (audit: tenant.niche → fresh-load `visual_style`+`visual_fallbacks` → Tahap-2 + ai_image; no default-leak).
+>
+> **A5** scene-0 = thumbnail (no-waste, hapus image dibuang). **A6** Ken-Burns motion per-PERAN beat (bukan idx%6). **Validasi SOP lokal:** 6 preset jalur nyata config-DB → prompt bersih 6/6, image=`visual_beats`, ai_image murni (NO pexels); universe 60s = gambar sinematik nyata (ARRI/chiaroscuro/god-rays).
+>
+> ⚠️ **Akurasi durasi (Cacat B) — SEBAGIAN:** B1 budget speed-adjust (`detik × delivery_wps × niche_speed`) → **45/60/75/90 LOLOS QC**; **15s/30s overshoot** krn LLM melebihi word-budget §3 di preset pendek (root-cause data: TTS sudah benar — bila LLM patuh budget, 15s→16.8s & 30s→29.7s LOLOS). Fix B2 = paksa kepatuhan word-budget preset pendek (detail di `PROGRESS.md` §RENCANA KERJA IMAGE-GEN).
+
 ## 4. Format Profiles (catalog `format_profiles`, admin-managed)
 | format_key | Arc (scale dgn durasi) | cta_mode | render_mode |
 |---|---|---|---|
@@ -117,6 +127,14 @@ Hardcode 45–180s (`pipeline.py:519-521`) → **relatif `target_duration ± ~15
 | NEW `distribution/reels_publisher.py`, `tiktok_publisher.py` | publisher (BYO-CC; +audit eksternal) | high+external |
 | `tenant_config.py` | field baru (§9) + factory provider | low-med |
 | katalog | `ai_models` + `format_profiles` loader (Phase 1.3 konsolidasi) | medium |
+
+> ✅ **IMPLEMENTASI Cacat A — image-gen per-preset + VISUAL DNA (2026-06-17, validated-lokal):**
+> - `script_engine.py` — Tahap-1 narasi-bersih (`_build_user_prompt`/`_validate_and_fix`: skema bersih, slot `core_facts_2`, guard beat aktif) · NEW `generate_visual_prompts()` = Tahap-2 (inject SELURUH `visual_dna` generik + `style_exemplars` + sanitize/fallback) · `compute_beat_durations()` (durasi per-beat) · B1 budget speed-adjust.
+> - `pipeline.py` — **STEP 4.5** panggil `generate_visual_prompts` (pasca hook-optimize); set `script["beat_durations"]` pasca-TTS.
+> - `visual_assembler.py` — image=`visual_beats` dari `beat_durations` (kompensasi xfade) · **A5** clip0=hook-frame, fetch hanya scene beats[1:] (no-waste) · pass `beat_roles`.
+> - `ai_image.py` — `fetch_clips(beat_roles=…)` · `_image_to_video(role=…)` **A6** motion per-peran · `extract_keywords(n=…)`.
+> - `video_renderer.py` — clip_durations dari `beat_durations` (fix bug −9s, bake==concat).
+> - **DB (admin-data, bukan migrasi):** `niches.visual_style` keempat base-niche di-perkaya jadi VISUAL DNA 10-key. Admin edit via `/admin/niches` (update-API sudah whitelist `visual_style`).
 
 ## 11. UI (dibangun langsung — Hybrid, BUKAN Claude Design)
 Screen baru (tidak ada di bundle desain): format config (duration_preset/format_profile/render_mode + **model picker per komponen** dgn quality/cost), Branded Content panel (**upload logo** + soft-sell + link), Distribution panel (tier-gated, lock Reels/TikTok + **info lead-time audit**), Admin `format_profiles` + `ai_models` editor. Reuse token/komponen desain.

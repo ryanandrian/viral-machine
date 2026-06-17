@@ -226,41 +226,72 @@ class VisualAssembler:
                 "visual_seed":            getattr(tenant_config, "visual_seed", None),  # Diversity §9.1
             }
             provider  = AIImageProvider(config)
-            keywords  = provider.extract_keywords_from_script(script, tenant_config.niche)
-            clip_durs = self._compute_clip_durations(script, n_clips=6, audio_duration=self._current_audio_duration)
+            # Image-gen PER-PRESET (MULTI_FORMAT §3): jumlah image = N beat (= visual_beats), durasi
+            # per-beat dari pipeline (script.beat_durations, SINKRON TTS via word_timestamps). Fallback
+            # ke _compute_clip_durations (6) bila beat_durations tak ada (legacy/no-preset).
+            #
+            # PENTING (sinkron bake↔concat): beat_durations = TTS-synced MENTAH (sum = audio_duration).
+            # Source clip WAJIB di-bake dengan kompensasi xfade-loss IDENTIK dgn renderer._create_clip_list
+            # (target = audio + (N-1)*0.4s). Tanpa ini: bake sum=audio, tapi clip_list scale ke audio+loss
+            # → durasi bake < durasi list → xfade "makan" konten → video pendek (terbukti N=9/90s: -9s).
+            # _compute_clip_durations (legacy) SUDAH ter-scale ke target ini, jadi hanya cabang
+            # beat_durations yang perlu di-scale di sini.
+            beat_durs = script.get("beat_durations")
+            if beat_durs:
+                clip_durs = [float(d) for d in beat_durs]
+                ad = self._current_audio_duration
+                if ad and ad > 0:
+                    xfade_loss = (len(clip_durs) - 1) * 0.4 if len(clip_durs) >= 2 else 0.0
+                    target     = ad + xfade_loss
+                    raw_sum    = sum(clip_durs)
+                    if raw_sum > 0:
+                        clip_durs = [round(d * target / raw_sum, 4) for d in clip_durs]
+            else:
+                clip_durs = self._compute_clip_durations(
+                    script, n_clips=6, audio_duration=self._current_audio_duration)
+            n_img     = len(clip_durs) if clip_durs else 6
+            keywords  = provider.extract_keywords_from_script(script, tenant_config.niche, n=n_img)
+            beats     = script.get("beats") or []
 
             logger.info(
                 f"[VisualAssembler] Generating AI images: "
-                f"{visual_mode} — {len(keywords)} scenes"
+                f"{visual_mode} — {n_img} scenes (beat-synced per-preset, beat-role motion)"
             )
 
-            clips = asyncio.run(
-                provider.fetch_clips(
-                    keywords=keywords,
-                    count=6,
-                    output_dir=clips_dir,
-                    clip_durations=clip_durs,
-                )
+            clips_dir.mkdir(parents=True, exist_ok=True)   # WAJIB sebelum hook-frame (A5 reorder: hook-frame kini sebelum fetch_clips yg biasanya mkdir)
+            # A5 (Opsi A): clip[0] = HOOK-FRAME dari thumbnail_concept (= scene hook, dibuat SEKALI).
+            # fetch HANYA scene beats[1:] → tak ada image yang dibuat-lalu-dibuang (boros).
+            # A6: motion per-peran beat (beat_roles). Fallback aman: hook-frame gagal → fetch semua N
+            # (satu jalur fetch saja → tanpa tabrakan penamaan clip).
+            hook_clip = self._generate_hook_frame(
+                script=script, clips_dir=clips_dir, config=config, clip_durs=clip_durs,
             )
+            if hook_clip:
+                scene_kw    = keywords[1:]
+                scene_durs  = clip_durs[1:] if len(clip_durs) > 1 else []
+                scene_roles = beats[1:] if len(beats) > 1 else []
+                scene_clips = asyncio.run(
+                    provider.fetch_clips(
+                        keywords=scene_kw, count=len(scene_kw),
+                        output_dir=clips_dir, clip_durations=scene_durs, beat_roles=scene_roles,
+                    )
+                ) if scene_kw else []
+                clips = [hook_clip] + scene_clips
+                logger.info(f"[VisualAssembler] s6c7 ✅ Hook-frame + {len(scene_clips)} scene (no waste)")
+            else:
+                logger.warning("[VisualAssembler] Hook-frame gagal → fetch semua N (clip0=thumbnail)")
+                clips = asyncio.run(
+                    provider.fetch_clips(
+                        keywords=keywords, count=n_img,
+                        output_dir=clips_dir, clip_durations=clip_durs, beat_roles=beats,
+                    )
+                )
 
             if clips:
                 logger.info(
                     f"[VisualAssembler] ✅ AI Image generated: "
                     f"{len(clips)} clips via {visual_mode}"
                 )
-
-                # ── s6c7: Hook frame optimization ─────────────────────
-                # Replace clips[0] dengan hero image khusus dari hook text
-                # Lebih scroll-stopping dari visual_suggestion generik
-                hook_clip = self._generate_hook_frame(
-                    script=script,
-                    clips_dir=clips_dir,
-                    config=config,
-                    clip_durs=clip_durs,
-                )
-                if hook_clip:
-                    clips[0] = hook_clip
-                    logger.info(f"[VisualAssembler] s6c7 ✅ Hook frame replaced clips[0]")
 
             return [clip.path for clip in clips]
 

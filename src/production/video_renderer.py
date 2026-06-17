@@ -812,27 +812,32 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             clips = [titled_clip_0] + list(clips[1:])
 
         logger.info("Creating clip list...")
-        section_durs   = script.get("section_durations", {})
-        clip_durations = None
-        if section_durs and len(section_durs) >= 6:
-            sd        = section_durs
-            hook      = float(sd.get("hook", 3))
-            mystery   = float(sd.get("mystery_drop", 5))
-            buildup   = float(sd.get("build_up", 12))
-            interrupt = float(sd.get("pattern_interrupt", 2))
-            core      = float(sd.get("core_facts", 15))
-            bridge    = float(sd.get("curiosity_bridge", 3))
-            climax    = float(sd.get("climax", 8))
-            cta       = float(sd.get("cta", 3))
-            clip_durations = [
-                hook,
-                mystery,
-                buildup,
-                round(interrupt + core / 2, 2),
-                round(core / 2 + bridge, 2),
-                round(climax + cta, 2),
-            ]
-            logger.info(f"[Renderer] section_durations: {clip_durations}")
+        # Image-gen per-preset (MULTI_FORMAT §3): durasi concat = beat_durations dari pipeline (SUMBER
+        # TUNGGAL — sama dgn yang di-bake tiap clip → display==bake=exact, sinkron TTS, nol glitch).
+        # Fallback: section_durations legacy 6 (no-preset/clip count tak cocok).
+        clip_durations = script.get("beat_durations")
+        if clip_durations and len(clip_durations) == len(clips):
+            logger.info(f"[Renderer] beat_durations ({len(clip_durations)}): {[round(d,1) for d in clip_durations]}")
+        else:
+            clip_durations = None
+            section_durs   = script.get("section_durations", {})
+            if section_durs and len(section_durs) >= 6:
+                sd        = section_durs
+                hook      = float(sd.get("hook", 3))
+                mystery   = float(sd.get("mystery_drop", 5))
+                buildup   = float(sd.get("build_up", 12))
+                interrupt = float(sd.get("pattern_interrupt", 2))
+                core      = float(sd.get("core_facts", 15))
+                bridge    = float(sd.get("curiosity_bridge", 3))
+                climax    = float(sd.get("climax", 8))
+                cta       = float(sd.get("cta", 3))
+                clip_durations = [
+                    hook, mystery, buildup,
+                    round(interrupt + core / 2, 2),
+                    round(core / 2 + bridge, 2),
+                    round(climax + cta, 2),
+                ]
+                logger.info(f"[Renderer] section_durations (legacy 6): {clip_durations}")
         # clip_list harus kompensasi xfade loss agar Step A output = audio_duration
         # Step A xfade: (n-1) × 0.4s loss → target harus audio_duration + loss
         # Sehingga: Step B tpad(trailing_silence) → total_duration = audio sync sempurna

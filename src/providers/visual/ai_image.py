@@ -117,6 +117,7 @@ class AIImageProvider(VisualProvider):
         count: int,
         output_dir: Path,
         clip_durations: list[float] | None = None,
+        beat_roles: list[str] | None = None,
     ) -> list[VideoClip]:
         """
         Generate gambar AI per section → convert ke video dengan motion.
@@ -183,9 +184,10 @@ class AIImageProvider(VisualProvider):
             if img_path is None:
                 continue
             duration  = _dur(i)
+            role      = beat_roles[i] if (beat_roles and i < len(beat_roles)) else ""
             clip_path = output_dir / f"clip_{i+1:02d}_ai.mp4"
             try:
-                self._image_to_video(img_path, clip_path, duration=duration, clip_index=i)
+                self._image_to_video(img_path, clip_path, duration=duration, clip_index=i, role=role)
                 size_mb = clip_path.stat().st_size / (1024 * 1024)
                 clips.append(VideoClip(
                     path=clip_path, duration=duration, width=1080, height=1920,
@@ -200,11 +202,11 @@ class AIImageProvider(VisualProvider):
         logger.info(f"[AIImage] Complete: {len(clips)}/{count} clips (image-gen paralel I/O, convert sekuensial CPU)")
         return clips
 
-    def extract_keywords_from_script(self, script: dict, niche: str) -> list[str]:
+    def extract_keywords_from_script(self, script: dict, niche: str, n: int = 6) -> list[str]:
         """
         Extract visual subjects dari script.
         Priority: visual_suggestions dari script (sudah sinematik dari s6c6).
-        Selalu return tepat 6 items untuk 6 section clips.
+        Return tepat N items (= visual_beats preset; 1 image per beat — image-gen per-preset MULTI_FORMAT §3).
         """
         keywords = []
 
@@ -220,17 +222,17 @@ class AIImageProvider(VisualProvider):
             f"[AIImage] visual_suggestions dari script: {len(keywords)} items"
         )
 
-        # Priority 2: fallback ke niche visual_fallbacks dari Supabase jika kurang dari 6
-        if len(keywords) < 6:
+        # Priority 2: fallback ke niche visual_fallbacks dari Supabase jika kurang dari N
+        if len(keywords) < n:
             fallbacks = self.niche_visual_fallbacks
             for fb in fallbacks:
-                if len(keywords) >= 6:
+                if len(keywords) >= n:
                     break
                 if fb not in keywords:
                     keywords.append(fb)
-            logger.info(f"[AIImage] Setelah fallback: {len(keywords)} items")
+            logger.info(f"[AIImage] Setelah fallback: {len(keywords)} items (target {n})")
 
-        return keywords[:6]
+        return keywords[:n]
 
     async def _ai_rewrite_on_rejection(
         self,
@@ -397,21 +399,24 @@ class AIImageProvider(VisualProvider):
     # ──────────────────────────────────────────────
 
     @staticmethod
-    @staticmethod
     def _image_to_video(
         img_path: Path,
         output_path: Path,
         duration: float = 5.0,
         clip_index: int = 0,
+        role: str = "",
     ) -> None:
         """
         Konversi gambar → video 9:16 dengan Ken Burns effect.
-        Fix G: section-aware motion — setiap clip punya karakter gerakan
-        sesuai posisi dalam narasi agar terasa dinamis seperti footage video.
+        A6 (Opsi A): motion BEAT-ROLE-aware — gerakan dipilih dari PERAN beat (hook/climax/…),
+        bukan posisi idx%6, agar cocok narasi di semua preset (3-9 beat). Unknown/kosong → idx%6.
         """
         fps    = 30
         frames = int(duration * fps)
-        idx    = clip_index % 6
+        # role → indeks SECTION_MOTIONS (reuse ekspresi zoompan terbukti); fallback idx%6 non-breaking.
+        _ROLE_MOTION = {"hook": 0, "mystery_drop": 1, "build_up": 2, "pattern_interrupt": 1,
+                        "core_facts": 3, "core_facts_2": 4, "curiosity_bridge": 2, "climax": 5, "cta": 5}
+        idx    = _ROLE_MOTION.get(role, clip_index % 6)
 
         # Section-aware Ken Burns motions
         # Kecepatan disesuaikan dengan durasi — clip pendek lebih agresif

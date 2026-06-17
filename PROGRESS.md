@@ -26,7 +26,7 @@
 - **➡️ LALU = 9-10** FE wiring/sinkronisasi (long pole) → **11** beta. *(follow-up: 6.2 voice rotation + 6.4 per-tag saat sistem tag/voice-catalog, ~P9-10.)*
 - **🆕 .env (2026-06-14):** root `.env` di-switch v1→v2 (service_role) — dulu run v2 via override inline; kini default v2 (foot-gun worker→v1 hilang). Detail [[project_env_supabase_target]].
 - **Keputusan Phase 6 (sudah diputus, default):** cadence fetch+compute 24j (config) · 6.2 voice-rotation pakai voice yang ada dulu (katalog voice = nyambung TTS-catalog-wiring) · AI disclosure = toggle, default ON.
-- **Gate owner:** cutover (deploy + flip) & ElevenLabs re-subscribe → **§GATE CUTOVER (F1, B1, E3)**.
+- **Gate owner:** cutover (deploy + flip). *(ElevenLabs re-subscribe / E3 = ✅ SELESAI 2026-06-17: owner topup OpenAI+ElevenLabs ryan, kuota aktif.)* → **§GATE CUTOVER (F1, B1)**.
 - **FE gap WAJIB (Phase 9-10), semua OPSIONAL/non-breaking:** format/preset picker · Branded panel (link+soft-sell+upload-logo+**pemilih posisi+preview**, ukuran platform-fixed) · privacy toggle (channel settings, default private) · provider-mgmt UI (E2) · live-tail→pipeline_run_logs · Supabase Auth.
 
 **JANGAN diulang (sudah dikerjakan):** Phase 0 audit ✅; framing v1/v2 (terkunci); **frontend track ✅ (28 screen)**; **backend Phase 1-5 ✅** (clone DB v2 ✅, decouple terbukti). Deploy backend v2 ke VPS = **cutover** (keputusan operasional owner, bukan "jangan") — v1 tetap jangan disentuh sampai saat itu.
@@ -153,9 +153,37 @@
 
 ---
 
+## 🎨 RENCANA KERJA — IMAGE-GEN PER-PRESET + LLM 2-TAHAP (Opsi A) + AKURASI DURASI (Cacat B)  [AKTIF 2026-06-17]
+
+> **Status:** image-gen per-preset = **implemented + VALIDATED LOKAL (belum deploy)** — 6 preset, jalur NYATA config-DB, image = `visual_beats`, ai_image murni (NOL pexels), fix bug durasi −9s. Ditemukan **2 cacat** → rencana penyempurnaan ke kualitas TERBAIK. Desain final + pseudocode = journal entri TERATAS + chat. **Spec detail (MULTI_FORMAT §3/§10, QC §2) ditulis SETELAH validasi + deploy** (sengaja ditunda krn arsitektur prompt berubah). ryan PAUSED selama kerja ini.
+>
+> **Arsitektur (disepakati owner):** Tahap-1 LLM = narasi saja (→ TTS → caption) ⟂ Tahap-2 LLM terdedikasi = prompt-image per-beat (→ image-gen). Clue prompt per-scene = **teks beat FINAL + niche_visual_style + peran arc**. Per-tenant: durasi→preset(beat/budget/jumlah-image) · niche→style/voice/speed/timing · topik→narasi+clue.
+
+**FASE 1 — Cacat A (prompt image konsisten, tahan model murah):** ✅ **VALIDATED-LOKAL (6 preset, prompt bersih 6/6), pending deploy.**
+- [x] A1 — STEP 3 = **Tahap-1 narasi saja** (skema JSON bersih, slot `core_facts_2`, array malformed dibuang). ✓ validated
+- [x] A2 — **Guard beat aktif non-kosong** (tolak→retry). ✓ validated
+- [x] A3 — **STEP 4.5 = Tahap-2** (1 LLM call pasca hook-optimize; thumbnail + N−1 prompt; through-line+variasi). ✓ validated
+- [x] A4 — **Sanitize/guard** ("N/A"/kurung/echo/kosong) + **fallback ekstraktif**. ✓ validated
+- [x] A5 — **scene-hook = thumbnail_concept** (no-waste: Hook-frame + N scene). ✓ validated
+- [x] A6 — **Ken-Burns motion BEAT-ROLE-aware** (role→motion). ✓ validated
+- [x] **VISUAL DNA (no-hardcode):** Tahap-2 inject SELURUH key `visual_style`(=visual_dna) generik + `style_exemplars` (eks-visual_fallbacks) + mandat "beauty-first". `visual_dna` universe_mysteries diperkaya 10-key (admin-editable via `/admin/niches` JSON; update-API whitelist). ✓ validated (60s sinematik). **3 niche lain belum diisi.**
+
+**FASE 2 — Cacat B (akurasi durasi → lolos QC):** ⚠️ **SEBAGIAN.**
+- [x] B1 — **budget speed-adjust** (`detik × delivery_wps × niche_speed`, EL ×0.9→1.62). → **45/60/75/90 LOLOS** ✓. 15s/30s masih overshoot.
+- [ ] B2 (REFRAMED — root-cause data: bukan delivery/v1, tapi **LLM melebihi word-budget §3 di preset pendek**; TTS sudah benar): **PAKSA kepatuhan word-budget §3 di preset pendek** — hard word-cap per beat di BEAT PLAN (ultra-terse) + length-gate batas-atas lebih galak (pangkas saat > budget×1.12). Validasi 15s/30s masuk window. *(Bukti: bila LLM patuh, 15s→24kata÷1.43=16.8s LOLOS, 30s→49÷1.65=29.7s LOLOS.)*
+
+**VALIDASI & RILIS (SOP):**
+- [x] V1 — Validasi SOP lokal 6 preset: image=visual_beats ✓ · prompt BERSIH 6/6 ✓ · universe 60s sinematik ✓ · durasi: 45/60/75/90 lolos, 15/30 overshoot (Cacat B). *(2026-06-17)*
+- [~] V2 — **Cacat A:** commit → push → deploy VPS → **unpause ryan** (sedang dikerjakan). *(Cacat B menyusul.)*
+- [x] V3 — SPEC ditulis: **MULTI_FORMAT §3 + §10** (arsitektur 2-tahap + VISUAL DNA + status Cacat B). *(QC §2 + DESAIN §12b pointer = saat Cacat B tuntas.)*
+
+**FUTURE (catat — JANGAN ubah tanpa keputusan owner; melanggar kontrak N=visual_beats):** >1 image per beat-panjang utk retensi · image-gen paralel TTS (latency) · quality-tier per kebutuhan viral.
+
+---
+
 ## 🛑 INSIDEN RUNAWAY PRODUKSI (2026-06-17) — ✅ RESOLVED + DEPLOYED (Opsi C)
 
-> **STATUS: SELESAI 2026-06-17.** Akar (producer loop tanpa rem + Opsi A producer-publish) diperbaiki via **Opsi C** (lihat §PERBAIKAN ARSITEKTUR PRODUKSI v2 di atas) — deployed (commit `53d4720`), **mv-worker RESTARTED + AMAN** (circuit-break terbukti: runaway tak terulang, 0 kredit). Ryan auto-paused (aman) pending **E3 ElevenLabs**. Riwayat insiden di bawah (arsip).
+> **STATUS: SELESAI 2026-06-17.** Akar (producer loop tanpa rem + Opsi A producer-publish) diperbaiki via **Opsi C** (lihat §PERBAIKAN ARSITEKTUR PRODUKSI v2 di atas) — deployed (commit `53d4720`), **mv-worker RESTARTED + AMAN** (circuit-break terbukti: runaway tak terulang, 0 kredit). **UPDATE 2026-06-17 (lanjutan):** **E3 ElevenLabs+OpenAI = ✅ DI-TOPUP owner (kuota aktif, EL TTS premium nyata).** ryan kini **PAUSED-manual sementara** untuk **validasi image-gen per-preset** (bukan lagi auto-pause-0-kredit pending-E3) — lihat journal entri TERATAS. Riwayat insiden di bawah (arsip).
 
 
 > **State kritis.** `mv-worker` **SENGAJA di-stop** (`sudo systemctl stop mv-worker`) untuk hentikan runaway. **Produksi+publish HALTED, nol pembakaran kredit.** ⛔ **JANGAN restart** sebelum #2 & #3 beres. `mv-web` normal.
@@ -213,8 +241,9 @@
 - [x] G2 — **KRITERIA-TERIMA TERBUKTI DI PRODUKSI (2026-06-17):** restart `mv-worker` → producer **circuit-break seketika** (streak 12 dari stale) → `channels.production_paused=true` ryan + alarm → **0 produksi baru, 0 kredit, 0 upload off-schedule**. Runaway **TIDAK terulang**. 7 thread `up`.
 - [x] G3 — 29 baris `failed` stale ryan dibersihkan (0 s3_key → 0 orphan; content_inventory ryan kosong). Wajib agar auto-recover tak di-defeat data stale. *(2026-06-17)*
 - [x] G4 — Deploy: commit `53d4720` push → pull `~/viral-machine-v2` + `~/mesinviral-web` (FE build PASS) + **`PRODUCER_MAX_RENDER=1`** di .env VPS (anti-OOM 2-core, decisions §3). *(2026-06-17)*
-- [x] G5 — `mv-worker` restarted + dipantau: 7 thread up, ryan auto-paused (aman), nol runaway. `mv-web` 200, `/review` 200. *(2026-06-17)*
-- [ ] **SISA (gate owner):** **E3 ElevenLabs re-subscribe** (akar durasi-pendek) → lalu **Jalankan Ulang (direct)** ryan → auto-unpause → produksi sehat lanjut. *(ATAU fix WPS-follow-actual-provider, QC §2 — alternatif tanpa re-subscribe.)* · **D2** preview · **F2/F3** fosil sisa.
+- [x] G5 — `mv-worker` restarted + dipantau: 7 thread up, ryan auto-paused (aman), nol runaway. `mv-web` 200, `/review` 200. *(2026-06-17 — saat itu; per UPDATE di bawah ryan kini PAUSED-manual utk validasi image-gen, E3 sudah di-topup)*
+- [x] **E3 ElevenLabs+OpenAI re-subscribe/topup — ✅ SELESAI (owner, 2026-06-17):** kuota aktif, EL TTS premium nyata, 429 hilang.
+- [ ] **SISA (urut):** **IMAGE-GEN per-preset** (validated-lokal; **Opsi A 2-tahap LLM** + kalibrasi akurasi durasi akar-b — SEDANG dikerjakan, detail journal TERATAS) → unpause ryan → **D2** preview · **F2/F3** fosil sisa.
 
 ---
 
@@ -253,7 +282,7 @@
 **E. Keamanan & data sebelum publik**
 - [ ] E1 — **ROTASI semua secret dev**: password DB, service_role, anon, `OAUTH_STATE_SECRET`, `MV_INTERNAL_SECRET`, SMTP, Midtrans, ElevenLabs.
 - [ ] E2 — Isi kredensial channel **admin-test** (Test Lab).
-- [ ] E3 — (kualitas) ElevenLabs ryan lapse→free: re-subscribe untuk voice premium + kalibrasi `tts_profiles.delivery_wps` + closed-loop + self-learning penuh.
+- [~] E3 — (kualitas) ElevenLabs ryan: **✅ DI-TOPUP owner 2026-06-17** (voice premium aktif, 429 hilang). **Sisa turunan (OPEN):** kalibrasi `tts_profiles.delivery_wps` **× speed-niche** = akar **Cacat B** akurasi durasi (sedang via track image-gen) + closed-loop + self-learning penuh (data-gated).
 - [ ] E4 — **§ADMIN SYSTEM SECRETS** (build S1-S4, lihat section di atas): system secrets editable di admin panel (Kategori A) sebelum go-live. *(rencana owner 2026-06-16; rotasi E1 mencakup secret-secret ini.)*
 
 **F. Cutover (flip)**

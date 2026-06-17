@@ -241,6 +241,32 @@ def _narrative_intent(target_duration, n_beats) -> str:
     return (f"LONG {target_duration}s: the complete arc — layered mystery, multiple distinct facts, build and release with depth. Zero filler.")
 
 
+def compute_beat_durations(script: dict, word_timestamps: list | None, audio_duration: float) -> list:
+    """Durasi per-beat untuk image-gen + render (1 image per beat). SUMBER TUNGGAL (dipanggil SEKALI di
+    pipeline) → dikonsumsi visual_assembler (bake Ken-Burns) DAN renderer (concat) = bake==display=exact
+    → sinkron TTS, nol glitch. Dari word_timestamps NYATA (presisi per-beat) bila ada+andal; else proporsi
+    jumlah-kata. Total dinormalisasi = audio_duration."""
+    beats  = script.get("beats") or _ALL_SECTIONS
+    counts = [max(1, len((script.get(b) or "").split())) for b in beats]
+    total_w = sum(counts) or 1
+    wt = word_timestamps or []
+    durs = None
+    if wt and len(wt) >= total_w * 0.6:          # cukup andal (ElevenLabs ~98%, edge ~80%)
+        durs, idx = [], 0
+        for c in counts:
+            s_i = min(idx, len(wt) - 1)
+            e_i = min(idx + c - 1, len(wt) - 1)
+            d = float(wt[e_i].get("end", 0)) - float(wt[s_i].get("start", 0))
+            durs.append(max(0.6, d))
+            idx += c
+    if not durs:                                  # fallback: proporsi jumlah-kata
+        durs = [max(0.6, audio_duration * c / total_w) for c in counts]
+    tot = sum(durs) or 1
+    if audio_duration > 0:                         # normalisasi total = audio_duration (presisi)
+        durs = [round(d * audio_duration / tot, 4) for d in durs]
+    return durs
+
+
 def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, insights_block=None,
                        preset_seconds=None, format_wps=None,
                        cta_mode="implicit", brand_name=None, brand_cta_text=None):
@@ -284,8 +310,7 @@ def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, ins
             f"Write EXACTLY these {len(active)} beats IN ORDER — nothing more, nothing fewer:\n{_plan_lines}\n"
             + (f"Leave these JSON fields as EMPTY string \"\": {', '.join(inactive)}.\n" if inactive else "")
             + (f"Also output field \"core_facts_2\" (a SECOND distinct fact).\n" if "core_facts_2" in active else "")
-            + f"visual_suggestions: output EXACTLY {n_scenes} scenes — ONE per beat above, in the same order.\n"
-            f"The numbered section guide below is your CRAFT TOOLBOX — apply only the active beats' techniques.\n"
+            + f"The numbered section guide below is your CRAFT TOOLBOX — apply only the active beats' techniques.\n"
         )
         words = {s: words.get(s, 0) for s in _ALL_SECTIONS}   # panduan ber-nomor (1-8) refs semua 8; inactive→0
     else:
@@ -304,15 +329,6 @@ Dimensions that need improvement (with specific techniques to apply):
 Apply each technique above precisely. Fresh thinking only — not a revision of what came before.
 """
 
-    vs = niche_visual_style or {}
-    visual_direction_block = ""
-    if vs:
-        visual_direction_block = f"""
-VISUAL DIRECTION — apply to all visual_suggestions prompts:
-- Style: {vs.get("base_style", "")}
-- Color palette: {vs.get("color_palette", "")}
-- Atmosphere: {vs.get("atmosphere", "")}
-"""
 
     insights_section = ""
     if insights_block:
@@ -347,7 +363,7 @@ STYLE: {profile['style']}
 AVOID: {profile['avoid']}
 EMOTION ARC: {profile['emotion_arc']}
 HOOK FORMULA: {profile['hook_style']}
-{visual_direction_block}{insights_section}{soft_sell_block}{feedback_block}{beat_plan}
+{insights_section}{soft_sell_block}{feedback_block}{beat_plan}
 Follow the BEAT PLAN above — write ONLY the active beats (others = empty ""). The numbered guide below is craft reference per section:
 
 1. HOOK ({section_timing['hook']}s ~{words['hook']} words)
@@ -435,6 +451,7 @@ Return ONLY valid JSON — no markdown, no preamble, no explanation:
   "build_up": "exact build up text",
   "pattern_interrupt": "exact pattern interrupt text — must be topic-specific",
   "core_facts": "exact core facts text",
+  "core_facts_2": "exact SECOND distinct fact text — ONLY if CORE FACT 2 is listed in the BEAT PLAN above; otherwise an empty string",
   "curiosity_bridge": "exact curiosity bridge text",
   "climax": "exact climax text",
   "cta": "exact cta text — must sound human, not scripted",
@@ -442,17 +459,11 @@ Return ONLY valid JSON — no markdown, no preamble, no explanation:
   "word_count": 140,
   "estimated_duration_seconds": {target_duration},
   "section_durations": {json.dumps(section_timing)},
-  "visual_suggestions": [
-    "Scene 1 — hook: [Look at the hook text you just wrote. Identify the single most concrete noun, entity, or visual moment in those exact words — not the topic in general, but the SPECIFIC thing named or implied in YOUR hook. Build the entire DALL-E 3 prompt around that one element. Character: dramatic, tension-filled, stops the scroll in 1 second. Lighting: high contrast, sharp shadows, or stark cosmic void. Camera: extreme close-up on a detail OR extreme wide shot showing overwhelming scale. Apply VISUAL DIRECTION style. Vertical 9:16, photorealistic, no text no words no letters no numbers no signs no logos no watermarks.]",
-    "Scene 2 — mystery drop: [Look at the mystery_drop text you just wrote. What is the single most specific, uncanny, or unsettling concrete thing you described? Show THAT — not a generic mysterious atmosphere. Character: mysterious, raises more questions than it answers, something is being concealed. Lighting: low-key, shadows dominate, one element catches ambient glow. Camera: subject partially obscured, slow-reveal composition. Apply VISUAL DIRECTION style. Vertical 9:16, photorealistic, no text no words no letters no numbers no signs no logos no watermarks.]",
-    "Scene 3 — build up: [Look at the build_up text you just wrote. What specific entity, location, or phenomenon did you describe — with a number, name, or date? Visualize THAT at its maximum scale and weight. Character: epic, awe-inspiring, the full enormity of what was just described. Lighting: dramatic natural or cosmic light — golden hour, deep space, or geological ancient. Camera: wide establishing shot, the subject dwarfed by its own context. Apply VISUAL DIRECTION style. Vertical 9:16, photorealistic, no text no words no letters no numbers no signs no logos no watermarks.]",
-    "Scene 4 — core facts 1: [Look at the core_facts text you just wrote. What is the first specific surprising fact — the concrete subject of that fact? Render the exact visual evidence of it, from an angle no one expects. Character: undeniable proof, visually striking, unexpected perspective. Lighting: clinical precision or dramatic chiaroscuro — no ambiguity. Camera: tight detail shot on the specific element that proves the fact. Apply VISUAL DIRECTION style. Vertical 9:16, photorealistic, no text no words no letters no numbers no signs no logos no watermarks.]",
-    "Scene 5 — core facts 2: [Look at the core_facts text you just wrote. What is the second specific fact — what entity, force, or moment does it describe? Show THAT at the precise moment of tension, the point of no return. Character: mounting tension, something vast approaching, irreversible. Lighting: atmosphere darkening, spotlight converging on the key element. Camera: medium shot, leading lines pulling toward the climax. Apply VISUAL DIRECTION style. Vertical 9:16, photorealistic, no text no words no letters no numbers no signs no logos no watermarks.]",
-    "Scene 6 — climax: [Look at the climax text you just wrote. What is the single most powerful revelation — the ultimate truth you just delivered? This frame must be the most unforgettable image in the entire video. Character: emotionally peak, overwhelming, the moment everything lands. Lighting: absolute extremes only — total darkness with one piercing light OR blinding overexposed reveal. Camera: the single most powerful composition possible for this specific revelation. Apply VISUAL DIRECTION style. Vertical 9:16, photorealistic, no text no words no letters no numbers no signs no logos no watermarks.]"
   "background_music_mood": "specific mood, instrumentation, and emotional arc — not just one word",
-  "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#shorts"],
-  "thumbnail_concept": "the specific image that makes someone stop scrolling and need to click"
-}}"""
+  "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#shorts"]
+}}
+
+NOTE: This call writes the NARRATION ONLY. Do NOT output image prompts/visual_suggestions/thumbnail — those are generated in a separate dedicated step."""
 
 
 class ScriptEngine:
@@ -477,29 +488,25 @@ class ScriptEngine:
         raw = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', raw)
         return raw.strip()
 
-    def _validate_and_fix(self, script, topic, section_timing: dict | None = None, n_scenes: int = 6):
+    def _validate_and_fix(self, script, topic, section_timing: dict | None = None, active_beats: list | None = None):
+        """Validasi TAHAP-1 (narasi saja). visual_suggestions TIDAK dibuat di sini lagi —
+        dipindah ke Tahap-2 terdedikasi (Opsi A) pasca hook-optimize."""
         if not isinstance(script, dict):
             return None
         # required = beat INTI yang selalu aktif di tiap preset (compression-mapping n≥3): hook+core+cta.
-        # build_up/climax/dll = preset-dependent → tak wajib (preset pendek tak memakainya).
         required = ["hook", "core_facts", "cta", "full_script"]
         if any(not script.get(f) for f in required):
             logger.warning(f"[ScriptEngine] Missing required fields")
             return None
         for f in ["mystery_drop", "build_up", "pattern_interrupt", "curiosity_bridge", "climax", "core_facts_2"]:
             script.setdefault(f, "")
-        vs = script.get("visual_suggestions", [])
-        if not isinstance(vs, list):
-            vs = []
-        topic_text = topic.get("topic", "the topic")
-        _n = max(1, int(n_scenes))   # scene = visual_beats preset (selaras QC clip_count)
-        while len(vs) < _n:
-            vs.append(
-                f"Cinematic documentary photograph directly related to {topic_text}. "
-                f"Single powerful focal point, dramatic natural lighting. "
-                f"Vertical 9:16, photorealistic, no text no words no letters no numbers no signs."
-            )
-        script["visual_suggestions"] = vs[:_n]
+        # A2 (Opsi A): SETIAP beat aktif preset WAJIB punya teks — compute_beat_durations + image-gen
+        # baca per-beat; beat aktif kosong → durasi & scene meleset. Kosong → tolak (retry attempt).
+        if active_beats:
+            empty = [b for b in active_beats if not (script.get(b) or "").strip()]
+            if empty:
+                logger.warning(f"[ScriptEngine] Beat aktif kosong (tolak→retry): {empty}")
+                return None
         script.setdefault("section_durations", section_timing or _DEFAULT_SECTION_TIMING)
         if not script.get("full_script"):
             parts = [script.get(s, "") for s in
@@ -521,11 +528,11 @@ class ScriptEngine:
         from src.providers.llm import LLMError
 
         section_timing = _get_section_timing(niche)
-        n_scenes = 6
-        if preset_seconds:   # selaras dgn prompt (validate pakai timing yg sama)
+        active_beats = None
+        if preset_seconds:   # selaras dgn prompt (validate pakai timing + beat aktif yg sama)
             section_timing = _scale_section_timing(section_timing, preset_seconds)
             from src.config.format_catalog import preset_visual_beats as _pvb
-            n_scenes = len(_active_beats(int(_pvb(preset_seconds))))   # scene = jumlah beat aktif preset
+            active_beats = _active_beats(int(_pvb(preset_seconds)))   # beat aktif preset = WAJIB non-kosong (A2)
         try:
             raw = provider.complete(
                 system=_build_system_prompt(),
@@ -540,7 +547,7 @@ class ScriptEngine:
                 as_json=True,
             )
             script = json.loads(self._clean_json(raw))
-            script = self._validate_and_fix(script, topic, section_timing, n_scenes=n_scenes)
+            script = self._validate_and_fix(script, topic, section_timing, active_beats=active_beats)
             if script:
                 logger.info(
                     f"[ScriptEngine] {provider.provider_name} attempt {attempt} "
@@ -569,6 +576,113 @@ class ScriptEngine:
             logger.warning(f"[ScriptEngine] Load insights gagal (non-fatal): {e}")
             return None
 
+    def generate_visual_prompts(self, script: dict, tenant_config) -> dict:
+        """TAHAP-2 (Opsi A): LLM TERDEDIKASI membuat prompt image per-beat dari narasi FINAL.
+        Dipanggil SETELAH hook-optimize (hook sudah final). Clue = teks beat + niche_visual_style +
+        peran arc. 1 LLM call melihat SEMUA beat → koheren + bervariasi (through-line + varied composition).
+        Set script['thumbnail_concept'] + script['visual_suggestions'] (index0 = thumbnail = scene hook).
+        Sanitize tiap prompt + fallback EKSTRAKTIF (robust): tak pernah "N/A"/instruksi/kosong → tahan
+        model image murah (flux/SD). visual_suggestions panjang = jumlah beat (= visual_beats preset)."""
+        beats      = script.get("beats") or list(_ALL_SECTIONS)
+        run_config = self._get_run_config(tenant_config)
+        # VISUAL DNA niche (owner: SELURUH property niche = sumber prompting; NO-HARDCODE).
+        # Inject SELURUH key visual_style apa adanya → admin tambah key (lighting/camera/composition/
+        # realism/reference/color_grading/motion/…) langsung berpengaruh TANPA ubah kode. Kosong → fallback minimal.
+        nvs        = (getattr(run_config, "niche_visual_style", {}) or {}) if run_config else {}
+        dna_lines  = "\n".join(f"- {k.replace('_',' ')}: {v}" for k, v in nvs.items() if v) \
+                     or "- style: cinematic, photorealistic, dramatic lighting"
+        dna_inline = "; ".join(str(v) for v in nvs.values() if v) or "cinematic, photorealistic, dramatic lighting"
+        # style_exemplars = eks-`visual_fallbacks` (di-repurpose): contoh shot terbaik niche → few-shot
+        # acuan kualitas (bukan lagi padding stock-lib v1). Admin kurasi di niche.
+        exemplars  = (getattr(run_config, "niche_visual_fallbacks", []) or []) if run_config else []
+        exemplar_block = ("\nEXEMPLAR SHOTS (this niche's signature look — MATCH this quality bar, don't copy verbatim):\n"
+                          + "\n".join(f"  • {e}" for e in exemplars[:6])) if exemplars else ""
+        topic_text = script.get("topic", "") or script.get("title", "")
+        niche_key  = getattr(tenant_config, "niche", "") or script.get("niche", "")
+        niche_name = (get_niches().get(niche_key) or {}).get("name", niche_key)
+
+        def _extractive(beat: str) -> str:
+            txt   = (script.get(beat) or "").strip()
+            first = (txt.split(".")[0].strip() if txt else topic_text) or topic_text
+            return (f"{first}. {dna_inline}. Single commanding focal point, vertical 9:16, "
+                    f"photorealistic, no text no words no letters no numbers no logos no watermarks.")
+
+        def _bad(p) -> bool:
+            if not p or not isinstance(p, str):
+                return True
+            s = p.strip().lower()
+            if len(s) < 15:
+                return True
+            return any(m in s for m in ["n/a", "look at", "you just wrote", "[", "visual direction", "scene 1", "scene 2"])
+
+        non_hook  = beats[1:]                 # beat[0]=hook → jadi thumbnail/hook-frame
+        thumbnail = ""
+        scenes    = []
+        llm       = run_config.get_llm_provider()      if run_config else None
+        model     = run_config.llm_model_for("utility") if run_config else ""
+        if llm:
+            try:
+                beat_lines = "\n".join(
+                    f"- BEAT {i+2} [{_ROLE_LABEL.get(b, b)}]: {(script.get(b) or '').strip()[:400]}"
+                    for i, b in enumerate(non_hook)
+                )
+                system = (
+                    "You are an elite cinematic visual director for viral short-form vertical video. "
+                    "You convert each narration beat into ONE photorealistic image prompt grounded in what "
+                    "the beat actually says. Output ONLY valid JSON — no markdown, no preamble."
+                )
+                user = f"""TOPIC: {topic_text}
+NICHE: {niche_name}
+
+VISUAL DNA — the signature cinematic identity of this niche. Apply ALL of it to EVERY image:
+{dna_lines}
+{exemplar_block}
+
+Below is the FINAL narration, beat by beat. Make each image match what is actually SAID in that beat.
+
+RULES (every prompt — non-negotiable for a VIRAL, breathtaking result):
+- Build the image around the single most CONCRETE visual element named/implied in that beat's text — not the topic in general.
+- BEAUTY FIRST: every frame must be gallery-grade cinematic. EXPLICITLY apply the VISUAL DNA's lighting, camera/lens, composition, color, and realism in your description. Not "good enough" — stunning, scroll-stopping, emotionally striking.
+- Photorealistic, vertical 9:16, ONE commanding focal point with depth.
+- Keep ONE consistent visual through-line across all scenes (a recurring subject/setting/palette that evolves), but VARY composition, scale, and camera angle so no two scenes look alike.
+- Write a concrete, richly cinematic DESCRIPTION (2-3 sentences) that explicitly names the lighting + camera + mood. NEVER write instructions. NEVER output "N/A".
+- ABSOLUTELY NO text, words, letters, numbers, signs, logos, or watermarks inside the image.
+
+THUMBNAIL = the opening HOOK frame. HOOK text: "{(script.get(beats[0]) or '').strip()[:300]}"
+Make it the most scroll-stopping, beautiful frame of all — one striking focal point, FULL VISUAL DNA applied, clear NEGATIVE SPACE in the upper third for a title overlay.
+
+BEATS to illustrate (one prompt each, IN ORDER):
+{beat_lines}
+
+Return ONLY valid JSON:
+{{
+  "thumbnail_concept": "concrete description of the opening hook image (negative space at top)",
+  "scenes": ["concrete prompt for BEAT 2", "concrete prompt for BEAT 3", "... EXACTLY {len(non_hook)} items, in order"]
+}}"""
+                raw  = llm.complete(system=system, user=user, model=model,
+                                    temperature=0.8, max_tokens=1400, as_json=True)
+                data = json.loads(self._clean_json(raw))
+                thumbnail = (data.get("thumbnail_concept") or "").strip()
+                scenes    = data.get("scenes") if isinstance(data.get("scenes"), list) else []
+            except Exception as e:
+                logger.warning(f"[ScriptEngine] Tahap-2 image-prompt gagal ({e}) → fallback ekstraktif")
+
+        # Sanitize + pad/trim tepat len(non_hook); cacat → fallback ekstraktif per-beat
+        clean_scenes = []
+        for i, b in enumerate(non_hook):
+            p = scenes[i] if i < len(scenes) else ""
+            clean_scenes.append(_extractive(b) if _bad(p) else p.strip())
+        if _bad(thumbnail):
+            thumbnail = _extractive(beats[0]) if beats else _extractive("hook")
+
+        script["thumbnail_concept"]  = thumbnail
+        script["visual_suggestions"] = [thumbnail] + clean_scenes   # index0 = scene hook = thumbnail
+        logger.info(
+            f"[ScriptEngine] Tahap-2 prompt-image: {len(script['visual_suggestions'])} "
+            f"(1 thumbnail + {len(clean_scenes)} scene) via {'LLM' if llm and scenes else 'fallback-ekstraktif'}"
+        )
+        return script
+
     def generate(self, topic, tenant_config):
         logger.info(f"[ScriptEngine] Generating: {topic.get('topic','')[:50]}...")
 
@@ -591,6 +705,17 @@ class ScriptEngine:
         # tak lolos QC → Opsi C: flagged + tenant putuskan). Akar akurasi durasi = LLM hit word-budget.
         _tts_provider  = getattr(run_config, "tts_provider", None) if run_config else None
         format_wps     = _eff_wps(getattr(tenant_config, "format_profile", None), _tts_provider) if preset_seconds else None
+        # Cacat B (B1) — BUDGET SADAR-SPEED: delivery EL diperlambat oleh voice `speed` per-niche
+        # (tts_voice_settings DB). audio = kata / (delivery_wps × speed) → kata = detik × delivery_wps × speed.
+        # Tanpa ini budget kebanyakan kata → audio molor → QC durasi gagal (terbukti 30s→34.9s @ speed 0.9).
+        # Hanya provider ber-setting speed (elevenlabs); edge sudah benar di delivery_wps-nya. No-hardcode:
+        # speed dari DB. (B2 closed-loop kalibrasi delivery_wps base dari data NYATA — menyusul.)
+        if format_wps and preset_seconds and (_tts_provider or "").lower().startswith("eleven"):
+            _vs    = (getattr(run_config, "tts_voice_settings", {}) or {}) if run_config else {}
+            _speed = float((_vs.get(tenant_config.niche) or {}).get("speed", 1.0) or 1.0)
+            if 0.5 <= _speed <= 1.5 and _speed != 1.0:
+                format_wps = round(format_wps * _speed, 4)
+                logger.info(f"[ScriptEngine] B1 budget speed-adjust: × speed({_speed}) → {format_wps} wps (niche={tenant_config.niche})")
         # Branded Content §6 — soft-sell (opsional; implicit → tanpa brand)
         _cta_mode  = getattr(tenant_config, "cta_mode", "implicit") or "implicit"
         _brand     = getattr(tenant_config, "brand_name", None)
@@ -745,12 +870,16 @@ class ScriptEngine:
                 f"threshold {min_score} — using best available"
             )
 
+        from src.config.format_catalog import preset_visual_beats as _pvb_g
+        _beats = _active_beats(int(_pvb_g(preset_seconds))) if preset_seconds else list(_ALL_SECTIONS)
         best_script.update({
             "topic":                   topic.get("topic", ""),
             "viral_score":             topic.get("viral_score", 0),
             "script_viral_score":      best_score,
             "tenant_id":               tenant_config.tenant_id,
             "niche":                   tenant_config.niche,
+            "beats":                   _beats,   # urutan beat aktif (compression-mapping) → image-gen + render per-preset
+
             "generated_at":            datetime.now().isoformat(),
             "llm_provider_used":       actual_provider,
             "llm_provider_requested":  llm_provider,
