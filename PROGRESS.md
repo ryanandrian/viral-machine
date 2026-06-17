@@ -155,7 +155,7 @@
 
 ## 🎨 RENCANA KERJA — IMAGE-GEN PER-PRESET + LLM 2-TAHAP (Opsi A) + AKURASI DURASI (Cacat B)  [AKTIF 2026-06-17]
 
-> **Status:** image-gen per-preset = **implemented + VALIDATED LOKAL (belum deploy)** — 6 preset, jalur NYATA config-DB, image = `visual_beats`, ai_image murni (NOL pexels), fix bug durasi −9s. Ditemukan **2 cacat** → rencana penyempurnaan ke kualitas TERBAIK. Desain final + pseudocode = journal entri TERATAS + chat. **Spec detail (MULTI_FORMAT §3/§10, QC §2) ditulis SETELAH validasi + deploy** (sengaja ditunda krn arsitektur prompt berubah). ryan PAUSED selama kerja ini.
+> **Status (2026-06-17):** **✅ CACAT A SELESAI + DEPLOYED (`e964a9e`)** — image-gen 2-tahap + VISUAL DNA (no-hardcode, 4 niche), validated 6 preset, ryan **UNPAUSED + produksi jalan** (preset 60s lolos QC). Spec di MULTI_FORMAT §3+§10. **⚠️ TERSISA = CACAT B** (durasi 15s/30s overshoot) — root-cause + plan di FASE 2 (B2) bawah. *(QC §2 + DESAIN §12b pointer ditulis saat Cacat B tuntas.)*
 >
 > **Arsitektur (disepakati owner):** Tahap-1 LLM = narasi saja (→ TTS → caption) ⟂ Tahap-2 LLM terdedikasi = prompt-image per-beat (→ image-gen). Clue prompt per-scene = **teks beat FINAL + niche_visual_style + peran arc**. Per-tenant: durasi→preset(beat/budget/jumlah-image) · niche→style/voice/speed/timing · topik→narasi+clue.
 
