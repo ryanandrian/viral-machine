@@ -174,7 +174,7 @@
 
 **VALIDASI & RILIS (SOP):**
 - [x] V1 — Validasi SOP lokal 6 preset: image=visual_beats ✓ · prompt BERSIH 6/6 ✓ · universe 60s sinematik ✓ · durasi: 45/60/75/90 lolos, 15/30 overshoot (Cacat B). *(2026-06-17)*
-- [~] V2 — **Cacat A:** commit → push → deploy VPS → **unpause ryan** (sedang dikerjakan). *(Cacat B menyusul.)*
+- [x] V2 — **Cacat A DEPLOYED** (`e964a9e` → VPS pull → mv-worker restart active → **ryan UNPAUSED**, preset 60). *(2026-06-17. Cacat B menyusul.)*
 - [x] V3 — SPEC ditulis: **MULTI_FORMAT §3 + §10** (arsitektur 2-tahap + VISUAL DNA + status Cacat B). *(QC §2 + DESAIN §12b pointer = saat Cacat B tuntas.)*
 
 **FUTURE (catat — JANGAN ubah tanpa keputusan owner; melanggar kontrak N=visual_beats):** >1 image per beat-panjang utk retensi · image-gen paralel TTS (latency) · quality-tier per kebutuhan viral.
