@@ -19,12 +19,15 @@ from loguru import logger
 
 from src.config.format_catalog import diversity_config
 
-# dimensi → kolom tracking di `videos` (0018)
+# dimensi → kolom tracking di `videos` (0018). 'niche' = kolom videos.niche → rotasi niche random
+# (decisions_niche_model: random = putar SELURUH entitlement) via mekanisme yang sama dgn dimensi lain.
+# Catatan: bergantung videos.channel_id terisi (lihat write_video di pipeline/publisher).
 _DIM_COLUMN = {
     "voice":  "voice_id",
     "hook":   "hook_pattern",
     "music":  "music_mood",
     "visual": "visual_seed",
+    "niche":  "niche",
 }
 
 

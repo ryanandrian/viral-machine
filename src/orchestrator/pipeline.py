@@ -96,31 +96,13 @@ class Pipeline:
         # Load config dari Supabase
         run_config = self._load_tenant_run_config(tenant_config)
 
-        # ── Resolusi niche (model terkunci §12c, [[decisions_niche_model]]) ──
-        # niche & jadwal TERPISAH. niche_mode='fixed' → pakai channel.niche apa adanya.
-        # niche_mode='random' → rotasi LRU dari SELURUH ENTITLEMENT tenant (katalog per-tier +
-        # niche custom/private milik tenant). TIDAK lagi pakai production_schedules (niche-per-jam).
+        # ── Niche sudah di-resolve di HULU per-channel ([[decisions_niche_model]]) ──
+        # SCHEDULED: producer._resolve_niche (random → rotasi LRU SELURUH entitlement / fixed → channels.niche).
+        # DIRECT/test (run_direct): pakai niche EKSPLISIT job. Pipeline memproduksi niche yang DIBERIKAN
+        # (tenant_config.niche) — TIDAK merotasi (single-source + cegah niche test/rerun ditimpa rotasi).
         niche_focus = None
         resolved_content_type = "short"
-        try:
-            mode = (getattr(run_config, "niche_mode", None) or "fixed").lower()
-            if mode == "random":
-                from supabase import create_client
-                from src.billing.limits import entitled_niches
-                from src.intelligence.diversity import DiversityEngine
-                sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
-                entitled = entitled_niches(sb, getattr(run_config, "plan_type", "starter"),
-                                           tenant_config.tenant_id)
-                channel_id = getattr(run_config, "channel_id", None) or tenant_config.tenant_id
-                chosen = DiversityEngine().pick(channel_id, "niche", entitled) if entitled else None
-                if chosen and chosen != tenant_config.niche:
-                    logger.info(f"[Pipeline] Niche rotasi (random, entitlement): "
-                                f"{tenant_config.niche} → {chosen}")
-                    tenant_config.niche = chosen
-            else:
-                logger.info(f"[Pipeline] Niche fixed: '{tenant_config.niche}'")
-        except Exception as _se:
-            logger.warning(f"[Pipeline] resolusi niche gagal ({_se}) — pakai channel.niche")
+        logger.info(f"[Pipeline] Niche (resolved upstream): '{tenant_config.niche}'")
         # ────────────────────────────────────────────────────────────
 
         result = {
@@ -444,6 +426,10 @@ class Pipeline:
                         file_size_mb   = file_size_mb,
                         topic_scores   = script.get("topic_scores"),
                         insights_grade = script.get("insights_grade", ""),
+                        # videos.channel_id WAJIB terisi → jadi histori per-channel utk DiversityEngine
+                        # (rotasi niche random + voice/hook/music/visual). Publisher sudah kirim; di sini
+                        # (direct publish) dulu kosong = videos.channel_id NULL → LRU buta. (decisions_niche_model)
+                        channel_id     = getattr(tenant_config, "channel_id", None),
                     )
                     # ──────────────────────────────────────────────────
 

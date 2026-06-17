@@ -33,6 +33,37 @@ def default_buffer_depth() -> int:
     return int(v) if v and v.isdigit() else 2
 
 
+def _resolve_niche(channel_row: dict) -> str | None:
+    """Resolusi niche per-channel SEBELUM pipeline (jalur SCHEDULED saja — `run_direct` pakai niche
+    EKSPLISIT job & TIDAK lewat sini, jadi niche test/rerun tak pernah ditimpa rotasi).
+    `niche_mode='fixed'` → `channels.niche` apa adanya; `'random'` → rotasi LRU (DiversityEngine atas
+    `videos.niche`) SELURUH ENTITLEMENT tenant ([[decisions_niche_model]]: random = seluruh entitlement;
+    `niche_pool` deprecated, TIDAK dipakai). Fail-soft → `channels.niche`. Padanan V2 dari ScheduleManager
+    V1 (dihapus di B1) yang dulu resolve niche sebelum pipeline."""
+    base = channel_row.get("niche")
+    if (channel_row.get("niche_mode") or "fixed").lower() != "random":
+        return base
+    try:
+        from supabase import create_client
+        from src.billing.limits import entitled_niches
+        from src.intelligence.diversity import DiversityEngine
+        from src.config.tenant_config import load_tenant_config
+        tenant_id  = channel_row["tenant_id"]
+        channel_id = str(channel_row.get("id") or channel_row.get("channel_id") or tenant_id)
+        plan_type  = getattr(load_tenant_config(tenant_id), "plan_type", "starter")
+        sb         = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+        entitled   = entitled_niches(sb, plan_type, tenant_id)
+        if not entitled:
+            return base
+        chosen = DiversityEngine(sb).pick(channel_id, "niche", entitled)
+        if chosen and chosen != base:
+            logger.info(f"[Producer] niche rotasi (random, LRU entitlement): {base} → {chosen} (ch={channel_id})")
+        return chosen or base
+    except Exception as e:
+        logger.warning(f"[Producer] resolusi niche random gagal ({e}) — pakai channels.niche '{base}'")
+        return base
+
+
 def produce_one(channel_row: dict) -> int | None:
     """Produksi 1 video (TANPA publish) → buffer. Return inv_id ready, atau None bila gagal/QC fail."""
     from src.intelligence.config import tenant_config_from_channel
@@ -40,7 +71,9 @@ def produce_one(channel_row: dict) -> int | None:
 
     tenant_id  = channel_row["tenant_id"]
     channel_id = str(channel_row.get("id") or channel_row.get("channel_id") or "default")
-    niche      = channel_row.get("niche")
+    # Niche per-channel di HULU (scheduled): random → rotasi LRU entitlement / fixed → channels.niche.
+    # Inventory + pipeline memakai niche yang SUDAH ter-resolve (single source; pipeline tak merotasi lagi).
+    niche      = _resolve_niche(channel_row)
     inv_id = inventory.record_producing(tenant_id, channel_id, niche,
                                         {"channel": channel_row.get("channel_name")})
     try:
