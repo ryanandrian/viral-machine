@@ -173,6 +173,25 @@ class ElevenLabsProvider(TTSProvider):
         except Exception as e:
             raise TTSError(f"ElevenLabs generation failed: {e}") from e
 
+    def is_available(self) -> bool:
+        """Probe sintesis MUNGIL (≈3 char, ~gratis) → True hanya bila ElevenLabs benar-benar bisa
+        me-render SEKARANG. Menangkap blokir NYATA (kredit habis / `detected_unusual_activity`) yang
+        TAK terlihat di endpoint subscription. Probe gagal (sebab apa pun) → False → resolusi pakai
+        WPS provider fallback utk word-budget (QC §2 fix-a)."""
+        import tempfile
+        tmp = Path(tempfile.gettempdir()) / f"el_probe_{int(time.time())}.mp3"
+        try:
+            asyncio.run(self.generate("ok.", tmp))
+            return True
+        except Exception as e:
+            logger.info(f"[ElevenLabs] is_available=False — probe ditolak: {str(e)[:80]}")
+            return False
+        finally:
+            try:
+                tmp.unlink()
+            except Exception:
+                pass
+
     def get_word_timestamps(self) -> list[dict] | None:
         return self._word_timestamps
 

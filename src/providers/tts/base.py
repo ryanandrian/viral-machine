@@ -20,6 +20,12 @@ class TTSProvider(ABC):
         self.voice = config.get("tts_voice", "en-US-GuyNeural")
         self.api_key = config.get("tts_api_key")
 
+    def is_available(self) -> bool:
+        """True bila provider siap me-render SEKARANG (kredensial/kuota OK).
+        Default True (gratis/lokal, mis. edge_tts). Provider berbayar override dgn probe murah.
+        Dipakai resolusi 'provider efektif' → word-budget pakai WPS provider AKTUAL (QC §2 fix-a)."""
+        return True
+
     @abstractmethod
     async def generate(self, text: str, output_path: Path) -> Path:
         """

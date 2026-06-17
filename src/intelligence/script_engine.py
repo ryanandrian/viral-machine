@@ -506,8 +506,13 @@ class ScriptEngine:
         # null → legacy (timing niche, WPS 2.4) = non-breaking. WPS EFEKTIF = delivery TTS provider
         # (solusi 2-kelas: ElevenLabs-class ~1.8 vs edge ~2.6) → word-budget pas per kelas.
         from src.config.format_catalog import effective_wps as _eff_wps
+        from src.production.tts_engine import effective_tts_provider as _eff_tts
         preset_seconds = getattr(tenant_config, "duration_preset", None)
-        _tts_provider  = getattr(run_config, "tts_provider", None) if run_config else None
+        # QC §2 fix-a: WPS budget IKUT provider yang AKAN benar-benar me-render (cek ketersediaan →
+        # fallback), BUKAN provider terkonfigurasi. Cegah durasi meleset saat fallback senyap
+        # (ElevenLabs lapse → edge). Fail-soft: '' → pakai tts_provider terkonfigurasi (perilaku lama).
+        _eff_prov      = (_eff_tts(tenant_config) if preset_seconds else None)
+        _tts_provider  = _eff_prov or (getattr(run_config, "tts_provider", None) if run_config else None)
         format_wps     = _eff_wps(getattr(tenant_config, "format_profile", None), _tts_provider) if preset_seconds else None
         # Branded Content §6 — soft-sell (opsional; implicit → tanpa brand)
         _cta_mode  = getattr(tenant_config, "cta_mode", "implicit") or "implicit"

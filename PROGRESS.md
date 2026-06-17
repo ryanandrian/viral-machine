@@ -153,7 +153,10 @@
 
 ---
 
-## 🛑 INSIDEN RUNAWAY PRODUKSI (2026-06-17 malam) — mv-worker DI-STOP, BELUM RESOLVED
+## 🛑 INSIDEN RUNAWAY PRODUKSI (2026-06-17) — ✅ RESOLVED + DEPLOYED (Opsi C)
+
+> **STATUS: SELESAI 2026-06-17.** Akar (producer loop tanpa rem + Opsi A producer-publish) diperbaiki via **Opsi C** (lihat §PERBAIKAN ARSITEKTUR PRODUKSI v2 di atas) — deployed (commit `53d4720`), **mv-worker RESTARTED + AMAN** (circuit-break terbukti: runaway tak terulang, 0 kredit). Ryan auto-paused (aman) pending **E3 ElevenLabs**. Riwayat insiden di bawah (arsip).
+
 
 > **State kritis.** `mv-worker` **SENGAJA di-stop** (`sudo systemctl stop mv-worker`) untuk hentikan runaway. **Produksi+publish HALTED, nol pembakaran kredit.** ⛔ **JANGAN restart** sebelum #2 & #3 beres. `mv-web` normal.
 - **Gejala:** channel ryan produksi nonstop tiap ~10 mnt. **Fakta (verified DB+kode):** `content_inventory` ryan = **29 row SEMUA `failed`, 0 ready**. Alasan NYATA (query metadata.error): **22× "produce/QC gagal"** (generik — akar TAK tercatat, BELUM diverifikasi) · 4× "Video rendering failed" · 3× "Visual assembly — no clips" (image-gen). ⚠️ image-gen cuma 3/29; mayoritas generik → **akar per-kategori WAJIB diverifikasi sesi baru, JANGAN asumsi**. ElevenLabs habis kredit tapi fallback edge_tts berhasil → bukan penyebab.
@@ -207,10 +210,11 @@
 
 **G — Validasi & Deploy (prioritas akhir):**
 - [~] G1 — Validasi LOKAL: **logika inti A+B+E ✅ PASS (2026-06-17)** — compile 6 file + simulasi nol-kredit (streak/rem-alami/circuit-break/produce_one branching). **Sisa: e2e dgn render nyata** (butuh kredit) + uji jalur D (approve/discard) saat D dibangun.
-- [ ] G2 — **KRITERIA-TERIMA: bukti runaway ryan TAK TERULANG** (loop berhenti ≤ buffer_depth, nol upload YouTube off-schedule).
-- [ ] G3 — Bersihkan 29 baris `failed` stale ryan (one-off, setelah janitor E1 jalan).
-- [ ] G4 — Deploy VPS (`git pull` `~/viral-machine-v2` + rebuild) — **HANYA setelah G1/G2 hijau + izin owner**.
-- [ ] G5 — **Restart `mv-worker`** + pantau 1-2 siklus (produksi+publish sesuai jadwal, nol runaway). ⛔ jangan restart sebelum G1-G4.
+- [x] G2 — **KRITERIA-TERIMA TERBUKTI DI PRODUKSI (2026-06-17):** restart `mv-worker` → producer **circuit-break seketika** (streak 12 dari stale) → `channels.production_paused=true` ryan + alarm → **0 produksi baru, 0 kredit, 0 upload off-schedule**. Runaway **TIDAK terulang**. 7 thread `up`.
+- [x] G3 — 29 baris `failed` stale ryan dibersihkan (0 s3_key → 0 orphan; content_inventory ryan kosong). Wajib agar auto-recover tak di-defeat data stale. *(2026-06-17)*
+- [x] G4 — Deploy: commit `53d4720` push → pull `~/viral-machine-v2` + `~/mesinviral-web` (FE build PASS) + **`PRODUCER_MAX_RENDER=1`** di .env VPS (anti-OOM 2-core, decisions §3). *(2026-06-17)*
+- [x] G5 — `mv-worker` restarted + dipantau: 7 thread up, ryan auto-paused (aman), nol runaway. `mv-web` 200, `/review` 200. *(2026-06-17)*
+- [ ] **SISA (gate owner):** **E3 ElevenLabs re-subscribe** (akar durasi-pendek) → lalu **Jalankan Ulang (direct)** ryan → auto-unpause → produksi sehat lanjut. *(ATAU fix WPS-follow-actual-provider, QC §2 — alternatif tanpa re-subscribe.)* · **D2** preview · **F2/F3** fosil sisa.
 
 ---
 
