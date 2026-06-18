@@ -236,8 +236,8 @@
 - [x] B3 — `plan_and_submit`: `stok = ready + ready_with_issues + producing` (**rem alami**) + **circuit-breaker**: N gagal beruntun/channel (config) → pause + **alarm Telegram SEKETIKA**; auto-recover saat 1 produce sukses.
 
 **C — BE Publisher:**
-- [ ] C1 — Tetap **hanya klaim `ready`** (issue tak auto-tayang); kuota di publish (gate existing); **laporan sukses dikirim saat publish** (pindah dari produce). 
-- [ ] C2 — Reporting **idempoten** (tandai sudah-terlapor sebelum kirim).
+- [x] C1 — ✅ **DONE (terverifikasi kode 2026-06-18; checkbox sebelumnya basi).** Publisher **hanya klaim `ready`** (`claim_oldest_ready`), gate kuota di publish (`gate_for_channel`+`published_today_count`), **laporan sukses `notify_published` dikirim SAAT PUBLISH** (`publisher.py:103-109`); **producer TIDAK lapor sukses** (hanya `notify_circuit_break`) → sudah pindah dari produce. ✓
+- [x] C2 — ✅ **DONE (terverifikasi kode 2026-06-18).** Idempoten: `_already_handled` (dedup per-slot `publishing`/`published`, `publisher.py:79`) + tandai `target_slot` sebelum publish (`:89`) + status `published` → tak dobel-kirim laporan. ✓
 
 **D — Review/Approve (domain kita — tutup cheat di sumber):**
 - [x] D1 — **RPC `approve_inventory_item`/`discard_inventory_item`** (migr **0052**, security-definer, scope `auth.uid()`, grant authenticated/revoke anon — verified). Approve = promote `ready_with_issues→ready` → Publisher publish saat slot **ber-kuota** (tutup cheat: jadi publik HANYA via jalur kita); Discard = tandai buang → janitor hapus S3. *(2026-06-17)*
