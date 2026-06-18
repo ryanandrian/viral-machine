@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import {
   ArrowLeft, Tag, Calendar, Clock, RefreshCw, ExternalLink, Search, Pause, Play,
   Radar, Target, FileText, Sparkles, AudioLines, Image as ImageIcon, Film, Upload,
-  Check, Loader2, X, AlertTriangle, type LucideIcon,
+  Check, Loader2, X, AlertTriangle, Eye, type LucideIcon,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import "./run-detail.css";
@@ -23,9 +23,11 @@ type RunRow = {
   error_message: string | null; llm_provider: string | null; created_at: string;
 };
 
-function statusKey(s: string | null): "completed" | "running" | "failed" | "queued" {
+function statusKey(s: string | null): "completed" | "running" | "failed" | "queued" | "review" {
   const v = (s || "").toLowerCase();
   if (v.includes("complete") || v === "published" || v === "success") return "completed";
+  // qc_failed / ready_with_issues = PRODUK JADI + catatan QC → "Perlu Ditinjau" (cek SEBELUM 'fail').
+  if (v.includes("qc_fail") || v.includes("ready_with_issues") || v.includes("issue")) return "review";
   if (v.includes("fail") || v.includes("error")) return "failed";
   if (v.includes("run") || v.includes("produc") || v.includes("publish")) return "running";
   return "queued";
@@ -126,7 +128,11 @@ export default function RunDetailPage() {
 
   const st = statusKey(run.status);
   const seen = new Set(logs.map((l) => { const s = (l.step || "").toLowerCase(); return STEP_DEFS.find((d) => s.includes(d.key))?.key; }).filter(Boolean) as string[]);
-  const stepState = (key: string): StepState => st === "completed" ? "completed" : seen.has(key) ? "completed" : st === "failed" ? "pending" : "pending";
+  // review = produk JADI (semua langkah selesai KECUALI publish — masih di buffer/ditinjau).
+  const stepState = (key: string): StepState =>
+    st === "completed" ? "completed"
+    : st === "review" ? (key === "publish" ? "pending" : "completed")
+    : seen.has(key) ? "completed" : "pending";
   const completed = STEP_DEFS.filter((d) => stepState(d.key) === "completed").length;
   const q = filter.toLowerCase();
   const shown = q ? logs.filter((l) => `${l.level} ${l.step} ${l.message}`.toLowerCase().includes(q)) : logs;
@@ -146,9 +152,9 @@ export default function RunDetailPage() {
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", alignItems: "flex-end" }}>
-            <span className={`status-lg ${st === "completed" ? "badge-success" : st === "failed" ? "badge-error" : st === "running" ? "badge-running" : "badge-default"}`}>
+            <span className={`status-lg ${st === "completed" ? "badge-success" : st === "review" ? "badge-warning" : st === "failed" ? "badge-error" : st === "running" ? "badge-running" : "badge-default"}`}>
               <span className="dot" style={{ width: 7, height: 7, borderRadius: "50%", background: "currentColor" }} />
-              {st === "completed" ? <><span data-id>Selesai</span><span data-en>Completed</span></> : st === "failed" ? <><span data-id>Gagal</span><span data-en>Failed</span></> : st === "running" ? <><span data-id>Berjalan</span><span data-en>Running</span></> : <><span data-id>Antre</span><span data-en>Queued</span></>}
+              {st === "completed" ? <><span data-id>Selesai</span><span data-en>Completed</span></> : st === "review" ? <><span data-id>Perlu Ditinjau</span><span data-en>Needs Review</span></> : st === "failed" ? <><span data-id>Gagal</span><span data-en>Failed</span></> : st === "running" ? <><span data-id>Berjalan</span><span data-en>Running</span></> : <><span data-id>Antre</span><span data-en>Queued</span></>}
             </span>
             <div className="run-actions">
               <button className="btn btn-secondary btn-sm" onClick={load}><RefreshCw size={15} /> <span data-id>Muat ulang</span><span data-en>Refresh</span></button>
@@ -159,6 +165,14 @@ export default function RunDetailPage() {
           </div>
         </div>
       </div>
+
+      {st === "review" && (
+        <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", flexWrap: "wrap", padding: "0.875rem 1.25rem", background: "var(--warning-soft)", border: "1px solid color-mix(in srgb,var(--warning) 30%,transparent)", borderRadius: "var(--r-md)", marginBottom: "1rem" }}>
+          <AlertTriangle size={16} style={{ color: "var(--warning)", flex: "none" }} />
+          <span style={{ fontSize: "var(--text-sm)", flex: 1 }}><b><span data-id>Produk berhasil dibuat</span><span data-en>Product was produced</span></b> — <span data-id>ada catatan QC</span><span data-en>QC note</span>: {run.error_message || "—"}. <span data-id>Tinjau (pakai/buang) di halaman Perlu Ditinjau.</span><span data-en>Review (use/discard) on the Needs Review page.</span></span>
+          <a href="/review" className="btn btn-secondary btn-sm"><Eye size={14} /> <span data-id>Tinjau</span><span data-en>Review</span></a>
+        </div>
+      )}
 
       {st === "failed" && (
         <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", flexWrap: "wrap", padding: "0.875rem 1.25rem", background: "var(--error-soft)", border: "1px solid color-mix(in srgb,var(--error) 30%,transparent)", borderRadius: "var(--r-md)", marginBottom: "1rem" }}>

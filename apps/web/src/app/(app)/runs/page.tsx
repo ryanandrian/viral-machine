@@ -13,10 +13,13 @@ import "./runs-list.css";
 // kolom views/cost — sumber = video_analytics, di-wire 9.4). Pipeline mini-step = derivasi
 // dari status (bukan data fabricated). Drawer → /runs/[id] (D5).
 
-type StKey = "completed" | "running" | "failed" | "queued";
+type StKey = "completed" | "running" | "failed" | "queued" | "review";
 function statusKey(s: string | null): StKey {
   const v = (s || "").toLowerCase();
   if (v.includes("complete") || v === "published" || v === "success") return "completed";
+  // qc_failed / ready_with_issues = PRODUK JADI tapi ada catatan QC → "Perlu Ditinjau", BUKAN gagal.
+  // WAJIB dicek sebelum 'fail' (qc_failed mengandung "fail").
+  if (v.includes("qc_fail") || v.includes("ready_with_issues") || v.includes("issue")) return "review";
   if (v.includes("fail") || v.includes("error")) return "failed";
   if (v.includes("run") || v.includes("produc") || v.includes("publish")) return "running";
   return "queued";
@@ -43,12 +46,13 @@ function prettyNiche(k: string | null) { return (k || "—").replace(/_/g, " ").
 
 const STATUS_TABS: { key: StKey | "all"; id: string; en: string }[] = [
   { key: "all", id: "Semua", en: "All" }, { key: "completed", id: "Completed", en: "Completed" },
-  { key: "running", id: "Running", en: "Running" }, { key: "failed", id: "Failed", en: "Failed" },
+  { key: "running", id: "Running", en: "Running" }, { key: "review", id: "Perlu Ditinjau", en: "Needs Review" },
+  { key: "failed", id: "Failed", en: "Failed" },
   { key: "queued", id: "Queued", en: "Queued" },
 ];
 
 function Badge({ st }: { st: StKey }) {
-  const m: Record<StKey, [string, string]> = { completed: ["badge-success", "Completed"], running: ["badge-running", "Running"], failed: ["badge-error", "Failed"], queued: ["badge-default", "Queued"] };
+  const m: Record<StKey, [string, string]> = { completed: ["badge-success", "Completed"], running: ["badge-running", "Running"], review: ["badge-warning", "Perlu Ditinjau"], failed: ["badge-error", "Failed"], queued: ["badge-default", "Queued"] };
   const [c, l] = m[st];
   return <span className={`badge ${c}`}><span className="dot" />{l}</span>;
 }
@@ -102,7 +106,8 @@ export default function RunsListPage() {
   const fail = data.filter((d) => statusKey(d.status) === "failed").length;
 
   function miniSteps(st: StKey) {
-    const activeCount = st === "completed" ? 8 : st === "running" ? 6 : st === "failed" ? 5 : 0;
+    // review = produk JADI (7 langkah produksi selesai), hanya Publish belum (masih di buffer/ditinjau).
+    const activeCount = st === "completed" ? 8 : st === "review" ? 7 : st === "running" ? 6 : st === "failed" ? 5 : 0;
     return PL_NAMES.map((name, i) => {
       let stt = i < activeCount - 1 ? "done" : i === activeCount - 1 ? (st === "failed" ? "fail" : st === "running" ? "run" : "done") : "pend";
       if (st === "completed") stt = "done";
