@@ -218,6 +218,31 @@ class ChannelAnalytics:
         )
         return result
 
+    def fetch_subscriber_count(self, tenant_id: str) -> dict:
+        """FAIL-SOFT: ambil subscriberCount channel tenant (mine=True via OAuth) → simpan ke
+        channels.subscriber_count. Terisolasi: gagal di sini TIDAK mengganggu fetch/produksi lain.
+        Idempotent (overwrite). Subscriber tersembunyi → skip (biarkan nilai lama)."""
+        if not self._youtube or not self._supabase:
+            return {"ok": False, "reason": "no_client"}
+        try:
+            resp = self._youtube.channels().list(part="statistics", mine=True).execute()
+            items = resp.get("items", [])
+            if not items:
+                return {"ok": False, "reason": "no_channel"}
+            stats = items[0].get("statistics", {})
+            if stats.get("hiddenSubscriberCount"):
+                return {"ok": False, "reason": "hidden"}
+            subs = int(stats.get("subscriberCount", 0))
+            (self._supabase.table("channels")
+                 .update({"subscriber_count": subs,
+                          "subscriber_count_at": datetime.now(timezone.utc).isoformat()})
+                 .eq("tenant_id", tenant_id).execute())
+            logger.info(f"[Analytics] subscriberCount={subs} tenant={tenant_id}")
+            return {"ok": True, "subscribers": subs}
+        except Exception as e:
+            logger.warning(f"[Analytics] fetch subscriberCount gagal tenant={tenant_id}: {e}")
+            return {"ok": False, "reason": str(e)}
+
     # ── Data fetching ─────────────────────────────────────────────────────
 
     def _get_videos_to_fetch(self, tenant_id: str) -> list:

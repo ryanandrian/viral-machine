@@ -34,7 +34,9 @@ def run_once(sb=None) -> dict:
         if tid not in fetched_tenants:
             try:
                 from src.analytics.channel_analytics import ChannelAnalytics
-                ChannelAnalytics(tenant_id=tid).fetch_and_store(tid)
+                ca = ChannelAnalytics(tenant_id=tid)
+                ca.fetch_and_store(tid)
+                ca.fetch_subscriber_count(tid)  # followers dashboard; fail-soft di dalam
                 fetched += 1
             except Exception as e:
                 logger.warning(f"[self_learning] fetch analytics gagal tenant={tid}: {e}")

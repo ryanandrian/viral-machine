@@ -7,7 +7,7 @@ import { useTheme } from "next-themes";
 import {
   LayoutDashboard, Tv, List, BarChart3, Calendar, ShieldCheck, Sparkles,
   Command, Mic, Image as ImageIcon, CreditCard, Settings, HelpCircle,
-  Menu, Search, Bell, ChevronsUpDown, Moon, Sun, ChevronRight, LogOut, AlertTriangle,
+  Menu, Moon, Sun, ChevronRight, LogOut, AlertTriangle,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -24,7 +24,7 @@ type NavEntry = { section: { id: string; en: string } } | NavItem;
 const NAV: NavEntry[] = [
   { section: { id: "Menu", en: "Menu" } },
   { id: "dashboard", icon: LayoutDashboard, idL: "Beranda", en: "Dashboard", href: "/dashboard" },
-  { id: "channels", icon: Tv, idL: "Kanal", en: "Channels", href: "/channels", badge: "3" },
+  { id: "channels", icon: Tv, idL: "Kanal", en: "Channels", href: "/channels" },
   { id: "runs", icon: List, idL: "Produksi", en: "Runs", href: "/runs" },
   { id: "review", icon: AlertTriangle, idL: "Perlu Ditinjau", en: "Needs Review", href: "/review" },
   { id: "analytics", icon: BarChart3, idL: "Analitik", en: "Analytics", href: "/analytics" },
@@ -53,24 +53,37 @@ function Bi({ id, en }: { id: string; en: string }) {
 export function AppShell({
   children,
   breadcrumb = [],
-  tenant = { name: "Riko Pratama", plan: "Pro · 3 channel", initials: "RP" },
 }: {
   children: React.ReactNode;
   breadcrumb?: { id: string; en?: string; href?: string }[];
-  tenant?: { name: string; plan: string; initials: string };
 }) {
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
+  const [supabase] = useState(() => createClient());
   const [collapsed, setCollapsed] = useState(false);
   const [lang, setLang] = useState<"id" | "en">("id");
   const [mounted, setMounted] = useState(false);
+  const [tenant, setTenant] = useState<{ name: string; plan: string; initials: string }>({ name: "", plan: "", initials: "" });
 
   useEffect(() => {
     setMounted(true);
     const saved = (localStorage.getItem("mv-lang") as "id" | "en") || "id";
     setLang(saved);
     document.documentElement.lang = saved;
-  }, []);
+    (async () => {
+      const [{ data: tc }, { count }] = await Promise.all([
+        supabase.from("tenant_configs").select("display_handle,plan_type").maybeSingle(),
+        supabase.from("channels").select("id", { count: "exact", head: true }),
+      ]);
+      const t = tc as { display_handle?: string; plan_type?: string } | null;
+      const h = (t?.display_handle || "").trim();
+      const toks = h.split(/[^a-zA-Z0-9]+/).filter(Boolean);
+      const initials = toks.slice(0, 2).map((s) => s[0].toUpperCase()).join("") || "T";
+      const plan = t?.plan_type ? t.plan_type.charAt(0).toUpperCase() + t.plan_type.slice(1) : "";
+      const nCh = count ?? 0;
+      setTenant({ name: h || "Tenant", plan: plan ? `${plan} · ${nCh} kanal` : `${nCh} kanal`, initials });
+    })();
+  }, [supabase]);
 
   function switchLang(l: "id" | "en") {
     setLang(l);
@@ -85,13 +98,12 @@ export function AppShell({
           <img src="/mesinviral_logo512.png" alt="MesinViral" style={{ width: 30, height: 30, objectFit: "contain", flex: "none" }} />
           <span className="sb-name">MesinViral</span>
         </div>
-        <div className="sb-tenant" title="Ganti tenant">
+        <div className="sb-tenant">
           <span className="avatar">{tenant.initials}</span>
           <div className="sb-tenant-meta">
             <div className="nm">{tenant.name}</div>
             <div className="pl">{tenant.plan}</div>
           </div>
-          <span className="sb-chev"><ChevronsUpDown size={14} /></span>
         </div>
         <nav className="sb-nav">
           {NAV.map((n, i) => {
@@ -110,9 +122,6 @@ export function AppShell({
           })}
         </nav>
         <div className="sb-bottom">
-          <a className="sb-item" href="/support"><HelpCircle size={18} />
-            <span className="sb-label"><Bi id="Bantuan" en="Help" /></span>
-          </a>
           <button
             className="sb-item"
             onClick={async () => { await createClient().auth.signOut(); window.location.href = "/auth"; }}
@@ -137,14 +146,7 @@ export function AppShell({
                   </span>;
             })}
           </div>
-          <div className="tb-search">
-            <Search size={15} />
-            <span><Bi id="Cari atau jalankan perintah…" en="Search or run a command…" /></span>
-            <kbd>⌘K</kbd>
-          </div>
-          <button className="btn btn-ghost btn-icon tb-icon" aria-label="Notifikasi">
-            <span className="ind" /><Bell size={18} />
-          </button>
+          <div style={{ marginLeft: "auto" }} />
           <div className="segmented">
             <button aria-selected={lang === "id"} onClick={() => switchLang("id")}>ID</button>
             <button aria-selected={lang === "en"} onClick={() => switchLang("en")}>EN</button>

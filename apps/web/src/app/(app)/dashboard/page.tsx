@@ -1,26 +1,30 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Zap, Play, CheckCircle, Eye, Users, Calendar, ArrowRight, List, Gauge as GaugeIcon, DollarSign, Sparkles, Activity, Check, Loader2, X, ChevronRight, ExternalLink } from "lucide-react";
+import { Zap, CheckCircle, Eye, ThumbsUp, Users, Calendar, List, Gauge as GaugeIcon, DollarSign, Sparkles, Activity, Check, Loader2, X, ChevronRight, ExternalLink } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import "./dashboard.css";
 
-// D1 Main Dashboard — Phase 9.3 (wired Supabase v2, anon + RLS). REAL: Recent Runs, Success Rate,
-// Video-hari-ini, activity feed (production_runs); Compliance (channel_insights.compliance bila ada).
-// Placeholder JUJUR (belum ada sumber): Views/Subs/Cost/Self-learning ("—"); Schedule = empty-state.
+// D1 Main Dashboard — Phase 9.3 (wired Supabase v2, anon + RLS). DATA NYATA:
+//  • Success Rate + breakdown all-time (production_runs).
+//  • Total Views/Likes/Followers YouTube tenant-wide → RPC get_tenant_youtube_totals (snapshot terbaru/video; followers = channels.subscriber_count).
+//  • Jadwal Hari Ini = channels.publish_slots (zona tenant). Compliance = channel_insights.compliance.
+//  • Auto-refresh SMOOTH: realtime production_runs (debounce) + re-fetch saat tab aktif (tanpa spinner).
 
 function Bi({ id, en }: { id: string; en: string }) { return (<><span data-id>{id}</span><span data-en>{en}</span></>); }
 
-type RunSt = "completed" | "running" | "failed" | "queued";
+type RunSt = "completed" | "running" | "failed" | "review" | "queued";
 function statusKey(s: string | null): RunSt {
   const v = (s || "").toLowerCase();
   if (v.includes("complete") || v === "published" || v === "success") return "completed";
+  if (v === "qc_failed" || v.includes("ready_with_issues") || v.includes("review")) return "review";
   if (v.includes("fail") || v.includes("error")) return "failed";
   if (v.includes("run") || v.includes("produc") || v.includes("publish")) return "running";
   return "queued";
 }
 function fmtDur(secs: string | null) { const n = parseFloat(secs || ""); if (!isFinite(n) || n <= 0) return "—"; return n >= 60 ? `${Math.floor(n / 60)}m ${Math.round(n % 60)}s` : `${Math.round(n)}s`; }
+function fmtN(n: number) { return n.toLocaleString("id-ID"); }
 function prettyNiche(k: string | null) { return (k || "—").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()); }
 function ago(iso: string) {
   try { const s = (Date.now() - new Date(iso).getTime()) / 1000; if (s < 60) return "baru saja"; if (s < 3600) return `${Math.floor(s / 60)} mnt`; if (s < 86400) return `${Math.floor(s / 3600)} jam`; return `${Math.floor(s / 86400)} hr`; } catch { return ""; }
@@ -29,10 +33,14 @@ const ST_MAP: Record<RunSt, { Icon: typeof Check; c: string; bg: string }> = {
   completed: { Icon: Check, c: "var(--success)", bg: "var(--success-soft)" },
   running: { Icon: Loader2, c: "var(--info)", bg: "var(--info-soft)" },
   failed: { Icon: X, c: "var(--error)", bg: "var(--error-soft)" },
+  review: { Icon: Loader2, c: "var(--warning, #F59E0B)", bg: "var(--warning-soft, rgba(245,158,11,.12))" },
   queued: { Icon: Loader2, c: "var(--text-muted)", bg: "var(--surface-2)" },
 };
 
 type RunRow = { id: string; topic: string | null; niche: string | null; status: string | null; elapsed_seconds: string | null; youtube_url: string | null; created_at: string };
+type Stats = { made: number; success: number; failed: number; review: number };
+type Yt = { views: number; likes: number; followers: number };
+type Slot = { name: string; times: string[] };
 
 function Gauge({ score }: { score: number }) {
   const r = 48, c = 2 * Math.PI * r, off = c * (1 - score / 100);
@@ -41,43 +49,67 @@ function Gauge({ score }: { score: number }) {
     <svg viewBox="0 0 120 120" width={116} height={116}>
       <circle cx={60} cy={60} r={r} fill="none" stroke="var(--surface-2)" strokeWidth={9} />
       <circle cx={60} cy={60} r={r} fill="none" stroke={col} strokeWidth={9} strokeLinecap="round" strokeDasharray={c} strokeDashoffset={off} transform="rotate(-90 60 60)" />
-      <text x={60} y={64} textAnchor="middle" fontSize={28} fontWeight={700} fill="var(--text-primary)" fontFamily="Geist">{score}</text>
+      <text x={60} y={64} textAnchor="middle" fontSize={26} fontWeight={700} fill="var(--text-primary)" fontFamily="Geist">{score}</text>
     </svg>
   );
 }
-
-function isToday(iso: string) { try { const d = new Date(iso), n = new Date(); return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate(); } catch { return false; } }
 
 export default function DashboardPage() {
   const [supabase] = useState(() => createClient());
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [handle, setHandle] = useState("");
-  const [cap, setCap] = useState<number | null>(null);
+  const [tz, setTz] = useState("Asia/Jakarta");
   const [compliance, setCompliance] = useState<number | null>(null);
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [yt, setYt] = useState<Yt | null>(null);
+  const [slots, setSlots] = useState<Slot[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const [{ data: r }, { data: tc }, { data: ci }] = await Promise.all([
+    const [
+      { data: r }, { data: tc }, { data: ci }, totals, { data: chs },
+      made, success, failed, review,
+    ] = await Promise.all([
       supabase.from("production_runs").select("id,topic,niche,status,elapsed_seconds,youtube_url,created_at").order("created_at", { ascending: false }).limit(50),
-      supabase.from("tenant_configs").select("display_handle,plan_type").maybeSingle(),
+      supabase.from("tenant_configs").select("display_handle,timezone").maybeSingle(),
       supabase.from("channel_insights").select("compliance,computed_at").order("computed_at", { ascending: false }).limit(1),
+      supabase.rpc("get_tenant_youtube_totals"),
+      supabase.from("channels").select("channel_name,publish_slots,is_active"),
+      supabase.from("production_runs").select("id", { count: "exact", head: true }),
+      supabase.from("production_runs").select("id", { count: "exact", head: true }).in("status", ["success", "completed", "published"]),
+      supabase.from("production_runs").select("id", { count: "exact", head: true }).in("status", ["failed", "error"]),
+      supabase.from("production_runs").select("id", { count: "exact", head: true }).in("status", ["qc_failed", "ready_with_issues"]),
     ]);
     setRuns((r as RunRow[]) ?? []);
-    const t = tc as { display_handle?: string; plan_type?: string } | null;
+    const t = tc as { display_handle?: string; timezone?: string } | null;
     setHandle(t?.display_handle || "");
-    if (t?.plan_type) { const { data: pl } = await supabase.from("plan_limits").select("max_videos_per_day").eq("plan_type", t.plan_type).maybeSingle(); setCap((pl as { max_videos_per_day?: number } | null)?.max_videos_per_day ?? null); }
+    if (t?.timezone) setTz(t.timezone);
     const comp = (ci as { compliance?: { score?: number } }[] | null)?.[0]?.compliance;
-    if (comp && typeof comp.score === "number") setCompliance(comp.score);
+    setCompliance(comp && typeof comp.score === "number" ? comp.score : null);
+    const tot = (Array.isArray(totals.data) ? totals.data[0] : totals.data) as { total_views?: number; total_likes?: number; total_followers?: number } | null;
+    if (tot) setYt({ views: Number(tot.total_views) || 0, likes: Number(tot.total_likes) || 0, followers: Number(tot.total_followers) || 0 });
+    setStats({ made: made.count ?? 0, success: success.count ?? 0, failed: failed.count ?? 0, review: review.count ?? 0 });
+    const channels = (chs as { channel_name: string; publish_slots: string[] | null; is_active: boolean }[] | null) ?? [];
+    setSlots(channels.filter((c) => c.is_active && c.publish_slots && c.publish_slots.length)
+      .map((c) => ({ name: c.channel_name, times: [...(c.publish_slots || [])].sort() })));
     setLoading(false);
   }, [supabase]);
 
-  useEffect(() => { load(); }, [load]);
+  // Mount + auto-refresh SMOOTH (realtime production_runs debounced + re-fetch saat tab aktif).
+  const debRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    load();
+    const reload = () => { if (debRef.current) clearTimeout(debRef.current); debRef.current = setTimeout(() => load(), 400); };
+    const ch = supabase.channel("rt-dashboard")
+      .on("postgres_changes", { event: "*", schema: "public", table: "production_runs" }, reload)
+      .subscribe();
+    const onVis = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { if (debRef.current) clearTimeout(debRef.current); supabase.removeChannel(ch); document.removeEventListener("visibilitychange", onVis); };
+  }, [load, supabase]);
 
   const recent = runs.slice(0, 5);
-  const todayCount = runs.filter((r) => isToday(r.created_at) && statusKey(r.status) === "completed").length;
-  const done = runs.filter((r) => statusKey(r.status) === "completed").length;
-  const fail = runs.filter((r) => statusKey(r.status) === "failed").length;
-  const successRate = done + fail > 0 ? Math.round((done / (done + fail)) * 100) : null;
+  const rate = stats && stats.success + stats.failed > 0 ? Math.round((stats.success / (stats.success + stats.failed)) * 100) : null;
   const today = new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
   return (
@@ -92,22 +124,26 @@ export default function DashboardPage() {
 
       <div className="kpi-row">
         <div className="kpi">
-          <div className="kpi-top"><span className="kpi-label"><Play size={14} /> <Bi id="Video Hari Ini" en="Videos Today" /></span></div>
-          <span className="kpi-value">{todayCount}{cap != null && <span className="muted" style={{ fontSize: "var(--text-xl)", fontWeight: 500 }}>/{cap}</span>}</span>
-        </div>
-        <div className="kpi">
           <div className="kpi-top"><span className="kpi-label"><CheckCircle size={14} /> Success Rate</span></div>
-          <span className="kpi-value">{successRate != null ? `${successRate}%` : "—"}</span>
-          <span className="muted" style={{ fontSize: "var(--text-xs)" }}>{done}✓ · {fail}✗ ({runs.length} run)</span>
+          <span className="kpi-value">{rate != null ? `${rate}%` : "—"}</span>
+          <span className="muted" style={{ fontSize: "var(--text-xs)" }}>
+            {stats ? <>{fmtN(stats.made)} dibuat · {fmtN(stats.success)} sukses · {fmtN(stats.failed)} gagal{stats.review > 0 ? ` · ${fmtN(stats.review)} perlu ditinjau` : ""}</> : "—"}
+          </span>
         </div>
         <div className="kpi">
-          <div className="kpi-top"><span className="kpi-label"><Eye size={14} /> <Bi id="Total Views" en="Total Views" /></span></div>
-          <span className="kpi-value">—</span>
-          <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="sumber analytics (9.4)" en="analytics source (9.4)" /></span>
+          <div className="kpi-top"><span className="kpi-label"><Eye size={14} /> <Bi id="Total Views YouTube" en="Total YouTube Views" /></span></div>
+          <span className="kpi-value">{yt ? fmtN(yt.views) : "—"}</span>
+          <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="seluruh channel" en="all channels" /></span>
         </div>
         <div className="kpi">
-          <div className="kpi-top"><span className="kpi-label"><Users size={14} /> <Bi id="Subs" en="Subs" /></span></div>
-          <span className="kpi-value">—</span>
+          <div className="kpi-top"><span className="kpi-label"><ThumbsUp size={14} /> <Bi id="Total Likes YouTube" en="Total YouTube Likes" /></span></div>
+          <span className="kpi-value">{yt ? fmtN(yt.likes) : "—"}</span>
+          <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="seluruh channel" en="all channels" /></span>
+        </div>
+        <div className="kpi">
+          <div className="kpi-top"><span className="kpi-label"><Users size={14} /> <Bi id="Total Followers YouTube" en="Total YouTube Followers" /></span></div>
+          <span className="kpi-value">{yt && yt.followers > 0 ? fmtN(yt.followers) : "—"}</span>
+          <span className="muted" style={{ fontSize: "var(--text-xs)" }}>{yt && yt.followers > 0 ? <Bi id="seluruh channel" en="all channels" /> : <Bi id="diperbarui ≤24 jam" en="updates ≤24h" />}</span>
         </div>
       </div>
 
@@ -118,8 +154,18 @@ export default function DashboardPage() {
               <h3 className="card-title"><Calendar size={16} /> <Bi id="Jadwal Hari Ini" en="Today's Schedule" /></h3>
               <Link href="/schedule" className="muted" style={{ fontSize: "var(--text-xs)", textDecoration: "none" }}><Bi id="Lihat jadwal →" en="View schedule →" /></Link>
             </div>
-            <div className="card-body" style={{ padding: "1.5rem", textAlign: "center" }}>
-              <span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Belum ada jadwal aktif. Atur di layar Jadwal." en="No active schedule yet. Set one in Schedule." /></span>
+            <div className="card-body" style={{ padding: slots.length ? "0.5rem 1.25rem 1rem" : "1.5rem", textAlign: slots.length ? "left" : "center" }}>
+              {slots.length === 0
+                ? <span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Belum ada jadwal aktif. Atur di layar Jadwal." en="No active schedule yet. Set one in Schedule." /></span>
+                : <>
+                  {slots.map((s) => (
+                    <div key={s.name} style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", padding: "0.4rem 0", borderBottom: "1px solid var(--border-subtle)", gap: "1rem" }}>
+                      <span style={{ fontSize: "var(--text-sm)", color: "var(--text-secondary)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
+                      <span style={{ fontSize: "var(--text-sm)", fontWeight: 600, fontFamily: "var(--font-mono)", flex: "none" }}>{s.times.join(" · ")}</span>
+                    </div>
+                  ))}
+                  <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.5rem" }}>Zona {tz}</div>
+                </>}
             </div>
           </div>
 
@@ -182,10 +228,11 @@ export default function DashboardPage() {
             {recent.length === 0 ? <div className="muted" style={{ padding: "0.75rem 0", fontSize: "var(--text-xs)" }}><Bi id="Belum ada aktivitas." en="No activity yet." /></div>
               : recent.map((r) => {
                 const st = statusKey(r.status); const m = ST_MAP[st];
+                const lbl = st === "completed" ? "selesai" : st === "failed" ? "gagal" : st === "review" ? "perlu ditinjau" : st;
                 return (
                   <div className="feed-item" key={r.id}>
                     <span className="fdot" style={{ background: m.c }} />
-                    <span>Run #{r.id} · {st === "completed" ? "selesai" : st === "failed" ? "gagal" : st} · {prettyNiche(r.niche)}</span>
+                    <span>Run #{r.id} · {lbl} · {prettyNiche(r.niche)}</span>
                     <span className="ftime">{ago(r.created_at)}</span>
                   </div>
                 );
