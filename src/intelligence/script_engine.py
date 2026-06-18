@@ -740,6 +740,9 @@ Return ONLY valid JSON:
         # (solusi 2-kelas: ElevenLabs-class ~1.8 vs edge ~2.6) → word-budget pas per kelas.
         from src.config.format_catalog import effective_wps as _eff_wps
         preset_seconds = getattr(tenant_config, "duration_preset", None)
+        # Beat-aktif preset (segmentasi DB single-source) — dipakai analyzer utk renormalisasi bobot
+        # (preset pendek tak dihukum climax/cta absen). None (legacy tanpa preset) → analyzer pakai 6 dim.
+        active_beats   = _beats_for_preset(preset_seconds) if preset_seconds else None
         # Word-budget pakai delivery_wps provider TERDAFTAR tenant (mis. elevenlabs 1.8 → 60s=108 kata).
         # TTS apa-adanya: premium dulu → bila kredit kurang fallback edge (produk jadi, durasi bisa
         # tak lolos QC → Opsi C: flagged + tenant putuskan). Akar akurasi durasi = LLM hit word-budget.
@@ -836,7 +839,10 @@ Return ONLY valid JSON:
                 continue
 
             if analyzer:
-                analysis = analyzer.analyze(script, tenant_config.niche, niche_profile=niche_profile)
+                # active_beats (segmentasi DB preset) → analyzer renormalisasi bobot atas dimensi
+                # relevan; preset pendek (tanpa climax/cta) tak dihukum bagian absen.
+                analysis = analyzer.analyze(script, tenant_config.niche,
+                                            niche_profile=niche_profile, active_beats=active_beats)
                 score    = analysis.get("viral_score", 0)
                 script["viral_analysis"] = analysis
 

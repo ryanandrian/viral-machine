@@ -26,6 +26,27 @@ VIRAL_DIMENSIONS = {
     "cta_strength":         0.05,
 }
 
+# Dimensi yang TERIKAT pada satu beat tertentu (segmentasi). Bila beat itu tak aktif di
+# preset (mis. 15s tanpa climax/cta), dimensi terkait DIBUANG dari penilaian — preset pendek
+# tak boleh dihukum karena bagian yang SENGAJA tak ada. Dimensi lain (curiosity/retention/
+# information_density) berlaku untuk naskah apa pun → selalu aktif.
+_DIM_REQUIRES_BEAT = {
+    "hook_power":     "hook",
+    "emotional_peak": "climax",
+    "cta_strength":   "cta",
+}
+
+
+def _active_dimensions(active_beats: list | None) -> dict:
+    """Bobot dimensi yang RELEVAN dengan beat-aktif preset, di-renormalisasi ke 100%.
+    active_beats None / kosong → semua 6 dimensi (perilaku lama, non-breaking).
+    Catatan: untuk preset lengkap (hook+climax+cta hadir, mis. 45-90s) hasilnya = VIRAL_DIMENSIONS
+    utuh → skor identik perilaku lama. Hanya preset tanpa climax/cta (8/15/30s) yang menciut."""
+    if not active_beats:
+        return dict(VIRAL_DIMENSIONS)
+    return {d: w for d, w in VIRAL_DIMENSIONS.items()
+            if d not in _DIM_REQUIRES_BEAT or _DIM_REQUIRES_BEAT[d] in active_beats}
+
 DEFAULT_EMOTION_CRITERIA = (
     "Score 80+ if the climax delivers a genuine, specific emotional payoff for THIS topic — it LANDS, "
     "not merely states a feeling; 90+ if goosebumps-level. Score below 60 ONLY if it just describes/explains "
@@ -78,7 +99,8 @@ def _derive_emotion_criteria(niche_profile: dict | None) -> str:
     return " ".join(parts)
 
 
-def _build_prompt(script: dict, niche: str, niche_profile: dict | None = None) -> str:
+def _build_prompt(script: dict, niche: str, niche_profile: dict | None = None,
+                  active_beats: list | None = None) -> str:
     sections = "\n".join([
         f"[HOOK]: {script.get('hook', '')}",
         f"[MYSTERY DROP]: {script.get('mystery_drop', '')}",
@@ -102,11 +124,35 @@ def _build_prompt(script: dict, niche: str, niche_profile: dict | None = None) -
 
     emotion_criteria = _derive_emotion_criteria(niche_profile)
 
+    # Catatan FORMAT (preset-aware): bila preset pendek sengaja tak punya climax/cta, beri tahu
+    # LLM agar TIDAK menghukum bagian yang absen (set dimensi terkait null, nilai hanya yang ada).
+    beats_note = ""
+    if active_beats:
+        _PART_LABEL = {"hook": "hook", "core_facts": "core fact", "build_up": "build-up",
+                       "mystery_drop": "mystery", "curiosity_bridge": "curiosity bridge",
+                       "climax": "climax", "cta": "call-to-action"}
+        present = ", ".join(_PART_LABEL.get(b, b) for b in active_beats)
+        missing = []
+        if "climax" not in active_beats:
+            missing.append("emotional_peak (there is NO climax)")
+        if "cta" not in active_beats:
+            missing.append("cta_strength (there is NO call-to-action)")
+        if "hook" not in active_beats:
+            missing.append("hook_power (there is NO separate hook)")
+        if missing:
+            beats_note = (
+                f"\nFORMAT NOTICE — this is a {len(active_beats)}-part ultra-short. "
+                f"It INTENTIONALLY contains ONLY: {present}. "
+                f"Do NOT penalize the absence of: {'; '.join(missing)}. "
+                f"For those, output null and judge ONLY the parts that are present, on their own terms — "
+                f"a great {present} script must be able to reach 80+.\n"
+            )
+
     return f"""You are a strict viral content analyst. Analyze this {niche} video script.
 
 SCRIPT:
 {sections}
-
+{beats_note}
 Score each dimension 0-100. Calibrate against real viral short-form — be FAIR, not perfectionist:
 - 90-100: EXCEPTIONAL — best-in-class, rare. Reserve the gap above 88 for the truly outstanding.
 - 80-89: STRONG & viral-ready — does its job well and SPECIFICALLY for THIS topic. **This is the target band for genuinely good content — award it freely when earned. Do NOT withhold 80 from solid work just because it isn't perfect.**
@@ -152,7 +198,8 @@ class ScriptAnalyzer:
         self.provider = provider
         self.model    = model
 
-    def analyze(self, script: dict, niche: str, niche_profile: dict | None = None) -> dict:
+    def analyze(self, script: dict, niche: str, niche_profile: dict | None = None,
+                active_beats: list | None = None) -> dict:
         """
         Score script terhadap 6 dimensi viral via LLMProvider tenant (config-driven).
         niche_profile: data niche dari Supabase (voice_profile, target_emotion, dll).
@@ -163,14 +210,14 @@ class ScriptAnalyzer:
         """
         if not self.provider:
             logger.warning("[ScriptAnalyzer] tanpa LLM provider — local estimate")
-            return self._local_estimate(script)
+            return self._local_estimate(script, active_beats)
         try:
             raw = self.provider.complete(
                 system=(
                     "You are a strict viral content analyst. "
                     "Score honestly. Only respond with valid JSON."
                 ),
-                user=_build_prompt(script, niche, niche_profile),
+                user=_build_prompt(script, niche, niche_profile, active_beats),
                 model=self.model,
                 temperature=0.3,
                 max_tokens=500,
@@ -178,16 +225,23 @@ class ScriptAnalyzer:
             )
             analysis = parse_json_lenient(raw)
 
-            # Hitung viral_score dari weighted dimensions jika tidak dikembalikan
-            if "viral_score" not in analysis:
-                dim = analysis.get("dimension_scores", {})
-                analysis["viral_score"] = round(sum(
-                    dim.get(k, 50) * w
-                    for k, w in VIRAL_DIMENSIONS.items()
-                ))
+            # Skor preset-aware: bobot hanya atas dimensi yg RELEVAN dgn beat aktif, renormalisasi 100%.
+            # Preset lengkap (45-90s: hook+climax+cta hadir) → active_dims = semua 6 → skor LLM
+            # dipertahankan (perilaku lama, TAK berubah). Preset 8/15/30s (tanpa climax/cta) → recompute
+            # tanpa dimensi absen → naskah pendek dinilai adil.
+            active_dims = _active_dimensions(active_beats)
+            if "viral_score" not in analysis or set(active_dims) != set(VIRAL_DIMENSIONS):
+                dim  = analysis.get("dimension_scores", {})
+                wsum = sum(active_dims.values()) or 1
+                analysis["viral_score"] = round(
+                    sum(dim.get(k, 50) * w for k, w in active_dims.items()) / wsum
+                )
 
             analysis.setdefault("weak_areas", [])
             analysis.setdefault("strengths", [])
+            # weak_areas hanya dimensi AKTIF → retry-feedback tak menuntut beat yg sengaja absen
+            analysis["weak_areas"] = [a for a in analysis["weak_areas"]
+                                      if a not in VIRAL_DIMENSIONS or a in active_dims]
             analysis.setdefault("summary", "Analysis complete")
             analysis.setdefault("retry_suggestion", "")
 
@@ -199,21 +253,23 @@ class ScriptAnalyzer:
 
         except Exception as e:
             logger.warning(f"[ScriptAnalyzer] LLM failed ({e}) — local estimate")
-            return self._local_estimate(script)
+            return self._local_estimate(script, active_beats)
 
-    def _local_estimate(self, script: dict) -> dict:
-        """Fallback estimasi lokal tanpa LLM — pipeline tidak crash."""
+    def _local_estimate(self, script: dict, active_beats: list | None = None) -> dict:
+        """Fallback estimasi lokal tanpa LLM — pipeline tidak crash. Preset-aware: denominator
+        & skor hanya atas beat/dimensi yang AKTIF (preset pendek tak dihukum bagian absen)."""
         hook        = script.get("hook", "")
         power_words = ["secret", "never", "impossible", "discovered", "truth",
                        "nobody", "scientists", "actually", "shocking", "reveals",
                        "hurtling", "changed", "terrifying", "hidden"]
         hook_score  = min(100, 55 + sum(8 for w in power_words if w in hook.lower()))
 
-        sections_present = sum(
-            1 for s in ["build_up", "core_facts", "climax", "cta"]
-            if script.get(s)
-        )
-        base = round(sections_present / 4 * 65)
+        # Beat konten yang dihitung = beat aktif preset (fallback: skema 4-section lama)
+        _content = [b for b in (active_beats or ["build_up", "core_facts", "climax", "cta"])
+                    if b in ("build_up", "core_facts", "climax", "cta",
+                             "mystery_drop", "curiosity_bridge")] or ["core_facts"]
+        sections_present = sum(1 for s in _content if script.get(s))
+        base = round(sections_present / len(_content) * 65)
 
         dim_scores = {
             "hook_power":          hook_score,
@@ -223,9 +279,9 @@ class ScriptAnalyzer:
             "information_density": base,
             "cta_strength":        base,
         }
-        viral_score = round(sum(
-            dim_scores[k] * w for k, w in VIRAL_DIMENSIONS.items()
-        ))
+        active_dims = _active_dimensions(active_beats)
+        wsum        = sum(active_dims.values()) or 1
+        viral_score = round(sum(dim_scores[k] * w for k, w in active_dims.items()) / wsum)
 
         return {
             "dimension_scores":  dim_scores,
