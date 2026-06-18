@@ -119,7 +119,8 @@ export default function AuthPage() {
   async function doGoogle() {
     setErr(null);
     const after = `${origin()}/auth/callback?next=${encodeURIComponent("/dashboard")}`;
-    const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: after } });
+    // prompt=select_account → Google SELALU tampilkan pemilih akun (tak silent-SSO ke akun terakhir).
+    const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: after, queryParams: { prompt: "select_account" } } });
     if (error) setErr(error.message);  // aktif setelah provider Google dikonfigurasi di Supabase
   }
   const ErrBox = () => err ? <div style={{ color: "var(--danger, #ef4444)", fontSize: "var(--text-sm)", marginTop: "0.5rem" }}>{err}</div> : null;
