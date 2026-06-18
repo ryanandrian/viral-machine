@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ExternalLink, Settings, Zap, ArrowRight, BarChart3, Calendar, Activity, Loader2, Check } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import PresetTables from "@/components/preset-tables";
 import "./channel-detail.css";
 
 // D3 Channel Detail — Phase 9.3 (wired Supabase v2, anon + RLS).
@@ -19,7 +20,7 @@ function Bi({ id, en }: { id: string; en: string }) {
 type ChannelRow = {
   id: string; channel_name: string | null; platform_channel_id: string | null;
   niche: string | null; niche_pool: string[] | null; niche_mode: string | null; content_language: string | null;
-  is_active: boolean | null; publish_privacy: string | null;
+  is_active: boolean | null; publish_privacy: string | null; duration_preset: number | null;
 };
 
 const PALETTE = ["#6366F1", "#047857", "#9f1239", "#b45309", "#1d4ed8", "#7c3aed"];
@@ -65,6 +66,19 @@ export default function ChannelDetailPage() {
   const [nicheMsg, setNicheMsg] = useState<string | null>(null);
   const [savingNiche, setSavingNiche] = useState(false);
 
+  // Preset durasi per-channel (channels.duration_preset) — kolom "bersih", tulis via RLS UPDATE langsung.
+  const [dpreset, setDpreset] = useState<number | null>(null);
+  const [savingPreset, setSavingPreset] = useState(false);
+  const [presetMsg, setPresetMsg] = useState<string | null>(null);
+
+  async function savePreset() {
+    setPresetMsg(null); setSavingPreset(true);
+    const { error } = await supabase.from("channels").update({ duration_preset: dpreset }).eq("id", id);
+    setSavingPreset(false);
+    setPresetMsg(error ? `Gagal: ${error.message}` : "Durasi tersimpan");
+    if (!error) load();
+  }
+
   async function saveNiche() {
     setNicheMsg(null); setSavingNiche(true);
     const { error } = await supabase.rpc("set_channel_niche", { p_channel_id: id, p_niche: niche, p_niche_mode: nicheMode });
@@ -88,7 +102,7 @@ export default function ChannelDetailPage() {
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     const { data } = await supabase.from("channels")
-      .select("id,channel_name,platform_channel_id,niche,niche_pool,niche_mode,content_language,is_active,publish_privacy")
+      .select("id,channel_name,platform_channel_id,niche,niche_pool,niche_mode,content_language,is_active,publish_privacy,duration_preset")
       .eq("id", id).maybeSingle();
     const c = data as ChannelRow | null;
     setCh(c);
@@ -96,6 +110,7 @@ export default function ChannelDetailPage() {
       setName(c.channel_name ?? ""); setClang(c.content_language ?? "id-ID");
       setPrivacy(c.publish_privacy ?? "private"); setActive(c.is_active ?? true);
       setNicheMode((c.niche_mode === "random" ? "random" : "fixed")); setNiche(c.niche ?? "");
+      setDpreset(c.duration_preset ?? null);
     }
     // Opsi niche = ENTITLEMENT tenant (katalog per-tier + niche custom/private milik tenant).
     const { data: cfg } = await supabase.from("tenant_configs").select("plan_type").maybeSingle();
@@ -171,6 +186,7 @@ export default function ChannelDetailPage() {
       )}
 
       {tab === "settings" && (
+        <>
         <div className="card card-pad" style={{ maxWidth: 560 }}>
           <h3 className="card-title" style={{ marginBottom: "1rem" }}><Bi id="Pengaturan channel" en="Channel settings" /></h3>
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -219,6 +235,19 @@ export default function ChannelDetailPage() {
             </div>
           </div>
         </div>
+
+        <div className="card card-pad" style={{ marginTop: "1rem" }}>
+          <h3 className="card-title" style={{ marginBottom: "0.35rem" }}><Bi id="Durasi & segmentasi konten" en="Duration & content segmentation" /></h3>
+          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}>
+            <Bi id="Pilih durasi video untuk channel ini. Makin panjang, makin banyak bagian cerita. Tabel di bawah menjelaskan tiap pilihan." en="Pick this channel's video duration. Longer durations add more story parts. The table below explains each option." />
+          </p>
+          <PresetTables selectable selectedSeconds={dpreset} onSelect={setDpreset} />
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "1rem" }}>
+            <button className="btn btn-default" onClick={savePreset} disabled={savingPreset || dpreset == null}>{savingPreset ? <Loader2 size={15} className="spin" /> : <Bi id="Simpan durasi" en="Save duration" />}</button>
+            {presetMsg && <span style={{ fontSize: "var(--text-sm)", color: presetMsg.includes("tersimpan") ? "var(--success)" : "var(--danger, #ef4444)" }}>{presetMsg}</span>}
+          </div>
+        </div>
+        </>
       )}
     </>
   );

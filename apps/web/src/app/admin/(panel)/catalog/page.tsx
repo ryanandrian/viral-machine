@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Plus, Target, ArrowRight, X } from "lucide-react";
+import PresetTables from "@/components/preset-tables";
 import "./catalog.css";
 
 // E2 Admin Catalog (Phase 10.4-10.7) — DATA NYATA via /api/admin/catalog (service_role).
@@ -17,7 +18,7 @@ type Cat = {
   content_languages: Record<string, unknown>[]; voice_catalog: Record<string, unknown>[]; tts_profiles: Record<string, unknown>[];
 };
 
-const TABS: [string, string][] = [["models", "AI Models"], ["providers", "Providers"], ["music", "Music"], ["voice", "Voice"], ["languages", "Languages"], ["niche", "Niche"]];
+const TABS: [string, string][] = [["models", "AI Models"], ["providers", "Providers"], ["music", "Music"], ["voice", "Voice"], ["languages", "Languages"], ["durations", "Durasi"], ["niche", "Niche"]];
 
 // field minimal untuk "Add" per tabel (PK + wajib)
 const ADD_FIELDS: Record<string, { table: string; fields: [string, string][] }> = {
@@ -64,7 +65,15 @@ export default function AdminCatalogPage() {
 
       <div className="cat-tabs">{TABS.map(([k, l]) => <button key={k} className={`cat-tab${tab === k ? " active" : ""}`} onClick={() => setTab(k)}>{l}</button>)}</div>
 
-      {loading && <div className="card card-pad muted">Memuat…</div>}
+      {tab === "durations" && (
+        <div className="card card-pad">
+          <h3 className="card-title" style={{ marginBottom: "0.35rem" }}><Bi id="Durasi & segmentasi konten" en="Duration & content segmentation" /></h3>
+          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}><Bi id="Acuan segmentasi per preset (single-source: duration_presets + beat_glossary). Identik dengan yang dilihat tenant." en="Per-preset segmentation reference (single-source: duration_presets + beat_glossary). Identical to what tenants see." /></p>
+          <PresetTables />
+        </div>
+      )}
+
+      {loading && tab !== "durations" && <div className="card card-pad muted">Memuat…</div>}
       {!loading && data && (<>
         {tab === "models" && (<>
           <div className="cat-toolbar"><div className="right"><button className="btn btn-default btn-sm" onClick={() => setAdd({})}><Plus size={14} /> <Bi id="Tambah model" en="Add model" /></button></div></div>
