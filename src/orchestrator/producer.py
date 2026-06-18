@@ -64,6 +64,34 @@ def _resolve_niche(channel_row: dict) -> str | None:
         return base
 
 
+def _record_production_run(channel_row: dict, result: dict, status: str,
+                           qc_passed: bool | None, error: str | None = None) -> None:
+    """Observability: tulis 1 baris `production_runs` utk produksi SCHEDULED (produce_one) → tampak
+    di FE /runs (selama ini hanya `run_direct` yang menulis → produksi terjadwal tak terlihat).
+    queue_id NULL (jalur decoupled, bukan pipeline_queue); youtube_url NULL (producer HANYA stok —
+    publish oleh publisher saat slot). run_metadata.scheduled=True (bedakan dari direct). Fail-soft."""
+    try:
+        from supabase import create_client
+        sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+        script = result.get("script", {}) or {}
+        sb.table("production_runs").insert({
+            "tenant_id":       channel_row["tenant_id"],
+            "run_id":          result.get("run_id"),
+            "channel_id":      str(channel_row.get("id") or channel_row.get("channel_id") or ""),
+            "niche":           result.get("niche"),
+            "topic":           script.get("topic", ""),
+            "status":          status,
+            "qc_passed":       qc_passed,
+            "viral_score":     script.get("viral_score"),
+            "llm_provider":    script.get("llm_provider_used"),
+            "elapsed_seconds": result.get("elapsed_seconds"),
+            "error_message":   error,
+            "run_metadata":    {"scheduled": True, "mode": "buffer"},
+        }).execute()
+    except Exception as e:
+        logger.warning(f"[Producer] tulis production_runs (scheduled) gagal — non-fatal: {e}")
+
+
 def produce_one(channel_row: dict) -> int | None:
     """Produksi 1 video (TANPA publish) → buffer. Return inv_id ready, atau None bila gagal/QC fail."""
     from src.intelligence.config import tenant_config_from_channel
@@ -97,7 +125,9 @@ def produce_one(channel_row: dict) -> int | None:
         video = result.get("video_path")
         # HARD-FAIL (crash render/visual, TANPA video jadi) → failed (TIDAK dihitung stok).
         if result.get("status") != "success" or not video or not os.path.exists(video):
-            inventory.mark_failed(inv_id, result.get("error") or "produksi gagal (tanpa video)")
+            _err = result.get("error") or "produksi gagal (tanpa video)"
+            inventory.mark_failed(inv_id, _err)
+            _record_production_run(channel_row, result, "failed", False, _err)
             return None
 
         run_id = result["run_id"]
@@ -146,12 +176,14 @@ def produce_one(channel_row: dict) -> int | None:
                 inv_id, vkey, reason=qc.get("reason", ""),
                 recommendation=qc.get("recommendation", ""), metadata=_meta)
             _cleanup_local()
+            _record_production_run(channel_row, result, "qc_failed", False, qc.get("reason"))
             logger.warning(f"[Producer] ready_with_issues (tinjau): {vkey} (inv {inv_id}) — {qc.get('reason','')}")
             return inv_id
 
         # QC-PASS → ready (siap auto-publish saat slot)
         inventory.mark_ready(inv_id, vkey, metadata=_meta)
         _cleanup_local()
+        _record_production_run(channel_row, result, "success", True)
         logger.info(f"[Producer] buffer ready: {vkey} (inv {inv_id})")
         return inv_id
     except Exception as e:
