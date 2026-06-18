@@ -47,20 +47,22 @@ Kategori section bergantung **niat konten**, bukan durasi saja. Dua sumbu: **Dur
 
 ## 3. Duration Presets — 8/15/30/45/60/75/90s
 Word budget = detik × WPS(format). Visual beat = retensi vs biaya.
-| Preset | Word budget* | Visual beat | Render mode | Catatan kelayakan |
-|---|---|---|---|---|
-| 8s | ~12-16 (WPS~1.6) | 1 | `ai_video` | butuh ai_video + bypass QC 45s |
-| 15s | ~36 | 2-3 | image_sequence | **ultra-short: butuh skema section ringkas + QC relatif** |
-| 30s | ~72 | 4-5 | image_sequence | feasible (section_timing preset + compression-map) |
-| 45s | ~108 | 5-6 | image_sequence | feasible |
-| 60s | ~144 | 6-7 | image_sequence | feasible |
-| 75s | ~180 | 7-8 | image_sequence | feasible |
-| 90s | ~216 | 8-9 | image_sequence | feasible (>180 lama, naikkan QC max) |
-\* WPS per-format: energik ~2.4, edukasi ~2.2, motivasi ~1.6. Visual beat = angka awal, **A/B saat live**.
+| Preset | Word budget* | Beat (segmentasi) | Visual beat | Render mode | "Cocok untuk" (bahasa awam) |
+|---|---|---|---|---|---|
+| 8s | ~12-16 | `core` | 1 | `ai_video` | Kutipan atau satu fakta mengejutkan |
+| 15s | ~21 | `hook-core` | 2 | image_sequence | Satu fakta cepat pemancing penasaran |
+| 30s | ~45 | `hook-core-cta` | 3 | image_sequence | Fakta singkat dengan ajakan |
+| 45s | ~70 | `+climax` (4) | 4 | image_sequence | Fakta dengan momen kejutan |
+| 60s | ~97 | `+build_up` (5) | 5 | image_sequence | Cerita utuh yang padat (paling ideal) |
+| 75s | ~120 | `+mystery_drop` (6) | 6 | image_sequence | Cerita dengan sentuhan misteri |
+| 90s | ~150 | `+curiosity_bridge` (7) | 7 | image_sequence | Pembahasan mendalam dan lengkap |
+\* Word budget = (detik − render_overhead) × **delivery_wps TTS** (overhead-aware). Visual beat = len(beats). **Segmentasi = SINGLE-SOURCE `duration_presets.beats` (migr 0053)** — mesin + panel tenant + admin baca sama.
 
 **Pendekatan section (tervalidasi):** JANGAN rewrite skema jadi arbitrer (40–60% rewrite, risiko analyzer). Pakai **compression-mapping**: 8-section kanonik → kelompokkan jadi N beat sesuai preset (mis. 4 beat = hook / mystery+buildup / interrupt+core / bridge+climax+cta). Plus closed-loop speed-adjust (Edge/ElevenLabs) utk menepatkan durasi.
 
-> ✅ **DIIMPLEMENTASI 2026-06-17 (`script_engine.py`):** compression-mapping LLM per-preset AKTIF. `visual_beats` preset (15→3, 30→5, 45→6, 60→7, 75→8, 90→9) menentukan **N beat narasi = N scene** (`_BEATS_FOR_N`). Prompt `_build_user_prompt` render **BEAT PLAN dinamis** (beat aktif + budget-kata per-beat + intent naratif per-durasi: ultra-short=1 ide tajam … long=arc penuh). word-budget = `detik × WPS provider terdaftar`, didistribusi ke beat aktif. `_validate_and_fix` scene-count = `visual_beats` (selaras QC clip_count). **Validasi LLM-only (topik sama, 2026-06-17): 15/30/45/60/75/90 SEMUA word_count dalam rentang + scene=beats + durasi-EL pas.** 8s = ai_video (di luar image-sequence, epik terpisah).
+> ✅ **DEPLOYED 2026-06-18 (`05a3339` + migr `0053`) — SEGMENTASI SINGLE-SOURCE + STRUKTUR LEAN + 15s FIX:** segmentasi beat per preset pindah ke **`duration_presets.beats` (SUMBER TUNGGAL)** — dibaca `script_engine._beats_for_preset()` (fallback `_BEATS_FOR_N` pra-migrasi) + panel tenant/admin (anti-drift). **Struktur LEAN progresif** (keputusan owner): 8=`core` · 15=`hook-core` · 30=`hook-core-cta` · 45=+climax · 60=+build_up · 75=+mystery_drop · 90=+curiosity_bridge; `visual_beats=len(beats)`. `_validate_and_fix` required DINAMIS = {hook,core,cta}∩beats-aktif → 15s tanpa-cta & 8s core-saja LOLOS. + tabel `beat_glossary` (label awam dwibahasa, tooltip FE). **✅ Cacat B 15s FIXED** (struktur 2-beat + budget overhead-aware → ~21 kata → 14.5s, validated e2e). **Mapping lama "15→3, 30→5…" di bawah = SUPERSEDED.** Follow-up: analyzer skor hanya dim aktif (jangan hukum beat absen di ultra-short).
+>
+> ✅ **DIIMPLEMENTASI 2026-06-17 (`script_engine.py`) [mapping visual_beats SUPERSEDED oleh 0053]:** compression-mapping LLM per-preset AKTIF. `visual_beats` preset (15→3, 30→5, 45→6, 60→7, 75→8, 90→9) menentukan **N beat narasi = N scene** (`_BEATS_FOR_N`). Prompt `_build_user_prompt` render **BEAT PLAN dinamis** (beat aktif + budget-kata per-beat + intent naratif per-durasi: ultra-short=1 ide tajam … long=arc penuh). word-budget = `detik × WPS provider terdaftar`, didistribusi ke beat aktif. `_validate_and_fix` scene-count = `visual_beats` (selaras QC clip_count). **Validasi LLM-only (topik sama, 2026-06-17): 15/30/45/60/75/90 SEMUA word_count dalam rentang + scene=beats + durasi-EL pas.** 8s = ai_video (di luar image-sequence, epik terpisah).
 
 > ✅ **DIIMPLEMENTASI 2026-06-17 (Opsi A — image-gen per-preset + VISUAL DNA; validated-lokal):** Pembuatan prompt visual dipisah **DUA TAHAP** (akar Cacat A "prompt asal jadi"):
 > - **Tahap-1** (`script_engine._generate_one`) = NARASI saja — skema JSON bersih (buang visual_suggestions dari call narasi; slot `core_facts_2`; guard tiap beat aktif non-kosong).
