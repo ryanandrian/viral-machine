@@ -129,9 +129,13 @@ class TTSEngine:
         script: dict,
         tenant_config: TenantConfig,
         output_dir: str = "logs",
+        target_audio_secs: float | None = None,
     ) -> tuple[str, list[dict]]:
         """
         Generate audio dari script.
+        target_audio_secs: target durasi AUDIO (preset − trailing_silence). Bila di-set → closed-loop
+        durasi: ukur audio, kalau di luar window QC → atempo (time-stretch, NOL biaya TTS) ke target +
+        skala word_timestamps. None → perilaku lama (open-loop, non-breaking).
         Returns: (audio_path, word_timestamps)
         """
         os.makedirs(output_dir, exist_ok=True)
@@ -192,6 +196,11 @@ class TTSEngine:
                         f"[TTSEngine] ✅ {provider_name}: {size_kb:.1f}KB "
                         f"| {ts_count} word timestamps ({ts_quality})"
                     )
+                    # Closed-loop durasi (opsional, NOL biaya TTS): rapikan via atempo bila di luar window.
+                    if target_audio_secs and target_audio_secs > 0:
+                        audio_path, word_timestamps = self._fit_duration(
+                            audio_path, word_timestamps, float(target_audio_secs), output_dir
+                        )
                     return audio_path, word_timestamps
 
             except Exception as e:
@@ -229,3 +238,50 @@ class TTSEngine:
             return round((size_bytes * 8) / (128 * 1000), 1)
         except Exception:
             return 0.0
+
+    @staticmethod
+    def _fit_duration(audio_path: str, word_timestamps: list, target_secs: float, output_dir: str):
+        """Closed-loop durasi TANPA biaya TTS ekstra (akar: kecepatan bicara EL bervariasi ±15%).
+        SYARAT (kesepakatan owner): hanya dipakai pada audio dari naskah yg SUDAH lulus gate mutu;
+        koreksi HANYA bila hasil di luar window QC; HANYA bila faktor dalam batas aman (suara tak rusak);
+        kalau di luar batas → biarkan apa adanya (→ ready_with_issues, mutu suara > paksa durasi).
+        Caption: word_timestamps diskala dgn faktor yg sama → tetap sinkron.
+        atempo: out_dur = in_dur / factor (pitch tetap)."""
+        try:
+            actual = TTSEngine.get_duration(audio_path)
+            if actual <= 0:
+                return audio_path, word_timestamps
+            trailing = float(os.getenv("RENDER_TRAILING_SILENCE", "1.5"))
+            tol      = float(os.getenv("QC_DURATION_TOLERANCE", "0.15"))
+            preset   = target_secs + trailing            # target FINAL ≈ preset (audio+trailing)
+            final_est = actual + trailing
+            lo, hi   = preset * (1 - tol), preset * (1 + tol)
+            if lo <= final_est <= hi:
+                return audio_path, word_timestamps        # sudah dalam window → JANGAN sentuh suara
+            factor = actual / target_secs                 # atempo value
+            amin = float(os.getenv("TTS_ATEMPO_MIN", "0.80"))
+            amax = float(os.getenv("TTS_ATEMPO_MAX", "1.25"))
+            if not (amin <= factor <= amax):
+                logger.warning(
+                    f"[TTSEngine] durasi {actual:.1f}s vs target {target_secs:.1f}s — faktor {factor:.2f} "
+                    f"di luar batas aman [{amin},{amax}] → TIDAK di-atempo (jaga mutu suara) → ready_with_issues"
+                )
+                return audio_path, word_timestamps
+            import subprocess
+            out = os.path.join(output_dir, "fit_" + os.path.basename(audio_path))
+            subprocess.run(
+                ["ffmpeg", "-y", "-i", audio_path, "-filter:a", f"atempo={factor:.4f}", "-vn", out],
+                check=True, capture_output=True,
+            )
+            scale  = 1.0 / factor                          # new_dur/old_dur → skala timestamp
+            scaled = [{**w, "start": float(w.get("start", 0)) * scale, "end": float(w.get("end", 0)) * scale}
+                      for w in (word_timestamps or [])]
+            new = TTSEngine.get_duration(out)
+            logger.info(
+                f"[TTSEngine] ⏱ atempo fit: {actual:.1f}s → {new:.1f}s (target {target_secs:.1f}s, "
+                f"factor {factor:.3f}) — caption diskala, biaya EL=0"
+            )
+            return out, scaled
+        except Exception as e:
+            logger.warning(f"[TTSEngine] fit durasi gagal ({e}) — pakai audio asli")
+            return audio_path, word_timestamps

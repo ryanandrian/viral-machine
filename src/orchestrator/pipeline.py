@@ -196,7 +196,12 @@ class Pipeline:
 
             # ── STEP 5: TTS Audio ───────────────────────────────────
             logger.info("STEP 5/7 | Generating TTS audio...")
-            tts_result = self.tts_engine.generate(script, tenant_config)
+            # Closed-loop durasi (NOL biaya TTS): target audio = preset − trailing_silence. Bila preset
+            # di-set → tts_engine rapikan via atempo HANYA jika di luar window QC + faktor dalam batas aman.
+            _preset_s = getattr(tenant_config, "duration_preset", None)
+            _trailing = float(os.getenv("RENDER_TRAILING_SILENCE", "1.5"))
+            _target_audio = (float(_preset_s) - _trailing) if _preset_s else None
+            tts_result = self.tts_engine.generate(script, tenant_config, target_audio_secs=_target_audio)
             audio_path, word_timestamps = (
                 tts_result if isinstance(tts_result, tuple)
                 else (tts_result, [])
