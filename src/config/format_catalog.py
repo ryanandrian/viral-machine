@@ -78,6 +78,18 @@ def preset_visual_beats(seconds, default: int = 6) -> int:
         return default
 
 
+def preset_beats(seconds) -> list | None:
+    """Urutan beat (SEGMENTASI) per preset = SINGLE-SOURCE dari `duration_presets.beats` (jsonb) —
+    dibaca mesin + panel tenant + panel admin agar konsisten (anti-drift). None bila kolom belum ada
+    / kosong → caller fallback ke _BEATS_FOR_N (non-breaking sebelum migrasi)."""
+    if not seconds:
+        return None
+    _load()
+    row = (_CACHE["presets"] or {}).get(int(seconds))
+    b = row.get("beats") if row else None
+    return list(b) if isinstance(b, list) and b else None
+
+
 def effective_wps(format_key, tts_provider, default: float = 2.4) -> float:
     """WPS efektif untuk word-budget = **delivery rate TTS provider** (dominan; kata/detik suara).
     Inilah solusi 2-kelas TTS (owner): ElevenLabs-class ~1.8 vs edge ~2.6. Fallback ke WPS

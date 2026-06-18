@@ -225,6 +225,19 @@ def _active_beats(n_beats: int) -> list:
     return _BEATS_FOR_N[max(3, min(9, int(n_beats)))]
 
 
+def _beats_for_preset(preset_seconds) -> list:
+    """Beat aktif (SEGMENTASI) preset = SINGLE-SOURCE dari DB `duration_presets.beats`
+    (konsisten dgn panel tenant/admin); fallback `_BEATS_FOR_N` bila DB kosong (pra-migrasi/legacy).
+    Validasi: hanya key beat dikenal (_BEAT_WEIGHT)."""
+    from src.config.format_catalog import preset_beats, preset_visual_beats
+    db = preset_beats(preset_seconds)
+    if db:
+        known = [b for b in db if b in _BEAT_WEIGHT]
+        if known:
+            return known
+    return _active_beats(int(preset_visual_beats(preset_seconds)))
+
+
 def _distribute_words(active: list, total_words: int) -> dict:
     tot = sum(_BEAT_WEIGHT.get(b, 5) for b in active) or 1
     return {b: max(5, round(total_words * _BEAT_WEIGHT.get(b, 5) / tot)) for b in active}
@@ -301,8 +314,8 @@ def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, ins
         _spoken = max(1.0, float(preset_seconds) - float(render_overhead_sec or 0))
         total_words = round(_spoken * WPS)
         _lo, _hi    = round(total_words * 0.92), round(total_words * 1.12)
-        n_beats = int(_pvb(preset_seconds))
-        active  = _active_beats(n_beats)            # seksi aktif sesuai jumlah beat preset
+        active  = _beats_for_preset(preset_seconds)  # SEGMENTASI dari DB (single-source) / fallback _BEATS_FOR_N
+        n_beats = len(active)
         words   = _distribute_words(active, total_words)   # konsentrasi budget ke beat aktif (bukan sebar 8)
         n_scenes = len(active)
         inactive = [s for s in _ALL_SECTIONS if s not in active]
@@ -517,8 +530,10 @@ class ScriptEngine:
         dipindah ke Tahap-2 terdedikasi (Opsi A) pasca hook-optimize."""
         if not isinstance(script, dict):
             return None
-        # required = beat INTI yang selalu aktif di tiap preset (compression-mapping n≥3): hook+core+cta.
-        required = ["hook", "core_facts", "cta", "full_script"]
+        # required = beat inti yg BENAR-BENAR aktif di preset ini (segmentasi DB bisa <hook+core+cta,
+        # mis. 15s=hook-core tanpa cta, 8s=core saja). Intersection {hook,core,cta} ∩ active + full_script.
+        _core_req = [b for b in ("hook", "core_facts", "cta") if (not active_beats or b in active_beats)]
+        required = _core_req + ["full_script"]
         if any(not script.get(f) for f in required):
             logger.warning(f"[ScriptEngine] Missing required fields")
             return None
@@ -556,7 +571,7 @@ class ScriptEngine:
         if preset_seconds:   # selaras dgn prompt (validate pakai timing + beat aktif yg sama)
             section_timing = _scale_section_timing(section_timing, preset_seconds)
             from src.config.format_catalog import preset_visual_beats as _pvb
-            active_beats = _active_beats(int(_pvb(preset_seconds)))   # beat aktif preset = WAJIB non-kosong (A2)
+            active_beats = _beats_for_preset(preset_seconds)   # segmentasi DB (single-source) — WAJIB non-kosong (A2)
         try:
             raw = provider.complete(
                 system=_build_system_prompt(),
@@ -924,7 +939,7 @@ Return ONLY valid JSON:
             )
 
         from src.config.format_catalog import preset_visual_beats as _pvb_g
-        _beats = _active_beats(int(_pvb_g(preset_seconds))) if preset_seconds else list(_ALL_SECTIONS)
+        _beats = _beats_for_preset(preset_seconds) if preset_seconds else list(_ALL_SECTIONS)
         best_script.update({
             "topic":                   topic.get("topic", ""),
             "viral_score":             topic.get("viral_score", 0),
