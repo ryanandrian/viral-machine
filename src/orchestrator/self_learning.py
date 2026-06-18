@@ -36,7 +36,7 @@ def run_once(sb=None) -> dict:
                 from src.analytics.channel_analytics import ChannelAnalytics
                 ca = ChannelAnalytics(tenant_id=tid)
                 ca.fetch_and_store(tid)
-                ca.fetch_subscriber_count(tid)  # followers dashboard; fail-soft di dalam
+                ca.sync_channel_meta(tid)  # nama channel = YouTube + platform_channel_id + followers; fail-soft
                 fetched += 1
             except Exception as e:
                 logger.warning(f"[self_learning] fetch analytics gagal tenant={tid}: {e}")

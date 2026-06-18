@@ -218,29 +218,40 @@ class ChannelAnalytics:
         )
         return result
 
-    def fetch_subscriber_count(self, tenant_id: str) -> dict:
-        """FAIL-SOFT: ambil subscriberCount channel tenant (mine=True via OAuth) → simpan ke
-        channels.subscriber_count. Terisolasi: gagal di sini TIDAK mengganggu fetch/produksi lain.
-        Idempotent (overwrite). Subscriber tersembunyi → skip (biarkan nilai lama)."""
+    def sync_channel_meta(self, tenant_id: str) -> dict:
+        """FAIL-SOFT: sinkronkan metadata channel dari YouTube (mine=True via OAuth) → tabel channels:
+          • channel_name  = JUDUL channel YouTube (WAJIB sama dgn YouTube → anti-confuse tenant)
+          • platform_channel_id = channel id YouTube (UC...)
+          • subscriber_count   = jumlah subscriber (skip jika tersembunyi)
+        GENERIK untuk semua tenant (sumber kebenaran nama = YouTube, bukan input/niche).
+        Terisolasi: gagal di sini TIDAK mengganggu produksi/fetch lain. Idempotent.
+        Catatan: model BYO-CC saat ini = 1 OAuth YouTube per tenant → update channel tenant.
+        Multi-channel (banyak akun YT) butuh OAuth per-channel (arsitektur masa depan)."""
         if not self._youtube or not self._supabase:
             return {"ok": False, "reason": "no_client"}
         try:
-            resp = self._youtube.channels().list(part="statistics", mine=True).execute()
+            resp = self._youtube.channels().list(part="snippet,statistics", mine=True).execute()
             items = resp.get("items", [])
             if not items:
                 return {"ok": False, "reason": "no_channel"}
-            stats = items[0].get("statistics", {})
-            if stats.get("hiddenSubscriberCount"):
-                return {"ok": False, "reason": "hidden"}
-            subs = int(stats.get("subscriberCount", 0))
-            (self._supabase.table("channels")
-                 .update({"subscriber_count": subs,
-                          "subscriber_count_at": datetime.now(timezone.utc).isoformat()})
+            it = items[0]
+            uc_id = it.get("id")
+            title = (it.get("snippet") or {}).get("title")
+            stats = it.get("statistics") or {}
+            patch = {"updated_at": datetime.now(timezone.utc).isoformat()}
+            if title:
+                patch["channel_name"] = title
+            if uc_id:
+                patch["platform_channel_id"] = uc_id
+            if not stats.get("hiddenSubscriberCount"):
+                patch["subscriber_count"] = int(stats.get("subscriberCount", 0))
+                patch["subscriber_count_at"] = datetime.now(timezone.utc).isoformat()
+            (self._supabase.table("channels").update(patch)
                  .eq("tenant_id", tenant_id).execute())
-            logger.info(f"[Analytics] subscriberCount={subs} tenant={tenant_id}")
-            return {"ok": True, "subscribers": subs}
+            logger.info(f"[Analytics] sync channel meta tenant={tenant_id} name='{title}' id={uc_id} subs={patch.get('subscriber_count')}")
+            return {"ok": True, "name": title, "channel_id": uc_id, "subscribers": patch.get("subscriber_count")}
         except Exception as e:
-            logger.warning(f"[Analytics] fetch subscriberCount gagal tenant={tenant_id}: {e}")
+            logger.warning(f"[Analytics] sync channel meta gagal tenant={tenant_id}: {e}")
             return {"ok": False, "reason": str(e)}
 
     # ── Data fetching ─────────────────────────────────────────────────────
