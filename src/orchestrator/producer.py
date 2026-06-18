@@ -36,17 +36,19 @@ def default_buffer_depth() -> int:
 def _resolve_niche(channel_row: dict) -> str | None:
     """Resolusi niche per-channel SEBELUM pipeline (jalur SCHEDULED saja — `run_direct` pakai niche
     EKSPLISIT job & TIDAK lewat sini, jadi niche test/rerun tak pernah ditimpa rotasi).
-    `niche_mode='fixed'` → `channels.niche` apa adanya; `'random'` → rotasi LRU (DiversityEngine atas
-    `videos.niche`) SELURUH ENTITLEMENT tenant ([[decisions_niche_model]]: random = seluruh entitlement;
-    `niche_pool` deprecated, TIDAK dipakai). Fail-soft → `channels.niche`. Padanan V2 dari ScheduleManager
-    V1 (dihapus di B1) yang dulu resolve niche sebelum pipeline."""
+    `niche_mode='fixed'` → `channels.niche` apa adanya; `'random'` → **cara V1 (sederhana, owner
+    2026-06-18): pilih ACAK dari SELURUH entitlement tenant, lalu cek histori — bila niche pilihan SAMA
+    dengan 1-2 video TERAKHIR channel (berdekatan), acak lagi.** Sifat acak per-panggilan otomatis
+    memvariasikan produksi burst-paralel (beda dari LRU deterministik lama yg memilih sama saat window
+    sama). ([[decisions_niche_model]]: random = seluruh entitlement; `niche_pool` deprecated, TIDAK
+    dipakai.) Fail-soft → `channels.niche`."""
     base = channel_row.get("niche")
     if (channel_row.get("niche_mode") or "fixed").lower() != "random":
         return base
     try:
+        import random as _rand
         from supabase import create_client
         from src.billing.limits import entitled_niches
-        from src.intelligence.diversity import DiversityEngine
         from src.config.tenant_config import load_tenant_config
         tenant_id  = channel_row["tenant_id"]
         channel_id = str(channel_row.get("id") or channel_row.get("channel_id") or tenant_id)
@@ -55,10 +57,24 @@ def _resolve_niche(channel_row: dict) -> str | None:
         entitled   = entitled_niches(sb, plan_type, tenant_id)
         if not entitled:
             return base
-        chosen = DiversityEngine(sb).pick(channel_id, "niche", entitled)
-        if chosen and chosen != base:
-            logger.info(f"[Producer] niche rotasi (random, LRU entitlement): {base} → {chosen} (ch={channel_id})")
-        return chosen or base
+        if len(entitled) == 1:
+            return entitled[0]
+        # 1-2 niche TERAKHIR channel (content_inventory = sinyal terbaru, mencakup yg baru diproduksi).
+        recent = []
+        try:
+            _r = (sb.table("content_inventory").select("niche")
+                  .eq("channel_id", channel_id).order("created_at", desc=True).limit(2).execute())
+            recent = [x["niche"] for x in (_r.data or []) if x.get("niche")]
+        except Exception:
+            recent = []
+        chosen = _rand.choice(entitled)
+        for _ in range(8):                 # acak lagi bila berdekatan; mentok → pakai apa adanya
+            if chosen not in recent:
+                break
+            chosen = _rand.choice(entitled)
+        if chosen != base:
+            logger.info(f"[Producer] niche random (V1-style, hindari {recent}): {base} → {chosen} (ch={channel_id})")
+        return chosen
     except Exception as e:
         logger.warning(f"[Producer] resolusi niche random gagal ({e}) — pakai channels.niche '{base}'")
         return base
