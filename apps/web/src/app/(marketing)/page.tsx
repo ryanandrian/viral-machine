@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { fetchPricing, idrK } from "@/lib/pricing";
 import {
   Sparkles, ArrowRight, Play, CheckCircle, Check, Clock, BarChart3, XCircle,
-  Command, ShieldCheck, Tv, Zap, X, Loader2, ChevronDown, Star,
+  Command, ShieldCheck, Zap, X, Loader2, ChevronDown, Star,
   Radar, Target, FileText, AudioLines, Image as ImageIcon, Film, Upload, type LucideIcon,
   Lock, KeyRound, EyeOff, Server, Send, Brain, TrendingUp, RotateCcw,
 } from "lucide-react";
@@ -193,7 +193,7 @@ export default function LandingPage() {
           <div className="feat"><span className="fic"><Command size={22} /></span><h3><Bi id="BYOK Transparan" en="Transparent BYOK" /></h3><p><Bi id="Kamu pegang API keys Anthropic, OpenAI, ElevenLabs. Lihat biaya AI real-time per video. Tanpa markup." en="You hold your Anthropic, OpenAI, ElevenLabs keys. See AI cost per video in real time. No markup." /></p></div>
           <div className="feat"><span className="fic" style={{ background: "var(--success-soft)", color: "var(--success)" }}><ShieldCheck size={22} /></span><h3><Bi id="AI Slop Defense" en="AI Slop Defense" /></h3><p><Bi id="Diversity engine otomatis melindungi channel dari YouTube AI policy 2026. Compliance score real-time." en="A diversity engine automatically protects your channel from YouTube's 2026 AI policy. Real-time compliance score." /></p></div>
           <div className="feat"><span className="fic"><Zap size={22} /></span><h3><Bi id="5–24 Video / Hari" en="5–24 Videos / Day" /></h3><p><Bi id="Multi-channel paralel. Scale produksi tanpa hire tim editor." en="Parallel multi-channel. Scale production without hiring an editing team." /></p></div>
-          <div className="feat"><span className="fic" style={{ background: "var(--warning-soft)", color: "var(--warning)" }}><Tv size={22} /></span><h3>🇮🇩 <Bi id="Indonesia-First" en="Indonesia-First" /></h3><p><Bi id="UI Bahasa Indonesia, pembayaran Midtrans, suara lokal, dan support lokal yang paham creator Indonesia." en="Bahasa Indonesia UI, Midtrans payments, local voices, and local support that understands Indonesian creators." /></p></div>
+          <div className="feat"><span className="fic" style={{ background: "var(--warning-soft)", color: "var(--warning)" }}><Clock size={22} /></span><h3><Bi id="Beragam Opsi Durasi Konten" en="Flexible Content Durations" /></h3><p><Bi id="Pilih durasi 8–90 detik sesuai gaya & platform — teaser cepat 15 detik atau cerita utuh 60 detik. Tiap durasi diramu otomatis dengan struktur cerita yang pas, bukan sekadar dipotong, jadi tiap detik tetap menahan penonton." en="Pick 8–90s to match your style & platform — a fast 15s teaser or a full 60s story. Each duration is auto-crafted with the right story structure, never just trimmed, so every second keeps viewers watching." /></p></div>
           <div className="feat"><span className="fic" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}><Zap size={22} /></span><h3>🌐 <Bi id="Konten Multi-Bahasa" en="Multi-Language Content" /></h3><p><Bi id="Produksi narasi + caption dalam Bahasa Indonesia, English, dan bahasa Asia Tenggara. Pilih bahasa per channel — jangkau audiens lintas negara dari satu platform." en="Produce narration + captions in Indonesian, English, and Southeast Asian languages. Pick a language per channel — reach cross-border audiences from one platform." /></p><div style={{ display: "flex", gap: "0.4rem", marginTop: "0.875rem", fontSize: "var(--text-lg)" }}>🇮🇩 🇬🇧 🇲🇾 🇵🇭 🇹🇭 🇻🇳</div></div>
         </div>
       </div></section>
