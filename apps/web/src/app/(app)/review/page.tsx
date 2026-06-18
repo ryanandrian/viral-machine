@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { AlertTriangle, Check, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, Trash2, Play, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 // OPSI C (QC_CONTENT_ARCHITECTURE §3 / DESAIN §12d.F) — tinjau video 'ready_with_issues':
@@ -34,6 +34,23 @@ export default function ReviewPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [preview, setPreview] = useState<Record<number, string>>({});
+  const [previewBusy, setPreviewBusy] = useState<number | null>(null);
+
+  async function loadPreview(id: number) {
+    if (preview[id]) return;
+    setPreviewBusy(id);
+    try {
+      const r = await fetch(`/api/review/preview?id=${id}`);
+      const j = await r.json();
+      if (r.ok && j.url) setPreview((p) => ({ ...p, [id]: j.url as string }));
+      else setToast(`Preview gagal: ${j.error ?? r.status}`);
+    } catch (e) {
+      setToast(`Preview gagal: ${(e as Error).message}`);
+    } finally {
+      setPreviewBusy(null);
+    }
+  }
 
   const load = useCallback(async () => {
     const { data } = await supabase
@@ -103,8 +120,17 @@ export default function ReviewPage() {
                 {m.duration_secs != null && <>⏱ {Number(m.duration_secs).toFixed(1)}s · </>}
                 {m.size_mb != null && <>💾 {m.size_mb} MB · </>}
                 {new Date(it.created_at).toLocaleString()}
-                {" · "}<i>(preview video menyusul)</i>
               </div>
+              {preview[it.id] ? (
+                <video controls preload="metadata" src={preview[it.id]}
+                  style={{ width: "100%", maxWidth: 270, borderRadius: 8, marginBottom: 12, background: "#000", aspectRatio: "9 / 16" }} />
+              ) : (
+                <button className="btn btn-ghost btn-sm" disabled={previewBusy === it.id}
+                  onClick={() => loadPreview(it.id)} style={{ marginBottom: 12 }}>
+                  {previewBusy === it.id ? <Loader2 size={15} className="spin" /> : <Play size={15} />}
+                  {" "}<Bi id="Preview video" en="Preview video" />
+                </button>
+              )}
               <div style={{ display: "flex", gap: 8 }}>
                 <button className="btn" disabled={busy === it.id} onClick={() => act(it.id, "approve")}>
                   <Check size={16} /> <Bi id="Pakai (Terbitkan)" en="Use (Publish)" />
