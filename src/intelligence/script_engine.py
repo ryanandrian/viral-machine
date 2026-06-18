@@ -268,7 +268,7 @@ def compute_beat_durations(script: dict, word_timestamps: list | None, audio_dur
 
 
 def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, insights_block=None,
-                       preset_seconds=None, format_wps=None,
+                       preset_seconds=None, format_wps=None, render_overhead_sec=0.0,
                        cta_mode="implicit", brand_name=None, brand_cta_text=None):
     """
     Build prompt. Jika feedback ada (dari retry), sisipkan sebagai instruksi perbaikan.
@@ -295,7 +295,11 @@ def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, ins
     # ── Compression-mapping per-preset (MULTI_FORMAT §3): N beat = visual_beats → narasi + scene + QC.
     from src.config.format_catalog import preset_visual_beats as _pvb
     if preset_seconds:
-        total_words = round(preset_seconds * WPS)   # budget BENAR = detik × WPS (bukan sum 8-seksi ber-min-1 yg menggelembung di preset pendek)
+        # Budget = (detik − overhead render) × WPS. QC mengukur VIDEO FINAL = audio + trailing_silence
+        # (+ loop net), jadi target AUDIO = preset − overhead agar video JADI ≈ preset. Tanpa ini, kata
+        # in-range pun bisa overshoot di preset pendek (terbukti: 15s 27 kata → 18.2s > window 17.2).
+        _spoken = max(1.0, float(preset_seconds) - float(render_overhead_sec or 0))
+        total_words = round(_spoken * WPS)
         _lo, _hi    = round(total_words * 0.92), round(total_words * 1.12)
         n_beats = int(_pvb(preset_seconds))
         active  = _active_beats(n_beats)            # seksi aktif sesuai jumlah beat preset
@@ -345,6 +349,30 @@ DILARANG hard-sell: tanpa "beli", "diskon", "promo", "klik link sekarang", tanpa
 Maksimal SATU sebutan brand di seluruh script.{(' Arahan brand: ' + brand_cta_text) if brand_cta_text else ''}
 """
 
+    # ── Length directive — DUA-SISI + sadar-preset (B2). Ganti blok satu-sisi lama yang seragam
+    # ("FEWER=fail / Do NOT be terse / at least lo") — penyebab 15s OVERSHOOT (lawan sinyal ringkas)
+    # & 60s UNDERSHOOT (dorongan floor kurang). Preset PENDEK: density=quality, batas-ATAS galak,
+    # "bukan asal-pendek". Preset PANJANG/legacy: capai budget dgn fakta spesifik (bukan filler) +
+    # batas-atas tetap ada. Terukur: 15s 30w(budget24), 60s 70w(budget97), skor <80 (lihat journal 2026-06-18).
+    if preset_seconds and len(active) <= 5:
+        length_block = (
+            f"🎯 LENGTH — WAJIB (video {target_duration} detik = SANGAT PENDEK):\n"
+            f"Total narasi HARUS {total_words} kata — rentang KETAT {_lo}–{_hi}. "
+            f"LEBIH dari {_hi} kata = audio kepanjangan = video DITOLAK. KURANG dari {_lo} = DITOLAK.\n"
+            f"Di durasi sependek ini setiap kata WAJIB berbobot: padat, tajam, NOL filler, NOL pengulangan. "
+            f"Ini BUKAN 'asal pendek' — justru tiap kata harus memukul & spesifik (angka/nama/fakta nyata). "
+            f"JANGAN memanjang atau menjelaskan berlebih. Hitung jumlah katamu sebelum selesai — pastikan ≤ {_hi}."
+        )
+    else:
+        length_block = (
+            f"🎯 CRITICAL LENGTH REQUIREMENT — NON-NEGOTIABLE:\n"
+            f"The COMPLETE narration (all sections combined) MUST total {total_words} words (range {_lo}–{_hi} words).\n"
+            f"This word count makes the spoken audio last {target_duration}s — FEWER than {_lo} = audio too short = video FAILS; "
+            f"MORE than {_hi} = audio too long = video FAILS.\n"
+            f"Reach {total_words} words by adding SPECIFIC facts, numbers, names, concrete detail — NOT filler or repetition. "
+            f"The per-section counts below add up to {total_words} — hit every one. Verify the total is between {_lo} and {_hi} before finishing."
+        )
+
     return f"""Write a viral short-form video script.
 
 TOPIC: {topic.get('topic', '')}
@@ -352,11 +380,7 @@ ANGLE: {topic.get('angle', topic.get('topic', ''))}
 NICHE: {niche_data.get('name', niche)}
 TARGET DURATION: {target_duration} seconds of spoken narration.
 
-🎯 CRITICAL LENGTH REQUIREMENT — NON-NEGOTIABLE:
-The COMPLETE narration (all sections combined) MUST total {total_words} words (acceptable range {_lo}–{_hi} words).
-This exact word count is what makes the spoken audio last {target_duration} seconds — FEWER words = audio too short = video FAILS and is REJECTED.
-Write full, detailed, specific sentences until you reach {total_words} words. Do NOT be terse. Do NOT stop early.
-The per-section word counts below ADD UP to {total_words} — hit every single one. Before you finish, verify the total is at least {_lo} words.
+{length_block}
 
 TONE: {profile['tone']}
 STYLE: {profile['style']}
@@ -517,7 +541,7 @@ class ScriptEngine:
 
     def _generate_one(self, provider, model, topic, niche, attempt,
                       niche_visual_style=None, feedback=None, insights_block=None,
-                      preset_seconds=None, format_wps=None,
+                      preset_seconds=None, format_wps=None, render_overhead_sec=0.0,
                       cta_mode="implicit", brand_name=None, brand_cta_text=None):
         """Satu attempt generate script via LLMProvider (config-driven).
 
@@ -539,6 +563,7 @@ class ScriptEngine:
                 user=_build_user_prompt(
                     topic, niche, niche_visual_style, feedback, insights_block,
                     preset_seconds=preset_seconds, format_wps=format_wps,
+                    render_overhead_sec=render_overhead_sec,
                     cta_mode=cta_mode, brand_name=brand_name, brand_cta_text=brand_cta_text,
                 ),
                 model=model,
@@ -716,6 +741,18 @@ Return ONLY valid JSON:
             if 0.5 <= _speed <= 1.5 and _speed != 1.0:
                 format_wps = round(format_wps * _speed, 4)
                 logger.info(f"[ScriptEngine] B1 budget speed-adjust: × speed({_speed}) → {format_wps} wps (niche={tenant_config.niche})")
+        # Cacat B (#3) — BUDGET SADAR-OVERHEAD RENDER: QC mengukur VIDEO FINAL = audio + trailing_silence
+        # (+ loop net = loop_dur−0.5 xfade). Target AUDIO = preset − overhead agar video JADI ≈ preset.
+        # Tanpa ini kata in-range pun overshoot di preset pendek (terbukti: 15s 27 kata → video 18.2s > 17.2).
+        # No-hardcode: trailing_silence + loop dari tenant_configs (sama dgn yang dipakai video_renderer).
+        render_overhead_sec = 0.0
+        if preset_seconds and run_config:
+            _trail = float(getattr(run_config, "trailing_silence", 2.5) or 2.5)
+            _loopn = (float(getattr(run_config, "loop_ending_duration", 1.5) or 1.5) - 0.5) \
+                     if getattr(run_config, "loop_ending_enabled", True) else 0.0
+            render_overhead_sec = max(0.0, _trail + max(0.0, _loopn))
+            logger.info(f"[ScriptEngine] #3 budget overhead-aware: preset {preset_seconds}s − overhead {render_overhead_sec}s "
+                        f"= audio-target {max(1.0, preset_seconds-render_overhead_sec)}s")
         # Branded Content §6 — soft-sell (opsional; implicit → tanpa brand)
         _cta_mode  = getattr(tenant_config, "cta_mode", "implicit") or "implicit"
         _brand     = getattr(tenant_config, "brand_name", None)
@@ -759,10 +796,12 @@ Return ONLY valid JSON:
 
         best_script     = None
         best_score      = 0
+        best_len_ok_script = None   # #2 — best yang LULUS length-gate (panjang PAS → lolos QC durasi)
+        best_len_ok_score  = 0
         actual_provider = llm_provider
         feedback        = None  # Feedback dari attempt sebelumnya
         # F2d — target word-budget (LLM-QC length gate). Aktif hanya bila preset di-set.
-        word_budget = round(preset_seconds * float(format_wps)) if (preset_seconds and format_wps) else None
+        word_budget = round(max(1.0, preset_seconds - render_overhead_sec) * float(format_wps)) if (preset_seconds and format_wps) else None
         _LEN_TOL    = float(os.getenv("SCRIPT_LENGTH_TOLERANCE", "0.12"))  # ketat: jaga durasi pas (was 0.25 → terlalu longgar, 82w lolos 108-budget → video pendek)
 
         for attempt in range(1, max_retry + 1):
@@ -772,6 +811,7 @@ Return ONLY valid JSON:
                 llm, script_model, topic, tenant_config.niche, attempt,
                 niche_visual_style, feedback, insights_block,
                 preset_seconds=preset_seconds, format_wps=format_wps,
+                render_overhead_sec=render_overhead_sec,
                 cta_mode=_cta_mode, brand_name=_brand, brand_cta_text=_brand_cta,
             )
 
@@ -845,6 +885,11 @@ Return ONLY valid JSON:
             if score > best_score:
                 best_score  = score
                 best_script = script
+            # #2 — lacak best LENGTH-COMPLIANT terpisah. Naskah salah-durasi GAGAL QC (→ ready_with_issues,
+            # tak auto-publish); lebih baik kirim yang panjangnya PAS + skor tertinggi DI ANTARA yang pas.
+            if length_ok and score > best_len_ok_score:
+                best_len_ok_score  = score
+                best_len_ok_script = script
 
             if score >= min_score and length_ok:
                 logger.info(
@@ -863,6 +908,14 @@ Return ONLY valid JSON:
         if best_script is None:
             logger.error("[ScriptEngine] All attempts failed")
             return {}
+
+        # #2 — FINAL: utamakan naskah length-compliant (lolos QC durasi) + skor tertinggi di antaranya;
+        # bila tak ada yang pas → fallback skor-tertinggi (perilaku lama). Jaga kualitas DALAM batas panjang.
+        if best_len_ok_script is not None and best_len_ok_script is not best_script:
+            logger.info(f"[ScriptEngine] #2 pilih naskah length-compliant (skor {best_len_ok_score}) alih-alih "
+                        f"skor-tertinggi {best_score} (salah-durasi) — agar lolos QC durasi")
+            best_script = best_len_ok_script
+            best_score  = best_len_ok_score
 
         if best_score < min_score:
             logger.warning(
