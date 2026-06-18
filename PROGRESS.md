@@ -1,7 +1,7 @@
 # MesinViral — Live Progress & Master Plan
 
 > **Single source of truth** untuk status implementasi. Update setiap selesai sub-phase.
-> Dibuat: 2026-06-10 | Update terakhir: 2026-06-12
+> Dibuat: 2026-06-10 | Update terakhir: 2026-06-18
 
 ---
 
@@ -13,6 +13,21 @@
 - **DB v2 = punya sendiri** (clone penuh skema+data dari v1) — bukan DB v1. **v2 REPLACE v1 penuh di VPS yang sama saat proven.**
 
 **🎯 STATUS TERBARU (2026-06-15) — WIRING FE TUNTAS.** Backend Phase 0-8 ✅. **Frontend SEMUA ter-wiring + tervalidasi** ke Supabase v2: tenant (Phase 9: dashboard/channels/runs/analytics/compliance/insights/schedule/billing/settings/support/config-10-tab/onboarding) · admin penuh (Phase 10: tenants/pricing/niches/catalog/system/support/content-CMS/test-lab/account) · marketing (harga dari pricing_config, konten Blog/Docs/Demo DB-backed via CMS). **Fitur baru:** direct-produce (`direct_jobs`, "1 mesin 2 mode", anti-OOM terverifikasi) · admin Test Lab (validasi kredensial NYATA) · `/channels/new` · CMS. **Nol komponen FE fake/non-functional** (audit 3-area, owner-driven). Branch `v2-backend` (pushed, `main` v1-safe). Migrasi v2 = **0001–0044** (skema penuh: `DB_SCHEMA_V2.md`, 39 tabel + 4 kolom `*_enc`). **🔐 KEAMANAN KREDENSIAL (2026-06-15):** **YouTube OAuth BYO-CC = ✅ TERBANGUN** (alur web per-tenant, Opsi A — enkripsi + dance OAuth di server Python `webhook_app`; master key tak pernah ke Vercel) · **SEMUA API key AI kini TERENKRIPSI at-rest** (Fernet, migr 0044; plaintext lama dimigrasi+di-null; tulis via vault `/api/keys/set`; worker dekripsi saat baca) · landing punya section keamanan (klaim jujur). **➡️ BERIKUTNYA = §PERBAIKAN PRODUCE & PUBLISH (pra-cutover)** — luruskan DB/BE/FE ke §12c (jadwal `channels.publish_slots`, niche per-channel dari entitlement, buang fosil V1, editor niche + form custom-niche). **WAJIB selesai 100% SEBELUM** §GATE CUTOVER. Kedua checklist ada di bawah blok ini. Detail per-fitur: `PHASE10_ADMIN_WIRING.md` + memory `progress_journal` (POSISI TERKINI). *(Catatan historis di bawah = arsip per-phase; status OTORITATIF = baris ini + roadmap §MASTER.)*
+
+**⚡ STATUS TERBARU (2026-06-18) — INI YANG TERKINI (menang atas status 2026-06-15 di atas). Kronologi rinci = memory `progress_journal` entri 06-18 lanjutan-2 s/d 5.** Sesi penyesuaian PRODUKSI per-preset + audit pipeline (semua LOKAL→validasi→commit→push→deploy VPS). Migrasi v2 = **0001-0054**.
+> - **✅ Segmentasi per-preset SINGLE-SOURCE** (migr `0053`/`0054`, `05a3339`): `duration_presets.beats`/`use_case`/`render_mode` + tabel BARU `beat_glossary` (term+label dwibahasa). Struktur lean 8=core…90=7beat. LIVE.
+> - **✅ Analyzer preset-aware** (`617a33c`): renormalisasi bobot atas beat aktif → ultra-short adil (15s 74→85; 45-90s TAK berubah). LIVE.
+> - **✅ FE preset-picker + 2 tabel** (segmentasi+glosarium) di channel-detail (tenant) & admin catalog tab "Durasi" (`fd12f4e`). LIVE.
+> - **✅ Kartu landing** "Indonesia-First"→"Beragam Opsi Durasi Konten" dwibahasa (`fabeec3`). LIVE.
+> - **✅ D2 PREVIEW /review** presigned Biznet S3 + `<video>` (+@aws-sdk, S3_* di env mv-web) (`adbd4e4`) — **menutup §OPSI C D2**. LIVE (belum diuji putar di browser).
+> - **✅ Akurasi durasi — closed-loop atempo** (`e0c42b3`): akar = kecepatan bicara EL bervariasi ±15% (log: 1.43-1.95 wps). Fix = ffmpeg time-stretch audio ke target + skala word_timestamps, **NOL biaya EL ekstra**, clamp [0.80,1.25] (ekstrem→skip jaga suara). **= realisasi closed-loop MULTI_FORMAT §0/§10 + GATE-CUTOVER E3.** Validated LOKAL (sintetis). ⚠️ **BELUM terverifikasi produksi nyata.**
+> - **✅ Label run** `qc_failed`/`ready_with_issues` → "Perlu Ditinjau" (kuning, bukan merah "Failed") (`b4d844a`). LIVE.
+> - **✅ Rotasi niche AKTIF lagi:** backfill `videos.channel_id` (247 baris, dulu NULL = footnote §Phase7) → `DiversityEngine.pick` kini rotate (terbukti run). hook/visual/music = WIRED, dorman menunggu histori publish; voice = deferred by-design (Phase 6.2). **Bukan bug baru.**
+> - **buffer_depth ryan 1→3** (DB) → produksi resume.
+>
+> **KONDISI PRODUKSI NYATA:** ryan (business/active · preset 60s · niche random · visual=`ai_image:gpt-image-1-mini` BUKAN pexels · tts=elevenlabs) — buffer = **2 `ready` (60.2s/52.9s) + 1 `ready_with_issues` (49.1s)**. **AUTO-PUBLISH BELUM PERNAH terjadi** (root: butuh `ready` bersih saat slot; produksi lampau selalu undershoot → `ready_with_issues`). **📍 CHECKPOINT slot 21:00 WIB = percobaan AUTO-PUBLISH PERTAMA ke YouTube + produksi ber-atempo PERTAMA** (owner pantau).
+>
+> **BERIKUTNYA (PR terbuka, urut):** (1) verifikasi atempo+auto-publish slot 21:00 · (2) niche rotation **part-B** (burst 3-paralel pilih niche sama — `pick` deterministik atas window statis) · (3) label run utk item buffer yg sudah hilang (run `qc_failed` lama, S3 disapu janitor) · (4) buang fosil **pexels** (kolom legacy `tenant_configs.visual_provider`; efektif=`visual_mode`) · (5) §OPSI-C F2/F3 + C1/C2 publisher reporting. Ditunda: 8s ai_video, swap VPS.
 - **✅ PHASE 0-5 SELESAI:** softcode AI+katalog (1) · exceptions typed (2) · pipeline_run_logs (3) · BYO-CC+Auth(`tenant_id=auth.uid()`)+RLS+OAuth-DB-first (4) · **decouple TERBUKTI end-to-end** (5: producer/publisher/buffer-S3/janitor/worker_decoupled; full loop → publish YouTube private `shorts/7ocW6BPdlVg`).
 - **✅ MULTI-FORMAT §12-A (cheap-wins):** F1+F2 durasi preset + QC-LLM relatif (±15% §8) + **effective-WPS per kelas TTS** (tts_profiles; ElevenLabs-class 1.8/edge 2.6 — solusi gap budget); Branded FB1-4 (link deskripsi + soft-sell CTA + logo overlay: **ukuran=bounds platform `branding_config`, posisi=tenant `channel.logo_position`**).
 - **✅ publish-privacy** per-channel DEFAULT **private** (trial-safe; tenant flip public saat cocok).
@@ -224,7 +239,7 @@
 
 **D — Review/Approve (domain kita — tutup cheat di sumber):**
 - [x] D1 — **RPC `approve_inventory_item`/`discard_inventory_item`** (migr **0052**, security-definer, scope `auth.uid()`, grant authenticated/revoke anon — verified). Approve = promote `ready_with_issues→ready` → Publisher publish saat slot **ber-kuota** (tutup cheat: jadi publik HANYA via jalur kita); Discard = tandai buang → janitor hapus S3. *(2026-06-17)*
-- [ ] D2 — Preview video/thumbnail dari S3 (presigned URL). **FOLLOW-UP** (butuh kredensial S3 di env `mv-web` — kini hanya di worker; + presign route). Sementara review jalan via metadata (alasan/koreksi/durasi/topik).
+- [x] D2 — ✅ **DONE (2026-06-18, `adbd4e4`)** Preview video di `/review` — route `/api/review/preview` presign **Biznet S3** (forcePathStyle, `S3_*` ditambah ke env `mv-web`) + `<video>` FE. build PASS; route 401 tanpa-auth (benar). *(Belum diuji putar di browser.)*
 - [x] D3 — FE `app/(app)/review` (daftar `ready_with_issues` + advisory + tombol **Pakai/Buang** via RPC) + link nav app-shell. **build PASS** (route `/review` ter-prerender). *(2026-06-17)*
 - [x] D4 — Circuit-breaker **alarm Telegram** DONE (B3 `notify_circuit_break`) + laporan sukses publish (C). **Review-request per-issue SENGAJA TIDAK dibuat** (cegah mini-flood): tenant tahu via nav "Perlu Ditinjau" + alarm saat sistemik. *(keputusan 2026-06-17)*
 
