@@ -66,7 +66,7 @@ class Pipeline:
             logger.info(
                 f"[Pipeline] Config loaded from Supabase: "
                 f"tts={run_config.tts_provider} | "
-                f"visual={run_config.visual_provider} | "
+                f"visual_mode={run_config.visual_mode} | "  # selektor EFEKTIF (bukan visual_provider legacy)
                 f"llm={run_config.llm_model}"
             )
             return run_config

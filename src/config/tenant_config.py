@@ -410,7 +410,7 @@ class TenantConfigManager:
             logger.info(
                 f"[TenantConfig] Loaded from Supabase: {tenant_id} "
                 f"| tts={row.get('tts_provider')} "
-                f"| visual={row.get('visual_provider')} "
+                f"| visual_mode={row.get('visual_mode')} "
                 f"| llm={row.get('llm_model')}"
             )
 
