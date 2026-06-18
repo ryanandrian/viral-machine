@@ -230,7 +230,7 @@ def run_direct(sb, job: dict) -> None:
     sb.table("direct_jobs").update({"run_id": run_id}).eq("id", jid).execute()
 
     niche = job.get("niche") or ch.get("niche")
-    status, yt_url, err, qc_ok = "failed", None, None, False
+    status, yt_url, err, qc_ok, result = "failed", None, None, False, {}
     try:
         tc = tenant_config_from_channel(ch, niche=niche)
         try:
@@ -258,10 +258,15 @@ def run_direct(sb, job: dict) -> None:
 
     # Tulis production_runs (muncul di Runs/D5). queue_id NULL (bukan jalur pipeline_queue).
     try:
+        _script = result.get("script", {}) or {}
         sb.table("production_runs").insert({
             "tenant_id": tenant_id, "run_id": run_id, "channel_id": str(job["channel_id"]),
-            "niche": niche, "status": status, "youtube_url": yt_url,
-            "qc_passed": qc_ok, "error_message": err,
+            "niche": niche, "topic": _script.get("topic", ""), "status": status,
+            "youtube_url": yt_url, "qc_passed": qc_ok,
+            "viral_score": _script.get("viral_score"),
+            "llm_provider": _script.get("llm_provider_used"),
+            "elapsed_seconds": result.get("elapsed_seconds"),
+            "error_message": err,
             "run_metadata": {"direct": True, "job_type": job.get("job_type")},
         }).execute()
     except Exception as e:
