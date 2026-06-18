@@ -258,10 +258,11 @@ class ChannelAnalytics:
 
     def _get_videos_to_fetch(self, tenant_id: str) -> list:
         """
-        Ambil video dari Supabase yang:
-        - Status = 'published'
-        - Dipublish > 48 jam yang lalu (data tersedia di Analytics)
-        - Belum di-fetch dalam 23 jam terakhir (hindari re-fetch berlebihan)
+        Pilih video untuk di-fetch — ROTASI berbasis kesegaran (BUKAN hanya 50 terbaru).
+        Kriteria: status='published', dipublish > 48 jam.
+        Prioritas: video yang paling BASI (last fetched_at ASC; belum pernah di-fetch lebih dulu) →
+        semua video ter-refresh bergiliran tiap run (cegah video lama beku snapshot selamanya).
+        Skip yang sudah di-fetch < REFETCH_INTERVAL_HOURS. Ambil MAX_VIDEOS_PER_RUN per run.
         """
         if not self._supabase:
             return []
@@ -269,45 +270,41 @@ class ChannelAnalytics:
             cutoff_publish = (
                 datetime.now(timezone.utc) - timedelta(hours=self.MIN_HOURS_AFTER_PUBLISH)
             ).isoformat()
-
+            # SEMUA video eligible (cap aman 1000), bukan hanya 50 terbaru.
             result = (
-                self._supabase
-                .table("videos")
+                self._supabase.table("videos")
                 .select("video_id, title, hook, niche, published_at")
-                .eq("tenant_id", tenant_id)
-                .eq("status", "published")
+                .eq("tenant_id", tenant_id).eq("status", "published")
                 .lt("published_at", cutoff_publish)
-                .order("published_at", desc=True)
-                .limit(self.MAX_VIDEOS_PER_RUN)
-                .execute()
+                .order("published_at", desc=True).limit(1000).execute()
             )
-            all_videos = result.data or []
+            all_videos = [v for v in (result.data or []) if v.get("video_id")]
+            if not all_videos:
+                return []
 
-            # Filter: skip yang sudah di-fetch baru-baru ini
+            # last fetched_at per video (chunk IN agar URL aman utk channel besar)
             cutoff_fetch = (
                 datetime.now(timezone.utc) - timedelta(hours=self.REFETCH_INTERVAL_HOURS)
             ).isoformat()
+            ids = [v["video_id"] for v in all_videos]
+            last_fetch: dict = {}
+            for i in range(0, len(ids), 150):
+                chunk = ids[i:i + 150]
+                fa = (self._supabase.table("video_analytics")
+                      .select("video_id, fetched_at").in_("video_id", chunk).execute())
+                for r in (fa.data or []):
+                    vid, ft = r["video_id"], r.get("fetched_at")
+                    if ft and (vid not in last_fetch or ft > last_fetch[vid]):
+                        last_fetch[vid] = ft
 
-            recent_fetches = set()
-            if all_videos:
-                video_ids = [v["video_id"] for v in all_videos if v.get("video_id")]
-                # Cek video_analytics: mana yang baru di-fetch
-                fa = (
-                    self._supabase
-                    .table("video_analytics")
-                    .select("video_id, fetched_at")
-                    .in_("video_id", video_ids)
-                    .gt("fetched_at", cutoff_fetch)
-                    .execute()
-                )
-                recent_fetches = {r["video_id"] for r in (fa.data or [])}
-
-            # Return hanya yang belum di-fetch baru-baru ini
-            to_fetch = [v for v in all_videos if v.get("video_id") not in recent_fetches]
+            # buang yang masih segar (<23j); sisanya urut PALING BASI dulu (never-fetched = "" → terdepan)
+            candidates = [v for v in all_videos if last_fetch.get(v["video_id"], "") <= cutoff_fetch]
+            candidates.sort(key=lambda v: last_fetch.get(v["video_id"], ""))
+            to_fetch = candidates[:self.MAX_VIDEOS_PER_RUN]
             logger.info(
-                f"[Analytics] {len(all_videos)} published videos, "
-                f"{len(recent_fetches)} recently fetched, "
-                f"{len(to_fetch)} to fetch"
+                f"[Analytics] {len(all_videos)} eligible, "
+                f"{len(all_videos) - len(candidates)} fresh(<{self.REFETCH_INTERVAL_HOURS}h), "
+                f"fetch {len(to_fetch)} (stalest-first rotation)"
             )
             return to_fetch
 
