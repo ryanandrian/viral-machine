@@ -27,9 +27,9 @@ VIRAL_DIMENSIONS = {
 }
 
 DEFAULT_EMOTION_CRITERIA = (
-    "Score 80+ if the climax causes a genuine reaction — goosebumps, held breath, or the "
-    "immediate need to tell someone. The emotion must be CAUSED by the content, not described. "
-    "Score LOW for climaxes that explain what to feel instead of making the viewer feel it."
+    "Score 80+ if the climax delivers a genuine, specific emotional payoff for THIS topic — it LANDS, "
+    "not merely states a feeling; 90+ if goosebumps-level. Score below 60 ONLY if it just describes/explains "
+    "what to feel or is generic. A solid, well-earned climax deserves 80+ — do not withhold it at 70."
 )
 
 
@@ -63,16 +63,17 @@ def _derive_emotion_criteria(niche_profile: dict | None) -> str:
     if not (emotion_arc or target):
         return DEFAULT_EMOTION_CRITERIA
 
-    parts = ["Score 80+ if the climax delivers the FINAL STAGE of this emotion arc:"]
+    parts = ["Score the climax's emotional payoff for the FINAL STAGE of this emotion arc:"]
     if emotion_arc:
         parts.append(f"'{emotion_arc}'.")
     if target:
-        parts.append(f"The viewer must genuinely feel: {target}.")
+        parts.append(f"The viewer should genuinely feel: {target}.")
     if style:
         parts.append(f"Achieve it through: {style}.")
     parts.append(
-        "Do NOT describe the emotion — CAUSE it directly through the content. "
-        "Score LOW if the climax tells the viewer what to feel instead of making them feel it."
+        "Award 80+ when the climax genuinely LANDS this payoff for THIS topic (90+ if goosebumps-level); "
+        "score below 60 ONLY if it merely describes/states the feeling or is generic. "
+        "Do not withhold 80 from a solid, well-earned climax."
     )
     return " ".join(parts)
 
@@ -106,18 +107,19 @@ def _build_prompt(script: dict, niche: str, niche_profile: dict | None = None) -
 SCRIPT:
 {sections}
 
-Score each dimension 0-100. Be honest and calibrated:
-- 80-100: genuinely makes viewers stay, share, or feel something
-- 60-79: decent but missing one key element
-- below 60: viewers scroll away at this point
+Score each dimension 0-100. Calibrate against real viral short-form — be FAIR, not perfectionist:
+- 90-100: EXCEPTIONAL — best-in-class, rare. Reserve the gap above 88 for the truly outstanding.
+- 80-89: STRONG & viral-ready — does its job well and SPECIFICALLY for THIS topic. **This is the target band for genuinely good content — award it freely when earned. Do NOT withhold 80 from solid work just because it isn't perfect.**
+- 60-79: COMPETENT but generic or flat — the element is present yet not topic-specific, or doesn't fully land.
+- below 60: WEAK — generic, vague, or would make viewers scroll away.
 
-Dimensions:
-- hook_power (25%): stops scroll in first second. Score 80+ only if the opening creates an information gap so specific it cannot apply to any other video. Score LOW for generic openers.
-- curiosity_gap (20%): every section ends with an unanswered question. Score 80+ if viewer feels stopping is like leaving mid-sentence. Score LOW if any section summarizes instead of deepening.
-- retention_arc (20%): every sentence adds new information or raises stakes. Score 80+ if no sentence could be cut without the video losing something. Score LOW for filler, repetition, or vague claims.
+Dimensions (award 80+ for good execution, 90+ for exceptional; reserve <60 for genuinely weak):
+- hook_power (25%): stops scroll in first second. Score 80+ if the opening creates a specific information gap tied to THIS topic (a number/name/claim it couldn't be about anything else); 90+ if irresistibly precise. Score below 60 for generic openers ("Did you know", "In this video").
+- curiosity_gap (20%): sections leave loops open. Score 80+ if the viewer feels pulled to the next line; 90+ if stopping feels like leaving mid-sentence. Score below 60 only if sections summarize/close loops prematurely.
+- retention_arc (20%): each sentence adds info or raises stakes. Score 80+ if it stays tight with little waste; 90+ if nothing could be cut. Score below 60 for filler, repetition, or vague claims.
 - emotional_peak (20%): {emotion_criteria}
-- information_density (10%): specific numbers, names, dates — not vague claims. Score 80+ if every fact is verifiable and surprising. Score LOW for "very large", "long ago", "many scientists".
-- cta_strength (5%): Score HIGH if it reads like one human sharing a thought — a question that demands an answer, an open loop, a perspective shift. Score HIGH for implicit engagement (curiosity that naturally leads to following). Score LOW for ANY explicit instruction: "follow", "subscribe", "like", "hit the bell", or any sentence starting with an imperative verb. The best CTA makes following feel like the viewer's own idea.
+- information_density (10%): specific numbers, names, dates. Score 80+ if it carries concrete, verifiable specifics; 90+ if every fact is surprising AND precise. Score below 60 for "very large", "long ago", "many scientists".
+- cta_strength (5%): Score 80+ if it reads like one human sharing a thought — a question, open loop, or perspective shift (implicit engagement that makes following feel like the viewer's own idea). Score below 50 for ANY explicit instruction ("follow", "subscribe", "like", "hit the bell", or any imperative verb at the viewer).
 
 Return ONLY valid JSON, no markdown:
 {{
