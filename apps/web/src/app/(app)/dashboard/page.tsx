@@ -60,6 +60,7 @@ export default function DashboardPage() {
   const [handle, setHandle] = useState("");
   const [tz, setTz] = useState("Asia/Jakarta");
   const [compliance, setCompliance] = useState<number | null>(null);
+  const [insights, setInsights] = useState<{ videosAnalyzed: number; lastLearned: string | null; topNiche: string | null; channels: number } | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
   const [yt, setYt] = useState<Yt | null>(null);
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -67,12 +68,12 @@ export default function DashboardPage() {
 
   const load = useCallback(async () => {
     const [
-      { data: r }, { data: tc }, { data: ci }, totals, { data: chs },
+      { data: r }, { data: tc }, ins, totals, { data: chs },
       made, success, failed, review,
     ] = await Promise.all([
       supabase.from("production_runs").select("id,topic,niche,status,elapsed_seconds,youtube_url,created_at").order("created_at", { ascending: false }).limit(50),
       supabase.from("tenant_configs").select("display_handle,timezone").maybeSingle(),
-      supabase.from("channel_insights").select("compliance,computed_at").order("computed_at", { ascending: false }).limit(1),
+      supabase.rpc("get_tenant_insights_summary"),
       supabase.rpc("get_tenant_youtube_totals"),
       supabase.from("channels").select("channel_name,publish_slots,is_active"),
       supabase.from("production_runs").select("id", { count: "exact", head: true }),
@@ -84,8 +85,11 @@ export default function DashboardPage() {
     const t = tc as { display_handle?: string; timezone?: string } | null;
     setHandle(t?.display_handle || "");
     if (t?.timezone) setTz(t.timezone);
-    const comp = (ci as { compliance?: { score?: number } }[] | null)?.[0]?.compliance;
-    setCompliance(comp && typeof comp.score === "number" ? comp.score : null);
+    const insRow = (Array.isArray(ins.data) ? ins.data[0] : ins.data) as { channels_count?: number; compliance_avg?: number; videos_analyzed?: number; last_learned?: string; top_niche?: string } | null;
+    setCompliance(insRow && insRow.compliance_avg != null ? Number(insRow.compliance_avg) : null);
+    setInsights(insRow && (insRow.channels_count ?? 0) > 0
+      ? { videosAnalyzed: Number(insRow.videos_analyzed) || 0, lastLearned: insRow.last_learned || null, topNiche: insRow.top_niche || null, channels: Number(insRow.channels_count) || 0 }
+      : null);
     const tot = (Array.isArray(totals.data) ? totals.data[0] : totals.data) as { total_views?: number; total_likes?: number; total_followers?: number } | null;
     if (tot) setYt({ views: Number(tot.total_views) || 0, likes: Number(tot.total_likes) || 0, followers: Number(tot.total_followers) || 0 });
     setStats({ made: made.count ?? 0, success: success.count ?? 0, failed: failed.count ?? 0, review: review.count ?? 0 });
@@ -210,13 +214,36 @@ export default function DashboardPage() {
               <h3 className="card-title"><DollarSign size={16} /> <Bi id="Biaya AI" en="AI Cost" /></h3>
               <span className="badge badge-outline">BYOK</span>
             </div>
-            <p className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.75rem" }}><Bi id="Rincian biaya BYOK tampil setelah worker mencatat metadata produksi." en="BYOK cost breakdown appears once the worker records production metadata." /></p>
+            <p className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.75rem" }}><Bi id="Segera hadir — pelacakan biaya BYOK per produksi." en="Coming soon — per-production BYOK cost tracking." /></p>
           </div>
 
           <div className="card card-pad">
             <h3 className="card-title" style={{ marginBottom: "0.75rem" }}><Sparkles size={16} /> <Bi id="Self-Learning" en="Self-Learning" /></h3>
-            <p className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Insight adaptasi muncul setelah analytics terkumpul (24-72j pasca-publish)." en="Adaptation insights appear once analytics accumulate (24-72h post-publish)." /></p>
-            <div style={{ marginTop: "0.5rem" }}><Link href="/insights" className="muted" style={{ fontSize: "var(--text-xs)", textDecoration: "none" }}><Bi id="Lihat insights →" en="View insights →" /></Link></div>
+            {insights ? (
+              <>
+                <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap" }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: "var(--text-lg)" }}>{fmtN(insights.videosAnalyzed)}</div>
+                    <div className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="video dipelajari" en="videos learned" /></div>
+                  </div>
+                  {insights.topNiche && (
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: "var(--text-lg)" }}>{prettyNiche(insights.topNiche)}</div>
+                      <div className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="niche teratas" en="top niche" /></div>
+                    </div>
+                  )}
+                </div>
+                <p className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.625rem" }}>
+                  {insights.channels > 1 ? `${insights.channels} kanal · ` : ""}<Bi id="terakhir belajar" en="last learned" /> {insights.lastLearned ? ago(insights.lastLearned) : "—"}
+                </p>
+                <div style={{ marginTop: "0.5rem" }}><Link href="/insights" className="muted" style={{ fontSize: "var(--text-xs)", textDecoration: "none" }}><Bi id="Lihat insights →" en="View insights →" /></Link></div>
+              </>
+            ) : (
+              <>
+                <p className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Insight adaptasi muncul setelah analytics terkumpul (24-72j pasca-publish)." en="Adaptation insights appear once analytics accumulate (24-72h post-publish)." /></p>
+                <div style={{ marginTop: "0.5rem" }}><Link href="/insights" className="muted" style={{ fontSize: "var(--text-xs)", textDecoration: "none" }}><Bi id="Lihat insights →" en="View insights →" /></Link></div>
+              </>
+            )}
           </div>
         </div>
       </div>
