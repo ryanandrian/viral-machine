@@ -20,7 +20,7 @@
 > - **✅ FE preset-picker + 2 tabel** (segmentasi+glosarium) di channel-detail (tenant) & admin catalog tab "Durasi" (`fd12f4e`). LIVE.
 > - **✅ Kartu landing** "Indonesia-First"→"Beragam Opsi Durasi Konten" dwibahasa (`fabeec3`). LIVE.
 > - **✅ D2 PREVIEW /review** presigned Biznet S3 + `<video>` (+@aws-sdk, S3_* di env mv-web) (`adbd4e4`) — **menutup §OPSI C D2**. LIVE (belum diuji putar di browser).
-> - **✅ Akurasi durasi — closed-loop atempo** (`e0c42b3`): akar = kecepatan bicara EL bervariasi ±15% (log: 1.43-1.95 wps). Fix = ffmpeg time-stretch audio ke target + skala word_timestamps, **NOL biaya EL ekstra**, clamp [0.80,1.25] (ekstrem→skip jaga suara). **= realisasi closed-loop MULTI_FORMAT §0/§10 + GATE-CUTOVER E3.** Validated LOKAL (sintetis). ⚠️ **BELUM terverifikasi produksi nyata.**
+> - **✅ Akurasi durasi — closed-loop atempo** (`e0c42b3`): akar = kecepatan bicara EL bervariasi ±15% (log: 1.43-1.95 wps). Fix = ffmpeg time-stretch audio ke target + skala word_timestamps, **NOL biaya EL ekstra**, clamp [0.80,1.25] (ekstrem→skip jaga suara). **= realisasi closed-loop MULTI_FORMAT §0/§10 + GATE-CUTOVER E3.** Validated LOKAL (sintetis). **✅ TERVERIFIKASI PRODUKSI NYATA (2026-06-18):** worker.log `atempo fit: 68.4s→58.5s factor 1.169` — menangani OVERSHOOT (yg word-budget tak bisa) → masuk window, caption diskala, EL=0. **Sekaligus terbukti live: AUTO-PUBLISH (inv 42 published ke YouTube slot 21:00) + NICHE ROTATION fix (inv 44 producing=dark_history, tak lagi selalu universe) + approve-fix (inv 41 ready+run success).** Semua linchpin go-to-market PROVEN.
 > - **✅ Label run** `qc_failed`/`ready_with_issues` → "Perlu Ditinjau" (kuning, bukan merah "Failed") (`b4d844a`). LIVE.
 > - **✅ Rotasi niche AKTIF lagi:** backfill `videos.channel_id` (247 baris, dulu NULL = footnote §Phase7) → `DiversityEngine.pick` kini rotate (terbukti run). hook/visual/music = WIRED, dorman menunggu histori publish; voice = deferred by-design (Phase 6.2). **Bukan bug baru.**
 > - **buffer_depth ryan 1→3** (DB) → produksi resume.
@@ -242,7 +242,7 @@
 
 **D — Review/Approve (domain kita — tutup cheat di sumber):**
 - [x] D1 — **RPC `approve_inventory_item`/`discard_inventory_item`** (migr **0052**, security-definer, scope `auth.uid()`, grant authenticated/revoke anon — verified). Approve = promote `ready_with_issues→ready` → Publisher publish saat slot **ber-kuota** (tutup cheat: jadi publik HANYA via jalur kita); Discard = tandai buang → janitor hapus S3. *(2026-06-17)*
-- [x] D2 — ✅ **DONE (2026-06-18, `adbd4e4`)** Preview video di `/review` — route `/api/review/preview` presign **Biznet S3** (forcePathStyle, `S3_*` ditambah ke env `mv-web`) + `<video>` FE. build PASS; route 401 tanpa-auth (benar). *(Belum diuji putar di browser.)*
+- [x] D2 — ✅ **DONE + TERVERIFIKASI BERFUNGSI (owner konfirmasi 2026-06-18).** Preview video di `/review` — route `/api/review/preview` presign **Biznet S3** (forcePathStyle, `S3_*` di env `mv-web`) + `<video>` FE. **Owner sudah cek: video TER-PUTAR di browser. SELESAI, jangan masuk PR lagi.**
 - [x] D3 — FE `app/(app)/review` (daftar `ready_with_issues` + advisory + tombol **Pakai/Buang** via RPC) + link nav app-shell. **build PASS** (route `/review` ter-prerender). *(2026-06-17)*
 - [x] D4 — Circuit-breaker **alarm Telegram** DONE (B3 `notify_circuit_break`) + laporan sukses publish (C). **Review-request per-issue SENGAJA TIDAK dibuat** (cegah mini-flood): tenant tahu via nav "Perlu Ditinjau" + alarm saat sistemik. *(keputusan 2026-06-17)*
 
