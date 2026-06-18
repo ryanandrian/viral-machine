@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  Download, Zap, Tv, ChevronDown, Calendar, Filter, ChevronLeft, ChevronRight,
-  MoreHorizontal, X, RefreshCw, ArrowRight, Check, Loader2, Clock, type LucideIcon,
+  Download, Zap, Tv, ChevronDown, Calendar, Filter, ChevronRight,
+  Eye, X, RefreshCw, ArrowRight, Check, Loader2, Clock, type LucideIcon,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import "./runs-list.css";
@@ -28,8 +28,9 @@ function statusKey(s: string | null): StKey {
 type RunRow = {
   id: string; channel_id: string | null; niche: string | null; topic: string | null;
   status: string | null; elapsed_seconds: string | null; youtube_url: string | null;
-  viral_score: number | null; created_at: string;
+  youtube_video_id: string | null; viral_score: number | null; created_at: string;
 };
+const fmtK = (n: number) => n >= 1_000_000 ? `${(n / 1e6).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
 
 function fmtDur(secs: string | null, st: StKey) {
   if (st === "running") return "berjalan…";
@@ -67,22 +68,27 @@ export default function RunsListPage() {
   const [supabase] = useState(() => createClient());
   const [data, setData] = useState<RunRow[]>([]);
   const [chMap, setChMap] = useState<Record<string, string>>({});
+  const [views, setViews] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<StKey | "all">("all");
   const [selected, setSelected] = useState<RunRow | null>(null);
   const [direct, setDirect] = useState<{ id: string; status: string; job_type: string; niche: string | null }[]>([]);
 
   const load = useCallback(async () => {
-    const [{ data: runs }, { data: chs }, { data: dj }] = await Promise.all([
-      supabase.from("production_runs").select("id,channel_id,niche,topic,status,elapsed_seconds,youtube_url,viral_score,created_at").order("created_at", { ascending: false }).limit(100),
+    const [{ data: runs }, { data: chs }, { data: dj }, vw] = await Promise.all([
+      supabase.from("production_runs").select("id,channel_id,niche,topic,status,elapsed_seconds,youtube_url,youtube_video_id,viral_score,created_at").order("created_at", { ascending: false }).limit(100),
       supabase.from("channels").select("id,channel_name"),
       supabase.from("direct_jobs").select("id,status,job_type,niche").in("status", ["pending", "producing"]).order("created_at", { ascending: false }),
+      supabase.rpc("get_tenant_video_views"),
     ]);
     setDirect(dj ?? []);
     setData((runs as RunRow[]) ?? []);
     const m: Record<string, string> = {};
     (chs as { id: string; channel_name: string | null }[] ?? []).forEach((c) => { m[c.id] = c.channel_name || "Channel"; });
     setChMap(m);
+    const vm: Record<string, number> = {};
+    (vw.data as { video_id: string; views: number }[] ?? []).forEach((v) => { vm[v.video_id] = Number(v.views) || 0; });
+    setViews(vm);
     setLoading(false);
   }, [supabase]);
 
@@ -165,7 +171,7 @@ export default function RunsListPage() {
           <table className="tbl">
             <thead><tr>
               <th>ID</th><th>Channel</th><th>Niche</th><th>Topic</th><th>Status</th>
-              <th className="num">Durasi</th><th className="num">Views</th><th>Started</th><th></th>
+              <th className="num" title="Waktu proses produksi">Proses</th><th className="num">Views</th><th>Started</th><th></th>
             </tr></thead>
             <tbody>
               {loading ? (
@@ -182,9 +188,9 @@ export default function RunsListPage() {
                     <td><div className="topic-cell">{d.topic || <span className="muted">—</span>}</div></td>
                     <td><Badge st={st} /></td>
                     <td className="num mono" style={{ fontSize: "var(--text-xs)" }}>{fmtDur(d.elapsed_seconds, st)}</td>
-                    <td className="num"><span className="muted">—</span></td>
+                    <td className="num">{d.youtube_video_id && views[d.youtube_video_id] != null ? <b style={{ color: "var(--text-primary)", fontWeight: 600 }}>{fmtK(views[d.youtube_video_id])}</b> : <span className="muted">—</span>}</td>
                     <td><span className="muted" style={{ fontSize: "var(--text-xs)", whiteSpace: "nowrap" }}>{fmtWhen(d.created_at)}</span></td>
-                    <td><button className="btn btn-ghost btn-icon btn-sm" onClick={(e) => e.stopPropagation()}><MoreHorizontal size={14} /></button></td>
+                    <td><a href={`/runs/${d.id}`} className="btn btn-ghost btn-icon btn-sm" onClick={(e) => e.stopPropagation()} title="Lihat detail"><Eye size={14} /></a></td>
                   </tr>
                 );
               })}

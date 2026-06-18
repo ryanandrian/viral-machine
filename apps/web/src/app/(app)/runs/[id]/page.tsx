@@ -93,10 +93,10 @@ export default function RunDetailPage() {
       .eq("id", id).maybeSingle();
     const r = data as RunRow | null;
     setRun(r);
-    // live-tail by queue_id (scheduled) ATAU run_id (direct job, queue_id null)
+    // live-tail: log pipeline di-key oleh run_id → UTAMAKAN run_id (queue_id fallback).
     let q = supabase.from("pipeline_run_logs").select("id,level,step,category,message,created_at");
-    if (r?.queue_id != null) q = q.eq("queue_id", String(r.queue_id));
-    else if (r?.run_id) q = q.eq("run_id", r.run_id);
+    if (r?.run_id) q = q.eq("run_id", r.run_id);
+    else if (r?.queue_id != null) q = q.eq("queue_id", String(r.queue_id));
     else q = null as never;
     if (q) { const { data: lg } = await q.order("created_at", { ascending: true }).limit(2000); setLogs((lg as LogRow[]) ?? []); }
     setLoading(false);
@@ -106,8 +106,8 @@ export default function RunDetailPage() {
 
   // REALTIME live-tail: by queue_id (scheduled) ATAU run_id (direct job). RLS men-scope tenant.
   useEffect(() => {
-    const col = run?.queue_id != null ? "queue_id" : run?.run_id ? "run_id" : null;
-    const val = run?.queue_id != null ? String(run.queue_id) : run?.run_id;
+    const col = run?.run_id ? "run_id" : run?.queue_id != null ? "queue_id" : null;
+    const val = run?.run_id ? run.run_id : run?.queue_id != null ? String(run.queue_id) : null;
     if (!col || !val) return;
     const chan = supabase.channel(`rt-logs-${val}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "pipeline_run_logs", filter: `${col}=eq.${val}` },
@@ -230,13 +230,13 @@ export default function RunDetailPage() {
           <div className="card card-pad">
             <h3 className="rail-title"><span data-id>Output</span><span data-en>Output</span></h3>
             <div className="meta-row"><span className="k">Viral score</span><span className="v">{run.viral_score ?? "—"}</span></div>
-            <div className="meta-row"><span className="k">Durasi</span><span className="v">{fmtDur(run.elapsed_seconds)}</span></div>
+            <div className="meta-row"><span className="k"><span data-id>Waktu proses</span><span data-en>Process time</span></span><span className="v">{fmtDur(run.elapsed_seconds)}</span></div>
             <div className="meta-row"><span className="k">YouTube</span><span className="v">{run.youtube_url ? <a className="link" href={run.youtube_url} target="_blank" rel="noreferrer">buka</a> : "—"}</span></div>
             <div className="meta-row"><span className="k">LLM</span><span className="v">{run.llm_provider || "—"}</span></div>
           </div>
           <div className="card card-pad">
             <h3 className="rail-title"><span data-id>Rincian biaya</span><span data-en>Cost breakdown</span></h3>
-            <p className="muted" style={{ fontSize: "var(--text-xs)", margin: 0 }}><span data-id>Rincian biaya per-provider tampil saat worker mencatat metadata produksi.</span><span data-en>Per-provider cost appears once the worker records production metadata.</span></p>
+            <p className="muted" style={{ fontSize: "var(--text-xs)", margin: 0 }}><span data-id>Segera hadir.</span><span data-en>Coming soon.</span></p>
           </div>
         </div>
       </div>

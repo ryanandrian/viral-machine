@@ -86,6 +86,9 @@ export default function AnalyticsPage() {
     </th>
   );
   const grade = learn?.performance_grade;
+  // dedupe: top_hooks/top_topics dari analyzer bisa berisi duplikat teks sama → tampilkan unik (views tertinggi sudah di urutan awal).
+  const uniqHooks = learn?.top_hooks ? Array.from(new Map(learn.top_hooks.filter((h) => h?.hook).map((h) => [h.hook, h])).values()) : [];
+  const uniqTopics = learn?.top_topics ? Array.from(new Map(learn.top_topics.filter((t) => t?.title).map((t) => [t.title, t])).values()) : [];
 
   if (loading) return <div className="muted" style={{ padding: "3rem", textAlign: "center" }}><Bi id="Memuat analitik…" en="Loading analytics…" /></div>;
 
@@ -147,7 +150,7 @@ export default function AnalyticsPage() {
       <div className="an-grid-3" style={{ marginTop: "1rem" }}>
         <div className="card card-pad">
           <h3 className="card-title" style={{ marginBottom: "1rem" }}><Zap size={16} /> <Bi id="Hook teratas" en="Top hooks" /></h3>
-          {learn?.top_hooks?.length ? learn.top_hooks.slice(0, 5).map((h, i) => (
+          {uniqHooks.length ? uniqHooks.slice(0, 5).map((h, i) => (
             <div key={i} style={{ padding: "0.5rem 0", borderBottom: "1px solid var(--border-subtle)" }}>
               <div style={{ fontSize: "var(--text-sm)", color: "var(--text-primary)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{h.hook}</div>
               <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: 3, display: "flex", gap: "0.75rem" }}>
@@ -159,7 +162,7 @@ export default function AnalyticsPage() {
         </div>
         <div className="card card-pad">
           <h3 className="card-title" style={{ marginBottom: "1rem" }}><Sparkles size={16} /> <Bi id="Topik teratas" en="Top topics" /></h3>
-          {learn?.top_topics?.length ? learn.top_topics.slice(0, 5).map((t, i) => (
+          {uniqTopics.length ? uniqTopics.slice(0, 5).map((t, i) => (
             <div key={i} style={{ padding: "0.5rem 0", borderBottom: "1px solid var(--border-subtle)" }}>
               <div style={{ fontSize: "var(--text-sm)", color: "var(--text-primary)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{t.title}</div>
               <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: 3, display: "flex", gap: "0.75rem" }}>
