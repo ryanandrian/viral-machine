@@ -162,6 +162,9 @@ export default function ChannelDetailPage() {
           </div>
         </div>
         <div style={{ display: "flex", gap: "0.5rem" }}>
+          {ch.platform_channel_id && (
+            <a className="btn btn-secondary" href={`https://studio.youtube.com/channel/${ch.platform_channel_id}`} target="_blank" rel="noopener noreferrer" title="Kelola di YouTube Studio (tab baru)" style={{ color: "var(--yt)" }}><ExternalLink size={15} /> YouTube Studio</a>
+          )}
           <button className="btn btn-secondary" onClick={() => setTab("settings")}><Settings size={15} /> <Bi id="Pengaturan" en="Settings" /></button>
           <button className="btn btn-ai" disabled={busy} onClick={testNow} title="Produksi 1 video private untuk preview config"><Zap size={15} /> <Bi id="Test sekarang (private)" en="Test now (private)" /></button>
         </div>
