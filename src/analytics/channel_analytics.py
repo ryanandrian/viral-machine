@@ -45,13 +45,15 @@ class ChannelAnalytics:
     # Maksimum video yang diproses per run
     MAX_VIDEOS_PER_RUN = 50
 
-    def __init__(self, token_path: str = None, tenant_id: str = None):
+    def __init__(self, token_path: str = None, tenant_id: str = None, channel_id: str = None):
         """
         token_path: eksplisit path ke token file (opsional)
         tenant_id:  jika diisi, resolve path via konvensi tokens/{tenant_id}.json
+        channel_id: jika diisi → creds PER-CHANNEL (channel_credentials); else fallback per-tenant.
         Fallback:   token_youtube.json (backward compatible)
         """
         self._tenant_id  = tenant_id
+        self._channel_id = channel_id   # per-channel creds (channel_credentials, migr 0060)
         self._token_path = self._resolve_token_path(token_path, tenant_id)
         self._supabase   = self._init_supabase()
         self._creds      = None
@@ -126,7 +128,7 @@ class ChannelAnalytics:
             if self._tenant_id:
                 try:
                     from src.utils.tenant_credentials import load_google_credentials
-                    token_data = load_google_credentials(self._tenant_id)
+                    token_data = load_google_credentials(self._tenant_id, channel_id=self._channel_id)
                 except Exception as e:
                     logger.warning(f"[Analytics] DB creds gagal ({e}) — coba file")
             if not token_data:
@@ -152,7 +154,7 @@ class ChannelAnalytics:
                 if self._tenant_id:
                     try:
                         from src.utils.tenant_credentials import save_google_access_token
-                        save_google_access_token(self._tenant_id, creds.token)
+                        save_google_access_token(self._tenant_id, creds.token, channel_id=self._channel_id)
                     except Exception as e:
                         logger.warning(f"[Analytics] simpan token DB gagal (non-fatal): {e}")
                 elif os.path.exists(self._token_path):
@@ -218,15 +220,14 @@ class ChannelAnalytics:
         )
         return result
 
-    def sync_channel_meta(self, tenant_id: str) -> dict:
+    def sync_channel_meta(self, tenant_id: str, channel_id: str = None) -> dict:
         """FAIL-SOFT: sinkronkan metadata channel dari YouTube (mine=True via OAuth) → tabel channels:
           • channel_name  = JUDUL channel YouTube (WAJIB sama dgn YouTube → anti-confuse tenant)
           • platform_channel_id = channel id YouTube (UC...)
           • subscriber_count   = jumlah subscriber (skip jika tersembunyi)
-        GENERIK untuk semua tenant (sumber kebenaran nama = YouTube, bukan input/niche).
-        Terisolasi: gagal di sini TIDAK mengganggu produksi/fetch lain. Idempotent.
-        Catatan: model BYO-CC saat ini = 1 OAuth YouTube per tenant → update channel tenant.
-        Multi-channel (banyak akun YT) butuh OAuth per-channel (arsitektur masa depan)."""
+        Sumber kebenaran nama = YouTube. Terisolasi: gagal di sini TIDAK mengganggu produksi/fetch lain.
+        PER-CHANNEL (migr 0060): scope update ke channels.id=channel_id (tiap channel pakai OAuth-nya
+        sendiri → mine=true = channel itu). Tanpa channel_id → tenant-wide (legacy 1-channel)."""
         if not self._youtube or not self._supabase:
             return {"ok": False, "reason": "no_client"}
         try:
@@ -246,9 +247,12 @@ class ChannelAnalytics:
             if not stats.get("hiddenSubscriberCount"):
                 patch["subscriber_count"] = int(stats.get("subscriberCount", 0))
                 patch["subscriber_count_at"] = datetime.now(timezone.utc).isoformat()
-            (self._supabase.table("channels").update(patch)
-                 .eq("tenant_id", tenant_id).execute())
-            logger.info(f"[Analytics] sync channel meta tenant={tenant_id} name='{title}' id={uc_id} subs={patch.get('subscriber_count')}")
+            ch_id = channel_id or self._channel_id
+            q = self._supabase.table("channels").update(patch).eq("tenant_id", tenant_id)
+            if ch_id:
+                q = q.eq("id", ch_id)   # multi-channel: HANYA channel ini (bukan semua channel tenant)
+            q.execute()
+            logger.info(f"[Analytics] sync channel meta tenant={tenant_id} ch={ch_id} name='{title}' id={uc_id} subs={patch.get('subscriber_count')}")
             return {"ok": True, "name": title, "channel_id": uc_id, "subscribers": patch.get("subscriber_count")}
         except Exception as e:
             logger.warning(f"[Analytics] sync channel meta gagal tenant={tenant_id}: {e}")

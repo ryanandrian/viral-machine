@@ -30,17 +30,17 @@ def run_once(sb=None) -> dict:
     for ch in channels:
         tid = ch["tenant_id"]
         cid = str(ch.get("id"))
-        # FETCH analytics per-tenant (sekali; fetch_and_store tenant-wide + idempotent)
-        if tid not in fetched_tenants:
-            try:
-                from src.analytics.channel_analytics import ChannelAnalytics
-                ca = ChannelAnalytics(tenant_id=tid)
+        # ANALYTICS + meta PER-CHANNEL: ChannelAnalytics pakai creds channel ini (channel_credentials).
+        try:
+            from src.analytics.channel_analytics import ChannelAnalytics
+            ca = ChannelAnalytics(tenant_id=tid, channel_id=cid)
+            ca.sync_channel_meta(tid, channel_id=cid)   # nama/platform_channel_id/subs — scope channel ini
+            if tid not in fetched_tenants:               # fetch analitik: sekali per tenant (hindari redundan)
                 ca.fetch_and_store(tid)
-                ca.sync_channel_meta(tid)  # nama channel = YouTube + platform_channel_id + followers; fail-soft
                 fetched += 1
-            except Exception as e:
-                logger.warning(f"[self_learning] fetch analytics gagal tenant={tid}: {e}")
-            fetched_tenants.add(tid)
+                fetched_tenants.add(tid)
+        except Exception as e:
+            logger.warning(f"[self_learning] analytics gagal ch={cid} tenant={tid}: {e}")
         # COMPUTE insights (channel-scoped tag)
         try:
             from src.analytics.performance_analyzer import PerformanceAnalyzer

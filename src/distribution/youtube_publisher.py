@@ -26,13 +26,14 @@ class YouTubePublisher:
 
     TOKEN_PATH = "token_youtube.json"  # backward compatible fallback
 
-    def _get_credentials(self, tenant_config: TenantConfig) -> Credentials:
-        # Phase 4.4 BYO-CC: DB-first (tenant_credentials, terenkripsi Fernet) → fallback file
-        # (transisi sampai creds tiap tenant di-seed ke DB). Non-breaking.
+    def _get_credentials(self, tenant_config: TenantConfig, channel_id: str | None = None) -> Credentials:
+        # Phase 4.4 BYO-CC: DB-first → fallback file. PER-CHANNEL (migr 0060): pakai channel_id
+        # (param ATAU tenant_config.channel_id=channels.id) → channel_credentials; fallback tenant_credentials.
         from src.utils.tenant_credentials import load_google_credentials, save_google_access_token
         source     = "db"
         token_path = None
-        token_data = load_google_credentials(tenant_config.tenant_id)
+        ch_id      = channel_id or getattr(tenant_config, "channel_id", None)
+        token_data = load_google_credentials(tenant_config.tenant_id, channel_id=ch_id)
         if not token_data:
             source = "file"
             if hasattr(tenant_config, 'get_youtube_token_path'):
@@ -59,7 +60,7 @@ class YouTubePublisher:
             logger.info(f"Refreshing expired YouTube token (source={source})...")
             creds.refresh(Request())
             if source == "db":
-                save_google_access_token(tenant_config.tenant_id, creds.token)
+                save_google_access_token(tenant_config.tenant_id, creds.token, channel_id=ch_id)
             else:
                 token_data["token"] = creds.token
                 with open(token_path, "w") as f:
