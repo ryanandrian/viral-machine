@@ -10,7 +10,7 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const { client_id, client_secret, ret } = await req.json().catch(() => ({}));
+  const { client_id, client_secret, ret, channel_id } = await req.json().catch(() => ({}));
   if (!client_id?.trim() || !client_secret?.trim())
     return NextResponse.json({ error: "client_id & client_secret wajib" }, { status: 400 });
 
@@ -19,7 +19,8 @@ export async function POST(req: Request) {
       tenant_id: user.id,
       client_id: client_id.trim(),
       client_secret: client_secret.trim(),
-      ret: ret === "/onboarding" ? "/onboarding" : "/settings",
+      channel_id: channel_id || null,   // multi-channel: ikat consent ke channel ini (channels.id)
+      ret: typeof ret === "string" && ret.startsWith("/") ? ret : "/settings",  // anti open-redirect (path only)
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) return NextResponse.json({ error: j.error || "init gagal" }, { status: 502 });

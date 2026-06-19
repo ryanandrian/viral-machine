@@ -71,6 +71,37 @@ export default function ChannelDetailPage() {
   const [savingPreset, setSavingPreset] = useState(false);
   const [presetMsg, setPresetMsg] = useState<string | null>(null);
 
+  // YouTube per-channel (migr 0060): connect/status/disconnect ber-scope channels.id ini.
+  const [yt, setYt] = useState<{ connected: boolean; has_client: boolean; channel_id: string | null } | null>(null);
+  const [ytCid, setYtCid] = useState("");
+  const [ytSecret, setYtSecret] = useState("");
+  const [ytBusy, setYtBusy] = useState(false);
+  const [ytErr, setYtErr] = useState<string | null>(null);
+
+  async function loadYtStatus() {
+    try { const r = await fetch(`/api/youtube/status?channel_id=${id}`); setYt(await r.json()); }
+    catch { setYt({ connected: false, has_client: false, channel_id: null }); }
+  }
+  async function connectYt() {
+    setYtErr(null);
+    if (!ytCid.trim() || !ytSecret.trim()) return setYtErr("Isi Client ID & Client Secret dulu.");
+    setYtBusy(true);
+    try {
+      const r = await fetch("/api/youtube/connect", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_id: ytCid, client_secret: ytSecret, channel_id: id, ret: `/channels/${id}` }) });
+      const j = await r.json();
+      if (r.ok && j.authorize_url) { window.location.href = j.authorize_url; return; }
+      setYtErr(j.error || "Gagal memulai koneksi."); setYtBusy(false);
+    } catch { setYtErr("Server tak terjangkau."); setYtBusy(false); }
+  }
+  async function disconnectYt() {
+    setYtBusy(true);
+    try {
+      await fetch("/api/youtube/disconnect", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ channel_id: id }) });
+      await loadYtStatus();
+    } finally { setYtBusy(false); }
+  }
+
   async function savePreset() {
     setPresetMsg(null); setSavingPreset(true);
     const { error } = await supabase.from("channels").update({ duration_preset: dpreset }).eq("id", id);
@@ -125,6 +156,14 @@ export default function ChannelDetailPage() {
   }, [supabase, id]);
 
   useEffect(() => { load(); }, [load]);
+  // Status YouTube per-channel + tangani kembalinya dari consent (?youtube=connected|error).
+  useEffect(() => {
+    loadYtStatus();
+    const sp = new URLSearchParams(window.location.search);
+    const y = sp.get("youtube");
+    if (y === "connected") { setYtErr(null); window.history.replaceState({}, "", `/channels/${id}`); loadYtStatus(); }
+    else if (y === "error") { setYtErr(`Koneksi gagal: ${sp.get("reason") || "unknown"}`); window.history.replaceState({}, "", `/channels/${id}`); }
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function save() {
     setErr(null); setSaved(false); setBusy(true);
@@ -249,6 +288,27 @@ export default function ChannelDetailPage() {
             <button className="btn btn-default" onClick={savePreset} disabled={savingPreset || dpreset == null}>{savingPreset ? <Loader2 size={15} className="spin" /> : <Bi id="Simpan durasi" en="Save duration" />}</button>
             {presetMsg && <span style={{ fontSize: "var(--text-sm)", color: presetMsg.includes("tersimpan") ? "var(--success)" : "var(--danger, #ef4444)" }}>{presetMsg}</span>}
           </div>
+        </div>
+
+        <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 560 }}>
+          <h3 className="card-title" style={{ marginBottom: "0.35rem" }}><Bi id="Koneksi YouTube" en="YouTube connection" /></h3>
+          {yt?.connected ? (
+            <>
+              <p style={{ fontSize: "var(--text-sm)", marginBottom: "0.75rem" }}><Check size={14} style={{ color: "var(--success)", verticalAlign: -2 }} /> <Bi id="Tersambung" en="Connected" />{yt.channel_id ? ` · ${yt.channel_id}` : ""}</p>
+              <button className="btn btn-secondary btn-sm" onClick={disconnectYt} disabled={ytBusy}>{ytBusy ? <Loader2 size={14} className="spin" /> : <Bi id="Putuskan" en="Disconnect" />}</button>
+            </>
+          ) : (
+            <>
+              <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "0.75rem" }}><Bi id="Hubungkan channel INI ke akun YouTube-nya (OAuth) agar bisa auto-publish. Tiap channel = koneksi sendiri." en="Connect THIS channel to its YouTube account (OAuth) for auto-publish. Each channel = its own connection." /></p>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: 460 }}>
+                <input className="input input-mono" placeholder="Google Client ID" value={ytCid} onChange={(e) => setYtCid(e.target.value)} />
+                <input className="input input-mono" type="password" placeholder="Google Client Secret" value={ytSecret} onChange={(e) => setYtSecret(e.target.value)} />
+                <div className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Daftarkan Redirect URI ini di OAuth app Anda: " en="Register this Redirect URI in your OAuth app: " /><code>{process.env.NEXT_PUBLIC_YT_REDIRECT_URI || "(lihat dokumentasi)"}</code></div>
+                <button className="btn btn-default btn-sm" style={{ width: "fit-content" }} onClick={connectYt} disabled={ytBusy}>{ytBusy ? <Loader2 size={14} className="spin" /> : <><ExternalLink size={14} /> <Bi id="Hubungkan via Google" en="Connect via Google" /></>}</button>
+              </div>
+            </>
+          )}
+          {ytErr && <div style={{ color: "var(--danger,#ef4444)", fontSize: "var(--text-sm)", marginTop: "0.5rem" }}>{ytErr}</div>}
         </div>
         </>
       )}
