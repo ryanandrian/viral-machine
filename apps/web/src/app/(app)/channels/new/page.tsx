@@ -29,19 +29,23 @@ export default function NewChannelPage() {
 
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
+    const me = user?.id ?? "";
     const [{ data: nq }, { data: lq }, { count: c }, { data: cfg }] = await Promise.all([
-      supabase.from("niches").select("niche_id, name").eq("is_active", true).order("niche_id"),
+      supabase.from("niches").select("niche_id, name, is_base, access_type, exclusive_to").eq("is_active", true).order("niche_id"),
       supabase.from("content_languages").select("locale, display_name").eq("is_active", true).order("sort_order"),
       supabase.from("channels").select("id", { count: "exact", head: true }),
       supabase.from("tenant_configs").select("plan_type").maybeSingle(),
     ]);
-    setNiches(nq ?? []); setLangs(lq ?? []); setCount(c ?? 0);
-    const pt = cfg?.plan_type ?? "starter";
-    const { data: pl } = await supabase.from("plan_limits").select("max_channels").eq("plan_type", pt).maybeSingle();
+    const tier = cfg?.plan_type ?? "starter";
+    // Entitlement (SAMA dgn channel-detail): niche custom milik sendiri ATAU publik (pro/business=semua, else hanya is_base).
+    const entitled = (nq ?? []).filter((n: { access_type: string; is_base: boolean; exclusive_to: string | null }) =>
+      n.exclusive_to === me || (n.access_type === "public" && (["pro", "business"].includes(tier) || n.is_base)));
+    setNiches(entitled.map((n: { niche_id: string; name: string }) => ({ niche_id: n.niche_id, name: n.name })));
+    setLangs(lq ?? []); setCount(c ?? 0);
+    const { data: pl } = await supabase.from("plan_limits").select("max_channels").eq("plan_type", tier).maybeSingle();
     setMaxCh(pl?.max_channels ?? null);
     if (lq?.[0]) setClang(lq[0].locale);
     setLoading(false);
-    void user;
   }, [supabase]);
   useEffect(() => { load(); }, [load]);
 
