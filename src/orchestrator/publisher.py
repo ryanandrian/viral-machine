@@ -139,6 +139,19 @@ def _publish_from_buffer(sb, channel_row: dict, item: dict) -> None:
     if not yt.get("video_id"):
         raise RuntimeError(yt.get("error", "YouTube publish gagal"))
 
+    # Tautkan video_id/url BALIK ke production_runs (via run_id). Sebelumnya hanya ditulis ke `videos`
+    # → kolom Views di /runs kosong utk run terjadwal. Non-fatal (publish sudah sukses).
+    _rid = meta.get("run_id")
+    if _rid:
+        try:
+            (sb.table("production_runs")
+               .update({"youtube_video_id": yt["video_id"],
+                        "youtube_url": yt.get("url") or f"https://youtu.be/{yt['video_id']}",
+                        "status": "success"})
+               .eq("run_id", _rid).eq("tenant_id", channel_row["tenant_id"]).execute())
+        except Exception as _e:
+            logger.warning(f"[Publisher] link video_id→production_runs gagal (non-fatal): {_e}")
+
     # Tutup gap Phase-5 decoupled: di mode ini PUBLISHER = penulis row `videos` (pipeline.run
     # publish=False tak menulisnya). Sekaligus rekam dimensi diversity (Phase 6.2, migr 0018)
     # → jadi HISTORI lookback rotasi berikutnya. Non-fatal (publish sudah sukses).
