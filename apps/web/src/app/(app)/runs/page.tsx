@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  Download, Zap, Tv, ChevronDown, Calendar, Filter, ChevronRight,
+  Download, Zap, ChevronLeft, ChevronRight, Search,
   Eye, X, RefreshCw, ArrowRight, Check, Loader2, Clock, type LucideIcon,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -73,10 +73,16 @@ export default function RunsListPage() {
   const [filter, setFilter] = useState<StKey | "all">("all");
   const [selected, setSelected] = useState<RunRow | null>(null);
   const [direct, setDirect] = useState<{ id: string; status: string; job_type: string; niche: string | null }[]>([]);
+  const [q, setQ] = useState("");
+  const [chFilter, setChFilter] = useState("all");
+  const [nicheFilter, setNicheFilter] = useState("all");
+  const [days, setDays] = useState<"7" | "30" | "all">("all");
+  const [page, setPage] = useState(0);
+  const PAGE = 25;
 
   const load = useCallback(async () => {
     const [{ data: runs }, { data: chs }, { data: dj }, vw] = await Promise.all([
-      supabase.from("production_runs").select("id,channel_id,niche,topic,status,elapsed_seconds,youtube_url,youtube_video_id,viral_score,created_at").order("created_at", { ascending: false }).limit(100),
+      supabase.from("production_runs").select("id,channel_id,niche,topic,status,elapsed_seconds,youtube_url,youtube_video_id,viral_score,created_at").order("created_at", { ascending: false }).limit(2000),
       supabase.from("channels").select("id,channel_name"),
       supabase.from("direct_jobs").select("id,status,job_type,niche").in("status", ["pending", "producing"]).order("created_at", { ascending: false }),
       supabase.rpc("get_tenant_video_views"),
@@ -106,10 +112,23 @@ export default function RunsListPage() {
     document.addEventListener("keydown", onEsc);
     return () => document.removeEventListener("keydown", onEsc);
   }, [load]);
+  useEffect(() => { setPage(0); }, [filter, q, chFilter, nicheFilter, days]);
 
-  const rows = data.filter((d) => filter === "all" || statusKey(d.status) === filter);
   const done = data.filter((d) => statusKey(d.status) === "completed").length;
   const fail = data.filter((d) => statusKey(d.status) === "failed").length;
+  const nicheOpts = Array.from(new Set(data.map((d) => d.niche).filter(Boolean))) as string[];
+  const ql = q.trim().toLowerCase();
+  const cutoff = days === "all" ? 0 : Date.now() - parseInt(days) * 86400000;
+  const filtered = data.filter((d) =>
+    (filter === "all" || statusKey(d.status) === filter) &&
+    (chFilter === "all" || d.channel_id === chFilter) &&
+    (nicheFilter === "all" || d.niche === nicheFilter) &&
+    (days === "all" || (() => { try { return new Date(d.created_at).getTime() >= cutoff; } catch { return true; } })()) &&
+    (!ql || `${d.id} ${d.topic ?? ""} ${prettyNiche(d.niche)}`.toLowerCase().includes(ql))
+  );
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE));
+  const pg = Math.min(page, pageCount - 1);
+  const paged = filtered.slice(pg * PAGE, pg * PAGE + PAGE);
 
   function miniSteps(st: StKey) {
     // review = produk JADI (7 langkah produksi selesai), hanya Publish belum (masih di buffer/ditinjau).
@@ -161,9 +180,20 @@ export default function RunsListPage() {
             </button>
           ))}
         </div>
-        <div className="selbox"><Tv size={14} /> <span data-id>Semua channel</span><span data-en>All channels</span> <ChevronDown size={14} /></div>
-        <div className="selbox"><Calendar size={14} /> 7 hari terakhir <ChevronDown size={14} /></div>
-        <div className="selbox"><Filter size={14} /> Niche <ChevronDown size={14} /></div>
+        <div className="selbox" style={{ gap: "0.4rem" }}><Search size={14} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari ID / topik / niche…" style={{ border: "none", background: "transparent", outline: "none", color: "inherit", font: "inherit", width: 160 }} /></div>
+        <select className="selbox" value={chFilter} onChange={(e) => setChFilter(e.target.value)} title="Channel">
+          <option value="all">Semua channel</option>
+          {Object.entries(chMap).map(([id, nm]) => <option key={id} value={id}>{nm}</option>)}
+        </select>
+        <select className="selbox" value={days} onChange={(e) => setDays(e.target.value as "7" | "30" | "all")} title="Rentang waktu">
+          <option value="all">Semua waktu</option>
+          <option value="7">7 hari terakhir</option>
+          <option value="30">30 hari terakhir</option>
+        </select>
+        <select className="selbox" value={nicheFilter} onChange={(e) => setNicheFilter(e.target.value)} title="Niche">
+          <option value="all">Semua niche</option>
+          {nicheOpts.map((n) => <option key={n} value={n}>{prettyNiche(n)}</option>)}
+        </select>
       </div>
 
       <div className="card">
@@ -176,9 +206,9 @@ export default function RunsListPage() {
             <tbody>
               {loading ? (
                 <tr><td colSpan={9} className="muted" style={{ textAlign: "center", padding: "2rem" }}><span data-id>Memuat runs…</span><span data-en>Loading runs…</span></td></tr>
-              ) : rows.length === 0 ? (
-                <tr><td colSpan={9} className="muted" style={{ textAlign: "center", padding: "2rem" }}><span data-id>Belum ada run.</span><span data-en>No runs yet.</span></td></tr>
-              ) : rows.map((d) => {
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={9} className="muted" style={{ textAlign: "center", padding: "2rem" }}><span data-id>Tidak ada run cocok filter.</span><span data-en>No runs match filters.</span></td></tr>
+              ) : paged.map((d) => {
                 const st = statusKey(d.status);
                 return (
                   <tr key={d.id} onClick={() => setSelected(d)}>
@@ -198,7 +228,11 @@ export default function RunsListPage() {
           </table>
         </div>
         <div className="pager">
-          <span>Menampilkan {rows.length} dari {data.length} run</span>
+          <span>Halaman {pg + 1} / {pageCount} · {filtered.length} run</span>
+          <div style={{ display: "flex", gap: "0.4rem", marginLeft: "auto" }}>
+            <button className="btn btn-secondary btn-sm" disabled={pg <= 0} onClick={() => setPage(pg - 1)}><ChevronLeft size={14} /></button>
+            <button className="btn btn-secondary btn-sm" disabled={pg >= pageCount - 1} onClick={() => setPage(pg + 1)}><ChevronRight size={14} /></button>
+          </div>
         </div>
       </div>
 
