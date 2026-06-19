@@ -22,6 +22,7 @@ export default function NewChannelPage() {
   const [name, setName] = useState("");
   const [platform, setPlatform] = useState("youtube");
   const [sel, setSel] = useState<string[]>([]);
+  const [nicheMode, setNicheMode] = useState<"fixed" | "random">("fixed");
   const [clang, setClang] = useState("id-ID");
   const [privacy, setPrivacy] = useState("private");
   const [busy, setBusy] = useState(false);
@@ -50,18 +51,21 @@ export default function NewChannelPage() {
   useEffect(() => { load(); }, [load]);
 
   const full = count != null && maxCh != null && count >= maxCh;
-  const toggleNiche = (id: string) => setSel((s) => s.includes(id) ? s.filter((x) => x !== id) : [...s, id]);
+  // Fixed → single-select (selalu 1). Random → multi-select (2+). Konsisten dgn niche_mode.
+  const pickNiche = (id: string) => setSel((s) => nicheMode === "fixed" ? [id] : (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  const changeMode = (m: "fixed" | "random") => { setNicheMode(m); if (m === "fixed") setSel((s) => s.slice(0, 1)); };
 
   async function create() {
     setErr(null);
     if (!name.trim()) return setErr("Nama channel wajib.");
     if (sel.length === 0) return setErr("Pilih minimal 1 niche.");
+    if (nicheMode === "random" && sel.length < 2) return setErr("Mode rotasi butuh minimal 2 niche.");
     setBusy(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setBusy(false); return setErr("Sesi tak valid."); }
     const { data, error } = await supabase.from("channels").insert({
       tenant_id: user.id, channel_group: "default", channel_name: name.trim(), platform,
-      niche: sel[0], niche_pool: sel, niche_mode: sel.length > 1 ? "random" : "fixed",
+      niche: sel[0], niche_pool: sel, niche_mode: nicheMode,
       content_language: clang, publish_privacy: privacy, publish_slots: ["13:00"], is_active: true,
     }).select("id").single();
     setBusy(false);
@@ -88,14 +92,23 @@ export default function NewChannelPage() {
         <div className="card card-pad" style={{ display: "grid", gap: "1rem" }}>
           <div><label className="label"><Bi id="Nama channel" en="Channel name" /></label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="mis. Misteri Samudra" /></div>
           <div><label className="label">Platform</label><div className="radio-row">{["youtube"].map((p) => <span key={p} className={`radio-pill${platform === p ? " sel" : ""}`} onClick={() => setPlatform(p)}>{p}</span>)}<span className="radio-pill" style={{ opacity: .5, cursor: "not-allowed" }} title="Reels/TikTok per tier (segera)">reels/tiktok (segera)</span></div></div>
-          <div><label className="label"><Bi id="Niche (pilih 1+)" en="Niche (pick 1+)" /></label>
-            <div style={{ display: "flex", gap: ".5rem", flexWrap: "wrap" }}>{niches.map((n) => <span key={n.niche_id} className={`radio-pill${sel.includes(n.niche_id) ? " sel" : ""}`} onClick={() => toggleNiche(n.niche_id)}>{sel.includes(n.niche_id) && <Check size={12} />} {n.name}</span>)}</div>
-            {sel.length > 1 && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".375rem" }}>Mode rotasi (random) — {sel.length} niche.</div>}
+          <div><label className="label"><Bi id="Mode niche" en="Niche mode" /></label>
+            <div className="radio-row">
+              <span className={`radio-pill${nicheMode === "fixed" ? " sel" : ""}`} onClick={() => changeMode("fixed")}>{nicheMode === "fixed" && <Check size={12} />} <Bi id="Tetap (1 niche)" en="Fixed (1 niche)" /></span>
+              <span className={`radio-pill${nicheMode === "random" ? " sel" : ""}`} onClick={() => changeMode("random")}>{nicheMode === "random" && <Check size={12} />} <Bi id="Rotasi otomatis (random)" en="Auto-rotate (random)" /></span>
+            </div>
+            <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".375rem" }}>{nicheMode === "random" ? <Bi id="Mesin memutar niche terpilih bergiliran." en="Engine rotates the selected niches." /> : <Bi id="Channel memakai 1 niche tetap." en="Channel uses one fixed niche." />}</div>
+          </div>
+          <div><label className="label">{nicheMode === "random" ? <Bi id="Niche (pilih 2+)" en="Niches (pick 2+)" /> : <Bi id="Niche (pilih 1)" en="Niche (pick 1)" />}</label>
+            <div className="radio-row">{niches.map((n) => <span key={n.niche_id} className={`radio-pill${sel.includes(n.niche_id) ? " sel" : ""}`} onClick={() => pickNiche(n.niche_id)}>{sel.includes(n.niche_id) && <Check size={12} />} {n.name}</span>)}</div>
           </div>
           <div><label className="label"><Bi id="Bahasa konten" en="Content language" /></label><select className="input" value={clang} onChange={(e) => setClang(e.target.value)}>{langs.map((l) => <option key={l.locale} value={l.locale}>{l.display_name}</option>)}</select></div>
           <div><label className="label">Privacy publish</label><div className="radio-row">{["private", "public"].map((p) => <span key={p} className={`radio-pill${privacy === p ? " sel" : ""}`} onClick={() => setPrivacy(p)}>{p}</span>)}</div><div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".25rem" }}><Bi id="Default private (trial-safe). Ganti ke public saat hasil cocok." en="Default private (trial-safe). Switch to public when satisfied." /></div></div>
           {err && <div style={{ color: "var(--danger)", fontSize: "var(--text-sm)" }}>{err}</div>}
-          <button className="btn btn-primary" disabled={busy} onClick={create} style={{ justifySelf: "start" }}>{busy ? "Membuat…" : <Bi id="Buat channel" en="Create channel" />}</button>
+          <div style={{ display: "flex", gap: ".5rem" }}>
+            <button className="btn btn-default" disabled={busy} onClick={create}>{busy ? "Membuat…" : <Bi id="Buat channel" en="Create channel" />}</button>
+            <button className="btn btn-secondary" disabled={busy} onClick={() => router.push("/channels")}><Bi id="Batal" en="Cancel" /></button>
+          </div>
         </div>
       )}
     </div>
