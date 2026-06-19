@@ -77,15 +77,17 @@ class Pipeline:
             )
             return None
 
-    def run(self, tenant_config: TenantConfig, publish: bool = True) -> dict:
+    def run(self, tenant_config: TenantConfig, publish: bool = True, run_id: str | None = None) -> dict:
         """
         Jalankan full pipeline untuk satu tenant.
 
         Args:
             tenant_config: Config tenant (tenant_id + niche minimum)
             publish:       True → upload ke platform setelah render
+            run_id:        opsional — bila diberikan caller (mis. produce_one yang sudah
+                           contextualize log), dipakai apa adanya; else generate (backward-compatible).
         """
-        run_id     = f"{tenant_config.tenant_id}_{int(time.time())}"
+        run_id     = run_id or f"{tenant_config.tenant_id}_{int(time.time())}"
         start_time = time.time()
 
         logger.info(f"{'='*60}")

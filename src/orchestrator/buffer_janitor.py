@@ -93,9 +93,26 @@ def reconcile_orphans(sb=None, grace_minutes=None) -> dict:
     return {"deleted_orphans": deleted}
 
 
+def prune_logs(sb) -> dict:
+    """Retensi pipeline_run_logs — hapus log lebih tua dari LOG_RETENTION_DAYS (default 30 hari) →
+    cegah tabel bloat. Live-tail (D5) hanya butuh log run baru; histori lama tak bernilai.
+    Idempotent, best-effort (gagal tak ganggu janitor). Global (lintas-tenant, service_role)."""
+    days = int(os.getenv("LOG_RETENTION_DAYS", "30"))
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    try:
+        res = sb.table("pipeline_run_logs").delete().lt("created_at", cutoff).execute()
+        n = len(res.data or [])
+        if n:
+            logger.info(f"[janitor] prune_logs: {n} baris pipeline_run_logs >{days}hari dihapus")
+        return {"logs_pruned": n}
+    except Exception as e:
+        logger.warning(f"[janitor] prune_logs gagal: {e}")
+        return {"logs_pruned": 0}
+
+
 def run_once(sb=None) -> dict:
     sb = sb or _sb()
-    return {**sweep_stale(sb), **reconcile_orphans(sb)}
+    return {**sweep_stale(sb), **reconcile_orphans(sb), **prune_logs(sb)}
 
 
 def run_forever(interval_seconds=None) -> None:

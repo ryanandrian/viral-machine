@@ -118,6 +118,7 @@ def produce_one(channel_row: dict) -> int | None:
     # Niche per-channel di HULU (scheduled): random → rotasi LRU entitlement / fixed → channels.niche.
     # Inventory + pipeline memakai niche yang SUDAH ter-resolve (single source; pipeline tak merotasi lagi).
     niche      = _resolve_niche(channel_row)
+    run_id     = f"{tenant_id}_{int(time.time())}"  # pre-gen → contextualize log SEBELUM pipeline jalan
     inv_id = inventory.record_producing(tenant_id, channel_id, niche,
                                         {"channel": channel_row.get("channel_name")})
     try:
@@ -136,7 +137,10 @@ def produce_one(channel_row: dict) -> int | None:
             tc.preferred_music_mood = _div.pick(channel_id, "music", _mood_pool) if _mood_pool else None
         except Exception as _de:
             logger.debug(f"[Producer] diversity hint skip (ch={channel_id}): {_de}")
-        result = Pipeline().run(tc, publish=False)   # PRODUCE-ONLY (producer TAK pernah publish — §12c)
+        # contextualize → log pipeline buffer-run tersimpan ke pipeline_run_logs (live-tail D5),
+        # ber-run_id SAMA dgn production_runs. Sebelumnya log buffer hilang (hanya direct yg ter-log).
+        with logger.contextualize(tenant_id=tenant_id, channel_id=channel_id, run_id=run_id):
+            result = Pipeline().run(tc, publish=False, run_id=run_id)   # PRODUCE-ONLY (producer TAK pernah publish — §12c)
         qc    = result.get("steps", {}).get("qc", {})
         video = result.get("video_path")
         # HARD-FAIL (crash render/visual, TANPA video jadi) → failed (TIDAK dihitung stok).
