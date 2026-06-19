@@ -53,7 +53,11 @@ export default function NewChannelPage() {
   const full = count != null && maxCh != null && count >= maxCh;
   // Fixed → single-select (selalu 1). Random → multi-select (2+). Konsisten dgn niche_mode.
   const pickNiche = (id: string) => setSel((s) => nicheMode === "fixed" ? [id] : (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
-  const changeMode = (m: "fixed" | "random") => { setNicheMode(m); if (m === "fixed") setSel((s) => s.slice(0, 1)); };
+  // Random → auto-pilih SEMUA niche hak tenant (rotasi penuh). Fixed → kosongkan (tenant pilih 1 sendiri).
+  const changeMode = (m: "fixed" | "random") => {
+    setNicheMode(m);
+    setSel(m === "fixed" ? [] : niches.map((n) => n.niche_id));
+  };
 
   async function create() {
     setErr(null);
@@ -97,7 +101,7 @@ export default function NewChannelPage() {
               <span className={`radio-pill${nicheMode === "fixed" ? " sel" : ""}`} onClick={() => changeMode("fixed")}>{nicheMode === "fixed" && <Check size={12} />} <Bi id="Tetap (1 niche)" en="Fixed (1 niche)" /></span>
               <span className={`radio-pill${nicheMode === "random" ? " sel" : ""}`} onClick={() => changeMode("random")}>{nicheMode === "random" && <Check size={12} />} <Bi id="Rotasi otomatis (random)" en="Auto-rotate (random)" /></span>
             </div>
-            <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".375rem" }}>{nicheMode === "random" ? <Bi id="Mesin memutar niche terpilih bergiliran." en="Engine rotates the selected niches." /> : <Bi id="Channel memakai 1 niche tetap." en="Channel uses one fixed niche." />}</div>
+            <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".375rem" }}>{nicheMode === "random" ? <Bi id="Semua niche hak Anda dipilih & diputar bergiliran (boleh kurangi)." en="All your niches are selected & rotated (you may deselect some)." /> : <Bi id="Channel memakai 1 niche tetap." en="Channel uses one fixed niche." />}</div>
           </div>
           <div><label className="label">{nicheMode === "random" ? <Bi id="Niche (pilih 2+)" en="Niches (pick 2+)" /> : <Bi id="Niche (pilih 1)" en="Niche (pick 1)" />}</label>
             <div className="radio-row">{niches.map((n) => <span key={n.niche_id} className={`radio-pill${sel.includes(n.niche_id) ? " sel" : ""}`} onClick={() => pickNiche(n.niche_id)}>{sel.includes(n.niche_id) && <Check size={12} />} {n.name}</span>)}</div>
