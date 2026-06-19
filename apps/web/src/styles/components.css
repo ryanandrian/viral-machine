@@ -135,3 +135,9 @@
 .tnum { font-variant-numeric: tabular-nums; }
 .hr { height: 1px; background: var(--border-subtle); border: 0; margin: 0; }
 .glow-ai { box-shadow: var(--glow-brand); }
+
+/* ---------- Radio pills (segmented choice) — global (sebelumnya hanya di config.css → halaman lain polos) ---------- */
+.radio-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.radio-pill { padding: 0.4375rem 0.75rem; border: 1px solid var(--border-strong); border-radius: var(--r-md); font-size: var(--text-sm); cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; transition: all var(--d-fast); background: none; color: var(--text-secondary); }
+.radio-pill.sel { border-color: var(--brand); background: var(--brand-soft); color: var(--brand); }
+.radio-pill svg { width: 15px; height: 15px; }
