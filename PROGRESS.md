@@ -7,6 +7,8 @@
 
 ## ⏭️ RESUME POINT — BACA INI DULU SETIAP SESI BARU (jangan salah arah)
 
+> **🟢 DOKUMEN FINAL MENUJU GO-LIVE (2026-06-20) — anti-dualisme:** seluruh **pekerjaan teknis pending** kini DIKELOLA di **[`REMEDIASI_NICHE_CHANNEL_VOICE_LLM.md`](REMEDIASI_NICHE_CHANNEL_VOICE_LLM.md)** (FASE 1–5, format Plan vs Realisasi). Item yang dulu tersebar di PROGRESS.md — editor niche + form custom-niche, `/compliance` per-channel + cost-tracking, dedup hooks, buang fosil V1, **config per-channel (voice/caption/hashtag/visual/music/quality)**, durasi/Cacat-B — **DISERAP** ke remediasi; **jangan dobel-kerjakan di sini.** **PROGRESS.md = arsip historis + status + GATE OPS/EKSTERNAL go-live** yang TIDAK diserap remediasi: Midtrans prod · Supabase Auth SMTP+Google · DNS api · YouTube OAuth live · rotasi secret · deploy webhook/admin-secrets. **Bila kontradiksi → REMEDIASI menang** (item teknis). Setelah remediasi 1–5 tuntas → onboarding funnel (go-market).
+
 **FRAMING FUNDAMENTAL (detail: memory [[decisions_v1_v2_migration]]):**
 - **v1 = PRODUKSI LIVE di VPS** — mesin produksi konten single-tenant (`ryan_andrian`) + Supabase. **TANPA SaaS/multitenancy/frontend. Running well. JANGAN DISENTUH.**
 - **v2 = YANG KITA KERJAKAN** — SaaS multi-tenant + Multi-Format Studio + frontend. **SEMUA di local dev ini, BELUM ada yang di-pull ke VPS.** Spec = `DESAIN_PRODUK_SAAS.md` + `MULTI_FORMAT_STUDIO.md` + `design-source/`.
@@ -48,10 +50,10 @@
 - **🆕 .env (2026-06-14):** root `.env` di-switch v1→v2 (service_role) — dulu run v2 via override inline; kini default v2 (foot-gun worker→v1 hilang). Detail [[project_env_supabase_target]].
 - **Keputusan Phase 6 (sudah diputus, default):** cadence fetch+compute 24j (config) · 6.2 voice-rotation pakai voice yang ada dulu (katalog voice = nyambung TTS-catalog-wiring) · AI disclosure = toggle, default ON.
 - **Gate owner:** cutover (deploy + flip). *(ElevenLabs re-subscribe / E3 = ✅ SELESAI 2026-06-17: owner topup OpenAI+ElevenLabs ryan, kuota aktif.)* → **§GATE CUTOVER (F1, B1)**.
-- **FE gap WAJIB (Phase 9-10), semua OPSIONAL/non-breaking:** format/preset picker · Branded panel (→ status & arsitektur **kanonik**: [`BRANDED_CONTENT_ARCHITECTURE.md`](BRANDED_CONTENT_ARCHITECTURE.md)) · privacy toggle (channel settings, default private) · provider-mgmt UI (E2) · live-tail→pipeline_run_logs · Supabase Auth.
+- **FE gap WAJIB (Phase 9-10), semua OPSIONAL/non-breaking:** format/preset picker · Branded panel (→ status & arsitektur **kanonik**: [`REMEDIASI_NICHE_CHANNEL_VOICE_LLM.md` §5.6/F2-04](REMEDIASI_NICHE_CHANNEL_VOICE_LLM.md)) · privacy toggle (channel settings, default private) · provider-mgmt UI (E2) · live-tail→pipeline_run_logs · Supabase Auth.
 
 #### Branded Content (CTA · logo · link landing) — status bertahap
-> **Sumber kebenaran tunggal = [`BRANDED_CONTENT_ARCHITECTURE.md`](BRANDED_CONTENT_ARCHITECTURE.md)** (spec konsep: `MULTI_FORMAT_STUDIO.md §6`). Bila dokumen lain berbeda → file itu menang.
+> **Status & arsitektur branded kini KANONIK di [`REMEDIASI_NICHE_CHANNEL_VOICE_LLM.md` §5.6 + item F2-04](REMEDIASI_NICHE_CHANNEL_VOICE_LLM.md)** (spec konsep: `MULTI_FORMAT_STUDIO.md §6`). *(File `BRANDED_CONTENT_ARCHITECTURE.md` di-merge penuh ke remediasi & DIHAPUS 2026-06-20 — anti-confuse.)* Checklist di bawah = status ringkas; detail/eksekusi di remediasi.
 - [x] **DB** — kolom `channels` (migr `0015_branded_content`): `cta_mode`,`brand_name`,`brand_cta_text`,`brand_logo`,`logo_position`,`logo_size`,`logo_opacity`,`landing_link`,`link_position`.
 - [x] **BE — soft-sell CTA** (`script_engine.py:285,355`): `cta_mode='soft_sell'`+`brand_name` → satu sebutan brand halus (hard-sell tetap dilarang).
 - [x] **BE — logo overlay** (`video_renderer.py:937` `_overlay_logo`, fail-soft, posisi/ukuran/opacity; image_sequence & ai_video).
@@ -488,7 +490,7 @@ Perluasan produk: menampung **banyak kategori creator short faceless** (mystery/
 **Plan-vs-realisasi (status per item):**
 | Item | Feasibility | Status |
 |---|---|---|
-| QC window relatif · link deskripsi · logo overlay · soft-sell CTA | ✅ murah (~20-50 LOC each) | ✅ **BE DONE** (QC relatif=F2c ±15%; Branded FB1-4=link/logo/soft-sell). **FE Branded panel = BELUM** → [`BRANDED_CONTENT_ARCHITECTURE.md`](BRANDED_CONTENT_ARCHITECTURE.md) |
+| QC window relatif · link deskripsi · logo overlay · soft-sell CTA | ✅ murah (~20-50 LOC each) | ✅ **BE DONE** (QC relatif=F2c ±15%; Branded FB1-4=link/logo/soft-sell). **FE Branded panel = BELUM** → [`REMEDIASI_NICHE_CHANNEL_VOICE_LLM.md` §5.6/F2-04](REMEDIASI_NICHE_CHANNEL_VOICE_LLM.md) |
 | Durasi 30–75s (section_timing preset + compression-map) | 🟡 medium | ✅ **F1+F2 DONE** — katalog (0012/0013) + scaling/word-budget (F2a) + wiring channel→tc (F2b) + QC relatif ±15% (F2c) + LLM-QC length-gate (F2d) + **effective-WPS per kelas TTS (F2e, 0014)**. Tervalidasi LIVE (ryan 60s konvergen). Closed-loop speed-adjust (poles edge + presisi) = pasca-ElevenLabs aktif. |
 | Closed-loop akurasi durasi (speed-adjust Edge/ElevenLabs) | 🟡 medium | ⏳ setelah cheap wins |
 | Variable visual beats · katalog `ai_models` (konsolidasi Phase 1.3) | 🟡 medium | ⏳ |
@@ -553,7 +555,7 @@ Setelah Phase 1-4 + alignment (migr 0010). **DB = lengkap untuk semua domain; ba
 | OAuth/credentials | `tenant_credentials` ✅ | crypto+loader ✅ | onboarding C3 | DB/BE ✅ · FE wiring (P9); seed token ryan pending |
 | Logs/live-tail | `pipeline_run_logs` ✅ | db_log_sink ✅ | D5 (simulasi) | DB/BE ✅ · FE live-tail wiring (P9) |
 | Auth/isolasi | `auth.users`+`tenant_id=auth.uid()`+RLS ✅ | RLS+service_role ✅ | B1-B4 (mock) | DB/BE ✅ · FE Supabase Auth (P9) |
-| Multi-Format | `format_profiles`+`duration_presets`+`tts_profiles`+branded(0015) ✅ (0012-0015) | **F1+F2 ✅** + **Branded FB1-4 ✅** (link deskripsi + soft-sell CTA + **logo overlay** `_overlay_logo`, tervalidasi pixel) | **screen baru BELUM ada** (Hybrid §11) | DB ✅ · BE ✅ · **FE gap Phase 9-10 (WAJIB): (a) format/preset picker; (b) Branded Content — link + soft-sell + `config/visual/logo-overlay` tab: upload logo + PEMILIH POSISI + PREVIEW (pola `config/visual/caption` position); UKURAN platform-fixed (bounds DB `branding_config`, tenant ikut). SEMUA OPSIONAL (backend nullable=non-breaking)** · closed-loop pasca-ElevenLabs · **status kanonik branded → [`BRANDED_CONTENT_ARCHITECTURE.md`](BRANDED_CONTENT_ARCHITECTURE.md)** |
+| Multi-Format | `format_profiles`+`duration_presets`+`tts_profiles`+branded(0015) ✅ (0012-0015) | **F1+F2 ✅** + **Branded FB1-4 ✅** (link deskripsi + soft-sell CTA + **logo overlay** `_overlay_logo`, tervalidasi pixel) | **screen baru BELUM ada** (Hybrid §11) | DB ✅ · BE ✅ · **FE gap Phase 9-10 (WAJIB): (a) format/preset picker; (b) Branded Content — link + soft-sell + `config/visual/logo-overlay` tab: upload logo + PEMILIH POSISI + PREVIEW (pola `config/visual/caption` position); UKURAN platform-fixed (bounds DB `branding_config`, tenant ikut). SEMUA OPSIONAL (backend nullable=non-breaking)** · closed-loop pasca-ElevenLabs · **status kanonik branded → [`REMEDIASI_NICHE_CHANNEL_VOICE_LLM.md` §5.6/F2-04](REMEDIASI_NICHE_CHANNEL_VOICE_LLM.md)** |
 
 | Diversity (Phase 6.2) | `videos`(voice_id/hook_pattern/music_mood/visual_seed)+`diversity_config` ✅ (0018) | `DiversityEngine` LRU + hook/visual/music rotation ✅ | — | DB/BE ✅ · FE (opsional, admin diversity_config) P9-10 |
 | AI Disclosure (Phase 6.3) | `channels.ai_disclosure` ✅ (0019) | `youtube_publisher` set `containsSyntheticMedia` ✅ | D-channel settings (toggle) | DB/BE ✅ · **FE toggle gap (default ON) P9-10** |
