@@ -12,9 +12,9 @@
 ## 0. ⭐ MULAI DARI SINI (resume guide untuk sesi berikutnya)
 1. Baca **§2 Pondasi** + **§3 Keputusan** + **§4 Peta Config-Fanout** (inti pemahaman; 5 menit).
 2. Cek **§7 FASE** — cari item pertama ber-status ⬜/🟡 pada FASE prioritas terendah-nomornya. Itu pekerjaan berikutnya.
-3. Tiap item punya: TUJUAN · KENAPA · BUKTI · PLAN · DEPENDS · DONE-BILA · REALISASI. Kerjakan sesuai PLAN, validasi sesuai DONE-BILA, isi REALISASI (status+commit). **Item LLM/voice (F1-01, F4-02/03/04) menunjuk ke §10 LAMPIRAN — desain solusi yang SUDAH DISEPAKATI (prompt persis, skema field, kontrak JSON, contoh). IKUTI §10 apa adanya — jangan rancang ulang / berasumsi.**
+3. Tiap item punya: TUJUAN · KENAPA · BUKTI · PLAN · DEPENDS · DONE-BILA · REALISASI. Kerjakan sesuai PLAN, validasi sesuai DONE-BILA, isi REALISASI (status+commit). **Item LLM/voice/arsitektur (F1-03/04/05/07/08, F2-01/03, F3-02, F4-02/03/04) menunjuk ke §10 LAMPIRAN — desain SUDAH DISEPAKATI: §10.A durasi-via-speed · §10.B voice (Opsi 2) · §10.C konduktor · §10.E multi-AI-model + channel setup + gerbang aktivasi. IKUTI §10 apa adanya — jangan rancang ulang / berasumsi.**
 4. Aturan kerja: lokal → validasi 100% → commit → push → pull+rebuild+restart di VPS. JANGAN ngoding di VPS. JANGAN rusak produksi ryan. Validasi tiap fase sebelum lanjut.
-5. **Status global (update 2026-06-20):** ✅ **F1-01** (migr 0061, voice_catalog field baku + tts_profiles.param_schema; deployed) · ✅ **F1-02** (migr 0062, niches.voice_key + seed 4 voice EL; nol dampak ryan). **Item berikutnya = F1-03** — ⚠️ **GERBANG KERAS: butuh konfirmasi owner** (perubahan perilaku BE + precedence `tts_voice_per_niche` + resolusi fallback). Migr nyata terakhir = **0062**.
+5. **Status global (update 2026-06-20):** ✅ **F1-01** (migr 0061) · ✅ **F1-02** (migr 0062). **Arsitektur FINAL sudah dibungkus** (owner 2026-06-20): multi-AI-model per-elemen (tenant pilih, admin kurasi) · voice **Opsi 2** (default niche per TTS model + pilihan tenant per-channel + **test/preview**) · **TIDAK ada fallback** · channel default non-aktif + **gerbang aktivasi** · caption-styling+hashtag+model+voice = channel · credential per-tenant dipakai-ulang · niche-create gating config-driven. Acuan = §3 (kpts 3-11) + §4 + **§10.B/§10.E**. **Item berikutnya = F1-07** (BE/DB multi-model-ready) — ⚠️ **GERBANG: konfirmasi owner sebelum sentuh BE**. Urutan FASE 1: F1-07→F1-04→F1-03→F1-05→F1-08→F1-06. Migr nyata terakhir = **0062**.
 
 ---
 
@@ -40,10 +40,15 @@
 ## 3. 🔒 KEPUTUSAN TERKUNCI (sesi 2026-06-19/20)
 1. **Cacat B (durasi) bukan bug prompt.** Akar terukur: budget-wps terlalu rendah (budget 1.55–1.62 vs nyata 1.86–2.0; V1 base **1.97**) + variansi intrinsik + jaring sempit. Solusi: **LLM pilih `words`+`speed` bersama** (durasi via speed) + jaring deterministik tipis. Bukan tuning prompt lagi.
 2. **LLM = nyawa konten.** Orchestrator = konduktor: **1 prompt dinamis (preset × niche × voice × pace)** → **1 JSON** = partitur 3 konsumen: narasi (TTS), `tts_params` (voice+delivery), `visual_suggestions` (image-gen).
-3. **Voice identitas = NICHE → 1 `voice_key`** (dari `voice_catalog` = single source). Tanpa voice random (branding). LLM hanya setel DELIVERY per-naskah; identitas stabil.
-4. **NICHE = DNA** · **CHANNEL = brand skin + knob operasional/biaya** · **TENANT = akun (plan/billing/BYOK keys/notifikasi)**. (Caption+hashtag = channel; visual STYLE & mood-musik = niche; visual_mode/image_quality/music-on-off/volume/quality-gate = channel.)
-5. **Niche dibuat hanya di:** admin panel, atau tenant **Business** (niche-studio = clone UI admin, **PRIVATE eksklusif** `access_type=private, exclusive_to=tenant_id`). Entry/Pro: pakai niche ada / request via `niche_requests`.
+3. **Voice = Opsi 2 (owner 2026-06-20):** voice milik tiap **TTS model**; admin sediakan voice per TTS model (`voice_catalog`, per `provider_key`). **NICHE memberi voice DEFAULT per TTS model** (DNA/branding); **TENANT memilih TTS model lalu voice saat konfigurasi CHANNEL** (default niche ter-pra-isi, boleh diganti — hak prerogatif tenant). Pilihan final = `channels`. Tanpa voice random; LLM hanya setel DELIVERY per-naskah. **FE WAJIB fasilitas TEST/PREVIEW voice** (dengar sampel sebelum pilih). Detail §10.B + §10.E.
+4. **NICHE = DNA** · **CHANNEL = brand skin + knob operasional/biaya + pilihan AI-model & voice** · **TENANT = akun (plan/billing/BYOK keys/notifikasi)**. (Caption+hashtag = channel; visual STYLE & mood-musik = niche; visual_mode/image_quality/music-on-off/volume/quality-gate + model-per-elemen + voice = channel.)
+5. **Niche dibuat hanya di:** admin panel, atau tenant **Business** (niche-studio = clone UI admin, **PRIVATE eksklusif** `access_type=private, exclusive_to=tenant_id`). Entry/Pro: pakai niche ada / request via `niche_requests`. **Gating "siapa boleh buat niche" = config-driven** (`app_config`, default `business` + admin; extensible ke Pro tanpa ubah kode). Saat pilih niche di channel-config, list = **semua niche platform + niche custom milik tenant** (`entitled_niches`).
 6. **`voice_catalog`/`tts_profiles` field = parameter TTS baku** (portabel lintas provider).
+7. **Multi-AI-model per elemen (owner 2026-06-20).** Tiap elemen produksi punya **AI model yang dipilih TENANT per-CHANNEL** dari katalog **yang diaktifkan admin** — biaya produksi = hak prerogatif tenant. Elemen ber-model: **LLM (skrip), image-gen (visual), TTS (voice), video-gen (preset ai_video)**. Admin/dev = **gerbang dukungan**: model baru `is_active` HANYA setelah parameter API-nya terverifikasi didukung (extensible, mis. Fish Audio). Param bisa beda per model → ditampung `ai_providers.adapter`/`request_param_schema` + `ai_models.default_params` + `tts_profiles.param_schema`. Detail §10.E.
+8. **TIDAK ADA FALLBACK.** Produksi pakai HANYA model/provider/credential terkonfigurasi; gagal runtime = **gagal jujur + tercatat**, tak pindah provider diam-diam.
+9. **Channel default NON-AKTIF + gerbang aktivasi.** Channel `is_active=true` HANYA bila semua syarat (niche, model tiap elemen, voice, credential valid, YouTube OAuth) lengkap & valid. Boleh **save draft** sebelum lengkap. UX **ramah pemula** (checklist sisa). Detail §10.E.
+10. **Credential (BYOK key) = per-TENANT, dipakai-ulang** lintas channel (1 key/provider, ramah pemula), divalidasi (test koneksi). YouTube OAuth = per-channel (sudah).
+11. **Caption = styling subtitle ON-SCREEN** (font, ukuran, posisi, warna, highlight, outline, dll — `caption_style`) **+ hashtag = CHANNEL** (diatur tenant). Bukan judul/deskripsi YouTube.
 
 ---
 
@@ -58,12 +63,14 @@
 | publish_privacy, ai_disclosure, publish_slots, buffer_depth, content_language, production_cron | channels | channel ✅ | channel | — |
 | **caption_style** | tenant_configs | tenant ❌ | **CHANNEL** | + kolom channels + thread |
 | **niche_hashtags** | tenant_configs | tenant ❌ | **CHANNEL** | + kolom channels + thread |
-| **tts_voice / tts_voice_per_niche / tts_voice_settings** | tenant_configs + map HARDCODE | tenant ❌ | **NICHE (voice_key)** | voice_catalog + niches.voice_key |
+| **voice (pilihan final)** | tenant_configs + map HARDCODE | tenant ❌ | **CHANNEL** (`channels.voice_key`; default dari niche per TTS model) | channels.voice_key + niche default per model |
+| **AI model per elemen** (llm/image/tts/video) | llm=tenant_configs · image/tts=hardcode | tenant/hardcode ❌ | **CHANNEL** (pilih dari katalog `ai_models` aktif) | + kolom channels (model per elemen) + adapter config-driven |
 | **visual_mode, image_quality** | tenant_configs | tenant ❌ | **CHANNEL** | + kolom channels + thread |
 | **music_enabled, music_volume, music_default_mood** | tenant_configs | tenant ❌ | **CHANNEL** | + kolom channels + thread |
 | **script_min_viral_score, script_max_retry** | tenant_configs | tenant ❌ | **CHANNEL** | + kolom channels + thread |
 | visual_style, image_quality_tags, image_negative_prompt, mood_priority, section_timing, emotion_scoring_criteria, voice_profile, **motion_profiles(baru)** | niches | niche ✅ (motion belum) | niche | + motion_profiles |
-| llm_provider/model/library, *_api_key_enc (BYOK), plan_type, subscription_status, telegram_*, timezone, videos_per_day | tenant_configs | tenant ✅ | tenant | — |
+| *_api_key_enc (BYOK keys), plan_type, subscription_status, telegram_*, timezone, videos_per_day | tenant_configs | tenant ✅ | tenant (key dipakai-ulang lintas channel, divalidasi) | — |
+| llm_provider/model/library | tenant_configs | tenant ❌ | **CHANNEL** (pilih per channel) | pindah ke channels (model-per-elemen) |
 
 **Baris ❌ = inti FASE 1 (pondasi multi-channel belum tuntas).**
 
@@ -79,8 +86,8 @@
 
 ### 5.2 Voice (4 sumber, voice_catalog orphan)
 - Resolusi `elevenlabs.py:84-88`: `tts_voice_per_niche` → `tts_voice` → **map HARDCODE** (`elevenlabs.py:19-24`). Settings hardcode `:115-120`. Edge `edge_tts.py:22-47` & OpenAI `openai_tts.py:24-29` juga map hardcode.
-- `voice_catalog` (voice_key, provider_key, display_name, locale, gender, niche_default, preview_url, is_active, sort_order) — **KOSONG & tak dibaca kode** (orphan). Admin CRUD ada (`admin/(panel)/catalog/page.tsx:27,123-145`).
-- `niches` **belum punya `voice_key`**. Identitas ryan: `tenant_configs.tts_voice_per_niche.dark_history=VR6AewLTigWG4xSOukaG`.
+- `voice_catalog` ~~KOSONG & orphan~~ → **✅ F1-01/02: diperkaya field baku + diisi 4 voice EL platform** (masih belum dibaca BE s/d F1-03). Admin CRUD (`catalog/page.tsx`).
+- `niches` ~~belum punya voice_key~~ → **✅ F1-02: ADA `voice_key`** (default EL per niche; diperluas jadi `voice_defaults` per provider di F1-07, §10.B). Identitas ryan: `tenant_configs.tts_voice_per_niche.dark_history=VR6AewLTigWG4xSOukaG` (delivery override tetap).
 
 ### 5.3 Multi-channel (hasil audit) — ✅ yang sudah, ❌ yang belum
 - ✅ per-channel: config-load channel-fields (`config.py:47`), producer iterasi semua channel (`producer.py:337-390,111-212`), publisher per-channel+timezone (`publisher.py:61-117`), analytics/self-learning per-channel (`self_learning.py:24-67`), FE list/create/edit channel (`channels/`), DB channel_id konsisten.
@@ -126,8 +133,8 @@
 > **Catatan Cacat B:** relief cepat env-only (lebarkan `TTS_ATEMPO_MIN`, longgarkan `QC_DURATION_TOLERANCE`) BOLEH diterapkan kapan saja sebagai penambal sementara — tapi solusi tuntas (durasi-via-speed) ada di F4 (butuh voice/niche bersih dulu agar tak dikerjakan 2×).
 
 ---
-### FASE 1 — TUNTASKAN PONDASI MULTI-CHANNEL + Voice single-source `[PRIORITAS UTAMA]`
-*Sasaran fase: setelah ini, 1 tenant = banyak channel BENAR-BENAR independen (voice/caption/hashtag/visual/music/quality per-channel/niche), bukan berbagi per-tenant.*
+### FASE 1 — TUNTASKAN PONDASI MULTI-CHANNEL + Multi-AI-model + Voice (Opsi 2) `[PRIORITAS UTAMA]`
+*Sasaran fase: setelah ini, 1 tenant = banyak channel BENAR-BENAR independen — voice/caption/hashtag/visual/music/quality + **AI-model per elemen (LLM/image/TTS/video)** per-channel; pipeline **config-driven multi-model (no-hardcode, no-fallback)**; voice = default niche + pilihan tenant per-channel. Acuan arsitektur = §10.E.*
 
 #### [F1-01] voice_catalog jadi single-source + field baku TTS
 - TUJUAN: satu sumber identitas voice; matikan 4-sumber ambigu.
@@ -145,29 +152,45 @@
 - DEPENDS: F1-01.
 - DONE-BILA: tiap niche aktif punya voice_key valid; ryan dark_history→VR6.
 - REALISASI: ✅ | commit: `72d5e51` | catatan: migr **0062** applied DB v2. Seed voice_catalog 4 voice EL platform (Adam/Rachel/Arnold/Bella, `default_settings`=BASELINE BE DEFAULTS) + `niches.voice_key` (nullable, FK→voice_catalog on-update-cascade/on-delete-set-null). Binding: dark_history→VR6(Arnold), universe→pNInz(Adam), fun_facts→21m00(Rachel), ocean→EXAVITQu(Bella). Validasi: 4 niche aktif voice_key valid (join non-null) · dark_history→VR6 · FK ada · `tenant_configs` TAK tersentuh (ryan per_niche=VR6 + settings.speed=0.86 utuh) → NOL dampak ryan (BE belum baca s/d F1-03).
+- 🔄 **PENYESUAIAN ARSITEKTUR (Opsi 2, owner 2026-06-20):** `niche.voice_key` (1 voice) = **default ElevenLabs** saja. Akan **diperluas jadi `niches.voice_defaults jsonb` per provider** (EL/edge/openai dari map lama → DATA terkurasi) di **F1-07**, karena voice mengikuti TTS model pilihan tenant (§10.B/§10.E). Voice FINAL = `channels.voice_key` (F1-04). Seed F1-02 tidak terbuang (jadi entri EL di voice_defaults).
 
-#### [F1-03] BE baca voice dari niche.voice_key→voice_catalog; buang map hardcode
-- ⚠️ **GERBANG KERAS: KONFIRMASI OWNER DULU** sebelum sentuh BE (instruksi owner 2026-06-20). F1-03 = perubahan perilaku produksi (resolusi voice + fallback) → propose + tunggu approve.
-- 🔴 **TEMUAN KUNCI (verified, wajib ditangani di F1-03):** SEMUA tenant punya `tts_voice_per_niche` terisi **identik** = duplikat map hardcode (pseudo-default, BUKAN override sejati). ryan `a410251c` `tts_voice_settings`-nya BEDA (speed dark_history **0.86** vs baseline 0.83, fun_facts 0.93/0.90, ocean 0.88/0.86, universe 0.90/0.87) = override ASLI ryan, **wajib dipertahankan**. → Kalau `tts_voice_per_niche` dibiarkan prioritas teratas (`elevenlabs.py:84-92`), `niche.voice_key` TAK akan pernah terpakai. Precedence harus dirancang ulang (opsi: kosongkan pseudo-default non-BYOK, atau niche.voice_key primer & override hanya saat tenant eksplisit set) — **diputuskan bersama owner.**
-- TUJUAN: produksi pakai single-source; hapus hardcode (§5.5).
-- PLAN: `tts_engine`/`elevenlabs`/`edge`/`openai` resolve `niche.voice_key→voice_catalog`; hapus `ELEVENLABS_VOICES/NICHE_VOICES/OPENAI_VOICES` + DEFAULTS hardcode; `tts_voice_per_niche` jadi override BYOK opsional. Fallback provider (EL→edge/openai saat EL down): map provider-equivalen — **resolusi fallback wajib konfirmasi owner.**
+#### [F1-07] Multi-AI-model BE-ready: katalog TTS/video + `niches.voice_defaults` + audit adapter `[NEW — owner 2026-06-20]`
+- ⚠️ **KONFIRMASI OWNER sebelum sentuh BE** (perubahan perilaku produksi). Arsitektur = §10.E.
+- TUJUAN: BE+DB siap arsitektur multi-AI-model (param beda per model), pondasi F1-03/05.
+- PLAN: (a) migr: tambah model **TTS & video** ke `ai_models` (`component='tts'/'video'`) untuk provider aktif (EL/openai/edge; video=kosong dulu) + `niches.voice_defaults jsonb` (per provider, isi dari map lama EL/edge/openai). (b) Audit pipeline tiap elemen (LLM/image/TTS) → pastikan pemilihan model/provider **config-driven via adapter** (`ai_providers.adapter`), bukan if-else hardcode. (c) Petakan elemen→param via `default_params`/`param_schema`.
 - DEPENDS: F1-02.
-- DONE-BILA: produksi ryan pakai VR6 via voice_catalog (suara identik); tak ada map niche hardcoded tersisa (grep bersih).
+- DONE-BILA: katalog punya model utk tiap elemen aktif; `niches.voice_defaults` terisi; audit BE terdokumentasi (mana config-driven, mana sisa hardcode→F1-03/F5).
 - REALISASI: ⬜ | commit: — | catatan: —
 
-#### [F1-04] Tambah kolom per-channel di `channels` (caption/hashtag/operasional)
-- TUJUAN: pindahkan field brand-skin & operasional ke channel (§4).
-- PLAN: migr `channels +caption_style jsonb, +niche_hashtags jsonb, +visual_mode, +image_quality, +music_enabled, +music_volume, +music_default_mood, +script_min_viral_score, +script_max_retry`; backfill dari `tenant_configs` → channel(s) tenant.
-- DEPENDS: —
-- DONE-BILA: kolom ada + ter-backfill; ryan channel terisi nilai lama.
+#### [F1-03] BE resolusi model+voice config-driven (NO FALLBACK); buang map hardcode
+- ⚠️ **GERBANG KERAS: KONFIRMASI OWNER DULU** sebelum sentuh BE (instruksi owner 2026-06-20). Perubahan perilaku produksi.
+- 🔴 **TEMUAN (verified):** SEMUA tenant punya `tts_voice_per_niche` terisi **identik** = duplikat map hardcode (pseudo-default). ryan `tts_voice_settings` BEDA (speed dark_history 0.86 dst) = DELIVERY override asli ryan, **wajib dipertahankan** (tetap di tenant_configs, dipakai LLM/TTS sbg setelan delivery). Pseudo-default voice-id dibersihkan agar single-source jalan.
+- TUJUAN: produksi pilih model+voice dari **konfigurasi channel** (no-hardcode, **NO FALLBACK**, §3.8/§10.E).
+- PLAN: resolusi voice = `channels.voice_key` → (kosong) `niches.voice_defaults[channel.tts_provider]`; provider/model TTS = `channel.tts_provider/model`. **Hapus** `ELEVENLABS_VOICES/NICHE_VOICES/OPENAI_VOICES` + map DEFAULTS hardcode **tanpa pengganti fallback**. Provider gagal saat runtime → gagal jujur + log (tak pindah). `tts_voice_settings` = delivery override (tetap). Sama untuk LLM/image: provider/model dari channel via adapter.
+- DEPENDS: F1-04 (channels punya voice_key + model-per-elemen), F1-07.
+- DONE-BILA: produksi ryan pakai voice & model sesuai config channel (suara identik VR6); **tak ada map/fallback hardcoded tersisa** (grep bersih); provider gagal → status gagal jujur (bukan diam-diam edge).
 - REALISASI: ⬜ | commit: — | catatan: —
 
-#### [F1-05] Refactor config-fanout: thread field per-channel ke pipeline
-- TUJUAN: pipeline baca caption/hashtag/visual_mode/image_quality/music/quality dari CHANNEL (bukan tenant); voice dari NICHE.
+#### [F1-04] Tambah kolom per-channel di `channels` (model-per-elemen + voice + caption/hashtag/operasional)
+- TUJUAN: pindahkan pilihan AI-model, voice, brand-skin & operasional ke channel (§4/§10.E).
+- PLAN: migr `channels +llm_model, +image_model, +tts_provider, +tts_model, +video_model` (FK/ref `ai_models`), `+voice_key` (ref `voice_catalog`), `+caption_style jsonb, +niche_hashtags jsonb, +visual_mode, +image_quality, +music_enabled, +music_volume, +music_default_mood, +script_min_viral_score, +script_max_retry`; backfill dari `tenant_configs`/default niche → channel(s) tenant (ryan: voice_key=VR6, model EL/gpt-image/llm lama).
+- DEPENDS: F1-07.
+- DONE-BILA: kolom ada + ter-backfill; ryan channel terisi nilai lama (voice+model identik perilaku).
+- REALISASI: ⬜ | commit: — | catatan: —
+
+#### [F1-05] Refactor config-fanout: thread field per-channel (model+voice+brand+operasional) ke pipeline
+- TUJUAN: pipeline baca **model-per-elemen + voice + caption/hashtag/visual_mode/image_quality/music/quality dari CHANNEL** (bukan tenant); credential (key) dari tenant; DNA dari niche.
 - BUKTI: `pipeline.py:65` muat per-tenant; `config.py:47-68` TenantConfig lean.
-- PLAN: tambah field ke `TenantConfig` + isi di `tenant_config_from_channel` dari channel_row; pipeline/tts_engine/video_renderer/script_engine baca dari objek per-channel (caption/visual/music/quality) & dari niche (voice); `TenantRunConfig` tetap untuk field tenant sejati (LLM/BYOK/plan).
+- PLAN: tambah field ke `TenantConfig` + isi di `tenant_config_from_channel` dari channel_row (model-per-elemen, voice_key, caption/visual/music/quality); pipeline/tts_engine/video_renderer/script_engine/llm baca model+voice dari objek per-channel; `TenantRunConfig` tetap untuk field tenant sejati (BYOK keys/plan).
 - DEPENDS: F1-03, F1-04.
-- DONE-BILA: tenant uji 2-channel beda caption/voice/visual_mode → output beda, tak saling timpa; ryan (1ch) identik perilaku.
+- DONE-BILA: tenant uji 2-channel beda model/voice/caption/visual_mode → output beda, tak saling timpa; ryan (1ch) identik perilaku.
+- REALISASI: ⬜ | commit: — | catatan: —
+
+#### [F1-08] Gerbang aktivasi channel di BE — `channel_readiness()` + guard produksi `[NEW — owner 2026-06-20]`
+- TUJUAN: channel default non-aktif; produksi hanya jalan untuk channel READY (§10.E.7).
+- PLAN: fungsi BE `channel_readiness(channel)` cek (niche, model tiap elemen preset, voice, credential valid per provider, YouTube OAuth) → status + daftar sisa. Producer **skip** channel non-ready (tambah ke guard `can_produce`). `channels.is_active` hanya boleh true bila ready (enforce di RPC/gate). Default channel baru = `is_active=false`.
+- DEPENDS: F1-04, F1-03.
+- DONE-BILA: channel tak lengkap tak diproduksi (terbukti) + tak bisa di-set aktif; channel lengkap jalan; ryan tetap jalan.
 - REALISASI: ⬜ | commit: — | catatan: —
 
 #### [F1-06] Backfill channel_id NULLABLE (5 tabel)
@@ -179,23 +202,25 @@
 - REALISASI: ⬜ | commit: — | catatan: —
 
 ---
-### FASE 2 — CHANNEL CRUD + child (FE/BE tenant) `[buka pondasi ke pengguna]`
-#### [F2-01] Channel CRUD lengkap + entitlement kuota
-- PLAN: FE create/read/update/delete channel; enforce `plan_limits.max_channels`; RLS `tenant_id=auth.uid()`.
-- DEPENDS: F1-05.
-- DONE-BILA: CRUD jalan + kuota + RLS teruji; tak bocor antar-tenant.
+### FASE 2 — CHANNEL SETUP (wizard) + gerbang aktivasi + child (FE/BE tenant) `[buka pondasi ke pengguna]`
+*Sasaran: form setup channel ramah pemula (§10.E.8) — pilih niche + model per-elemen + voice (+test) + credential + caption/hashtag/branded/operasional; save draft; channel non-aktif s/d lengkap & valid.*
+
+#### [F2-01] Channel setup wizard + entitlement kuota + gerbang aktivasi
+- PLAN: FE create/read/update/delete channel sbg **wizard ber-langkah** (§10.E.8), **boleh save draft** tiap langkah; pilih niche dari **platform + custom milik tenant** (`entitled_niches`); enforce `plan_limits.max_channels`; RLS `tenant_id=auth.uid()`; **tombol Aktifkan enabled hanya saat `channel_readiness` lengkap** (F1-08) + tampil **checklist sisa**; channel baru default `is_active=false`.
+- DEPENDS: F1-05, F1-08.
+- DONE-BILA: wizard jalan + draft tersimpan + kuota + RLS teruji (tak bocor antar-tenant); channel tak lengkap tak bisa diaktifkan; checklist akurat.
 - REALISASI: ⬜ | commit: — | catatan: —
 
-#### [F2-02] Pindah tab Captions + Hashtags → `/channels/[id]` (per-channel)
-- PLAN: tab caption-style & hashtags baca/tulis kolom `channels` (F1-04) via RLS UPDATE; buang dari `config/[tab]` tenant.
+#### [F2-02] Tab Caption (styling subtitle) + Hashtags → `/channels/[id]` (per-channel)
+- PLAN: tab **caption_style** (font, **ukuran, posisi, warna**, highlight/outline, kata-per-baris — styling subtitle on-screen, BUKAN deskripsi YouTube) & **hashtags** baca/tulis kolom `channels` (F1-04) via RLS UPDATE; buang dari `config/[tab]` tenant. Preview styling bila memungkinkan.
 - DEPENDS: F1-04, F2-01.
-- DONE-BILA: 2 channel beda caption/hashtag tersimpan terpisah & terpakai produksi.
+- DONE-BILA: 2 channel beda caption_style/hashtag tersimpan terpisah & terpakai produksi (subtitle ter-render sesuai styling).
 - REALISASI: ⬜ | commit: — | catatan: —
 
-#### [F2-03] Tab knob operasional per-channel (visual_mode/image_quality/music/quality-gate)
-- PLAN: pindah Visual(mode/quality)+Music(on/volume/mood)+Quality-gate dari config tenant → `/channels/[id]`.
-- DEPENDS: F1-04, F1-05, F2-01.
-- DONE-BILA: tersimpan per-channel + terpakai produksi.
+#### [F2-03] Pemilih AI-model per-elemen + voice (+TEST) + knob operasional per-channel
+- PLAN: di `/channels/[id]` (atau wizard): **pemilih model per-elemen** (LLM/image/TTS/video) dari katalog `ai_models` **aktif** (tampil cost_hint); **pemilih voice** untuk TTS model terpilih (default niche ter-pra-isi via `voice_defaults`, boleh ganti) + **TOMBOL TEST/PREVIEW voice** (F2-06); knob operasional (visual_mode/image_quality/music on-volume-mood/quality-gate). Tulis ke `channels` via RLS UPDATE.
+- DEPENDS: F1-04, F1-05, F2-01, F2-06.
+- DONE-BILA: model+voice+operasional tersimpan per-channel + terpakai produksi; voice bisa di-preview sebelum simpan; 2 channel beda model/voice → output beda.
 - REALISASI: ⬜ | commit: — | catatan: —
 
 #### [F2-04] Panel "Branded" per-channel (CTA/logo/landing) + storage logo `[dari branded-content doc]`
@@ -206,9 +231,16 @@
 - REALISASI: ⬜ | commit: — | catatan: —
 
 #### [F2-05] Buang tab Voice/Visual-style/Music-DNA dari config tenant
-- PLAN: hapus tab Voice (mock) + bagian visual-style/music yang DNA dari `config/[tab]` tenant (pindah ke niche, FASE 3). Sisakan AI-keys/Notifikasi/plan di tenant.
+- PLAN: hapus tab Voice (mock) + bagian visual-style/music yang DNA dari `config/[tab]` tenant (pindah ke niche, FASE 3). Sisakan **BYOK keys (per-tenant, dipakai-ulang)**/Notifikasi/plan di tenant. *(Pilihan voice & model pindah ke channel, F2-03; key TETAP tenant.)*
 - DEPENDS: F3 (niche editor siap menampung DNA).
-- DONE-BILA: config tenant hanya berisi item milik tenant; tak ada config DNA di tenant.
+- DONE-BILA: config tenant hanya berisi item milik tenant (keys/notif/plan); tak ada config DNA/voice/model-pick di tenant.
+- REALISASI: ⬜ | commit: — | catatan: —
+
+#### [F2-06] Endpoint TEST/PREVIEW voice (FE tenant) `[NEW — owner 2026-06-20]`
+- TUJUAN: tenant bisa **mendengar sampel voice** sebelum memilih (§3.3/§10.E.4).
+- PLAN: endpoint `/api/voice/preview` — kalau `voice_catalog.preview_url` ada → sajikan; kalau tidak → sintesis kalimat pendek via provider voice itu (pakai key tenant bila BYOK; key platform bila platform voice) → audio sementara. FE: tombol ▶ di pemilih voice (F2-03) + di niche editor (F3-02). Sadar-biaya (sampel pendek, cache).
+- DEPENDS: F1-01 (voice_catalog), F2-01.
+- DONE-BILA: tenant klik ▶ → dengar voice terpilih; jalan untuk EL/openai/edge; aman tanpa key (degradasi jelas).
 - REALISASI: ⬜ | commit: — | catatan: —
 
 ---
@@ -219,16 +251,16 @@
 - DONE-BILA: admin buat niche baru dari UI; tercatat audit.
 - REALISASI: ⬜ | commit: — | catatan: —
 
-#### [F3-02] Lengkapi editor niche (field hilang + voice_key selector)
-- PLAN: drawer tampil `image_quality_tags, image_negative_prompt, visual_fallbacks, section_timing` (API allow) + **selector `voice_key`** dari voice_catalog; ganti JSON-textarea rapuh→form terstruktur; tambah `voice_key` ke allowlist PATCH (`[id]/route.ts:7-8`).
-- DEPENDS: F1-01/02.
-- DONE-BILA: semua field DNA bisa di-edit aman; voice_key tersimpan & terbaca pipeline.
+#### [F3-02] Lengkapi editor niche (field hilang + voice DEFAULT per TTS model)
+- PLAN: drawer tampil `image_quality_tags, image_negative_prompt, visual_fallbacks, section_timing` (API allow) + **selector voice DEFAULT per TTS model** (`niches.voice_defaults` — 1 default tiap provider aktif, dari `voice_catalog` provider itu) + **TEST/PREVIEW** (F2-06); ganti JSON-textarea rapuh→form terstruktur; tambah `voice_defaults` ke allowlist PATCH (`[id]/route.ts:7-8`).
+- DEPENDS: F1-01/02/07.
+- DONE-BILA: semua field DNA bisa di-edit aman; voice default per model tersimpan & jadi pra-isi di channel-config (F2-03); preview jalan.
 - REALISASI: ⬜ | commit: — | catatan: —
 
-#### [F3-03] Business niche-studio (clone admin, scoped private)
-- PLAN: halaman kelola-niche untuk tier Business (clone UI admin niches), niche dibuat `access_type=private, exclusive_to=tenant_id`; gating `plan_type='business'`; Entry/Pro tetap request.
+#### [F3-03] Business niche-studio (clone admin, scoped private) + gating config-driven
+- PLAN: halaman kelola-niche untuk tier yang diizinkan (clone UI admin niches), niche dibuat `access_type=private, exclusive_to=tenant_id`; **gating config-driven** (`app_config` daftar tier yang boleh buat niche, default `['business']` + admin — **extensible ke `pro` tanpa ubah kode**, sesuai arahan owner); Entry/Pro (di luar daftar) tetap request.
 - DEPENDS: F3-01/02.
-- DONE-BILA: Business buat+edit niche private (tak terlihat tenant lain); Entry/Pro tak punya akses create.
+- DONE-BILA: tier dalam daftar (default Business) buat+edit niche private (tak terlihat tenant lain); tier di luar daftar tak punya akses create; menambah Pro = ubah `app_config` saja.
 - REALISASI: ⬜ | commit: — | catatan: —
 
 ---
@@ -296,6 +328,8 @@
 - **2026-06-20 (b)**: PROGRESS.md direkonsiliasi (banner: pending teknis → remediasi; PROGRESS = arsip+gate ops/eksternal). `BRANDED_CONTENT_ARCHITECTURE.md` di-merge ke §5.6/F2-04 lalu **DIHAPUS** (link di PROGRESS dialihkan; nol link putus).
 - **2026-06-20 (c)**: Ditambah **§10 LAMPIRAN desain-disepakati** (prompt durasi-via-speed + skema voice + konduktor + data wps) supaya sesi baru TAK re-derive/asumsi. Belum ada kode produksi disentuh. **Berikutnya: F1-01.**
 - **2026-06-20 (d)**: ✅ **F1-01 SELESAI** (commit `6d3b662`, migr **0061** applied DB v2). voice_catalog diperkaya field baku §10.B + tts_profiles.param_schema; admin catalog route+form extended (whitelist + parse jsonb). Validasi: build PASS + CRUD data-layer e2e LULUS + voice_catalog 0 row (nol dampak ryan). **Migr nyata terakhir = 0061** (doc lama "0059" tertinggal; F1-01 ambil 0061 karena 0060=channel_credentials sudah ada). **Berikutnya: F1-02** (niches.voice_key + seed VR6 ryan).
+- **2026-06-20 (e)**: ✅ **F1-02 SELESAI** (commit `72d5e51`, migr **0062**). niches.voice_key + seed 4 voice EL platform. NOL dampak ryan.
+- **2026-06-20 (f)**: 🏗️ **ARSITEKTUR FINAL DIBUNGKUS** (diskusi owner — keputusan dikunci): **(1)** multi-AI-model per-elemen (LLM/image/TTS/video) — **tenant pilih per-channel** dari katalog **aktif admin**; admin/dev = gerbang dukungan param (extensible mis. Fish Audio). **(2)** Voice **Opsi 2**: niche kasih default per TTS model, tenant pilih final per-channel, **FE wajib test/preview voice**. **(3)** **TIDAK ADA FALLBACK** — produksi hanya pakai config, gagal=jujur. **(4)** Channel default **non-aktif** + **gerbang aktivasi** (lengkap+valid baru aktif), form wizard ramah pemula, save draft. **(5)** caption-styling(subtitle)+hashtag+model+voice = channel; credential per-tenant dipakai-ulang+divalidasi; YouTube OAuth per-channel. **(6)** niche-create gating config-driven (extensible ke Pro); niche picker = platform + custom milik tenant. **Tertuang di:** §3 (kpts 3-11), §4 (fanout), §10.B (voice Opsi 2), **§10.E (arsitektur kanonik)**, FASE 1 (+F1-07 BE-ready, +F1-08 gerbang aktivasi; F1-03 rewrite no-fallback; F1-04 perluas model+voice), FASE 2 (wizard+gate+model/voice picker+F2-06 preview), F3-02/03 (voice default per model + gating config-driven). **Belum ada kode dari arsitektur ini disentuh.** **Berikutnya: F1-07** (⚠️ gerbang konfirmasi owner sebelum BE).
 
 ---
 
@@ -329,12 +363,13 @@ Words serve the story; speed makes it land on time.
 **Contoh terisi (dark_history @30s, nilai NYATA DB):** beats=[hook,core_facts,cta] proporsi ~14/72/14%; P≈1.97; base speed 0.83 (mood somber niche, dari `tts_voice_settings`); T_spoken≈26.5s; band ~24–29s; ≈43 kata. Semua var dari config niche (no-hardcode).
 **Jaring (F4-03):** lebarkan `TTS_ATEMPO_MIN/MAX` (env) + gate QC durasi → **Shorts-valid** (cap ≤ batas Shorts; hard-fail hanya ekstrem); STOP paksa durasi-tepat; buang hardcode WPS-2.4 & speed-bounds-[0.5,1.5].
 
-### 10.B — Skema Voice baku (untuk F1-01/02/03, F3-02)
-**Prinsip (disepakati):** IDENTITAS voice (voice_key/gender/timbre) = **stabil per niche** (branding; TTS butuh voice_key nyata, LLM TAK bisa mengarang voice). DELIVERY (speed/style/stability) = **LLM setel per-naskah**. Rotasi voice **default OFF**. "LLM memilih voice" hanya sekali saat setup niche (rekomendasi), bukan per-video.
-**`voice_catalog` (field = label baku ElevenLabs, portabel):** `voice_key`(PK) · `provider_key` · `display_name` · `gender` · `age` · `accent` · `language`/`locale` · `use_case` · `description` · `default_settings jsonb`{stability,similarity_boost,style,speed} · `preview_url` · `tenant_id`(NULL=platform/terisi=BYOK) · `is_active` · `sort_order`.
-**`tts_profiles.param_schema jsonb` (rentang valid/provider):** elevenlabs `{speed:[0.7,1.2],stability:[0,1],style:[0,1],similarity_boost:[0,1]}` · openai_tts `{speed:[0.25,4.0]}` · edge_tts `{rate,pitch,volume}`.
-**`niches.voice_key`** (FK→voice_catalog) = binding 1-voice-per-niche.
-**tts_params yang LLM serahkan ke TTS (TTS tinggal eksekusi):** `{voice_key (default=niche.voice_key), speed, style, stability, similarity_boost}`.
+### 10.B — Skema Voice (Opsi 2 — owner 2026-06-20) (untuk F1-02/03, F2-03, F3-02)
+**Prinsip:** voice = milik tiap **TTS model**; admin menyediakan voice per TTS model (`voice_catalog` per `provider_key`). **NICHE memberi voice DEFAULT per TTS model** (DNA/branding). **TENANT memilih TTS model lalu voice saat konfigurasi CHANNEL** — default niche ter-pra-isi, boleh diganti (hak prerogatif tenant). **Pilihan final = `channels.voice_key`** (otoritatif saat produksi). DELIVERY (speed/style/stability) = LLM setel per-naskah. Rotasi voice **OFF**. **FE WAJIB TEST/PREVIEW voice** (putar sampel `preview_url`/sintesis pendek sebelum pilih). TTS butuh voice_key nyata (LLM tak mengarang voice).
+**`voice_catalog` (field baku, portabel — SUDAH F1-01):** `voice_key`(PK) · `provider_key` · `display_name` · `gender` · `age` · `accent` · `language`/`locale` · `use_case` · `description` · `default_settings jsonb`{stability,similarity_boost,style,speed} · `preview_url` · `tenant_id`(NULL=platform/terisi=BYOK) · `is_active` · `sort_order`.
+**`tts_profiles.param_schema jsonb` (rentang valid/provider — SUDAH F1-01):** elevenlabs `{speed:[0.7,1.2],stability:[0,1],style:[0,1],similarity_boost:[0,1]}` · openai_tts `{speed:[0.25,4.0]}` · edge_tts `{rate,pitch,volume}`.
+**Default voice per niche × TTS model:** `niches.voice_defaults jsonb` = `{provider_key: voice_key, ...}` (mis. dark_history `{elevenlabs:VR6…, edge_tts:en-US-GuyNeural, openai_tts:fable}`). *(F1-02 sudah seed `niches.voice_key`=default ElevenLabs; diperluas jadi `voice_defaults` per provider — isi diambil dari map lama edge/openai, jadi DATA terkurasi, bukan hardcode/fallback.)* Bila niche belum punya default utk suatu model → tenant pilih manual (degradasi anggun, BUKAN fallback runtime).
+**Resolusi voice saat produksi (NO FALLBACK):** `channels.voice_key` (pilihan tenant) → bila kosong, `niches.voice_defaults[channel.tts_provider]`. Tidak ada yang valid → channel tak lolos gerbang aktivasi (tak produksi). Provider TTS = `channel.tts_provider/model` (pilihan tenant).
+**tts_params yang LLM serahkan ke TTS:** `{voice_key (= channels.voice_key), speed, style, stability, similarity_boost}` — di-clamp ke `param_schema` provider.
 
 ### 10.C — LLM-as-conductor (untuk F4-04)
 Orchestrator meramu **1 prompt dinamis** (per preset×niche×voice×pace), semua var dari **config niche** (no-hardcode). LLM balas **1 JSON** = partitur **3 konsumen**: (1) **`beats`**→narasi→TTS · (2) **`tts_params`**(voice+delivery §10.B)→TTS eksekusi · (3) **`visual_suggestions`**(prompt per-scene buatan LLM, `ai_image.py:213`)→image-gen, dibungkus DNA visual niche (`_build_image_prompt:308`). Niche menyuntik "jiwa": `voice_profile`+`emotion_scoring_criteria`(quality-bar 80+)+`mood_priority`+`keywords`+`style`.
@@ -349,3 +384,30 @@ Orchestrator meramu **1 prompt dinamis** (per preset×niche×voice×pace), semua
 | V2 log | 72 | 38.0s | 0.86 | 1.90 | 2.20 |
 
 Budget DIPAKAI mesin: 1.548–1.674 (terlalu rendah). **Kesimpulan:** tak ada satu konstanta wps benar (variansi intrinsik per konten) → (1) seed **P≈1.97** = INFO acuan ke LLM (bukan rumus paksa), (2) **speed = tuas penyerap** variansi, (3) self-calibrate per `voice_key×speed` dari `tts_delivery_samples` (F5-01). Observability bocor (durasi hanya ter-log saat atempo) → F4-01 menutupnya.
+
+### 10.E — ARSITEKTUR MULTI-AI-MODEL + CHANNEL SETUP & GERBANG AKTIVASI (owner 2026-06-20) (untuk F1-03/04/05/07, F2-01/03)
+**Acuan kanonik** untuk arahan: model AI per-elemen dipilih tenant, voice Opsi-2, tidak ada fallback, channel default non-aktif. Ikuti apa adanya.
+
+**1) Elemen produksi & taksonomi model.** Ber-AI-model (butuh model + credential, param bisa beda): **LLM** (skrip, `component=llm`), **image-gen** (visual bila `render_mode=image_sequence`, `component=image`), **TTS** (voice, `component=tts`), **video-gen** (bila `render_mode=ai_video`, `component=video`). **Bukan** ber-model (tanpa credential): music (library), caption (turunan word-timestamp), render (ffmpeg), publish (YouTube OAuth). *(Verified DB: `ai_models.component` nyata baru `{llm,image}` → TTS & video BELUM masuk katalog sbg model terpilih → ditambah di F1-07.)*
+
+**2) Gerbang dukungan model (admin/dev).** Model baru `is_active=true` **hanya** setelah developer verifikasi parameter API-nya didukung. Struktur penampung param (SUDAH ADA): `ai_providers.adapter` (protokol) + `request_param_schema`; `ai_models.default_params` + `cost_hint`; `tts_profiles.param_schema`. **Extensible (mis. Fish Audio):** (a) dev cek/implement adapter+param, (b) admin daftarkan provider+model (`is_active`), (c) admin isi voice library provider itu ke `voice_catalog`, (d) tenant bisa memilih.
+
+**3) Pilihan tenant per-CHANNEL (biaya = hak prerogatif tenant).** Tiap channel pilih model untuk tiap elemen yang dipakai preset-nya, dari katalog **aktif** (admin). `cost_hint` ditampilkan. Disimpan di `channels` (kolom model per-elemen). Provider TTS channel menentukan voice yang tersedia.
+
+**4) Voice (Opsi 2 — ringkas, detail §10.B).** Pilih TTS model → pilih voice (default niche ter-pra-isi via `niches.voice_defaults[provider]`, boleh ganti). **FE wajib TEST/PREVIEW voice.** Final = `channels.voice_key`. NO fallback runtime.
+
+**5) Credential.** Per-TENANT, dipakai-ulang lintas channel (1 key/provider, terenkripsi di vault). Divalidasi (test koneksi) saat diisi. YouTube OAuth = per-channel (sudah).
+
+**6) TIDAK ADA FALLBACK.** Produksi pakai HANYA model/provider/credential/voice terkonfigurasi. Gagal runtime → status gagal + log jujur, tak pindah diam-diam.
+
+**7) Gerbang aktivasi channel (readiness).** `channels` default `is_active=false`. Boleh **save draft** kapan saja. Channel READY (boleh diaktifkan) bila SEMUA:
+- niche dipilih (list = platform + custom milik tenant);
+- model dipilih untuk tiap elemen preset (LLM selalu; image bila image_sequence; video bila ai_video; TTS selalu);
+- voice dipilih untuk TTS model terpilih;
+- credential ADA & VALID untuk tiap provider yang dipakai model di channel itu;
+- YouTube OAuth terkoneksi.
+FE tampilkan **checklist sisa** (ramah pemula); tombol "Aktifkan" enabled hanya saat lengkap. BE sediakan fungsi `channel_readiness(channel)` (dipakai FE gate + guard produksi: producer skip channel non-ready).
+
+**8) Form add/setup channel (UX pemula).** Langkah jelas & boleh simpan sebagian: (1) info channel · (2) pilih niche · (3) pilih model per-elemen (+ cost_hint) · (4) pilih voice (+ test/preview) · (5) isi credential (validasi inline) · (6) caption_style + hashtag + branded + operasional (visual_mode/image_quality/music/quality-gate) · (7) publish settings (privacy/slot/bahasa/AI-disclosure) + connect YouTube.
+
+**9) Fanout penyimpanan.** `channels`: model-per-elemen, `voice_key`, `caption_style`, `niche_hashtags`, branded, operasional, publish settings. `tenant_configs`/vault: BYOK keys (per-tenant), plan/billing. `niches`: DNA + `voice_defaults` per provider. `channel_credentials`: YouTube OAuth (per-channel).
