@@ -306,9 +306,18 @@
 - DONE-BILA: grep hardcode kritis bersih; semua config-driven.
 - REALISASI: ⬜ | commit: — | catatan: —
 
-#### [F5-03] /compliance per-channel + cost-tracking live (gap audit)
-- PLAN: `/compliance` tampil per-channel (data di `channel_insights.compliance`); worker catat `run_metadata.cost_usd`; FE kartu Biaya AI aggregate per-channel.
-- DONE-BILA: compliance & biaya tampil per-channel nyata (bukan mock/coming-soon).
+#### [F5-03] Cost-tracking REAL per-konten (BYOK) + /compliance per-channel
+- 🔬 **STUDI DB/BE/FE (2026-06-20, verified):** **tak ada cost-tracking.** SATU-SATUNYA sumber harga = `ai_models.cost_hint` (LLM `{per_mtok,input,output}` · image `{per_image,approx_usd}`, admin-editable=bisa up-to-date). **GAP:** (a) adapter LLM `complete()` TAK kembalikan token usage; (b) `tts_profiles` TANPA cost_hint (TTS per-karakter); (c) `production_runs` TANPA kolom cost (cuma `run_metadata` jsonb). FE = "Biaya AI Coming soon" (dashboard+billing).
+- TUJUAN (owner): biaya produksi **VALID per-konten** (REAL, bukan estimasi melenceng), ber-label jelas **"biaya provider AI / BYOK — bukan biaya kami"**.
+- PLAN: (1) **BE adapter** kembalikan `usage{input_tokens,output_tokens}` dari respons API (anthropic+openai); pipeline kumpulkan per run. (2) tangkap **jumlah gambar** (=visual_beats) & **jumlah karakter TTS** per run. (3) **DB**: `tts_profiles +cost_hint` (per-char EL/openai; edge=0); simpan **biaya aktual** per run di `production_runs.run_metadata.cost` (breakdown llm/image/tts). (4) **hitung** `Σ tokens×harga + gambar×harga + char×harga`. (5) **FE**: kartu "Biaya AI" (dashboard) + kolom biaya di Runs = **REAL pasca-produksi** (ganti coming-soon), label provider/BYOK. **Picker model (FASE 2): JANGAN estimasi menyesatkan** — nama+tier saja (+harga-unit provider hanya bila valid). (6) `/compliance` per-channel dari `channel_insights.compliance`.
+- DONE-BILA: tiap run baru tulis biaya REAL breakdown; FE tampil biaya valid per-konten (label provider/BYOK); compliance per-channel nyata.
+- REALISASI: ⬜ | commit: — | catatan: —
+
+#### [F5-05] Penyesuaian Analytics FE — fokus KINERJA MESIN, link YT Studio `[NEW — owner 2026-06-20]`
+- 🔬 **STUDI (verified):** arsitektur BE benar (mesin olah data YT): `video_analytics`(YT mentah, overlap Studio) → `performance_analyzer`→`channel_insights`(pola mesin, TAK di Studio). FE `/analytics` kini **mayoritas re-display YT-mentah** (RPC overview/by_niche/monthly/top_videos/video_views/youtube_totals) = **redundan dgn YT Studio**; `channels/[id]` **sudah** link YT Studio + placeholder (sejalan). RPC mesin = insights_summary/learning.
+- TUJUAN (owner): jangan duplikat YT Studio; **analitik kita = kinerja MESIN** (success-rate/QC/durasi, self-learning niche/hook, **cost-per-konten**) yang mengolah data YT.
+- PLAN: channel manage-page (FASE 2) → tombol "Buka YouTube Studio" + status MESIN (produksi/readiness/last-runs), **buang chart YT-redundant**. `/analytics` → **pivot ke kinerja-mesin** (success-rate, QC/durasi trend, self-learning, niche-perf lensa-mesin, biaya per-konten) + retensi/engagement sebagai *efektivitas mesin* (bukan dashboard YT); raw views/likes → link Studio.
+- DONE-BILA: nol re-display YT-mentah yg redundan; analytics FE = kinerja mesin + link Studio; ryan tetap tampil benar.
 - REALISASI: ⬜ | commit: — | catatan: —
 
 #### [F5-04] Go-live checklist: regression + regenerate DB_SCHEMA_V2.md + bersih dok
