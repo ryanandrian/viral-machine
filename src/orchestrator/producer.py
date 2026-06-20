@@ -340,6 +340,7 @@ def plan_and_submit(sb, pool: ThreadPoolExecutor, sem: threading.Semaphore, dept
     stok = rem alami; (3) circuit-breaker §4b/F7: N gagal beruntun → STOP channel + alarm (anti-runaway)."""
     channels = _active_channels(sb)
     from src.billing.limits import gate_for_channel
+    from src.orchestrator.readiness import channel_readiness
     fail_stop = int(os.getenv("PRODUCER_FAIL_STREAK_STOP", "3"))
     deficits = []
     for ch in channels:
@@ -350,6 +351,13 @@ def plan_and_submit(sb, pool: ThreadPoolExecutor, sem: threading.Semaphore, dept
         # Phase 8a — gate monetisasi: jangan produksi (buang compute) utk tenant suspended/cancelled.
         if not gate_for_channel(sb, ch)["can_produce"]:
             logger.info(f"[Producer] skip ch={cid} tenant={ch.get('tenant_id')} — subscription tidak aktif")
+            continue
+        # F1-08 GERBANG AKTIVASI: channel belum lengkap (niche/model/voice/credential/OAuth) → skip
+        # (no-fallback: jangan produksi pakai default diam-diam). FAIL-OPEN bila cek error transient
+        # (lindungi channel sehat — mis. ryan — dari berhenti karena gangguan sesaat).
+        _rd = channel_readiness(sb, ch)
+        if not _rd["ready"] and not _rd["check_failed"]:
+            logger.info(f"[Producer] skip ch={cid} — channel belum READY (kurang: {', '.join(_rd['missing'])})")
             continue
         # REM DARURAT (§4b/F7): N produksi beruntun gagal/bermasalah (failed + ready_with_issues) →
         # STOP channel + alarm SEKETIKA. Cegah loop bakar-kredit saat akar sistemik (mis. ElevenLabs habis).
