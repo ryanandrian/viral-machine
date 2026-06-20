@@ -27,6 +27,9 @@ type ChannelRow = {
   image_quality: string | null; music_enabled: boolean | null; music_volume: number | null;
   music_default_mood: string | null; script_min_viral_score: number | null; script_max_retry: number | null;
   caption_style: Record<string, unknown> | null; niche_hashtags: Record<string, string[]> | null;
+  cta_mode: string | null; brand_name: string | null; brand_cta_text: string | null; brand_logo: string | null;
+  logo_position: string | null; logo_size: number | null; logo_opacity: number | null;
+  landing_link: string | null; link_position: string | null;
 };
 // Default caption_style — match BE DEFAULT_CAPTION_STYLE (video_renderer). Partial-override OK.
 const CAP_DEFAULT = { font_name: "Anton", font_size: 68, bold: true, active_word_color: "#FFD700", inactive_word_color: "#FFFFFF", outline_color: "#000000", outline: 4, position_y_pct: 83, max_words_per_line: 3 };
@@ -115,6 +118,30 @@ export default function ChannelDetailPage() {
   const [tags, setTags] = useState<Record<string, string>>({}); // niche → "#a, #b" (editing)
   const [savingBrand, setSavingBrand] = useState(false);
   const [brandMsg, setBrandMsg] = useState<string | null>(null);
+  // F2-04: branded (CTA/logo/landing) per-channel → channels (DB+BE sudah ada, migr 0015)
+  const [ctaMode, setCtaMode] = useState("implicit");
+  const [brandName, setBrandName] = useState("");
+  const [ctaText, setCtaText] = useState("");
+  const [brandLogo, setBrandLogo] = useState("");
+  const [logoPos, setLogoPos] = useState("top-right");
+  const [logoSize, setLogoSize] = useState(0.12);
+  const [logoOpacity, setLogoOpacity] = useState(0.85);
+  const [landingLink, setLandingLink] = useState("");
+  const [linkPos, setLinkPos] = useState("bottom");
+  const [savingBr2, setSavingBr2] = useState(false);
+  const [br2Msg, setBr2Msg] = useState<string | null>(null);
+
+  async function saveBranded() {
+    setBr2Msg(null); setSavingBr2(true);
+    const { error } = await supabase.from("channels").update({
+      cta_mode: ctaMode, brand_name: brandName.trim() || null, brand_cta_text: ctaText.trim() || null,
+      brand_logo: brandLogo.trim() || null, logo_position: logoPos, logo_size: logoSize, logo_opacity: logoOpacity,
+      landing_link: landingLink.trim() || null, link_position: linkPos,
+    }).eq("id", id);
+    setSavingBr2(false);
+    setBr2Msg(error ? `Gagal: ${error.message}` : "Tersimpan");
+    if (!error) load();
+  }
   const capNum = (k: string, d: number) => Number((cap[k] as number) ?? d);
   const capStr = (k: string, d: string) => String((cap[k] as string) ?? d);
 
@@ -241,7 +268,7 @@ export default function ChannelDetailPage() {
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     const { data } = await supabase.from("channels")
-      .select("id,channel_name,platform_channel_id,niche,niche_pool,niche_mode,content_language,is_active,publish_privacy,duration_preset,production_paused,production_paused_reason,llm_model,llm_library,visual_mode,tts_provider,voice_key,image_quality,music_enabled,music_volume,music_default_mood,script_min_viral_score,script_max_retry,caption_style,niche_hashtags")
+      .select("id,channel_name,platform_channel_id,niche,niche_pool,niche_mode,content_language,is_active,publish_privacy,duration_preset,production_paused,production_paused_reason,llm_model,llm_library,visual_mode,tts_provider,voice_key,image_quality,music_enabled,music_volume,music_default_mood,script_min_viral_score,script_max_retry,caption_style,niche_hashtags,cta_mode,brand_name,brand_cta_text,brand_logo,logo_position,logo_size,logo_opacity,landing_link,link_position")
       .eq("id", id).maybeSingle();
     const c = data as ChannelRow | null;
     setCh(c);
@@ -260,6 +287,10 @@ export default function ChannelDetailPage() {
       setCap({ ...CAP_DEFAULT, ...(c.caption_style && typeof c.caption_style === "object" ? c.caption_style : {}) });
       const nh = (c.niche_hashtags && typeof c.niche_hashtags === "object") ? c.niche_hashtags : {};
       setTags(Object.fromEntries(Object.entries(nh).map(([k, v]) => [k, Array.isArray(v) ? v.join(", ") : ""])));
+      setCtaMode(c.cta_mode ?? "implicit"); setBrandName(c.brand_name ?? ""); setCtaText(c.brand_cta_text ?? "");
+      setBrandLogo(c.brand_logo ?? ""); setLogoPos(c.logo_position ?? "top-right");
+      setLogoSize(c.logo_size ?? 0.12); setLogoOpacity(c.logo_opacity ?? 0.85);
+      setLandingLink(c.landing_link ?? ""); setLinkPos(c.link_position ?? "bottom");
     }
     // F2-03: katalog (ai_models/tts_profiles/voice_catalog — RLS read) + voice_defaults niche (pre-fill).
     const { data: am } = await supabase.from("ai_models").select("model_key,provider_key,component,display_name").eq("is_active", true).order("display_name");
@@ -564,6 +595,49 @@ export default function ChannelDetailPage() {
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
               <button className="btn btn-default" onClick={saveBrand} disabled={savingBrand}>{savingBrand ? <Loader2 size={15} className="spin" /> : <Bi id="Simpan caption & hashtag" en="Save caption & hashtags" />}</button>
               {brandMsg && <span style={{ fontSize: "var(--text-sm)", color: brandMsg.includes("Tersimpan") ? "var(--success)" : "var(--danger,#ef4444)" }}>{brandMsg}</span>}
+            </div>
+          </div>
+        </div>
+
+        <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 560 }}>
+          <h3 className="card-title" style={{ marginBottom: "0.35rem" }}><Bi id="Branded (CTA · logo · link)" en="Branded (CTA · logo · link)" /></h3>
+          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}><Bi id="Sentuhan brand opsional di video & deskripsi (semua boleh kosong = tanpa branding)." en="Optional brand touches in video & description (all blank = no branding)." /></p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.875rem" }}>
+            <div><label className="label">CTA</label>
+              <select className="input" value={ctaMode} onChange={(e) => setCtaMode(e.target.value)} style={{ width: "fit-content" }}>
+                <option value="implicit"><Bi id="Implicit (tanpa sebut brand)" en="Implicit (no brand mention)" /></option>
+                <option value="soft_sell"><Bi id="Soft-sell (sebut brand halus)" en="Soft-sell (subtle brand mention)" /></option>
+              </select>
+            </div>
+            {ctaMode === "soft_sell" && (
+              <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+                <div><label className="label"><Bi id="Nama brand" en="Brand name" /></label><input className="input" value={brandName} onChange={(e) => setBrandName(e.target.value)} style={{ width: 200 }} /></div>
+                <div><label className="label"><Bi id="Teks CTA" en="CTA text" /></label><input className="input" value={ctaText} onChange={(e) => setCtaText(e.target.value)} placeholder="Follow for more" style={{ width: 220 }} /></div>
+              </div>
+            )}
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.875rem" }}>
+              <label className="label"><Bi id="Logo (URL gambar) — overlay di video" en="Logo (image URL) — video overlay" /></label>
+              <input className="input input-mono" value={brandLogo} onChange={(e) => setBrandLogo(e.target.value)} placeholder="https://… .png" />
+              <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.3rem" }}><Bi id="Tempel URL logo (PNG transparan disarankan). Upload file langsung — segera hadir." en="Paste logo URL (transparent PNG recommended). Direct file upload — coming soon." /></div>
+              {brandLogo && (
+                <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: "flex-end", marginTop: "0.625rem" }}>
+                  <div><label className="label" style={{ fontSize: "var(--text-xs)" }}><Bi id="Posisi" en="Position" /></label>
+                    <select className="input" value={logoPos} onChange={(e) => setLogoPos(e.target.value)} style={{ width: 140 }}>
+                      {[["top-left", "Kiri atas"], ["top-right", "Kanan atas"], ["bottom-left", "Kiri bawah"], ["bottom-right", "Kanan bawah"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                    </select></div>
+                  <label className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Ukuran" en="Size" /> {Math.round(logoSize * 100)}%<br /><input type="range" min={0.05} max={0.3} step={0.01} value={logoSize} onChange={(e) => setLogoSize(parseFloat(e.target.value))} /></label>
+                  <label className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Opasitas" en="Opacity" /> {Math.round(logoOpacity * 100)}%<br /><input type="range" min={0.2} max={1} step={0.05} value={logoOpacity} onChange={(e) => setLogoOpacity(parseFloat(e.target.value))} /></label>
+                </div>
+              )}
+            </div>
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.875rem", display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: "flex-end" }}>
+              <div style={{ flex: 1, minWidth: 220 }}><label className="label"><Bi id="Link landing (deskripsi)" en="Landing link (description)" /></label><input className="input input-mono" value={landingLink} onChange={(e) => setLandingLink(e.target.value)} placeholder="https://…" /></div>
+              <div><label className="label"><Bi id="Posisi link" en="Link position" /></label>
+                <select className="input" value={linkPos} onChange={(e) => setLinkPos(e.target.value)} style={{ width: 110 }}><option value="top"><Bi id="Atas" en="Top" /></option><option value="bottom"><Bi id="Bawah" en="Bottom" /></option></select></div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+              <button className="btn btn-default" onClick={saveBranded} disabled={savingBr2}>{savingBr2 ? <Loader2 size={15} className="spin" /> : <Bi id="Simpan branded" en="Save branded" />}</button>
+              {br2Msg && <span style={{ fontSize: "var(--text-sm)", color: br2Msg.includes("Tersimpan") ? "var(--success)" : "var(--danger,#ef4444)" }}>{br2Msg}</span>}
             </div>
           </div>
         </div>
