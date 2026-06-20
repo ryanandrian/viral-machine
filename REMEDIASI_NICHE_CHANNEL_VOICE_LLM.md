@@ -14,7 +14,7 @@
 2. Cek **§7 FASE** — cari item pertama ber-status ⬜/🟡 pada FASE prioritas terendah-nomornya. Itu pekerjaan berikutnya.
 3. Tiap item punya: TUJUAN · KENAPA · BUKTI · PLAN · DEPENDS · DONE-BILA · REALISASI. Kerjakan sesuai PLAN, validasi sesuai DONE-BILA, isi REALISASI (status+commit). **Item LLM/voice (F1-01, F4-02/03/04) menunjuk ke §10 LAMPIRAN — desain solusi yang SUDAH DISEPAKATI (prompt persis, skema field, kontrak JSON, contoh). IKUTI §10 apa adanya — jangan rancang ulang / berasumsi.**
 4. Aturan kerja: lokal → validasi 100% → commit → push → pull+rebuild+restart di VPS. JANGAN ngoding di VPS. JANGAN rusak produksi ryan. Validasi tiap fase sebelum lanjut.
-5. **Status global saat tulisan ini:** belum ada kode disentuh. Fakta sudah diaudit penuh (BE hardcode + multi-channel). Item berikutnya = **F1-01**.
+5. **Status global (update 2026-06-20):** ✅ **F1-01** (migr 0061, voice_catalog field baku + tts_profiles.param_schema; deployed) · ✅ **F1-02** (migr 0062, niches.voice_key + seed 4 voice EL; nol dampak ryan). **Item berikutnya = F1-03** — ⚠️ **GERBANG KERAS: butuh konfirmasi owner** (perubahan perilaku BE + precedence `tts_voice_per_niche` + resolusi fallback). Migr nyata terakhir = **0062**.
 
 ---
 
