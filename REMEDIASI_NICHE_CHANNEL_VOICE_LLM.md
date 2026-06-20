@@ -14,7 +14,7 @@
 2. Cek **§7 FASE** — cari item pertama ber-status ⬜/🟡 pada FASE prioritas terendah-nomornya. Itu pekerjaan berikutnya.
 3. Tiap item punya: TUJUAN · KENAPA · BUKTI · PLAN · DEPENDS · DONE-BILA · REALISASI. Kerjakan sesuai PLAN, validasi sesuai DONE-BILA, isi REALISASI (status+commit). **Item LLM/voice/arsitektur (F1-03/04/05/07/08, F2-01/03, F3-02, F4-02/03/04) menunjuk ke §10 LAMPIRAN — desain SUDAH DISEPAKATI: §10.A durasi-via-speed · §10.B voice (Opsi 2) · §10.C konduktor · §10.E multi-AI-model + channel setup + gerbang aktivasi. IKUTI §10 apa adanya — jangan rancang ulang / berasumsi.**
 4. Aturan kerja: lokal → validasi 100% → commit → push → pull+rebuild+restart di VPS. JANGAN ngoding di VPS. JANGAN rusak produksi ryan. Validasi tiap fase sebelum lanjut.
-5. **Status global (update 2026-06-20):** ✅ **F1-01** (migr 0061) · ✅ **F1-02** (migr 0062). **Arsitektur FINAL sudah dibungkus** (owner 2026-06-20): multi-AI-model per-elemen (tenant pilih, admin kurasi) · voice **Opsi 2** (default niche per TTS model + pilihan tenant per-channel + **test/preview**) · **TIDAK ada fallback** · channel default non-aktif + **gerbang aktivasi** · caption-styling+hashtag+model+voice = channel · credential per-tenant dipakai-ulang · niche-create gating config-driven. Acuan = §3 (kpts 3-11) + §4 + **§10.B/§10.E**. **Item berikutnya = F1-07** (BE/DB multi-model-ready) — ⚠️ **GERBANG: konfirmasi owner sebelum sentuh BE**. Urutan FASE 1: F1-07→F1-04→F1-03→F1-05→F1-08→F1-06. Migr nyata terakhir = **0062**.
+5. **Status global (update 2026-06-20):** ✅ **F1-01** (migr 0061) · ✅ **F1-02** (migr 0062). **Arsitektur FINAL sudah dibungkus** (owner 2026-06-20): multi-AI-model per-elemen (tenant pilih, admin kurasi) · voice **Opsi 2** (default niche per TTS model + pilihan tenant per-channel + **test/preview**) · **TIDAK ada fallback** · channel default non-aktif + **gerbang aktivasi** · caption-styling+hashtag+model+voice = channel · credential per-tenant dipakai-ulang · niche-create gating config-driven. Acuan = §3 (kpts 3-11) + §4 + **§10.B/§10.E**. **Item berikutnya = F1-07** (BE/DB multi-model-ready). **Urutan FASE 1 (re-evaluasi pasca studi-mendalam jalur produksi 2026-06-20):** **F1-07 → F1-04 → F1-05 (gabungan F1-03, ⭐ jahitan tunggal, GERBANG OWNER) → F1-08**; **F1-06 = independen** (data-hygiene, kapan saja). Kunci re-evaluasi: F1-03 dilebur ke F1-05 karena semua config per-channel lewat SATU jahitan (`load_tenant_config` di 8 komponen) → hindari sentuh 8 file dua kali. DB-additive (F1-07/04) dulu (nol-risiko spt F1-01/02), baru pembedahan produksi (F1-05). Migr nyata terakhir = **0062**.
 
 ---
 
@@ -162,14 +162,8 @@
 - DONE-BILA: katalog punya model utk tiap elemen aktif; `niches.voice_defaults` terisi; audit BE terdokumentasi (mana config-driven, mana sisa hardcode→F1-03/F5).
 - REALISASI: ⬜ | commit: — | catatan: —
 
-#### [F1-03] BE resolusi model+voice config-driven (NO FALLBACK); buang map hardcode
-- ⚠️ **GERBANG KERAS: KONFIRMASI OWNER DULU** sebelum sentuh BE (instruksi owner 2026-06-20). Perubahan perilaku produksi.
-- 🔴 **TEMUAN (verified):** SEMUA tenant punya `tts_voice_per_niche` terisi **identik** = duplikat map hardcode (pseudo-default). ryan `tts_voice_settings` BEDA (speed dark_history 0.86 dst) = DELIVERY override asli ryan, **wajib dipertahankan** (tetap di tenant_configs, dipakai LLM/TTS sbg setelan delivery). Pseudo-default voice-id dibersihkan agar single-source jalan.
-- TUJUAN: produksi pilih model+voice dari **konfigurasi channel** (no-hardcode, **NO FALLBACK**, §3.8/§10.E).
-- PLAN: resolusi voice = `channels.voice_key` → (kosong) `niches.voice_defaults[channel.tts_provider]`; provider/model TTS = `channel.tts_provider/model`. **Hapus** `ELEVENLABS_VOICES/NICHE_VOICES/OPENAI_VOICES` + map DEFAULTS hardcode **tanpa pengganti fallback**. Provider gagal saat runtime → gagal jujur + log (tak pindah). `tts_voice_settings` = delivery override (tetap). Sama untuk LLM/image: provider/model dari channel via adapter.
-- DEPENDS: F1-04 (channels punya voice_key + model-per-elemen), F1-07.
-- DONE-BILA: produksi ryan pakai voice & model sesuai config channel (suara identik VR6); **tak ada map/fallback hardcoded tersisa** (grep bersih); provider gagal → status gagal jujur (bukan diam-diam edge).
-- REALISASI: ⬜ | commit: — | catatan: —
+#### [F1-03] ~~BE resolusi model+voice~~ → **DIGABUNG ke F1-05** (re-evaluasi 2026-06-20)
+- 🔁 **MERGED.** Studi mendalam jalur produksi membuktikan: SEMUA pilihan model/voice/caption/visual datang dari **satu jahitan** — tiap komponen memanggil sendiri `load_tenant_config(tenant_id)` (8 file: tts_engine/script_engine/hook_optimizer/niche_selector/visual_assembler/video_renderer/youtube_publisher). Memisah voice (F1-03) dari caption/visual/music (F1-05) = menyentuh 8 file SAMA **dua kali** (boros + risiko regresi ganda di produksi live). → Voice-resolution + no-fallback + buang-hardcode **dilebur** ke **F1-05** (satu pass). Lihat F1-05.
 
 #### [F1-04] Tambah kolom per-channel di `channels` (model-per-elemen + voice + caption/hashtag/operasional)
 - TUJUAN: pindahkan pilihan AI-model, voice, brand-skin & operasional ke channel (§4/§10.E).
@@ -178,22 +172,28 @@
 - DONE-BILA: kolom ada + ter-backfill; ryan channel terisi nilai lama (voice+model identik perilaku).
 - REALISASI: ⬜ | commit: — | catatan: —
 
-#### [F1-05] Refactor config-fanout: thread field per-channel (model+voice+brand+operasional) ke pipeline
-- TUJUAN: pipeline baca **model-per-elemen + voice + caption/hashtag/visual_mode/image_quality/music/quality dari CHANNEL** (bukan tenant); credential (key) dari tenant; DNA dari niche.
-- BUKTI: `pipeline.py:65` muat per-tenant; `config.py:47-68` TenantConfig lean.
-- PLAN: tambah field ke `TenantConfig` + isi di `tenant_config_from_channel` dari channel_row (model-per-elemen, voice_key, caption/visual/music/quality); pipeline/tts_engine/video_renderer/script_engine/llm baca model+voice dari objek per-channel; `TenantRunConfig` tetap untuk field tenant sejati (BYOK keys/plan).
-- DEPENDS: F1-03, F1-04.
-- DONE-BILA: tenant uji 2-channel beda model/voice/caption/visual_mode → output beda, tak saling timpa; ryan (1ch) identik perilaku.
+#### [F1-05] ⭐ JAHITAN TUNGGAL: config per-channel via channel-aware loader + resolusi voice + NO-FALLBACK (gabungan F1-03+F1-05)
+- ⚠️ **GERBANG KERAS: KONFIRMASI OWNER DULU** — ini SATU-SATUNYA pembedahan jalur produksi live di FASE 1 (paling berisiko). Propose + uji-regresi ryan sebelum & sesudah.
+- 🔴 **TEMUAN (verified):** semua komponen panggil `load_tenant_config(tenant_id)` (per-tenant) → di situlah model/provider/voice/keys diambil. `TenantConfig` (per-channel) yang dioper hanya bawa niche/branded/preset. Plus: semua tenant punya `tts_voice_per_niche` identik (pseudo-default duplikat hardcode); override ASLI ryan = `tts_voice_settings` (delivery speed, WAJIB dipertahankan).
+- TUJUAN: produksi baca **model-per-elemen + voice + caption/hashtag/visual_mode/image_quality/music/quality dari CHANNEL**; credential (key) dari tenant; DNA dari niche. **NO FALLBACK.**
+- PLAN (satu pass, intervensi TERPUSAT — bukan tulis-ulang 8 file):
+  1. **Jadikan `load_tenant_config(tenant_id, channel_id=None)` channel-aware**: overlay kolom `channels` (F1-04: model-per-elemen, voice_key, caption_style, niche_hashtags, visual_mode, image_quality, music_*, script_min_viral_score/max_retry) DI ATAS `TenantRunConfig` per-tenant (key BYOK & plan tetap dari tenant).
+  2. **8 call-site** oper `tenant_config.channel_id` ke loader (tts_engine:62, script_engine:514, hook_optimizer:235, niche_selector:610/794, visual_assembler:386, video_renderer:133/160/795/911/930, youtube_publisher:110).
+  3. **Resolusi voice**: `channels.voice_key` → (kosong) `niches.voice_defaults[channel.tts_provider]`. Provider/model TTS/LLM/image dari channel.
+  4. **Buang hardcode + FALLBACK**: hapus `ELEVENLABS_VOICES/NICHE_VOICES/OPENAI_VOICES` + DEFAULTS; hapus fallback chain `tts_engine` (`tts_fallback_provider`), `visual_assembler` (`visual_fallback_mode`), `production_on_api_error='fallback'` → provider gagal = **gagal jujur + log** (tak pindah). `tts_voice_settings` tetap = delivery override.
+- DEPENDS: F1-04, F1-07.
+- DONE-BILA: ryan (1ch) **identik perilaku** (voice VR6, speed 0.86, model sama) — uji regresi produksi nyata; tenant uji 2-channel beda model/voice/caption → output beda, tak saling timpa; **grep bersih** (tak ada map/fallback hardcoded); provider gagal → status gagal jujur (bukan diam-diam edge).
 - REALISASI: ⬜ | commit: — | catatan: —
 
 #### [F1-08] Gerbang aktivasi channel di BE — `channel_readiness()` + guard produksi `[NEW — owner 2026-06-20]`
 - TUJUAN: channel default non-aktif; produksi hanya jalan untuk channel READY (§10.E.7).
-- PLAN: fungsi BE `channel_readiness(channel)` cek (niche, model tiap elemen preset, voice, credential valid per provider, YouTube OAuth) → status + daftar sisa. Producer **skip** channel non-ready (tambah ke guard `can_produce`). `channels.is_active` hanya boleh true bila ready (enforce di RPC/gate). Default channel baru = `is_active=false`.
-- DEPENDS: F1-04, F1-03.
+- PLAN: fungsi BE `channel_readiness(channel)` cek (niche, model tiap elemen preset, voice, credential valid per provider, YouTube OAuth) → status + daftar sisa. Producer **skip** channel non-ready (tambah ke guard di `plan_and_submit`, sejajar cek `production_paused`/`gate_for_channel`). `channels.is_active` hanya boleh true bila ready (enforce di RPC/gate). Default channel baru = `is_active=false`.
+- DEPENDS: F1-04, F1-05.
 - DONE-BILA: channel tak lengkap tak diproduksi (terbukti) + tak bisa di-set aktif; channel lengkap jalan; ryan tetap jalan.
 - REALISASI: ⬜ | commit: — | catatan: —
 
-#### [F1-06] Backfill channel_id NULLABLE (5 tabel)
+#### [F1-06] Backfill channel_id NULLABLE (5 tabel) `[INDEPENDEN — di luar kritis-path; kapan saja]`
+- 🔁 **Re-evaluasi 2026-06-20:** TIDAK memblok refactor fanout (data-hygiene murni, risiko rendah). Boleh dikerjakan paling awal (warmup aman) atau paling akhir. Tidak menahan F1-07/04/05/08.
 - TUJUAN: tutup gap legacy v1 null.
 - BUKTI: **verified DB** — nullable di `content_inventory, production_runs, video_analytics, channel_insights, videos`; `direct_jobs`=NOT NULL.
 - PLAN: backfill NULL→channel tenant (via join videos.run_id / channel tertua tenant); (opsi) ALTER NOT NULL per tabel bila aman (hati-hati `videos.channel_id` FK uuid).
@@ -329,7 +329,8 @@
 - **2026-06-20 (c)**: Ditambah **§10 LAMPIRAN desain-disepakati** (prompt durasi-via-speed + skema voice + konduktor + data wps) supaya sesi baru TAK re-derive/asumsi. Belum ada kode produksi disentuh. **Berikutnya: F1-01.**
 - **2026-06-20 (d)**: ✅ **F1-01 SELESAI** (commit `6d3b662`, migr **0061** applied DB v2). voice_catalog diperkaya field baku §10.B + tts_profiles.param_schema; admin catalog route+form extended (whitelist + parse jsonb). Validasi: build PASS + CRUD data-layer e2e LULUS + voice_catalog 0 row (nol dampak ryan). **Migr nyata terakhir = 0061** (doc lama "0059" tertinggal; F1-01 ambil 0061 karena 0060=channel_credentials sudah ada). **Berikutnya: F1-02** (niches.voice_key + seed VR6 ryan).
 - **2026-06-20 (e)**: ✅ **F1-02 SELESAI** (commit `72d5e51`, migr **0062**). niches.voice_key + seed 4 voice EL platform. NOL dampak ryan.
-- **2026-06-20 (f)**: 🏗️ **ARSITEKTUR FINAL DIBUNGKUS** (diskusi owner — keputusan dikunci): **(1)** multi-AI-model per-elemen (LLM/image/TTS/video) — **tenant pilih per-channel** dari katalog **aktif admin**; admin/dev = gerbang dukungan param (extensible mis. Fish Audio). **(2)** Voice **Opsi 2**: niche kasih default per TTS model, tenant pilih final per-channel, **FE wajib test/preview voice**. **(3)** **TIDAK ADA FALLBACK** — produksi hanya pakai config, gagal=jujur. **(4)** Channel default **non-aktif** + **gerbang aktivasi** (lengkap+valid baru aktif), form wizard ramah pemula, save draft. **(5)** caption-styling(subtitle)+hashtag+model+voice = channel; credential per-tenant dipakai-ulang+divalidasi; YouTube OAuth per-channel. **(6)** niche-create gating config-driven (extensible ke Pro); niche picker = platform + custom milik tenant. **Tertuang di:** §3 (kpts 3-11), §4 (fanout), §10.B (voice Opsi 2), **§10.E (arsitektur kanonik)**, FASE 1 (+F1-07 BE-ready, +F1-08 gerbang aktivasi; F1-03 rewrite no-fallback; F1-04 perluas model+voice), FASE 2 (wizard+gate+model/voice picker+F2-06 preview), F3-02/03 (voice default per model + gating config-driven). **Belum ada kode dari arsitektur ini disentuh.** **Berikutnya: F1-07** (⚠️ gerbang konfirmasi owner sebelum BE).
+- **2026-06-20 (f)**: 🏗️ **ARSITEKTUR FINAL DIBUNGKUS** (diskusi owner — keputusan dikunci): **(1)** multi-AI-model per-elemen (LLM/image/TTS/video) — **tenant pilih per-channel** dari katalog **aktif admin**; admin/dev = gerbang dukungan param (extensible mis. Fish Audio). **(2)** Voice **Opsi 2**: niche kasih default per TTS model, tenant pilih final per-channel, **FE wajib test/preview voice**. **(3)** **TIDAK ADA FALLBACK** — produksi hanya pakai config, gagal=jujur. **(4)** Channel default **non-aktif** + **gerbang aktivasi** (lengkap+valid baru aktif), form wizard ramah pemula, save draft. **(5)** caption-styling(subtitle)+hashtag+model+voice = channel; credential per-tenant dipakai-ulang+divalidasi; YouTube OAuth per-channel. **(6)** niche-create gating config-driven (extensible ke Pro); niche picker = platform + custom milik tenant. **Tertuang di:** §3 (kpts 3-11), §4 (fanout), §10.B (voice Opsi 2), **§10.E (arsitektur kanonik)**, FASE 1 (+F1-07 BE-ready, +F1-08 gerbang aktivasi; F1-03 rewrite no-fallback; F1-04 perluas model+voice), FASE 2 (wizard+gate+model/voice picker+F2-06 preview), F3-02/03 (voice default per model + gating config-driven). **Belum ada kode dari arsitektur ini disentuh.**
+- **2026-06-20 (g)**: 🔬 **STUDI MENDALAM jalur produksi A-to-Z** (worker→producer/publisher→pipeline 7-step→8 komponen, dibaca sendiri) → **RE-EVALUASI URUTAN FASE 1**. Temuan kunci: semua config per-channel (model/voice/caption/visual) lewat **SATU jahitan** = `load_tenant_config(tenant_id)` yang dipanggil tiap komponen (8 file). **Keputusan:** (1) **F1-03 DILEBUR ke F1-05** (jahitan tunggal channel-aware loader + resolusi voice + no-fallback — satu pass, hindari sentuh 8 file 2×). (2) **F1-06 = independen** (data-hygiene, di luar kritis-path). (3) Urutan: **F1-07 → F1-04 → F1-05(⭐ gerbang owner) → F1-08**; DB-additive dulu (nol-risiko), pembedahan produksi terakhir. **Berikutnya: F1-07** (mulai dgn audit read-only adapter + migr additive).
 
 ---
 
