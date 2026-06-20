@@ -136,7 +136,7 @@
 - PLAN: migr perkaya `voice_catalog` (+`age, accent, use_case, description, default_settings jsonb, language, tenant_id NULL=platform/terisi=BYOK`); `tts_profiles` +`param_schema jsonb` (param+rentang per provider). **→ skema field LENGKAP + alasan = §10.B (jangan re-derive).**
 - DEPENDS: —
 - DONE-BILA: `select` voice_catalog punya field baku; admin catalog FE bisa CRUD; query rentang param per provider tersedia.
-- REALISASI: ⬜ | commit: — | catatan: —
+- REALISASI: ✅ | commit: `6d3b662` | catatan: migr **0061** applied DB v2 (voice_catalog +age/accent/language/use_case/description/default_settings(jsonb)/tenant_id; tts_profiles +param_schema terisi el `{speed:[0.7,1.2],stability/style/similarity_boost:[0,1]}`/openai `{speed:[0.25,4.0]}`/edge `{rate,pitch,volume}`). Admin catalog route+form di-extend (whitelist + parse jsonb). **Catatan migr-nomor:** REMEDIASI lama tulis "s/d 0059"; nyata terakhir = 0060 → F1-01 = **0061**. `locale` existing dipertahankan, `language`=label manusiawi (§10.B "language/locale"). Validasi: build PASS · CRUD data-layer e2e (create+jsonb-object+toggle+delete) LULUS · voice_catalog tetap 0 row (NOL dampak ryan; BE belum baca s/d F1-03). FE belum di-deploy ke VPS (route admin, tak dipakai produksi worker — deploy mv-web menyusul).
 
 #### [F1-02] niches.voice_key (binding niche→1 voice) + seed
 - TUJUAN: tiap niche tunjuk tepat 1 voice (branding, no-random).
@@ -293,6 +293,7 @@
 - **2026-06-20 (a)**: Dokumen final dibuat. Audit BE-hardcode + multi-channel SELESAI (terverifikasi langsung). **Temuan kunci: pondasi multi-channel BELUM tuntas** — config-fanout voice/caption/hashtag/visual/music/quality masih per-tenant (`pipeline.py:65`) → FASE 1 = prioritas utama. Keputusan operasional→channel & Business-niche→private dikunci.
 - **2026-06-20 (b)**: PROGRESS.md direkonsiliasi (banner: pending teknis → remediasi; PROGRESS = arsip+gate ops/eksternal). `BRANDED_CONTENT_ARCHITECTURE.md` di-merge ke §5.6/F2-04 lalu **DIHAPUS** (link di PROGRESS dialihkan; nol link putus).
 - **2026-06-20 (c)**: Ditambah **§10 LAMPIRAN desain-disepakati** (prompt durasi-via-speed + skema voice + konduktor + data wps) supaya sesi baru TAK re-derive/asumsi. Belum ada kode produksi disentuh. **Berikutnya: F1-01.**
+- **2026-06-20 (d)**: ✅ **F1-01 SELESAI** (commit `6d3b662`, migr **0061** applied DB v2). voice_catalog diperkaya field baku §10.B + tts_profiles.param_schema; admin catalog route+form extended (whitelist + parse jsonb). Validasi: build PASS + CRUD data-layer e2e LULUS + voice_catalog 0 row (nol dampak ryan). **Migr nyata terakhir = 0061** (doc lama "0059" tertinggal; F1-01 ambil 0061 karena 0060=channel_credentials sudah ada). **Berikutnya: F1-02** (niches.voice_key + seed VR6 ryan).
 
 ---
 
