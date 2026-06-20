@@ -148,6 +148,11 @@ def _load_from_supabase() -> dict:
             "section_timing":        row.get("section_timing") or {},
             "image_quality_tags":    row.get("image_quality_tags") or "",
             "image_negative_prompt": row.get("image_negative_prompt") or "",
+            # F1-07 (Opsi 2): identitas voice niche. voice_key = default ElevenLabs (F1-02);
+            # voice_defaults = default per provider TTS {provider_key: voice_key} (F1-07).
+            # Dibaca pipeline mulai F1-05 (resolusi voice channel→niche default). Aman/aditif.
+            "voice_key":             row.get("voice_key"),
+            "voice_defaults":        row.get("voice_defaults") or {},
         }
     return niches
 
