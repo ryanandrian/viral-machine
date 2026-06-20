@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ExternalLink, Settings, Zap, ArrowRight, BarChart3, Calendar, Activity, Loader2, Check } from "lucide-react";
+import { ExternalLink, Settings, Zap, ArrowRight, BarChart3, Calendar, Activity, Loader2, Check, Pause, Play, RotateCw, AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import PresetTables from "@/components/preset-tables";
 import "./channel-detail.css";
@@ -21,7 +21,25 @@ type ChannelRow = {
   id: string; channel_name: string | null; platform_channel_id: string | null;
   niche: string | null; niche_pool: string[] | null; niche_mode: string | null; content_language: string | null;
   is_active: boolean | null; publish_privacy: string | null; duration_preset: number | null;
+  production_paused: boolean | null; production_paused_reason: string | null;
 };
+
+// F2-07/F1-09: status efektif terpadu — SATU sumber (bukan is_active saja yg menyesatkan).
+type Eff = { key: string; label_id: string; label_en: string; tone: "ok" | "warn" | "stop" | "muted"; reason?: string; reco_id?: string; reco_en?: string };
+function effectiveStatus(ch: ChannelRow, sub: string | null, rd: { ready: boolean; missing: string[] } | null): Eff {
+  if (sub && !["active", "trialing", "trial", "grace"].includes(sub))
+    return { key: "sub", label_id: "Langganan nonaktif", label_en: "Subscription inactive", tone: "stop", reco_id: "Aktifkan langganan untuk melanjutkan produksi.", reco_en: "Reactivate subscription to resume." };
+  if (ch.production_paused)
+    return { key: "halted", label_id: "Dihentikan sistem", label_en: "Halted by system", tone: "stop", reason: ch.production_paused_reason ?? undefined,
+      reco_id: "Perbaiki penyebabnya (kredit/konfigurasi), lalu klik “Jalankan ulang & pulihkan” — produksi-test; bila sukses channel aktif lagi.",
+      reco_en: "Fix the cause (credit/config), then “Run & recover” — a test production; success reactivates the channel." };
+  if (rd && !rd.ready)
+    return { key: "incomplete", label_id: "Belum lengkap", label_en: "Incomplete", tone: "warn", reason: rd.missing?.length ? `Kurang: ${rd.missing.join(", ")}` : undefined,
+      reco_id: "Lengkapi konfigurasi & kredensial di bawah, lalu aktifkan.", reco_en: "Complete config & credentials below, then activate." };
+  if (!ch.is_active)
+    return { key: "paused", label_id: "Dijeda", label_en: "Paused", tone: "warn", reco_id: "Channel dijeda manual. Klik Play untuk melanjutkan.", reco_en: "Manually paused. Click Play to resume." };
+  return { key: "active", label_id: "Aktif", label_en: "Active", tone: "ok" };
+}
 
 const PALETTE = ["#6366F1", "#047857", "#9f1239", "#b45309", "#1d4ed8", "#7c3aed"];
 function colorFor(id: string) { let h = 0; for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0; return PALETTE[h % PALETTE.length]; }
@@ -58,6 +76,9 @@ export default function ChannelDetailPage() {
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [testMsg, setTestMsg] = useState<string | null>(null);
+  // F2-07/F1-09: status efektif
+  const [sub, setSub] = useState<string | null>(null);
+  const [rd, setRd] = useState<{ ready: boolean; missing: string[] } | null>(null);
 
   // C3: editor niche per-channel (fixed/random) — opsi dari ENTITLEMENT tenant; tulis via RPC.
   const [nicheMode, setNicheMode] = useState<"fixed" | "random">("fixed");
@@ -130,10 +151,20 @@ export default function ChannelDetailPage() {
     setTestMsg(error ? `Gagal: ${error.message}` : "Diantre — produksi 1 video (private). Pantau di Runs (Antre→Berjalan).");
   }
 
+  // F2-07: pause/play (toggle is_active). Play hanya bila readiness lengkap (gerbang aktivasi).
+  async function pausePlay(toActive: boolean) {
+    setErr(null); setBusy(true);
+    if (toActive && rd && !rd.ready) { setBusy(false); setTab("settings"); return setTestMsg("Belum bisa diaktifkan — lengkapi konfigurasi dulu (lihat checklist)."); }
+    const { error } = await supabase.from("channels").update({ is_active: toActive }).eq("id", id);
+    setBusy(false);
+    if (error) return setErr(error.message);
+    setActive(toActive); load();
+  }
+
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     const { data } = await supabase.from("channels")
-      .select("id,channel_name,platform_channel_id,niche,niche_pool,niche_mode,content_language,is_active,publish_privacy,duration_preset")
+      .select("id,channel_name,platform_channel_id,niche,niche_pool,niche_mode,content_language,is_active,publish_privacy,duration_preset,production_paused,production_paused_reason")
       .eq("id", id).maybeSingle();
     const c = data as ChannelRow | null;
     setCh(c);
@@ -143,8 +174,10 @@ export default function ChannelDetailPage() {
       setNicheMode((c.niche_mode === "random" ? "random" : "fixed")); setNiche(c.niche ?? "");
       setDpreset(c.duration_preset ?? null);
     }
-    // Opsi niche = ENTITLEMENT tenant (katalog per-tier + niche custom/private milik tenant).
-    const { data: cfg } = await supabase.from("tenant_configs").select("plan_type").maybeSingle();
+    // F2-07: status efektif → subscription + readiness (RPC tenant-scoped F2-fondasi).
+    const { data: cfg } = await supabase.from("tenant_configs").select("plan_type,subscription_status").maybeSingle();
+    setSub((cfg as { subscription_status?: string } | null)?.subscription_status ?? null);
+    try { const { data: rdd } = await supabase.rpc("channel_readiness", { p_channel_id: id }); if (rdd) setRd(rdd as { ready: boolean; missing: string[] }); } catch { /* non-fatal */ }
     const tier = (cfg as { plan_type?: string } | null)?.plan_type ?? "starter";
     const { data: nrows } = await supabase.from("niches").select("niche_id,name,is_base,access_type,exclusive_to").eq("is_active", true);
     const me = user?.id ?? "";
@@ -181,15 +214,15 @@ export default function ChannelDetailPage() {
   );
 
   const name0 = ch.channel_name || "Channel";
+  const eff = effectiveStatus(ch, sub, rd);
+  const TONE: Record<string, string> = { ok: "badge-success", warn: "badge-warning", stop: "badge-danger", muted: "badge-default" };
 
   return (
     <>
       <div className="cd-header">
         <span className="cd-logo-lg" style={{ background: colorFor(ch.id) }}>{initials(name0)}</span>
         <div className="cd-h-meta">
-          <h1>{name0} {ch.is_active
-            ? <span className="badge badge-success" style={{ fontSize: "var(--text-xs)" }}><span className="dot" />Active</span>
-            : <span className="badge badge-warning" style={{ fontSize: "var(--text-xs)" }}><span className="dot" />Paused</span>}</h1>
+          <h1>{name0} <span className={`badge ${TONE[eff.tone]}`} style={{ fontSize: "var(--text-xs)" }}><span className="dot" /><Bi id={eff.label_id} en={eff.label_en} /></span></h1>
           {ch.platform_channel_id
             ? <a href={`https://youtube.com/channel/${ch.platform_channel_id}`} target="_blank" rel="noopener noreferrer" className="cd-yt-link"><span className="yt" /> youtube.com/channel/{ch.platform_channel_id} <ExternalLink size={13} /></a>
             : <span className="cd-yt-link muted"><span className="yt" /> <Bi id="YouTube belum terhubung" en="YouTube not connected" /></span>}
@@ -204,11 +237,36 @@ export default function ChannelDetailPage() {
           {ch.platform_channel_id && (
             <a className="btn btn-secondary" href={`https://studio.youtube.com/channel/${ch.platform_channel_id}`} target="_blank" rel="noopener noreferrer" title="Kelola di YouTube Studio (tab baru)" style={{ color: "var(--yt)" }}><ExternalLink size={15} /> YouTube Studio</a>
           )}
+          {/* F2-07: pause/play (is_active). Play ter-gate readiness. Sembunyikan saat halted/sub (pakai aksi di banner). */}
+          {!ch.production_paused && (sub === null || ["active","trialing","trial","grace"].includes(sub)) && (
+            ch.is_active
+              ? <button className="btn btn-secondary" disabled={busy} onClick={() => pausePlay(false)}><Pause size={15} /> <Bi id="Jeda" en="Pause" /></button>
+              : <button className="btn btn-secondary" disabled={busy} onClick={() => pausePlay(true)}><Play size={15} /> <Bi id="Aktifkan" en="Activate" /></button>
+          )}
           <button className="btn btn-secondary" onClick={() => setTab("settings")}><Settings size={15} /> <Bi id="Pengaturan" en="Settings" /></button>
           <button className="btn btn-ai" disabled={busy} onClick={testNow} title="Produksi 1 video private untuk preview config"><Zap size={15} /> <Bi id="Test sekarang (private)" en="Test now (private)" /></button>
         </div>
         {testMsg && <div style={{ flexBasis: "100%", fontSize: "var(--text-xs)", color: "var(--text-secondary)", marginTop: ".5rem" }}>{testMsg}</div>}
       </div>
+
+      {/* F2-07/F1-09: banner status efektif — tenant well-informed (alasan + rekomendasi + aksi pemulihan) */}
+      {eff.key !== "active" && (
+        <div className="card card-pad" style={{ marginBottom: "1rem", borderLeft: `3px solid var(--${eff.tone === "stop" ? "danger" : eff.tone === "warn" ? "warning" : "border"}, #f59e0b)` }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: "0.625rem" }}>
+            <AlertTriangle size={18} style={{ color: `var(--${eff.tone === "stop" ? "danger" : "warning"}, #f59e0b)`, flexShrink: 0, marginTop: 2 }} />
+            <div style={{ flex: 1 }}>
+              <strong style={{ fontSize: "var(--text-sm)" }}><Bi id={`Status: ${eff.label_id}`} en={`Status: ${eff.label_en}`} /></strong>
+              {eff.reason && <div style={{ fontSize: "var(--text-sm)", color: "var(--text-secondary)", marginTop: "0.25rem" }}>{eff.reason}</div>}
+              {eff.reco_id && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.35rem" }}><Bi id={eff.reco_id} en={eff.reco_en!} /></div>}
+              <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.625rem", flexWrap: "wrap" }}>
+                {eff.key === "halted" && <button className="btn btn-ai btn-sm" disabled={busy} onClick={testNow}><RotateCw size={14} /> <Bi id="Jalankan ulang & pulihkan" en="Run & recover" /></button>}
+                {eff.key === "incomplete" && <button className="btn btn-default btn-sm" onClick={() => setTab("settings")}><Settings size={14} /> <Bi id="Lengkapi konfigurasi" en="Complete config" /></button>}
+                {eff.key === "paused" && <button className="btn btn-default btn-sm" disabled={busy} onClick={() => pausePlay(true)}><Play size={14} /> <Bi id="Aktifkan" en="Activate" /></button>}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="cd-tabs">
         {TABS.map(([k, idT, en]) => <button key={k} className={`cd-tab${tab === k ? " active" : ""}`} onClick={() => setTab(k)}><Bi id={idT} en={en} /></button>)}
