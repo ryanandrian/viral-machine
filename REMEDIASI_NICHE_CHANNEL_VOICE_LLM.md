@@ -205,6 +205,11 @@
 ### FASE 2 — CHANNEL SETUP (wizard) + gerbang aktivasi + child (FE/BE tenant) `[buka pondasi ke pengguna]`
 *Sasaran: form setup channel ramah pemula (§10.E.8) — pilih niche + model per-elemen + voice (+test) + credential + caption/hashtag/branded/operasional; save draft; channel non-aktif s/d lengkap & valid.*
 
+> **🔒 KEPUTUSAN KONSEP/UX OWNER (2026-06-20) — wilayah owner, IKUTI:**
+> 1. **Buat baru = WIZARD multi-langkah** (step-by-step, ramah pemula). **Edit = via tombol "Manage" di tiap card channel** → halaman manage (edit config yg di-add via wizard) + **pause/play channel**. Halaman manage **diselaraskan arsitektur baru** — buang elemen tak perlu (jangan bingungkan tenant).
+> 2. **Analytics channel = LINK ke YouTube Studio** (JANGAN duplikat data kaya YT Studio — redundan/tak efisien). **Analitik KITA = KINERJA MESIN kita** (success-rate, self-learning, durasi/QC, retensi/engagement olahan) yang **TAK ada di YT Studio** tapi **mengolah data dari YT Studio**. → di manage-page channel: buang chart YT-redundant, sediakan tombol "Buka YouTube Studio".
+> 3. **Biaya:** bila ditampilkan → JELAS "biaya provider AI (bukan biaya kami)" + up-to-date. **Prioritas = biaya produksi VALID per konten** (REAL dari pemakaian aktual, BUKAN estimasi melenceng). Estimasi kasar yg bisa menyesatkan → JANGAN. Picker model: tampilkan nama+tier (+harga-unit provider HANYA bila valid & up-to-date, ber-label jelas). **Biaya real per-konten = item BE cost-tracking terpisah** (tampil di Runs/dashboard pasca-produksi, bukan tebakan di picker).
+
 #### [F2-01] Channel setup wizard + entitlement kuota + gerbang aktivasi
 - PLAN: FE create/read/update/delete channel sbg **wizard ber-langkah** (§10.E.8), **boleh save draft** tiap langkah; pilih niche dari **platform + custom milik tenant** (`entitled_niches`); enforce `plan_limits.max_channels`; RLS `tenant_id=auth.uid()`; **tombol Aktifkan enabled hanya saat `channel_readiness` lengkap** (F1-08) + tampil **checklist sisa**; channel baru default `is_active=false`.
 - DEPENDS: F1-05, F1-08.
