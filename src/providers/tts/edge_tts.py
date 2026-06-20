@@ -19,34 +19,8 @@ from src.providers.tts.base import TTSProvider, TTSError
 
 
 # Voice mapping per niche — bisa di-override via tenant_configs.tts_voice
-NICHE_VOICES = {
-    "universe_mysteries": {
-        "voice": "en-US-GuyNeural",
-        "description": "Deep, authoritative — misteri & sains",
-        "rate": "+10%",
-        "volume": "+0%",
-    },
-    "fun_facts": {
-        "voice": "en-US-JennyNeural",
-        "description": "Energetic, upbeat — fun facts",
-        "rate": "+15%",
-        "volume": "+0%",
-    },
-    "dark_history": {
-        "voice": "en-US-ChristopherNeural",
-        "description": "Dramatic, intense — dark history",
-        "rate": "+5%",
-        "volume": "+0%",
-    },
-    "ocean_mysteries": {
-        "voice": "en-US-GuyNeural",
-        "description": "Deep, mysterious — ocean content",
-        "rate": "+10%",
-        "volume": "+0%",
-    },
-}
-
-DEFAULT_VOICE = "en-US-GuyNeural"
+# F1-05: NICHE_VOICES (map niche→voice hardcode) DIHAPUS — voice kini single-source
+# (channels.voice_key → niches.voice_defaults[edge_tts] → voice_catalog). rate baseline = voice_catalog.default_settings.
 DEFAULT_RATE  = "+10%"
 
 
@@ -58,17 +32,15 @@ class EdgeTTSProvider(TTSProvider):
 
     def __init__(self, config: dict):
         super().__init__(config)
-        # Voice bisa di-override dari tenant_configs.tts_voice
-        # Jika tidak ada di config, fallback ke niche voice atau default
-        niche = config.get("niche") or ""
-        niche_data = NICHE_VOICES.get(niche, NICHE_VOICES["universe_mysteries"])
-
-        if config.get("tts_voice"):
-            self.voice = config["tts_voice"]
-        else:
-            self.voice = niche_data["voice"]
-
-        self.rate   = niche_data.get("rate", DEFAULT_RATE)
+        # F1-05: voice ter-resolve di config layer (channels.voice_key → niches.voice_defaults[edge_tts]).
+        # NO map hardcode, NO fallback (gagal jujur bila kosong). rate = baseline voice_catalog.default_settings.
+        self.voice = config.get("tts_voice")
+        if not self.voice:
+            raise TTSError(
+                "Edge TTS: voice belum ter-resolve. Set channels.voice_key atau "
+                "niches.voice_defaults[edge_tts] (admin)."
+            )
+        self.rate   = (config.get("tts_voice_default_settings") or {}).get("rate") or DEFAULT_RATE
         self._word_timestamps: list[dict] | None = None
 
     # ──────────────────────────────────────────────

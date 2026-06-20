@@ -130,7 +130,7 @@ class VideoRenderer:
         """Load caption style dari Supabase tenant_configs. Fallback ke default."""
         try:
             from src.config.tenant_config import load_tenant_config
-            rc = load_tenant_config(tenant_config.tenant_id)
+            rc = load_tenant_config(tenant_config.tenant_id, getattr(tenant_config, "channel_id", None), getattr(tenant_config, "niche", None))
             if rc.caption_style and isinstance(rc.caption_style, dict):
                 style = DEFAULT_CAPTION_STYLE.copy()
                 style.update(rc.caption_style)
@@ -157,7 +157,7 @@ class VideoRenderer:
         }
         try:
             from src.config.tenant_config import load_tenant_config
-            rc = load_tenant_config(tenant_config.tenant_id)
+            rc = load_tenant_config(tenant_config.tenant_id, getattr(tenant_config, "channel_id", None), getattr(tenant_config, "niche", None))
             if rc.hook_title_style and isinstance(rc.hook_title_style, dict):
                 style = DEFAULT.copy()
                 style.update(rc.hook_title_style)
@@ -792,7 +792,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         # ── s72b: trailing_silence — baca dari Supabase config ──
         try:
             from src.config.tenant_config import load_tenant_config
-            rc = load_tenant_config(tenant_config.tenant_id)
+            rc = load_tenant_config(tenant_config.tenant_id, getattr(tenant_config, "channel_id", None), getattr(tenant_config, "niche", None))
             trailing_silence = float(getattr(rc, "trailing_silence", 2.5))
         except Exception:
             trailing_silence = 2.5
@@ -908,7 +908,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         # ── s6c4: Music mixing (jika music_enabled) ────────────────
         try:
             from src.config.tenant_config import load_tenant_config
-            rc = load_tenant_config(tenant_config.tenant_id)
+            rc = load_tenant_config(tenant_config.tenant_id, getattr(tenant_config, "channel_id", None), getattr(tenant_config, "niche", None))
             if getattr(rc, "music_enabled", False):
                 output_path = self._mix_music(
                     video_path=output_path,
@@ -927,7 +927,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         # ── s83: Loop Ending (jika enabled) ──────────────────────────
         try:
             from src.config.tenant_config import load_tenant_config
-            rc_loop = load_tenant_config(tenant_config.tenant_id)
+            rc_loop = load_tenant_config(tenant_config.tenant_id, getattr(tenant_config, "channel_id", None), getattr(tenant_config, "niche", None))
             if getattr(rc_loop, "loop_ending_enabled", True):
                 loop_dur = float(getattr(rc_loop, "loop_ending_duration", 1.5) or 1.5)
                 output_path = self._add_loop_ending(output_path, loop_dur, output_dir)

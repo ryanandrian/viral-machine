@@ -107,7 +107,7 @@ class YouTubePublisher:
         # ── s73: Hashtag strategy — topik + niche + universal ──
         try:
             from src.config.tenant_config import load_tenant_config
-            rc = load_tenant_config(tenant_config.tenant_id)
+            rc = load_tenant_config(tenant_config.tenant_id, getattr(tenant_config, "channel_id", None), getattr(tenant_config, "niche", None))
             niche_tags = []
             if hasattr(rc, "niche_hashtags") and rc.niche_hashtags:
                 niche_tags = rc.niche_hashtags.get(niche, [])

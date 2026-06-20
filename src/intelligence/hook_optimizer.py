@@ -232,7 +232,7 @@ IMPORTANT: Return ONLY the JSON object. No markdown, no explanation, no extra te
         _llm, _model = None, ""
         try:
             from src.config.tenant_config import load_tenant_config
-            _rc = load_tenant_config(tenant_config.tenant_id)
+            _rc = load_tenant_config(tenant_config.tenant_id, getattr(tenant_config, "channel_id", None), getattr(tenant_config, "niche", None))
             if _rc:
                 _llm   = _rc.get_llm_provider()
                 _model = _rc.llm_model_for("utility")

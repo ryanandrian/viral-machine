@@ -383,7 +383,7 @@ class VisualAssembler:
         """Baca config dari Supabase, fallback ke defaults."""
         try:
             from src.config.tenant_config import load_tenant_config
-            rc = load_tenant_config(tenant_config.tenant_id)
+            rc = load_tenant_config(tenant_config.tenant_id, getattr(tenant_config, "channel_id", None), getattr(tenant_config, "niche", None))
             return {
                 "visual_mode":            getattr(rc, "visual_mode", "video"),
                 "visual_max_clip_mb":     rc.visual_max_clip_mb,

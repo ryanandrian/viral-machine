@@ -511,7 +511,7 @@ class ScriptEngine:
     def _get_run_config(self, tenant_config):
         try:
             from src.config.tenant_config import load_tenant_config
-            return load_tenant_config(tenant_config.tenant_id)
+            return load_tenant_config(tenant_config.tenant_id, getattr(tenant_config, "channel_id", None), getattr(tenant_config, "niche", None))
         except Exception as e:
             logger.warning(f"[ScriptEngine] RunConfig failed ({e}) — defaults")
             return None

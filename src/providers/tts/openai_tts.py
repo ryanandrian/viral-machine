@@ -20,13 +20,8 @@ from loguru import logger
 from src.providers.tts.base import TTSProvider, TTSError
 
 
-# Voice OpenAI yang cocok per niche
-OPENAI_VOICES = {
-    "universe_mysteries": "onyx",    # Deep, authoritative
-    "fun_facts":          "nova",    # Upbeat, friendly
-    "dark_history":       "fable",   # Dramatic
-    "ocean_mysteries":    "onyx",    # Deep
-}
+# F1-05: OPENAI_VOICES (map niche→voice hardcode) DIHAPUS — voice single-source
+# (channels.voice_key → niches.voice_defaults[openai_tts] → voice_catalog).
 
 OPENAI_MODELS = {
     "standard": "tts-1",     # Lebih cepat, sedikit kurang natural
@@ -53,11 +48,15 @@ class OpenAITTSProvider(TTSProvider):
                 "OpenAI TTS membutuhkan API key. "
                 "Set tts_api_key atau visual_api_key di tenant_configs Supabase."
             )
-        niche = config.get("niche") or ""
-        if not config.get("tts_voice"):
-            self.voice = OPENAI_VOICES.get(niche, "onyx")
-
-        self.model = config.get("tts_model", "tts-1")  # standard default
+        # F1-05: voice ter-resolve di config layer. NO map hardcode/fallback (perbaiki bug:
+        # self.voice dulu TAK ter-set bila tts_voice ADA → AttributeError saat generate).
+        self.voice = config.get("tts_voice")
+        if not self.voice:
+            raise TTSError(
+                "OpenAI TTS: voice belum ter-resolve. Set channels.voice_key atau "
+                "niches.voice_defaults[openai_tts] (admin)."
+            )
+        self.model = config.get("tts_model") or "tts-1"  # standard default
 
     async def generate(self, text: str, output_path: Path) -> Path:
         """Generate audio via OpenAI TTS API."""

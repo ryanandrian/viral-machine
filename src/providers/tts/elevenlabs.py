@@ -15,15 +15,6 @@ from loguru import logger
 
 from src.providers.tts.base import TTSProvider, TTSError
 
-# Default voice per niche — override via tenant_configs.tts_voice_per_niche
-ELEVENLABS_VOICES = {
-    "universe_mysteries": "pNInz6obpgDQGcFmaJgB",  # Adam — deep, authoritative
-    "fun_facts":          "21m00Tcm4TlvDq8ikWAM",  # Rachel — energetic
-    "dark_history":       "VR6AewLTigWG4xSOukaG",  # Arnold — dramatic
-    "ocean_mysteries":    "EXAVITQu4vr4xnSDxMaL",  # Bella — calm, mysterious
-}
-
-
 def _chars_to_words(
     characters: list[str],
     start_times: list[float],
@@ -79,17 +70,14 @@ class ElevenLabsProvider(TTSProvider):
                 "ElevenLabs membutuhkan API key. "
                 "Set ELEVENLABS_API_KEY di .env atau tts_api_key di tenant_configs."
             )
-        niche = config.get("niche") or ""
-
-        # Priority: tts_voice_per_niche → tts_voice → niche default
-        voice_per_niche = config.get("tts_voice_per_niche", {})
-        if isinstance(voice_per_niche, dict) and niche in voice_per_niche:
-            self.voice = voice_per_niche[niche]
-            logger.info(f"[ElevenLabs] Voice dari tts_voice_per_niche: {self.voice}")
-        elif config.get("tts_voice") and config["tts_voice"] != "en-US-GuyNeural":
-            self.voice = config["tts_voice"]
-        else:
-            self.voice = ELEVENLABS_VOICES.get(niche, ELEVENLABS_VOICES["universe_mysteries"])
+        # F1-05: voice sudah ter-resolve di config layer (channels.voice_key → niches.voice_defaults[provider]).
+        # Provider pakai apa adanya — NO map hardcode, NO fallback (gagal jujur bila kosong).
+        self.voice = config.get("tts_voice")
+        if not self.voice:
+            raise TTSError(
+                "ElevenLabs: voice belum ter-resolve. Set channels.voice_key atau "
+                "niches.voice_defaults[elevenlabs] (admin)."
+            )
 
         self._word_timestamps: list[dict] | None = None
 
@@ -110,17 +98,12 @@ class ElevenLabsProvider(TTSProvider):
             client = AsyncElevenLabs(api_key=self.api_key)
             niche  = self.config.get("niche") or ""
 
-            # Config-driven: baca dari Supabase tts_voice_settings JSONB
-            # Fallback ke nilai default jika belum ada di Supabase config
-            DEFAULTS = {
-                "universe_mysteries": {"speed": 0.87, "style": 0.50, "stability": 0.30, "similarity_boost": 0.75},
-                "dark_history":       {"speed": 0.83, "style": 0.55, "stability": 0.28, "similarity_boost": 0.75},
-                "ocean_mysteries":    {"speed": 0.86, "style": 0.40, "stability": 0.35, "similarity_boost": 0.75},
-                "fun_facts":          {"speed": 0.90, "style": 0.35, "stability": 0.50, "similarity_boost": 0.80},
-            }
+            # F1-05 (no-hardcode): baseline delivery = voice_catalog.default_settings (per voice,
+            # di-inject config layer); override per-tenant via tts_voice_settings[niche] (mis. ryan speed 0.86).
+            baseline      = self.config.get("tts_voice_default_settings", {}) or {}
             tts_vs_config = self.config.get("tts_voice_settings", {}) or {}
-            niche_vs      = {**DEFAULTS.get(niche, DEFAULTS["universe_mysteries"]),
-                             **tts_vs_config.get(niche, {})}
+            _override     = tts_vs_config.get(niche, {}) if isinstance(tts_vs_config, dict) else {}
+            niche_vs      = {**baseline, **_override}
             voice_settings = VoiceSettings(
                 stability        = float(niche_vs.get("stability",        0.30)),
                 similarity_boost = float(niche_vs.get("similarity_boost", 0.75)),

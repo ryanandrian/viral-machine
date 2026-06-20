@@ -187,6 +187,8 @@ class TenantRunConfig:
     # Provider settings (raw config — provider diinisialisasi saat dibutuhkan)
     tts_provider:      str           = "edge_tts"
     tts_voice:         str           = "en-US-GuyNeural"
+    tts_model:         Optional[str] = None   # F1-05: model TTS opsional (mis. openai tts-1/tts-1-hd); None → default engine
+    tts_voice_default_settings: Optional[dict] = None   # F1-05: default_settings voice dari voice_catalog (baseline delivery; no-hardcode)
     tts_api_key:       Optional[str] = None
 
     visual_provider:   str           = "pexels"
@@ -218,6 +220,8 @@ class TenantRunConfig:
             # TTS
             "tts_provider": self.tts_provider,
             "tts_voice":    self.tts_voice,
+            "tts_model":    self.tts_model or "",
+            "tts_voice_default_settings": self.tts_voice_default_settings or {},
             "tts_api_key":  self.tts_api_key or "",
 
             # Visual
@@ -365,19 +369,25 @@ class TenantConfigManager:
             logger.warning(f"[TenantConfig] Supabase init failed: {e} — pakai defaults")
             return None
 
-    def load(self, tenant_id: str, use_cache: bool = True) -> TenantRunConfig:
+    def load(self, tenant_id: str, channel_id: str | None = None,
+             niche: str | None = None, use_cache: bool = True) -> TenantRunConfig:
         """
         Load TenantRunConfig untuk tenant_id tertentu.
 
         Args:
             tenant_id:  ID tenant (contoh: 'ryan_andrian')
+            channel_id: bila diberi → overlay kolom per-channel `channels` (F1-05: model/voice/
+                        caption/visual/music/quality) DI ATAS config tenant. None → murni per-tenant
+                        (BACKWARD-COMPATIBLE: pemanggil lama tak berubah).
+            niche:      niche RUN ini (untuk resolusi voice default per niche×provider). None → rc.niche.
             use_cache:  Pakai cache jika sudah pernah di-load (default: True)
 
         Returns:
-            TenantRunConfig siap pakai
+            TenantRunConfig siap pakai (sudah ter-overlay channel bila channel_id diberi)
         """
-        if use_cache and tenant_id in self._cache:
-            return self._cache[tenant_id]
+        cache_key = f"{tenant_id}|{channel_id or '-'}|{niche or '-'}"
+        if use_cache and cache_key in self._cache:
+            return self._cache[cache_key]
 
         config = self._load_from_supabase(tenant_id)
         if not config:
@@ -387,8 +397,61 @@ class TenantConfigManager:
             )
             config = self._default_config(tenant_id)
 
-        self._cache[tenant_id] = config
+        if channel_id:
+            try:
+                self._apply_channel_overlay(config, channel_id, niche)
+            except Exception as e:
+                logger.warning(f"[TenantConfig] overlay channel gagal (ch={channel_id}): {e} — pakai config tenant")
+
+        self._cache[cache_key] = config
         return config
+
+    # Kolom channels per-channel (F1-04) → field TenantRunConfig. Hanya overlay bila NOT NULL
+    # (NULL = belum dikonfigurasi → pakai nilai tenant; transisi aman).
+    _CHANNEL_OVERLAY_FIELDS = [
+        "llm_model", "llm_library", "tts_provider", "tts_model",
+        "visual_mode", "image_quality", "caption_style", "niche_hashtags",
+        "music_enabled", "music_volume", "music_default_mood",
+        "script_min_viral_score", "script_max_retry",
+    ]
+
+    def _apply_channel_overlay(self, config: "TenantRunConfig", channel_id: str, niche: str | None) -> None:
+        """F1-05 (§10.E): overlay config per-channel + resolusi voice (channel.voice_key →
+        niches.voice_defaults[provider]). Key BYOK & plan TETAP dari tenant (tak di-overlay).
+        Mutasi `config` in-place (instance fresh per cache_key → tak ada shared-mutation)."""
+        if not self._supabase:
+            return
+        res = self._supabase.table("channels").select("*").eq("id", channel_id).limit(1).execute()
+        ch = (res.data or [None])[0]
+        if not ch:
+            logger.warning(f"[TenantConfig] channel {channel_id} tak ditemukan — overlay dilewati")
+            return
+        for f in self._CHANNEL_OVERLAY_FIELDS:
+            v = ch.get(f)
+            if v is not None:
+                setattr(config, f, v)
+        # Resolusi VOICE (Opsi 2 §10.B): channel.voice_key → (kosong) niches.voice_defaults[provider].
+        provider = config.tts_provider
+        vkey = ch.get("voice_key")
+        if not vkey:
+            run_niche = niche or config.niche
+            try:
+                from src.intelligence.config import get_niches
+                vdefs = (get_niches().get(run_niche) or {}).get("voice_defaults") or {}
+                vkey = vdefs.get(provider)
+            except Exception as e:
+                logger.warning(f"[TenantConfig] resolusi voice_defaults gagal (niche={run_niche}): {e}")
+        if vkey:
+            config.tts_voice = vkey
+            # default_settings voice (baseline delivery, no-hardcode) dari voice_catalog.
+            try:
+                vc = self._supabase.table("voice_catalog").select("default_settings").eq("voice_key", vkey).limit(1).execute()
+                if vc.data:
+                    config.tts_voice_default_settings = vc.data[0].get("default_settings") or {}
+            except Exception as e:
+                logger.warning(f"[TenantConfig] load default_settings voice {vkey} gagal: {e}")
+        logger.info(f"[TenantConfig] overlay ch={channel_id}: tts={config.tts_provider}/{config.tts_voice} "
+                    f"llm={config.llm_model} visual={config.visual_mode}")
 
     def _load_from_supabase(self, tenant_id: str) -> Optional[TenantRunConfig]:
         """Load config dari Supabase. Return None jika gagal."""
@@ -602,9 +665,11 @@ def get_manager() -> TenantConfigManager:
         _manager = TenantConfigManager()
     return _manager
 
-def load_tenant_config(tenant_id: str) -> TenantRunConfig:
-    """Shortcut untuk load config — dipakai dari pipeline.py."""
-    return get_manager().load(tenant_id)
+def load_tenant_config(tenant_id: str, channel_id: str | None = None,
+                       niche: str | None = None) -> TenantRunConfig:
+    """Shortcut untuk load config — dipakai dari pipeline.py + komponen.
+    channel_id → overlay per-channel (F1-05); None → murni per-tenant (backward-compatible)."""
+    return get_manager().load(tenant_id, channel_id=channel_id, niche=niche)
 
 
 if __name__ == "__main__":

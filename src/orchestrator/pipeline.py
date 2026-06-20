@@ -62,7 +62,7 @@ class Pipeline:
         """
         try:
             from src.config.tenant_config import load_tenant_config
-            run_config = load_tenant_config(tenant_config.tenant_id)
+            run_config = load_tenant_config(tenant_config.tenant_id, getattr(tenant_config, "channel_id", None), getattr(tenant_config, "niche", None))
             logger.info(
                 f"[Pipeline] Config loaded from Supabase: "
                 f"tts={run_config.tts_provider} | "
