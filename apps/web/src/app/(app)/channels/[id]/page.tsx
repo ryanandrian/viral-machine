@@ -24,6 +24,8 @@ type ChannelRow = {
   production_paused: boolean | null; production_paused_reason: string | null;
   llm_model: string | null; llm_library: string | null; visual_mode: string | null;
   tts_provider: string | null; voice_key: string | null;
+  image_quality: string | null; music_enabled: boolean | null; music_volume: number | null;
+  music_default_mood: string | null; script_min_viral_score: number | null; script_max_retry: number | null;
 };
 type ModelOpt = { model_key: string; provider_key: string; display_name: string };
 type VoiceOpt = { voice_key: string; provider_key: string; display_name: string; gender: string | null };
@@ -96,6 +98,27 @@ export default function ChannelDetailPage() {
   const [nicheDefaults, setNicheDefaults] = useState<Record<string, string>>({});
   const [savingAi, setSavingAi] = useState(false);
   const [aiMsg, setAiMsg] = useState<string | null>(null);
+  // F2-03: knob operasional per-channel (mutu & biaya — hak tenant)
+  const [imgQuality, setImgQuality] = useState("low");
+  const [musicOn, setMusicOn] = useState(false);
+  const [musicVol, setMusicVol] = useState(0.1);
+  const [musicMood, setMusicMood] = useState("");
+  const [minScore, setMinScore] = useState(75);
+  const [maxRetry, setMaxRetry] = useState(3);
+  const [savingOps, setSavingOps] = useState(false);
+  const [opsMsg, setOpsMsg] = useState<string | null>(null);
+
+  async function saveOps() {
+    setOpsMsg(null); setSavingOps(true);
+    const { error } = await supabase.from("channels").update({
+      image_quality: imgQuality, music_enabled: musicOn, music_volume: musicVol,
+      music_default_mood: musicMood.trim() || null,
+      script_min_viral_score: minScore, script_max_retry: maxRetry,
+    }).eq("id", id);
+    setSavingOps(false);
+    setOpsMsg(error ? `Gagal: ${error.message}` : "Tersimpan");
+    if (!error) load();
+  }
 
   // F2-03 simpan: model+voice → channels (RLS UPDATE). llm_library diturunkan dari provider model LLM.
   async function saveAi() {
@@ -195,7 +218,7 @@ export default function ChannelDetailPage() {
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     const { data } = await supabase.from("channels")
-      .select("id,channel_name,platform_channel_id,niche,niche_pool,niche_mode,content_language,is_active,publish_privacy,duration_preset,production_paused,production_paused_reason,llm_model,llm_library,visual_mode,tts_provider,voice_key")
+      .select("id,channel_name,platform_channel_id,niche,niche_pool,niche_mode,content_language,is_active,publish_privacy,duration_preset,production_paused,production_paused_reason,llm_model,llm_library,visual_mode,tts_provider,voice_key,image_quality,music_enabled,music_volume,music_default_mood,script_min_viral_score,script_max_retry")
       .eq("id", id).maybeSingle();
     const c = data as ChannelRow | null;
     setCh(c);
@@ -208,6 +231,9 @@ export default function ChannelDetailPage() {
       const vm = c.visual_mode ?? "";
       if (vm.startsWith("ai_image:")) { setVmode("ai_image"); setImgModel(vm.slice(9)); } else { setVmode("video"); setImgModel(""); }
       setTtsProv(c.tts_provider ?? ""); setVoiceKey(c.voice_key ?? "");
+      setImgQuality(c.image_quality ?? "low"); setMusicOn(c.music_enabled ?? false);
+      setMusicVol(c.music_volume ?? 0.1); setMusicMood(c.music_default_mood ?? "");
+      setMinScore(c.script_min_viral_score ?? 75); setMaxRetry(c.script_max_retry ?? 3);
     }
     // F2-03: katalog (ai_models/tts_profiles/voice_catalog — RLS read) + voice_defaults niche (pre-fill).
     const { data: am } = await supabase.from("ai_models").select("model_key,provider_key,component,display_name").eq("is_active", true).order("display_name");
@@ -437,6 +463,41 @@ export default function ChannelDetailPage() {
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
               <button className="btn btn-default" onClick={saveAi} disabled={savingAi}>{savingAi ? <Loader2 size={15} className="spin" /> : <Bi id="Simpan produksi AI" en="Save AI production" />}</button>
               {aiMsg && <span style={{ fontSize: "var(--text-sm)", color: aiMsg.includes("Tersimpan") ? "var(--success)" : "var(--danger,#ef4444)" }}>{aiMsg}</span>}
+            </div>
+          </div>
+        </div>
+
+        <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 560 }}>
+          <h3 className="card-title" style={{ marginBottom: "0.35rem" }}><Bi id="Operasional & mutu" en="Operations & quality" /></h3>
+          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}><Bi id="Kendali biaya & mutu output per-channel." en="Per-channel cost & output-quality controls." /></p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.875rem" }}>
+            {vmode === "ai_image" && (
+              <div><label className="label"><Bi id="Kualitas gambar" en="Image quality" /></label>
+                <select className="input" value={imgQuality} onChange={(e) => setImgQuality(e.target.value)} style={{ width: "fit-content" }}>
+                  <option value="low"><Bi id="Hemat" en="Low" /></option><option value="medium">Medium</option><option value="high">High</option>
+                </select>
+                <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.3rem" }}><Bi id="Makin tinggi = makin bagus tapi lebih mahal (biaya provider AI Anda)." en="Higher = better but pricier (your AI provider cost)." /></div>
+              </div>
+            )}
+            <div>
+              <label style={{ display: "flex", alignItems: "center", gap: "0.625rem", fontSize: "var(--text-sm)" }}>
+                <span className="switch"><input type="checkbox" checked={musicOn} onChange={(e) => setMusicOn(e.target.checked)} /><span className="track" /><span className="thumb" /></span>
+                <Bi id="Musik latar" en="Background music" />
+              </label>
+              {musicOn && (
+                <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: "center", marginTop: "0.5rem" }}>
+                  <label className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Volume" en="Volume" /> {Math.round(musicVol * 100)}%<br /><input type="range" min={0} max={0.5} step={0.01} value={musicVol} onChange={(e) => setMusicVol(parseFloat(e.target.value))} /></label>
+                  <div><label className="label" style={{ fontSize: "var(--text-xs)" }}><Bi id="Mood (opsional)" en="Mood (optional)" /></label><input className="input" value={musicMood} onChange={(e) => setMusicMood(e.target.value)} placeholder="auto" style={{ width: 160 }} /></div>
+                </div>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+              <div><label className="label"><Bi id="Skor viral min (QC)" en="Min viral score (QC)" /></label><input className="input" type="number" min={0} max={100} value={minScore} onChange={(e) => setMinScore(parseInt(e.target.value) || 0)} style={{ width: 110 }} /></div>
+              <div><label className="label"><Bi id="Maks retry skrip" en="Max script retry" /></label><input className="input" type="number" min={0} max={10} value={maxRetry} onChange={(e) => setMaxRetry(parseInt(e.target.value) || 0)} style={{ width: 110 }} /></div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+              <button className="btn btn-default" onClick={saveOps} disabled={savingOps}>{savingOps ? <Loader2 size={15} className="spin" /> : <Bi id="Simpan operasional" en="Save operations" />}</button>
+              {opsMsg && <span style={{ fontSize: "var(--text-sm)", color: opsMsg.includes("Tersimpan") ? "var(--success)" : "var(--danger,#ef4444)" }}>{opsMsg}</span>}
             </div>
           </div>
         </div>
