@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ExternalLink, Settings, Zap, ArrowRight, BarChart3, Calendar, Activity, Loader2, Check, Pause, Play, RotateCw, AlertTriangle } from "lucide-react";
+import { ExternalLink, Settings, Zap, ArrowRight, BarChart3, Calendar, Activity, Loader2, Check, Pause, Play, RotateCw, AlertTriangle, Mic } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import PresetTables from "@/components/preset-tables";
 import "./channel-detail.css";
@@ -161,7 +161,7 @@ export default function ChannelDetailPage() {
   async function saveOps() {
     setOpsMsg(null); setSavingOps(true);
     const { error } = await supabase.from("channels").update({
-      image_quality: imgQuality, music_enabled: musicOn, music_volume: musicVol,
+      music_enabled: musicOn, music_volume: musicVol,
       music_default_mood: musicMood.trim() || null,
       script_min_viral_score: minScore, script_max_retry: maxRetry,
     }).eq("id", id);
@@ -177,7 +177,7 @@ export default function ChannelDetailPage() {
     const visual_mode = vmode === "ai_image" ? (imgModel ? `ai_image:${imgModel}` : null) : "video";
     const { error } = await supabase.from("channels").update({
       llm_model: llmModel || null, llm_library: lib,
-      visual_mode, tts_provider: ttsProv || null, voice_key: voiceKey || null,
+      visual_mode, image_quality: imgQuality, tts_provider: ttsProv || null, voice_key: voiceKey || null,
     }).eq("id", id);
     setSavingAi(false);
     setAiMsg(error ? `Gagal: ${error.message}` : "Tersimpan");
@@ -476,112 +476,87 @@ export default function ChannelDetailPage() {
         </div>
 
         <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 560 }}>
-          <h3 className="card-title" style={{ marginBottom: "0.35rem" }}><Bi id="Produksi AI (model & suara)" en="AI production (models & voice)" /></h3>
-          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}>
+          <h3 className="card-title" style={{ marginBottom: "0.35rem" }}><Bi id="Produksi AI — model & suara" en="AI production — models & voice" /></h3>
+          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1.25rem" }}>
             <Bi id="Pilih model AI tiap elemen + suara. Biaya = penyedia AI Anda (BYOK), bukan biaya kami." en="Pick the AI model per element + voice. Cost = your AI provider (BYOK), not our fee." />
           </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.875rem" }}>
-            <div><label className="label"><Bi id="Model LLM (skrip)" en="LLM model (script)" /></label>
-              <select className="input" value={llmModel} onChange={(e) => setLlmModel(e.target.value)} style={{ width: "fit-content" }}>
-                <option value="">— pilih —</option>
-                {llmOpts.map((m) => <option key={m.model_key} value={m.model_key}>{m.display_name}</option>)}
-              </select>
-            </div>
-            <div><label className="label"><Bi id="Visual" en="Visual" /></label>
-              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                <select className="input" value={vmode} onChange={(e) => setVmode(e.target.value as "video" | "ai_image")} style={{ width: "fit-content" }}>
-                  <option value="video"><Bi id="Stock video" en="Stock video" /></option>
-                  <option value="ai_image">AI Image</option>
-                </select>
-                {vmode === "ai_image" && (
-                  <select className="input" value={imgModel} onChange={(e) => setImgModel(e.target.value)} style={{ width: "fit-content" }}>
-                    <option value="">— model gambar —</option>
-                    {imgOpts.map((m) => <option key={m.model_key} value={m.model_key}>{m.display_name}</option>)}
-                  </select>
-                )}
-              </div>
-            </div>
-            <div><label className="label"><Bi id="Suara (TTS)" en="Voice (TTS)" /></label>
-              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
-                <select className="input" value={ttsProv} onChange={(e) => { setTtsProv(e.target.value); setVoiceKey(""); }} style={{ width: "fit-content" }}>
-                  <option value="">— provider —</option>
-                  {ttsOpts.map((p) => <option key={p.provider_key} value={p.provider_key}>{p.display_name}</option>)}
-                </select>
-                {ttsProv && (
-                  <select className="input" value={voiceKey || nicheDefaults[ttsProv] || ""} onChange={(e) => setVoiceKey(e.target.value)} style={{ width: "fit-content" }}>
-                    <option value="">— suara —</option>
-                    {voiceAll.filter((v) => v.provider_key === ttsProv).map((v) => <option key={v.voice_key} value={v.voice_key}>{v.display_name}{v.gender ? ` (${v.gender})` : ""}</option>)}
-                  </select>
-                )}
-              </div>
-              {ttsProv && !voiceKey && nicheDefaults[ttsProv] && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.35rem" }}><Bi id="Default niche dipakai bila tak diubah." en="Niche default used if unchanged." /></div>}
-              <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.35rem" }}><Bi id="Test/preview suara — segera hadir." en="Voice test/preview — coming soon." /></div>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-              <button className="btn btn-default" onClick={saveAi} disabled={savingAi}>{savingAi ? <Loader2 size={15} className="spin" /> : <Bi id="Simpan produksi AI" en="Save AI production" />}</button>
-              {aiMsg && <span style={{ fontSize: "var(--text-sm)", color: aiMsg.includes("Tersimpan") ? "var(--success)" : "var(--danger,#ef4444)" }}>{aiMsg}</span>}
-            </div>
-          </div>
+          <div className="fld-row"><div className="k"><Bi id="Model LLM (skrip)" en="LLM model (script)" /></div>
+            <div className="radio-row">{llmOpts.map((m) => <span key={m.model_key} className={`radio-pill${llmModel === m.model_key ? " sel" : ""}`} onClick={() => setLlmModel(m.model_key)}>{m.display_name}</span>)}</div></div>
+          <div className="fld-row"><div className="k"><Bi id="Mode visual" en="Visual mode" /><div className="sub">video=stok · ai_image=generate</div></div>
+            <div className="radio-row">{(["video", "ai_image"] as const).map((m) => <span key={m} className={`radio-pill${vmode === m ? " sel" : ""}`} onClick={() => setVmode(m)}>{m === "video" ? "Stock video" : "AI Image"}</span>)}</div></div>
+          {vmode === "ai_image" && <>
+            <div className="fld-row"><div className="k"><Bi id="Model gambar" en="Image model" /></div>
+              <div className="radio-row">{imgOpts.map((m) => <span key={m.model_key} className={`radio-pill${imgModel === m.model_key ? " sel" : ""}`} onClick={() => setImgModel(m.model_key)}>{m.display_name}</span>)}</div></div>
+            <div className="fld-row"><div className="k"><Bi id="Kualitas gambar" en="Image quality" /><div className="sub"><Bi id="tinggi = bagus, lebih mahal" en="higher = better, pricier" /></div></div>
+              <div className="radio-row">{["low", "medium", "high"].map((q) => <span key={q} className={`radio-pill${imgQuality === q ? " sel" : ""}`} onClick={() => setImgQuality(q)}>{q}</span>)}</div></div>
+          </>}
+          <div className="fld-row"><div className="k"><Bi id="Provider suara (TTS)" en="Voice provider (TTS)" /></div>
+            <div className="radio-row">{ttsOpts.map((p) => <span key={p.provider_key} className={`radio-pill${ttsProv === p.provider_key ? " sel" : ""}`} onClick={() => { setTtsProv(p.provider_key); setVoiceKey(""); }}>{p.display_name}</span>)}</div></div>
+          {ttsProv && (
+            <div className="fld-row"><div className="k"><Bi id="Suara" en="Voice" /><div className="sub"><Bi id="default niche bila tak dipilih" en="niche default if unset" /></div></div>
+              <div className="radio-row">{voiceAll.filter((v) => v.provider_key === ttsProv).map((v) => { const eff = voiceKey || nicheDefaults[ttsProv] || ""; return <span key={v.voice_key} className={`radio-pill${eff === v.voice_key ? " sel" : ""}`} onClick={() => setVoiceKey(v.voice_key)}><Mic size={13} />{v.display_name}{v.gender ? ` · ${v.gender}` : ""}</span>; })}</div></div>
+          )}
+          <div className="save-bar"><span className="muted">{aiMsg ?? <Bi id="Disimpan ke channel (model & suara)" en="Saves to channel (models & voice)" />}</span><button className="btn btn-default" disabled={savingAi} onClick={saveAi}>{savingAi ? "Menyimpan…" : <Bi id="Simpan & Terapkan" en="Save & Apply" />}</button></div>
         </div>
 
         <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 560 }}>
           <h3 className="card-title" style={{ marginBottom: "0.35rem" }}><Bi id="Operasional & mutu" en="Operations & quality" /></h3>
-          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}><Bi id="Kendali biaya & mutu output per-channel." en="Per-channel cost & output-quality controls." /></p>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.875rem" }}>
-            {vmode === "ai_image" && (
-              <div><label className="label"><Bi id="Kualitas gambar" en="Image quality" /></label>
-                <select className="input" value={imgQuality} onChange={(e) => setImgQuality(e.target.value)} style={{ width: "fit-content" }}>
-                  <option value="low"><Bi id="Hemat" en="Low" /></option><option value="medium">Medium</option><option value="high">High</option>
-                </select>
-                <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.3rem" }}><Bi id="Makin tinggi = makin bagus tapi lebih mahal (biaya provider AI Anda)." en="Higher = better but pricier (your AI provider cost)." /></div>
-              </div>
-            )}
-            <div>
-              <label style={{ display: "flex", alignItems: "center", gap: "0.625rem", fontSize: "var(--text-sm)" }}>
-                <span className="switch"><input type="checkbox" checked={musicOn} onChange={(e) => setMusicOn(e.target.checked)} /><span className="track" /><span className="thumb" /></span>
-                <Bi id="Musik latar" en="Background music" />
-              </label>
-              {musicOn && (
-                <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: "center", marginTop: "0.5rem" }}>
-                  <label className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Volume" en="Volume" /> {Math.round(musicVol * 100)}%<br /><input type="range" min={0} max={0.5} step={0.01} value={musicVol} onChange={(e) => setMusicVol(parseFloat(e.target.value))} /></label>
-                  <div><label className="label" style={{ fontSize: "var(--text-xs)" }}><Bi id="Mood (opsional)" en="Mood (optional)" /></label><input className="input" value={musicMood} onChange={(e) => setMusicMood(e.target.value)} placeholder="auto" style={{ width: 160 }} /></div>
-                </div>
-              )}
-            </div>
-            <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-              <div><label className="label"><Bi id="Skor viral min (QC)" en="Min viral score (QC)" /></label><input className="input" type="number" min={0} max={100} value={minScore} onChange={(e) => setMinScore(parseInt(e.target.value) || 0)} style={{ width: 110 }} /></div>
-              <div><label className="label"><Bi id="Maks retry skrip" en="Max script retry" /></label><input className="input" type="number" min={0} max={10} value={maxRetry} onChange={(e) => setMaxRetry(parseInt(e.target.value) || 0)} style={{ width: 110 }} /></div>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-              <button className="btn btn-default" onClick={saveOps} disabled={savingOps}>{savingOps ? <Loader2 size={15} className="spin" /> : <Bi id="Simpan operasional" en="Save operations" />}</button>
-              {opsMsg && <span style={{ fontSize: "var(--text-sm)", color: opsMsg.includes("Tersimpan") ? "var(--success)" : "var(--danger,#ef4444)" }}>{opsMsg}</span>}
-            </div>
-          </div>
+          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1.25rem" }}><Bi id="Musik latar & ambang mutu (QC) per-channel." en="Background music & quality gate (QC) per-channel." /></p>
+          <div className="fld-row"><div className="k"><Bi id="Aktifkan musik latar" en="Enable background music" /></div>
+            <label className="switch"><input type="checkbox" checked={musicOn} onChange={(e) => setMusicOn(e.target.checked)} /><span className="track" /><span className="thumb" /></label></div>
+          {musicOn && <>
+            <div className="fld-row"><div className="k"><Bi id="Volume" en="Volume" /><div className="sub">{Math.round(musicVol * 100)}%</div></div>
+              <input type="range" className="slider" min={0} max={50} value={Math.round(musicVol * 100)} onChange={(e) => setMusicVol(+e.target.value / 100)} /></div>
+            <div className="fld-row"><div className="k"><Bi id="Mood default (opsional)" en="Default mood (optional)" /></div>
+              <div className="radio-row">{["", "tegang", "misterius", "epik", "tenang", "ceria"].map((m) => <span key={m || "auto"} className={`radio-pill${musicMood === m ? " sel" : ""}`} onClick={() => setMusicMood(m)}>{m || "auto"}</span>)}</div></div>
+          </>}
+          <div className="fld-row"><div className="k"><Bi id="Skor viral min (QC)" en="Min viral score (QC)" /><div className="sub">{minScore}/100</div></div>
+            <input type="range" className="slider" min={0} max={100} value={minScore} onChange={(e) => setMinScore(+e.target.value)} /></div>
+          <div className="fld-row"><div className="k"><Bi id="Maks retry skrip" en="Max script retry" /></div>
+            <div className="radio-row">{[1, 2, 3, 4, 5].map((n) => <span key={n} className={`radio-pill${maxRetry === n ? " sel" : ""}`} onClick={() => setMaxRetry(n)}>{n}</span>)}</div></div>
+          <div className="save-bar"><span className="muted">{opsMsg ?? <Bi id="Disimpan ke channel (operasional)" en="Saves to channel (operations)" />}</span><button className="btn btn-default" disabled={savingOps} onClick={saveOps}>{savingOps ? "Menyimpan…" : <Bi id="Simpan & Terapkan" en="Save & Apply" />}</button></div>
         </div>
 
-        <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 560 }}>
+        <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 760 }}>
           <h3 className="card-title" style={{ marginBottom: "0.35rem" }}><Bi id="Caption & Hashtag" en="Caption & Hashtags" /></h3>
           <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}><Bi id="Tampilan teks subtitle di video + hashtag postingan (brand channel ini)." en="On-screen subtitle styling + post hashtags (this channel's brand)." /></p>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.875rem" }}>
-            <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-              <div><label className="label"><Bi id="Font" en="Font" /></label>
-                <select className="input" value={capStr("font_name", "Anton")} onChange={(e) => setCap({ ...cap, font_name: e.target.value })} style={{ width: 150 }}>
-                  {["Anton", "Montserrat", "Bebas Neue", "Oswald", "Roboto", "Poppins"].map((f) => <option key={f} value={f}>{f}</option>)}
-                </select>
+          <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: "1.5rem", alignItems: "start" }}>
+            {/* Preview 9:16 LIVE — pakai nilai caption_style sebenarnya */}
+            <div style={{ position: "sticky", top: 72 }}>
+              <div style={{ aspectRatio: "9/16", borderRadius: "var(--r-lg)", overflow: "hidden", position: "relative", background: "linear-gradient(170deg,#0c2233,#05101a)", border: "1px solid var(--border)" }}>
+                <div style={{ position: "absolute", inset: 0, background: "radial-gradient(120% 70% at 50% 25%,transparent,rgba(0,0,0,.55))" }} />
+                <div style={{ position: "absolute", left: 10, right: 10, top: `${capNum("position_y_pct", 83)}%`, transform: "translateY(-50%)", textAlign: "center", lineHeight: 1.12,
+                  fontFamily: `${capStr("font_name", "Anton")},Geist,sans-serif`, fontWeight: (cap.bold ?? true) ? 800 : 500,
+                  fontSize: capNum("font_size", 68) * 0.18, color: capStr("inactive_word_color", "#FFFFFF"),
+                  textShadow: `0 0 ${capNum("outline", 4)}px ${capStr("outline_color", "#000000")}, 0 1px 4px rgba(0,0,0,.8)` }}>
+                  Suara aneh di <span style={{ color: capStr("active_word_color", "#FFD700") }}>kedalaman</span>
+                </div>
               </div>
-              <div><label className="label"><Bi id="Ukuran" en="Size" /></label><input className="input" type="number" min={24} max={120} value={capNum("font_size", 68)} onChange={(e) => setCap({ ...cap, font_size: parseInt(e.target.value) || 68 })} style={{ width: 90 }} /></div>
-              <div><label className="label"><Bi id="Posisi Y (%)" en="Position Y (%)" /></label><input className="input" type="number" min={0} max={100} value={capNum("position_y_pct", 83)} onChange={(e) => setCap({ ...cap, position_y_pct: parseInt(e.target.value) || 83 })} style={{ width: 90 }} /></div>
-              <div><label className="label"><Bi id="Kata/baris" en="Words/line" /></label><input className="input" type="number" min={1} max={8} value={capNum("max_words_per_line", 3)} onChange={(e) => setCap({ ...cap, max_words_per_line: parseInt(e.target.value) || 3 })} style={{ width: 80 }} /></div>
+              <div className="muted" style={{ fontSize: "var(--text-xs)", textAlign: "center", marginTop: ".5rem" }}>Preview · 9:16</div>
             </div>
-            <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: "flex-end" }}>
-              <div><label className="label"><Bi id="Warna kata aktif" en="Active word" /></label><input type="color" value={capStr("active_word_color", "#FFD700")} onChange={(e) => setCap({ ...cap, active_word_color: e.target.value })} style={{ width: 48, height: 34, padding: 2 }} /></div>
-              <div><label className="label"><Bi id="Warna kata lain" en="Other words" /></label><input type="color" value={capStr("inactive_word_color", "#FFFFFF")} onChange={(e) => setCap({ ...cap, inactive_word_color: e.target.value })} style={{ width: 48, height: 34, padding: 2 }} /></div>
-              <div><label className="label"><Bi id="Garis tepi" en="Outline" /></label><input type="color" value={capStr("outline_color", "#000000")} onChange={(e) => setCap({ ...cap, outline_color: e.target.value })} style={{ width: 48, height: 34, padding: 2 }} /></div>
-              <div><label className="label"><Bi id="Tebal tepi" en="Outline px" /></label><input className="input" type="number" min={0} max={12} value={capNum("outline", 4)} onChange={(e) => setCap({ ...cap, outline: parseInt(e.target.value) || 0 })} style={{ width: 80 }} /></div>
-              <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "var(--text-sm)" }}>
-                <span className="switch"><input type="checkbox" checked={Boolean(cap.bold ?? true)} onChange={(e) => setCap({ ...cap, bold: e.target.checked })} /><span className="track" /><span className="thumb" /></span><Bi id="Tebal" en="Bold" />
-              </label>
+            {/* Kontrol — fld-row/slider/radio-pill/swatch */}
+            <div>
+              <div className="fld-row"><div className="k"><Bi id="Font" en="Font" /></div>
+                <div className="radio-row">{["Anton", "Montserrat", "Bebas Neue", "Oswald", "Poppins"].map((f) => <span key={f} className={`radio-pill${capStr("font_name", "Anton") === f ? " sel" : ""}`} onClick={() => setCap({ ...cap, font_name: f })}>{f}</span>)}</div></div>
+              <div className="fld-row"><div className="k"><Bi id="Ukuran font" en="Font size" /><div className="sub">{capNum("font_size", 68)}px</div></div>
+                <input type="range" className="slider" min={36} max={120} value={capNum("font_size", 68)} onChange={(e) => setCap({ ...cap, font_size: +e.target.value })} /></div>
+              <div className="fld-row"><div className="k"><Bi id="Posisi vertikal" en="Vertical position" /><div className="sub">{capNum("position_y_pct", 83)}% dari atas</div></div>
+                <input type="range" className="slider" min={10} max={95} value={capNum("position_y_pct", 83)} onChange={(e) => setCap({ ...cap, position_y_pct: +e.target.value })} /></div>
+              <div className="fld-row"><div className="k"><Bi id="Kata per baris" en="Words per line" /></div>
+                <div className="radio-row">{[1, 2, 3, 4, 5].map((n) => <span key={n} className={`radio-pill${capNum("max_words_per_line", 3) === n ? " sel" : ""}`} onClick={() => setCap({ ...cap, max_words_per_line: n })}>{n}</span>)}</div></div>
+              <div className="fld-row"><div className="k"><Bi id="Warna kata aktif" en="Active word color" /></div>
+                <input type="color" value={capStr("active_word_color", "#FFD700")} onChange={(e) => setCap({ ...cap, active_word_color: e.target.value })} style={{ width: 44, height: 30, padding: 2, borderRadius: "var(--r-sm)", border: "1px solid var(--border)" }} /></div>
+              <div className="fld-row"><div className="k"><Bi id="Warna kata lain" en="Other words color" /></div>
+                <input type="color" value={capStr("inactive_word_color", "#FFFFFF")} onChange={(e) => setCap({ ...cap, inactive_word_color: e.target.value })} style={{ width: 44, height: 30, padding: 2, borderRadius: "var(--r-sm)", border: "1px solid var(--border)" }} /></div>
+              <div className="fld-row"><div className="k"><Bi id="Garis tepi" en="Outline" /><div className="sub">{capNum("outline", 4)}px</div></div>
+                <div style={{ display: "flex", gap: ".625rem", alignItems: "center" }}>
+                  <input type="color" value={capStr("outline_color", "#000000")} onChange={(e) => setCap({ ...cap, outline_color: e.target.value })} style={{ width: 44, height: 30, padding: 2, borderRadius: "var(--r-sm)", border: "1px solid var(--border)" }} />
+                  <input type="range" className="slider" style={{ flex: 1 }} min={0} max={10} value={capNum("outline", 4)} onChange={(e) => setCap({ ...cap, outline: +e.target.value })} /></div></div>
+              <div className="fld-row"><div className="k"><Bi id="Tebal (bold)" en="Bold" /></div>
+                <label className="switch"><input type="checkbox" checked={Boolean(cap.bold ?? true)} onChange={(e) => setCap({ ...cap, bold: e.target.checked })} /><span className="track" /><span className="thumb" /></label></div>
             </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.875rem", marginTop: "1rem" }}>
             <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.875rem" }}>
               <label className="label"><Bi id="Hashtag per niche" en="Hashtags per niche" /></label>
               <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "0.5rem" }}><Bi id="Pisahkan dengan koma. Tanda # otomatis." en="Comma-separated. # added automatically." /></div>
@@ -601,45 +576,27 @@ export default function ChannelDetailPage() {
 
         <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 560 }}>
           <h3 className="card-title" style={{ marginBottom: "0.35rem" }}><Bi id="Branded (CTA · logo · link)" en="Branded (CTA · logo · link)" /></h3>
-          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}><Bi id="Sentuhan brand opsional di video & deskripsi (semua boleh kosong = tanpa branding)." en="Optional brand touches in video & description (all blank = no branding)." /></p>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.875rem" }}>
-            <div><label className="label">CTA</label>
-              <select className="input" value={ctaMode} onChange={(e) => setCtaMode(e.target.value)} style={{ width: "fit-content" }}>
-                <option value="implicit"><Bi id="Implicit (tanpa sebut brand)" en="Implicit (no brand mention)" /></option>
-                <option value="soft_sell"><Bi id="Soft-sell (sebut brand halus)" en="Soft-sell (subtle brand mention)" /></option>
-              </select>
-            </div>
-            {ctaMode === "soft_sell" && (
-              <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-                <div><label className="label"><Bi id="Nama brand" en="Brand name" /></label><input className="input" value={brandName} onChange={(e) => setBrandName(e.target.value)} style={{ width: 200 }} /></div>
-                <div><label className="label"><Bi id="Teks CTA" en="CTA text" /></label><input className="input" value={ctaText} onChange={(e) => setCtaText(e.target.value)} placeholder="Follow for more" style={{ width: 220 }} /></div>
-              </div>
-            )}
-            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.875rem" }}>
-              <label className="label"><Bi id="Logo (URL gambar) — overlay di video" en="Logo (image URL) — video overlay" /></label>
-              <input className="input input-mono" value={brandLogo} onChange={(e) => setBrandLogo(e.target.value)} placeholder="https://… .png" />
-              <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.3rem" }}><Bi id="Tempel URL logo (PNG transparan disarankan). Upload file langsung — segera hadir." en="Paste logo URL (transparent PNG recommended). Direct file upload — coming soon." /></div>
-              {brandLogo && (
-                <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: "flex-end", marginTop: "0.625rem" }}>
-                  <div><label className="label" style={{ fontSize: "var(--text-xs)" }}><Bi id="Posisi" en="Position" /></label>
-                    <select className="input" value={logoPos} onChange={(e) => setLogoPos(e.target.value)} style={{ width: 140 }}>
-                      {[["top-left", "Kiri atas"], ["top-right", "Kanan atas"], ["bottom-left", "Kiri bawah"], ["bottom-right", "Kanan bawah"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                    </select></div>
-                  <label className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Ukuran" en="Size" /> {Math.round(logoSize * 100)}%<br /><input type="range" min={0.05} max={0.3} step={0.01} value={logoSize} onChange={(e) => setLogoSize(parseFloat(e.target.value))} /></label>
-                  <label className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Opasitas" en="Opacity" /> {Math.round(logoOpacity * 100)}%<br /><input type="range" min={0.2} max={1} step={0.05} value={logoOpacity} onChange={(e) => setLogoOpacity(parseFloat(e.target.value))} /></label>
-                </div>
-              )}
-            </div>
-            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.875rem", display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: "flex-end" }}>
-              <div style={{ flex: 1, minWidth: 220 }}><label className="label"><Bi id="Link landing (deskripsi)" en="Landing link (description)" /></label><input className="input input-mono" value={landingLink} onChange={(e) => setLandingLink(e.target.value)} placeholder="https://…" /></div>
-              <div><label className="label"><Bi id="Posisi link" en="Link position" /></label>
-                <select className="input" value={linkPos} onChange={(e) => setLinkPos(e.target.value)} style={{ width: 110 }}><option value="top"><Bi id="Atas" en="Top" /></option><option value="bottom"><Bi id="Bawah" en="Bottom" /></option></select></div>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-              <button className="btn btn-default" onClick={saveBranded} disabled={savingBr2}>{savingBr2 ? <Loader2 size={15} className="spin" /> : <Bi id="Simpan branded" en="Save branded" />}</button>
-              {br2Msg && <span style={{ fontSize: "var(--text-sm)", color: br2Msg.includes("Tersimpan") ? "var(--success)" : "var(--danger,#ef4444)" }}>{br2Msg}</span>}
-            </div>
-          </div>
+          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1.25rem" }}><Bi id="Sentuhan brand opsional di video & deskripsi (semua boleh kosong = tanpa branding)." en="Optional brand touches in video & description (all blank = no branding)." /></p>
+          <div className="fld-row"><div className="k">CTA<div className="sub"><Bi id="implicit=tanpa brand · soft-sell=sebut halus" en="implicit=no brand · soft-sell=subtle" /></div></div>
+            <div className="radio-row">{[["implicit", "Implicit"], ["soft_sell", "Soft-sell"]].map(([v, l]) => <span key={v} className={`radio-pill${ctaMode === v ? " sel" : ""}`} onClick={() => setCtaMode(v)}>{l}</span>)}</div></div>
+          {ctaMode === "soft_sell" && <>
+            <div className="fld-row"><div className="k"><Bi id="Nama brand" en="Brand name" /></div><input className="input" value={brandName} onChange={(e) => setBrandName(e.target.value)} style={{ maxWidth: 280 }} /></div>
+            <div className="fld-row"><div className="k"><Bi id="Teks CTA" en="CTA text" /></div><input className="input" value={ctaText} onChange={(e) => setCtaText(e.target.value)} placeholder="Follow for more" style={{ maxWidth: 280 }} /></div>
+          </>}
+          <div className="fld-row"><div className="k"><Bi id="Logo (URL)" en="Logo (URL)" /><div className="sub"><Bi id="PNG transparan · overlay di video · upload file: segera" en="transparent PNG · video overlay · file upload: soon" /></div></div>
+            <input className="input input-mono" value={brandLogo} onChange={(e) => setBrandLogo(e.target.value)} placeholder="https://… .png" style={{ maxWidth: 320 }} /></div>
+          {brandLogo && <>
+            <div className="fld-row"><div className="k"><Bi id="Posisi logo" en="Logo position" /></div>
+              <div className="radio-row">{[["top-left", "↖"], ["top-right", "↗"], ["bottom-left", "↙"], ["bottom-right", "↘"]].map(([v, l]) => <span key={v} className={`radio-pill${logoPos === v ? " sel" : ""}`} onClick={() => setLogoPos(v)} style={{ fontSize: "1rem" }}>{l}</span>)}</div></div>
+            <div className="fld-row"><div className="k"><Bi id="Ukuran logo" en="Logo size" /><div className="sub">{Math.round(logoSize * 100)}%</div></div>
+              <input type="range" className="slider" min={5} max={30} value={Math.round(logoSize * 100)} onChange={(e) => setLogoSize(+e.target.value / 100)} /></div>
+            <div className="fld-row"><div className="k"><Bi id="Opasitas logo" en="Logo opacity" /><div className="sub">{Math.round(logoOpacity * 100)}%</div></div>
+              <input type="range" className="slider" min={20} max={100} value={Math.round(logoOpacity * 100)} onChange={(e) => setLogoOpacity(+e.target.value / 100)} /></div>
+          </>}
+          <div className="fld-row"><div className="k"><Bi id="Link landing (deskripsi)" en="Landing link (description)" /></div><input className="input input-mono" value={landingLink} onChange={(e) => setLandingLink(e.target.value)} placeholder="https://…" style={{ maxWidth: 320 }} /></div>
+          {landingLink && <div className="fld-row"><div className="k"><Bi id="Posisi link" en="Link position" /></div>
+            <div className="radio-row">{[["top", "Atas"], ["bottom", "Bawah"]].map(([v, l]) => <span key={v} className={`radio-pill${linkPos === v ? " sel" : ""}`} onClick={() => setLinkPos(v)}>{l}</span>)}</div></div>}
+          <div className="save-bar"><span className="muted">{br2Msg ?? <Bi id="Disimpan ke channel (branded)" en="Saves to channel (branded)" />}</span><button className="btn btn-default" disabled={savingBr2} onClick={saveBranded}>{savingBr2 ? "Menyimpan…" : <Bi id="Simpan & Terapkan" en="Save & Apply" />}</button></div>
         </div>
 
         <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 560 }}>

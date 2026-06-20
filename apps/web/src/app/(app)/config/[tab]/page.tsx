@@ -5,11 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { fetchPricing, idrK } from "@/lib/pricing";
-import {
-  Sparkles, Command, Mic, Image as ImageIcon, Music, FileText, Gauge, List, Target, Bell, Shield,
-  ChevronDown, CheckCircle, Loader2, Play, Pause, Settings, X, Clock, Wand2, Plus, Tv,
-  Info, Eye, EyeOff, Minus, BarChart3, XCircle, HelpCircle, RefreshCw, Check, Zap,
-} from "lucide-react";
+import { Sparkles, Command, Music, Target, Bell, Shield, ChevronDown, Play, Settings, X, Clock, Wand2, Plus, Tv, HelpCircle, Check } from "lucide-react";
 import "../config.css";
 
 // Config (D8-D19) STAGE 1 — port dari design-source/Config.html + config/cfg-engines.js (Hybrid).
@@ -27,47 +23,6 @@ function Mark({ label, color, size = 38 }: { label: string; color: string; size?
 }
 
 // waveform deterministik (ganti Math.random)
-function bars(seed: number, n: number): number[] {
-  return Array.from({ length: n }, (_, i) => 20 + Math.round((Math.sin(seed * 1.7 + i * 0.6) * 0.5 + 0.5) * 60));
-}
-
-function TestBtn({ small, label }: { small?: boolean; label?: { id: string; en: string } }) {
-  const [s, setS] = useState<"idle" | "loading" | "done">("idle");
-  if (s === "done") {
-    return (
-      <span className="test-out" style={{ color: "var(--success)", display: "inline-flex", alignItems: "center", gap: "0.4rem", fontSize: "var(--text-sm)" }}>
-        <CheckCircle size={15} /> <Bi id="Terhubung · $0.00" en="Connected · $0.00" />
-      </span>
-    );
-  }
-  return (
-    <button className={`btn ${small ? "btn-ghost btn-sm" : "btn-secondary"}`} disabled={s === "loading"} onClick={() => { setS("loading"); setTimeout(() => setS("done"), 1100); }}>
-      {s === "loading" ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : (label ? <Bi id={label.id} en={label.en} /> : <Bi id="Test" en="Test" />)}
-    </button>
-  );
-}
-
-function PlayBtn({ small }: { small?: boolean }) {
-  const [p, setP] = useState(false);
-  const sz = small ? 13 : 15;
-  return (
-    <button className={`btn btn-secondary btn-icon ${small ? "btn-sm" : ""}`} style={{ borderRadius: "50%" }} onClick={() => setP(!p)}>
-      {p ? <Pause size={sz} /> : <Play size={sz} />}
-    </button>
-  );
-}
-
-function RadioRow({ options }: { options: string[] }) {
-  const [sel, setSel] = useState(0);
-  return (
-    <div className="radio-row">
-      {options.map((o, i) => (
-        <span key={o} className={`radio-pill${i === sel ? " sel" : ""}`} onClick={() => setSel(i)}>{o}</span>
-      ))}
-    </div>
-  );
-}
-
 function Svc({ mark, color, name, meta, defaultOpen = true, children }: { mark: string; color: string; name: string; meta: string; defaultOpen?: boolean; children: React.ReactNode }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
@@ -79,15 +34,6 @@ function Svc({ mark, color, name, meta, defaultOpen = true, children }: { mark: 
         <span className="chev"><ChevronDown size={16} /></span>
       </div>
       <div className="svc-body">{children}</div>
-    </div>
-  );
-}
-
-function TaskRow({ k, sub, model }: { k: string; sub: string; model: string }) {
-  return (
-    <div className="fld-row">
-      <div className="k">{k}<div className="sub">{sub}</div></div>
-      <div className="selbox">{model} <ChevronDown size={14} /></div>
     </div>
   );
 }
@@ -164,318 +110,6 @@ function ApiKeys() {
           ))}
         </tbody></table></div></div>
       <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".75rem" }}><Bi id="Key di-isi & dienkripsi (Fernet) di tab AI Engines / Notifikasi. Status di atas = ada/tidaknya key tersimpan (nilai tak pernah ditampilkan/di-log). Validasi koneksi nyata = saat run produksi." en="Keys are set & Fernet-encrypted in AI Engines / Notifications. Status above = whether a key is stored (values never shown/logged). Live connection validation happens at production run." /></div>
-    </>
-  );
-}
-
-function Voice() {
-  const supabase = createClient();
-  const [current, setCurrent] = useState<string>(""); const [saved, setSaved] = useState<string | null>(null);
-  useEffect(() => { supabase.from("tenant_configs").select("tts_voice").maybeSingle().then(({ data }) => setCurrent(data?.tts_voice ?? "")); }, [supabase]);
-  async function useVoice(name: string) {
-    const { error } = await supabase.rpc("set_tenant_config", { p_tts_voice: name });
-    if (!error) { setCurrent(name); setSaved(name); }
-  }
-  const filters = ["Style: Semua", "Gender: Semua", "Usia: Semua"];
-  const voices: [string, string, string, boolean][] = [
-    ["Arya", "Pria · dalam, misterius", "#1d4ed8", true], ["Sari", "Wanita · hangat, naratif", "#9f1239", false],
-    ["Bima", "Pria · energik, muda", "#047857", false], ["Dewi", "Wanita · tenang, jernih", "#7c3aed", false],
-    ["Galih", "Pria · berwibawa", "#b45309", false], ["Nadia", "Wanita · ekspresif", "#be185d", false],
-  ];
-  const niches: [string, string][] = [["Misteri Samudra", "Arya"], ["Fakta Menarik", "Bima"], ["Sejarah Kelam", "Galih"]];
-  return (
-    <>
-      <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", padding: "0.625rem 0.875rem", background: "var(--brand-soft)", border: "1px solid color-mix(in srgb,var(--brand) 25%,transparent)", borderRadius: "var(--r-md)", marginBottom: "1rem", fontSize: "var(--text-sm)" }}>
-        <Tv size={15} /> <span><Bi id={"Channel: Misteri Samudra · bahasa konten"} en={"Channel: Misteri Samudra · content language"} /></span>
-        <span className="badge badge-default" style={{ marginLeft: "auto" }}>🇮🇩 Bahasa Indonesia</span>
-      </div>
-      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1.25rem" }}>{filters.map((f) => (<span key={f} className="selbox" style={{ height: "2rem" }}>{f} <ChevronDown size={13} /></span>))}</div>
-      {saved && <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: ".75rem" }}>Voice aktif: <b style={{ color: "var(--text-primary)" }}>{saved}</b> — tersimpan.</div>}
-      <div className="grid-3">{voices.map(([n, s, c], idx) => { const sel = current === n; return (
-        <div key={n} className="card card-pad" style={sel ? { borderColor: "var(--brand)" } : undefined}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.75rem" }}><PlayBtn />
-            <div><div style={{ fontWeight: 600, fontSize: "var(--text-sm)" }}>{n}</div><div className="muted" style={{ fontSize: "var(--text-xs)" }}>{s}</div></div></div>
-          <div style={{ height: 24, display: "flex", alignItems: "center", gap: 2, marginBottom: "0.75rem" }}>{bars(idx + 1, 32).map((h, i) => (<span key={i} style={{ flex: 1, height: `${h}%`, background: c, opacity: 0.5, borderRadius: 1 }} />))}</div>
-          <button className={`btn ${sel ? "btn-default" : "btn-outline"} btn-sm`} style={{ width: "100%" }} onClick={() => useVoice(n)} disabled={sel}>{sel ? <Bi id="Sedang dipakai" en="In use" /> : <Bi id="Pakai suara ini" en="Use this voice" />}</button>
-        </div>
-      ); })}</div>
-      <div className="card card-pad" style={{ marginTop: "1.25rem" }}><h3 className="card-title" style={{ marginBottom: "1rem" }}><Target size={15} /> <Bi id="Voice default per niche" en="Default voice per niche" /></h3>
-        {niches.map(([nc, v]) => (<div key={nc} className="fld-row"><div className="k">{nc}</div><div className="selbox"><Mic size={14} /> {v} <ChevronDown size={14} /></div></div>))}
-      </div>
-    </>
-  );
-}
-
-function Visual() {
-  const supabase = createClient();
-  const [mode, setMode] = useState("video"); const [quality, setQuality] = useState("low");
-  const [saving, setSaving] = useState(false); const [saved, setSaved] = useState<string | null>(null);
-  useEffect(() => { supabase.from("tenant_configs").select("visual_mode, image_quality").maybeSingle().then(({ data }) => { if (data) { setMode(data.visual_mode ?? "video"); setQuality(data.image_quality ?? "low"); } }); }, [supabase]);
-  async function save() { setSaving(true); setSaved(null); const { error } = await supabase.rpc("set_tenant_content_config", { p: { visual_mode: mode, image_quality: quality } }); setSaving(false); setSaved(error ? "Gagal" : "Tersimpan"); }
-  const presets: [string, string[], boolean][] = [
-    ["Cinematic Dark", ["#0c1222", "#1e293b", "#334155"], true],
-    ["Vibrant", ["#7c3aed", "#db2777", "#f59e0b"], false],
-    ["Minimalist", ["#f8fafc", "#cbd5e1", "#64748b"], false],
-    ["Mysterious", ["#0f172a", "#1e1b4b", "#4c1d95"], false],
-  ];
-  const palettes: [string, string[]][] = [
-    ["Misteri Samudra", ["#082f49", "#0c4a6e", "#0ea5e9"]],
-    ["Sejarah Kelam", ["#450a0a", "#7f1d1d", "#dc2626"]],
-    ["Fakta Menarik", ["#052e16", "#14532d", "#22c55e"]],
-  ];
-  return (
-    <>
-      <div className="card card-pad" style={{ marginBottom: "1.25rem" }}>
-        <h3 className="card-title" style={{ marginBottom: "0.875rem" }}><Bi id="Mode & kualitas visual" en="Visual mode & quality" /></h3>
-        <div className="fld-row"><div className="k"><Bi id="Mode visual" en="Visual mode" /><div className="sub">video=stok · ai_image=generate</div></div><div className="radio-row">{["video", "ai_image"].map((m) => <span key={m} className={`radio-pill${mode === m ? " sel" : ""}`} onClick={() => setMode(m)}>{m}</span>)}</div></div>
-        <div className="fld-row"><div className="k"><Bi id="Kualitas gambar" en="Image quality" /></div><div className="radio-row">{["low", "standard", "high"].map((q) => <span key={q} className={`radio-pill${quality === q ? " sel" : ""}`} onClick={() => setQuality(q)}>{q}</span>)}</div></div>
-        <div style={{ display: "flex", alignItems: "center", gap: ".75rem", marginTop: ".5rem" }}><button className="btn btn-default btn-sm" disabled={saving} onClick={save}>{saving ? "…" : <Bi id="Simpan" en="Save" />}</button>{saved && <span className="muted" style={{ fontSize: "var(--text-xs)" }}>{saved}</span>}</div>
-      </div>
-      <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: ".5rem" }}><Bi id="Preset gaya & palet di bawah dikelola per-niche (Admin Niches: visual_style)." en="Style presets & palettes below are managed per-niche (Admin Niches: visual_style)." /></div>
-      <div className="grid-4" style={{ opacity: 0.7 }}>{presets.map(([n, cols, sel]) => (
-        <div key={n} className="card" style={{ overflow: "hidden", ...(sel ? { borderColor: "var(--brand)" } : {}) }}>
-          <div style={{ height: 90, display: "flex" }}>{cols.map((c) => (<span key={c} style={{ flex: 1, background: c }} />))}</div>
-          <div style={{ padding: "0.75rem 1rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}><span style={{ fontSize: "var(--text-sm)", fontWeight: 500 }}>{n}</span>{sel ? <span style={{ color: "var(--brand)" }}><CheckCircle size={16} /></span> : null}</div>
-        </div>
-      ))}</div>
-      <div className="card card-pad" style={{ marginTop: "1.25rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}><h3 className="card-title" style={{ margin: 0 }}><Wand2 size={15} /> <Bi id="Prompt prefix kustom" en="Custom prompt prefix" /></h3><span className="badge badge-default">Segera</span></div>
-        <textarea className="textarea input-mono" rows={3} disabled placeholder="Prompt visual diatur per-niche (Admin Niches: image_quality_tags / negative_prompt). Override per-tenant = segera." />
-      </div>
-      <div className="card card-pad" style={{ marginTop: "1rem" }}><h3 className="card-title" style={{ marginBottom: "1rem" }}><Bi id="Palet warna per niche" en="Color palette per niche" /></h3>
-        {palettes.map(([n, cols]) => (
-          <div key={n} className="fld-row"><div className="k">{n}</div><div style={{ display: "flex", gap: "0.5rem" }}>{cols.map((c) => (<span key={c} style={{ width: 28, height: 28, borderRadius: "var(--r-sm)", background: c, border: "1px solid var(--border)" }} />))}<button className="btn btn-ghost btn-icon btn-sm"><Plus size={14} /></button></div></div>
-        ))}
-      </div>
-    </>
-  );
-}
-
-function MusicPanel() {
-  const supabase = createClient();
-  const [enabled, setEnabled] = useState(false); const [vol, setVol] = useState(0.18); const [defMood, setDefMood] = useState("");
-  const [saving, setSaving] = useState(false); const [saved, setSaved] = useState<string | null>(null);
-  useEffect(() => { supabase.from("tenant_configs").select("music_enabled, music_volume, music_default_mood").maybeSingle().then(({ data }) => { if (data) { setEnabled(data.music_enabled ?? false); setVol(data.music_volume ?? 0.18); setDefMood(data.music_default_mood ?? ""); } }); }, [supabase]);
-  async function save() { setSaving(true); setSaved(null); const { error } = await supabase.rpc("set_tenant_content_config", { p: { music_enabled: enabled, music_volume: vol, music_default_mood: defMood || null } }); setSaving(false); setSaved(error ? "Gagal" : "Tersimpan"); }
-  const moods = ["Semua", "Tegang", "Misterius", "Epik", "Tenang", "Ceria"];
-  const [mood, setMood] = useState(0);
-  const tracks: [string, string, string, string, boolean][] = [
-    ["Deep Abyss", "Misterius", "1:42", "#0ea5e9", true], ["Ancient Echoes", "Epik", "2:10", "#f59e0b", true],
-    ["Tension Rising", "Tegang", "1:58", "#ef4444", false], ["Quiet Discovery", "Tenang", "2:24", "#22c55e", true],
-    ["Cosmic Drift", "Misterius", "2:02", "#8b5cf6", false], ["Bright Facts", "Ceria", "1:36", "#ec4899", false],
-  ];
-  return (
-    <>
-      <div className="card card-pad" style={{ marginBottom: "1.25rem" }}>
-        <h3 className="card-title" style={{ marginBottom: "0.875rem" }}><Bi id="Pengaturan musik channel" en="Channel music settings" /></h3>
-        <div className="fld-row"><div className="k"><Bi id="Aktifkan musik latar" en="Enable background music" /></div><label className="switch"><input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /><span className="track" /><span className="thumb" /></label></div>
-        <div className="fld-row"><div className="k"><Bi id="Volume" en="Volume" /><div className="sub">{Math.round(vol * 100)}%</div></div><input type="range" className="slider" min={0} max={100} value={Math.round(vol * 100)} onChange={(e) => setVol(+e.target.value / 100)} /></div>
-        <div className="fld-row"><div className="k"><Bi id="Mood default (opsional)" en="Default mood (optional)" /></div><div className="radio-row">{["", "tegang", "misterius", "epik", "tenang"].map((m) => <span key={m || "auto"} className={`radio-pill${defMood === m ? " sel" : ""}`} onClick={() => setDefMood(m)}>{m || "auto"}</span>)}</div></div>
-        <div style={{ display: "flex", alignItems: "center", gap: ".75rem", marginTop: ".5rem" }}><button className="btn btn-default btn-sm" disabled={saving} onClick={save}>{saving ? "…" : <Bi id="Simpan" en="Save" />}</button>{saved && <span className="muted" style={{ fontSize: "var(--text-xs)" }}>{saved}</span>}</div>
-      </div>
-      <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: ".5rem" }}><Bi id="Library track di bawah = katalog (dikelola admin); mesin pilih track sesuai mood & niche." en="Track library below = catalog (admin-managed); the engine picks tracks by mood & niche." /></div>
-      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1rem" }}>{moods.map((m, i) => (<button key={m} className={`radio-pill${i === mood ? " sel" : ""}`} onClick={() => setMood(i)}>{m}</button>))}</div>
-      <div className="card"><div style={{ padding: "0.5rem" }}>
-        {tracks.map(([n, md, dur, c, on], idx) => (
-          <div key={n} className="mrow" style={{ display: "grid", gridTemplateColumns: "36px 1fr auto auto auto", alignItems: "center", gap: "0.875rem", padding: "0.625rem 0.75rem", borderRadius: "var(--r-md)" }}>
-            <PlayBtn small />
-            <div><div style={{ fontSize: "var(--text-sm)", fontWeight: 500 }}>{n}</div><div style={{ height: 14, display: "flex", alignItems: "center", gap: 1, marginTop: 2 }}>{bars(idx + 3, 40).map((h, i) => (<span key={i} style={{ flex: 1, height: `${h}%`, background: c, opacity: 0.4, borderRadius: 1 }} />))}</div></div>
-            <span className="badge badge-default">{md}</span>
-            <span className="muted mono" style={{ fontSize: "var(--text-xs)" }}>{dur}</span>
-            <span className="badge badge-default" style={{ fontSize: "0.5625rem", opacity: on ? 1 : 0.5 }}>{on ? "library" : "off"}</span>
-          </div>
-        ))}
-      </div></div>
-    </>
-  );
-}
-
-// ===== STAGE 2 panels (port cfg-content.js): Captions, Quality, Hashtags, Niches, Notifications =====
-
-function Captions() {
-  const supabase = createClient();
-  const [sub, setSub] = useState<"style" | "position" | "animation">("style");
-  const [size, setSize] = useState(119);
-  const [textColor, setTextColor] = useState("#FFFFFF");
-  const [activeColor, setActiveColor] = useState("#FFD700");
-  const [pos, setPos] = useState("bottom");
-  const [maxLine, setMaxLine] = useState(2);
-  const [raw, setRaw] = useState<Record<string, unknown>>({});
-  const [saving, setSaving] = useState(false); const [saved, setSaved] = useState<string | null>(null);
-  useEffect(() => {
-    supabase.from("tenant_configs").select("caption_style").maybeSingle().then(({ data }) => {
-      const c = (data?.caption_style ?? {}) as Record<string, unknown>;
-      setRaw(c);
-      if (typeof c.font_size === "number") setSize(c.font_size as number);
-      if (typeof c.color === "string") setTextColor(c.color as string);
-      if (typeof c.active_color === "string") setActiveColor(c.active_color as string);
-      if (typeof c.position === "string") setPos(c.position as string);
-      if (typeof c.max_lines === "number") setMaxLine(c.max_lines as number);
-    });
-  }, [supabase]);
-  async function save() {
-    setSaving(true); setSaved(null);
-    const merged = { ...raw, font_size: size, color: textColor, active_color: activeColor, position: pos, max_lines: maxLine };
-    const { error } = await supabase.rpc("set_tenant_content_config", { p: { caption_style: merged } });
-    setSaving(false); setSaved(error ? "Gagal" : "Tersimpan");
-  }
-  return (
-    <>
-      <div style={{ display: "flex", gap: ".5rem", alignItems: "center", padding: ".625rem .875rem", background: "var(--brand-soft)", border: "1px solid color-mix(in srgb,var(--brand) 25%,transparent)", borderRadius: "var(--r-md)", marginBottom: "1.25rem", fontSize: "var(--text-sm)" }}>
-        <Info size={15} /> <span><Bi id="Caption mengikuti bahasa konten channel (🇮🇩 Bahasa Indonesia). Skrip non-Latin (Thai) pakai font pendukung — sistem otomatis fallback." en="Captions follow the channel's content language (🇮🇩 Indonesian). Non-Latin scripts (Thai) use a supporting font — system auto-falls back." /></span>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: "1.5rem", alignItems: "start" }} className="cap-grid">
-        <div style={{ position: "sticky", top: 72 }}>
-          <div style={{ aspectRatio: "9/16", borderRadius: "var(--r-lg)", overflow: "hidden", position: "relative", background: "linear-gradient(170deg,#0c2233,#05101a)", border: "1px solid var(--border)" }}>
-            <div style={{ position: "absolute", inset: 0, background: "radial-gradient(120% 70% at 50% 25%,transparent,rgba(0,0,0,.5))" }} />
-            <div style={{ position: "absolute", left: 12, right: 12, bottom: 60, textAlign: "center", fontFamily: "Anton,Geist,sans-serif", fontWeight: 800, fontSize: size * 0.25, lineHeight: 1.1, textShadow: "0 2px 8px rgba(0,0,0,.8)", color: textColor }}>Suara aneh di kedalaman <span style={{ color: activeColor }}>Mariana Trench</span></div>
-          </div>
-          <div className="muted" style={{ fontSize: "var(--text-xs)", textAlign: "center", marginTop: ".5rem" }}>Preview · 9:16 Shorts</div>
-        </div>
-        <div>
-          <div className="segmented" style={{ marginBottom: "1.25rem" }}>
-            <button aria-selected={sub === "style"} onClick={() => setSub("style")}>Style</button>
-            <button aria-selected={sub === "position"} onClick={() => setSub("position")}>Position</button>
-            <button aria-selected={sub === "animation"} onClick={() => setSub("animation")}>Animation</button>
-          </div>
-          {sub === "style" && <>
-            <div className="fld-row"><div className="k"><Bi id="Font" en="Font" /></div><div className="selbox">Anton <ChevronDown size={14} /></div></div>
-            <div className="fld-row"><div className="k"><Bi id="Ukuran font" en="Font size" /><div className="sub">{size}px</div></div><input type="range" className="slider" min={60} max={150} value={size} onChange={(e) => setSize(+e.target.value)} /></div>
-            <div className="fld-row"><div className="k"><Bi id="Warna teks" en="Text color" /></div><div style={{ display: "flex", gap: ".5rem" }}>{["#FFFFFF", "#F8FAFC", "#FDE68A"].map((c) => <span key={c} onClick={() => setTextColor(c)} style={{ width: 28, height: 28, borderRadius: "var(--r-sm)", background: c, border: `2px solid ${textColor === c ? "var(--text-primary)" : "transparent"}`, cursor: "pointer" }} />)}</div></div>
-            <div className="fld-row"><div className="k"><Bi id="Warna kata aktif" en="Active word" /></div><div style={{ display: "flex", gap: ".5rem" }}>{["#FFD700", "#22D3EE", "#F472B6", "#34D399"].map((c) => <span key={c} onClick={() => setActiveColor(c)} style={{ width: 28, height: 28, borderRadius: "var(--r-sm)", background: c, border: `2px solid ${activeColor === c ? "var(--text-primary)" : "transparent"}`, cursor: "pointer" }} />)}</div></div>
-            <div className="fld-row"><div className="k"><Bi id="Opasitas background" en="Background opacity" /></div><input type="range" className="slider" min={0} max={100} defaultValue={0} /></div>
-          </>}
-          {sub === "position" && <>
-            <div className="fld-row"><div className="k"><Bi id="Posisi" en="Position" /></div><div className="radio-row">{["top", "center", "bottom"].map((p) => <span key={p} className={`radio-pill${pos === p ? " sel" : ""}`} onClick={() => setPos(p)} style={{ textTransform: "capitalize" }}>{p}</span>)}</div></div>
-            <div className="fld-row"><div className="k"><Bi id="Margin vertikal" en="Vertical margin" /><div className="sub">326px</div></div><input type="range" className="slider" min={0} max={400} defaultValue={326} /></div>
-            <div className="fld-row"><div className="k">Max line</div><div className="radio-row">{[1, 2, 3].map((n) => <span key={n} className={`radio-pill${maxLine === n ? " sel" : ""}`} onClick={() => setMaxLine(n)}>{n}</span>)}</div></div>
-          </>}
-          {sub === "animation" && <>
-            <div className="fld-row"><div className="k"><Bi id="Gaya karaoke" en="Karaoke style" /></div><div className="radio-row"><span className="radio-pill sel">Word highlight</span><span className="radio-pill">Line fade</span><span className="radio-pill">Pop</span></div></div>
-            <div className="fld-row"><div className="k"><Bi id="Kecepatan" en="Speed" /></div><div className="radio-row"><span className="radio-pill">Slow</span><span className="radio-pill sel">Medium</span><span className="radio-pill">Fast</span></div></div>
-            <div className="fld-row"><div className="k"><Bi id="Kata per baris" en="Words per line" /><div className="sub">3</div></div><input type="range" className="slider" min={2} max={6} defaultValue={3} /></div>
-          </>}
-          <h4 style={{ fontSize: "var(--text-sm)", fontWeight: 600, margin: "1.5rem 0 .75rem" }}><Bi id="Template preset" en="Preset templates" /></h4>
-          <div className="grid-4">{([["🎬 Cinematic", true], ["✨ Subtle", false], ["🔥 Bold", false], ["🎨 Custom", false]] as [string, boolean][]).map(([n, s]) => <button key={n} className={`radio-pill${s ? " sel" : ""}`} style={{ justifyContent: "center" }}>{n}</button>)}</div>
-        </div>
-      </div>
-      <div className="save-bar"><span className="muted">{saved ?? <Bi id="Disimpan ke caption_style channel" en="Saves to channel caption_style" />}</span><button className="btn btn-default" disabled={saving} onClick={save}>{saving ? "Menyimpan…" : <Bi id="Simpan & Terapkan" en="Save & Apply" />}</button></div>
-    </>
-  );
-}
-
-function QHist({ thr }: { thr: number }) {
-  const binsArr = [4, 9, 16, 24, 30, 34, 28, 18, 9, 4]; const W = 320, H = 90, max = 34, bw = W / binsArr.length; const thrX = ((thr - 50) / 40) * W;
-  return (
-    <svg viewBox="0 0 320 90" style={{ width: "100%", height: "auto", margin: ".5rem 0" }}>
-      {binsArr.map((v, i) => { const h = (v / max) * (H - 16); return <rect key={i} x={i * bw + 3} y={H - h - 4} width={bw - 6} height={h} rx={2} fill={(i * bw) >= thrX ? "#10B981" : "var(--surface-3)"} />; })}
-      <line x1={thrX} y1={0} x2={thrX} y2={H - 4} stroke="var(--brand)" strokeWidth={2} strokeDasharray="3 3" />
-    </svg>
-  );
-}
-
-function Quality() {
-  const supabase = createClient();
-  const [score, setScore] = useState(75); const [retry, setRetry] = useState(3); const [fail, setFail] = useState(0); const [locked, setLocked] = useState(false);
-  const [saving, setSaving] = useState(false); const [saved, setSaved] = useState<string | null>(null);
-  useEffect(() => {
-    supabase.from("tenant_configs").select("script_min_viral_score, script_max_retry").maybeSingle()
-      .then(({ data }) => { if (data) { if (data.script_min_viral_score != null) setScore(data.script_min_viral_score); if (data.script_max_retry != null) setRetry(data.script_max_retry); } });
-  }, [supabase]);
-  async function save() {
-    setSaving(true); setSaved(null);
-    const { error } = await supabase.rpc("set_tenant_content_config", { p: { script_min_viral_score: score, script_max_retry: retry } });
-    setSaving(false); setSaved(error ? "Gagal menyimpan" : "Tersimpan");
-  }
-  const pass = Math.max(20, Math.round(100 - (score - 50) * 1.7));
-  const dims: [string, number][] = [["Hook Power", 80], ["Curiosity Gap", 80], ["Retention Arc", 80], ["Emotional Peak", 80], ["Information Density", 75], ["CTA Strength", 70]];
-  const fails: [string, number, string][] = [["Emotional Peak", 60, "var(--error)"], ["Hook Power", 25, "var(--warning)"], ["Lainnya", 15, "var(--text-muted)"]];
-  const actions: [string, string][] = [["🛑", "Skip publish + notif Telegram"], ["⚠️", "Publish dengan tag warning"], ["⏸️", "Pause channel sampai review"]];
-  return (
-    <>
-      <button className="btn btn-ghost btn-sm" style={{ marginBottom: "1rem" }} onClick={() => setLocked((l) => !l)}>{locked ? <><EyeOff size={14} /> <Bi id="Kembali ke Pro" en="Back to Pro" /></> : <><Eye size={14} /> <Bi id="Pratinjau sebagai Starter (terkunci)" en="Preview as Starter (locked)" /></>}</button>
-      <div className="lock-overlay" style={{ position: "relative" }}>
-        {locked && <div className="lock-shade"><span className="lic"><Shield size={26} /></span><div style={{ fontWeight: 600 }}><Bi id="Quality Gate hanya untuk paket Pro+" en="Quality Gate is for Pro+ plans only" /></div><div className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Upgrade untuk kustomisasi threshold" en="Upgrade to customize thresholds" /></div><button className="btn btn-default btn-sm"><Zap size={14} /> Upgrade ke Pro</button></div>}
-        <div className="grid-2">
-          <div className="card card-pad">
-            <h3 className="card-title" style={{ marginBottom: ".25rem" }}>Minimum Viral Score</h3>
-            <div style={{ display: "flex", alignItems: "baseline", gap: ".5rem", margin: ".5rem 0" }}><span style={{ fontSize: "var(--text-3xl)", fontWeight: 700 }}>{score}</span><span className="muted">/ 100</span></div>
-            <QHist thr={score} />
-            <input type="range" className="slider" min={50} max={90} value={score} onChange={(e) => setScore(+e.target.value)} />
-            <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".625rem" }}>Dengan threshold {score}, <b style={{ color: "var(--text-primary)" }}>{pass}% video lolos</b>.</div>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <div className="card card-pad"><h3 className="card-title" style={{ marginBottom: ".75rem" }}>Max retry</h3>
-              <div style={{ display: "flex", alignItems: "center", gap: ".75rem" }}><button className="btn btn-secondary btn-icon btn-sm" onClick={() => setRetry((r) => Math.max(1, r - 1))}><Minus size={14} /></button><span style={{ fontSize: "var(--text-2xl)", fontWeight: 700, width: "2ch", textAlign: "center" }}>{retry}</span><button className="btn btn-secondary btn-icon btn-sm" onClick={() => setRetry((r) => Math.min(5, r + 1))}><Plus size={14} /></button>
-                <span className="muted" style={{ fontSize: "var(--text-xs)", marginLeft: ".5rem" }}>~$0.07 / retry · max <b style={{ color: "var(--text-primary)" }}>${(retry * 0.07).toFixed(2)}</b></span></div>
-            </div>
-            <div className="card card-pad"><h3 className="card-title" style={{ marginBottom: ".75rem" }}><Bi id="Aksi saat gagal" en="Action on fail" /></h3>
-              {actions.map(([e, t], i) => <label key={i} onClick={() => setFail(i)} style={{ display: "flex", alignItems: "center", gap: ".625rem", padding: ".5rem .625rem", border: `1px solid ${fail === i ? "var(--brand)" : "var(--border)"}`, borderRadius: "var(--r-md)", marginBottom: ".5rem", cursor: "pointer", background: fail === i ? "var(--brand-soft)" : "" }}><input type="radio" name="qfail" checked={fail === i} readOnly style={{ accentColor: "var(--brand)" }} /> <span>{e}</span> <span style={{ fontSize: "var(--text-sm)" }}>{t}</span></label>)}
-            </div>
-          </div>
-        </div>
-        <details className="card card-pad" style={{ marginTop: "1rem" }}><summary style={{ cursor: "pointer", fontWeight: 600, fontSize: "var(--text-sm)", listStyle: "none", display: "flex", alignItems: "center", gap: ".5rem" }}><ChevronDown size={16} /> <Bi id="Threshold per-dimensi (advanced)" en="Per-dimension thresholds (advanced)" /></summary>
-          <div style={{ marginTop: "1rem" }}>{dims.map(([n, v]) => <div key={n} className="fld-row"><div className="k">{n}<div className="sub">{v}</div></div><input type="range" className="slider" min={50} max={95} defaultValue={v} /></div>)}</div>
-        </details>
-        <div className="grid-2" style={{ marginTop: "1rem" }}>
-          <div className="card card-pad"><h3 className="card-title" style={{ marginBottom: ".75rem" }}><BarChart3 size={15} /> <Bi id="Riwayat kualitas (30 hari)" en="Quality history (30d)" /></h3>
-            <div style={{ fontSize: "var(--text-2xl)", fontWeight: 700, marginBottom: ".5rem" }}>85% <span className="muted" style={{ fontSize: "var(--text-sm)", fontWeight: 400 }}>pass rate</span></div>
-            {fails.map(([n, v, c]) => <div key={n} style={{ display: "flex", alignItems: "center", gap: ".75rem", fontSize: "var(--text-xs)", padding: ".25rem 0" }}><span style={{ width: 110, color: "var(--text-secondary)" }}>{n}</span><div style={{ flex: 1, height: 7, background: "var(--surface-2)", borderRadius: 99, overflow: "hidden" }}><span style={{ display: "block", height: "100%", width: `${v}%`, background: c }} /></div><span className="mono">{v}%</span></div>)}
-          </div>
-          <div className="card card-pad" style={{ borderColor: "color-mix(in srgb,var(--accent) 30%,transparent)", background: "var(--accent-soft)" }}>
-            <div style={{ display: "flex", gap: ".625rem" }}><span style={{ color: "var(--accent)", flex: "none" }}><Sparkles size={18} /></span><div><div style={{ fontSize: "var(--text-sm)", lineHeight: 1.5 }}><b style={{ color: "var(--text-primary)" }}><Bi id="Rekomendasi AI: " en="AI suggestion: " /></b><Bi id="Hook Power channelmu avg 76 — naikkan threshold ke 80 untuk hasil lebih konsisten?" en="Your Hook Power averages 76 — raise the threshold to 80 for more consistent results?" /></div><button className="btn btn-default btn-sm" style={{ marginTop: ".75rem" }}><Bi id="Terapkan" en="Apply" /></button></div></div>
-          </div>
-        </div>
-      </div>
-      <div className="save-bar"><span className="muted">{saved ?? <Bi id="Threshold disimpan ke channel" en="Thresholds save to channel" />}</span><button className="btn btn-default" disabled={saving || locked} onClick={save}>{saving ? "Menyimpan…" : <Bi id="Simpan" en="Save" />}</button></div>
-    </>
-  );
-}
-
-function Hashtags() {
-  const supabase = createClient();
-  const [niches, setNiches] = useState<{ niche_id: string; name: string; default_hashtags: string[] }[]>([]);
-  const [ni, setNi] = useState(0);
-  const [map, setMap] = useState<Record<string, string[]>>({}); // niche_hashtags jsonb
-  const [draft, setDraft] = useState(""); const [saving, setSaving] = useState(false); const [saved, setSaved] = useState<string | null>(null);
-
-  useEffect(() => {
-    Promise.all([
-      supabase.from("niches").select("niche_id, name, default_hashtags").eq("is_active", true).order("niche_id"),
-      supabase.from("tenant_configs").select("niche_hashtags").maybeSingle(),
-    ]).then(([nq, tc]) => {
-      setNiches((nq.data ?? []).map((n) => ({ niche_id: n.niche_id, name: n.name, default_hashtags: Array.isArray(n.default_hashtags) ? n.default_hashtags : [] })));
-      setMap((tc.data?.niche_hashtags as Record<string, string[]>) ?? {});
-    });
-  }, [supabase]);
-
-  const cur = niches[ni];
-  const custom = (cur && map[cur.niche_id]) || [];
-  const setCustom = (arr: string[]) => { if (cur) setMap({ ...map, [cur.niche_id]: arr }); };
-  async function save() {
-    setSaving(true); setSaved(null);
-    const { error } = await supabase.rpc("set_tenant_content_config", { p: { niche_hashtags: map } });
-    setSaving(false); setSaved(error ? "Gagal" : "Tersimpan");
-  }
-  function addTag() { const t = draft.trim().replace(/^#?/, "#"); if (t.length > 1 && !custom.includes(t)) { setCustom([...custom, t]); setDraft(""); } }
-
-  if (niches.length === 0) return <div className="card card-pad muted">Memuat niche…</div>;
-  return (
-    <>
-      <div className="segmented" style={{ marginBottom: "1.25rem" }}>{niches.map((n, i) => <button key={n.niche_id} aria-selected={ni === i} onClick={() => setNi(i)}>{n.name}</button>)}</div>
-      <div className="grid-2">
-        <div className="card card-pad"><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: ".5rem" }}><h3 className="card-title" style={{ margin: 0 }}><Bi id="Pool default" en="Default pool" /></h3><span className="badge badge-default">Read-only</span></div>
-          <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: ".75rem" }}><Bi id="Default niche (admin). Dipakai jika custom kosong." en="Niche default (admin). Used when custom is empty." /></div>
-          <div className="chip-input" style={{ borderStyle: "dashed" }}>{cur.default_hashtags.length ? cur.default_hashtags.map((t) => <span key={t} className="chip ghost">{t}</span>) : <span className="muted" style={{ fontSize: "var(--text-xs)" }}>—</span>}</div>
-        </div>
-        <div className="card card-pad"><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: ".5rem" }}><h3 className="card-title" style={{ margin: 0 }}><Bi id="Hashtag custom" en="Custom hashtags" /></h3><span className="muted" style={{ fontSize: "var(--text-xs)" }}>{custom.length} tag</span></div>
-          <div className="chip-input">{custom.map((t) => <span key={t} className="chip">{t} <span className="x" onClick={() => setCustom(custom.filter((x) => x !== t))}><X size={11} /></span></span>)}<input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }} style={{ border: "none", background: "none", outline: "none", color: "var(--text-primary)", fontSize: "var(--text-xs)", flex: 1, minWidth: 80 }} placeholder="+ tambah (Enter)" /></div>
-          <div style={{ display: "flex", alignItems: "center", gap: ".75rem", marginTop: ".75rem" }}><button className="btn btn-default btn-sm" disabled={saving} onClick={save}>{saving ? "…" : <Bi id="Simpan" en="Save" />}</button>{saved && <span className="muted" style={{ fontSize: "var(--text-xs)" }}>{saved}</span>}</div>
-        </div>
-      </div>
-      <div className="card card-pad" style={{ marginTop: "1rem", background: "var(--bg-elevated)" }}><h3 className="card-title" style={{ marginBottom: ".5rem" }}><Eye size={15} /> <Bi id="Preview metadata" en="Metadata preview" /></h3>
-        <div className="mono" style={{ fontSize: "var(--text-xs)", color: "var(--text-secondary)", lineHeight: 1.7 }}>{(custom.length ? custom : cur.default_hashtags).join(" ") || "—"}</div>
-      </div>
     </>
   );
 }
@@ -672,32 +306,41 @@ function Notifications() {
   );
 }
 
+// F2-05: Voice/Visual/Music/Captions/Quality/Hashtags PINDAH ke per-channel (Channels → Manage).
+// Pengaturan ini bukan lagi per-tenant. Notice + tautan (URL lama tetap informatif, nol duplikat membingungkan).
+function MovedToChannel() {
+  return (
+    <div className="card card-pad" style={{ textAlign: "center", padding: "2.5rem", maxWidth: 560 }}>
+      <div style={{ color: "var(--text-muted)", marginBottom: ".75rem", display: "flex", justifyContent: "center" }}><Tv size={30} /></div>
+      <p style={{ marginBottom: ".35rem", fontWeight: 600 }}><Bi id="Pengaturan ini sekarang per-channel" en="This setting is now per-channel" /></p>
+      <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}><Bi id="Voice, visual, musik, caption, hashtag, & quality-gate kini diatur di tiap channel (tiap channel punya brand & konfigurasi sendiri)." en="Voice, visual, music, captions, hashtags & quality gate are now set per channel (each channel has its own brand & config)." /></p>
+      <a href="/channels" className="btn btn-default btn-sm"><Bi id="Buka Channels → Manage" en="Open Channels → Manage" /> <ChevronDown size={14} style={{ transform: "rotate(-90deg)" }} /></a>
+    </div>
+  );
+}
+
 type Panel = { title: { id: string; en: string }; desc: { id: string; en: string }; badge?: React.ReactNode; Body: () => React.ReactElement };
 const PANELS: Record<string, Panel> = {
   "ai-engines": { title: { id: "Mesin AI", en: "AI Engines" }, desc: { id: "Pilih provider & model per tugas produksi. Hubungkan API key milikmu (BYOK).", en: "Choose provider & model per production task. Connect your own API keys (BYOK)." }, Body: AiEngines },
   "api-keys": { title: { id: "API Keys", en: "API Keys" }, desc: { id: "Kelola semua API key. Dienkripsi Fernet AES-128, tidak pernah di-log.", en: "Manage all API keys. Encrypted with Fernet AES-128, never logged." }, Body: ApiKeys },
-  "voice": { title: { id: "Suara", en: "Voice" }, desc: { id: "Voice difilter oleh bahasa konten channel aktif. Tetapkan voice default per niche.", en: "Voices are filtered by the active channel's content language. Set a default voice per niche." }, Body: Voice },
-  "visual": { title: { id: "Visual", en: "Visual" }, desc: { id: "Pilih preset gaya visual & sesuaikan prompt per niche.", en: "Choose a visual style preset & customize prompts per niche." }, Body: Visual },
-  "music": { title: { id: "Musik", en: "Music" }, desc: { id: "Library musik latar. Mesin memilih mood otomatis sesuai niche & performa.", en: "Background music library. The engine auto-selects mood by niche & performance." }, Body: MusicPanel },
-  "captions": { title: { id: "Teks", en: "Captions" }, desc: { id: "Atur gaya subtitle karaoke yang muncul di video. Preview real-time.", en: "Style the karaoke subtitles shown in your videos. Real-time preview." }, Body: Captions },
-  "quality": { title: { id: "Gerbang Kualitas", en: "Quality Gate" }, badge: <span className="badge badge-brand" style={{ fontSize: ".625rem" }}>Pro+</span>, desc: { id: "Tentukan threshold skor viral, retry, dan aksi saat gagal.", en: "Set viral-score threshold, retries, and action on failure." }, Body: Quality },
-  "hashtags": { title: { id: "Hashtags", en: "Hashtags" }, desc: { id: "Kelola pool hashtag per niche untuk metadata YouTube.", en: "Manage the hashtag pool per niche for YouTube metadata." }, Body: Hashtags },
+  "voice": { title: { id: "Suara", en: "Voice" }, desc: { id: "Voice difilter oleh bahasa konten channel aktif. Tetapkan voice default per niche.", en: "Voices are filtered by the active channel's content language. Set a default voice per niche." }, Body: MovedToChannel },
+  "visual": { title: { id: "Visual", en: "Visual" }, desc: { id: "Pilih preset gaya visual & sesuaikan prompt per niche.", en: "Choose a visual style preset & customize prompts per niche." }, Body: MovedToChannel },
+  "music": { title: { id: "Musik", en: "Music" }, desc: { id: "Library musik latar. Mesin memilih mood otomatis sesuai niche & performa.", en: "Background music library. The engine auto-selects mood by niche & performance." }, Body: MovedToChannel },
+  "captions": { title: { id: "Teks", en: "Captions" }, desc: { id: "Atur gaya subtitle karaoke yang muncul di video. Preview real-time.", en: "Style the karaoke subtitles shown in your videos. Real-time preview." }, Body: MovedToChannel },
+  "quality": { title: { id: "Gerbang Kualitas", en: "Quality Gate" }, badge: <span className="badge badge-brand" style={{ fontSize: ".625rem" }}>Pro+</span>, desc: { id: "Tentukan threshold skor viral, retry, dan aksi saat gagal.", en: "Set viral-score threshold, retries, and action on failure." }, Body: MovedToChannel },
+  "hashtags": { title: { id: "Hashtags", en: "Hashtags" }, desc: { id: "Kelola pool hashtag per niche untuk metadata YouTube.", en: "Manage the hashtag pool per niche for YouTube metadata." }, Body: MovedToChannel },
   "niches": { title: { id: "Niches", en: "Niches" }, desc: { id: "3 dari 4 niche aktif (Pro plan). Aktifkan dari catalog atau request niche custom.", en: "3 of 4 niches active (Pro plan). Activate from catalog or request a custom niche." }, Body: Niches },
   "notifications": { title: { id: "Notifikasi", en: "Notifications" }, desc: { id: "Pilih event apa yang dikirim ke channel mana.", en: "Choose which events go to which channels." }, Body: Notifications },
 };
 
 type NavItem = { grp: { id: string; en: string } } | { id: string; Icon: typeof Sparkles; t: { id: string; en: string }; lock?: boolean };
+// F2-05: Voice/Visual/Music/Captions/Quality/Hashtags DIBUANG dari nav tenant → kini per-channel
+// (Channels → Manage). Sisa config tenant = item per-TENANT sejati: AI keys, Niches, Notifikasi.
 const NAV: NavItem[] = [
   { grp: { id: "Mesin", en: "Engine" } },
   { id: "ai-engines", Icon: Sparkles, t: { id: "Mesin AI", en: "AI Engines" } },
   { id: "api-keys", Icon: Command, t: { id: "API Keys", en: "API Keys" } },
-  { id: "voice", Icon: Mic, t: { id: "Suara", en: "Voice" } },
-  { id: "visual", Icon: ImageIcon, t: { id: "Visual", en: "Visual" } },
-  { id: "music", Icon: Music, t: { id: "Musik", en: "Music" } },
   { grp: { id: "Konten", en: "Content" } },
-  { id: "captions", Icon: FileText, t: { id: "Teks", en: "Captions" } },
-  { id: "quality", Icon: Gauge, t: { id: "Gerbang Kualitas", en: "Quality Gate" }, lock: true },
-  { id: "hashtags", Icon: List, t: { id: "Hashtags", en: "Hashtags" } },
   { id: "niches", Icon: Target, t: { id: "Niches", en: "Niches" } },
   { grp: { id: "Sistem", en: "System" } },
   { id: "notifications", Icon: Bell, t: { id: "Notifikasi", en: "Notifications" } },
