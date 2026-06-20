@@ -22,7 +22,11 @@ type ChannelRow = {
   niche: string | null; niche_pool: string[] | null; niche_mode: string | null; content_language: string | null;
   is_active: boolean | null; publish_privacy: string | null; duration_preset: number | null;
   production_paused: boolean | null; production_paused_reason: string | null;
+  llm_model: string | null; llm_library: string | null; visual_mode: string | null;
+  tts_provider: string | null; voice_key: string | null;
 };
+type ModelOpt = { model_key: string; provider_key: string; display_name: string };
+type VoiceOpt = { voice_key: string; provider_key: string; display_name: string; gender: string | null };
 
 // F2-07/F1-09: status efektif terpadu — SATU sumber (bukan is_active saja yg menyesatkan).
 type Eff = { key: string; label_id: string; label_en: string; tone: "ok" | "warn" | "stop" | "muted"; reason?: string; reco_id?: string; reco_en?: string };
@@ -79,6 +83,33 @@ export default function ChannelDetailPage() {
   // F2-07/F1-09: status efektif
   const [sub, setSub] = useState<string | null>(null);
   const [rd, setRd] = useState<{ ready: boolean; missing: string[] } | null>(null);
+  // F2-03: pemilih AI per-channel (model + voice). Katalog dari ai_models/tts_profiles/voice_catalog (RLS read).
+  const [llmOpts, setLlmOpts] = useState<ModelOpt[]>([]);
+  const [imgOpts, setImgOpts] = useState<ModelOpt[]>([]);
+  const [ttsOpts, setTtsOpts] = useState<{ provider_key: string; display_name: string }[]>([]);
+  const [voiceAll, setVoiceAll] = useState<VoiceOpt[]>([]);
+  const [llmModel, setLlmModel] = useState("");
+  const [vmode, setVmode] = useState<"video" | "ai_image">("video");
+  const [imgModel, setImgModel] = useState("");
+  const [ttsProv, setTtsProv] = useState("");
+  const [voiceKey, setVoiceKey] = useState("");
+  const [nicheDefaults, setNicheDefaults] = useState<Record<string, string>>({});
+  const [savingAi, setSavingAi] = useState(false);
+  const [aiMsg, setAiMsg] = useState<string | null>(null);
+
+  // F2-03 simpan: model+voice → channels (RLS UPDATE). llm_library diturunkan dari provider model LLM.
+  async function saveAi() {
+    setAiMsg(null); setSavingAi(true);
+    const lib = llmOpts.find((m) => m.model_key === llmModel)?.provider_key ?? null;
+    const visual_mode = vmode === "ai_image" ? (imgModel ? `ai_image:${imgModel}` : null) : "video";
+    const { error } = await supabase.from("channels").update({
+      llm_model: llmModel || null, llm_library: lib,
+      visual_mode, tts_provider: ttsProv || null, voice_key: voiceKey || null,
+    }).eq("id", id);
+    setSavingAi(false);
+    setAiMsg(error ? `Gagal: ${error.message}` : "Tersimpan");
+    if (!error) load();
+  }
 
   // C3: editor niche per-channel (fixed/random) — opsi dari ENTITLEMENT tenant; tulis via RPC.
   const [nicheMode, setNicheMode] = useState<"fixed" | "random">("fixed");
@@ -164,7 +195,7 @@ export default function ChannelDetailPage() {
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     const { data } = await supabase.from("channels")
-      .select("id,channel_name,platform_channel_id,niche,niche_pool,niche_mode,content_language,is_active,publish_privacy,duration_preset,production_paused,production_paused_reason")
+      .select("id,channel_name,platform_channel_id,niche,niche_pool,niche_mode,content_language,is_active,publish_privacy,duration_preset,production_paused,production_paused_reason,llm_model,llm_library,visual_mode,tts_provider,voice_key")
       .eq("id", id).maybeSingle();
     const c = data as ChannelRow | null;
     setCh(c);
@@ -173,7 +204,20 @@ export default function ChannelDetailPage() {
       setPrivacy(c.publish_privacy ?? "private"); setActive(c.is_active ?? true);
       setNicheMode((c.niche_mode === "random" ? "random" : "fixed")); setNiche(c.niche ?? "");
       setDpreset(c.duration_preset ?? null);
+      setLlmModel(c.llm_model ?? "");
+      const vm = c.visual_mode ?? "";
+      if (vm.startsWith("ai_image:")) { setVmode("ai_image"); setImgModel(vm.slice(9)); } else { setVmode("video"); setImgModel(""); }
+      setTtsProv(c.tts_provider ?? ""); setVoiceKey(c.voice_key ?? "");
     }
+    // F2-03: katalog (ai_models/tts_profiles/voice_catalog — RLS read) + voice_defaults niche (pre-fill).
+    const { data: am } = await supabase.from("ai_models").select("model_key,provider_key,component,display_name").eq("is_active", true).order("display_name");
+    setLlmOpts(((am ?? []) as (ModelOpt & {component:string})[]).filter((m) => m.component === "llm"));
+    setImgOpts(((am ?? []) as (ModelOpt & {component:string})[]).filter((m) => m.component === "image"));
+    const { data: tp } = await supabase.from("tts_profiles").select("provider_key,display_name").eq("is_active", true);
+    setTtsOpts((tp ?? []) as { provider_key: string; display_name: string }[]);
+    const { data: vc } = await supabase.from("voice_catalog").select("voice_key,provider_key,display_name,gender").eq("is_active", true).order("sort_order");
+    setVoiceAll((vc ?? []) as VoiceOpt[]);
+    if (c?.niche) { const { data: nd } = await supabase.from("niches").select("voice_defaults").eq("niche_id", c.niche).maybeSingle(); setNicheDefaults(((nd as { voice_defaults?: Record<string, string> } | null)?.voice_defaults) ?? {}); }
     // F2-07: status efektif → subscription + readiness (RPC tenant-scoped F2-fondasi).
     const { data: cfg } = await supabase.from("tenant_configs").select("plan_type,subscription_status").maybeSingle();
     setSub((cfg as { subscription_status?: string } | null)?.subscription_status ?? null);
@@ -345,6 +389,55 @@ export default function ChannelDetailPage() {
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "1rem" }}>
             <button className="btn btn-default" onClick={savePreset} disabled={savingPreset || dpreset == null}>{savingPreset ? <Loader2 size={15} className="spin" /> : <Bi id="Simpan durasi" en="Save duration" />}</button>
             {presetMsg && <span style={{ fontSize: "var(--text-sm)", color: presetMsg.includes("tersimpan") ? "var(--success)" : "var(--danger, #ef4444)" }}>{presetMsg}</span>}
+          </div>
+        </div>
+
+        <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 560 }}>
+          <h3 className="card-title" style={{ marginBottom: "0.35rem" }}><Bi id="Produksi AI (model & suara)" en="AI production (models & voice)" /></h3>
+          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}>
+            <Bi id="Pilih model AI tiap elemen + suara. Biaya = penyedia AI Anda (BYOK), bukan biaya kami." en="Pick the AI model per element + voice. Cost = your AI provider (BYOK), not our fee." />
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.875rem" }}>
+            <div><label className="label"><Bi id="Model LLM (skrip)" en="LLM model (script)" /></label>
+              <select className="input" value={llmModel} onChange={(e) => setLlmModel(e.target.value)} style={{ width: "fit-content" }}>
+                <option value="">— pilih —</option>
+                {llmOpts.map((m) => <option key={m.model_key} value={m.model_key}>{m.display_name}</option>)}
+              </select>
+            </div>
+            <div><label className="label"><Bi id="Visual" en="Visual" /></label>
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                <select className="input" value={vmode} onChange={(e) => setVmode(e.target.value as "video" | "ai_image")} style={{ width: "fit-content" }}>
+                  <option value="video"><Bi id="Stock video" en="Stock video" /></option>
+                  <option value="ai_image">AI Image</option>
+                </select>
+                {vmode === "ai_image" && (
+                  <select className="input" value={imgModel} onChange={(e) => setImgModel(e.target.value)} style={{ width: "fit-content" }}>
+                    <option value="">— model gambar —</option>
+                    {imgOpts.map((m) => <option key={m.model_key} value={m.model_key}>{m.display_name}</option>)}
+                  </select>
+                )}
+              </div>
+            </div>
+            <div><label className="label"><Bi id="Suara (TTS)" en="Voice (TTS)" /></label>
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+                <select className="input" value={ttsProv} onChange={(e) => { setTtsProv(e.target.value); setVoiceKey(""); }} style={{ width: "fit-content" }}>
+                  <option value="">— provider —</option>
+                  {ttsOpts.map((p) => <option key={p.provider_key} value={p.provider_key}>{p.display_name}</option>)}
+                </select>
+                {ttsProv && (
+                  <select className="input" value={voiceKey || nicheDefaults[ttsProv] || ""} onChange={(e) => setVoiceKey(e.target.value)} style={{ width: "fit-content" }}>
+                    <option value="">— suara —</option>
+                    {voiceAll.filter((v) => v.provider_key === ttsProv).map((v) => <option key={v.voice_key} value={v.voice_key}>{v.display_name}{v.gender ? ` (${v.gender})` : ""}</option>)}
+                  </select>
+                )}
+              </div>
+              {ttsProv && !voiceKey && nicheDefaults[ttsProv] && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.35rem" }}><Bi id="Default niche dipakai bila tak diubah." en="Niche default used if unchanged." /></div>}
+              <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.35rem" }}><Bi id="Test/preview suara — segera hadir." en="Voice test/preview — coming soon." /></div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+              <button className="btn btn-default" onClick={saveAi} disabled={savingAi}>{savingAi ? <Loader2 size={15} className="spin" /> : <Bi id="Simpan produksi AI" en="Save AI production" />}</button>
+              {aiMsg && <span style={{ fontSize: "var(--text-sm)", color: aiMsg.includes("Tersimpan") ? "var(--success)" : "var(--danger,#ef4444)" }}>{aiMsg}</span>}
+            </div>
           </div>
         </div>
 
