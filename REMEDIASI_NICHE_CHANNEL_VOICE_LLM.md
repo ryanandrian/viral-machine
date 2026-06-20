@@ -243,7 +243,7 @@
 - PLAN: di `/channels/[id]` (atau wizard): **pemilih model per-elemen** (LLM/image/TTS/video) dari katalog `ai_models` **aktif** — tampilkan **nama + tier saja** (⛔ JANGAN estimasi biaya menyesatkan di picker; harga-unit provider HANYA bila valid+up-to-date & ber-label "biaya provider, bukan kami"; **biaya REAL per-konten muncul pasca-produksi = F5-03**, keputusan owner 2026-06-20); **pemilih voice** untuk TTS model terpilih (default niche ter-pra-isi via `voice_defaults`, boleh ganti) + **TOMBOL TEST/PREVIEW voice** (F2-06); knob operasional (visual_mode/image_quality/music on-volume-mood/quality-gate). Tulis ke `channels` via RLS UPDATE.
 - DEPENDS: F1-04, F1-05, F2-01, F2-06.
 - DONE-BILA: model+voice+operasional tersimpan per-channel + terpakai produksi; voice bisa di-preview sebelum simpan; 2 channel beda model/voice → output beda.
-- REALISASI: ⬜ | commit: — | catatan: —
+- REALISASI: 🟡 PARTIAL (core) | commit: `d7cc640` | catatan: **SELESAI:** section "Produksi AI" di Manage — pemilih **LLM**(ai_models llm) + **visual**(video / ai_image:`<model>`) + **TTS provider**(tts_profiles) + **voice**(voice_catalog per-provider, default `niche.voice_defaults` pre-fill) → tulis `channels.llm_model/llm_library/visual_mode/tts_provider/voice_key` (RLS UPDATE). Katalog via RLS read (verified). Build PASS. **→ GAP EDIT model/voice TUTUP** (tenant ubah di tempat yg dibaca BE F1-05). **SISA:** knob operasional (image_quality/music/quality-gate) + **voice TEST/preview** (F2-06, kini coming-soon) → digabung F2-02/F2-04/F2-05.
 
 #### [F2-04] Panel "Branded" per-channel (CTA/logo/landing) + storage logo `[dari branded-content doc]`
 - KENAPA: DB+BE branded SUDAH jadi (§5.6), hanya FE+storage kurang.
