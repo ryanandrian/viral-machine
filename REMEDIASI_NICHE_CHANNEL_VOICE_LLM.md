@@ -237,7 +237,7 @@
 - PLAN: tab **caption_style** (font, **ukuran, posisi, warna**, highlight/outline, kata-per-baris — styling subtitle on-screen, BUKAN deskripsi YouTube) & **hashtags** baca/tulis kolom `channels` (F1-04) via RLS UPDATE; buang dari `config/[tab]` tenant. Preview styling bila memungkinkan.
 - DEPENDS: F1-04, F2-01.
 - DONE-BILA: 2 channel beda caption_style/hashtag tersimpan terpisah & terpakai produksi (subtitle ter-render sesuai styling).
-- REALISASI: ⬜ | commit: — | catatan: —
+- REALISASI: ✅ | commit: `7707e38` | catatan: section "Caption & Hashtag" di Manage — editor `caption_style` (font/size/posisi-Y/warna aktif-lain-outline/tebal/kata-per-baris) **cocok BE `DEFAULT_CAPTION_STYLE`** (video_renderer, partial-override) → `channels.caption_style`; **hashtag per-niche** (`{niche:[#tags]}` cocok `youtube_publisher.get(niche)`) → `channels.niche_hashtags`. Build PASS + deploy mv-web (poll DONE). *(Pembuangan tab lama dari `config/[tab]` tenant = F2-05.)*
 
 #### [F2-03] Pemilih AI-model per-elemen + voice (+TEST) + knob operasional per-channel
 - PLAN: di `/channels/[id]` (atau wizard): **pemilih model per-elemen** (LLM/image/TTS/video) dari katalog `ai_models` **aktif** — tampilkan **nama + tier saja** (⛔ JANGAN estimasi biaya menyesatkan di picker; harga-unit provider HANYA bila valid+up-to-date & ber-label "biaya provider, bukan kami"; **biaya REAL per-konten muncul pasca-produksi = F5-03**, keputusan owner 2026-06-20); **pemilih voice** untuk TTS model terpilih (default niche ter-pra-isi via `voice_defaults`, boleh ganti) + **TOMBOL TEST/PREVIEW voice** (F2-06); knob operasional (visual_mode/image_quality/music on-volume-mood/quality-gate). Tulis ke `channels` via RLS UPDATE.
