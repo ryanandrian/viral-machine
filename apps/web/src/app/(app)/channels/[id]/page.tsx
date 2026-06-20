@@ -26,7 +26,10 @@ type ChannelRow = {
   tts_provider: string | null; voice_key: string | null;
   image_quality: string | null; music_enabled: boolean | null; music_volume: number | null;
   music_default_mood: string | null; script_min_viral_score: number | null; script_max_retry: number | null;
+  caption_style: Record<string, unknown> | null; niche_hashtags: Record<string, string[]> | null;
 };
+// Default caption_style — match BE DEFAULT_CAPTION_STYLE (video_renderer). Partial-override OK.
+const CAP_DEFAULT = { font_name: "Anton", font_size: 68, bold: true, active_word_color: "#FFD700", inactive_word_color: "#FFFFFF", outline_color: "#000000", outline: 4, position_y_pct: 83, max_words_per_line: 3 };
 type ModelOpt = { model_key: string; provider_key: string; display_name: string };
 type VoiceOpt = { voice_key: string; provider_key: string; display_name: string; gender: string | null };
 
@@ -107,6 +110,26 @@ export default function ChannelDetailPage() {
   const [maxRetry, setMaxRetry] = useState(3);
   const [savingOps, setSavingOps] = useState(false);
   const [opsMsg, setOpsMsg] = useState<string | null>(null);
+  // F2-02: caption styling (subtitle on-screen) + hashtag per-niche → channels (brand skin)
+  const [cap, setCap] = useState<Record<string, unknown>>(CAP_DEFAULT);
+  const [tags, setTags] = useState<Record<string, string>>({}); // niche → "#a, #b" (editing)
+  const [savingBrand, setSavingBrand] = useState(false);
+  const [brandMsg, setBrandMsg] = useState<string | null>(null);
+  const capNum = (k: string, d: number) => Number((cap[k] as number) ?? d);
+  const capStr = (k: string, d: string) => String((cap[k] as string) ?? d);
+
+  async function saveBrand() {
+    setBrandMsg(null); setSavingBrand(true);
+    const nh: Record<string, string[]> = {};
+    for (const [n, s] of Object.entries(tags)) {
+      const arr = s.split(",").map((t) => t.trim()).filter(Boolean).map((t) => (t.startsWith("#") ? t : `#${t}`));
+      if (arr.length) nh[n] = arr;
+    }
+    const { error } = await supabase.from("channels").update({ caption_style: cap, niche_hashtags: nh }).eq("id", id);
+    setSavingBrand(false);
+    setBrandMsg(error ? `Gagal: ${error.message}` : "Tersimpan");
+    if (!error) load();
+  }
 
   async function saveOps() {
     setOpsMsg(null); setSavingOps(true);
@@ -218,7 +241,7 @@ export default function ChannelDetailPage() {
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     const { data } = await supabase.from("channels")
-      .select("id,channel_name,platform_channel_id,niche,niche_pool,niche_mode,content_language,is_active,publish_privacy,duration_preset,production_paused,production_paused_reason,llm_model,llm_library,visual_mode,tts_provider,voice_key,image_quality,music_enabled,music_volume,music_default_mood,script_min_viral_score,script_max_retry")
+      .select("id,channel_name,platform_channel_id,niche,niche_pool,niche_mode,content_language,is_active,publish_privacy,duration_preset,production_paused,production_paused_reason,llm_model,llm_library,visual_mode,tts_provider,voice_key,image_quality,music_enabled,music_volume,music_default_mood,script_min_viral_score,script_max_retry,caption_style,niche_hashtags")
       .eq("id", id).maybeSingle();
     const c = data as ChannelRow | null;
     setCh(c);
@@ -234,6 +257,9 @@ export default function ChannelDetailPage() {
       setImgQuality(c.image_quality ?? "low"); setMusicOn(c.music_enabled ?? false);
       setMusicVol(c.music_volume ?? 0.1); setMusicMood(c.music_default_mood ?? "");
       setMinScore(c.script_min_viral_score ?? 75); setMaxRetry(c.script_max_retry ?? 3);
+      setCap({ ...CAP_DEFAULT, ...(c.caption_style && typeof c.caption_style === "object" ? c.caption_style : {}) });
+      const nh = (c.niche_hashtags && typeof c.niche_hashtags === "object") ? c.niche_hashtags : {};
+      setTags(Object.fromEntries(Object.entries(nh).map(([k, v]) => [k, Array.isArray(v) ? v.join(", ") : ""])));
     }
     // F2-03: katalog (ai_models/tts_profiles/voice_catalog — RLS read) + voice_defaults niche (pre-fill).
     const { data: am } = await supabase.from("ai_models").select("model_key,provider_key,component,display_name").eq("is_active", true).order("display_name");
@@ -498,6 +524,46 @@ export default function ChannelDetailPage() {
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
               <button className="btn btn-default" onClick={saveOps} disabled={savingOps}>{savingOps ? <Loader2 size={15} className="spin" /> : <Bi id="Simpan operasional" en="Save operations" />}</button>
               {opsMsg && <span style={{ fontSize: "var(--text-sm)", color: opsMsg.includes("Tersimpan") ? "var(--success)" : "var(--danger,#ef4444)" }}>{opsMsg}</span>}
+            </div>
+          </div>
+        </div>
+
+        <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 560 }}>
+          <h3 className="card-title" style={{ marginBottom: "0.35rem" }}><Bi id="Caption & Hashtag" en="Caption & Hashtags" /></h3>
+          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}><Bi id="Tampilan teks subtitle di video + hashtag postingan (brand channel ini)." en="On-screen subtitle styling + post hashtags (this channel's brand)." /></p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.875rem" }}>
+            <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+              <div><label className="label"><Bi id="Font" en="Font" /></label>
+                <select className="input" value={capStr("font_name", "Anton")} onChange={(e) => setCap({ ...cap, font_name: e.target.value })} style={{ width: 150 }}>
+                  {["Anton", "Montserrat", "Bebas Neue", "Oswald", "Roboto", "Poppins"].map((f) => <option key={f} value={f}>{f}</option>)}
+                </select>
+              </div>
+              <div><label className="label"><Bi id="Ukuran" en="Size" /></label><input className="input" type="number" min={24} max={120} value={capNum("font_size", 68)} onChange={(e) => setCap({ ...cap, font_size: parseInt(e.target.value) || 68 })} style={{ width: 90 }} /></div>
+              <div><label className="label"><Bi id="Posisi Y (%)" en="Position Y (%)" /></label><input className="input" type="number" min={0} max={100} value={capNum("position_y_pct", 83)} onChange={(e) => setCap({ ...cap, position_y_pct: parseInt(e.target.value) || 83 })} style={{ width: 90 }} /></div>
+              <div><label className="label"><Bi id="Kata/baris" en="Words/line" /></label><input className="input" type="number" min={1} max={8} value={capNum("max_words_per_line", 3)} onChange={(e) => setCap({ ...cap, max_words_per_line: parseInt(e.target.value) || 3 })} style={{ width: 80 }} /></div>
+            </div>
+            <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: "flex-end" }}>
+              <div><label className="label"><Bi id="Warna kata aktif" en="Active word" /></label><input type="color" value={capStr("active_word_color", "#FFD700")} onChange={(e) => setCap({ ...cap, active_word_color: e.target.value })} style={{ width: 48, height: 34, padding: 2 }} /></div>
+              <div><label className="label"><Bi id="Warna kata lain" en="Other words" /></label><input type="color" value={capStr("inactive_word_color", "#FFFFFF")} onChange={(e) => setCap({ ...cap, inactive_word_color: e.target.value })} style={{ width: 48, height: 34, padding: 2 }} /></div>
+              <div><label className="label"><Bi id="Garis tepi" en="Outline" /></label><input type="color" value={capStr("outline_color", "#000000")} onChange={(e) => setCap({ ...cap, outline_color: e.target.value })} style={{ width: 48, height: 34, padding: 2 }} /></div>
+              <div><label className="label"><Bi id="Tebal tepi" en="Outline px" /></label><input className="input" type="number" min={0} max={12} value={capNum("outline", 4)} onChange={(e) => setCap({ ...cap, outline: parseInt(e.target.value) || 0 })} style={{ width: 80 }} /></div>
+              <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "var(--text-sm)" }}>
+                <span className="switch"><input type="checkbox" checked={Boolean(cap.bold ?? true)} onChange={(e) => setCap({ ...cap, bold: e.target.checked })} /><span className="track" /><span className="thumb" /></span><Bi id="Tebal" en="Bold" />
+              </label>
+            </div>
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.875rem" }}>
+              <label className="label"><Bi id="Hashtag per niche" en="Hashtags per niche" /></label>
+              <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "0.5rem" }}><Bi id="Pisahkan dengan koma. Tanda # otomatis." en="Comma-separated. # added automatically." /></div>
+              {(nicheMode === "fixed" ? (niche ? [{ id: niche, name: nicheOpts.find((o) => o.id === niche)?.name ?? niche }] : []) : nicheOpts).map((n) => (
+                <div key={n.id} style={{ marginBottom: "0.5rem" }}>
+                  <label className="muted" style={{ fontSize: "var(--text-xs)" }}>{n.name}</label>
+                  <input className="input" value={tags[n.id] ?? ""} onChange={(e) => setTags({ ...tags, [n.id]: e.target.value })} placeholder="space, science, viral" />
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+              <button className="btn btn-default" onClick={saveBrand} disabled={savingBrand}>{savingBrand ? <Loader2 size={15} className="spin" /> : <Bi id="Simpan caption & hashtag" en="Save caption & hashtags" />}</button>
+              {brandMsg && <span style={{ fontSize: "var(--text-sm)", color: brandMsg.includes("Tersimpan") ? "var(--success)" : "var(--danger,#ef4444)" }}>{brandMsg}</span>}
             </div>
           </div>
         </div>
