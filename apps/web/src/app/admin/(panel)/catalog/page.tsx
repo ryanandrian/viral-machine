@@ -24,7 +24,7 @@ const TABS: [string, string][] = [["models", "AI Models"], ["providers", "Provid
 const ADD_FIELDS: Record<string, { table: string; fields: [string, string][] }> = {
   models: { table: "ai_models", fields: [["model_key", "model_key (PK)"], ["provider_key", "provider_key"], ["component", "component (llm/image/tts/video)"], ["model_id", "model_id"], ["display_name", "display_name"]] },
   providers: { table: "ai_providers", fields: [["provider_key", "provider_key (PK)"], ["display_name", "display_name"], ["adapter", "adapter (mis. openai_chat)"], ["base_url", "base_url (opsional)"]] },
-  voice: { table: "voice_catalog", fields: [["voice_key", "voice_key (PK)"], ["provider_key", "provider_key"], ["display_name", "display_name"], ["locale", "locale (mis. id-ID)"], ["niche_default", "niche_default (opsional)"]] },
+  voice: { table: "voice_catalog", fields: [["voice_key", "voice_key (PK — voice_id provider)"], ["provider_key", "provider_key (mis. elevenlabs)"], ["display_name", "display_name"], ["locale", "locale (mis. id-ID)"], ["language", "language (mis. Indonesian)"], ["gender", "gender (male/female)"], ["age", "age (mis. young/middle-aged)"], ["accent", "accent (opsional)"], ["use_case", "use_case (mis. narration)"], ["description", "description (opsional)"], ["default_settings", "default_settings JSON {stability,style,speed}"], ["niche_default", "niche_default (opsional)"]] },
   languages: { table: "content_languages", fields: [["locale", "locale (PK)"], ["display_name", "display_name"], ["quality_tier", "tier (official/experimental)"], ["caption_font", "caption_font"]] },
 };
 
@@ -123,13 +123,13 @@ export default function AdminCatalogPage() {
         {tab === "voice" && (<>
           <div className="cat-toolbar"><span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Voice catalog + kelas TTS provider" en="Voice catalog + TTS provider classes" /></span><div className="right"><button className="btn btn-default btn-sm" onClick={() => setAdd({})}><Plus size={14} /> <Bi id="Tambah voice" en="Add voice" /></button></div></div>
           <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl cat-tbl">
-            <thead><tr><th>voice_key</th><th>provider</th><th>display</th><th>locale</th><th>niche default</th><th>active</th></tr></thead>
+            <thead><tr><th>voice_key</th><th>provider</th><th>display</th><th>locale</th><th>language</th><th>gender</th><th>niche default</th><th>active</th></tr></thead>
             <tbody>
-              {data.voice_catalog.length === 0 && <tr><td colSpan={6} className="muted" style={{ padding: "1rem", textAlign: "center" }}>Belum ada voice. Tambah untuk mulai.</td></tr>}
+              {data.voice_catalog.length === 0 && <tr><td colSpan={8} className="muted" style={{ padding: "1rem", textAlign: "center" }}>Belum ada voice. Tambah untuk mulai.</td></tr>}
               {data.voice_catalog.map((v) => (
                 <tr key={v.voice_key as string}>
                   <td className="mono" style={{ color: "var(--text-primary)" }}>{v.voice_key as string}</td><td>{v.provider_key as string}</td>
-                  <td>{v.display_name as string}</td><td className="muted">{(v.locale as string) || "—"}</td><td className="muted">{(v.niche_default as string) || "—"}</td>
+                  <td>{v.display_name as string}</td><td className="muted">{(v.locale as string) || "—"}</td><td className="muted">{(v.language as string) || "—"}</td><td className="muted">{(v.gender as string) || "—"}</td><td className="muted">{(v.niche_default as string) || "—"}</td>
                   <td><Switch table="voice_catalog" k={v.voice_key as string} on={v.is_active as boolean} /></td>
                 </tr>
               ))}
@@ -171,7 +171,7 @@ export default function AdminCatalogPage() {
       {add && ADD_FIELDS[tab] && (
         <>
           <div className="cat-scrim open" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 60 }} onClick={() => setAdd(null)} />
-          <div className="card" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(440px,92vw)", zIndex: 61, padding: "1.25rem" }}>
+          <div className="card" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(440px,92vw)", maxHeight: "85vh", overflowY: "auto", zIndex: 61, padding: "1.25rem" }}>
             <div style={{ display: "flex", alignItems: "center", marginBottom: "0.75rem" }}><strong>Tambah {ADD_FIELDS[tab].table}</strong><button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} onClick={() => setAdd(null)}><X size={16} /></button></div>
             <div style={{ display: "grid", gap: "0.5rem" }}>
               {ADD_FIELDS[tab].fields.map(([k, label]) => (
