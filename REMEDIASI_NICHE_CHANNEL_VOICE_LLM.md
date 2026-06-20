@@ -144,11 +144,13 @@
 - PLAN: migr `niches +voice_key` (FK voice_catalog, nullable); seed voice_catalog (ryan VR6 + platform voices); set `niches.dark_history.voice_key=VR6…`.
 - DEPENDS: F1-01.
 - DONE-BILA: tiap niche aktif punya voice_key valid; ryan dark_history→VR6.
-- REALISASI: ⬜ | commit: — | catatan: —
+- REALISASI: ✅ | commit: `72d5e51` | catatan: migr **0062** applied DB v2. Seed voice_catalog 4 voice EL platform (Adam/Rachel/Arnold/Bella, `default_settings`=BASELINE BE DEFAULTS) + `niches.voice_key` (nullable, FK→voice_catalog on-update-cascade/on-delete-set-null). Binding: dark_history→VR6(Arnold), universe→pNInz(Adam), fun_facts→21m00(Rachel), ocean→EXAVITQu(Bella). Validasi: 4 niche aktif voice_key valid (join non-null) · dark_history→VR6 · FK ada · `tenant_configs` TAK tersentuh (ryan per_niche=VR6 + settings.speed=0.86 utuh) → NOL dampak ryan (BE belum baca s/d F1-03).
 
 #### [F1-03] BE baca voice dari niche.voice_key→voice_catalog; buang map hardcode
+- ⚠️ **GERBANG KERAS: KONFIRMASI OWNER DULU** sebelum sentuh BE (instruksi owner 2026-06-20). F1-03 = perubahan perilaku produksi (resolusi voice + fallback) → propose + tunggu approve.
+- 🔴 **TEMUAN KUNCI (verified, wajib ditangani di F1-03):** SEMUA tenant punya `tts_voice_per_niche` terisi **identik** = duplikat map hardcode (pseudo-default, BUKAN override sejati). ryan `a410251c` `tts_voice_settings`-nya BEDA (speed dark_history **0.86** vs baseline 0.83, fun_facts 0.93/0.90, ocean 0.88/0.86, universe 0.90/0.87) = override ASLI ryan, **wajib dipertahankan**. → Kalau `tts_voice_per_niche` dibiarkan prioritas teratas (`elevenlabs.py:84-92`), `niche.voice_key` TAK akan pernah terpakai. Precedence harus dirancang ulang (opsi: kosongkan pseudo-default non-BYOK, atau niche.voice_key primer & override hanya saat tenant eksplisit set) — **diputuskan bersama owner.**
 - TUJUAN: produksi pakai single-source; hapus hardcode (§5.5).
-- PLAN: `tts_engine`/`elevenlabs`/`edge`/`openai` resolve `niche.voice_key→voice_catalog`; hapus `ELEVENLABS_VOICES/NICHE_VOICES/OPENAI_VOICES` + DEFAULTS hardcode; `tts_voice_per_niche` jadi override BYOK opsional.
+- PLAN: `tts_engine`/`elevenlabs`/`edge`/`openai` resolve `niche.voice_key→voice_catalog`; hapus `ELEVENLABS_VOICES/NICHE_VOICES/OPENAI_VOICES` + DEFAULTS hardcode; `tts_voice_per_niche` jadi override BYOK opsional. Fallback provider (EL→edge/openai saat EL down): map provider-equivalen — **resolusi fallback wajib konfirmasi owner.**
 - DEPENDS: F1-02.
 - DONE-BILA: produksi ryan pakai VR6 via voice_catalog (suara identik); tak ada map niche hardcoded tersisa (grep bersih).
 - REALISASI: ⬜ | commit: — | catatan: —
