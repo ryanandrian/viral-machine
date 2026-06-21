@@ -17,8 +17,9 @@ import { createClient } from "@/lib/supabase/client";
 
 type NavItem = {
   id: string; icon: React.ComponentType<{ size?: number }>;
-  idL: string; en: string; href: string; badge?: string;
+  idL: string; en: string; href: string; badge?: string; gated?: boolean;
 };
+const PLAN_RANK: Record<string, number> = { trial: 0, starter: 1, pro: 2, business: 3, scale: 3, enterprise: 4 };
 type NavEntry = { section: { id: string; en: string } } | NavItem;
 
 const NAV: NavEntry[] = [
@@ -32,6 +33,7 @@ const NAV: NavEntry[] = [
   { id: "schedule", icon: Calendar, idL: "Jadwal", en: "Schedule", href: "/schedule" },
   { id: "compliance", icon: ShieldCheck, idL: "Kepatuhan", en: "Compliance", href: "/compliance" },
   { id: "insights", icon: Sparkles, idL: "Wawasan", en: "Insights", href: "/insights" },
+  { id: "niche-studio", icon: Sparkles, idL: "Niche Studio", en: "Niche Studio", href: "/niche-studio", gated: true },
   { section: { id: "Konfigurasi", en: "Config" } },
   { id: "ai-engines", icon: Sparkles, idL: "Mesin AI", en: "AI Engines", href: "/config/ai-engines" },
   { id: "api-keys", icon: Command, idL: "API Keys", en: "API Keys", href: "/config/api-keys" },
@@ -65,6 +67,7 @@ export function AppShell({
   const [lang, setLang] = useState<"id" | "en">("id");
   const [mounted, setMounted] = useState(false);
   const [tenant, setTenant] = useState<{ name: string; plan: string; initials: string }>({ name: "", plan: "", initials: "" });
+  const [studioOK, setStudioOK] = useState(false);  // F2-10/F3-03: entitlement Niche Studio (gated nav)
 
   useEffect(() => {
     setMounted(true);
@@ -72,11 +75,13 @@ export function AppShell({
     setLang(saved);
     document.documentElement.lang = saved;
     (async () => {
-      const [{ data: tc }, { count }] = await Promise.all([
+      const [{ data: tc }, { count }, { data: cfg }] = await Promise.all([
         supabase.from("tenant_configs").select("display_handle,plan_type").maybeSingle(),
         supabase.from("channels").select("id", { count: "exact", head: true }),
+        supabase.from("app_config").select("value").eq("key", "niche_studio_min_rank").maybeSingle(),
       ]);
       const t = tc as { display_handle?: string; plan_type?: string } | null;
+      setStudioOK((PLAN_RANK[t?.plan_type ?? "starter"] ?? 1) >= Number((cfg as { value?: number } | null)?.value ?? 3));
       const h = (t?.display_handle || "").trim();
       const toks = h.split(/[^a-zA-Z0-9]+/).filter(Boolean);
       const initials = toks.slice(0, 2).map((s) => s[0].toUpperCase()).join("") || "T";
@@ -111,6 +116,7 @@ export function AppShell({
             if ("section" in n) {
               return <div key={`s${i}`} className="sb-section-title">{n.section.id}</div>;
             }
+            if (n.gated && !studioOK) return null;  // Niche Studio: tampil hanya bila ber-entitlement
             const Icon = n.icon;
             const active = pathname === n.href || pathname.startsWith(n.href + "/");
             return (

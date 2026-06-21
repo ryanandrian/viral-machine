@@ -312,7 +312,7 @@
 - **FE admin:** niche CRUD penuh (F3-01/02) jadi sumber katalog platform.
 - DEPENDS: F3-01/02/03, F2-12.
 - DONE-BILA: channel pilih 1 niche; Studio hanya muncul utk tier ber-entitlement; non-Studio bisa request; nol sisa "aktifkan niche". **FE dicontreng §10.F.4.**
-- REALISASI: ⬜ | DB:— BE:— FE:— | commit: — | catatan: —
+- REALISASI: ✅ | DB:0071 | BE:/api/niches/mine | FE:tenant+nav | catatan: **niche picker per-channel SUDAH ADA** (channel Settings: pilih 1 niche dari entitled + link request-custom). **Niche Studio gated = F3-03** (halaman `/niche-studio` + nav MAIN gated via `niche_studio_min_rank`). Keduanya live. *(Catatan: mode "random" niche di picker = warisan; §3.20 "1 channel=1 niche" — bila owner mau buang random, item kecil terpisah.)*
 
 #### [F2-11] Pensiun grup "Konfigurasi" sidebar + Notifikasi(matriks)→Settings `[NEW — owner 2026-06-21]`
 - ACUAN: §3.21 · §10.F.1/.2.
@@ -360,7 +360,7 @@
 - PLAN: halaman kelola-niche untuk tier yang diizinkan (clone UI admin niches), niche dibuat `access_type=private, exclusive_to=tenant_id`; **gating config-driven** (`app_config` daftar tier yang boleh buat niche, default `['business']` + admin — **extensible ke `pro` tanpa ubah kode**, sesuai arahan owner); Entry/Pro (di luar daftar) tetap request.
 - DEPENDS: F3-01/02.
 - DONE-BILA: tier dalam daftar (default Business) buat+edit niche private (tak terlihat tenant lain); tier di luar daftar tak punya akses create; menambah Pro = ubah `app_config` saja.
-- REALISASI: 🟡 (DB+BE) | DB:migr 0071 | BE:route | FE:— | catatan: **Keputusan AMAN (verified):** `niches` RLS=OFF (katalog global, tulis service_role) → F3-03 tulis via **server-route enforce** (BUKAN bedah RLS tabel mesin → nol-risiko). **DB:** `app_config.niche_studio_min_rank=3` (Business; value=INTEGER → pakai min-rank, extensible Pro=2). **BE:** route **`/api/niches/mine`** (GET own / POST create / PATCH edit) — authed (tenant_id dari SESI), **ENFORCE** `access_type='private'`+`exclusive_to=tenant_id`+gating(rank≥min); PATCH hanya own-private. next build PASS. **SISA FE:** halaman **Niche Studio** (clone editor admin, gated) + **nav MAIN gated** (tampil bila rank≥min). = juga menuntaskan **F2-10**.
+- REALISASI: ✅ (DB+BE+FE) | DB:migr 0071 | BE:route | FE:tenant+nav | catatan FE: halaman **`/niche-studio`** (gated: GET /api/niches/mine → 403 = kartu "Business+"; else list niche private + buat + **drawer edit DNA** voice/visual/mood/timing via PATCH) + **nav MAIN gated** (app-shell: tampil bila `PLAN_RANK[plan] >= app_config.niche_studio_min_rank`). Hanya kelas GLOBAL (nol css scoped). next build PASS. **→ F2-10 juga TUNTAS** (Niche Studio gated + picker per-channel sudah ada). --- catatan DB/BE: **Keputusan AMAN (verified):** `niches` RLS=OFF (katalog global, tulis service_role) → F3-03 tulis via **server-route enforce** (BUKAN bedah RLS tabel mesin → nol-risiko). **DB:** `app_config.niche_studio_min_rank=3` (Business; value=INTEGER → pakai min-rank, extensible Pro=2). **BE:** route **`/api/niches/mine`** (GET own / POST create / PATCH edit) — authed (tenant_id dari SESI), **ENFORCE** `access_type='private'`+`exclusive_to=tenant_id`+gating(rank≥min); PATCH hanya own-private. next build PASS. **SISA FE:** halaman **Niche Studio** (clone editor admin, gated) + **nav MAIN gated** (tampil bila rank≥min). = juga menuntaskan **F2-10**.
 
 ---
 ### FASE 4 — Cacat B tuntas + LLM-as-conductor `[kualitas konten]`
@@ -602,7 +602,8 @@ CHANNEL DETAIL (satu channel) = TABS — urutan = process flow (siapkan→jadwal
 | MAIN: Analytics agregat | tenant | ✓ | F5-05 (pivot kinerja-mesin) |
 | MAIN: Compliance agregat (rewire `.limit(1)`→RPC agg 0068) | tenant | ✓ (F2-13a) | F2-13 |
 | MAIN: Insights agregat (rewire→RPC agg 0068) | tenant | ✓ (F2-13a) | F2-13 |
-| MAIN: Niche Studio (gated) | tenant | ⬜ | F2-10 |
+| MAIN: Niche Studio (gated) | tenant | ✓ (F3-03/F2-10: page+nav gated) | F2-10 |
+| Channel Settings: niche picker (1 niche + request custom) | tenant | ✓ (ada) | F2-10 |
 | AKUN: Settings — Notifikasi matriks masuk | tenant | ⬜ | F2-11 |
 | Channel Detail: 1 Settings + urutan tab process-flow | tenant | ✓ (F2-12, build PASS) | F2-12 |
 | Channel Detail: Overview = checklist kesiapan nyata | tenant | ✓ (F2-12) | F2-12 |
