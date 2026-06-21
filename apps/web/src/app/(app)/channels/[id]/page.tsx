@@ -33,6 +33,7 @@ type ChannelRow = {
   production_paused: boolean | null; production_paused_reason: string | null;
   llm_model: string | null; llm_library: string | null; visual_mode: string | null;
   tts_provider: string | null; voice_key: string | null;
+  llm_account_id: string | null; tts_account_id: string | null; image_account_id: string | null;
   image_quality: string | null; music_enabled: boolean | null; music_volume: number | null;
   music_default_mood: string | null; script_min_viral_score: number | null; script_max_retry: number | null;
   caption_style: Record<string, unknown> | null; niche_hashtags: Record<string, string[]> | null;
@@ -123,6 +124,30 @@ export default function ChannelDetailPage() {
   const [nicheDefaults, setNicheDefaults] = useState<Record<string, string>>({});
   const [savingAi, setSavingAi] = useState(false);
   const [aiMsg, setAiMsg] = useState<string | null>(null);
+  // F2-09: akun VAULT per-elemen (assign ke channel + tambah akun baru). account_id NULL → key default tenant (fallback BE).
+  const [accounts, setAccounts] = useState<{ id: string; component: string; label: string }[]>([]);
+  const [llmAcct, setLlmAcct] = useState(""); const [ttsAcct, setTtsAcct] = useState(""); const [imageAcct, setImageAcct] = useState("");
+  const [addAcct, setAddAcct] = useState<{ component: string; label: string; key: string } | null>(null);
+  const [addBusy, setAddBusy] = useState(false); const [addMsg, setAddMsg] = useState<string | null>(null);
+  async function loadAccounts() {
+    const { data } = await supabase.from("tenant_api_accounts").select("id,component,label").eq("status", "active").order("created_at");
+    setAccounts((data ?? []) as { id: string; component: string; label: string }[]);
+  }
+  async function submitAddAcct() {
+    if (!addAcct || !addAcct.key.trim()) return;
+    setAddBusy(true); setAddMsg(null);
+    try {
+      const r = await fetch("/api/accounts/set", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ component: addAcct.component, label: addAcct.label, key: addAcct.key }) });
+      const j = await r.json();
+      if (!r.ok) { setAddMsg(j.error || "Gagal"); setAddBusy(false); return; }
+      await loadAccounts();
+      const c = addAcct.component;
+      if (j.id) { if (c === "llm") setLlmAcct(j.id); else if (c === "tts") setTtsAcct(j.id); else if (c === "image") setImageAcct(j.id); }
+      setAddAcct(null);
+    } catch { setAddMsg("Server tak terjangkau"); }
+    finally { setAddBusy(false); }
+  }
   // F2-03: knob operasional per-channel (mutu & biaya — hak tenant)
   const [imgQuality, setImgQuality] = useState("low");
   const [musicOn, setMusicOn] = useState(false);
@@ -197,6 +222,7 @@ export default function ChannelDetailPage() {
     const { error } = await supabase.from("channels").update({
       llm_model: llmModel || null, llm_library: lib,
       visual_mode, image_quality: imgQuality, tts_provider: ttsProv || null, voice_key: voiceKey || null,
+      llm_account_id: llmAcct || null, tts_account_id: ttsAcct || null, image_account_id: imageAcct || null,
     }).eq("id", id);
     setSavingAi(false);
     setAiMsg(error ? `Gagal: ${error.message}` : "Tersimpan");
@@ -279,7 +305,7 @@ export default function ChannelDetailPage() {
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     const { data } = await supabase.from("channels")
-      .select("id,channel_name,platform_channel_id,subscriber_count,niche,niche_pool,niche_mode,content_language,is_active,publish_privacy,duration_preset,publish_slots,production_paused,production_paused_reason,llm_model,llm_library,visual_mode,tts_provider,voice_key,image_quality,music_enabled,music_volume,music_default_mood,script_min_viral_score,script_max_retry,caption_style,niche_hashtags,cta_mode,brand_name,brand_cta_text,brand_logo,logo_position,logo_size,logo_opacity,landing_link,link_position")
+      .select("id,channel_name,platform_channel_id,subscriber_count,niche,niche_pool,niche_mode,content_language,is_active,publish_privacy,duration_preset,publish_slots,production_paused,production_paused_reason,llm_model,llm_library,visual_mode,tts_provider,voice_key,image_quality,music_enabled,music_volume,music_default_mood,script_min_viral_score,script_max_retry,llm_account_id,tts_account_id,image_account_id,caption_style,niche_hashtags,cta_mode,brand_name,brand_cta_text,brand_logo,logo_position,logo_size,logo_opacity,landing_link,link_position")
       .eq("id", id).maybeSingle();
     const c = data as ChannelRow | null;
     setCh(c);
@@ -292,6 +318,7 @@ export default function ChannelDetailPage() {
       const vm = c.visual_mode ?? "";
       if (vm.startsWith("ai_image:")) { setVmode("ai_image"); setImgModel(vm.slice(9)); } else { setVmode("video"); setImgModel(""); }
       setTtsProv(c.tts_provider ?? ""); setVoiceKey(c.voice_key ?? "");
+      setLlmAcct(c.llm_account_id ?? ""); setTtsAcct(c.tts_account_id ?? ""); setImageAcct(c.image_account_id ?? "");
       setImgQuality(c.image_quality ?? "low"); setMusicOn(c.music_enabled ?? false);
       setMusicVol(c.music_volume ?? 0.1); setMusicMood(c.music_default_mood ?? "");
       setMinScore(c.script_min_viral_score ?? 75); setMaxRetry(c.script_max_retry ?? 3);
@@ -311,6 +338,8 @@ export default function ChannelDetailPage() {
     setTtsOpts((tp ?? []) as { provider_key: string; display_name: string }[]);
     const { data: vc } = await supabase.from("voice_catalog").select("voice_key,provider_key,display_name,gender").eq("is_active", true).order("sort_order");
     setVoiceAll((vc ?? []) as VoiceOpt[]);
+    const { data: accs } = await supabase.from("tenant_api_accounts").select("id,component,label").eq("status", "active").order("created_at");
+    setAccounts((accs ?? []) as { id: string; component: string; label: string }[]);
     if (c?.niche) { const { data: nd } = await supabase.from("niches").select("voice_defaults").eq("niche_id", c.niche).maybeSingle(); setNicheDefaults(((nd as { voice_defaults?: Record<string, string> } | null)?.voice_defaults) ?? {}); }
     // F2-07: status efektif → subscription + readiness (RPC tenant-scoped F2-fondasi).
     const { data: cfg } = await supabase.from("tenant_configs").select("plan_type,subscription_status").maybeSingle();
@@ -582,6 +611,32 @@ export default function ChannelDetailPage() {
           {ttsProv && (
             <div className="fld-row"><div className="k"><Bi id="Suara" en="Voice" /><div className="sub"><Bi id="default niche bila tak dipilih" en="niche default if unset" /></div></div>
               <div className="radio-row">{voiceAll.filter((v) => v.provider_key === ttsProv).map((v) => { const eff = voiceKey || nicheDefaults[ttsProv] || ""; return <span key={v.voice_key} className={`radio-pill${eff === v.voice_key ? " sel" : ""}`} onClick={() => setVoiceKey(v.voice_key)}><Mic size={13} />{v.display_name}{v.gender ? ` · ${v.gender}` : ""}</span>; })}</div></div>
+          )}
+          {/* F2-09: akun API key (vault) per-elemen. Kosong → key default tenant (fallback BE). */}
+          <div className="fld-row" style={{ borderTop: "1px solid var(--border-subtle)" }}><div className="k"><Bi id="Akun API (key)" en="API account (key)" /><div className="sub"><Bi id="key BYOK per elemen; kosong = key default tenant" en="BYOK key per element; empty = tenant default key" /></div></div></div>
+          {(([["llm", "LLM", llmAcct, setLlmAcct], ["image", "Image", imageAcct, setImageAcct], ["tts", "TTS", ttsAcct, setTtsAcct]] as [string, string, string, (v: string) => void][])
+            .filter(([c]) => c === "llm" || (c === "image" && vmode === "ai_image") || (c === "tts" && !!ttsProv))
+            .map(([comp, labelTxt, val, setter]) => (
+              <div className="fld-row" key={comp}><div className="k">{labelTxt}</div>
+                <div className="radio-row">
+                  {accounts.filter((a) => a.component === comp).map((a) => <span key={a.id} className={`radio-pill${val === a.id ? " sel" : ""}`} onClick={() => setter(a.id)}>{a.label}</span>)}
+                  {val && <span className="radio-pill" onClick={() => setter("")} title="pakai key default tenant"><Bi id="default" en="default" /></span>}
+                  <span className="radio-pill" onClick={() => setAddAcct({ component: comp, label: "", key: "" })}><Plus size={12} /> <Bi id="Tambah" en="Add" /></span>
+                </div>
+              </div>
+            )))}
+          {addAcct && (
+            <div className="fld-row"><div className="k"><Bi id="Akun baru" en="New account" /> ({addAcct.component})</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                <input className="input" placeholder="Label (mis. OpenAI akun-1)" value={addAcct.label} onChange={(e) => setAddAcct({ ...addAcct, label: e.target.value })} />
+                <input className="input input-mono" type="password" placeholder="API key" value={addAcct.key} onChange={(e) => setAddAcct({ ...addAcct, key: e.target.value })} />
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                  <button className="btn btn-default btn-sm" disabled={addBusy || !addAcct.key.trim()} onClick={submitAddAcct}>{addBusy ? <Loader2 size={14} className="spin" /> : <Bi id="Simpan akun" en="Save account" />}</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setAddAcct(null)}><Bi id="Batal" en="Cancel" /></button>
+                  {addMsg && <span style={{ fontSize: "var(--text-xs)", color: "var(--danger,#ef4444)" }}>{addMsg}</span>}
+                </div>
+              </div>
+            </div>
           )}
           <div className="save-bar"><span className="muted">{aiMsg ?? <Bi id="Disimpan ke channel (model & suara)" en="Saves to channel (models & voice)" />}</span><button className="btn btn-default" disabled={savingAi} onClick={saveAi}>{savingAi ? "Menyimpan…" : <Bi id="Simpan & Terapkan" en="Save & Apply" />}</button></div>
         </div>

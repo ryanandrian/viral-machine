@@ -110,6 +110,21 @@ try:
 
     app.add_api_route("/api/keys/set", _keys_set, methods=["POST"])
 
+    # ── F2-09: vault MULTI-akun — tambah akun API (encrypt Fernet + insert tenant_api_accounts) ──
+    async def _accounts_set(request: "Request"):
+        if not _internal_ok(request):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        from src.utils.api_key_vault import add_api_account
+        try:
+            body = await request.json()
+            return add_api_account(body.get("tenant_id"), body.get("component"), body.get("label"),
+                                   body.get("key"), body.get("provider"))
+        except Exception as e:
+            logger.warning(f"[key-vault] add account gagal: {e}")
+            return JSONResponse({"error": str(e)}, status_code=400)
+
+    app.add_api_route("/api/accounts/set", _accounts_set, methods=["POST"])
+
 except ImportError:
     # fastapi belum terinstall di env dev — endpoint diaktifkan saat cutover (tambah ke requirements).
     app = None

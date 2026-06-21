@@ -46,3 +46,31 @@ def set_api_keys(tenant_id: str, payload: dict) -> dict:
     _sb().table("tenant_configs").update(upd).eq("tenant_id", tenant_id).execute()
     logger.info(f"[key-vault] tenant={tenant_id} set keys={set_keys}")
     return {"ok": True, "set": set_keys}
+
+
+# ── F2-09: vault MULTI-akun (tenant_api_accounts) — encrypt + insert akun baru ──
+ALLOWED_COMPONENTS = ("llm", "tts", "image", "video")
+
+
+def add_api_account(tenant_id: str, component: str, label: str, key: str, provider: str | None = None) -> dict:
+    """Tambah AKUN API ke vault (tenant_api_accounts), key TERENKRIPSI (Fernet, server-only).
+    Dipakai FE pemilih akun per-channel-per-elemen (F2-09). Return {ok, id}."""
+    if not tenant_id:
+        raise ValueError("tenant_id wajib")
+    if component not in ALLOWED_COMPONENTS:
+        raise ValueError(f"component invalid: {component}")
+    if not (key and str(key).strip()):
+        raise ValueError("key wajib")
+    row = {
+        "tenant_id": tenant_id,
+        "component": component,
+        "provider": (str(provider).strip() or None) if provider else None,
+        "label": (str(label).strip() or f"{component} key")[:80],
+        "key_enc": encrypt(str(key).strip()),
+        "status": "active",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    res = _sb().table("tenant_api_accounts").insert(row).execute()
+    aid = (res.data or [{}])[0].get("id")
+    logger.info(f"[key-vault] tenant={tenant_id} add account component={component} id={aid}")
+    return {"ok": True, "id": aid}
