@@ -5,7 +5,7 @@ import { fetchPricing, idrK } from "@/lib/pricing";
 import { fetchPlans, paidPlans, type Plan } from "@/lib/plans";
 import {
   Users, Check, X, ChevronDown, Info, DollarSign,
-  Wand2, Mic, HelpCircle, Zap, Gauge, ShieldCheck, type LucideIcon,
+  Wand2, ShieldCheck, type LucideIcon,
 } from "lucide-react";
 import "./pricing.css";
 
@@ -54,7 +54,6 @@ function makeFcmp(pm: Record<string, Plan | undefined>): FRow[] {
   { row: ["API access", false, false, true, true] },
   { grp: ["Dukungan", "Support"] },
   { row: ["Support", "Email", "Priority", "Priority", "Dedicated"] },
-  { row: ["Concierge setup", false, false, true, true] },
   ];
 }
 function Fc({ v, pop }: { v: boolean | string; pop?: boolean }) {
@@ -66,10 +65,6 @@ function Fc({ v, pop }: { v: boolean | string; pop?: boolean }) {
 // [icon, label, pricing_config key ("" = pakai fallback literal), suffix, fallback, desc]
 const ADDONS: [LucideIcon, string, string, string, string, string][] = [
   [Wand2, "Niche Pack", "custom_niche_public_90d", "", "Rp 299K", "Niche kustom dibuat sesuai brief Anda, 3–5 hari delivery."],
-  [Mic, "Voice Pack", "voice_pack", "", "Rp 99K", "Koleksi voice premium ElevenLabs untuk variasi channel."],
-  [HelpCircle, "Concierge Setup", "concierge_setup", "", "Rp 399K", "Tim kami setup channel, API keys, & schedule untuk Anda."],
-  [Zap, "Priority Queue", "priority_queue", "/bln", "Rp 99K/bln", "Run Anda diproses paling depan saat traffic tinggi."],
-  [Gauge, "Channel Audit", "niche_audit", "", "Rp 499K", "Analisis mendalam + rekomendasi growth dari ahli."],
   [ShieldCheck, "Extra Compliance", "", "", "Rp 99K/bln", "Monitoring compliance lebih ketat + alert prioritas."],
 ];
 
