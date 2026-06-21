@@ -1,23 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireSuperAdmin } from "@/lib/admin/guard";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { validateProviderKey } from "@/lib/providers/validate-key";
 import { ADMIN_TEST_TID } from "../route";
 
 // "Test semua kredensial" — validasi NYATA: panggil API provider dgn key tersimpan (channel admin_test).
 // Bukan palsu — benar-benar hit endpoint provider + laporkan ok/gagal per kredensial.
-async function check(url: string, headers: Record<string, string>): Promise<{ ok: boolean; msg: string }> {
-  try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 12000);
-    const r = await fetch(url, { headers, signal: ctrl.signal });
-    clearTimeout(t);
-    if (r.ok) return { ok: true, msg: "valid" };
-    if (r.status === 401 || r.status === 403) return { ok: false, msg: "key ditolak (401/403)" };
-    return { ok: false, msg: `HTTP ${r.status}` };
-  } catch (e) {
-    return { ok: false, msg: e instanceof Error ? e.message : "error" };
-  }
-}
+// Logika validasi (incl. EL scope-aware F1-09) = SATU sumber `@/lib/providers/validate-key` (nol-duplikat).
 
 export async function POST() {
   const g = await requireSuperAdmin();
@@ -30,20 +19,18 @@ export async function POST() {
   const out: Record<string, { ok: boolean; msg: string }> = {};
 
   // LLM (anthropic / openai)
-  if (cfg?.llm_api_key) {
-    out.llm = cfg.llm_library === "anthropic"
-      ? await check("https://api.anthropic.com/v1/models", { "x-api-key": cfg.llm_api_key, "anthropic-version": "2023-06-01" })
-      : await check("https://api.openai.com/v1/models", { Authorization: `Bearer ${cfg.llm_api_key}` });
-  } else out.llm = { ok: false, msg: "belum diisi" };
+  out.llm = cfg?.llm_api_key
+    ? await validateProviderKey(cfg.llm_library === "anthropic" ? "anthropic" : "openai", cfg.llm_api_key)
+    : { ok: false, msg: "belum diisi" };
 
   // Visual (OpenAI image)
   out.visual = cfg?.visual_api_key
-    ? await check("https://api.openai.com/v1/models", { Authorization: `Bearer ${cfg.visual_api_key}` })
+    ? await validateProviderKey("openai", cfg.visual_api_key)
     : { ok: false, msg: "belum diisi" };
 
-  // TTS (ElevenLabs) — edge_tts tak perlu key
+  // TTS (ElevenLabs) — scope-aware (F1-09: key TTS-scoped tak lagi false-negative); edge_tts tak perlu key
   out.tts = cfg?.tts_api_key
-    ? await check("https://api.elevenlabs.io/v1/user", { "xi-api-key": cfg.tts_api_key })
+    ? await validateProviderKey("elevenlabs", cfg.tts_api_key)
     : { ok: false, msg: "belum diisi (edge_tts fallback tak perlu key)" };
 
   // YouTube — presence (alur OAuth BYO-CC terpisah)
