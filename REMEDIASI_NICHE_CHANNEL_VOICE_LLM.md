@@ -340,7 +340,7 @@
 - **FE admin:** — .
 - DEPENDS: F2-12.
 - DONE-BILA: MAIN tampil agregat benar utk tenant multi-channel (uji simulasi >1 channel); tab channel tampil per-channel; ryan (1 channel) tetap benar. **FE dicontreng §10.F.4.**
-- REALISASI: ⬜ | DB:— BE:— FE:— | commit: — | catatan: —
+- REALISASI: 🟡 PARTIAL (F2-13a MAIN DONE) | DB:migr 0068 | BE:— | FE:tenant MAIN | commit: — | catatan: **F2-13a (MAIN agregat) SELESAI+validated:** migr **0068** = 2 RPC `get_tenant_compliance_agg` + `get_tenant_insights_agg` (SECURITY DEFINER, scope auth.uid, distinct-on channel_id, **shape SAMA** dgn FE Compliance/Insights → render konsisten; anon di-revoke, authenticated grant). **Validasi DB (ryan 1 channel): agg_score 77.5 == old limit(1) 77.5** (nol regresi) + insights 200 video. FE MAIN `/compliance` & `/insights` **rewire dari `.limit(1)` → RPC agregat** + copy "channel ini"→"semua channel" (jujur). `next build` PASS. **SISA F2-13b:** isi **tab Compliance/Insights per-channel** di Channel Detail (ekstrak komponen bersama `ComplianceView`/`InsightsView` dari halaman MAIN → reuse, nol-duplikat; baca `channel_insights` by channel_id). Deploy: menyusul (commit ini).
 
 ---
 ### FASE 3 — NICHE CRUD + child (admin + Business) `[authoring DNA]`
@@ -592,8 +592,8 @@ CHANNEL DETAIL (satu channel) = TABS — urutan = process flow (siapkan→jadwal
 | MAIN: Integrasi/Koneksi (pindah dari Settings + multi-platform) | tenant | ⬜ | F2-08 |
 | MAIN: Jadwal (CRUD semua channel) | tenant | ✓ (ada) | — |
 | MAIN: Analytics agregat | tenant | ✓ | F5-05 (pivot kinerja-mesin) |
-| MAIN: Compliance agregat (rewire `.limit(1)`→summary RPC) | tenant | ⬜ | F2-13 |
-| MAIN: Insights agregat (rewire) | tenant | ⬜ | F2-13 |
+| MAIN: Compliance agregat (rewire `.limit(1)`→RPC agg 0068) | tenant | ✓ (F2-13a) | F2-13 |
+| MAIN: Insights agregat (rewire→RPC agg 0068) | tenant | ✓ (F2-13a) | F2-13 |
 | MAIN: Niche Studio (gated) | tenant | ⬜ | F2-10 |
 | AKUN: Settings — Notifikasi matriks masuk | tenant | ⬜ | F2-11 |
 | Channel Detail: 1 Settings + urutan tab process-flow | tenant | ✓ (F2-12, build PASS) | F2-12 |

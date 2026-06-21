@@ -11,7 +11,7 @@ import "./compliance.css";
 
 function Bi({ id, en }: { id: string; en: string }) { return (<><span data-id>{id}</span><span data-en>{en}</span></>); }
 
-type Compliance = { score: number | null; status: string; dimensions: Record<string, number | null>; alert_below: number };
+type Compliance = { score: number | null; status: string; dimensions: Record<string, number | null>; alert_below: number; channels_count?: number };
 const DIM_META: [string, string, string, typeof Mic][] = [
   ["niche_distribution", "Distribusi Niche", "Niche Distribution", Layers],
   ["hook_style_spread", "Variasi Hook", "Hook Variation", Anchor],
@@ -40,8 +40,9 @@ export default function CompliancePage() {
   const [hasRow, setHasRow] = useState(false);
 
   useEffect(() => {
-    supabase.from("channel_insights").select("compliance, computed_at").order("computed_at", { ascending: false }).limit(1)
-      .then(({ data }) => { const c = data?.[0]?.compliance; if (c) { setCmp(c as Compliance); setHasRow(true); } setLoading(false); });
+    // F2-13: AGREGAT semua channel (RPC get_tenant_compliance_agg) — bukan 1 channel (limit 1) lagi.
+    supabase.rpc("get_tenant_compliance_agg")
+      .then(({ data }) => { const c = data as Compliance | null; if (c && (c.channels_count ?? 0) > 0) { setCmp(c); setHasRow(true); } setLoading(false); });
   }, [supabase]);
 
   const insufficient = !cmp || cmp.status === "insufficient_data" || cmp.score == null;
@@ -52,7 +53,7 @@ export default function CompliancePage() {
       <div className="cmp-head">
         <div>
           <h1><ShieldCheck size={26} style={{ color: "var(--success)" }} /> Compliance Score</h1>
-          <div className="sub"><Bi id="AI Slop Defense · dari channel_insights" en="AI Slop Defense · from channel_insights" /></div>
+          <div className="sub"><Bi id="AI Slop Defense · rata-rata semua channel" en="AI Slop Defense · averaged across all channels" /></div>
         </div>
       </div>
 

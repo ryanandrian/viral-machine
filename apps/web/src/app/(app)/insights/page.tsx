@@ -12,7 +12,7 @@ import "./insights.css";
 function Bi({ id, en }: { id: string; en: string }) { return (<><span data-id>{id}</span><span data-en>{en}</span></>); }
 const prettyNiche = (s: string) => s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
-type Insights = { performance_grade: string; videos_analyzed: number; niche_weights: Record<string, number>; top_hooks: { hook: string; pattern: string; views: number; ctr: number }[]; avoid_patterns: string[]; computed_at: string };
+type Insights = { performance_grade: string; videos_analyzed: number; niche_weights: Record<string, number>; top_hooks: { hook: string; pattern: string; views: number; ctr: number }[]; avoid_patterns: string[]; computed_at: string; channels_count?: number };
 
 export default function InsightsPage() {
   const supabase = createClient();
@@ -20,8 +20,9 @@ export default function InsightsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.from("channel_insights").select("performance_grade, videos_analyzed, niche_weights, top_hooks, avoid_patterns, computed_at").order("computed_at", { ascending: false }).limit(1)
-      .then(({ data }) => { if (data?.[0]) setIns(data[0] as Insights); setLoading(false); });
+    // F2-13: AGREGAT semua channel (RPC get_tenant_insights_agg) — bukan 1 channel (limit 1) lagi.
+    supabase.rpc("get_tenant_insights_agg")
+      .then(({ data }) => { const i = data as Insights | null; if (i && (i.channels_count ?? 0) > 0) setIns(i); setLoading(false); });
   }, [supabase]);
 
   const weights = Object.entries(ins?.niche_weights ?? {}).sort((a, b) => b[1] - a[1]);
@@ -34,14 +35,14 @@ export default function InsightsPage() {
       <div className="page-head">
         <div>
           <h1><Sparkles size={26} style={{ color: "var(--accent)" }} /> Self-Learning Insights</h1>
-          <div className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Apa yang mesin pelajari dari channelmu" en="What the engine learned from your channel" /></div>
+          <div className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Apa yang mesin pelajari dari semua channelmu" en="What the engine learned across all your channels" /></div>
         </div>
         {ins && <span className="grade"><TrendingUp size={13} /> {prettyNiche(ins.performance_grade)}</span>}
       </div>
 
       <div className="hero-card">
         <div className="brain"><span className="ic"><Sparkles size={22} /></span>
-          <h2><span data-id>Mesin sudah belajar dari <span style={{ color: "var(--accent)" }}>{ins?.videos_analyzed ?? 0} video</span> di channel ini</span><span data-en>The engine learned from <span style={{ color: "var(--accent)" }}>{ins?.videos_analyzed ?? 0} videos</span></span></h2>
+          <h2><span data-id>Mesin sudah belajar dari <span style={{ color: "var(--accent)" }}>{ins?.videos_analyzed ?? 0} video</span> di {ins?.channels_count ?? 0} channel</span><span data-en>The engine learned from <span style={{ color: "var(--accent)" }}>{ins?.videos_analyzed ?? 0} videos</span> across {ins?.channels_count ?? 0} channels</span></h2>
         </div>
         <div className="meta">
           <span><Clock size={15} /> <Bi id="Komputasi terakhir" en="Last computed" />: {ins ? new Date(ins.computed_at).toLocaleString("id-ID") : "—"}</span>
