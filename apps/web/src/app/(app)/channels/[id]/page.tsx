@@ -3,10 +3,19 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ExternalLink, Settings, Zap, ArrowRight, BarChart3, Calendar, Activity, Loader2, Check, Pause, Play, RotateCw, AlertTriangle, Mic, ShieldCheck, Sparkles } from "lucide-react";
+import { ExternalLink, Settings, Zap, ArrowRight, BarChart3, Calendar, Activity, Loader2, Check, Pause, Play, RotateCw, AlertTriangle, Mic, ShieldCheck, Sparkles, Clock, Trash2, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import PresetTables from "@/components/preset-tables";
+import { ComplianceView, type Compliance } from "@/components/compliance-view";
+import { InsightsView, type Insights } from "@/components/insights-view";
 import "./channel-detail.css";
+
+// F2-13b: status produksi → label + varian badge design-system (tab Runs).
+const RUN_ST: Record<string, [string, string, string]> = {
+  success: ["Sukses", "Success", "badge-success"], failed: ["Gagal", "Failed", "badge-danger"],
+  qc_failed: ["QC gagal", "QC failed", "badge-warning"], ready_with_issues: ["Perlu tinjau", "Needs review", "badge-warning"],
+  running: ["Berjalan", "Running", "badge-brand"], queued: ["Antre", "Queued", "badge-default"],
+};
 
 // D3 Channel Detail — Phase 9.3 (wired Supabase v2, anon + RLS).
 // Header + Settings = data NYATA (read channels by id, write via channels RLS UPDATE — tanpa kolom
@@ -18,9 +27,9 @@ function Bi({ id, en }: { id: string; en: string }) {
 }
 
 type ChannelRow = {
-  id: string; channel_name: string | null; platform_channel_id: string | null;
+  id: string; channel_name: string | null; platform_channel_id: string | null; subscriber_count: number | null;
   niche: string | null; niche_pool: string[] | null; niche_mode: string | null; content_language: string | null;
-  is_active: boolean | null; publish_privacy: string | null; duration_preset: number | null;
+  is_active: boolean | null; publish_privacy: string | null; duration_preset: number | null; publish_slots: string[] | null;
   production_paused: boolean | null; production_paused_reason: string | null;
   llm_model: string | null; llm_library: string | null; visual_mode: string | null;
   tts_provider: string | null; voice_key: string | null;
@@ -92,6 +101,15 @@ export default function ChannelDetailPage() {
   // F2-07/F1-09: status efektif
   const [sub, setSub] = useState<string | null>(null);
   const [rd, setRd] = useState<{ ready: boolean; missing: string[] } | null>(null);
+  // F2-13b: data per-channel utk tab (channel_insights + production_runs + publish_slots)
+  const [chCmp, setChCmp] = useState<Compliance | null>(null);
+  const [chIns, setChIns] = useState<Insights | null>(null);
+  const [chRuns, setChRuns] = useState<{ id: string; status: string; niche: string | null; topic: string | null; created_at: string }[]>([]);
+  const [slots, setSlots] = useState<string[]>([]);
+  const [newSlot, setNewSlot] = useState("");
+  const [slotMsg, setSlotMsg] = useState<string | null>(null);
+  const [savingSlot, setSavingSlot] = useState(false);
+  const [totalVids, setTotalVids] = useState<number | null>(null);  // video produksi sukses channel ini
   // F2-03: pemilih AI per-channel (model + voice). Katalog dari ai_models/tts_profiles/voice_catalog (RLS read).
   const [llmOpts, setLlmOpts] = useState<ModelOpt[]>([]);
   const [imgOpts, setImgOpts] = useState<ModelOpt[]>([]);
@@ -236,6 +254,16 @@ export default function ChannelDetailPage() {
     if (!error) load();
   }
 
+  // F2-13b: jadwal publish per-channel (RPC set_channel_publish_slots — sama dgn MAIN /jadwal, scope channel ini).
+  async function saveSlots(next: string[]) {
+    setSavingSlot(true); setSlotMsg(null);
+    const sorted = Array.from(new Set(next.map((t) => t.trim()).filter(Boolean))).sort();
+    const { error } = await supabase.rpc("set_channel_publish_slots", { p_channel_id: id, p_slots: sorted });
+    setSavingSlot(false);
+    if (error) { setSlotMsg(`Gagal: ${error.message}`); return; }
+    setSlots(sorted); setSlotMsg("Jadwal tersimpan");
+  }
+
   async function saveNiche() {
     setNicheMsg(null); setSavingNiche(true);
     const { error } = await supabase.rpc("set_channel_niche", { p_channel_id: id, p_niche: niche, p_niche_mode: nicheMode });
@@ -269,7 +297,7 @@ export default function ChannelDetailPage() {
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     const { data } = await supabase.from("channels")
-      .select("id,channel_name,platform_channel_id,niche,niche_pool,niche_mode,content_language,is_active,publish_privacy,duration_preset,production_paused,production_paused_reason,llm_model,llm_library,visual_mode,tts_provider,voice_key,image_quality,music_enabled,music_volume,music_default_mood,script_min_viral_score,script_max_retry,caption_style,niche_hashtags,cta_mode,brand_name,brand_cta_text,brand_logo,logo_position,logo_size,logo_opacity,landing_link,link_position")
+      .select("id,channel_name,platform_channel_id,subscriber_count,niche,niche_pool,niche_mode,content_language,is_active,publish_privacy,duration_preset,publish_slots,production_paused,production_paused_reason,llm_model,llm_library,visual_mode,tts_provider,voice_key,image_quality,music_enabled,music_volume,music_default_mood,script_min_viral_score,script_max_retry,caption_style,niche_hashtags,cta_mode,brand_name,brand_cta_text,brand_logo,logo_position,logo_size,logo_opacity,landing_link,link_position")
       .eq("id", id).maybeSingle();
     const c = data as ChannelRow | null;
     setCh(c);
@@ -277,7 +305,7 @@ export default function ChannelDetailPage() {
       setName(c.channel_name ?? ""); setClang(c.content_language ?? "id-ID");
       setPrivacy(c.publish_privacy ?? "private"); setActive(c.is_active ?? true);
       setNicheMode((c.niche_mode === "random" ? "random" : "fixed")); setNiche(c.niche ?? "");
-      setDpreset(c.duration_preset ?? null);
+      setDpreset(c.duration_preset ?? null); setSlots(c.publish_slots ?? []);
       setLlmModel(c.llm_model ?? "");
       const vm = c.visual_mode ?? "";
       if (vm.startsWith("ai_image:")) { setVmode("ai_image"); setImgModel(vm.slice(9)); } else { setVmode("video"); setImgModel(""); }
@@ -306,6 +334,20 @@ export default function ChannelDetailPage() {
     const { data: cfg } = await supabase.from("tenant_configs").select("plan_type,subscription_status").maybeSingle();
     setSub((cfg as { subscription_status?: string } | null)?.subscription_status ?? null);
     try { const { data: rdd } = await supabase.rpc("channel_readiness", { p_channel_id: id }); if (rdd) setRd(rdd as { ready: boolean; missing: string[] }); } catch { /* non-fatal */ }
+    // F2-13b: insight per-channel (channel_insights by channel_id) + runs per-channel (production_runs).
+    const { data: ci } = await supabase.from("channel_insights")
+      .select("compliance,performance_grade,videos_analyzed,niche_weights,top_hooks,avoid_patterns,computed_at")
+      .eq("channel_id", id).order("computed_at", { ascending: false }).limit(1).maybeSingle();
+    if (ci) {
+      setChCmp(((ci as { compliance?: Compliance }).compliance) ?? null);
+      setChIns(ci as unknown as Insights);
+    } else { setChCmp(null); setChIns(null); }
+    const { data: pr } = await supabase.from("production_runs")
+      .select("id,status,niche,topic,created_at").eq("channel_id", id).order("created_at", { ascending: false }).limit(60);
+    setChRuns((pr ?? []) as { id: string; status: string; niche: string | null; topic: string | null; created_at: string }[]);
+    // Total video per-channel = produksi SUKSES (production_runs.channel_id terisi 100%; akurat).
+    const { count: vCount } = await supabase.from("production_runs").select("id", { count: "exact", head: true }).eq("channel_id", id).eq("status", "success");
+    setTotalVids(vCount ?? 0);
     const tier = (cfg as { plan_type?: string } | null)?.plan_type ?? "starter";
     const { data: nrows } = await supabase.from("niches").select("niche_id,name,is_base,access_type,exclusive_to").eq("is_active", true);
     const me = user?.id ?? "";
@@ -355,16 +397,15 @@ export default function ChannelDetailPage() {
             ? <a href={`https://youtube.com/channel/${ch.platform_channel_id}`} target="_blank" rel="noopener noreferrer" className="cd-yt-link"><span className="yt" /> youtube.com/channel/{ch.platform_channel_id} <ExternalLink size={13} /></a>
             : <span className="cd-yt-link muted"><span className="yt" /> <Bi id="YouTube belum terhubung" en="YouTube not connected" /></span>}
           <div className="cd-kpi-strip">
-            <div className="item"><div className="v">—</div><div className="l"><Bi id="Total video" en="Total videos" /></div></div>
-            <div className="item"><div className="v">—</div><div className="l">Subscribers</div></div>
-            <div className="item"><div className="v">—</div><div className="l"><Bi id="Views bulan ini" en="Views this month" /></div></div>
-            <div className="item"><div className="v">—</div><div className="l"><Bi id="Avg engagement" en="Avg engagement" /></div></div>
+            {/* Total video + Subscribers = NYATA per-channel. Views/Engagement = metrik YouTube → tab Analytics/Studio; per-channel menunggu backfill video_analytics.channel_id (F1-06). */}
+            <div className="item"><div className="v">{totalVids != null ? totalVids.toLocaleString("id-ID") : "—"}</div><div className="l"><Bi id="Total video" en="Total videos" /></div></div>
+            <div className="item"><div className="v">{ch.subscriber_count != null ? ch.subscriber_count.toLocaleString("id-ID") : "—"}</div><div className="l">Subscribers</div></div>
+            <div className="item" title="Metrik YouTube — buka YouTube Studio (tab Analytics). Per-channel menunggu F1-06."><div className="v">—</div><div className="l"><Bi id="Views bulan ini" en="Views this month" /></div></div>
+            <div className="item" title="Metrik YouTube — buka YouTube Studio (tab Analytics). Per-channel menunggu F1-06."><div className="v">—</div><div className="l"><Bi id="Avg engagement" en="Avg engagement" /></div></div>
           </div>
         </div>
         <div style={{ display: "flex", gap: "0.5rem" }}>
-          {ch.platform_channel_id && (
-            <a className="btn btn-secondary" href={`https://studio.youtube.com/channel/${ch.platform_channel_id}`} target="_blank" rel="noopener noreferrer" title="Kelola di YouTube Studio (tab baru)" style={{ color: "var(--yt)" }}><ExternalLink size={15} /> YouTube Studio</a>
-          )}
+          {/* Tombol YouTube Studio dipindah ke tab Analytics (F2-13b) — tak lagi di header (buang duplikat). */}
           {/* F2-07: pause/play (is_active). Play ter-gate readiness. Sembunyikan saat halted/sub (pakai aksi di banner). */}
           {!ch.production_paused && (sub === null || ["active","trialing","trial","grace"].includes(sub)) && (
             ch.is_active
@@ -434,19 +475,54 @@ export default function ChannelDetailPage() {
         </div>
       )}
       {tab === "runs" && (
-        <Placeholder icon={<BarChart3 size={32} />} idT="Belum ada run untuk channel ini." enT="No runs for this channel yet." href="/runs" ctaId="Lihat semua Runs" ctaEn="View all Runs" />
+        chRuns.length === 0
+          ? <Placeholder icon={<BarChart3 size={32} />} idT="Belum ada run untuk channel ini." enT="No runs for this channel yet." />
+          : <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl">
+              <thead><tr><th>Status</th><th>Niche</th><th>Topik</th><th>Waktu</th></tr></thead>
+              <tbody>{chRuns.map((r) => { const st = RUN_ST[r.status] ?? [r.status, r.status, "badge-default"]; return (
+                <tr key={r.id}>
+                  <td><span className={`badge ${st[2]}`}><span className="dot" /><Bi id={st[0]} en={st[1]} /></span></td>
+                  <td className="muted">{r.niche ?? "—"}</td>
+                  <td style={{ color: "var(--text-primary)", maxWidth: 360 }}>{r.topic ?? "—"}</td>
+                  <td className="muted" style={{ fontSize: "var(--text-xs)" }}>{new Date(r.created_at).toLocaleString("id-ID")}</td>
+                </tr>); })}</tbody>
+            </table></div></div>
       )}
       {tab === "analytics" && (
-        <Placeholder icon={<BarChart3 size={32} />} idT="Analytics per-channel — chart mendalam." enT="Per-channel analytics — deep charts." href="/analytics" ctaId="Buka Analytics lengkap" ctaEn="Open full Analytics" />
+        <div className="card card-pad">
+          <h3 className="card-title" style={{ marginBottom: "0.75rem" }}><Bi id="Kinerja mesin — channel ini" en="Engine performance — this channel" /></h3>
+          {(() => { const tot = chRuns.length, ok = chRuns.filter((r) => r.status === "success").length, qc = chRuns.filter((r) => r.status === "qc_failed" || r.status === "ready_with_issues").length, fail = chRuns.filter((r) => r.status === "failed").length;
+            return (<div className="cd-kpi-strip">
+              <div className="item"><div className="v">{tot}</div><div className="l"><Bi id="Total run" en="Total runs" /></div></div>
+              <div className="item"><div className="v">{tot ? Math.round((ok / tot) * 100) : 0}%</div><div className="l"><Bi id="Success rate" en="Success rate" /></div></div>
+              <div className="item"><div className="v">{qc}</div><div className="l"><Bi id="Perlu tinjau / QC" en="Review / QC" /></div></div>
+              <div className="item"><div className="v">{fail}</div><div className="l"><Bi id="Gagal" en="Failed" /></div></div>
+            </div>); })()}
+          <p className="muted" style={{ fontSize: "var(--text-sm)", margin: "0.875rem 0 0.625rem" }}><Bi id="Metrik YouTube mentah (views/retensi/subscriber) ada di YouTube Studio — kami tak menduplikasinya (kpt 12)." en="Raw YouTube metrics (views/retention/subscribers) live in YouTube Studio — we don't duplicate them." /></p>
+          {ch.platform_channel_id && <a className="btn btn-secondary btn-sm" style={{ color: "var(--yt)" }} href={`https://studio.youtube.com/channel/${ch.platform_channel_id}`} target="_blank" rel="noopener noreferrer"><ExternalLink size={14} /> YouTube Studio</a>}
+        </div>
       )}
       {tab === "compliance" && (
-        <Placeholder icon={<ShieldCheck size={32} />} idT="Compliance khusus channel ini (skor + 5 dimensi) — disambungkan di F2-13." enT="This channel's compliance (score + 5 dimensions) — wired in F2-13." href="/compliance" ctaId="Buka Compliance (agregat)" ctaEn="Open Compliance (aggregate)" />
+        <ComplianceView compliance={chCmp} loading={loading} hasRow={!!chCmp} showEdu={false} />
       )}
       {tab === "insights" && (
-        <Placeholder icon={<Sparkles size={32} />} idT="Wawasan self-learning khusus channel ini — disambungkan di F2-13." enT="This channel's self-learning insights — wired in F2-13." href="/insights" ctaId="Buka Wawasan (agregat)" ctaEn="Open Insights (aggregate)" />
+        <InsightsView insights={chIns} loading={loading} scopeLabel={{ id: "channel ini", en: "this channel" }} />
       )}
       {tab === "schedule" && (
-        <Placeholder icon={<Calendar size={32} />} idT="Jadwal slot per-channel diatur di layar Jadwal." enT="Per-channel slots are managed in the Schedule screen." href="/schedule" ctaId="Buka Jadwal" ctaEn="Open Schedule" />
+        <div className="card card-pad" style={{ maxWidth: 560 }}>
+          <h3 className="card-title" style={{ marginBottom: "0.35rem" }}><Bi id="Jadwal publish — channel ini" en="Publish schedule — this channel" /></h3>
+          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}><Bi id="Jam publish harian (zona tenant). Bisa juga diatur di menu Jadwal (semua channel)." en="Daily publish times (tenant timezone). Also editable in the Schedule menu (all channels)." /></p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "1rem" }}>
+            {slots.length === 0 && <span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Belum ada slot." en="No slots yet." /></span>}
+            {slots.map((t) => (<span key={t} className="chip"><Clock size={12} /> {t} <span className="x" onClick={() => saveSlots(slots.filter((s) => s !== t))}><Trash2 size={12} /></span></span>))}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <input type="time" className="input" style={{ width: "fit-content" }} value={newSlot} onChange={(e) => setNewSlot(e.target.value)} />
+            <button className="btn btn-secondary btn-sm" disabled={savingSlot || !newSlot} onClick={() => { if (newSlot) { saveSlots([...slots, newSlot]); setNewSlot(""); } }}><Plus size={14} /> <Bi id="Tambah slot" en="Add slot" /></button>
+            {savingSlot && <Loader2 size={14} className="spin" />}
+            {slotMsg && <span style={{ fontSize: "var(--text-xs)", color: slotMsg.includes("tersimpan") ? "var(--success)" : "var(--danger,#ef4444)" }}>{slotMsg}</span>}
+          </div>
+        </div>
       )}
 
       {tab === "settings" && (
