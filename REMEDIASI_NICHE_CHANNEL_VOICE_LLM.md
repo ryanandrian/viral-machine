@@ -302,7 +302,7 @@
 - **FE admin:** — (key milik tenant).
 - DEPENDS: F1-05 (jahitan loader), F2-12.
 - DONE-BILA: 2 channel pakai akun berbeda provider sama → produksi pakai key masing-masing; vault CRUD + validasi; ryan jalan dgn akun default ter-backfill. **FE dicontreng §10.F.4.**
-- REALISASI: ⬜ | DB:— BE:— FE:— | commit: — | catatan: —
+- REALISASI: 🟡 PARTIAL (DB foundation) | DB:migr 0070 | BE:— FE:— | commit:(berikut) | catatan: **DB SELESAI+validated:** tabel **`tenant_api_accounts`** (id/tenant_id/component(llm|tts|image|video)/provider/label/key_enc Fernet/status, RLS owner, anon-revoke) + ref **`channels.{llm,tts,image,video}_account_id`** (nullable, FK on-delete-set-null). **Backfill** (multi-channel-correct): 1 akun "Default <elemen>" per tenant dari `tenant_configs.*_enc` (**COPY enc, TANPA dekripsi** — master-key tak tersentuh) + arahkan channel tenant. Validasi: ryan 3 akun, **enc-match=True** (key identik → nol-regresi), channel ter-arah. **SISA:** **BE** — channel-overlay resolve key dari akun terpilih channel (`tenant_api_accounts.key_enc` decrypt) + **fallback** ke `tenant_configs.*_enc` bila account_id NULL (non-breaking); **FE** — pemilih akun + "Tambah akun" (route encrypt server-side, pola `/api/keys/set`) di Channel Settings. Catatan: `youtube_api_key` (trend-scan) TETAP di tenant_configs (bukan elemen per-channel).
 
 #### [F2-10] Niche Studio (MAIN, gated) + niche picker per-channel (1:1, request custom) `[NEW — owner 2026-06-21]`
 - ACUAN: §3.20 · §10.F.2. 1 channel=1 niche; tanpa "aktifkan N niche per plan"; Studio gated.
