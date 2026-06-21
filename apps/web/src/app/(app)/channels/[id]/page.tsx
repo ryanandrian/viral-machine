@@ -18,7 +18,7 @@ function Bi({ id, en }: { id: string; en: string }) {
 }
 
 type ChannelRow = {
-  id: string; channel_name: string | null; platform_channel_id: string | null;
+  id: string; channel_name: string | null; platform_channel_id: string | null; subscriber_count: number | null;
   niche: string | null; niche_pool: string[] | null; niche_mode: string | null; content_language: string | null;
   is_active: boolean | null; publish_privacy: string | null; duration_preset: number | null;
   production_paused: boolean | null; production_paused_reason: string | null;
@@ -269,7 +269,7 @@ export default function ChannelDetailPage() {
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     const { data } = await supabase.from("channels")
-      .select("id,channel_name,platform_channel_id,niche,niche_pool,niche_mode,content_language,is_active,publish_privacy,duration_preset,production_paused,production_paused_reason,llm_model,llm_library,visual_mode,tts_provider,voice_key,image_quality,music_enabled,music_volume,music_default_mood,script_min_viral_score,script_max_retry,caption_style,niche_hashtags,cta_mode,brand_name,brand_cta_text,brand_logo,logo_position,logo_size,logo_opacity,landing_link,link_position")
+      .select("id,channel_name,platform_channel_id,subscriber_count,niche,niche_pool,niche_mode,content_language,is_active,publish_privacy,duration_preset,production_paused,production_paused_reason,llm_model,llm_library,visual_mode,tts_provider,voice_key,image_quality,music_enabled,music_volume,music_default_mood,script_min_viral_score,script_max_retry,caption_style,niche_hashtags,cta_mode,brand_name,brand_cta_text,brand_logo,logo_position,logo_size,logo_opacity,landing_link,link_position")
       .eq("id", id).maybeSingle();
     const c = data as ChannelRow | null;
     setCh(c);
@@ -355,8 +355,10 @@ export default function ChannelDetailPage() {
             ? <a href={`https://youtube.com/channel/${ch.platform_channel_id}`} target="_blank" rel="noopener noreferrer" className="cd-yt-link"><span className="yt" /> youtube.com/channel/{ch.platform_channel_id} <ExternalLink size={13} /></a>
             : <span className="cd-yt-link muted"><span className="yt" /> <Bi id="YouTube belum terhubung" en="YouTube not connected" /></span>}
           <div className="cd-kpi-strip">
+            {/* Subscribers = NYATA dari channels.subscriber_count. 3 KPI lain (views/video/engagement)
+                butuh atribusi per-channel di video_analytics → channel_id kini 100% NULL → menunggu F1-06 backfill + analytics per-channel (F5-05). Jujur "—" daripada angka salah. */}
             <div className="item"><div className="v">—</div><div className="l"><Bi id="Total video" en="Total videos" /></div></div>
-            <div className="item"><div className="v">—</div><div className="l">Subscribers</div></div>
+            <div className="item"><div className="v">{ch.subscriber_count != null ? ch.subscriber_count.toLocaleString("id-ID") : "—"}</div><div className="l">Subscribers</div></div>
             <div className="item"><div className="v">—</div><div className="l"><Bi id="Views bulan ini" en="Views this month" /></div></div>
             <div className="item"><div className="v">—</div><div className="l"><Bi id="Avg engagement" en="Avg engagement" /></div></div>
           </div>
@@ -371,7 +373,6 @@ export default function ChannelDetailPage() {
               ? <button className="btn btn-secondary" disabled={busy} onClick={() => pausePlay(false)}><Pause size={15} /> <Bi id="Jeda" en="Pause" /></button>
               : <button className="btn btn-secondary" disabled={busy} onClick={() => pausePlay(true)}><Play size={15} /> <Bi id="Aktifkan" en="Activate" /></button>
           )}
-          <button className="btn btn-secondary" onClick={() => setTab("settings")}><Settings size={15} /> <Bi id="Pengaturan" en="Settings" /></button>
           <button className="btn btn-ai" disabled={busy} onClick={testNow} title="Produksi 1 video private untuk preview config"><Zap size={15} /> <Bi id="Test sekarang (private)" en="Test now (private)" /></button>
         </div>
         {testMsg && <div style={{ flexBasis: "100%", fontSize: "var(--text-xs)", color: "var(--text-secondary)", marginTop: ".5rem" }}>{testMsg}</div>}
