@@ -360,7 +360,7 @@
 - PLAN: halaman kelola-niche untuk tier yang diizinkan (clone UI admin niches), niche dibuat `access_type=private, exclusive_to=tenant_id`; **gating config-driven** (`app_config` daftar tier yang boleh buat niche, default `['business']` + admin — **extensible ke `pro` tanpa ubah kode**, sesuai arahan owner); Entry/Pro (di luar daftar) tetap request.
 - DEPENDS: F3-01/02.
 - DONE-BILA: tier dalam daftar (default Business) buat+edit niche private (tak terlihat tenant lain); tier di luar daftar tak punya akses create; menambah Pro = ubah `app_config` saja.
-- REALISASI: ⬜ | commit: — | catatan: —
+- REALISASI: 🟡 (DB+BE) | DB:migr 0071 | BE:route | FE:— | catatan: **Keputusan AMAN (verified):** `niches` RLS=OFF (katalog global, tulis service_role) → F3-03 tulis via **server-route enforce** (BUKAN bedah RLS tabel mesin → nol-risiko). **DB:** `app_config.niche_studio_min_rank=3` (Business; value=INTEGER → pakai min-rank, extensible Pro=2). **BE:** route **`/api/niches/mine`** (GET own / POST create / PATCH edit) — authed (tenant_id dari SESI), **ENFORCE** `access_type='private'`+`exclusive_to=tenant_id`+gating(rank≥min); PATCH hanya own-private. next build PASS. **SISA FE:** halaman **Niche Studio** (clone editor admin, gated) + **nav MAIN gated** (tampil bila rank≥min). = juga menuntaskan **F2-10**.
 
 ---
 ### FASE 4 — Cacat B tuntas + LLM-as-conductor `[kualitas konten]`
