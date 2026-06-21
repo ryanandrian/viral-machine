@@ -348,13 +348,13 @@
 - BUKTI: POST `niches/route.ts:44` SIAP; FE tak ada tombol (§5.4).
 - PLAN: tambah form create niche di `admin/(panel)/niches` → POST.
 - DONE-BILA: admin buat niche baru dari UI; tercatat audit.
-- REALISASI: ⬜ | commit: — | catatan: —
+- REALISASI: ✅ | commit:(deploy berikut) | catatan: tombol **"Niche baru"** di `admin/(panel)/niches` head + modal (niche_id slug/name/access_type/is_base) → POST `/api/admin/niches` (audit tercatat) → reload. next build PASS. Admin-only (nol-risiko ryan).
 
 #### [F3-02] Lengkapi editor niche (field hilang + voice DEFAULT per TTS model)
 - PLAN: drawer tampil `image_quality_tags, image_negative_prompt, visual_fallbacks, section_timing` (API allow) + **selector voice DEFAULT per TTS model** (`niches.voice_defaults` — 1 default tiap provider aktif, dari `voice_catalog` provider itu) + **TEST/PREVIEW** (F2-06); ganti JSON-textarea rapuh→form terstruktur; tambah `voice_defaults` ke allowlist PATCH (`[id]/route.ts:7-8`).
 - DEPENDS: F1-01/02/07.
 - DONE-BILA: semua field DNA bisa di-edit aman; voice default per model tersimpan & jadi pra-isi di channel-config (F2-03); preview jalan.
-- REALISASI: ⬜ | commit: — | catatan: —
+- REALISASI: 🟡 (editor lengkap; TEST=F2-06) | commit:(berikut) | catatan: drawer niche +field DNA yang hilang — `image_quality_tags`/`visual_fallbacks` (pisah-koma), `image_negative_prompt` (textarea), `section_timing` (JSON), + **`voice_defaults` per provider (JSON, Opsi 2 §10.B)**; **allowlist PATCH +`voice_key,voice_defaults`** (`[id]/route.ts`). save() parse comma-array + JSON. next build PASS. **SISA:** TEST/PREVIEW voice (butuh F2-06) + (opsi) selector voice_defaults terstruktur per-provider dari voice_catalog.
 
 #### [F3-03] Business niche-studio (clone admin, scoped private) + gating config-driven
 - PLAN: halaman kelola-niche untuk tier yang diizinkan (clone UI admin niches), niche dibuat `access_type=private, exclusive_to=tenant_id`; **gating config-driven** (`app_config` daftar tier yang boleh buat niche, default `['business']` + admin — **extensible ke `pro` tanpa ubah kode**, sesuai arahan owner); Entry/Pro (di luar daftar) tetap request.
@@ -617,8 +617,8 @@ CHANNEL DETAIL (satu channel) = TABS — urutan = process flow (siapkan→jadwal
 | Channel Settings: target platform id (youtube_channel_id) | tenant | ✓ (F2-08) | F2-08 |
 | Wizard buat channel (step-by-step) | tenant | ⬜ | F2-01 |
 | Admin: voice_catalog CRUD | admin | ✓ (`F1-01`) | — |
-| Admin: tombol "Tambah niche" | admin | ⬜ | F3-01 |
-| Admin: niche editor (fields + voice_defaults + test) | admin | ⬜ | F3-02 |
+| Admin: tombol "Tambah niche" | admin | ✓ (F3-01) | F3-01 |
+| Admin: niche editor (fields + voice_defaults + test) | admin | 🟡 (fields+voice_defaults ✓; test=F2-06) | F3-02 |
 | Admin: gating platform/tier (IG/TikTok/Niche-Studio) config | admin | ⬜ | F2-08/F3-03 |
 | Admin: shell/komponen selaras design tenant | admin | 🟡 | (owner pt.2) |
 

@@ -16,6 +16,7 @@ type Niche = {
   niche_id: string; name: string; keywords: unknown; default_hashtags: unknown; is_active: boolean; is_base: boolean;
   access_type: string; exclusive_to: string | null; exclusive_until: string | null; released_at: string | null;
   voice_profile: unknown; visual_style: unknown; mood_priority: unknown; emotion_scoring_criteria: string | null;
+  image_quality_tags: unknown; image_negative_prompt: string | null; visual_fallbacks: unknown; section_timing: unknown; voice_defaults: unknown;
   video_count: number; tenant_count: number; avg_viral: number | null;
 };
 type Release = { id: string; niche_id: string; scheduled_at: string; status: string };
@@ -44,6 +45,17 @@ export default function AdminNichesPage() {
   type NReq = { request_id: string; tenant_id: string; tenant_email: string | null; request_type: string; title: string; clues: Record<string, string>; status: string; created_at: string; niche_id: string | null };
   const [reqs, setReqs] = useState<NReq[]>([]);
   const [appr, setAppr] = useState<{ req: NReq; niche_id: string } | null>(null);
+  // F3-01: buat niche baru dari nol (POST /api/admin/niches; detail diedit via drawer/PATCH).
+  const [newN, setNewN] = useState<{ niche_id: string; name: string; is_base: boolean; access_type: string } | null>(null);
+  async function createNiche() {
+    if (!newN) return;
+    setBusy(true);
+    const r = await fetch("/api/admin/niches", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newN) });
+    setBusy(false);
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) { setToast(`Niche dibuat: ${j.row?.niche_id ?? newN.niche_id}`); setNewN(null); await load(); }
+    else setToast(j.error || "Gagal buat niche");
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -77,6 +89,8 @@ export default function AdminNichesPage() {
       exclusive_until: n.exclusive_until ?? "", released_at: n.released_at ?? "",
       voice_profile: jstr(n.voice_profile), visual_style: jstr(n.visual_style), mood_priority: jstr(n.mood_priority),
       emotion_scoring_criteria: n.emotion_scoring_criteria ?? "",
+      image_quality_tags: asArr(n.image_quality_tags).join(", "), image_negative_prompt: n.image_negative_prompt ?? "",
+      visual_fallbacks: asArr(n.visual_fallbacks).join(", "), section_timing: jstr(n.section_timing), voice_defaults: jstr(n.voice_defaults),
     } : {});
   }
 
@@ -88,10 +102,13 @@ export default function AdminNichesPage() {
       access_type: edit.access_type, exclusive_to: (edit.exclusive_to as string) || null,
       exclusive_until: (edit.exclusive_until as string) || null, released_at: (edit.released_at as string) || null,
       emotion_scoring_criteria: edit.emotion_scoring_criteria,
+      image_negative_prompt: (edit.image_negative_prompt as string) || null,
       keywords: String(edit.keywords || "").split(",").map((s) => s.trim()).filter(Boolean),
       default_hashtags: String(edit.default_hashtags || "").split(",").map((s) => s.trim()).filter(Boolean),
+      image_quality_tags: String(edit.image_quality_tags || "").split(",").map((s) => s.trim()).filter(Boolean),
+      visual_fallbacks: String(edit.visual_fallbacks || "").split(",").map((s) => s.trim()).filter(Boolean),
     };
-    for (const [k, v] of [["voice_profile", edit.voice_profile], ["visual_style", edit.visual_style], ["mood_priority", edit.mood_priority]] as const) {
+    for (const [k, v] of [["voice_profile", edit.voice_profile], ["visual_style", edit.visual_style], ["mood_priority", edit.mood_priority], ["section_timing", edit.section_timing], ["voice_defaults", edit.voice_defaults]] as const) {
       try { patch[k] = JSON.parse(v as string); } catch { /* skip invalid JSON */ }
     }
     const r = await fetch(`/api/admin/niches/${cur.niche_id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
@@ -131,6 +148,7 @@ export default function AdminNichesPage() {
             <span><b>{niches.filter((n) => n.is_base).length}</b> Base</span>
           </div>
         </div>
+        <button className="btn btn-default" onClick={() => setNewN({ niche_id: "", name: "", is_base: false, access_type: "public" })}><Plus size={15} /> <Bi id="Niche baru" en="New niche" /></button>
       </div>
 
       <div className="nl-filters"><div className="segmented">
@@ -190,6 +208,23 @@ export default function AdminNichesPage() {
         </div>
       )}
 
+      {newN && (
+        <div onClick={(e) => { if (e.target === e.currentTarget) setNewN(null); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem" }}>
+          <div className="card card-pad" style={{ maxWidth: 460, width: "100%" }}>
+            <h3 className="card-title" style={{ marginBottom: ".75rem" }}><Bi id="Niche baru" en="New niche" /></h3>
+            <div className="nl-fld"><label className="label">niche_id (slug a-z0-9_)</label><input className="input input-mono" value={newN.niche_id} onChange={(e) => setNewN({ ...newN, niche_id: e.target.value })} placeholder="mis. dark_history" /></div>
+            <div className="nl-fld"><label className="label"><Bi id="Nama tampilan" en="Display name" /></label><input className="input" value={newN.name} onChange={(e) => setNewN({ ...newN, name: e.target.value })} /></div>
+            <div className="nl-fld"><label className="label">access_type</label><select className="input" value={newN.access_type} onChange={(e) => setNewN({ ...newN, access_type: e.target.value })}><option value="public">🌍 Public</option><option value="pending">📅 Pending</option><option value="private">🔒 Private</option></select></div>
+            <label style={{ display: "flex", alignItems: "center", gap: ".5rem", fontSize: "var(--text-sm)", margin: ".4rem 0" }}><input type="checkbox" checked={newN.is_base} onChange={(e) => setNewN({ ...newN, is_base: e.target.checked })} /> is_base (trial/starter)</label>
+            <div className="muted" style={{ fontSize: "var(--text-xs)", margin: ".25rem 0 .5rem" }}><Bi id="Detail DNA (voice/visual/timing) diedit di drawer setelah dibuat." en="DNA detail (voice/visual/timing) edited in the drawer after creation." /></div>
+            <div style={{ display: "flex", gap: ".5rem", justifyContent: "flex-end", marginTop: "0.5rem" }}>
+              <button className="btn btn-ghost" onClick={() => setNewN(null)}>Batal</button>
+              <button className="btn btn-default" disabled={busy || !/^[a-z0-9_]+$/.test(newN.niche_id)} onClick={createNiche}><Check size={14} /> <Bi id="Buat niche" en="Create niche" /></button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="nl-section-title"><Calendar size={18} style={{ color: "var(--accent)" }} /> <Bi id="Jadwal Rilis Bulanan" en="Monthly Release Scheduler" /></div>
       <div className="card card-pad">
         <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "end", marginBottom: "1rem" }}>
@@ -233,10 +268,19 @@ export default function AdminNichesPage() {
               <div className="nl-fld" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}><span style={{ fontSize: "var(--text-sm)" }}>is_active</span><label className="switch"><input type="checkbox" checked={!!edit.is_active} onChange={(e) => setEdit({ ...edit, is_active: e.target.checked })} /><span className="track" /><span className="thumb" /></label></div>
               <div className="nl-fld" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}><span style={{ fontSize: "var(--text-sm)" }}>is_base <span className="muted">(trial/starter only)</span></span><label className="switch"><input type="checkbox" checked={!!edit.is_base} onChange={(e) => setEdit({ ...edit, is_base: e.target.checked })} /><span className="track" /><span className="thumb" /></label></div>
             </>}
-            {dtab === 1 && <div className="nl-fld"><label className="label">voice_profile JSON</label><textarea className="textarea input-mono" rows={8} value={edit.voice_profile as string} onChange={(e) => setEdit({ ...edit, voice_profile: e.target.value })} /></div>}
-            {dtab === 2 && <div className="nl-fld"><label className="label">visual_style JSON</label><textarea className="textarea input-mono" rows={8} value={edit.visual_style as string} onChange={(e) => setEdit({ ...edit, visual_style: e.target.value })} /></div>}
+            {dtab === 1 && <>
+              <div className="nl-fld"><label className="label">voice_profile JSON</label><textarea className="textarea input-mono" rows={6} value={edit.voice_profile as string} onChange={(e) => setEdit({ ...edit, voice_profile: e.target.value })} /></div>
+              <div className="nl-fld"><label className="label">voice_defaults JSON <span className="muted" style={{ fontWeight: 400, fontSize: "var(--text-xs)" }}>{"{provider: voice_key}"} — default voice per TTS model (Opsi 2 §10.B)</span></label><textarea className="textarea input-mono" rows={4} value={edit.voice_defaults as string} onChange={(e) => setEdit({ ...edit, voice_defaults: e.target.value })} placeholder={'{"elevenlabs":"VR6...","openai_tts":"fable","edge_tts":"en-US-GuyNeural"}'} /></div>
+            </>}
+            {dtab === 2 && <>
+              <div className="nl-fld"><label className="label">visual_style JSON</label><textarea className="textarea input-mono" rows={5} value={edit.visual_style as string} onChange={(e) => setEdit({ ...edit, visual_style: e.target.value })} /></div>
+              <div className="nl-fld"><label className="label">image_quality_tags <span className="muted" style={{ fontWeight: 400, fontSize: "var(--text-xs)" }}>(pisah koma)</span></label><textarea className="textarea" rows={2} value={edit.image_quality_tags as string} onChange={(e) => setEdit({ ...edit, image_quality_tags: e.target.value })} /></div>
+              <div className="nl-fld"><label className="label">image_negative_prompt</label><textarea className="textarea" rows={2} value={edit.image_negative_prompt as string} onChange={(e) => setEdit({ ...edit, image_negative_prompt: e.target.value })} /></div>
+              <div className="nl-fld"><label className="label">visual_fallbacks <span className="muted" style={{ fontWeight: 400, fontSize: "var(--text-xs)" }}>(pisah koma)</span></label><textarea className="textarea" rows={2} value={edit.visual_fallbacks as string} onChange={(e) => setEdit({ ...edit, visual_fallbacks: e.target.value })} /></div>
+            </>}
             {dtab === 3 && <>
-              <div className="nl-fld"><label className="label">mood_priority JSON</label><textarea className="textarea input-mono" rows={5} value={edit.mood_priority as string} onChange={(e) => setEdit({ ...edit, mood_priority: e.target.value })} /></div>
+              <div className="nl-fld"><label className="label">mood_priority JSON</label><textarea className="textarea input-mono" rows={4} value={edit.mood_priority as string} onChange={(e) => setEdit({ ...edit, mood_priority: e.target.value })} /></div>
+              <div className="nl-fld"><label className="label">section_timing JSON <span className="muted" style={{ fontWeight: 400, fontSize: "var(--text-xs)" }}>(durasi per-section, detik)</span></label><textarea className="textarea input-mono" rows={4} value={edit.section_timing as string} onChange={(e) => setEdit({ ...edit, section_timing: e.target.value })} /></div>
               <div className="nl-fld"><label className="label">emotion_scoring_criteria</label><textarea className="textarea" rows={3} value={edit.emotion_scoring_criteria as string} onChange={(e) => setEdit({ ...edit, emotion_scoring_criteria: e.target.value })} /></div>
             </>}
             {dtab === 4 && (
