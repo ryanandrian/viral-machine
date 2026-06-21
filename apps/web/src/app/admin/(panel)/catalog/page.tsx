@@ -24,7 +24,7 @@ const TABS: [string, string][] = [["models", "AI Models"], ["providers", "Provid
 const ADD_FIELDS: Record<string, { table: string; fields: [string, string][] }> = {
   models: { table: "ai_models", fields: [["model_key", "model_key (PK)"], ["provider_key", "provider_key"], ["component", "component (llm/image/tts/video)"], ["model_id", "model_id"], ["display_name", "display_name"]] },
   providers: { table: "ai_providers", fields: [["provider_key", "provider_key (PK)"], ["display_name", "display_name"], ["adapter", "adapter (mis. openai_chat)"], ["base_url", "base_url (opsional)"]] },
-  voice: { table: "voice_catalog", fields: [["voice_key", "voice_key (PK — voice_id provider)"], ["provider_key", "provider_key (mis. elevenlabs)"], ["display_name", "display_name"], ["locale", "locale (mis. id-ID)"], ["language", "language (mis. Indonesian)"], ["gender", "gender (male/female)"], ["age", "age (mis. young/middle-aged)"], ["accent", "accent (opsional)"], ["use_case", "use_case (mis. narration)"], ["description", "description (opsional)"], ["default_settings", "default_settings JSON {stability,style,speed}"], ["niche_default", "niche_default (opsional)"]] },
+  voice: { table: "voice_catalog", fields: [["voice_key", "voice_key (PK — voice_id provider)"], ["provider_key", "provider_key (mis. elevenlabs)"], ["display_name", "display_name"], ["locale", "locale (mis. id-ID)"], ["language", "language (mis. Indonesian)"], ["gender", "gender (male/female)"], ["age", "age (mis. young/middle-aged)"], ["accent", "accent (opsional)"], ["use_case", "use_case (mis. narration)"], ["description", "description (opsional)"], ["default_settings", "default_settings JSON {stability,style,speed}"], ["niche_default", "niche_default (opsional)"], ["preview_url", "preview_url (URL contoh suara .mp3, opsional)"]] },
   languages: { table: "content_languages", fields: [["locale", "locale (PK)"], ["display_name", "display_name"], ["quality_tier", "tier (official/experimental)"], ["caption_font", "caption_font"]] },
 };
 
@@ -47,6 +47,12 @@ export default function AdminCatalogPage() {
   async function toggle(table: string, key: string, value: boolean) {
     const r = await fetch("/api/admin/catalog", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table, key, patch: { is_active: value } }) });
     if (r.ok) { setToast("Tersimpan"); await load(); } else setToast("Gagal");
+  }
+  // F2-06: admin set contoh suara (preview_url) per voice — tenant ▶ memutarnya (nol biaya runtime).
+  const [prevEdit, setPrevEdit] = useState<{ key: string; url: string } | null>(null);
+  async function savePreview(key: string, url: string) {
+    const r = await fetch("/api/admin/catalog", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table: "voice_catalog", key, patch: { preview_url: url.trim() || null } }) });
+    if (r.ok) { setToast("Contoh disimpan"); setPrevEdit(null); await load(); } else setToast("Gagal");
   }
   async function createRow() {
     if (!add) return;
@@ -123,13 +129,21 @@ export default function AdminCatalogPage() {
         {tab === "voice" && (<>
           <div className="cat-toolbar"><span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Voice catalog + kelas TTS provider" en="Voice catalog + TTS provider classes" /></span><div className="right"><button className="btn btn-default btn-sm" onClick={() => setAdd({})}><Plus size={14} /> <Bi id="Tambah voice" en="Add voice" /></button></div></div>
           <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl cat-tbl">
-            <thead><tr><th>voice_key</th><th>provider</th><th>display</th><th>locale</th><th>language</th><th>gender</th><th>niche default</th><th>active</th></tr></thead>
+            <thead><tr><th>voice_key</th><th>provider</th><th>display</th><th>locale</th><th>gender</th><th>Contoh suara</th><th>active</th></tr></thead>
             <tbody>
-              {data.voice_catalog.length === 0 && <tr><td colSpan={8} className="muted" style={{ padding: "1rem", textAlign: "center" }}>Belum ada voice. Tambah untuk mulai.</td></tr>}
+              {data.voice_catalog.length === 0 && <tr><td colSpan={7} className="muted" style={{ padding: "1rem", textAlign: "center" }}>Belum ada voice. Tambah untuk mulai.</td></tr>}
               {data.voice_catalog.map((v) => (
                 <tr key={v.voice_key as string}>
                   <td className="mono" style={{ color: "var(--text-primary)" }}>{v.voice_key as string}</td><td>{v.provider_key as string}</td>
-                  <td>{v.display_name as string}</td><td className="muted">{(v.locale as string) || "—"}</td><td className="muted">{(v.language as string) || "—"}</td><td className="muted">{(v.gender as string) || "—"}</td><td className="muted">{(v.niche_default as string) || "—"}</td>
+                  <td>{v.display_name as string}</td><td className="muted">{(v.locale as string) || "—"}</td><td className="muted">{(v.gender as string) || "—"}</td>
+                  <td>
+                    <span style={{ display: "inline-flex", gap: "0.3rem", alignItems: "center" }}>
+                      {v.preview_url ? <button className="btn btn-ghost btn-sm" title="Putar contoh" onClick={() => { new Audio(v.preview_url as string).play().catch(() => setToast("Gagal memutar")); }}>▶</button> : <span className="muted" style={{ fontSize: "0.7rem" }}>kosong</span>}
+                      {prevEdit && prevEdit.key === v.voice_key
+                        ? <><input className="input" style={{ height: 26, fontSize: "0.7rem", width: 150 }} value={prevEdit.url} onChange={(e) => setPrevEdit({ key: v.voice_key as string, url: e.target.value })} placeholder="https://… .mp3" /><button className="btn btn-default btn-sm" onClick={() => savePreview(v.voice_key as string, prevEdit.url)}>✓</button><button className="btn btn-ghost btn-sm" onClick={() => setPrevEdit(null)}>✕</button></>
+                        : <button className="btn btn-ghost btn-sm" title="Set contoh" onClick={() => setPrevEdit({ key: v.voice_key as string, url: (v.preview_url as string) || "" })}>✎</button>}
+                    </span>
+                  </td>
                   <td><Switch table="voice_catalog" k={v.voice_key as string} on={v.is_active as boolean} /></td>
                 </tr>
               ))}

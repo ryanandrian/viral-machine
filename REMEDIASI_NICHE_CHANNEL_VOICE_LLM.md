@@ -273,7 +273,7 @@
 - PLAN: endpoint `/api/voice/preview` — kalau `voice_catalog.preview_url` ada → sajikan; kalau tidak → sintesis kalimat pendek via provider voice itu (pakai key tenant bila BYOK; key platform bila platform voice) → audio sementara. FE: tombol ▶ di pemilih voice (F2-03) + di niche editor (F3-02). Sadar-biaya (sampel pendek, cache).
 - DEPENDS: F1-01 (voice_catalog), F2-01.
 - DONE-BILA: tenant klik ▶ → dengar voice terpilih; jalan untuk EL/openai/edge; aman tanpa key (degradasi jelas).
-- REALISASI: ⬜ | commit: — | catatan: —
+- REALISASI: ✅ (cost-free) | DB:(preview_url ada) | BE:catalog PATCH | FE:admin+tenant | catatan: **Pendekatan owner-approved (hemat, nol biaya runtime):** **admin sediakan contoh** — di **Voice Catalog admin** tiap voice ada kolom **Contoh suara**: set `preview_url` (URL .mp3) + ▶ test (catalog PATCH sudah allow preview_url) + field di form-add. **Tenant** ▶ di pemilih voice channel → `new Audio(preview_url).play()` (nol synth runtime). Contoh per voice (tiap voice punya provider-nya). next build PASS. **→ tutup 🟡 F2-03 "voice test".** **Opsional defer:** auto-generate synth (perlu platform-key per provider) — admin set URL manual sudah cukup.
 
 #### [F2-07] Manage page channel (EDIT config + pause/play) — selaras arsitektur baru `[NEW — owner 2026-06-20]`
 - KONSEP (owner): tiap **card channel** punya tombol **"Manage"** → halaman edit config yang sudah dibuat via wizard (niche/model/voice/caption/hashtag/brand/operasional/publish) + **pause/play channel** (`is_active` toggle, hanya bisa play bila `channel_readiness` lengkap). Halaman **diselaraskan arsitektur baru** — BUANG elemen tak perlu/membingungkan (mis. tab config DNA lama, chart YT-redundant).
@@ -611,7 +611,8 @@ CHANNEL DETAIL (satu channel) = TABS — urutan = process flow (siapkan→jadwal
 | Channel Detail: tab Analytics/Compliance/Insights per-channel | tenant | 🟡 (tab ADA; data per-channel = F2-13) | F2-12/F2-13 |
 | Channel Settings: niche picker (1 niche + request custom) | tenant | ⬜ | F2-10 |
 | Channel Settings: model + akun-key (VAULT) per elemen | tenant | ✓ (DB+BE+FE: migr0070/`352848a`/webhook+picker) | F2-09 |
-| Channel Settings: voice + TEST | tenant | 🟡 (picker ✓; test ⬜) | F2-06 |
+| Channel Settings: voice + TEST | tenant | ✓ (picker + ▶ preview, F2-06) | F2-06 |
+| Admin: Voice Catalog — set/▶ contoh suara (preview_url) | admin | ✓ (F2-06) | F2-06 |
 | Channel Settings: caption + hashtag | tenant | ✓ (`7707e38`) | F2-02 |
 | Channel Settings: visual_mode/image_quality/music/quality-gate | tenant | ✓ (`d7cc640`) | F2-03 |
 | Channel Settings: branded (CTA/logo/landing) | tenant | 🟡 (URL; upload ⬜) | F2-04 |

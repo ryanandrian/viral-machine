@@ -44,7 +44,7 @@ type ChannelRow = {
 // Default caption_style — match BE DEFAULT_CAPTION_STYLE (video_renderer). Partial-override OK.
 const CAP_DEFAULT = { font_name: "Anton", font_size: 68, bold: true, active_word_color: "#FFD700", inactive_word_color: "#FFFFFF", outline_color: "#000000", outline: 4, position_y_pct: 83, max_words_per_line: 3 };
 type ModelOpt = { model_key: string; provider_key: string; display_name: string };
-type VoiceOpt = { voice_key: string; provider_key: string; display_name: string; gender: string | null };
+type VoiceOpt = { voice_key: string; provider_key: string; display_name: string; gender: string | null; preview_url: string | null };
 
 // F2-07/F1-09: status efektif terpadu — SATU sumber (bukan is_active saja yg menyesatkan).
 type Eff = { key: string; label_id: string; label_en: string; tone: "ok" | "warn" | "stop" | "muted"; reason?: string; reco_id?: string; reco_en?: string };
@@ -336,7 +336,7 @@ export default function ChannelDetailPage() {
     setImgOpts(((am ?? []) as (ModelOpt & {component:string})[]).filter((m) => m.component === "image"));
     const { data: tp } = await supabase.from("tts_profiles").select("provider_key,display_name").eq("is_active", true);
     setTtsOpts((tp ?? []) as { provider_key: string; display_name: string }[]);
-    const { data: vc } = await supabase.from("voice_catalog").select("voice_key,provider_key,display_name,gender").eq("is_active", true).order("sort_order");
+    const { data: vc } = await supabase.from("voice_catalog").select("voice_key,provider_key,display_name,gender,preview_url").eq("is_active", true).order("sort_order");
     setVoiceAll((vc ?? []) as VoiceOpt[]);
     const { data: accs } = await supabase.from("tenant_api_accounts").select("id,component,label").eq("status", "active").order("created_at");
     setAccounts((accs ?? []) as { id: string; component: string; label: string }[]);
@@ -610,7 +610,7 @@ export default function ChannelDetailPage() {
             <div className="radio-row">{ttsOpts.map((p) => <span key={p.provider_key} className={`radio-pill${ttsProv === p.provider_key ? " sel" : ""}`} onClick={() => { setTtsProv(p.provider_key); setVoiceKey(""); }}>{p.display_name}</span>)}</div></div>
           {ttsProv && (
             <div className="fld-row"><div className="k"><Bi id="Suara" en="Voice" /><div className="sub"><Bi id="default niche bila tak dipilih" en="niche default if unset" /></div></div>
-              <div className="radio-row">{voiceAll.filter((v) => v.provider_key === ttsProv).map((v) => { const eff = voiceKey || nicheDefaults[ttsProv] || ""; return <span key={v.voice_key} className={`radio-pill${eff === v.voice_key ? " sel" : ""}`} onClick={() => setVoiceKey(v.voice_key)}><Mic size={13} />{v.display_name}{v.gender ? ` · ${v.gender}` : ""}</span>; })}</div></div>
+              <div className="radio-row">{voiceAll.filter((v) => v.provider_key === ttsProv).map((v) => { const eff = voiceKey || nicheDefaults[ttsProv] || ""; return <span key={v.voice_key} className={`radio-pill${eff === v.voice_key ? " sel" : ""}`} onClick={() => setVoiceKey(v.voice_key)}><Mic size={13} />{v.display_name}{v.gender ? ` · ${v.gender}` : ""}{v.preview_url ? <span title="Dengar contoh" style={{ cursor: "pointer", marginLeft: 4 }} onClick={(e) => { e.stopPropagation(); new Audio(v.preview_url as string).play().catch(() => {}); }}>▶</span> : null}</span>; })}</div></div>
           )}
           {/* F2-09: akun API key (vault) per-elemen. Kosong → key default tenant (fallback BE). */}
           <div className="fld-row" style={{ borderTop: "1px solid var(--border-subtle)" }}><div className="k"><Bi id="Akun API (key)" en="API account (key)" /><div className="sub"><Bi id="key BYOK per elemen; kosong = key default tenant" en="BYOK key per element; empty = tenant default key" /></div></div></div>
