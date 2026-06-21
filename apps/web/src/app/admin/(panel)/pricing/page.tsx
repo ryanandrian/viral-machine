@@ -94,7 +94,7 @@ export default function AdminPricingPage() {
           <div className="pr-stat-line">
             <span><b>{pricing.length}</b> entries</span>
             <span><b>{pricing.filter((p) => p.active).length}</b> active</span>
-            <span><Bi id="Sumber harga seluruh sistem (landing/billing/onboarding)" en="Source of truth for all prices" /></span>
+            <span style={{ color: "var(--success)", fontWeight: 500 }}><Bi id="✓ Tersimpan otomatis — tanpa tombol Save (saat klik ke luar field / ubah toggle)" en="✓ Auto-saved — no Save button (on blur / toggle change)" /></span>
           </div>
         </div>
       </div>
