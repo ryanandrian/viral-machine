@@ -321,7 +321,7 @@
 - **FE admin:** — (cek admin shell tak punya grup serupa yang nyangkut).
 - DEPENDS: F2-09 (key pindah), F2-10 (niche pindah).
 - DONE-BILA: sidebar tenant nol item mati/duplikat; Notifikasi di Settings berfungsi; nol halaman stub. **FE dicontreng §10.F.4.**
-- REALISASI: ⬜ | DB:— BE:— FE:— | commit: — | catatan: —
+- REALISASI: ✅ (inti) | DB:— BE:— FE:tenant | commit:(deploy berikut) | catatan: **grup "Konfigurasi" DIPENSIUNKAN dari sidebar** (app-shell): item AI-Engines/API-Keys/Voice/Visual dibuang (key→channel-vault F2-09; Voice/Visual→channel F2-05; Niche→Niche-Studio F2-10+picker). Import lucide unused (Command/Mic/ImageIcon) dibersihkan. **Anti-strand (verified):** key-entry via channel vault; niche-request link channel→/config/niches tetap jalan (page reachable); Notifikasi diakses via Settings→tab notif (link ke matriks). next build PASS. FE-only nol-risiko. **Poles opsional (defer):** embed matriks notif langsung DI Settings + redirect/hapus page config legacy.
 
 #### [F2-12] Restruktur Channel Detail: TABS process-flow + SATU Settings `[NEW — owner 2026-06-21]`
 - ACUAN: §10.F.1 (urutan Overview→Settings→Schedule→Runs→Analytics→Compliance→Insights; satu Settings).
@@ -596,7 +596,7 @@ CHANNEL DETAIL (satu channel) = TABS — urutan = process flow (siapkan→jadwal
 | Area FE | Level | Status | Item |
 |---|---|---|---|
 | Sidebar: tombol Sign-out (font ikut `.sb-item`) | tenant+admin | ✓ (2026-06-21) | — |
-| Sidebar: pensiun grup "Konfigurasi" | tenant | ⬜ | F2-11 |
+| Sidebar: pensiun grup "Konfigurasi" | tenant | ✓ (F2-11) | F2-11 |
 | MAIN: Integrasi/Koneksi (pindah dari Settings + multi-platform) | tenant | 🟡 (page+nav+relokasi ✓; target-id channel sisa) | F2-08 |
 | MAIN: Jadwal (CRUD semua channel) | tenant | ✓ (ada) | — |
 | MAIN: Analytics agregat | tenant | ✓ | F5-05 (pivot kinerja-mesin) |

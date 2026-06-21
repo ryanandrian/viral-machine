@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
   LayoutDashboard, Tv, List, BarChart3, Calendar, ShieldCheck, Sparkles,
-  Command, Mic, Image as ImageIcon, CreditCard, Settings, HelpCircle,
+  CreditCard, Settings, HelpCircle,
   Menu, Moon, Sun, ChevronRight, LogOut, AlertTriangle, Globe,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -34,11 +34,8 @@ const NAV: NavEntry[] = [
   { id: "compliance", icon: ShieldCheck, idL: "Kepatuhan", en: "Compliance", href: "/compliance" },
   { id: "insights", icon: Sparkles, idL: "Wawasan", en: "Insights", href: "/insights" },
   { id: "niche-studio", icon: Sparkles, idL: "Niche Studio", en: "Niche Studio", href: "/niche-studio", gated: true },
-  { section: { id: "Konfigurasi", en: "Config" } },
-  { id: "ai-engines", icon: Sparkles, idL: "Mesin AI", en: "AI Engines", href: "/config/ai-engines" },
-  { id: "api-keys", icon: Command, idL: "API Keys", en: "API Keys", href: "/config/api-keys" },
-  { id: "voice", icon: Mic, idL: "Suara", en: "Voice", href: "/config/voice" },
-  { id: "visual", icon: ImageIcon, idL: "Visual", en: "Visual", href: "/config/visual" },
+  // Grup "Konfigurasi" DIPENSIUNKAN (F2-11, §10.F): AI-Engines/API-Keys → key per-channel (vault F2-09);
+  // Voice/Visual → channel (F2-05); Niche → Niche Studio + picker channel; Notifikasi → Settings.
   { section: { id: "Akun", en: "Account" } },
   { id: "billing", icon: CreditCard, idL: "Tagihan", en: "Billing", href: "/billing" },
   // nav "Tim/Team" DIHAPUS — fitur team di-take-down untuk V2 (1 user=1 tenant, no multi-user — decisions_auth_rbac). Jangan tambah lagi s/d V3.
