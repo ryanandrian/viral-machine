@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
   Users, HelpCircle, Activity, List, Target, DollarSign, LogOut, UserCog, FlaskConical, FileText,
-  Menu, Search, Moon, Sun, ChevronRight,
+  Menu, Search, Moon, Sun, ChevronRight, SlidersHorizontal,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -19,6 +19,7 @@ type NavEntry = { section: { id: string; en: string } } | NavItem;
 const NAV: NavEntry[] = [
   { section: { id: "Operasi", en: "Operations" } },
   { id: "tenants", icon: Users, idL: "Tenant", en: "Tenants", href: "/admin/tenants" },
+  { id: "app-config", icon: SlidersHorizontal, idL: "Konfigurasi Sistem", en: "System Configuration", href: "/admin/app-config" },
   { id: "support", icon: HelpCircle, idL: "Dukungan", en: "Support", href: "/admin/support", badge: "4" },
   { id: "system", icon: Activity, idL: "Kesehatan Sistem", en: "System Health", href: "/admin/system" },
   { id: "content", icon: FileText, idL: "Konten (CMS)", en: "Content (CMS)", href: "/admin/content" },

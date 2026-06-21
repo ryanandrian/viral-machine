@@ -5,7 +5,7 @@ import { fetchPricing, idrK } from "@/lib/pricing";
 import { fetchPlans, paidPlans, type Plan } from "@/lib/plans";
 import {
   Users, Check, X, ChevronDown, Info, DollarSign,
-  Wand2, ShieldCheck, type LucideIcon,
+  Wand2, type LucideIcon,
 } from "lucide-react";
 import "./pricing.css";
 
@@ -65,7 +65,6 @@ function Fc({ v, pop }: { v: boolean | string; pop?: boolean }) {
 // [icon, label, pricing_config key ("" = pakai fallback literal), suffix, fallback, desc]
 const ADDONS: [LucideIcon, string, string, string, string, string][] = [
   [Wand2, "Niche Pack", "custom_niche_public_90d", "", "Rp 299K", "Niche kustom dibuat sesuai brief Anda, 3–5 hari delivery."],
-  [ShieldCheck, "Extra Compliance", "", "", "Rp 99K/bln", "Monitoring compliance lebih ketat + alert prioritas."],
 ];
 
 const makeFaq = (d: number): [string, string][] => [

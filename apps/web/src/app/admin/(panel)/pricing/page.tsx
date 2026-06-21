@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Command, Clock, Shield, X, Info, AlertTriangle, FileText, CheckCircle, RotateCcw, SlidersHorizontal } from "lucide-react";
+import { Command, Clock, Shield, X, Info, AlertTriangle, FileText, CheckCircle, RotateCcw } from "lucide-react";
 import "./pricing.css";
 
 // E5 Admin Pricing (Phase 10.2) — SUMBER HARGA seluruh sistem. DATA NYATA via /api/admin/* (service_role).
@@ -18,32 +18,15 @@ type PRow = {
   updated_by: string | null; updated_at: string;
 };
 type PlanLimit = { plan_type: string; max_videos_per_day: number; max_channels: number; display_name: string | null; niche_studio: boolean; sort_order: number };
-type AppCfg = { key: string; value: number; description: string | null };
 type AuditRow = { id: string; old_value: PRow | null; new_value: PRow; changed_by: string | null; changed_at: string };
 
 const CAT_BADGE: Record<string, string> = { subscription: "badge-brand", add_on: "badge-info", one_time: "badge-default", discount: "badge-success" };
 const fmtIDR = (n: number) => (n ?? 0).toLocaleString("id-ID");
-
-// Metadata tampilan App Config (label ramah + unit + grup) — keterangan detail = description (DB, bahasa admin).
-const G_TREND = "Bobot Sumber Tren";
-const G_ENGINE = "Performa Mesin Tren";
-const G_TRIAL = "Trial & Akses";
-const CFG_GROUPS = [G_TRIAL, G_TREND, G_ENGINE];
-const CFG_META: Record<string, { label: string; group: string; unit: string; hint?: string }> = {
-  trial_duration_days:     { label: "Masa Trial Gratis", group: G_TRIAL, unit: "hari" },
-  trend_weight_youtube:    { label: "YouTube (utama)", group: G_TREND, unit: "%" },
-  trend_weight_trends:     { label: "Google Trends", group: G_TREND, unit: "%" },
-  trend_weight_news:       { label: "Google News", group: G_TREND, unit: "%" },
-  trend_weight_wikipedia:  { label: "Wikipedia", group: G_TREND, unit: "%" },
-  trend_weight_hackernews: { label: "HackerNews", group: G_TREND, unit: "%" },
-  trend_cache_ttl_sec:     { label: "Penyegaran Data Tren", group: G_ENGINE, unit: "detik", hint: "43200 = 12 jam" },
-  trend_refresh_pacing_ms: { label: "Jeda Ambil Data", group: G_ENGINE, unit: "ms", hint: "3000 = 3 detik" },
-};
+// (App Config dipindah ke halaman khusus /admin/app-config — tak lagi di sini.)
 
 export default function AdminPricingPage() {
   const [pricing, setPricing] = useState<PRow[]>([]);
   const [planLimits, setPlanLimits] = useState<PlanLimit[]>([]);
-  const [appCfg, setAppCfg] = useState<AppCfg[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [filter, setFilter] = useState("all");
@@ -59,7 +42,7 @@ export default function AdminPricingPage() {
     const r = await fetch("/api/admin/pricing");
     if (!r.ok) { setErr(`Gagal memuat (${r.status})`); setLoading(false); return; }
     const j = await r.json();
-    setPricing(j.pricing); setPlanLimits(j.plan_limits); setAppCfg(j.app_config); setLoading(false);
+    setPricing(j.pricing); setPlanLimits(j.plan_limits); setLoading(false);
   }, []);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2400); return () => clearTimeout(t); }, [toast]);
@@ -96,10 +79,6 @@ export default function AdminPricingPage() {
   async function patchPlanLimit(plan: string, body: Partial<PlanLimit>) {
     const r = await fetch(`/api/admin/plan-limits/${plan}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     if (r.ok) { setToast("Caps tersimpan"); await load(); } else setToast("Gagal");
-  }
-  async function patchAppCfg(key: string, value: number) {
-    const r = await fetch(`/api/admin/app-config/${key}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ value }) });
-    if (r.ok) { setToast("Config tersimpan"); await load(); } else setToast("Gagal");
   }
 
   return (
@@ -160,44 +139,6 @@ export default function AdminPricingPage() {
             </tbody>
           </table></div></div>
           <div className="muted" style={{ fontSize: "var(--text-xs)", margin: "0.625rem 0 0" }}><Bi id="Harga/bln tiap tier diatur di tabel pricing_config di atas (plan_starter/pro/business)." en="Per-tier monthly price is edited in the pricing_config table above (plan_starter/pro/business)." /></div>
-          <h3 style={{ fontSize: "var(--text-lg)", fontWeight: 600, margin: "1.5rem 0 1rem" }}><Bi id="Pengaturan Sistem" en="System Settings" /></h3>
-          <div className="card">
-            <div className="card-head">
-              <h3 className="card-title"><SlidersHorizontal size={15} /> <Bi id="Parameter mesin & trial" en="Engine & trial parameters" /></h3>
-              <span className="card-sub" style={{ color: "var(--success)", fontWeight: 500 }}><Bi id="✓ Tersimpan otomatis" en="✓ Auto-saved" /></span>
-            </div>
-            <div className="card-body" style={{ display: "grid", gap: "1.5rem" }}>
-              {CFG_GROUPS.map((grp) => {
-                const items = appCfg.filter((a) => (CFG_META[a.key]?.group ?? "Lainnya") === grp);
-                if (items.length === 0) return null;
-                const total = grp === G_TREND ? items.reduce((n, a) => n + (a.value || 0), 0) : null;
-                return (
-                  <div key={grp}>
-                    <div className="label" style={{ textTransform: "uppercase", letterSpacing: ".04em", marginBottom: ".5rem", display: "flex", alignItems: "center", gap: ".5rem" }}>
-                      <span>{grp}</span>
-                      {total != null && <span style={{ color: total === 100 ? "var(--success)" : "var(--warning)", fontWeight: 600 }}>total {total}%{total !== 100 && " ⚠"}</span>}
-                    </div>
-                    {items.map((a) => {
-                      const m = CFG_META[a.key];
-                      return (
-                        <div key={a.key} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "1rem", alignItems: "center", padding: ".7rem 0", borderBottom: "1px solid var(--border-subtle)" }}>
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ fontWeight: 500, fontSize: "var(--text-sm)" }}>{m?.label ?? a.key}</div>
-                            <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "3px", lineHeight: 1.45 }}>{a.description}{m?.hint && <span style={{ marginLeft: ".375rem", opacity: .75 }}>({m.hint})</span>}</div>
-                          </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: ".4rem", flex: "none" }}>
-                            <input className="input" type="number" min={0} style={{ width: "5rem", height: "2rem", textAlign: "right" }} defaultValue={a.value} onBlur={(e) => { const n = parseInt(e.target.value, 10); if (Number.isInteger(n) && n !== a.value) patchAppCfg(a.key, n); }} />
-                            <span className="muted" style={{ fontSize: "var(--text-xs)", width: "2.75rem" }}>{m?.unit ?? ""}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-              {appCfg.length === 0 && <div className="muted" style={{ fontSize: "var(--text-xs)" }}>—</div>}
-            </div>
-          </div>
         </div>
 
         <aside className="pr-api-panel">
