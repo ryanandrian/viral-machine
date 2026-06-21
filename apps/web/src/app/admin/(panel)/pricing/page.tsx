@@ -17,7 +17,7 @@ type PRow = {
   category: string | null; active: boolean; effective_from: string | null; effective_until: string | null;
   updated_by: string | null; updated_at: string;
 };
-type PlanLimit = { plan_type: string; max_videos_per_day: number; max_channels: number };
+type PlanLimit = { plan_type: string; max_videos_per_day: number; max_channels: number; display_name: string | null; niche_studio: boolean; sort_order: number };
 type AppCfg = { key: string; value: number; description: string | null };
 type AuditRow = { id: string; old_value: PRow | null; new_value: PRow; changed_by: string | null; changed_at: string };
 
@@ -124,17 +124,32 @@ export default function AdminPricingPage() {
             </tbody>
           </table></div></div>
 
-          <h3 style={{ fontSize: "var(--text-lg)", fontWeight: 600, margin: "1.5rem 0 1rem" }}><Bi id="Batas paket (caps)" en="Plan limits (caps)" /></h3>
-          <div className="pr-quick-card">
-            <h3><Bi id="Admin-editable (no-hardcode)" en="Admin-editable (no-hardcode)" /></h3>
-            {planLimits.map((pl) => (
-              <div className="pr-qrow" key={pl.plan_type}>
-                <span className="nm mono">{pl.plan_type}</span>
-                <input className="pr-val-edit" type="number" defaultValue={pl.max_videos_per_day} title="video/hari" onBlur={(e) => { const n = parseInt(e.target.value, 10); if (n !== pl.max_videos_per_day) patchPlanLimit(pl.plan_type, { max_videos_per_day: n }); }} />
-                <input className="pr-val-edit" type="number" defaultValue={pl.max_channels} title="channel" onBlur={(e) => { const n = parseInt(e.target.value, 10); if (n !== pl.max_channels) patchPlanLimit(pl.plan_type, { max_channels: n }); }} />
-              </div>
-            ))}
-            <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.5rem" }}>kolom: video/hari · channel</div>
+          <h3 style={{ fontSize: "var(--text-lg)", fontWeight: 600, margin: "1.5rem 0 1rem" }}><Bi id="Paket (tier) — admin-editable, no-hardcode" en="Plans (tiers) — admin-editable, no-hardcode" /></h3>
+          <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl">
+            <thead><tr>
+              <th><Bi id="Nama tampil" en="Display name" /></th><th>Key</th>
+              <th className="num"><Bi id="Video/hari" en="Videos/day" /></th><th className="num">Channel</th>
+              <th><Bi id="Niche Studio" en="Niche Studio" /></th>
+            </tr></thead>
+            <tbody>
+              {[...planLimits].sort((a, b) => a.sort_order - b.sort_order).map((pl) => (
+                <tr key={pl.plan_type}>
+                  <td><input className="input" style={{ height: "2rem", maxWidth: 160 }} defaultValue={pl.display_name ?? pl.plan_type} title="Nama yang dilihat pelanggan" onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== (pl.display_name ?? "")) patchPlanLimit(pl.plan_type, { display_name: v }); }} /></td>
+                  <td className="mono muted" style={{ fontSize: "var(--text-xs)" }}>{pl.plan_type}</td>
+                  <td className="num"><input className="input" type="number" min={0} style={{ height: "2rem", width: "4.75rem" }} defaultValue={pl.max_videos_per_day} onBlur={(e) => { const n = parseInt(e.target.value, 10); if (Number.isInteger(n) && n !== pl.max_videos_per_day) patchPlanLimit(pl.plan_type, { max_videos_per_day: n }); }} /></td>
+                  <td className="num"><input className="input" type="number" min={0} style={{ height: "2rem", width: "4.75rem" }} defaultValue={pl.max_channels} onBlur={(e) => { const n = parseInt(e.target.value, 10); if (Number.isInteger(n) && n !== pl.max_channels) patchPlanLimit(pl.plan_type, { max_channels: n }); }} /></td>
+                  <td><label className="switch" title="Fasilitas Niche Studio"><input type="checkbox" checked={!!pl.niche_studio} onChange={(e) => patchPlanLimit(pl.plan_type, { niche_studio: e.target.checked })} /><span className="track" /><span className="thumb" /></label></td>
+                </tr>
+              ))}
+            </tbody>
+          </table></div></div>
+          <div className="muted" style={{ fontSize: "var(--text-xs)", margin: "0.625rem 0 0" }}><Bi id="Harga/bln tiap tier diatur di tabel pricing_config di atas (plan_starter/pro/business)." en="Per-tier monthly price is edited in the pricing_config table above (plan_starter/pro/business)." /></div>
+          <div className="pr-quick-card" style={{ marginTop: "1rem" }}>
+            <h3><Bi id="Trial" en="Trial" /></h3>
+            <div className="pr-qrow">
+              <span className="nm"><Bi id="Masa trial (hari)" en="Trial duration (days)" /></span>
+              <input className="pr-val-edit" type="number" min={0} defaultValue={appCfg.find((c) => c.key === "trial_duration_days")?.value ?? 7} title="hari" onBlur={(e) => { const n = parseInt(e.target.value, 10); const cur = appCfg.find((c) => c.key === "trial_duration_days")?.value ?? 7; if (Number.isInteger(n) && n !== cur) patchAppCfg("trial_duration_days", n); }} />
+            </div>
           </div>
 
           <h3 style={{ fontSize: "var(--text-lg)", fontWeight: 600, margin: "1.5rem 0 1rem" }}><Bi id="App config" en="App config" /></h3>

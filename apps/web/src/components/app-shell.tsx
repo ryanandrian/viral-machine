@@ -19,7 +19,6 @@ type NavItem = {
   id: string; icon: React.ComponentType<{ size?: number }>;
   idL: string; en: string; href: string; badge?: string; gated?: boolean;
 };
-const PLAN_RANK: Record<string, number> = { trial: 0, starter: 1, pro: 2, business: 3, scale: 3, enterprise: 4 };
 type NavEntry = { section: { id: string; en: string } } | NavItem;
 
 const NAV: NavEntry[] = [
@@ -72,17 +71,19 @@ export function AppShell({
     setLang(saved);
     document.documentElement.lang = saved;
     (async () => {
-      const [{ data: tc }, { count }, { data: cfg }] = await Promise.all([
+      const [{ data: tc }, { count }, { data: pls }] = await Promise.all([
         supabase.from("tenant_configs").select("display_handle,plan_type").maybeSingle(),
         supabase.from("channels").select("id", { count: "exact", head: true }),
-        supabase.from("app_config").select("value").eq("key", "niche_studio_min_rank").maybeSingle(),
+        supabase.from("plan_limits").select("plan_type,display_name,niche_studio"),
       ]);
       const t = tc as { display_handle?: string; plan_type?: string } | null;
-      setStudioOK((PLAN_RANK[t?.plan_type ?? "starter"] ?? 1) >= Number((cfg as { value?: number } | null)?.value ?? 3));
+      const planType = t?.plan_type ?? "starter";
+      const pl = (pls as { plan_type: string; display_name?: string; niche_studio?: boolean }[] | null)?.find((x) => x.plan_type === planType);
+      setStudioOK(Boolean(pl?.niche_studio));   // tier-config (owner 2026-06-21): fasilitas per-tier dari plan_limits.niche_studio
       const h = (t?.display_handle || "").trim();
       const toks = h.split(/[^a-zA-Z0-9]+/).filter(Boolean);
       const initials = toks.slice(0, 2).map((s) => s[0].toUpperCase()).join("") || "T";
-      const plan = t?.plan_type ? t.plan_type.charAt(0).toUpperCase() + t.plan_type.slice(1) : "";
+      const plan = pl?.display_name || (t?.plan_type ? t.plan_type.charAt(0).toUpperCase() + t.plan_type.slice(1) : "");  // nama tier config-driven
       const nCh = count ?? 0;
       setTenant({ name: h || "Tenant", plan: plan ? `${plan} · ${nCh} kanal` : `${nCh} kanal`, initials });
     })();

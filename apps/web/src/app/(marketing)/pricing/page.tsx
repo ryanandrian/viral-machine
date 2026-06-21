@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { fetchPricing, idrK } from "@/lib/pricing";
+import { fetchPlans, paidPlans, type Plan } from "@/lib/plans";
 import {
   Users, Check, X, ChevronDown, Info, DollarSign,
   Wand2, Mic, HelpCircle, Zap, Gauge, ShieldCheck, type LucideIcon,
@@ -15,23 +16,32 @@ function Bi({ id, en }: { id: string; en: string }) {
   return (<><span data-id>{id}</span><span data-en>{en}</span></>);
 }
 
-type Tier = { n: string; m: number; ttId: string; ttEn: string; feats: string[]; ctaId: string; ctaEn: string; pop: boolean };
-const TIERS: Tier[] = [
-  { n: "Starter", m: 149, ttId: "Untuk mulai scaling 1 channel", ttEn: "To start scaling 1 channel", feats: ["1 channel", "5 video / hari", "Niche dasar", "Self-learning", "Telegram notif"], ctaId: "Pilih Starter", ctaEn: "Choose Starter", pop: false },
-  { n: "Pro", m: 349, ttId: "Paling diminati creator serius", ttEn: "Most chosen by serious creators", feats: ["3 channel", "10 video / hari", "Semua niche", "Quality Gate + Compliance", "Custom voice", "Captions & hashtags"], ctaId: "Pilih Pro", ctaEn: "Choose Pro", pop: true },
-  { n: "Business", m: 699, ttId: "Untuk agency & power user", ttEn: "For agencies & power users", feats: ["10 channel", "24 video / hari", "Priority queue", "Cross-channel insights", "Webhook & API", "Quiet hours"], ctaId: "Pilih Business", ctaEn: "Choose Business", pop: false },
-];
+// Konten KUALITATIF per tier (marketing copy) — keyed by plan_type. NAMA / HARGA / CHANNEL / VIDEO-HARI /
+// NICHE-STUDIO = config-driven (plan_limits + pricing_config via fetchPlans) → no-hardcode (owner 2026-06-21).
+// Kelas/visual = Claude Design (pricing.css/marketing.css), tak diubah.
+type TierCopy = { ttId: string; ttEn: string; feats: string[]; pop: boolean };
+const TIER_COPY: Record<string, TierCopy> = {
+  starter:  { ttId: "Untuk mulai scaling", ttEn: "To start scaling", feats: ["Niche dasar", "Self-learning", "Telegram notif"], pop: false },
+  pro:      { ttId: "Paling diminati creator serius", ttEn: "Most chosen by serious creators", feats: ["Semua niche", "Quality Gate + Compliance", "Custom voice", "Captions & hashtags"], pop: true },
+  business: { ttId: "Untuk agency & power user", ttEn: "For agencies & power users", feats: ["Priority queue", "Cross-channel insights", "Webhook & API", "Quiet hours"], pop: false },
+};
 
 type FRow = { grp: [string, string] } | { row: [string, boolean | string, boolean | string, boolean | string, boolean | string] };
-const FCMP: FRow[] = [
+// Baris Channel/Video-hari/Niche-Studio = config-driven (plan_limits via fetchPlans); Enterprise = literal.
+function makeFcmp(pm: Record<string, Plan | undefined>): FRow[] {
+  const ch = (k: string) => (pm[k] ? String(pm[k]!.max_channels) : "—");
+  const vd = (k: string) => (pm[k] ? String(pm[k]!.max_videos_per_day) : "—");
+  const ns = (k: string): boolean => Boolean(pm[k]?.niche_studio);
+  return [
   { grp: ["Produksi", "Production"] },
-  { row: ["Channel", "1", "3", "10", "∞"] },
-  { row: ["Video / hari", "5", "10", "24", "custom"] },
+  { row: ["Channel", ch("starter"), ch("pro"), ch("business"), "∞"] },
+  { row: ["Video / hari", vd("starter"), vd("pro"), vd("business"), "custom"] },
   { row: ["Self-learning engine", true, true, true, true] },
   { row: ["BYOK (bawa API keys)", true, true, true, true] },
   { row: ["Multi-channel paralel", false, true, true, true] },
   { grp: ["AI & Kualitas", "AI & Quality"] },
   { row: ["Niche tersedia", "3", "semua", "semua", "semua"] },
+  { row: ["Niche Studio (DNA kustom)", ns("starter"), ns("pro"), ns("business"), true] },
   { row: ["Quality Gate kustom", false, true, true, true] },
   { row: ["Compliance detail", false, true, true, true] },
   { row: ["Custom voice (ElevenLabs)", false, true, true, true] },
@@ -45,7 +55,8 @@ const FCMP: FRow[] = [
   { grp: ["Dukungan", "Support"] },
   { row: ["Support", "Email", "Priority", "Priority", "Dedicated"] },
   { row: ["Concierge setup", false, false, true, true] },
-];
+  ];
+}
 function Fc({ v, pop }: { v: boolean | string; pop?: boolean }) {
   if (v === true) return <span className="yes"><Check size={18} /></span>;
   if (v === false) return <span className="no"><X size={16} /></span>;
@@ -62,9 +73,9 @@ const ADDONS: [LucideIcon, string, string, string, string, string][] = [
   [ShieldCheck, "Extra Compliance", "", "", "Rp 99K/bln", "Monitoring compliance lebih ketat + alert prioritas."],
 ];
 
-const FAQ: [string, string][] = [
+const makeFaq = (d: number): [string, string][] => [
   ["Bisa upgrade / downgrade kapan saja?", "Bisa. Perubahan paket berlaku langsung dan biaya di-prorate otomatis di tagihan berikutnya."],
-  ["Bagaimana refund policy-nya?", "Trial 7 hari gratis penuh. Setelah berlangganan, kami menawarkan refund 7 hari untuk pembayaran pertama jika belum cocok."],
+  ["Bagaimana refund policy-nya?", `Trial ${d} hari gratis penuh. Setelah berlangganan, kami menawarkan refund 7 hari untuk pembayaran pertama jika belum cocok.`],
   ["Bagaimana biaya AI dihitung?", "Biaya AI mengikuti pemakaian aktual API milikmu (BYOK) dan dibayar langsung ke Anthropic/OpenAI/ElevenLabs. Dashboard menampilkan biaya real-time per video."],
   ["Apakah harga sudah termasuk biaya AI?", "Belum. Harga langganan terpisah dari biaya AI (BYOK). Gunakan kalkulator di atas untuk estimasi total."],
   ["Pembayaran pakai apa?", "Kami pakai Midtrans — mendukung transfer bank, e-wallet (GoPay, ShopeePay), QRIS, kartu kredit, dan Virtual Account."],
@@ -75,8 +86,14 @@ export default function PricingPage() {
   const [vids, setVids] = useState(5);
   const [faqOpen, setFaqOpen] = useState(0);
   const [pricing, setPricing] = useState<Record<string, number>>({});
-  useEffect(() => { fetchPricing().then(setPricing); }, []);
-  const tierK = (t: Tier) => { const v = pricing[`plan_${t.n.toLowerCase()}`]; return v ? Math.round(v / 1000) : t.m; };
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [trialDays, setTrialDays] = useState(7);
+  useEffect(() => {
+    fetchPricing().then(setPricing);
+    fetchPlans().then(({ plans, trialDays }) => { setPlans(plans); setTrialDays(trialDays); });
+  }, []);
+  const pm: Record<string, Plan | undefined> = Object.fromEntries(plans.map((p) => [p.plan_type, p]));
+  const fcmp = makeFcmp(pm);
 
   const month = vids * 30 * 0.34;
   const ant = month * 0.21, el = month * 0.53, oai = month * 0.26;
@@ -97,19 +114,21 @@ export default function PricingPage() {
         </div>
 
         <div className="tiers">
-          {TIERS.map((t) => {
-            const baseK = tierK(t);
+          {paidPlans(plans).map((p) => {
+            const copy = TIER_COPY[p.plan_type] ?? { ttId: "", ttEn: "", feats: [], pop: false };
+            const baseK = Math.round((p.price_idr ?? 0) / 1000);
             const price = annual ? Math.round(baseK * 0.8) : baseK;
+            const feats = [`${p.max_channels} channel`, `${p.max_videos_per_day} video / hari`, ...(p.niche_studio ? ["Niche Studio (DNA kustom)"] : []), ...copy.feats];
             return (
-              <div className={`tier${t.pop ? " pop" : ""}`} key={t.n}>
-                {t.pop && <span className="pop-badge">Most Popular</span>}
-                <div className="tn">{t.n}</div>
-                <div className="tt"><Bi id={t.ttId} en={t.ttEn} /></div>
+              <div className={`tier${copy.pop ? " pop" : ""}`} key={p.plan_type}>
+                {copy.pop && <span className="pop-badge">Most Popular</span>}
+                <div className="tn">{p.display_name}</div>
+                <div className="tt"><Bi id={copy.ttId} en={copy.ttEn} /></div>
                 <div className="tp-strike">{annual ? `Rp ${baseK}K` : ""}</div>
                 <div className="tp">Rp {price}K<small>/bln</small></div>
                 <div className="muted" style={{ fontSize: "var(--text-xs)" }}>{annual ? <Bi id="ditagih tahunan" en="billed annually" /> : " "}</div>
-                <ul>{t.feats.map((f, k) => <li key={k}><Check size={15} /> {f}</li>)}</ul>
-                <a href="/auth?view=signup" className={`btn ${t.pop ? "btn-default" : "btn-outline"}`} style={{ width: "100%" }}><Bi id={t.ctaId} en={t.ctaEn} /></a>
+                <ul>{feats.map((f, k) => <li key={k}><Check size={15} /> {f}</li>)}</ul>
+                <a href="/auth?view=signup" className={`btn ${copy.pop ? "btn-default" : "btn-outline"}`} style={{ width: "100%" }}><Bi id={`Pilih ${p.display_name}`} en={`Choose ${p.display_name}`} /></a>
               </div>
             );
           })}
@@ -129,8 +148,8 @@ export default function PricingPage() {
         <div className="mk-center" style={{ marginBottom: "2rem" }}><h2 className="mk-h2"><Bi id="Bandingkan semua fitur" en="Compare all features" /></h2></div>
         <div className="fcmp-wrap">
           <table className="fcmp">
-            <thead><tr><th></th><th>Starter</th><th className="pop">Pro</th><th>Business</th><th>Enterprise</th></tr></thead>
-            <tbody>{FCMP.map((r, i) => "grp" in r ? (
+            <thead><tr><th></th><th>{pm.starter?.display_name ?? "Starter"}</th><th className="pop">{pm.pro?.display_name ?? "Pro"}</th><th>{pm.business?.display_name ?? "Business"}</th><th>Enterprise</th></tr></thead>
+            <tbody>{fcmp.map((r, i) => "grp" in r ? (
               <tr className="grp" key={i}><td colSpan={5}><Bi id={r.grp[0]} en={r.grp[1]} /></td></tr>
             ) : (
               <tr key={i}><td>{r.row[0] as string}</td><td><Fc v={r.row[1]} /></td><td className="popcol"><Fc v={r.row[2]} pop /></td><td><Fc v={r.row[3]} /></td><td><Fc v={r.row[4]} /></td></tr>
@@ -180,7 +199,7 @@ export default function PricingPage() {
       <section className="mk-section" style={{ background: "var(--bg-elevated)", borderTop: "1px solid var(--border-subtle)" }}><div className="mk-container">
         <div className="mk-center" style={{ marginBottom: "2rem" }}><h2 className="mk-h2">FAQ <Bi id="seputar harga" en="about pricing" /></h2></div>
         <div className="faq">
-          {FAQ.map(([q, a], i) => (
+          {makeFaq(trialDays).map(([q, a], i) => (
             <div className={`faq-item${faqOpen === i ? " open" : ""}`} key={i}>
               <div className="faq-q" onClick={() => setFaqOpen(faqOpen === i ? -1 : i)}>{q} <span className="chev"><ChevronDown size={18} /></span></div>
               <div className="faq-a"><p>{a}</p></div>

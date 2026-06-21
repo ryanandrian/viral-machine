@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { fetchPricing, idrK } from "@/lib/pricing";
+import { fetchPlans, paidPlans, type Plan } from "@/lib/plans";
 import {
   Sparkles, ArrowRight, Play, CheckCircle, Check, Clock, BarChart3, XCircle,
   Command, ShieldCheck, Zap, X, Loader2, ChevronDown, Star,
@@ -57,12 +58,12 @@ const TST = [
   { q: 'Niche "Sejarah Kelam" saya akhirnya konsisten upload 5×/hari tanpa saya sentuh editing sama sekali.', nm: "Bagus Pratomo", ch: "Jejak Kelam Sejarah · 8.2K", av: "BP", c: "#7c3aed", gr: "5/hari", gl: "auto-publish" },
 ];
 
-const FAQ: [string, string][] = [
+const makeFaq = (d: number): [string, string][] => [
   ["Apa itu BYOK?", "BYOK = Bring Your Own Keys. Kamu pakai API keys Anthropic/OpenAI/ElevenLabs milikmu sendiri, jadi biaya AI dibayar langsung ke provider dengan harga asli — transparan, tanpa markup dari kami."],
   ["Bisa bikin konten dalam bahasa selain Indonesia (English, Malaysia, Thailand)?", "Bisa. Pilih bahasa konten per channel saat setup. Mesin memproduksi narasi, caption, dan script dalam bahasa itu. Bahasa official: Indonesia & English; bahasa Asia Tenggara lain (Malaysia, Filipina, Thailand, Vietnam) tersedia bertahap."],
   ["Apakah aman dari penalty YouTube AI policy 2026?", "Ya. AI Slop Defense Engine kami otomatis merotasi voice, niche, hook, dan menambahkan AI disclosure. Compliance score real-time membantumu menjaga channel tetap aman."],
   ["Berapa total biaya termasuk API?", "Langganan mulai Rp 149K/bln + biaya AI (BYOK) sekitar Rp 75/video. Untuk 5 video/hari, estimasi biaya AI ~Rp 340K/bln yang dibayar langsung ke provider."],
-  ["Bisa cancel kapan saja?", "Bisa. Tidak ada kontrak. Cancel kapan saja sebelum trial 7 hari berakhir tanpa biaya, atau berhenti berlangganan kapan pun setelahnya."],
+  ["Bisa cancel kapan saja?", `Bisa. Tidak ada kontrak. Cancel kapan saja sebelum trial ${d} hari berakhir tanpa biaya, atau berhenti berlangganan kapan pun setelahnya.`],
   ["Channel saya 0 subs, bisa pakai?", "Tentu. Mesin mulai dengan niche default terbaik, lalu belajar dari data channelmu seiring video mulai tayang."],
   ["Apakah mesin belajar antar-channel?", "Tidak. Self-learning bersifat per-channel — data dan adaptasi satu channel tidak bocor ke channel lain."],
 ];
@@ -70,8 +71,19 @@ const FAQ: [string, string][] = [
 export default function LandingPage() {
   const [faqOpen, setFaqOpen] = useState(0);
   const [pricing, setPricing] = useState<Record<string, number>>({});
-  useEffect(() => { fetchPricing().then(setPricing); }, []);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [trialDays, setTrialDays] = useState(7);
+  useEffect(() => {
+    fetchPricing().then(setPricing);
+    fetchPlans().then(({ plans, trialDays }) => { setPlans(plans); setTrialDays(trialDays); });
+  }, []);
   const pk = (k: string, fb: string) => pricing[k] ? `Rp ${idrK(pricing[k])}` : fb;
+  // Preview harga config-driven (no-hardcode) — copy kualitatif singkat per tier; batas dari plan_limits.
+  const PREVIEW_COPY: Record<string, { ttId: string; ttEn: string; feats: string[]; pop: boolean }> = {
+    starter:  { ttId: "Untuk mulai scaling", ttEn: "To start scaling", feats: ["Niche dasar", "Self-learning"], pop: false },
+    pro:      { ttId: "Paling diminati creator", ttEn: "Most chosen by creators", feats: ["Semua niche", "Quality Gate + Compliance", "Custom voice"], pop: true },
+    business: { ttId: "Untuk agency & power user", ttEn: "For agencies & power users", feats: ["Priority queue", "Cross-channel insights"], pop: false },
+  };
 
   return (
     <>
@@ -260,22 +272,22 @@ export default function LandingPage() {
           <h2 className="mk-h2"><Bi id="Pilih paket untuk channelmu" en="Pick a plan for your channel" /></h2>
         </div>
         <div className="price-grid reveal">
-          <div className="pcard">
-            <div className="pn">Starter</div><div className="pp">{pk("plan_starter", "Rp 149K")}<small>/bln</small></div><div className="ptag"><Bi id="Untuk mulai scaling" en="To start scaling" /></div>
-            <ul><li><Check size={15} /> 1 channel</li><li><Check size={15} /> 5 video / <Bi id="hari" en="day" /></li><li><Check size={15} /> <Bi id="Niche dasar" en="Core niches" /></li><li><Check size={15} /> Self-learning</li></ul>
-            <a href="/auth?view=signup" className="btn btn-outline" style={{ width: "100%" }}><Bi id="Pilih Starter" en="Choose Starter" /></a>
-          </div>
-          <div className="pcard pop">
-            <span className="pop-badge">Most Popular</span>
-            <div className="pn">Pro</div><div className="pp">{pk("plan_pro", "Rp 349K")}<small>/bln</small></div><div className="ptag"><Bi id="Paling diminati creator" en="Most chosen by creators" /></div>
-            <ul><li><Check size={15} /> 3 channel</li><li><Check size={15} /> 10 video / <Bi id="hari" en="day" /></li><li><Check size={15} /> <Bi id="Semua niche" en="All niches" /></li><li><Check size={15} /> Quality Gate + Compliance</li><li><Check size={15} /> Custom voice</li></ul>
-            <a href="/auth?view=signup" className="btn btn-default" style={{ width: "100%" }}><Bi id="Pilih Pro" en="Choose Pro" /></a>
-          </div>
-          <div className="pcard">
-            <div className="pn">Business</div><div className="pp">{pk("plan_business", "Rp 699K")}<small>/bln</small></div><div className="ptag"><Bi id="Untuk agency & power user" en="For agencies & power users" /></div>
-            <ul><li><Check size={15} /> 10 channel</li><li><Check size={15} /> 24 video / <Bi id="hari" en="day" /></li><li><Check size={15} /> Priority queue</li><li><Check size={15} /> Cross-channel insights</li></ul>
-            <a href="/auth?view=signup" className="btn btn-outline" style={{ width: "100%" }}><Bi id="Pilih Business" en="Choose Business" /></a>
-          </div>
+          {paidPlans(plans).map((p) => {
+            const copy = PREVIEW_COPY[p.plan_type] ?? { ttId: "", ttEn: "", feats: [], pop: false };
+            return (
+              <div className={`pcard${copy.pop ? " pop" : ""}`} key={p.plan_type}>
+                {copy.pop && <span className="pop-badge">Most Popular</span>}
+                <div className="pn">{p.display_name}</div><div className="pp">{pk(`plan_${p.plan_type}`, "—")}<small>/bln</small></div><div className="ptag"><Bi id={copy.ttId} en={copy.ttEn} /></div>
+                <ul>
+                  <li><Check size={15} /> {p.max_channels} channel</li>
+                  <li><Check size={15} /> {p.max_videos_per_day} video / <Bi id="hari" en="day" /></li>
+                  {p.niche_studio && <li><Check size={15} /> Niche Studio</li>}
+                  {copy.feats.map((f, k) => <li key={k}><Check size={15} /> {f}</li>)}
+                </ul>
+                <a href="/auth?view=signup" className={`btn ${copy.pop ? "btn-default" : "btn-outline"}`} style={{ width: "100%" }}><Bi id={`Pilih ${p.display_name}`} en={`Choose ${p.display_name}`} /></a>
+              </div>
+            );
+          })}
         </div>
         <div className="mk-center" style={{ marginTop: "1.75rem" }}><a href="/pricing" style={{ color: "var(--brand)", textDecoration: "none", fontWeight: 500 }}><Bi id="Lihat semua paket & fitur" en="See all plans & features" /> →</a></div>
       </div></section>
@@ -284,7 +296,7 @@ export default function LandingPage() {
       <section className="mk-section" style={{ background: "var(--bg-elevated)", borderTop: "1px solid var(--border-subtle)" }}><div className="mk-container">
         <div className="mk-center reveal" style={{ marginBottom: "2.5rem" }}><h2 className="mk-h2">FAQ</h2></div>
         <div className="faq reveal">
-          {FAQ.map(([q, a], i) => (
+          {makeFaq(trialDays).map(([q, a], i) => (
             <div className={`faq-item${faqOpen === i ? " open" : ""}`} key={i}>
               <div className="faq-q" onClick={() => setFaqOpen(faqOpen === i ? -1 : i)}>{q} <span className="chev"><ChevronDown size={18} /></span></div>
               <div className="faq-a"><p>{a}</p></div>

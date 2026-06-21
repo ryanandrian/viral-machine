@@ -9,13 +9,20 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ plan: 
   const { plan } = await params;
   const body = await req.json().catch(() => ({}));
   const patch: Record<string, unknown> = {};
-  for (const k of ["max_videos_per_day", "max_channels"]) {
+  for (const k of ["max_videos_per_day", "max_channels", "sort_order"]) {
     if (k in body) {
       const n = Number(body[k]);
       if (!Number.isInteger(n) || n < 0) return NextResponse.json({ error: `invalid ${k}` }, { status: 400 });
       patch[k] = n;
     }
   }
+  // Tier config-driven (owner 2026-06-21): nama-tampil + fasilitas Niche Studio per-tier (no-hardcode).
+  if ("display_name" in body) {
+    const s = String(body.display_name ?? "").trim();
+    if (!s || s.length > 40) return NextResponse.json({ error: "invalid display_name" }, { status: 400 });
+    patch.display_name = s;
+  }
+  if ("niche_studio" in body) patch.niche_studio = Boolean(body.niche_studio);
   if (Object.keys(patch).length === 0) return NextResponse.json({ error: "no_fields" }, { status: 400 });
 
   const admin = createAdminClient();

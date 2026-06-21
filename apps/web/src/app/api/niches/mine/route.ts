@@ -5,9 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 // F3-03 / F2-10 — Niche Studio tenant (gated). Tenant ber-entitlement BUAT/EDIT niche CUSTOM
 // sendiri (access_type='private', exclusive_to=tenant_id). Tulis via service_role (niches RLS OFF)
 // TAPI di-ENFORCE di sini: tenant_id dari SESI (bukan klien), selalu private+exclusive milik dia,
-// gating config-driven (app_config.niche_studio_min_rank). Default Business (rank 3).
+// gating PER-TIER config-driven (plan_limits.niche_studio — owner 2026-06-21, adjustable di Admin tanpa redeploy).
 
-const PLAN_RANK: Record<string, number> = { trial: 0, starter: 1, pro: 2, business: 3, scale: 3, enterprise: 4 };
 // Field DNA yang boleh tenant edit pada niche PRIVATE miliknya (BUKAN access_type/exclusive_to/is_base).
 const EDITABLE = [
   "name", "keywords", "style", "target_emotion", "hook_templates", "default_hashtags", "is_active",
@@ -20,13 +19,11 @@ async function gate() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: NextResponse.json({ error: "unauthorized" }, { status: 401 }) };
   const admin = createAdminClient();
-  const [{ data: tc }, { data: cfg }] = await Promise.all([
-    admin.from("tenant_configs").select("plan_type").eq("tenant_id", user.id).maybeSingle(),
-    admin.from("app_config").select("value").eq("key", "niche_studio_min_rank").maybeSingle(),
-  ]);
-  const rank = PLAN_RANK[(tc as { plan_type?: string } | null)?.plan_type ?? "starter"] ?? 1;
-  const min = Number((cfg as { value?: number } | null)?.value ?? 3);
-  if (rank < min) return { error: NextResponse.json({ error: "Niche Studio butuh paket lebih tinggi (Business+)." }, { status: 403 }) };
+  const { data: tc } = await admin.from("tenant_configs").select("plan_type").eq("tenant_id", user.id).maybeSingle();
+  const plan = (tc as { plan_type?: string } | null)?.plan_type ?? "starter";
+  const { data: pl } = await admin.from("plan_limits").select("niche_studio").eq("plan_type", plan).maybeSingle();
+  if (!(pl as { niche_studio?: boolean } | null)?.niche_studio)
+    return { error: NextResponse.json({ error: "Niche Studio tidak tersedia di paket Anda — upgrade untuk membuat niche kustom." }, { status: 403 }) };
   return { user, admin };
 }
 
