@@ -450,8 +450,29 @@ class TenantConfigManager:
                     config.tts_voice_default_settings = vc.data[0].get("default_settings") or {}
             except Exception as e:
                 logger.warning(f"[TenantConfig] load default_settings voice {vkey} gagal: {e}")
+        # F2-09 (§3.19): key per-elemen dari AKUN VAULT channel (tenant_api_accounts.key_enc).
+        # account_id NULL → TETAP pakai key tenant_configs (fallback, NON-BREAKING). Multi-akun
+        # → tiap channel boleh key berbeda untuk provider sama.
+        self._overlay_account_key(config, ch, "llm_account_id", "llm_api_key")
+        self._overlay_account_key(config, ch, "tts_account_id", "tts_api_key")
+        self._overlay_account_key(config, ch, "image_account_id", "visual_api_key")
         logger.info(f"[TenantConfig] overlay ch={channel_id}: tts={config.tts_provider}/{config.tts_voice} "
                     f"llm={config.llm_model} visual={config.visual_mode}")
+
+    def _overlay_account_key(self, config: "TenantRunConfig", ch: dict, ref_col: str, key_attr: str) -> None:
+        """F2-09: set key dari akun vault (tenant_api_accounts.key_enc, Fernet) yang dipilih channel.
+        account_id NULL / error / status≠active → biarkan key tenant_configs (fallback non-breaking)."""
+        aid = ch.get(ref_col)
+        if not aid or not self._supabase:
+            return
+        try:
+            r = self._supabase.table("tenant_api_accounts").select("key_enc,status").eq("id", aid).limit(1).execute()
+            row = (r.data or [None])[0]
+            if row and row.get("status") == "active" and row.get("key_enc"):
+                from src.utils.crypto import decrypt
+                setattr(config, key_attr, decrypt(row["key_enc"]))
+        except Exception as e:
+            logger.warning(f"[TenantConfig] resolve account key {ref_col}={aid} gagal: {e} — fallback key tenant")
 
     def _load_from_supabase(self, tenant_id: str) -> Optional[TenantRunConfig]:
         """Load config dari Supabase. Return None jika gagal."""
