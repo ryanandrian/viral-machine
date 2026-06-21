@@ -241,7 +241,7 @@
 - PLAN: FE **buat channel baru** sbg **wizard ber-langkah** (§10.E.8), **boleh save draft** tiap langkah; pilih niche dari **platform + custom milik tenant** (`entitled_niches`); enforce `plan_limits.max_channels`; RLS `tenant_id=auth.uid()`; **tombol Aktifkan enabled hanya saat `channel_readiness` lengkap** (F1-08, expose ke FE via RPC `channel_readiness`) + tampil **checklist sisa**; channel baru default `is_active=false`.
 - DEPENDS: F1-05, F1-08.
 - DONE-BILA: wizard buat jalan + draft tersimpan + kuota + RLS teruji (tak bocor antar-tenant); channel tak lengkap tak bisa diaktifkan; checklist akurat.
-- REALISASI: ⬜ | commit: — | catatan: —
+- REALISASI: ✅ | FE:tenant | catatan: **`channels/new` = create terpandu** (sudah ada: guard kuota `plan_limits.max_channels` + niche entitled + bahasa + privacy + RLS insert tenant_id=auth.uid). **FIX KUNCI F2-01/§10.E.7:** create kini `is_active=FALSE` (DRAFT — sebelumnya `true`, langgar gerbang aktivasi) + catatan draft. → land di **Manage** (Overview readiness-checklist F2-12 + pause/play ter-gate F2-07 + config Settings reuse). **World-class: nol-duplikat** (config detail tak ditiru di wizard — pakai Manage). DONE-BILA terpenuhi (draft+kuota+RLS+tak-bisa-aktif-jika-belum-lengkap+checklist). next build PASS. *(Default niche-mode "fixed"=1 niche sesuai §3.20; "random" warisan tetap opsi.)*
 
 #### [F2-02] Tab Caption (styling subtitle) + Hashtags → `/channels/[id]` (per-channel)
 - PLAN: tab **caption_style** (font, **ukuran, posisi, warna**, highlight/outline, kata-per-baris — styling subtitle on-screen, BUKAN deskripsi YouTube) & **hashtags** baca/tulis kolom `channels` (F1-04) via RLS UPDATE; buang dari `config/[tab]` tenant. Preview styling bila memungkinkan.
@@ -617,7 +617,7 @@ CHANNEL DETAIL (satu channel) = TABS — urutan = process flow (siapkan→jadwal
 | Channel Settings: visual_mode/image_quality/music/quality-gate | tenant | ✓ (`d7cc640`) | F2-03 |
 | Channel Settings: branded (CTA/logo/landing) | tenant | 🟡 (URL; upload ⬜) | F2-04 |
 | Channel Settings: target platform id (youtube_channel_id) | tenant | ✓ (F2-08) | F2-08 |
-| Wizard buat channel (step-by-step) | tenant | ⬜ | F2-01 |
+| Wizard buat channel (create terpandu → draft → Manage) | tenant | ✓ (F2-01) | F2-01 |
 | Admin: voice_catalog CRUD | admin | ✓ (`F1-01`) | — |
 | Admin: tombol "Tambah niche" | admin | ✓ (F3-01) | F3-01 |
 | Admin: niche editor (fields + voice_defaults + test) | admin | 🟡 (fields+voice_defaults ✓; test=F2-06) | F3-02 |

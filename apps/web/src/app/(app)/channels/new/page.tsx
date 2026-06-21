@@ -70,7 +70,8 @@ export default function NewChannelPage() {
     const { data, error } = await supabase.from("channels").insert({
       tenant_id: user.id, channel_group: "default", channel_name: name.trim(), platform,
       niche: sel[0], niche_pool: sel, niche_mode: nicheMode,
-      content_language: clang, publish_privacy: privacy, publish_slots: ["13:00"], is_active: true,
+      content_language: clang, publish_privacy: privacy, publish_slots: ["13:00"],
+      is_active: false,   // F2-01/§10.E.7: channel default NON-AKTIF (draft) → aktif setelah readiness lengkap di Manage.
     }).select("id").single();
     setBusy(false);
     if (error) return setErr(error.message);
@@ -109,6 +110,7 @@ export default function NewChannelPage() {
           <div><label className="label"><Bi id="Bahasa konten" en="Content language" /></label><select className="input" value={clang} onChange={(e) => setClang(e.target.value)}>{langs.map((l) => <option key={l.locale} value={l.locale}>{l.display_name}</option>)}</select></div>
           <div><label className="label">Privacy publish</label><div className="radio-row">{["private", "public"].map((p) => <span key={p} className={`radio-pill${privacy === p ? " sel" : ""}`} onClick={() => setPrivacy(p)}>{p}</span>)}</div><div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".25rem" }}><Bi id="Default private (trial-safe). Ganti ke public saat hasil cocok." en="Default private (trial-safe). Switch to public when satisfied." /></div></div>
           {err && <div style={{ color: "var(--danger)", fontSize: "var(--text-sm)" }}>{err}</div>}
+          <div className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Channel dibuat sebagai DRAFT (non-aktif). Di halaman berikutnya: lengkapi model AI + key (vault), voice, caption — ada checklist kesiapan; aktifkan saat lengkap." en="Created as a DRAFT (inactive). Next page: complete AI models + key (vault), voice, captions — a readiness checklist guides you; activate once complete." /></div>
           <div style={{ display: "flex", gap: ".5rem" }}>
             <button className="btn btn-default" disabled={busy} onClick={create}>{busy ? "Membuat…" : <Bi id="Buat channel" en="Create channel" />}</button>
             <button className="btn btn-secondary" disabled={busy} onClick={() => router.push("/channels")}><Bi id="Batal" en="Cancel" /></button>
