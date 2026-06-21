@@ -292,7 +292,7 @@
 - **FE admin:** daftar platform + gating tier (config-driven) di admin app_config/UI.
 - DEPENDS: F1-08 (readiness), F2-12 (channel settings).
 - DONE-BILA: 1 OAuth tenant memayungi >1 channel; channel pilih target id; readiness/publish jalan; ryan tetap publish (nol putus); IG/TikTok ter-gate tier. **FE dicontreng §10.F.4.**
-- REALISASI: ⬜ | DB:— BE:— FE:— | commit: — | catatan: —
+- REALISASI: 🟡 PARTIAL (FE Integrasi-MAIN) | DB:(tenant_credentials sudah ada) BE:(seam load_google_credentials sudah tenant-level + fallback) FE:tenant | commit:(deploy berikut) | catatan: **Studi alur OAuth (verified):** `youtube_oauth.py` init/callback/disconnect/status SEMUA dukung tenant-level (`channel_id=None`→`tenant_credentials`) **dan** per-channel; publisher `_get_credentials` resolve channel→**fallback tenant** → **TENANT-level non-breaking**. **Dikerjakan:** halaman MAIN **`/integrations`** (tenant-level: YouTube BYO-CC `/api/youtube/connect` tanpa channel_id, Telegram, **Instagram(Pro+)/TikTok(Business) gated** via plan_rank) + **nav MAIN** (`Globe`, setelah Dashboard) + **Settings dirapikan** (tab Integrasi DIBUANG → relokasi, nol-dup; state/handler YT+Telegram dihapus bersih). Hanya kelas GLOBAL (nol css scoped lintas-route — bug Turbopack diperbaiki). `next build` PASS. **ryan publish TAK disentuh** (channel_credentials tetap di-resolve). **SISA:** pemilih **target `youtube_channel_id`** di Channel Settings + deprecate channel-level connect UI + gating IG/TikTok config-driven admin. *(ikon brand `Instagram`/`Music2` tak ada di lucide ini → pakai Image/Video.)*
 
 #### [F2-09] AI key = VAULT multi-akun, assignment per-channel-per-elemen `[NEW — owner 2026-06-21]`
 - ACUAN: §3.19 · §10.F.2 · §10.F.5. Tenant boleh >1 akun/provider; channel pilih akun saat pilih model.
@@ -597,7 +597,7 @@ CHANNEL DETAIL (satu channel) = TABS — urutan = process flow (siapkan→jadwal
 |---|---|---|---|
 | Sidebar: tombol Sign-out (font ikut `.sb-item`) | tenant+admin | ✓ (2026-06-21) | — |
 | Sidebar: pensiun grup "Konfigurasi" | tenant | ⬜ | F2-11 |
-| MAIN: Integrasi/Koneksi (pindah dari Settings + multi-platform) | tenant | ⬜ | F2-08 |
+| MAIN: Integrasi/Koneksi (pindah dari Settings + multi-platform) | tenant | 🟡 (page+nav+relokasi ✓; target-id channel sisa) | F2-08 |
 | MAIN: Jadwal (CRUD semua channel) | tenant | ✓ (ada) | — |
 | MAIN: Analytics agregat | tenant | ✓ | F5-05 (pivot kinerja-mesin) |
 | MAIN: Compliance agregat (rewire `.limit(1)`→RPC agg 0068) | tenant | ✓ (F2-13a) | F2-13 |
