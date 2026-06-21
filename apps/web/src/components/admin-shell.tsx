@@ -84,7 +84,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <button
             className="sb-item"
             onClick={async () => { await createClient().auth.signOut(); window.location.href = "/admin/login"; }}
-            style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", font: "inherit", color: "inherit" }}
+            style={{ width: "100%", background: "none", border: "none", fontFamily: "inherit" }}
           >
             <LogOut size={18} /><span className="sb-label"><Bi id="Keluar" en="Sign out" /></span>
           </button>

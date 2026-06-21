@@ -12,7 +12,9 @@
 ## 0. ⭐ MULAI DARI SINI (resume guide untuk sesi berikutnya)
 1. Baca **§2 Pondasi** + **§3 Keputusan** + **§4 Peta Config-Fanout** (inti pemahaman; 5 menit).
 2. Cek **§7 FASE** — cari item pertama ber-status ⬜/🟡 pada FASE prioritas terendah-nomornya. Itu pekerjaan berikutnya.
+   - 🔗 **WAJIB (owner 2026-06-21, [[feedback_review_whole_remediation_before_item]]): SEBELUM eksekusi item APA PUN, review SELURUH dokumen REMEDIASI** (§3/§4/§10.E/**§10.F**/semua item FASE) — item saling terkait. Petakan **DEPENDS + item yang menumpang seam** item ini; bangun seam yang benar untuk mereka (hindari rework/sentuh file sama 2×). Tiap item = DB·BE·FE(admin&tenant), FE mengacu §10.F + contreng §10.F.4. Setelah selesai, sinkronkan dampak ke item terkait.
 3. Tiap item punya: TUJUAN · KENAPA · BUKTI · PLAN · DEPENDS · DONE-BILA · REALISASI. Kerjakan sesuai PLAN, validasi sesuai DONE-BILA, isi REALISASI (status+commit). **Item LLM/voice/arsitektur (F1-03/04/05/07/08, F2-01/03, F3-02, F4-02/03/04) menunjuk ke §10 LAMPIRAN — desain SUDAH DISEPAKATI: §10.A durasi-via-speed · §10.B voice (Opsi 2) · §10.C konduktor · §10.E multi-AI-model + channel setup + gerbang aktivasi. IKUTI §10 apa adanya — jangan rancang ulang / berasumsi.**
+   - 🔒 **FE (UI/UX) = §10.F ACUAN KANONIK** (IA panel tenant terkunci 2026-06-21: tree MAIN + Channel Detail + matriks contreng §10.F.4 + supersede §10.F.5). **Semua item FE (F2-08..F2-13 baru + F2-01/06/07) WAJIB mengacu §10.F.** Tiap item = **DB · BE · FE(admin & tenant)** (§3.22). Pakai komponen Claude Design existing — jangan kontrol mentah/inline-override ([[feedback_world_class_quality]]).
 4. Aturan kerja: lokal → validasi 100% → commit → push → pull+rebuild+restart di VPS. JANGAN ngoding di VPS. JANGAN rusak produksi ryan. Validasi tiap fase sebelum lanjut.
 5. **Status global (update 2026-06-20):** ✅ **F1-01** (migr 0061) · ✅ **F1-02** (migr 0062). **Arsitektur FINAL sudah dibungkus** (owner 2026-06-20): multi-AI-model per-elemen (tenant pilih, admin kurasi) · voice **Opsi 2** (default niche per TTS model + pilihan tenant per-channel + **test/preview**) · **TIDAK ada fallback** · channel default non-aktif + **gerbang aktivasi** · caption-styling+hashtag+model+voice = channel · credential per-tenant dipakai-ulang · niche-create gating config-driven. Acuan = §3 (kpts 3-11) + §4 + **§10.B/§10.E**. ✅ **F1-07**(0063) · ✅ **F1-04**(0064) · ✅ **F1-05**(`7a5d030`+0065, **render-CONFIRMED produksi nyata ryan** — voice=Adam dipakai, QC PASS 56.4s, published, success) · ✅ **F1-08**(`d7238ee`+0066, deployed — gerbang aktivasi, ryan READY tak ter-skip). **FASE 1 BE = 6/7 SELESAI.** Sisa FASE 1 = **F1-06** (backfill channel_id 5 tabel, **INDEPENDEN/data-hygiene, kapan saja**). **Berikutnya (keputusan teknis Claude): FASE 2 FE** (F2-01 wizard BUAT → F2-07 Manage page EDIT+pause/play → F2-02/03/04 pemilih caption/model/voice(+test)/branded → F2-05 buang tab lama → F2-06 preview voice) — selaras owner FE-in-tandem; tutup gap aktif tab config tenant. **Keputusan konsep tambahan owner (terkunci, JANGAN tanya ulang):** analytics = **link YT Studio + fokus kinerja-mesin** (F5-05, jangan duplikat Studio) · biaya = **REAL per-konten** (F5-03; ⛔ jangan estimasi menyesatkan di picker, label provider/BYOK) · wizard buat-baru + Manage(edit/pause-play) · admin≠tenant (panel terpisah, bisa >1 admin) · FE admin+tenant berbarengan. **Kunci re-evaluasi:** F1-03 dilebur ke F1-05 (semua config per-channel lewat SATU jahitan `load_tenant_config` di 8 komponen → hindari sentuh 8 file 2×); DB-additive (F1-07/04) dulu, pembedahan produksi (F1-05) terakhir. **Migr nyata terakhir = 0066.** **Pembagian peran (owner 2026-06-20): owner pegang konsep/bisnis; Claude putuskan detail teknis (best judgment) — eksekusi sesuai dok ini tanpa tanya-ulang yg sudah dibungkus.**
 
@@ -47,7 +49,7 @@
 7. **Multi-AI-model per elemen (owner 2026-06-20).** Tiap elemen produksi punya **AI model yang dipilih TENANT per-CHANNEL** dari katalog **yang diaktifkan admin** — biaya produksi = hak prerogatif tenant. Elemen ber-model: **LLM (skrip), image-gen (visual), TTS (voice), video-gen (preset ai_video)**. Admin/dev = **gerbang dukungan**: model baru `is_active` HANYA setelah parameter API-nya terverifikasi didukung (extensible, mis. Fish Audio). Param bisa beda per model → ditampung `ai_providers.adapter`/`request_param_schema` + `ai_models.default_params` + `tts_profiles.param_schema`. Detail §10.E.
 8. **TIDAK ADA FALLBACK.** Produksi pakai HANYA model/provider/credential terkonfigurasi; gagal runtime = **gagal jujur + tercatat**, tak pindah provider diam-diam.
 9. **Channel default NON-AKTIF + gerbang aktivasi.** Channel `is_active=true` HANYA bila semua syarat (niche, model tiap elemen, voice, credential valid, YouTube OAuth) lengkap & valid. Boleh **save draft** sebelum lengkap. UX **ramah pemula** (checklist sisa). Detail §10.E.
-10. **Credential (BYOK key) = per-TENANT, dipakai-ulang** lintas channel (1 key/provider, ramah pemula), divalidasi (test koneksi). YouTube OAuth = per-channel (sudah).
+10. ~~**Credential (BYOK key) = per-TENANT, dipakai-ulang** lintas channel (1 key/provider). YouTube OAuth = per-channel.~~ → **DIGANTI (owner 2026-06-21) oleh kpt 18-19 & §10.F:** key = **VAULT multi-akun per provider**, diinput **per-channel-per-elemen** saat pilih model (tenant boleh >1 akun/provider); **koneksi platform = TENANT di MAIN→Integrasi** (bukan per-channel), channel hanya pilih target id. Tetap divalidasi (test koneksi).
 11. **Caption = styling subtitle ON-SCREEN** (font, ukuran, posisi, warna, highlight, outline, dll — `caption_style`) **+ hashtag = CHANNEL** (diatur tenant). Bukan judul/deskripsi YouTube.
 12. **Analytics (owner 2026-06-20):** **JANGAN duplikat YouTube Studio** (data YT mentah kaya di sana) → **link ke YT Studio**. **Analitik KITA = KINERJA MESIN** (success-rate/QC/durasi, self-learning niche/hook, biaya per-konten) yang **mengolah** data YT — bukan re-display. Detail F5-05.
 13. **Biaya (owner 2026-06-20):** tampilkan **biaya produksi VALID per-konten** (REAL dari pemakaian aktual, BUKAN estimasi melenceng), ber-label **"biaya provider AI / BYOK — bukan biaya kami"**, up-to-date. ⛔ Estimasi menyesatkan di picker = JANGAN. Detail F5-03.
@@ -55,6 +57,11 @@
 15. **Admin ≠ Tenant (owner 2026-06-20):** admin punya panel terpisah (`/admin/login`), **TAK bisa login panel tenant**; **bisa >1 user admin** (role `super_admin`). `admin_test_internal` (admin_te) = channel internal admin (test), BUKAN tenant. **ryan = satu-satunya tenant nyata** saat ini.
 16. **Pembagian peran (owner 2026-06-20):** **owner pegang konsep & bisnis**; **Claude putuskan detail teknis** (best judgment, dalam aturan kerja). Hal yang sudah dibungkus di dok ini → **eksekusi, jangan tanya-ulang**.
 17. **Status channel terpadu + recovery circuit-breaker (owner 2026-06-20, terverifikasi):** SATU **status efektif terderivasi** (Aktif / Dijeda-tenant / Dihentikan-sistem / Belum-lengkap / Langganan-nonaktif) dipakai SEMUA (producer + FE + Manage). **Tenant WAJIB well-informed:** status + **alasan** + **rekomendasi perbaikan** + **harus test sebelum aktif lagi**. **Circuit-breaker tetap memutus** untuk hard-fail (kredit/key) **dan** soft-QC (`ready_with_issues` persisten 3×). **Recovery = 1 produksi-test ("Jalankan ulang & pulihkan")** untuk KEDUA sebab (sukses→rem lepas; gagal→tetap berhenti+alasan baru); beda hanya label/rekomendasi. **TERVERIFIKASI (jangan asumsi lain):** "cek kredit/kuota gratis" TIDAK andal lintas-provider — EL `/v1/user` 401 untuk key BYOK scoped (tanpa `user_read`, terbukti pada key ryan); OpenAI/Anthropic 200 walau saldo $0. Pra-filter validity-LLM (`/v1/models`) opsional (best-effort, nyaring key revoked sebelum bakar test); EL jangan di-pre-check. **Catatan:** akar soft-QC = word-budget durasi (F4-02) → setelah F4-02 beres, halt soft-QC jadi langka. **Bug existing:** `/api/validate-key` + test-lab pakai EL `/v1/user` → false-negative untuk key TTS-scoped (perlu fix: pakai endpoint yg tak butuh user_read / terima 200|401-permission sbg "valid").
+18. **Integrasi/Koneksi platform = TENANT, di MAIN (owner 2026-06-21).** YouTube · Telegram · Instagram (Pro+) · TikTok (Business) — **dikeluarkan dari Settings**, ditonjolkan di MAIN sebagai **prasyarat sebelum buat channel**. Satu koneksi (OAuth akun) dipakai SEMUA channel; **channel hanya pilih TARGET** (mis. `youtube_channel_id`). **MENGGANTI** "YouTube OAuth per-channel" (§10.E.5/.9 lama, `channel_credentials`). Gating platform per-tier = config-driven.
+19. **API key = key-VAULT per-channel-per-elemen (owner 2026-06-21).** Diinput saat tenant memilih AI-model tiap elemen di channel. Tenant boleh punya >1 akun/provider; vault simpan akun bernama, channel **pilih akun** (atau tambah baru). **MENGGANTI** "1 key/provider per tenant" (kpt 10 lama). Tetap divalidasi.
+20. **Niche per-channel + Niche Studio gated (owner 2026-06-21).** 1 channel = 1 niche, dipilih **DI channel** (Settings) dari katalog (platform + custom tenant); non-Studio bisa **request custom** dari picker. **TIDAK ADA "aktifkan N niche per plan"** (model single-channel lama → dibuang). **Niche Studio** (authoring custom DNA) = item **MAIN**, tampil **hanya bila tenant ber-entitlement** (kini Business; extensible Pro via `app_config` — selaras kpt 5).
+21. **IA panel tenant TERKUNCI (owner 2026-06-21) = §10.F.** Grup "Konfigurasi" sidebar **dipensiunkan**; Analytics/Compliance/Insights MAIN = **AGREGAT** (tiap channel punya tab sendiri); **Jadwal** di MAIN (semua channel) + tab per-channel; **Channel Detail = SATU Settings**, urutan tab = process-flow (Overview→Settings→Schedule→Runs→Analytics→Compliance→Insights). Semua perbaikan FE WAJIB mengacu **§10.F** + dicontreng matriks **§10.F.4**.
+22. **Tiap item = DB · BE · FE(admin & tenant) (owner 2026-06-21).** Setiap PLAN & REALISASI wajib mempertimbangkan 3 unsur; tiap perubahan FE wajib mengacu tree §10.F dengan **contreng (✓ disesuaikan / ⬜ belum)**.
 
 ---
 
@@ -75,7 +82,9 @@
 | **music_enabled, music_volume, music_default_mood** | tenant_configs | tenant ❌ | **CHANNEL** | + kolom channels + thread |
 | **script_min_viral_score, script_max_retry** | tenant_configs | tenant ❌ | **CHANNEL** | + kolom channels + thread |
 | visual_style, image_quality_tags, image_negative_prompt, mood_priority, section_timing, emotion_scoring_criteria, voice_profile, **motion_profiles(baru)** | niches | niche ✅ (motion belum) | niche | + motion_profiles |
-| *_api_key_enc (BYOK keys), plan_type, subscription_status, telegram_*, timezone, videos_per_day | tenant_configs | tenant ✅ | tenant (key dipakai-ulang lintas channel, divalidasi) | — |
+| plan_type, subscription_status, telegram_*, timezone, videos_per_day | tenant_configs | tenant ✅ | tenant | — |
+| ~~*_api_key_enc (1 key/provider)~~ → **AI key = VAULT multi-akun** | tenant_configs.*_enc (1/provider) | tenant ❌ | **TENANT vault (akun bernama) + assignment per-CHANNEL-per-elemen** | tabel vault + ref akun di channels (F2-09) |
+| **Koneksi platform (YouTube/Telegram/IG/TikTok)** | ~~channel_credentials (per-channel OAuth)~~ | per-channel ❌ | **TENANT (MAIN→Integrasi)**; channel simpan **target id** (`youtube_channel_id`) | pindah ke tenant_credentials + FE Integrasi MAIN (F2-08) |
 | llm_provider/model/library | tenant_configs | tenant ❌ | **CHANNEL** (pilih per channel) | pindah ke channels (model-per-elemen) |
 
 **Baris ❌ = inti FASE 1 (pondasi multi-channel belum tuntas).**
@@ -137,6 +146,7 @@
 ## 7. 📋 FASE & ITEM (urut prioritas; tiap item = Plan vs Realisasi)
 > Prioritas mengikuti arahan owner: **#4 pondasi multi-channel = PRIORITAS UTAMA** → FASE 1. Lalu CRUD yang membuka pondasi itu ke pengguna (FASE 2-3), baru Cacat B/LLM-conductor penuh (FASE 4), lalu sapu-bersih hardcode + go-live (FASE 5).
 > **Catatan Cacat B:** relief cepat env-only (lebarkan `TTS_ATEMPO_MIN`, longgarkan `QC_DURATION_TOLERANCE`) BOLEH diterapkan kapan saja sebagai penambal sementara — tapi solusi tuntas (durasi-via-speed) ada di F4 (butuh voice/niche bersih dulu agar tak dikerjakan 2×).
+> **🔑 KONVENSI ITEM (owner 2026-06-21, §3.22):** tiap item mempertimbangkan **DB · BE · FE(admin & tenant)**; perubahan FE mengacu **§10.F** + dicontreng matriks **§10.F.4**.
 
 ---
 ### FASE 1 — TUNTASKAN PONDASI MULTI-CHANNEL + Multi-AI-model + Voice (Opsi 2) `[PRIORITAS UTAMA]`
@@ -272,6 +282,66 @@
 - DONE-BILA: tenant edit semua config channel dari Manage + pause/play (play ter-gate readiness); nol elemen lama membingungkan; analytics = link Studio + kinerja-mesin (nol redundan).
 - REALISASI: 🟡 PARTIAL | commit: `51fa45a` (+RPC `a695148`/migr 0067) | catatan: **SELESAI:** RPC `channel_readiness` (migr 0067, tenant-scoped, validated) + **status efektif terpadu** di channel-detail (banner: Aktif/Dijeda/Dihentikan-sistem/Belum-lengkap/Langganan, ganti badge is_active menyesatkan) + **well-informed** (alasan+rekomendasi) + **recovery "Jalankan ulang & pulihkan"** (=direct-test→run_direct auto-clear production_paused, F1-09) + **pause/play** (is_active, play ter-gate readiness). YT Studio link sudah ada. Build PASS + DEPLOYED (mv-web active, situs 200, channel-detail 307 gate-benar). **SISA:** pindah pemilih model/voice(+test)/caption/hashtag/branded ke Manage (F2-02/03/04) + buang chart YT-redundant (F5-05) + buang tab config tenant lama (F2-05). *(F1-09 BE: effective-status diturunkan di FE; recovery pakai run_direct existing; sisa F1-09 = fix validator EL + pra-filter LLM opsional.)*
 
+> **🔄 AMANDEMEN F2-07 (owner 2026-06-21):** Manage page diselaraskan **§10.F** — Channel Detail jadi **TABS** ber-urutan process-flow (Overview→**Settings**→Schedule→Runs→Analytics→Compliance→Insights), **SATU** tab Settings (semua section config jadi isi Settings); restruktur tab = **F2-12**. Integrasi/OAuth **keluar** dari channel → MAIN (F2-08); key jadi vault (F2-09).
+
+#### [F2-08] Integrasi/Koneksi platform = TENANT di MAIN (multi-platform; ganti OAuth per-channel) `[NEW — owner 2026-06-21]`
+- ACUAN: §3.18 · §10.F.2 · §10.F.5. Satu koneksi (OAuth akun) dipakai semua channel; channel hanya pilih **target id**.
+- **DB:** koneksi platform di **`tenant_credentials`** (per-tenant) — YouTube (OAuth), Telegram (chat id), Instagram/TikTok (token, gated); **deprecate/repurpose `channel_credentials`** → simpan **target id** terpilih per channel (mis. `channels.youtube_channel_id`). Migrasi backfill ryan dari channel_credentials→tenant_credentials (jaga produksi).
+- **BE:** publisher pakai **token tenant** + **target id channel**; `channel_readiness` cek koneksi di tenant (bukan per-channel) + target id terisi; webhook OAuth callback simpan ke tenant.
+- **FE tenant:** **halaman MAIN "Integrasi/Koneksi"** (pindah dari Settings→Integrasi) — kartu per platform (status tersambung/belum, connect/disconnect), gated per tier (IG=Pro+, TikTok=Business); pakai komponen Claude Design existing (kartu integrasi Settings di-relokasi, bukan dibuat ulang). Channel Settings: **pemilih target id** (dari channel yg dipayungi OAuth).
+- **FE admin:** daftar platform + gating tier (config-driven) di admin app_config/UI.
+- DEPENDS: F1-08 (readiness), F2-12 (channel settings).
+- DONE-BILA: 1 OAuth tenant memayungi >1 channel; channel pilih target id; readiness/publish jalan; ryan tetap publish (nol putus); IG/TikTok ter-gate tier. **FE dicontreng §10.F.4.**
+- REALISASI: ⬜ | DB:— BE:— FE:— | commit: — | catatan: —
+
+#### [F2-09] AI key = VAULT multi-akun, assignment per-channel-per-elemen `[NEW — owner 2026-06-21]`
+- ACUAN: §3.19 · §10.F.2 · §10.F.5. Tenant boleh >1 akun/provider; channel pilih akun saat pilih model.
+- **DB:** tabel vault `tenant_api_accounts` (tenant_id, provider, label, key_enc, validated_at, status) — multi-row/provider; channels ref **akun per elemen** (mis. `channels.llm_key_account_id`, `image/tts/video`); migrasi: angkat `tenant_configs.*_enc` lama → 1 akun "default" per provider (backfill ryan tanpa putus).
+- **BE:** loader (`load_tenant_config`/`tts_engine`/adapter) ambil key dari **akun terpilih channel** (bukan `tenant_configs.*_enc`); no-fallback; validasi test-koneksi saat simpan.
+- **FE tenant:** di Channel Settings pemilih model per-elemen → **pilih akun (vault) atau "+ Tambah akun"** (inline, validasi); pakai `selbox/fld-row/save-bar` existing. (Opsi: halaman kelola vault di Settings.)
+- **FE admin:** — (key milik tenant).
+- DEPENDS: F1-05 (jahitan loader), F2-12.
+- DONE-BILA: 2 channel pakai akun berbeda provider sama → produksi pakai key masing-masing; vault CRUD + validasi; ryan jalan dgn akun default ter-backfill. **FE dicontreng §10.F.4.**
+- REALISASI: ⬜ | DB:— BE:— FE:— | commit: — | catatan: —
+
+#### [F2-10] Niche Studio (MAIN, gated) + niche picker per-channel (1:1, request custom) `[NEW — owner 2026-06-21]`
+- ACUAN: §3.20 · §10.F.2. 1 channel=1 niche; tanpa "aktifkan N niche per plan"; Studio gated.
+- **DB:** entitlement Studio = `app_config` daftar tier (default `['business']`+admin, extensible Pro — selaras §3.5/F3-03); custom niche = `access_type=private, exclusive_to=tenant_id`; request = `niche_requests`.
+- **BE:** `entitled_niches(tenant)` = platform + custom milik tenant (sudah konsep §3.5); endpoint create niche (Studio) re-use admin API scoped-private.
+- **FE tenant:** (a) **Niche Studio** = item MAIN, **tampil hanya bila ber-entitlement** (clone UI admin niche editor, scoped private) — F3-03; (b) **niche picker di Channel Settings** (pilih 1 dari `entitled_niches`; non-Studio → tombol "request custom"). Buang konsep aktivasi-N-niche dari config lama.
+- **FE admin:** niche CRUD penuh (F3-01/02) jadi sumber katalog platform.
+- DEPENDS: F3-01/02/03, F2-12.
+- DONE-BILA: channel pilih 1 niche; Studio hanya muncul utk tier ber-entitlement; non-Studio bisa request; nol sisa "aktifkan niche". **FE dicontreng §10.F.4.**
+- REALISASI: ⬜ | DB:— BE:— FE:— | commit: — | catatan: —
+
+#### [F2-11] Pensiun grup "Konfigurasi" sidebar + Notifikasi(matriks)→Settings `[NEW — owner 2026-06-21]`
+- ACUAN: §3.21 · §10.F.1/.2.
+- **DB/BE:** — (murni IA FE; matriks notif tetap RPC existing).
+- **FE tenant:** hapus grup "Konfigurasi" dari `app-shell.tsx` NAV (AI Engines/API Keys/Voice/Visual sudah pindah/moved); **Notifikasi matriks** direlokasi jadi tab di **Settings** (pakai komponen existing, jangan bikin ulang); rapikan link sidebar (nol link ke stub mati). API Keys-vault diakses dari channel (F2-09).
+- **FE admin:** — (cek admin shell tak punya grup serupa yang nyangkut).
+- DEPENDS: F2-09 (key pindah), F2-10 (niche pindah).
+- DONE-BILA: sidebar tenant nol item mati/duplikat; Notifikasi di Settings berfungsi; nol halaman stub. **FE dicontreng §10.F.4.**
+- REALISASI: ⬜ | DB:— BE:— FE:— | commit: — | catatan: —
+
+#### [F2-12] Restruktur Channel Detail: TABS process-flow + SATU Settings `[NEW — owner 2026-06-21]`
+- ACUAN: §10.F.1 (urutan Overview→Settings→Schedule→Runs→Analytics→Compliance→Insights; satu Settings).
+- **DB/BE:** — (FE; sumber data per-channel sudah ada: readiness RPC, runs/analytics/insights per channel_id).
+- **FE tenant:** ubah `/channels/[id]` jadi **tabbed** (komponen tab Claude Design); **Settings** = satu tab berisi seluruh section config (Identitas/Niche/Model+Voice/Visual/Music/Caption/Hashtag/Quality/Branded/Status) yg sudah dibangun (F2-02/03/04 direlokasi ke dalam Settings, bukan dibuat ulang); tab **Schedule** per-channel (CRUD slot channel ini, reuse RPC `set_channel_publish_slots`); tab **Analytics/Compliance/Insights** per-channel; **Overview** = status efektif + checklist readiness (F2-07) + KPI ringkas. Buang section ganda/Settings dobel.
+- **FE admin:** — .
+- DEPENDS: F2-07, F2-02/03/04, F2-13 (per-channel C/I).
+- DONE-BILA: Channel Detail = tab urut process-flow; SATU Settings; Schedule/Analytics/Compliance/Insights per-channel tampil benar; nol duplikat/section nyasar. **FE dicontreng §10.F.4.**
+- REALISASI: 🟡 PARTIAL (backbone) | DB:— BE:— FE:tenant | commit: — (validated lokal, build EXIT=0) | catatan: **Verifikasi:** halaman `channels/[id]` **sudah tabbed** & Settings sudah memuat semua section (F2-02/03/04) → F2-12 = (a) **reorder TABS** ke process-flow (Overview→Settings→Schedule→Runs→Analytics→Compliance→Insights); (b) **tambah tab Compliance & Insights** (placeholder jujur → data per-channel diisi **F2-13**); (c) **Overview** kini bermakna = **checklist kesiapan NYATA** (pakai `rd` dari RPC `channel_readiness`, tampil item `missing` + CTA ke Settings) + ringkasan kinerja (KPI di header; kinerja-mesin menyusul F5-05). **SATU Settings** (terkonfirmasi, bukan dobel). **YouTube-connect TETAP di Settings** (dilepas di F2-08 saat MAIN→Integrasi siap — JANGAN strand). tsc bersih + `next build` PASS (`/channels/[id]` compiled). **SISA (F2-13/F5-05/D4):** isi data per-channel tab Runs/Analytics/Compliance/Insights. **Deploy:** menyusul (FE-only mv-web; worker/DB tak tersentuh).
+
+#### [F2-13] Agregat Compliance/Insights di MAIN + tab per-channel `[NEW — owner 2026-06-21]`
+- ACUAN: §10.F.2. MAIN = agregat semua channel; channel = per-channel. **Bukti bug:** `compliance/page.tsx:43` & `insights/page.tsx:23` pakai `channel_insights…limit(1)` = **1 channel saja** (salah utk multi-channel); RPC agregat **`get_tenant_insights_summary`** sudah ADA (migr 0057) tapi belum di-wire.
+- **DB:** `get_tenant_insights_summary` (✅ ada, 0057) — verifikasi cukup field; bila kurang, tambah RPC agregat compliance.
+- **BE:** — .
+- **FE tenant:** `/compliance` & `/insights` MAIN → **rewire ke RPC agregat** (semua channel); versi **per-channel** muncul di tab Channel Detail (F2-12) baca `channel_insights` by `channel_id`.
+- **FE admin:** — .
+- DEPENDS: F2-12.
+- DONE-BILA: MAIN tampil agregat benar utk tenant multi-channel (uji simulasi >1 channel); tab channel tampil per-channel; ryan (1 channel) tetap benar. **FE dicontreng §10.F.4.**
+- REALISASI: ⬜ | DB:— BE:— FE:— | commit: — | catatan: —
+
 ---
 ### FASE 3 — NICHE CRUD + child (admin + Business) `[authoring DNA]`
 #### [F3-01] Tombol "Tambah niche" di admin (API sudah ada)
@@ -373,6 +443,7 @@
 - **2026-06-21 (k)**: ⚠️→✅ **KOREKSI WORLD-CLASS (owner tegur keras: kerja FE asal-jadi).** Insiden: section channel saya pakai `<select>` mentah (bukan design-system bagus yang ADA) + tinggal page lama (duplikat) + klaim "selesai" prematur. **Koreksi (commit `ec97e95`):** SEMUA section channel Manage di-RESTYLE ke design-system existing (`fld-row/radio-pill/slider/swatch/save-bar` global `components.css`) + **caption preview 9:16 live**; **F2-05 tuntas** (buang Voice/Visual/Music/Caption/Quality/Hashtag dari config tenant → per-channel; URL lama→MovedToChannel; **nol duplikat**); dead-code dibersihkan (312-baris fungsi + 5 helper + 16 import). **Standar baru dikunci di memory [[feedback_world_class_quality]]:** DB/BE/FE semua TERBAIK; reuse/relokasi UI bagus yang ada (jangan bikin lebih jelek); "selesai"=kualitas+nol-duplikat+lama-dibereskan+tervalidasi. Build PASS + deploy.
 - **2026-06-20 (j)**: 🚀 **FASE 2 FE substansial maju + DEPLOYED** (channel Manage = pusat config per-channel): RPC `channel_readiness` (`a695148`/migr 0067) · **F2-07** status efektif+well-informed+recovery(1-test)+pause/play (`51fa45a`) · **F2-03** pemilih model AI(LLM/visual)+voice+operasional (`d7cc640`) · **F2-02** caption-styling+hashtag per-niche (`7707e38`) · **F2-04** branded CTA/logo(URL)/landing (`e23015d`) — semua → `channels`, build PASS, deploy mv-web (DONE/200). **→ GAP "config tenant stale" TUTUP** utk model/voice/operasional/caption/hashtag/branded. Pola deploy andal: script di VPS + nohup + poll (SSH-hold lama drop). **SISA FASE 2:** F2-05 (buang/redirect tab config tenant lama — refactor shared-page 735-baris) · F2-06 (voice preview) · F2-01 (wizard). **Berikutnya: F2-05.**
 - **2026-06-20 (i)**: ✅ **RESOLVED — model pause/play & recovery dikunci** (diskusi+verifikasi owner). Keputusan = **§3.17** + item **F1-09** (BE status efektif terpadu + recovery 1-test, well-informed) + **F2-07** (FE surface). **Verifikasi nyata** (bukan asumsi): EL `/v1/user/subscription` → 401 missing `user_read` pada key BYOK ryan (scoped) → **cek-kuota-gratis TIDAK andal lintas provider**; OpenAI/Anthropic 200 walau saldo $0. → recovery = **1 produksi-test** (universal andal), pra-filter validity-LLM opsional. `/review` (accept/reject) = jalur per-item TERPISAH dari circuit-breaker. soft-QC (`ready_with_issues` persisten) **tetap memutus**, release via test. Akar soft-QC = word-budget (F4-02) → setelah beres, halt soft-QC langka. **Bonus-fix dicatat:** validator EL `/v1/user` false-negative key scoped (di F1-09).
+- **2026-06-21 (l)**: 🔒 **IA PANEL TENANT DIBUNGKUS (diskusi owner mendalam, tenant-vs-channel) → §10.F kanonik.** Tree MAIN + Channel Detail terkunci; keputusan penempatan final. **2 keputusan lama DIGANTI:** (1) "YouTube OAuth per-channel" → **koneksi platform = TENANT di MAIN→Integrasi** (multi-platform YouTube/Telegram/IG-Pro+/TikTok-Business; channel simpan target id) = **F2-08**; (2) "1 key/provider per tenant" → **key-VAULT multi-akun, assignment per-channel-per-elemen** = **F2-09**. Tambah: Niche Studio gated di MAIN + niche picker per-channel (**F2-10**), pensiun grup Konfigurasi + Notifikasi→Settings (**F2-11**), restruktur Channel Detail jadi tabs process-flow + SATU Settings (**F2-12**), agregat Compliance/Insights di MAIN + tab per-channel (**F2-13**, bug `.limit(1)` → wire `get_tenant_insights_summary` 0057). **§3 +kpt 18-22** (kunci IA + konvensi DB/BE/FE per item + contreng §10.F.4). §4/§10.E.5/.9 ditandai supersede. **Fix kecil dideploy-belakangan:** tombol Sign-out (tenant+admin) — inline `font:inherit` menabrak `.sb-item` → font beda; diperbaiki (`fontFamily` only). **Owner pt.2:** FE admin disesuaikan selaras keputusan tenant. **Koreksi (verified):** RPC `get_tenant_insights_summary` (0057) hanya RINGKAS (compliance_avg/videos/last/top_niche) — **tak cukup** utk halaman detail (5 dimensi, hooks, avoid, grade); F2-13 perlu **RPC agregat-detail baru** + secara IA detail per-channel pindah ke tab (F2-12) → **F2-13 DEPENDS F2-12** (bukan langkah independen). **Urutan eksekusi jujur:** **F2-12** (backbone: Channel Detail jadi tabs + SATU Settings; relokasi section F2-02/03/04 ke dalam Settings — nol-rebuild, reuse) **+ F2-13** (agregat MAIN + isi tab C/I per-channel) → **F2-08** (Integrasi→MAIN, tenant-OAuth) → **F2-09** (key-vault) → **F2-10** (Niche Studio gated + picker) → **F2-11** (pensiun grup Konfigurasi, setelah 09/10) → **F2-06** (voice preview — independen, kapan saja) → **F2-01** (wizard, terakhir). Fix sign-out di-batch saat deploy FE pertama.
 
 ---
 
@@ -439,7 +510,7 @@ Budget DIPAKAI mesin: 1.548–1.674 (terlalu rendah). **Kesimpulan:** tak ada sa
 
 **4) Voice (Opsi 2 — ringkas, detail §10.B).** Pilih TTS model → pilih voice (default niche ter-pra-isi via `niches.voice_defaults[provider]`, boleh ganti). **FE wajib TEST/PREVIEW voice.** Final = `channels.voice_key`. NO fallback runtime.
 
-**5) Credential.** Per-TENANT, dipakai-ulang lintas channel (1 key/provider, terenkripsi di vault). Divalidasi (test koneksi) saat diisi. YouTube OAuth = per-channel (sudah).
+**5) Credential.** ⚠️ **DIGANTI oleh §3.18-19 & §10.F (owner 2026-06-21):** AI key = **VAULT multi-akun per provider** (terenkripsi), di-assign **per-channel-per-elemen** (tenant boleh >1 akun/provider). **Koneksi platform (YouTube/Telegram/IG/TikTok) = TENANT-level** di MAIN→Integrasi (bukan per-channel); channel hanya pilih **target id**. Divalidasi (test koneksi) saat diisi.
 
 **6) TIDAK ADA FALLBACK.** Produksi pakai HANYA model/provider/credential/voice terkonfigurasi. Gagal runtime → status gagal + log jujur, tak pindah diam-diam.
 
@@ -453,6 +524,97 @@ FE tampilkan **checklist sisa** (ramah pemula); tombol "Aktifkan" enabled hanya 
 
 **8) Form add/setup channel (UX pemula).** Langkah jelas & boleh simpan sebagian: (1) info channel · (2) pilih niche · (3) pilih model per-elemen (+ cost_hint) · (4) pilih voice (+ test/preview) · (5) isi credential (validasi inline) · (6) caption_style + hashtag + branded + operasional (visual_mode/image_quality/music/quality-gate) · (7) publish settings (privacy/slot/bahasa/AI-disclosure) + connect YouTube.
 
-**9) Fanout penyimpanan.** `channels`: model-per-elemen, `voice_key`, `caption_style`, `niche_hashtags`, branded, operasional, publish settings. `tenant_configs`/vault: BYOK keys (per-tenant), plan/billing. `niches`: DNA + `voice_defaults` per provider. `channel_credentials`: YouTube OAuth (per-channel).
+**9) Fanout penyimpanan.** `channels`: model-per-elemen + **ref akun-key (vault)**, `voice_key`, `caption_style`, `niche_hashtags`, branded, operasional, publish settings, **target platform id** (`youtube_channel_id`). **vault (per-tenant): akun-key bernama multi-per-provider** (ganti "1 key/provider"). `tenant_configs`: plan/billing. `niches`: DNA + `voice_defaults` per provider. ⚠️ **`channel_credentials` (per-channel OAuth) DIGANTI** → **koneksi platform per-TENANT** (`tenant_credentials`, MAIN→Integrasi); lihat §3.18 & F2-08.
 
 **10) FE WAJIB BERBARENGAN (owner 2026-06-20).** UI/UX **admin panel + tenant panel** harus selaras arsitektur ini secara **in-tandem** — supaya saat seluruh proses selesai, FE sudah sesuai (tak ada BE-FE drift). **⚠️ GAP AKTIF pasca-F1-05:** BE kini baca config dari CHANNEL, tapi FE tab config tenant (Voice/Visual/Music/Caption/Hashtag) masih tulis ke `tenant_configs` → **edit di tab itu tak berefek** ke produksi (ryan aman krn channel ter-backfill; tapi edit baru via tab itu mubazir). **Penutup gap = FASE 2** (pindah ke channel) + FASE 3 (niche editor admin/Business). Prinsip: tiap area BE yang dipindah ke channel/niche → FE-nya WAJIB ikut dipindah di fase yang sama, jangan menyisakan tab yang menulis ke tempat yang tak dibaca BE. Admin: voice_catalog CRUD (✅ F1-01) · niche editor voice_defaults+test (F3-02) · tts_profiles display. Tenant: channel setup wizard + pemilih model/voice(+test)/caption/hashtag/branded + gerbang aktivasi (FASE 2).
+
+---
+
+### 10.F — FE TENANT PANEL: IA & UI/UX TERKUNCI (diskusi owner 2026-06-21) `[ACUAN FE KANONIK — semua perbaikan FE WAJIB mengacu sini]`
+> Hasil diskusi penuh 2026-06-21. **Ini peta IA final panel tenant + Channel Detail.** Semua item FE (FASE 2 & turunan) WAJIB mengacu tree ini & dicontreng di §10.F.4. **Prinsip desain: rapi + PAKAI komponen/fungsi Claude Design yang SUDAH ADA** (kelas global `components.css`: `card*/btn*/badge*/radio-pill/radio-row/segmented/switch/slider/fld-row/save-bar/selbox/chip-input/input/textarea/label/kpi`). **DILARANG** kontrol mentah ad-hoc (`<select>` polos) atau menimpa design-system dgn inline-style (insiden sign-out & section `<select>` → [[feedback_world_class_quality]]). Reuse/relokasi UI bagus yg ada; jangan bikin versi lebih jelek; tutup duplikat; tervalidasi nyata.
+
+**10.F.1 — TREE TERKUNCI (panel tenant)**
+```
+TENANT — MAIN (MENU)
+├─ Dashboard ........... agregat semua channel
+├─ Integrasi/Koneksi ... YouTube · Telegram · Instagram(Pro+) · TikTok(Business)   [TENANT; prasyarat sebelum buat channel]
+├─ Channels ........... daftar → Channel Detail
+├─ Runs ............... agregat
+├─ Needs Review ....... agregat
+├─ Analytics .......... agregat
+├─ Jadwal ............. CRUD jadwal SEMUA channel
+├─ Compliance ......... agregat
+├─ Insights ........... agregat
+└─ Niche Studio ....... GATED (tampil hanya bila ber-entitlement; kini Business)
+AKUN
+├─ Billing ............ plan · usage · invoice
+├─ Settings ........... Profil/Keamanan · Bahasa-tema · Notifikasi(matriks) · Danger
+└─ Support
+
+CHANNEL DETAIL (satu channel) = TABS — urutan = process flow (siapkan→jadwalkan→produksi→pantau)
+├─ Overview ...... HOME: status efektif + checklist readiness ("langkah berikutnya") + KPI ringkas
+├─ Settings ...... SATU-SATUNYA "Settings" channel — seluruh konfigurasi:
+│                  • Identitas: nama · target platform id (youtube_channel_id) · bahasa · logo
+│                  • Niche (pilih 1 dari katalog; DNA niche = read-only warisan) [+request custom bila non-Studio]
+│                  • Model AI per-elemen (LLM/TTS/image/video) + pilih/tambah akun-key (VAULT)
+│                  • Voice (default niche · pilih · TEST)
+│                  • Visual: visual_mode + image_quality
+│                  • Music: on/off · volume · default_mood
+│                  • Caption: font/ukuran/posisi/warna   • Hashtag: set channel ini
+│                  • Quality gate: min_viral_score · max_retry   • Branded: CTA/logo/landing
+│                  • Status aktif/non-aktif (gate readiness)
+├─ Schedule ...... CRUD jadwal publish channel ini
+├─ Runs .......... produksi channel ini
+├─ Analytics ..... channel ini (link YT Studio + kinerja-mesin; nol re-display YT mentah)
+├─ Compliance .... channel ini
+└─ Insights ...... channel ini
+```
+
+**10.F.2 — KEPUTUSAN PENEMPATAN (tenant vs channel) — final:**
+- **Integrasi = TENANT, di MAIN** (keluar dari Settings): YouTube/Telegram/IG(Pro+)/TikTok(Business). 1 koneksi (OAuth akun) → semua channel; channel hanya pilih **target id**. (Ganti OAuth-per-channel — §10.F.5.)
+- **AI key = per-CHANNEL-per-ELEMEN via VAULT** (input saat pilih model; >1 akun/provider OK; channel pilih akun/tambah). (Ganti 1-key/tenant — §10.F.5.)
+- **Niche = 1 channel:1 niche**, dipilih di channel; **tanpa "aktifkan N niche per plan"**; non-Studio request custom dari picker. **Niche Studio** (authoring) = MAIN, **gated**.
+- **DNA niche** (visual_style/image_quality_tags/image_negative_prompt/mood_priority/section_timing/emotion_scoring_criteria/voice_profile/motion_profiles) = **read-only di channel**; edit hanya di Niche Studio/admin.
+- **Channel** = brand-skin + knob operasional/biaya: caption_style, niche_hashtags, bahasa, logo; **visual_mode + image_quality**; **music on/volume/mood**; quality-gate; model-per-elemen + akun-key; voice_key (default niche, +TEST). **Music = CHANNEL** (knob biaya), bukan niche.
+- **Analytics/Compliance/Insights:** MAIN = **AGREGAT** semua channel; tiap **Channel** punya tab A/C/I sendiri. (Compliance & Insights main kini `.limit(1)` 1-channel → **rewire** ke `get_tenant_insights_summary` migr 0057.)
+- **Jadwal:** MAIN = CRUD semua channel; Channel = tab Schedule CRUD channel itu.
+- **Grup "Konfigurasi" sidebar dipensiunkan**: AI Engines/API Keys → channel(vault); Voice/Visual/Music/Caption/Hashtag/Quality → channel (✅ F2-05); Niche → Niche Studio(MAIN gated)+picker channel; Notifikasi(matriks) → Settings.
+- **Channel Detail = SATU Settings**; urutan tab = Overview→Settings→Schedule→Runs→Analytics→Compliance→Insights.
+
+**10.F.3 — ATURAN per ITEM (owner pt.4/5):** tiap item PLAN & REALISASI punya 3 sub-unsur **DB · BE · FE(admin & tenant)**; tiap perubahan FE mengacu tree §10.F.1 + dicontreng §10.F.4.
+
+**10.F.4 — MATRIKS PELACAKAN FE** (✓ sesuai tree · 🟡 sebagian · ⬜ belum)
+
+| Area FE | Level | Status | Item |
+|---|---|---|---|
+| Sidebar: tombol Sign-out (font ikut `.sb-item`) | tenant+admin | ✓ (2026-06-21) | — |
+| Sidebar: pensiun grup "Konfigurasi" | tenant | ⬜ | F2-11 |
+| MAIN: Integrasi/Koneksi (pindah dari Settings + multi-platform) | tenant | ⬜ | F2-08 |
+| MAIN: Jadwal (CRUD semua channel) | tenant | ✓ (ada) | — |
+| MAIN: Analytics agregat | tenant | ✓ | F5-05 (pivot kinerja-mesin) |
+| MAIN: Compliance agregat (rewire `.limit(1)`→summary RPC) | tenant | ⬜ | F2-13 |
+| MAIN: Insights agregat (rewire) | tenant | ⬜ | F2-13 |
+| MAIN: Niche Studio (gated) | tenant | ⬜ | F2-10 |
+| AKUN: Settings — Notifikasi matriks masuk | tenant | ⬜ | F2-11 |
+| Channel Detail: 1 Settings + urutan tab process-flow | tenant | ✓ (F2-12, build PASS) | F2-12 |
+| Channel Detail: Overview = checklist kesiapan nyata | tenant | ✓ (F2-12) | F2-12 |
+| Channel Detail: tab Schedule per-channel | tenant | 🟡 (tab ada→/schedule; CRUD in-tab nanti) | F2-12/F2-13 |
+| Channel Detail: tab Analytics/Compliance/Insights per-channel | tenant | 🟡 (tab ADA; data per-channel = F2-13) | F2-12/F2-13 |
+| Channel Settings: niche picker (1 niche + request custom) | tenant | ⬜ | F2-10 |
+| Channel Settings: model + akun-key (VAULT) per elemen | tenant | 🟡 (model ✓ `d7cc640`; vault-key ⬜) | F2-09 |
+| Channel Settings: voice + TEST | tenant | 🟡 (picker ✓; test ⬜) | F2-06 |
+| Channel Settings: caption + hashtag | tenant | ✓ (`7707e38`) | F2-02 |
+| Channel Settings: visual_mode/image_quality/music/quality-gate | tenant | ✓ (`d7cc640`) | F2-03 |
+| Channel Settings: branded (CTA/logo/landing) | tenant | 🟡 (URL; upload ⬜) | F2-04 |
+| Channel Settings: target platform id (youtube_channel_id) | tenant | ⬜ | F2-08 |
+| Wizard buat channel (step-by-step) | tenant | ⬜ | F2-01 |
+| Admin: voice_catalog CRUD | admin | ✓ (`F1-01`) | — |
+| Admin: tombol "Tambah niche" | admin | ⬜ | F3-01 |
+| Admin: niche editor (fields + voice_defaults + test) | admin | ⬜ | F3-02 |
+| Admin: gating platform/tier (IG/TikTok/Niche-Studio) config | admin | ⬜ | F2-08/F3-03 |
+| Admin: shell/komponen selaras design tenant | admin | 🟡 | (owner pt.2) |
+
+**10.F.5 — SUPERSEDE (keputusan lama yang DIGANTI 2026-06-21):**
+- "YouTube OAuth per-channel" (§10.E.5/.9, `channel_credentials`) → **koneksi platform = TENANT di MAIN→Integrasi**; channel simpan target id. `channel_credentials` di-deprecate/repurpose (F2-08).
+- "1 credential/provider per tenant, dipakai-ulang" (§3.10 lama/§4/§10.E.5) → **key-VAULT multi-akun; assignment per-channel-per-elemen** (F2-09).
+- "Niches di Config tenant (aktifkan/request)" → **Niche Studio (MAIN gated) + niche picker di channel** (F2-10).

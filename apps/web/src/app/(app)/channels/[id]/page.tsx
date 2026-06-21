@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ExternalLink, Settings, Zap, ArrowRight, BarChart3, Calendar, Activity, Loader2, Check, Pause, Play, RotateCw, AlertTriangle, Mic } from "lucide-react";
+import { ExternalLink, Settings, Zap, ArrowRight, BarChart3, Calendar, Activity, Loader2, Check, Pause, Play, RotateCw, AlertTriangle, Mic, ShieldCheck, Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import PresetTables from "@/components/preset-tables";
 import "./channel-detail.css";
@@ -59,7 +59,8 @@ function initials(n: string) { const p = n.trim().split(/[\s—-]+/).filter(Bool
 
 const LANGS: [string, string][] = [["id-ID", "🇮🇩 Bahasa Indonesia"], ["en-US", "🇬🇧 English"], ["ms-MY", "🇲🇾 Bahasa Malaysia"], ["fil-PH", "🇵🇭 Filipino"], ["th-TH", "🇹🇭 ภาษาไทย"], ["vi-VN", "🇻🇳 Tiếng Việt"]];
 const PRIVACY: [string, string, string][] = [["private", "Privat", "Private"], ["unlisted", "Tak terdaftar", "Unlisted"], ["public", "Publik", "Public"]];
-const TABS: [string, string, string][] = [["overview", "Overview", "Overview"], ["runs", "Runs", "Runs"], ["analytics", "Analytics", "Analytics"], ["schedule", "Jadwal", "Schedule"], ["settings", "Pengaturan", "Settings"]];
+// Urutan tab = PROCESS FLOW (§10.F): siapkan → jadwalkan → produksi → pantau.
+const TABS: [string, string, string][] = [["overview", "Overview", "Overview"], ["settings", "Pengaturan", "Settings"], ["schedule", "Jadwal", "Schedule"], ["runs", "Runs", "Runs"], ["analytics", "Analytics", "Analytics"], ["compliance", "Kepatuhan", "Compliance"], ["insights", "Wawasan", "Insights"]];
 
 function Placeholder({ icon, idT, enT, href, ctaId, ctaEn }: { icon: React.ReactNode; idT: string; enT: string; href?: string; ctaId?: string; ctaEn?: string }) {
   return (
@@ -400,13 +401,50 @@ export default function ChannelDetailPage() {
       </div>
 
       {tab === "overview" && (
-        <Placeholder icon={<Activity size={32} />} idT="Statistik performa muncul setelah channel berproduksi (views, watch-time, niche, hook)." enT="Performance stats appear once the channel starts producing (views, watch-time, niche, hooks)." href="/analytics" ctaId="Buka Analytics" ctaEn="Open Analytics" />
+        <div style={{ display: "grid", gap: "1rem" }}>
+          {/* Kesiapan channel — data NYATA dari RPC channel_readiness (rd) */}
+          <div className="card card-pad">
+            <h3 className="card-title" style={{ marginBottom: "0.75rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <ShieldCheck size={18} style={{ color: "var(--brand)" }} /> <Bi id="Kesiapan channel" en="Channel readiness" />
+            </h3>
+            {rd == null ? (
+              <p className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Memeriksa kesiapan…" en="Checking readiness…" /></p>
+            ) : rd.ready ? (
+              <p style={{ fontSize: "var(--text-sm)", color: "var(--success)", display: "flex", alignItems: "center", gap: "0.4rem", margin: 0 }}>
+                <Check size={15} /> <Bi id="Semua syarat lengkap — channel siap diaktifkan." en="All requirements met — channel is ready to activate." />
+              </p>
+            ) : (
+              <>
+                <p className="muted" style={{ fontSize: "var(--text-sm)", marginTop: 0, marginBottom: "0.625rem" }}><Bi id="Lengkapi item berikut agar channel bisa aktif:" en="Complete these to activate the channel:" /></p>
+                <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+                  {rd.missing.map((m) => (
+                    <li key={m} style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "var(--text-sm)", padding: "0.3rem 0" }}>
+                      <AlertTriangle size={14} style={{ color: "var(--warning)", flexShrink: 0 }} /> <span>{m}</span>
+                    </li>
+                  ))}
+                </ul>
+                <button className="btn btn-default btn-sm" style={{ marginTop: "0.75rem" }} onClick={() => setTab("settings")}><Settings size={14} /> <Bi id="Lengkapi di Pengaturan" en="Complete in Settings" /></button>
+              </>
+            )}
+          </div>
+          {/* Ringkasan kinerja — KPI nyata di header; kinerja-mesin menyusul (F5-05/F2-13) */}
+          <div className="card card-pad">
+            <h3 className="card-title" style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}><Activity size={18} /> <Bi id="Ringkasan kinerja" en="Performance summary" /></h3>
+            <p className="muted" style={{ fontSize: "var(--text-sm)", margin: 0 }}><Bi id="Statistik muncul setelah channel berproduksi. Detail per-channel ada di tab Analytics · Compliance · Wawasan." en="Stats appear once the channel produces. Per-channel detail lives in the Analytics · Compliance · Insights tabs." /></p>
+          </div>
+        </div>
       )}
       {tab === "runs" && (
         <Placeholder icon={<BarChart3 size={32} />} idT="Belum ada run untuk channel ini." enT="No runs for this channel yet." href="/runs" ctaId="Lihat semua Runs" ctaEn="View all Runs" />
       )}
       {tab === "analytics" && (
         <Placeholder icon={<BarChart3 size={32} />} idT="Analytics per-channel — chart mendalam." enT="Per-channel analytics — deep charts." href="/analytics" ctaId="Buka Analytics lengkap" ctaEn="Open full Analytics" />
+      )}
+      {tab === "compliance" && (
+        <Placeholder icon={<ShieldCheck size={32} />} idT="Compliance khusus channel ini (skor + 5 dimensi) — disambungkan di F2-13." enT="This channel's compliance (score + 5 dimensions) — wired in F2-13." href="/compliance" ctaId="Buka Compliance (agregat)" ctaEn="Open Compliance (aggregate)" />
+      )}
+      {tab === "insights" && (
+        <Placeholder icon={<Sparkles size={32} />} idT="Wawasan self-learning khusus channel ini — disambungkan di F2-13." enT="This channel's self-learning insights — wired in F2-13." href="/insights" ctaId="Buka Wawasan (agregat)" ctaEn="Open Insights (aggregate)" />
       )}
       {tab === "schedule" && (
         <Placeholder icon={<Calendar size={32} />} idT="Jadwal slot per-channel diatur di layar Jadwal." enT="Per-channel slots are managed in the Schedule screen." href="/schedule" ctaId="Buka Jadwal" ctaEn="Open Schedule" />
