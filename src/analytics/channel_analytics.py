@@ -277,7 +277,7 @@ class ChannelAnalytics:
             # SEMUA video eligible (cap aman 1000), bukan hanya 50 terbaru.
             result = (
                 self._supabase.table("videos")
-                .select("video_id, title, hook, niche, published_at")
+                .select("video_id, title, hook, niche, published_at, channel_id")
                 .eq("tenant_id", tenant_id).eq("status", "published")
                 .lt("published_at", cutoff_publish)
                 .order("published_at", desc=True).limit(1000).execute()
@@ -434,6 +434,9 @@ class ChannelAnalytics:
             row = {
                 "video_id":           video.get("video_id"),
                 "tenant_id":          tenant_id,
+                # F1-06: atribusi PER-VIDEO (multi-channel-correct) → channel_id dari videos.channel_id.
+                # Cegah NULL berulang di baris analytics baru (backfill 1× saja tak cukup — terbukti 96 NULL).
+                "channel_id":         video.get("channel_id"),
                 "platform":           "youtube",
                 "niche":              video.get("niche"),
                 "title":              (video.get("title") or "")[:200],
