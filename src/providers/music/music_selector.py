@@ -1,5 +1,5 @@
 """
-Music Selector — pilih track dari library S3 berdasarkan mood script (migrasi R2→S3 M1; R2 fallback transisi).
+Music Selector — pilih track dari library S3 berdasarkan mood script (aset = S3 ONLY; NO-FALLBACK §3.8).
 
 s85b: Fully config-driven — tidak ada hardcode.
   - Mood keywords dari tabel moods di Supabase
@@ -200,7 +200,8 @@ def _query_tracks(niche: str, mood: str, fallback_moods: list) -> list[dict]:
 
 
 def _download_from_r2(r2_key: str, output_path: Path) -> bool:
-    """Download track dari Cloudflare R2 ke local path."""
+    """DEPRECATED (tak dipakai lagi — aset = S3 ONLY). Dihapus TOTAL bersama R2 env/config/dok saat
+    dekomisi R2, setelah migrasi terbukti 100% valid. Dibiarkan sementara hanya sbg jejak."""
     try:
         import boto3
         from botocore.client import Config
@@ -250,12 +251,10 @@ def _download_from_s3(s3_key: str, output_path: Path) -> bool:
 
 
 def _download_track(r2_key: str, output_path: Path) -> bool:
-    """Migrasi R2→S3 (M1): UTAMAKAN S3 (mesinviral-assets/music/<key>); fallback R2 selama transisi.
-    `r2_key` = object-key (legacy nama kolom); dipakai sama di S3 dgn prefix 'music/'."""
-    if _download_from_s3(f"music/{r2_key}", output_path):
-        return True
-    logger.warning(f"[MusicSelector] S3 miss → fallback R2 (transisi): {r2_key}")
-    return _download_from_r2(r2_key, output_path)
+    """Aset musik = S3 ONLY (aturan owner; NO-FALLBACK §3.8). Gagal S3 = gagal JUJUR (TIDAK diam-diam
+    pindah ke R2). `r2_key` = object-key (legacy nama kolom; key S3 = 'music/<key>'). R2 dihapus TOTAL
+    saat dekomisi — setelah migrasi terbukti 100% valid di seluruh area + dokumen + env."""
+    return _download_from_s3(f"music/{r2_key}", output_path)
 
 
 def _increment_play_count(track_id: str) -> None:
@@ -347,9 +346,9 @@ def select_and_download(
         logger.info(f"[MusicSelector] Cache hit: {output_path.name}")
         return str(output_path)
 
-    logger.info(f"[MusicSelector] Downloading from S3 (fallback R2): {r2_key}")
+    logger.info(f"[MusicSelector] Downloading from S3: {r2_key}")
     if not _download_track(r2_key, output_path):
-        logger.error("[MusicSelector] Download gagal (S3+R2) — skip music")
+        logger.error("[MusicSelector] Download S3 gagal — skip music (NO-FALLBACK, gagal jujur)")
         return None
 
     size_kb = output_path.stat().st_size / 1024
