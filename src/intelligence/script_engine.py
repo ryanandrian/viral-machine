@@ -381,6 +381,8 @@ Maksimal SATU sebutan brand di seluruh script.{(' Arahan brand: ' + brand_cta_te
             f"Set `speed` ∈ [0.7,1.2] to match the mood of {niche_data.get('name', niche)} "
             "(somber/dramatic→~0.85, punchy/urgent→~1.05, neutral→~0.95).\n"
             f"The {len(active)} beats TOGETHER must last ≈{round(_Tspoken,1)}s (acceptable {_Tlo}–{_Thi}s), keeping proportions.\n"
+            f"KEEP TOTAL WORDS ≈{round(_P*_Tspoken)} (hard range {round(0.7*_P*_Tspoken)}–{round(1.2*_P*_Tspoken)}). "
+            f"The system sets the EXACT speed to land on {round(_Tspoken,1)}s — your job is to keep word count in that range (NEVER exceed {round(1.2*_P*_Tspoken)}).\n"
             f" 1. Pick a mood-fitting base speed (suggested for this niche: ~{_bspeed}).\n"
             f" 2. Write the {len(active)} beats naturally — STORY FIRST.\n"
             f" 3. Count words W. Spoken ≈ W ÷ ({_P} × speed).\n"
@@ -918,32 +920,34 @@ Return ONLY valid JSON:
                 script["viral_analysis"] = {}
                 feedback = None
 
-            # §10.A DURASI-VIA-SPEED GATE (ganti word-count gate): yang dijaga = DURASI mendarat di window,
-            # BUKAN jumlah-kata pas. est = W ÷ (P × speed_LLM); speed MENYERAP variansi kata. Simpan speed
-            # resolved ke script.tts_params → dipakai TTS (F4-03). Aktif bila preset + P dasar ada.
+            # §3.1 JARING DETERMINISTIK TIPIS + §10.A: durasi = DITENTUKAN, bukan ditebak. Setelah LLM tulis
+            # W kata, SISTEM SOLVE speed = W ÷ (P × T_spoken) lalu clamp [0.7,1.2] (param_schema EL) → est
+            # mendarat di window TANPA bergantung tebakan-speed LLM (yg terbukti tak andal: 9/12). Speed =
+            # tuas matematis (§10.A "speed menyerap variansi"). Hanya bila W di luar JANGKAUAN speed (kata
+            # ekstrem) → retry sesuaikan KATA. Speed resolved → script.tts_params → TTS (F4-03).
             length_ok = True
             if preset_seconds and _base_p:
                 wc  = len((script.get("full_script") or "").split())
                 _tp = script.get("tts_params") if isinstance(script.get("tts_params"), dict) else {}
-                try:
-                    _llm_speed = min(1.2, max(0.7, float(_tp.get("speed", _base_speed))))
-                except Exception:
-                    _llm_speed = _base_speed
-                script["tts_params"] = {**_tp, "speed": _llm_speed}   # resolved → TTS (F4-03)
                 _Tspoken   = max(1.0, float(preset_seconds) - float(render_overhead_sec or 0))
-                _denom     = _base_p * _llm_speed
-                _est       = (wc / _denom) if _denom else _Tspoken
+                _need      = wc / (_base_p * _Tspoken) if (_base_p and _Tspoken) else 1.0   # speed agar est = T_spoken
+                _speed     = round(min(1.2, max(0.7, _need)), 3)                            # clamp param_schema
+                _est       = wc / (_base_p * _speed)
                 _Tlo, _Thi = _Tspoken * 0.90, _Tspoken * 1.10
+                script["tts_params"] = {**_tp, "speed": _speed}   # SPEED RESOLVED (deterministik) → TTS (F4-03)
                 if not (_Tlo <= _est <= _Thi):
+                    # speed sudah mentok di clamp tapi durasi tetap lewat → KATA terlalu jauh → retry kata.
                     length_ok = False
-                    _act = ("PERPENDEK naskah atau NAIKKAN speed (bicara lebih cepat)" if _est > _Thi
-                            else "PERPANJANG naskah atau TURUNKAN speed (bicara lebih lambat)")
+                    _act = (f"PERPENDEK naskah (speed sudah maksimum {_speed})" if _est > _Thi
+                            else f"PERPANJANG naskah (speed sudah minimum {_speed})")
                     feedback = (feedback or []) + [
-                        f"DURATION FAIL: {wc} kata @ speed {_llm_speed} → est {_est:.1f}s, di luar "
-                        f"{_Tlo:.1f}–{_Thi:.1f}s (target {_Tspoken:.1f}s). {_act} agar W ÷ ({_base_p} × speed) "
-                        f"masuk rentang; set `speed`∈[0.7,1.2] & laporkan _duration_check."]
-                    logger.info(f"[ScriptEngine] §10.A duration-gate: {wc}w @spd{_llm_speed} → est {_est:.1f}s "
-                                f"vs {_Tlo:.1f}-{_Thi:.1f}s → retry")
+                        f"DURATION FAIL: {wc} kata → walau speed dikunci {_speed} (batas [0.7,1.2]), est {_est:.1f}s "
+                        f"masih di luar {_Tlo:.1f}–{_Thi:.1f}s (target {_Tspoken:.1f}s). {_act} agar jumlah kata "
+                        f"masuk jangkauan; sasaran ≈{round(_base_p*_Tspoken)} kata (±{round(_base_p*_Tspoken*0.18)})."]
+                    logger.info(f"[ScriptEngine] §3.1 net: {wc}w → speed_solve {_speed} → est {_est:.1f}s "
+                                f"vs {_Tlo:.1f}-{_Thi:.1f}s → retry (kata di luar jangkauan)")
+                else:
+                    logger.info(f"[ScriptEngine] §3.1 net: {wc}w → speed {_speed} (deterministik) → est {_est:.1f}s ∈ band ✓")
 
             if score > best_score:
                 best_score  = score

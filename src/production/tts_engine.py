@@ -101,6 +101,33 @@ def _run_provider(provider_name: str, text: str, config: dict, output_dir: str) 
     return str(audio), timestamps
 
 
+def _log_delivery_sample(tenant_config, config: dict, provider_name: str, word_count: int, audio_path: str) -> None:
+    """F4-01: 1 baris per render TTS SUKSES → tts_delivery_samples (delivery NYATA per voice×speed).
+    Dipakai F5-01 (kalibrasi pace EWMA → ganti seed P) + verifikasi akurasi P §10.D. Best-effort/fail-soft,
+    NOL pengaruh produksi. speed = yg BENAR-BENAR dipakai provider (incl. override LLM §10.A)."""
+    try:
+        niche = config.get("niche")
+        _vs   = (config.get("tts_voice_settings") or {}).get(niche) or {}
+        speed = _vs.get("speed") or (config.get("tts_voice_default_settings") or {}).get("speed") or 1.0
+        audio_secs = TTSEngine.get_duration(audio_path)
+        from supabase import create_client
+        sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+        sb.table("tts_delivery_samples").insert({
+            "tenant_id":  config.get("tenant_id"),
+            "channel_id": str(getattr(tenant_config, "channel_id", None) or ""),
+            "niche":      niche,
+            "provider":   provider_name,
+            "voice_key":  config.get("tts_voice"),
+            "speed":      round(float(speed), 4),
+            "words":      int(word_count),
+            "audio_secs": round(float(audio_secs), 2),
+            "preset":     getattr(tenant_config, "duration_preset", None),
+        }).execute()
+        logger.info(f"[TTSEngine] F4-01 sample: {word_count}w @spd{speed} → {audio_secs:.1f}s ({provider_name}/{niche})")
+    except Exception as e:
+        logger.debug(f"[TTSEngine] log delivery sample skip (non-fatal): {e}")
+
+
 class TTSEngine:
     """
     TTS Engine dengan fallback hierarchy.
@@ -202,6 +229,8 @@ class TTSEngine:
                         audio_path, word_timestamps = self._fit_duration(
                             audio_path, word_timestamps, float(target_audio_secs), output_dir
                         )
+                    # F4-01 observability: catat delivery NYATA (best-effort) → kalibrasi pace F5-01 + verifikasi P §10.D.
+                    _log_delivery_sample(tenant_config, config, provider_name, word_count, audio_path)
                     return audio_path, word_timestamps
 
             except Exception as e:
