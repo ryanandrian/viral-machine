@@ -86,15 +86,9 @@ def _run_provider(provider_name: str, text: str, config: dict, output_dir: str) 
     tenant_id   = config.get("tenant_id", "default")
     output_path = Path(output_dir) / f"audio_{tenant_id}_{timestamp}.mp3"
 
-    if provider_name == "elevenlabs":
-        from src.providers.tts.elevenlabs import ElevenLabsProvider
-        provider = ElevenLabsProvider(config)
-    elif provider_name == "openai_tts":
-        from src.providers.tts.openai_tts import OpenAITTSProvider
-        provider = OpenAITTSProvider(config)
-    else:
-        from src.providers.tts.edge_tts import EdgeTTSProvider
-        provider = EdgeTTSProvider(config)
+    # F5-06: dispatch DB-driven via registry (tts_profiles.adapter) — ganti if/elif hardcode.
+    from src.providers.tts import build_tts_provider
+    provider = build_tts_provider(provider_name, config)
 
     audio = asyncio.run(provider.generate(text, output_path))
     timestamps = provider.get_word_timestamps() or []

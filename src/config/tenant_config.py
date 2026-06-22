@@ -245,25 +245,10 @@ class TenantRunConfig:
         }
 
     def get_tts_provider(self):
-        """Inisialisasi dan return TTS provider instance."""
-        from src.providers.tts.edge_tts   import EdgeTTSProvider
-        from src.providers.tts.elevenlabs import ElevenLabsProvider
-        from src.providers.tts.openai_tts import OpenAITTSProvider
-
-        cfg = self.to_provider_config()
-        providers = {
-            "edge_tts":    EdgeTTSProvider,
-            "elevenlabs":  ElevenLabsProvider,
-            "openai_tts":  OpenAITTSProvider,
-        }
-        cls = providers.get(self.tts_provider)
-        if not cls:
-            logger.warning(
-                f"TTS provider '{self.tts_provider}' tidak dikenal — "
-                f"fallback ke edge_tts"
-            )
-            cls = EdgeTTSProvider
-        return cls(cfg)
+        """Inisialisasi dan return TTS provider instance via registry DB-driven (F5-06).
+        Dispatch dari `tts_profiles.adapter` (no hardcode, no silent fallback — §3.8)."""
+        from src.providers.tts import build_tts_provider
+        return build_tts_provider(self.tts_provider, self.to_provider_config())
 
     def get_visual_provider(self):
         """Inisialisasi dan return Visual provider instance."""

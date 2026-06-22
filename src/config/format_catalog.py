@@ -147,6 +147,16 @@ def tts_speed_param(tts_provider):
     return tp.get("speed_param") if tp else None
 
 
+def tts_adapter(tts_provider, default=None):
+    """Nama PROTOKOL transport TTS (registry kode `TTS_ADAPTERS`) per provider — DB-driven
+    (`tts_profiles.adapter`, migr 0080). Dipakai `build_tts_provider` (F5-06). None → caller fallback."""
+    if not tts_provider:
+        return default
+    _load()
+    tp = (_CACHE["tts"] or {}).get(tts_provider)
+    return (tp.get("adapter") if tp else None) or default
+
+
 def tts_speed_range(tts_provider, default=(0.7, 1.2)):
     """Rentang PENGALI-KECEPATAN efektif per provider — GENERIK (dari `param_schema`/`speed_param`, DB).
     Dipakai gate durasi §10.A untuk clamp speed lintas-provider (BUKAN hardcode EL [0.7,1.2]):
