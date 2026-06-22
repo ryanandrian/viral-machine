@@ -126,7 +126,7 @@ class VisualAssembler:
     ) -> list[Path]:
         """Download clips dari Pexels."""
         try:
-            from src.providers.visual.pexels import PexelsProvider
+            from src.providers.visual import build_visual_provider
 
             config   = {
                 "tenant_id":          tenant_config.tenant_id,
@@ -138,7 +138,7 @@ class VisualAssembler:
                     or os.getenv("PEXELS_API_KEY", "")
                 ),
             }
-            provider = PexelsProvider(config)
+            provider = build_visual_provider("video", config)   # F5-06: registry (ganti instansiasi inline)
             keywords = provider.extract_keywords_from_script(script, tenant_config.niche)
             logger.info(f"Searching footage: {keywords[:3]}")
 
@@ -208,7 +208,7 @@ class VisualAssembler:
     ) -> list[Path]:
         """Generate gambar AI + Ken Burns effect."""
         try:
-            from src.providers.visual.ai_image import AIImageProvider
+            from src.providers.visual import build_visual_provider
 
             config = {
                 "tenant_id":              tenant_config.tenant_id,
@@ -225,7 +225,7 @@ class VisualAssembler:
                 "image_quality":          run_config.get("image_quality") or "",
                 "visual_seed":            getattr(tenant_config, "visual_seed", None),  # Diversity §9.1
             }
-            provider  = AIImageProvider(config)
+            provider  = build_visual_provider(visual_mode, config)   # F5-06: registry
             # Image-gen PER-PRESET (MULTI_FORMAT §3): jumlah image = N beat (= visual_beats), durasi
             # per-beat dari pipeline (script.beat_durations, SINKRON TTS via word_timestamps). Fallback
             # ke _compute_clip_durations (6) bila beat_durations tak ada (legacy/no-preset).
@@ -312,7 +312,7 @@ class VisualAssembler:
         Hanya aktif saat visual_mode = ai_image:*.
         """
         try:
-            from src.providers.visual.ai_image import AIImageProvider, VideoClip
+            from src.providers.visual import build_visual_provider
 
             hook_text = script.get("hook", "").strip()
             # s72: thumbnail_concept = deskripsi visual murni dari script engine
@@ -339,7 +339,7 @@ class VisualAssembler:
                 f"Photorealistic. "
                 f"No text, no words, no letters, no numbers, no signs, no typography. No people."
             )
-            provider  = AIImageProvider(config)
+            provider  = build_visual_provider(config.get("visual_provider") or "ai_image:", config)   # F5-06: registry
             img_path  = clips_dir / "hook_frame_img.jpg"
             clip_path = clips_dir / "clip_01_hook.mp4"
 

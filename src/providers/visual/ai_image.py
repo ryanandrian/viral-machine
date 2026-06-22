@@ -330,14 +330,19 @@ class AIImageProvider(VisualProvider):
     # Internal: generate image
     # ──────────────────────────────────────────────
 
+    # F5-06: registry transport image per-PLATFORM (mirror LLM ADAPTERS). Tambah platform baru
+    # (mis. stability/fireworks) = +1 method `_generate_<x>` + 1 entri di sini; model-nya via ai_models (DB).
+    _TRANSPORTS = {"replicate": "_generate_replicate", "openai": "_generate_dalle"}
+
     async def _generate_image(self, prompt: str, negative_prompt: str, output_path: Path) -> None:
         platform = self.model_config["platform"]
-        if platform == "replicate":
-            await self._generate_replicate(prompt, negative_prompt, output_path)
-        elif platform == "openai":
-            await self._generate_dalle(prompt, negative_prompt, output_path)
-        else:
-            raise VisualError(f"Platform tidak dikenal: {platform}")
+        method = self._TRANSPORTS.get(platform)
+        if not method:
+            raise VisualError(
+                f"Platform transport image '{platform}' belum didukung kode. "
+                f"Tambah adaptor _generate_<platform> + entri _TRANSPORTS (model didaftar via ai_models)."
+            )
+        await getattr(self, method)(prompt, negative_prompt, output_path)
 
     async def _generate_replicate(self, prompt: str, negative_prompt: str, output_path: Path) -> None:
         try:

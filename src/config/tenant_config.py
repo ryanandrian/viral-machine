@@ -244,32 +244,8 @@ class TenantRunConfig:
             "discount_pct":  self.discount_pct,
         }
 
-    def get_tts_provider(self):
-        """Inisialisasi dan return TTS provider instance via registry DB-driven (F5-06).
-        Dispatch dari `tts_profiles.adapter` (no hardcode, no silent fallback — §3.8)."""
-        from src.providers.tts import build_tts_provider
-        return build_tts_provider(self.tts_provider, self.to_provider_config())
-
-    def get_visual_provider(self):
-        """Inisialisasi dan return Visual provider instance."""
-        from src.providers.visual.pexels   import PexelsProvider
-        from src.providers.visual.ai_image import AIImageProvider
-        from src.providers.visual.ai_video import AIVideoProvider
-
-        cfg = self.to_provider_config()
-
-        if self.visual_provider == "pexels":
-            return PexelsProvider(cfg)
-        elif self.visual_provider.startswith("ai_image:"):
-            return AIImageProvider(cfg)
-        elif self.visual_provider.startswith("ai_video:"):
-            return AIVideoProvider(cfg)  # Akan raise VisualError — DISABLED
-        else:
-            logger.warning(
-                f"Visual provider '{self.visual_provider}' tidak dikenal — "
-                f"fallback ke pexels"
-            )
-            return PexelsProvider(cfg)
+    # F5-06: get_tts_provider() & get_visual_provider() DIHAPUS — vestigial (tak dipanggil di mana pun;
+    # dispatch nyata via build_tts_provider / build_visual_provider). get_llm_provider tetap (DIPAKAI).
 
     def get_llm_provider(self):
         """Return LLMProvider instance via factory tunggal (config-driven).
