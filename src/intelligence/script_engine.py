@@ -846,6 +846,18 @@ Return ONLY valid JSON:
         # tak lolos QC → Opsi C: flagged + tenant putuskan). Akar akurasi durasi = LLM hit word-budget.
         _tts_provider  = getattr(run_config, "tts_provider", None) if run_config else None
         format_wps     = _eff_wps(getattr(tenant_config, "format_profile", None), _tts_provider) if preset_seconds else None
+        # F5-01: pace VOICE-FIRST (no-hardcode voice) — voice_catalog.delivery_wps menimpa pace provider
+        # HANYA untuk voice ini (mis. Arnold lebih cepat = DATA di baris voice, bukan if-else di kode).
+        # NULL/di-luar-guard [1.0,4.0] → tetap pakai pace provider (fallback) = perilaku sekarang.
+        if preset_seconds and run_config:
+            _vw = getattr(run_config, "voice_delivery_wps", None)
+            try:
+                if _vw is not None and 1.0 <= float(_vw) <= 4.0:
+                    format_wps = float(_vw)
+                    logger.info(f"[ScriptEngine] F5-01 pace voice-first: {format_wps} wps "
+                                f"(voice={getattr(run_config,'tts_voice',None)}) — override pace provider")
+            except Exception:
+                pass
         # §10.A DURASI-VIA-SPEED: P = pace DASAR (delivery_wps @speed 1.0), DITANGKAP SEBELUM B1 → dipakai
         # di speed-block LLM. base_speed = speed-mood niche (hint awal; LLM nudge ∈[0.7,1.2] dari sini).
         # Speed jadi TUAS LLM (menyerap variansi kata), bukan dibakar ke word-budget. Gate = DURASI (bukan kata).

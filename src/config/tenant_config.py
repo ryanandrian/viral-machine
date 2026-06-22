@@ -189,6 +189,7 @@ class TenantRunConfig:
     tts_voice:         str           = "en-US-GuyNeural"
     tts_model:         Optional[str] = None   # F1-05: model TTS opsional (mis. openai tts-1/tts-1-hd); None → default engine
     tts_voice_default_settings: Optional[dict] = None   # F1-05: default_settings voice dari voice_catalog (baseline delivery; no-hardcode)
+    voice_delivery_wps: Optional[float] = None          # F5-01: pace PER-VOICE (voice_catalog.delivery_wps). None → fallback tts_profiles[provider]. Guard [1.0,4.0].
     tts_api_key:       Optional[str] = None
 
     visual_provider:   str           = "pexels"
@@ -406,11 +407,13 @@ class TenantConfigManager:
             config.tts_voice = vkey
             # default_settings voice (baseline delivery, no-hardcode) dari voice_catalog.
             try:
-                vc = self._supabase.table("voice_catalog").select("default_settings").eq("voice_key", vkey).limit(1).execute()
+                vc = self._supabase.table("voice_catalog").select("default_settings, delivery_wps").eq("voice_key", vkey).limit(1).execute()
                 if vc.data:
                     config.tts_voice_default_settings = vc.data[0].get("default_settings") or {}
+                    # F5-01: pace per-voice (override engine). NULL → biarkan None → estimator fallback ke provider.
+                    config.voice_delivery_wps = vc.data[0].get("delivery_wps")
             except Exception as e:
-                logger.warning(f"[TenantConfig] load default_settings voice {vkey} gagal: {e}")
+                logger.warning(f"[TenantConfig] load default_settings/pace voice {vkey} gagal: {e}")
         # F2-09 (§3.19): key per-elemen dari AKUN VAULT channel (tenant_api_accounts.key_enc).
         # account_id NULL → TETAP pakai key tenant_configs (fallback, NON-BREAKING). Multi-akun
         # → tiap channel boleh key berbeda untuk provider sama.
