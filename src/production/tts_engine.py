@@ -290,7 +290,7 @@ class TTSEngine:
                 return audio_path, word_timestamps        # sudah dalam window → JANGAN sentuh suara
             factor = actual / target_secs                 # atempo value
             amin = float(os.getenv("TTS_ATEMPO_MIN", "0.80"))
-            amax = float(os.getenv("TTS_ATEMPO_MAX", "1.25"))
+            amax = float(os.getenv("TTS_ATEMPO_MAX", "1.35"))  # §10.A lebarkan: tangkap sisa overshoot jeda (1.35=mutu masih oke)
             if not (amin <= factor <= amax):
                 logger.warning(
                     f"[TTSEngine] durasi {actual:.1f}s vs target {target_secs:.1f}s — faktor {factor:.2f} "

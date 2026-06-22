@@ -423,6 +423,7 @@ STYLE: {profile['style']}
 AVOID: {profile['avoid']}
 EMOTION ARC: {profile['emotion_arc']}
 HOOK FORMULA: {profile['hook_style']}
+{("🎯 NICHE EMOTIONAL QUALITY BAR (aim for this from the first draft — it is how this script is scored): " + niche_data.get('emotion_scoring_criteria','')) if niche_data.get('emotion_scoring_criteria') else ""}
 {insights_section}{soft_sell_block}{feedback_block}{beat_plan}
 Follow the BEAT PLAN above — write ONLY the active beats (others = empty ""). The numbered guide below is craft reference per section:
 
@@ -497,11 +498,13 @@ WRITING RULES — every single one non-negotiable:
 - Every section transition must feel inevitable — not a gear shift, a deepening
 - Zero filler: "basically", "literally", "you know", "kind of", "amazing", "incredible"
 TTS DELIVERY RULES — write for the human ear, not the eye:
-- Use em-dash (—) for dramatic mid-sentence pause: "It survived — against all odds."
-- Use ellipsis (...) for suspense build-up: "No one knew what was coming..."
-- Short standalone sentences for emphasis: "It was real. Completely real."
+- ⏱ DURATION-CRITICAL: each em-dash (—) and ellipsis (…) becomes ≈0.6–1.0s of SILENCE when spoken — they EAT runtime. Over-using pauses is the #1 reason a video runs too long. Use them DELIBERATELY: at most ~1 per beat, only where the drama truly earns it.
+- Em-dash (—) for ONE key mid-sentence pause per beat: "It survived — against all odds."
+- Ellipsis (…) sparingly for suspense: "No one knew what was coming…"
+- Short standalone sentences for emphasis (these read FAST — safe for runtime): "It was real. Completely real."
 - ALWAYS "heard of" not "heard about": "You've never heard of this discovery."
-- Sentence fragments for dramatic impact: "Thirteen billion years. Vanished."
+- Sentence fragments for impact, used sparingly: "Thirteen billion years. Vanished."
+- KEEP PACING TIGHT: every line moves the story forward — no dwelling, no padding. When in doubt, fewer pauses = more reliable runtime + punchier delivery.
 
 Return ONLY valid JSON — no markdown, no preamble, no explanation:
 {{
