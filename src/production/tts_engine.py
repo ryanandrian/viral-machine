@@ -143,6 +143,20 @@ class TTSEngine:
 
         # Load config CHANNEL-AWARE (F1-05)
         config   = _get_provider_config(tenant_config)
+        # F4-03 (§10.A DURASI-VIA-SPEED): pakai SPEED pilihan LLM (script.tts_params.speed) — override
+        # speed-niche statik. Speed inilah yg membuat durasi mendarat (LLM sudah nudge W÷(P×speed)≈target).
+        # Clamp [0.7,1.2] (= param_schema EL; openai lebih lebar; edge pakai rate → speed diabaikan). Per-call.
+        try:
+            _llm_speed = (script.get("tts_params") or {}).get("speed")
+            if _llm_speed is not None:
+                _llm_speed = min(1.2, max(0.7, float(_llm_speed)))
+                _niche_k = config.get("niche")
+                _vs = dict(config.get("tts_voice_settings") or {})
+                _vs[_niche_k] = {**(_vs.get(_niche_k) or {}), "speed": _llm_speed}
+                config["tts_voice_settings"] = _vs
+                logger.info(f"[TTSEngine] §10.A speed dari LLM = {_llm_speed} (niche={_niche_k}) — override speed statik")
+        except Exception as _se:
+            logger.warning(f"[TTSEngine] inject LLM speed gagal (pakai speed config): {_se}")
         primary  = config.get("tts_provider")
         # F1-05 NO-FALLBACK (§3.8/§10.E): produksi pakai HANYA provider terkonfigurasi channel.
         # Provider tak terkonfigurasi / gagal → GAGAL JUJUR (tak pindah diam-diam ke edge).

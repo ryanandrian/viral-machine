@@ -282,7 +282,8 @@ def compute_beat_durations(script: dict, word_timestamps: list | None, audio_dur
 
 def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, insights_block=None,
                        preset_seconds=None, format_wps=None, render_overhead_sec=0.0,
-                       cta_mode="implicit", brand_name=None, brand_cta_text=None):
+                       cta_mode="implicit", brand_name=None, brand_cta_text=None,
+                       delivery_p=None, voice_name=None, tts_provider=None, base_speed=None):
     """
     Build prompt. Jika feedback ada (dari retry), sisipkan sebagai instruksi perbaikan.
     niche_visual_style: dict dari tabel niches (base_style, color_palette, atmosphere).
@@ -319,12 +320,13 @@ def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, ins
         words   = _distribute_words(active, total_words)   # konsentrasi budget ke beat aktif (bukan sebar 8)
         n_scenes = len(active)
         inactive = [s for s in _ALL_SECTIONS if s not in active]
-        _plan_lines = "\n".join(f"   beat {i+1} — {_ROLE_LABEL.get(b, b)} (~{words.get(b, 0)} words)"
+        _wsum = sum(words.get(b, 0) for b in active) or 1
+        _plan_lines = "\n".join(f"   beat {i+1} — {_ROLE_LABEL.get(b, b)} (~{round(100*words.get(b,0)/_wsum)}%)"
                                 for i, b in enumerate(active))
         beat_plan = (
             f"\n📐 BEAT PLAN — {target_duration}s video = {len(active)} BEATS (compression-mapping, non-negotiable):\n"
             f"{_narrative_intent(target_duration, len(active))}\n"
-            f"Write EXACTLY these {len(active)} beats IN ORDER — nothing more, nothing fewer:\n{_plan_lines}\n"
+            f"Write EXACTLY these {len(active)} beats IN ORDER — keep their relative weight:\n{_plan_lines}\n"
             + (f"Leave these JSON fields as EMPTY string \"\": {', '.join(inactive)}.\n" if inactive else "")
             + (f"Also output field \"core_facts_2\" (a SECOND distinct fact).\n" if "core_facts_2" in active else "")
             + f"The numbered section guide below is your CRAFT TOOLBOX — apply only the active beats' techniques.\n"
@@ -367,7 +369,26 @@ Maksimal SATU sebutan brand di seluruh script.{(' Arahan brand: ' + brand_cta_te
     # & 60s UNDERSHOOT (dorongan floor kurang). Preset PENDEK: density=quality, batas-ATAS galak,
     # "bukan asal-pendek". Preset PANJANG/legacy: capai budget dgn fakta spesifik (bukan filler) +
     # batas-atas tetap ada. Terukur: 15s 30w(budget24), 60s 70w(budget97), skor <80 (lihat journal 2026-06-18).
-    if preset_seconds and len(active) <= 5:
+    if preset_seconds and delivery_p:
+        # §10.A DURASI-VIA-SPEED: LLM kontrol KATA + SPEED. Speed menyerap variansi hitung-kata →
+        # durasi mendarat di window QC. Ganti pemaksaan word-count kaku (akar 15s-overshoot/60s-undershoot).
+        _P = float(delivery_p); _bspeed = float(base_speed) if base_speed else 0.95
+        _Tspoken = max(1.0, float(preset_seconds) - float(render_overhead_sec or 0))
+        _Tlo, _Thi = round(_Tspoken * 0.90, 1), round(_Tspoken * 1.10, 1)
+        length_block = (
+            "🎙️ THIS SCRIPT WILL BE SPOKEN — you control BOTH the words and the pace.\n"
+            f"VOICE: {voice_name or 'the narrator'} ({tts_provider or 'TTS'}) speaks ≈{_P} words/sec at speed 1.0.\n"
+            f"Set `speed` ∈ [0.7,1.2] to match the mood of {niche_data.get('name', niche)} "
+            "(somber/dramatic→~0.85, punchy/urgent→~1.05, neutral→~0.95).\n"
+            f"The {len(active)} beats TOGETHER must last ≈{round(_Tspoken,1)}s (acceptable {_Tlo}–{_Thi}s), keeping proportions.\n"
+            f" 1. Pick a mood-fitting base speed (suggested for this niche: ~{_bspeed}).\n"
+            f" 2. Write the {len(active)} beats naturally — STORY FIRST.\n"
+            f" 3. Count words W. Spoken ≈ W ÷ ({_P} × speed).\n"
+            f" 4. PREFER nudging `speed` within [0.7,1.2] to fit your actual W; rewrite length only if speed can't reach {_Tlo}–{_Thi}s.\n"
+            " 5. Report word_count + est_seconds in `_duration_check`; confirm in range.\n"
+            "Words serve the story; speed makes it land on time."
+        )
+    elif preset_seconds and len(active) <= 5:
         length_block = (
             f"🎯 LENGTH — WAJIB (video {target_duration} detik = SANGAT PENDEK):\n"
             f"Total narasi HARUS {total_words} kata — rentang KETAT {_lo}–{_hi}. "
@@ -496,6 +517,8 @@ Return ONLY valid JSON — no markdown, no preamble, no explanation:
   "word_count": 140,
   "estimated_duration_seconds": {target_duration},
   "section_durations": {json.dumps(section_timing)},
+  "tts_params": {{"speed": 0.95, "stability": 0.5, "style": 0.3}},
+  "_duration_check": {{"word_count": 95, "est_seconds": 56.5}},
   "background_music_mood": "specific mood, instrumentation, and emotional arc — not just one word",
   "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#shorts"]
 }}
@@ -557,7 +580,8 @@ class ScriptEngine:
     def _generate_one(self, provider, model, topic, niche, attempt,
                       niche_visual_style=None, feedback=None, insights_block=None,
                       preset_seconds=None, format_wps=None, render_overhead_sec=0.0,
-                      cta_mode="implicit", brand_name=None, brand_cta_text=None):
+                      cta_mode="implicit", brand_name=None, brand_cta_text=None,
+                      delivery_p=None, voice_name=None, tts_provider=None, base_speed=None):
         """Satu attempt generate script via LLMProvider (config-driven).
 
         Provider memegang SDK client + format API spesifik vendor — di sini tak
@@ -580,6 +604,7 @@ class ScriptEngine:
                     preset_seconds=preset_seconds, format_wps=format_wps,
                     render_overhead_sec=render_overhead_sec,
                     cta_mode=cta_mode, brand_name=brand_name, brand_cta_text=brand_cta_text,
+                    delivery_p=delivery_p, voice_name=voice_name, tts_provider=tts_provider, base_speed=base_speed,
                 ),
                 model=model,
                 temperature=1.0,
@@ -748,6 +773,18 @@ Return ONLY valid JSON:
         # tak lolos QC → Opsi C: flagged + tenant putuskan). Akar akurasi durasi = LLM hit word-budget.
         _tts_provider  = getattr(run_config, "tts_provider", None) if run_config else None
         format_wps     = _eff_wps(getattr(tenant_config, "format_profile", None), _tts_provider) if preset_seconds else None
+        # §10.A DURASI-VIA-SPEED: P = pace DASAR (delivery_wps @speed 1.0), DITANGKAP SEBELUM B1 → dipakai
+        # di speed-block LLM. base_speed = speed-mood niche (hint awal; LLM nudge ∈[0.7,1.2] dari sini).
+        # Speed jadi TUAS LLM (menyerap variansi kata), bukan dibakar ke word-budget. Gate = DURASI (bukan kata).
+        _base_p = float(format_wps) if format_wps else None
+        _base_speed = 1.0
+        if run_config:
+            _vs0 = (getattr(run_config, "tts_voice_settings", {}) or {})
+            try:
+                _base_speed = min(1.2, max(0.7, float((_vs0.get(tenant_config.niche) or {}).get("speed", 1.0) or 1.0)))
+            except Exception:
+                _base_speed = 1.0
+        _voice_name = (getattr(run_config, "tts_voice", None) if run_config else None) or None
         # Cacat B (B1) — BUDGET SADAR-SPEED: delivery EL diperlambat oleh voice `speed` per-niche
         # (tts_voice_settings DB). audio = kata / (delivery_wps × speed) → kata = detik × delivery_wps × speed.
         # Tanpa ini budget kebanyakan kata → audio molor → QC durasi gagal (terbukti 30s→34.9s @ speed 0.9).
@@ -831,6 +868,7 @@ Return ONLY valid JSON:
                 preset_seconds=preset_seconds, format_wps=format_wps,
                 render_overhead_sec=render_overhead_sec,
                 cta_mode=_cta_mode, brand_name=_brand, brand_cta_text=_brand_cta,
+                delivery_p=_base_p, voice_name=_voice_name, tts_provider=_tts_provider, base_speed=_base_speed,
             )
 
             if not script:
@@ -880,28 +918,32 @@ Return ONLY valid JSON:
                 script["viral_analysis"] = {}
                 feedback = None
 
-            # F2d — LLM-QC LENGTH GATE (shift-left): script wajib capai word-budget preset
-            # SEBELUM TTS/render (hemat kredit; "QC di LLM"). Aktif hanya bila preset di-set.
+            # §10.A DURASI-VIA-SPEED GATE (ganti word-count gate): yang dijaga = DURASI mendarat di window,
+            # BUKAN jumlah-kata pas. est = W ÷ (P × speed_LLM); speed MENYERAP variansi kata. Simpan speed
+            # resolved ke script.tts_params → dipakai TTS (F4-03). Aktif bila preset + P dasar ada.
             length_ok = True
-            if word_budget:
-                wc = len((script.get("full_script") or "").split())
-                if abs(wc - word_budget) / word_budget > _LEN_TOL:
+            if preset_seconds and _base_p:
+                wc  = len((script.get("full_script") or "").split())
+                _tp = script.get("tts_params") if isinstance(script.get("tts_params"), dict) else {}
+                try:
+                    _llm_speed = min(1.2, max(0.7, float(_tp.get("speed", _base_speed))))
+                except Exception:
+                    _llm_speed = _base_speed
+                script["tts_params"] = {**_tp, "speed": _llm_speed}   # resolved → TTS (F4-03)
+                _Tspoken   = max(1.0, float(preset_seconds) - float(render_overhead_sec or 0))
+                _denom     = _base_p * _llm_speed
+                _est       = (wc / _denom) if _denom else _Tspoken
+                _Tlo, _Thi = _Tspoken * 0.90, _Tspoken * 1.10
+                if not (_Tlo <= _est <= _Thi):
                     length_ok = False
-                    _floor = round(word_budget * (1 - _LEN_TOL))
-                    if wc < word_budget:
-                        _need = word_budget - wc
-                        _msg = (
-                            f"LENGTH FAIL (WAJIB diperbaiki): naskahmu hanya {wc} kata — terlalu PENDEK "
-                            f"untuk video {preset_seconds} detik (butuh {word_budget} kata, kurang {_need} kata). "
-                            f"TAMBAHKAN ~{_need} kata: perdalam tiap seksi dengan fakta spesifik, angka, "
-                            f"detail konkret, kalimat utuh — BUKAN filler/pengulangan. JANGAN kembalikan "
-                            f"naskah di bawah {_floor} kata. Hitung jumlah katamu sebelum selesai."
-                        )
-                    else:
-                        _msg = (f"LENGTH: {wc} kata, terlalu PANJANG vs target {word_budget} — "
-                                f"pangkas baris terlemah, jaga padat (≤ {round(word_budget*(1+_LEN_TOL))} kata).")
-                    feedback = (feedback or []) + [_msg]
-                    logger.info(f"[ScriptEngine] length-gate: {wc}w vs target {word_budget}w (floor {_floor}) → retry")
+                    _act = ("PERPENDEK naskah atau NAIKKAN speed (bicara lebih cepat)" if _est > _Thi
+                            else "PERPANJANG naskah atau TURUNKAN speed (bicara lebih lambat)")
+                    feedback = (feedback or []) + [
+                        f"DURATION FAIL: {wc} kata @ speed {_llm_speed} → est {_est:.1f}s, di luar "
+                        f"{_Tlo:.1f}–{_Thi:.1f}s (target {_Tspoken:.1f}s). {_act} agar W ÷ ({_base_p} × speed) "
+                        f"masuk rentang; set `speed`∈[0.7,1.2] & laporkan _duration_check."]
+                    logger.info(f"[ScriptEngine] §10.A duration-gate: {wc}w @spd{_llm_speed} → est {_est:.1f}s "
+                                f"vs {_Tlo:.1f}-{_Thi:.1f}s → retry")
 
             if score > best_score:
                 best_score  = score
