@@ -425,7 +425,7 @@
 - PLAN: ekstrak registry adaptor bersama (pola LLM) untuk TTS & visual: katalog provider DB (adapter+param_schema+base_url) → resolver `build_tts_provider`/`build_visual_provider` → adaptor per-protokol (bisa di-share lintas provider sejenis). Migrasi katalog + isi `ai_providers`/profil. NO-FALLBACK & per-channel tetap.
 - DEPENDS: **F4 TUNTAS dulu** (owner 2026-06-22 — hindari sentuh file dispatch 2 fase). Bersinggungan F5-02 (eliminasi hardcode).
 - DONE-BILA: tambah provider TTS/image/video baru tanpa edit kode dispatch (cukup adaptor protokol-baru + DB); ryan/EL + tenant edge tetap jalan (uji regresi); grep dispatch-hardcode bersih.
-- REALISASI: ⬜ | commit: — | catatan: —
+- REALISASI: 🟡 SLICE 1 (TTS) SELESAI commit-only `4eb9e6b` (+migr 0080) | catatan: **Slice 1 TTS DONE+validated:** `tts_profiles +adapter`(0080: elevenlabs/openai_speech/edge) + `providers/tts/__init__.build_tts_provider(provider_key,cfg)` (resolve via DB adapter→`TTS_ADAPTERS`, mirror `build_llm_provider`, no-fallback) + rewire `tts_engine._run_provider` & `tenant_config.get_tts_provider` (buang if/elif 2 tempat) + helper `format_catalog.tts_adapter`. Validated: resolusi DB benar + edge audio nyata IDENTIK (nol regresi). **SLICE 2 (Visual) BELUM — temuan: dispatch visual NYATA terjalin INLINE di `visual_assembler.py` (if/elif visual_mode di bbrp method, instansiasi PexelsProvider/AIImageProvider langsung); `get_visual_provider` (tenant_config) + `get_tts_provider` = VESTIGIAL (tak dipakai → kandidat hapus).** Slice 2 = refactor visual_assembler ke `build_visual_provider` registry → butuh regresi render-penuh (jalur image ryan). **DEPLOY F5-06 ditahan sampai Slice 2 + regresi penuh** (commit-only). migr 0080 applied (aditif).
 
 ---
 
