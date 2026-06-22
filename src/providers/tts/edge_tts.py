@@ -24,6 +24,22 @@ from src.providers.tts.base import TTSProvider, TTSError
 DEFAULT_RATE  = "+10%"
 
 
+def _rate_to_factor(rate_str) -> float:
+    """Edge rate '+10%' → pengali 1.10. Tak valid → 1.10 (DEFAULT_RATE)."""
+    try:
+        return 1.0 + float(str(rate_str).strip().replace("%", "")) / 100.0
+    except Exception:
+        return 1.10
+
+
+def _apply_speed_to_rate(base_rate, speed: float) -> str:
+    """Durasi-via-speed (Pilihan A): gabung baseline rate edge dgn pengali kecepatan ter-solve gate
+    → string rate edge. S=1.0 ⇒ persis baseline (nol regresi). Clamp ke rentang knob edge [-50%,+100%]."""
+    factor = _rate_to_factor(base_rate) * max(0.1, float(speed or 1.0))
+    pct = max(-50, min(100, round((factor - 1.0) * 100)))
+    return f"+{pct}%" if pct >= 0 else f"{pct}%"
+
+
 class EdgeTTSProvider(TTSProvider):
     """
     Microsoft Edge TTS — gratis, tidak butuh API key.
@@ -40,7 +56,15 @@ class EdgeTTSProvider(TTSProvider):
                 "Edge TTS: voice belum ter-resolve. Set channels.voice_key atau "
                 "niches.voice_defaults[edge_tts] (admin)."
             )
-        self.rate   = (config.get("tts_voice_default_settings") or {}).get("rate") or DEFAULT_RATE
+        # Durasi-via-speed (Pilihan A, multi-provider): rate dinamis = baseline rate × kecepatan ter-solve
+        # gate. baseline (voice_catalog.default_settings.rate) = titik S=1.0 (perilaku lama, nol regresi);
+        # gate menyuntik speed ter-solve ke tts_voice_settings[niche].speed → modulasi pace utk durasi tepat.
+        _base_rate = (config.get("tts_voice_default_settings") or {}).get("rate") or DEFAULT_RATE
+        _niche     = config.get("niche") or ""
+        _vs        = config.get("tts_voice_settings") or {}
+        _override  = _vs.get(_niche, {}) if isinstance(_vs, dict) else {}
+        _S         = float(_override.get("speed", 1.0) or 1.0)
+        self.rate  = _apply_speed_to_rate(_base_rate, _S)
         self._word_timestamps: list[dict] | None = None
 
     # ──────────────────────────────────────────────

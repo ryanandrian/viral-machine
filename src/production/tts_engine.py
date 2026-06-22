@@ -176,7 +176,12 @@ class TTSEngine:
         try:
             _llm_speed = (script.get("tts_params") or {}).get("speed")
             if _llm_speed is not None:
-                _llm_speed = min(1.2, max(0.7, float(_llm_speed)))
+                # Clamp PROVIDER-AWARE (multi-provider, no-hardcode): rentang dari tts_profiles per provider
+                # (EL speed[0.7,1.2] · openai[0.25,4.0] · edge rate→pengali). Gate sudah clamp ke comfort;
+                # ini jaring defensif. Ganti hardcode EL-spesifik [0.7,1.2] lama.
+                from src.config.format_catalog import tts_speed_range as _tsr
+                _plo, _phi = _tsr(config.get("tts_provider"))
+                _llm_speed = round(min(_phi, max(_plo, float(_llm_speed))), 3)
                 _niche_k = config.get("niche")
                 _vs = dict(config.get("tts_voice_settings") or {})
                 _vs[_niche_k] = {**(_vs.get(_niche_k) or {}), "speed": _llm_speed}

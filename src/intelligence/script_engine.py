@@ -243,6 +243,63 @@ def _distribute_words(active: list, total_words: int) -> dict:
     return {b: max(5, round(total_words * _BEAT_WEIGHT.get(b, 5) / tot)) for b in active}
 
 
+# ── §10.A PAUSE-AWARE DURATION ESTIMATOR (provider-AGNOSTIK) ────────────────────────
+# Durasi-ucap = waktu-BICARA + waktu-JEDA. Jeda (em-dash/elipsis/akhir-kalimat) = sumber variansi
+# utama (data NYATA: P_base 1.37–2.20 → seed pace TUNGGAL salah ~½ kasus; 75s pernah meledak 105s).
+# Estimator ini BERLAKU UMUM utk SEMUA TTS provider:
+#   • pace dasar  = `tts_profiles.delivery_wps` per provider (DB) — beda provider mengalir dari sini
+#   • speech_wps  = delivery_wps × _PAUSE_INFLATION (bicara MURNI; delivery_wps sudah meng-include jeda rata-rata)
+#   • jeda dihitung dari TEKS (tanda baca) → bebas-provider & bebas-bahasa
+# Seed di bawah = AWAL; F5-01 kalibrasi PER PROVIDER dari tts_delivery_samples (EL presisi via
+# word_timestamps; provider tanpa word-timeframe via agregat) → pindah ke kolom DB. Tak ada angka 1-vendor.
+_PAUSE_INFLATION = 1.10   # SEED universal: speech_wps = delivery_wps × ini (F5-01 kalibrasi per provider)
+_PAUSE_SECONDS = {        # SEED hening/token (detik) — universal; F5-01 kalibrasi per provider → DB
+    "em_dash": 0.55, "ellipsis": 0.75, "sentence": 0.35, "comma": 0.12, "linebreak": 0.45,
+}
+
+def _count_pauses(text: str) -> dict:
+    """Hitung token-jeda dari TEKS (bebas-provider/bahasa). Elipsis tak dihitung ulang sbg akhir-kalimat."""
+    import re
+    t = text or ""
+    ell = t.count("…") + t.count("...")
+    t2 = t.replace("…", "  ").replace("...", "  ")
+    return {
+        "em_dash":   t.count("—"),
+        "ellipsis":  ell,
+        "sentence":  len(re.findall(r"[.!?]+", t2)),
+        "comma":     t2.count(",") + t2.count(";") + t2.count(":"),
+        "linebreak": t.count("\n"),
+    }
+
+def pause_seconds(text: str, model: dict | None = None) -> float:
+    m = model or _PAUSE_SECONDS
+    c = _count_pauses(text)
+    return round(sum(c.get(k, 0) * float(m.get(k, 0)) for k in c), 3)
+
+def estimate_spoken_seconds(text: str, speed: float, delivery_wps: float,
+                            pause_model: dict | None = None) -> tuple:
+    """(est_detik, jeda_detik, speech_wps) — sadar-jeda, GENERIK lintas provider."""
+    swps = max(0.1, float(delivery_wps) * _PAUSE_INFLATION)
+    wc = len((text or "").split())
+    pause = pause_seconds(text, pause_model)
+    speech = wc / (swps * max(0.1, float(speed or 1.0)))
+    return round(speech + pause, 2), pause, round(swps, 3)
+
+def solve_speed_for_duration(text: str, t_spoken: float, delivery_wps: float,
+                             speed_range=(0.7, 1.2), pause_model: dict | None = None) -> tuple:
+    """SOLVE pengali-kecepatan agar (bicara + jeda) = t_spoken; clamp ke rentang provider (generik).
+    Returns (speed, est_detik, jeda_detik, speech_wps)."""
+    swps = max(0.1, float(delivery_wps) * _PAUSE_INFLATION)
+    wc = len((text or "").split())
+    pause = pause_seconds(text, pause_model)
+    budget = max(0.4, float(t_spoken) - pause)          # detik tersisa utk bicara setelah jeda
+    lo, hi = speed_range
+    need = wc / (swps * budget) if budget else hi
+    speed = round(min(hi, max(lo, need)), 3)
+    est = round(wc / (swps * speed) + pause, 2)
+    return speed, est, pause, round(swps, 3)
+
+
 def _narrative_intent(target_duration, n_beats) -> str:
     if n_beats <= 3:
         return (f"ULTRA-SHORT {target_duration}s: ONE razor-sharp idea. No setup, no padding — "
@@ -321,12 +378,20 @@ def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, ins
         n_scenes = len(active)
         inactive = [s for s in _ALL_SECTIONS if s not in active]
         _wsum = sum(words.get(b, 0) for b in active) or 1
-        _plan_lines = "\n".join(f"   beat {i+1} — {_ROLE_LABEL.get(b, b)} (~{round(100*words.get(b,0)/_wsum)}%)"
-                                for i, b in enumerate(active))
+        # Anggaran-kata ABSOLUT + MAX per-beat (bukan cuma %): plafon konkret per-beat jauh lebih dipatuhi
+        # LLM daripada total agregat — akar osilasi preset pendek (LLM "mengisi" tiap beat seukuran preset
+        # lebih panjang → total membengkak → speed mentok → atempo/QC-fail). `words` = _distribute_words atas
+        # total_words = T_spoken × WPS(provider) → GENERIK & no-hardcode. MAX = +15% per-beat (sedikit ruang).
+        _plan_lines = "\n".join(
+            f"   beat {i+1} — {_ROLE_LABEL.get(b, b)}: ~{words.get(b,0)} words (HARD MAX {round(words.get(b,0)*1.15)+1}) — {round(100*words.get(b,0)/_wsum)}%"
+            for i, b in enumerate(active))
         beat_plan = (
             f"\n📐 BEAT PLAN — {target_duration}s video = {len(active)} BEATS (compression-mapping, non-negotiable):\n"
             f"{_narrative_intent(target_duration, len(active))}\n"
-            f"Write EXACTLY these {len(active)} beats IN ORDER — keep their relative weight:\n{_plan_lines}\n"
+            f"Write EXACTLY these {len(active)} beats IN ORDER. Each beat has a HARD per-beat word budget — "
+            f"do NOT exceed any beat's MAX (over-writing ONE beat is the #1 cause of overruns):\n{_plan_lines}\n"
+            f"⚠️ PER-BEAT BUDGETS ARE BINDING: their sum (~{sum(words.get(b,0) for b in active)} words) is your TOTAL ceiling. "
+            f"Write a {target_duration}s script — NOT a longer one trimmed down.\n"
             + (f"Leave these JSON fields as EMPTY string \"\": {', '.join(inactive)}.\n" if inactive else "")
             + (f"Also output field \"core_facts_2\" (a SECOND distinct fact).\n" if "core_facts_2" in active else "")
             + f"The numbered section guide below is your CRAFT TOOLBOX — apply only the active beats' techniques.\n"
@@ -383,6 +448,9 @@ Maksimal SATU sebutan brand di seluruh script.{(' Arahan brand: ' + brand_cta_te
             f"The {len(active)} beats TOGETHER must last ≈{round(_Tspoken,1)}s (acceptable {_Tlo}–{_Thi}s), keeping proportions.\n"
             f"KEEP TOTAL WORDS ≈{round(_P*_Tspoken)} (hard range {round(0.7*_P*_Tspoken)}–{round(1.2*_P*_Tspoken)}). "
             f"The system sets the EXACT speed to land on {round(_Tspoken,1)}s — your job is to keep word count in that range (NEVER exceed {round(1.2*_P*_Tspoken)}).\n"
+            f"⏱ PAUSE BUDGET — at most ~{len(active)} deliberate pauses total (≈1 per beat). Each em-dash (—) or "
+            f"ellipsis (…) adds ≈0.6s of SILENCE that EATS runtime — over-using pauses is the #1 cause of overruns. "
+            f"Keep pacing tight; let speed (not pauses) carry the mood.\n"
             f" 1. Pick a mood-fitting base speed (suggested for this niche: ~{_bspeed}).\n"
             f" 2. Write the {len(active)} beats naturally — STORY FIRST.\n"
             f" 3. Count words W. Spoken ≈ W ÷ ({_P} × speed).\n"
@@ -930,27 +998,37 @@ Return ONLY valid JSON:
             # ekstrem) → retry sesuaikan KATA. Speed resolved → script.tts_params → TTS (F4-03).
             length_ok = True
             if preset_seconds and _base_p:
-                wc  = len((script.get("full_script") or "").split())
-                _tp = script.get("tts_params") if isinstance(script.get("tts_params"), dict) else {}
+                # §10.A JARING SADAR-JEDA (provider-agnostik). Akar Cacat-B = jeda (em-dash/elipsis/akhir-
+                # kalimat) jadi hening tak-terduga → est `kata÷(P×speed)` BUTA-JEDA meleset (75s nyata 105s).
+                # Kini est = bicara + Σjeda(dari teks); SISTEM solve speed agar mendarat; clamp = rentang
+                # speed PROVIDER (tts_profiles.param_schema, bukan EL-hardcode). Speed resolved → TTS (F4-03).
+                from src.config.format_catalog import tts_speed_range as _tsr
+                _txt = script.get("full_script") or ""
+                wc   = len(_txt.split())
+                _tp  = script.get("tts_params") if isinstance(script.get("tts_params"), dict) else {}
                 _Tspoken   = max(1.0, float(preset_seconds) - float(render_overhead_sec or 0))
-                _need      = wc / (_base_p * _Tspoken) if (_base_p and _Tspoken) else 1.0   # speed agar est = T_spoken
-                _speed     = round(min(1.2, max(0.7, _need)), 3)                            # clamp param_schema
-                _est       = wc / (_base_p * _speed)
+                _plo, _phi = _tsr(_tts_provider)                       # rentang speed provider (GENERIK, DB)
+                _rng       = (max(_plo, 0.7), min(_phi, 1.3))          # comfort-band: jaga MUTU suara lintas provider
+                _speed, _est, _pause, _swps = solve_speed_for_duration(_txt, _Tspoken, _base_p, speed_range=_rng)
                 _Tlo, _Thi = _Tspoken * 0.90, _Tspoken * 1.10
-                script["tts_params"] = {**_tp, "speed": _speed}   # SPEED RESOLVED (deterministik) → TTS (F4-03)
+                script["tts_params"] = {**_tp, "speed": _speed}        # SPEED RESOLVED (sadar-jeda) → TTS
+                script["_duration_est"] = {"est_seconds": _est, "pause_seconds": _pause,   # observability
+                                           "speed": _speed, "speech_wps": _swps, "words": wc}
                 if not (_Tlo <= _est <= _Thi):
-                    # speed sudah mentok di clamp tapi durasi tetap lewat → KATA terlalu jauh → retry kata.
                     length_ok = False
-                    _act = (f"PERPENDEK naskah (speed sudah maksimum {_speed})" if _est > _Thi
-                            else f"PERPANJANG naskah (speed sudah minimum {_speed})")
+                    _np  = sum(_count_pauses(_txt).values())
+                    _act = (f"PERPENDEK naskah / KURANGI jeda (speed sudah {_speed})" if _est > _Thi
+                            else f"PERPANJANG naskah sedikit (speed sudah {_speed})")
                     feedback = (feedback or []) + [
-                        f"DURATION FAIL: {wc} kata → walau speed dikunci {_speed} (batas [0.7,1.2]), est {_est:.1f}s "
-                        f"masih di luar {_Tlo:.1f}–{_Thi:.1f}s (target {_Tspoken:.1f}s). {_act} agar jumlah kata "
-                        f"masuk jangkauan; sasaran ≈{round(_base_p*_Tspoken)} kata (±{round(_base_p*_Tspoken*0.18)})."]
-                    logger.info(f"[ScriptEngine] §3.1 net: {wc}w → speed_solve {_speed} → est {_est:.1f}s "
-                                f"vs {_Tlo:.1f}-{_Thi:.1f}s → retry (kata di luar jangkauan)")
+                        f"DURATION FAIL: {wc} kata + {_pause:.1f}s jeda ({_np} tanda-jeda) → speed {_speed} → "
+                        f"est {_est:.1f}s di luar {_Tlo:.1f}–{_Thi:.1f}s (target {_Tspoken:.1f}s). {_act}. "
+                        f"Tiap em-dash/elipsis ≈0.6s hening — pangkas yang berlebih; sasaran ≈{round(_swps*_Tspoken)} kata "
+                        f"bila jeda minim (≈1/beat)."]
+                    logger.info(f"[ScriptEngine] §10.A jeda-aware: {wc}w +{_pause:.1f}s jeda → speed {_speed} → "
+                                f"est {_est:.1f}s vs {_Tlo:.1f}-{_Thi:.1f}s → retry")
                 else:
-                    logger.info(f"[ScriptEngine] §3.1 net: {wc}w → speed {_speed} (deterministik) → est {_est:.1f}s ∈ band ✓")
+                    logger.info(f"[ScriptEngine] §10.A jeda-aware: {wc}w +{_pause:.1f}s jeda (swps {_swps}) → "
+                                f"speed {_speed} → est {_est:.1f}s ∈ band ✓")
 
             if score > best_score:
                 best_score  = score

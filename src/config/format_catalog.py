@@ -145,3 +145,32 @@ def tts_speed_param(tts_provider):
     _load()
     tp = (_CACHE["tts"] or {}).get(tts_provider)
     return tp.get("speed_param") if tp else None
+
+
+def tts_speed_range(tts_provider, default=(0.7, 1.2)):
+    """Rentang PENGALI-KECEPATAN efektif per provider — GENERIK (dari `param_schema`/`speed_param`, DB).
+    Dipakai gate durasi §10.A untuk clamp speed lintas-provider (BUKAN hardcode EL [0.7,1.2]):
+      • 'speed' → param_schema['speed']  (EL [0.7,1.2] · openai [0.25,4.0])
+      • 'rate'  → 1 + rate%/100          (edge [-50,100]% → pengali [0.5,2.0])
+      • None    → (1.0,1.0)              (provider tak bisa speed-adjust)
+    Provider tak dikenal → default. Caller boleh meng-intersect dgn comfort-band mutu suara."""
+    if not tts_provider:
+        return default
+    _load()
+    tp = (_CACHE["tts"] or {}).get(tts_provider)
+    if not tp:
+        return default
+    sp = tp.get("speed_param")
+    sch = tp.get("param_schema") or {}
+    try:
+        rng = sch.get("speed") if sp == "speed" else None
+        if sp == "speed" and isinstance(rng, (list, tuple)) and len(rng) == 2:
+            return (float(rng[0]), float(rng[1]))
+        rt = sch.get("rate") if sp == "rate" else None
+        if sp == "rate" and isinstance(rt, (list, tuple)) and len(rt) == 2:
+            return (1.0 + float(rt[0]) / 100.0, 1.0 + float(rt[1]) / 100.0)
+        if sp is None:
+            return (1.0, 1.0)
+    except Exception:
+        pass
+    return default

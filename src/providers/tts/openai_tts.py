@@ -68,7 +68,17 @@ class OpenAITTSProvider(TTSProvider):
         except ImportError:
             raise TTSError("openai tidak terinstall. Jalankan: pip install openai")
 
-        logger.info(f"[OpenAI TTS] voice={self.voice} model={self.model} chars={len(text)}")
+        # Durasi-via-speed (Pilihan A, multi-provider): terapkan kecepatan terpecahkan gate/LLM.
+        # Sumber = {baseline voice_catalog.default_settings} ⊕ {override tts_voice_settings[niche]}
+        # (gate menyuntik speed ter-solve ke override saat runtime) — POLA SAMA elevenlabs (no-hardcode).
+        # S=1.0 (default) ⇒ perilaku lama (OpenAI default) = nol regresi. Clamp ke rentang API OpenAI.
+        niche     = self.config.get("niche") or ""
+        baseline  = self.config.get("tts_voice_default_settings", {}) or {}
+        vs_cfg    = self.config.get("tts_voice_settings", {}) or {}
+        override  = vs_cfg.get(niche, {}) if isinstance(vs_cfg, dict) else {}
+        speed     = float({**baseline, **override}.get("speed", 1.0) or 1.0)
+        speed     = round(min(4.0, max(0.25, speed)), 3)   # rentang API OpenAI TTS
+        logger.info(f"[OpenAI TTS] voice={self.voice} model={self.model} speed={speed} chars={len(text)}")
 
         try:
             client   = AsyncOpenAI(api_key=self.api_key)
@@ -77,6 +87,7 @@ class OpenAITTSProvider(TTSProvider):
                 voice=self.voice,
                 input=text,
                 response_format="mp3",
+                speed=speed,
             )
             response.stream_to_file(str(output_path))
 
