@@ -120,7 +120,6 @@ class TenantRunConfig:
     # Fase 6C fields
     script_min_viral_score: int            = 75
     script_max_retry:       int            = 3
-    tts_voice_per_niche:    Optional[dict] = None
     music_enabled:          bool           = False
     music_volume:           float          = 0.10
     music_default_mood:     Optional[str]  = None   # Phase 1.5: fallback mood; kosong → any-active (no global default)
@@ -544,7 +543,6 @@ class TenantConfigManager:
                 discount_pct=row.get("discount_pct", 0),
                 script_min_viral_score=row.get("script_min_viral_score", 75),
                 script_max_retry=row.get("script_max_retry", 3),
-                tts_voice_per_niche=row.get("tts_voice_per_niche") if isinstance(row.get("tts_voice_per_niche"), dict) else None,
                 music_enabled=row.get("music_enabled", False),
                 music_volume=float(row.get("music_volume", 0.10)),
                 music_default_mood=row.get("music_default_mood"),

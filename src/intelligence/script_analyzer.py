@@ -61,7 +61,7 @@ def _derive_emotion_criteria(niche_profile: dict | None) -> str:
     Prioritas:
     1. emotion_scoring_criteria (field khusus scoring — spesifik, dirancang sebagai
        scoring guide, diisi admin via migrate_s89)
-    2. Derive dari voice_profile.emotion_arc + target_emotion + style
+    2. Derive dari narration_persona.emotion_arc + target_emotion + style
        (kurang spesifik tapi otomatis works untuk niche baru)
     3. DEFAULT_EMOTION_CRITERIA — generic fallback
 
@@ -202,7 +202,7 @@ class ScriptAnalyzer:
                 active_beats: list | None = None) -> dict:
         """
         Score script terhadap 6 dimensi viral via LLMProvider tenant (config-driven).
-        niche_profile: data niche dari Supabase (voice_profile, target_emotion, dll).
+        niche_profile: data niche dari Supabase (narration_persona, target_emotion, dll).
                        Dipakai untuk emotional_peak criteria yang niche-aware.
                        Jika None → fallback ke DEFAULT_EMOTION_CRITERIA.
         Returns dict dengan viral_score, weak_areas, strengths.

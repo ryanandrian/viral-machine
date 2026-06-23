@@ -1,11 +1,9 @@
 """
 TTS Engine — provider routing + fallback hierarchy.
 Fase 6C s6c8:
-  - Routing ke provider yang benar dari tenant_configs (tidak lagi hardcode Edge TTS)
-  - Fallback hierarchy: ElevenLabs → OpenAI TTS → Edge TTS (last resort)
-  - Concern logging setiap fallback — user tahu apa yang terjadi
-  - Fix: full_script fallback cover 8 section (bukan 5 section lama)
-  - tts_voice_per_niche dari tenant_configs
+  - Provider/voice dari CHANNEL (channels.tts_provider/voice_key, §10.B FINAL) — config-driven
+  - NO-FALLBACK (F1-05): provider gagal = gagal jujur + log, tak pindah diam-diam
+  - Delivery override per-tenant via tts_voice_settings (mis. ryan speed)
 """
 
 import asyncio

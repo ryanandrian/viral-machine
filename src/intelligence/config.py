@@ -181,7 +181,7 @@ def get_niches() -> dict:
     Load niche registry. Fully Supabase-driven — tidak ada hardcode.
 
     Returns:
-        dict: {niche_id: {name, keywords, style, target_emotion, voice_profile,
+        dict: {niche_id: {name, keywords, style, target_emotion, narration_persona,
                           visual_style, visual_fallbacks, mood_priority,
                           hook_templates, is_active, ...}}
 

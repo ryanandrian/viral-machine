@@ -3,7 +3,7 @@ ElevenLabs TTS Provider — suara paling natural, berbayar.
 Fase 6C s6c8 upgrade:
   - SDK v2.40.0: audio via audio_base_64 (bukan response.audio)
   - Word-level timestamps: gabung char-level → word-level
-  - Voice per niche dari tts_voice_per_niche di tenant_configs
+  - Voice di-resolve di config layer (channels.voice_key, §10.B FINAL); delivery override via tts_voice_settings
 """
 
 import asyncio

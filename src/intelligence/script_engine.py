@@ -117,8 +117,8 @@ def _scale_section_timing(section_timing: dict, target_seconds: float) -> dict:
 
 def _get_profile(niche: str) -> dict:
     """
-    Load voice profile dari niche registry (Supabase-driven, no hardcode).
-    Jika voice_profile belum diisi admin, derive dari base fields niche.
+    Load narration_persona dari niche registry (Supabase-driven, no hardcode).
+    Jika narration_persona belum diisi admin, derive dari base fields niche.
     """
     niches     = get_niches()
     niche_data = niches.get(niche)
@@ -141,7 +141,7 @@ def _get_profile(niche: str) -> dict:
             "hook_style":  "impossible_claim or question",
             "emotion_arc": f"curiosity → interest → {target_emotion}",
         }
-        logger.debug(f"[ScriptEngine] voice_profile '{niche}' derived dari base fields")
+        logger.debug(f"[ScriptEngine] narration_persona '{niche}' derived dari base fields")
 
     return vp
 
