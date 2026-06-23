@@ -1,5 +1,5 @@
 """
-TTS Engine — provider routing + fallback hierarchy.
+TTS Engine — provider/voice dari CHANNEL via registry config-driven, NO-FALLBACK.
 Fase 6C s6c8:
   - Provider/voice dari CHANNEL (channels.tts_provider/voice_key, §10.B FINAL) — config-driven
   - NO-FALLBACK (F1-05): provider gagal = gagal jujur + log, tak pindah diam-diam
@@ -17,20 +17,6 @@ from dotenv import load_dotenv
 from src.intelligence.config import TenantConfig
 
 load_dotenv()
-
-# Concern messages — DINAMIS, nama provider TIDAK ditanam (no-hardcode, QC §0.3).
-# Pesan fallback dibangun dari nama provider config (lihat _fallback_concern).
-CONCERN_ALL_FAILED = "❌  CRITICAL: Semua penyedia TTS gagal. Cek koneksi & kredensial penyedia suara."
-
-
-def _fallback_concern(prev_provider: str, next_provider: str) -> str:
-    """Pesan concern fallback DINAMIS — nama provider dari config, bukan literal (§0.3)."""
-    return (
-        f"⚠️  CONCERN: penyedia suara '{prev_provider}' gagal → fallback ke '{next_provider}'. "
-        f"Kualitas suara/timestamp dapat menurun & kecepatan bicara berbeda "
-        f"(durasi bisa meleset dari target preset). Periksa kredensial/saldo akun '{prev_provider}'."
-    )
-
 
 def _build_full_script(script: dict) -> str:
     """
@@ -132,8 +118,7 @@ class TTSEngine:
         # vs yang AKTUAL me-render. Di-set ulang tiap generate().
         self.last_primary = None
         self.last_provider = None
-        self.last_fallback_used = False
-        self.last_concern = ""
+        self.last_fallback_used = False   # no-fallback (F1-05): selalu False; dipertahankan utk advisory pipeline
 
     def generate(
         self,
@@ -191,54 +176,34 @@ class TTSEngine:
         self.last_primary = primary
         self.last_provider = None
         self.last_fallback_used = False
-        chain = [primary]
+        # NO-FALLBACK (F1-05/§3.8): HANYA provider terkonfigurasi channel — gagal = GAGAL JUJUR (tak pindah diam-diam).
+        try:
+            logger.info(f"[TTSEngine] Generating with: {primary}")
+            audio_path, word_timestamps = _run_provider(primary, text, config, output_dir)
 
-        last_error = None
-        for i, provider_name in enumerate(chain):
-            try:
-                if i > 0:
-                    # Fallback aktif → concern DINAMIS (no-hardcode nama provider, §0.3)
-                    prev = chain[i-1]
-                    concern_msg = _fallback_concern(prev, provider_name)
-                    logger.warning(concern_msg)
-                    self.last_concern = concern_msg
-
-                logger.info(f"[TTSEngine] Trying: {provider_name}")
-                audio_path, word_timestamps = _run_provider(
-                    provider_name, text, config, output_dir
-                )
-
-                if audio_path and os.path.exists(audio_path):
-                    # Transparansi (§4b): provider yang BENAR-BENAR me-render + apakah fallback.
-                    self.last_provider = provider_name
-                    self.last_fallback_used = (provider_name != primary)
-                    size_kb    = os.path.getsize(audio_path) / 1024
-                    ts_count   = len(word_timestamps)
-                    ts_quality = "~98% akurasi" if provider_name == "elevenlabs" else \
-                                 "tidak tersedia" if provider_name == "openai_tts" else \
-                                 "~80% estimasi"
-                    logger.info(
-                        f"[TTSEngine] ✅ {provider_name}: {size_kb:.1f}KB "
-                        f"| {ts_count} word timestamps ({ts_quality})"
+            if audio_path and os.path.exists(audio_path):
+                self.last_provider = primary           # transparansi pipeline (§4b)
+                self.last_fallback_used = False         # no-fallback → selalu False
+                size_kb    = os.path.getsize(audio_path) / 1024
+                ts_count   = len(word_timestamps)
+                ts_quality = "~98% akurasi" if primary == "elevenlabs" else \
+                             "tidak tersedia" if primary == "openai_tts" else \
+                             "~80% estimasi"
+                logger.info(f"[TTSEngine] ✅ {primary}: {size_kb:.1f}KB | {ts_count} word timestamps ({ts_quality})")
+                # Closed-loop durasi (opsional, NOL biaya TTS): rapikan via atempo bila di luar window.
+                if target_audio_secs and target_audio_secs > 0:
+                    audio_path, word_timestamps = self._fit_duration(
+                        audio_path, word_timestamps, float(target_audio_secs), output_dir
                     )
-                    # Closed-loop durasi (opsional, NOL biaya TTS): rapikan via atempo bila di luar window.
-                    if target_audio_secs and target_audio_secs > 0:
-                        audio_path, word_timestamps = self._fit_duration(
-                            audio_path, word_timestamps, float(target_audio_secs), output_dir
-                        )
-                    # F4-01 observability: catat delivery NYATA (best-effort) → kalibrasi pace F5-01 + verifikasi P §10.D.
-                    _log_delivery_sample(tenant_config, config, provider_name, word_count, audio_path)
-                    return audio_path, word_timestamps
+                # F4-01 observability: catat delivery NYATA (best-effort) → kalibrasi pace F5-01 + verifikasi P §10.D.
+                _log_delivery_sample(tenant_config, config, primary, word_count, audio_path)
+                return audio_path, word_timestamps
 
-            except Exception as e:
-                last_error = e
-                logger.error(f"[TTSEngine] {provider_name} failed: {e}")
-                continue
-
-        # Semua gagal
-        logger.error(CONCERN_ALL_FAILED)
-        logger.error(f"[TTSEngine] Last error: {last_error}")
-        return "", []
+            logger.error(f"[TTSEngine] {primary}: audio kosong/tak terbentuk — gagal jujur (no-fallback)")
+            return "", []
+        except Exception as e:
+            logger.error(f"[TTSEngine] {primary} failed: {e} — gagal jujur (no-fallback)")
+            return "", []
 
     @staticmethod
     def get_duration(audio_path: str) -> float:
