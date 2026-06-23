@@ -26,11 +26,10 @@ class VisualProvider(ABC):
     def __init__(self, config: dict):
         """
         Args:
-            config: dict berisi konfigurasi provider dari tenant_configs.
-                    Minimal: {'visual_provider': str, 'visual_max_clip_mb': int}
+            config: dict konfigurasi provider. Minimal: {'visual_provider': 'ai_image:<model>',
+                    'visual_api_key': str} (visual_provider = visual_mode generator, di-set assembler).
         """
         self.config = config
-        self.max_clip_size_mb = config.get("visual_max_clip_mb", 50)
         self.api_key = config.get("visual_api_key")
 
     @abstractmethod
@@ -74,7 +73,7 @@ class VisualProvider(ABC):
     @property
     @abstractmethod
     def provider_name(self) -> str:
-        """Nama unik provider, contoh: 'pexels', 'ai_image:flux-schnell'"""
+        """Nama unik provider, contoh: 'ai_image:flux-schnell', 'ai_image:gpt-image-1-mini'"""
         pass
 
     @property

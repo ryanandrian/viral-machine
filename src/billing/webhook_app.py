@@ -96,34 +96,35 @@ try:
     app.add_api_route("/api/youtube/oauth/disconnect", _yt_disconnect, methods=["POST"])
     app.add_api_route("/api/youtube/oauth/status", _yt_status, methods=["POST"])
 
-    # ── Vault API key AI (migr 0044): enkripsi Fernet + tulis *_enc (master key hanya di sini) ──
-    async def _keys_set(request: "Request"):
+    # ── Vault kunci AI per-CHANNEL (Fernet, master key hanya di sini) — model bersih 2026-06-24 ──
+    # Tulis kunci 1 elemen (llm/tts/visual) ke channels.<element>_key_enc.
+    async def _channel_key_set(request: "Request"):
         if not _internal_ok(request):
             return JSONResponse({"error": "unauthorized"}, status_code=401)
-        from src.utils.api_key_vault import set_api_keys
+        from src.utils.api_key_vault import set_channel_key
         try:
             body = await request.json()
-            return set_api_keys(body.get("tenant_id"), body)
+            return set_channel_key(body.get("tenant_id"), body.get("channel_id"),
+                                   body.get("element"), body.get("key"))
         except Exception as e:
-            logger.warning(f"[key-vault] set gagal: {e}")
+            logger.warning(f"[key-vault] set channel key gagal: {e}")
             return JSONResponse({"error": str(e)}, status_code=400)
 
-    app.add_api_route("/api/keys/set", _keys_set, methods=["POST"])
+    app.add_api_route("/api/channels/key", _channel_key_set, methods=["POST"])
 
-    # ── F2-09: vault MULTI-akun — tambah akun API (encrypt Fernet + insert tenant_api_accounts) ──
-    async def _accounts_set(request: "Request"):
+    # Baca-balik kunci (decrypt) utk tenant pemilik channel — owner: kunci tak di-mask (copy-paste).
+    async def _channel_keys_get(request: "Request"):
         if not _internal_ok(request):
             return JSONResponse({"error": "unauthorized"}, status_code=401)
-        from src.utils.api_key_vault import add_api_account
+        from src.utils.api_key_vault import get_channel_keys
         try:
             body = await request.json()
-            return add_api_account(body.get("tenant_id"), body.get("component"), body.get("label"),
-                                   body.get("key"), body.get("provider"))
+            return get_channel_keys(body.get("tenant_id"), body.get("channel_id"))
         except Exception as e:
-            logger.warning(f"[key-vault] add account gagal: {e}")
+            logger.warning(f"[key-vault] get channel keys gagal: {e}")
             return JSONResponse({"error": str(e)}, status_code=400)
 
-    app.add_api_route("/api/accounts/set", _accounts_set, methods=["POST"])
+    app.add_api_route("/api/channels/keys/get", _channel_keys_get, methods=["POST"])
 
 except ImportError:
     # fastapi belum terinstall di env dev — endpoint diaktifkan saat cutover (tambah ke requirements).

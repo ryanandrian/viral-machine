@@ -36,7 +36,7 @@ class AIVideoProvider(VisualProvider):
         # Langsung raise — jangan biarkan pipeline jalan dengan provider disabled
         raise VisualError(
             f"AI Video provider '{self.ai_model}' DISABLED di v0.2. "
-            f"Pilih provider lain: 'pexels', 'ai_image:flux-schnell', dll. "
+            f"Pilih generator gambar: 'ai_image:<model>' (mis. ai_image:gpt-image-1-mini). "
             f"AI Video akan diaktifkan di versi mendatang."
         )
 

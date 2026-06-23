@@ -19,21 +19,6 @@ from loguru import logger
 load_dotenv()
 
 
-def _eff_key(row: dict, name: str) -> Optional[str]:
-    """Key API efektif: prefer kolom TERENKRIPSI (*_enc, Fernet — migr 0044) lalu fallback plaintext
-    (kompat transisi). Master key (ENCRYPTION_KEY) ada di worker/backend; dekripsi hanya di sini.
-    Plaintext dikosongkan pasca-migrasi → effektif selalu lewat *_enc."""
-    enc = row.get(f"{name}_enc")
-    if enc:
-        try:
-            from src.utils.crypto import decrypt
-            return decrypt(enc)
-        except Exception as e:
-            logger.error(f"[TenantConfig] dekripsi {name}_enc gagal: {e}")
-            return None
-    return row.get(name)
-
-
 # ──────────────────────────────────────────────────────────
 # Niche Registry — fully Supabase-driven via get_niches()
 # Tidak ada hardcode di sini. Admin tambah/nonaktifkan niche via tabel niches di Supabase.
@@ -110,9 +95,8 @@ class TenantRunConfig:
     production_cron:    str   = "0 13 * * *"
     analytics_cron:     str   = "0 13 * * *"
 
-    # Visual mode
-    visual_mode:        str   = "video"
-    # 'video'                    → stock footage (Pexels/Getty/dll)
+    # Visual mode (GENERATOR AI saja; stock footage Pexels = fosil v1, dibuang 2026-06-24)
+    visual_mode:        str   = ""
     # 'ai_image:gpt-image-1-mini' → AI generated image + motion
     # 'ai_image:flux-schnell'    → AI generated image + motion (cheaper via Replicate)
     # 'ai_video:*'               → AI video generation (DISABLED v0.2)
@@ -127,11 +111,8 @@ class TenantRunConfig:
     niche_mode:             str            = "fixed"
     niche_pool:             list           = None
 
-    # Fase 7 s71 — Provider fallback + billing behavior + multi-channel
+    # Fase 7 s71 — multi-channel
     duplicate_lookback_days: int  = 30            # window duplicate check (hari)
-    production_on_api_error: str  = "fallback"    # 'fallback' | 'stop_and_notify'
-    tts_fallback_provider:   str  = "edge_tts"    # fallback jika primary TTS error
-    visual_fallback_mode:    str  = "video"       # fallback jika primary visual error
     channel_group:           str  = "default"     # grup channel multi-tenant SaaS
     caption_style:          Optional[dict] = None
     hook_title_style:       Optional[dict] = None
@@ -191,8 +172,6 @@ class TenantRunConfig:
     voice_delivery_wps: Optional[float] = None          # F5-01: pace PER-VOICE (voice_catalog.delivery_wps). None → fallback tts_profiles[provider]. Guard [1.0,4.0].
     tts_api_key:       Optional[str] = None
 
-    visual_provider:   str           = "pexels"
-    visual_max_clip_mb: int          = 50
     visual_api_key:    Optional[str] = None
     visual_ai_model:   Optional[str] = None
     image_quality:     str           = "low"
@@ -202,8 +181,6 @@ class TenantRunConfig:
     llm_api_key:       Optional[str] = None
     llm_library:       Optional[str]  = None  # Phase 1.1: 'anthropic'|'openai'. None → derive dari llm_provider
     llm_models:        Optional[dict] = None  # Phase 1.1 per-task: script/utility/rewrite/analyzer/fallback
-
-    youtube_api_key:   Optional[str] = None  # YouTube Data API v3 — untuk trend scan
 
     def to_provider_config(self) -> dict:
         """
@@ -225,8 +202,6 @@ class TenantRunConfig:
             "tts_api_key":  self.tts_api_key or "",
 
             # Visual
-            "visual_provider":        self.visual_provider,
-            "visual_max_clip_mb":     self.visual_max_clip_mb,
             "visual_api_key":         self.visual_api_key or "",
             "visual_ai_model":        self.visual_ai_model,
             "image_quality":          self.image_quality,
@@ -292,14 +267,14 @@ class TenantRunConfig:
     def missing_credentials(self) -> list[str]:
         """Phase 4.5: daftar key WAJIB yang belum diisi, per provider terpilih tenant.
         Dipakai pipeline utk fail-loud SEBELUM produksi (35 mnt). Provider gratis
-        (edge_tts/pexels) tak perlu key. YouTube OAuth dicek di publish (tenant_credentials/file)."""
+        (edge_tts) tak perlu key. YouTube OAuth dicek di publish (tenant_credentials/file)."""
         missing = []
         if not (self.llm_api_key or "").strip():
             missing.append(f"llm_api_key (LLM: {self.effective_llm_provider() or '?'})")
         if (self.tts_provider or "") in ("elevenlabs", "openai_tts") and not (self.tts_api_key or "").strip():
             missing.append(f"tts_api_key ({self.tts_provider})")
-        if (self.visual_provider or "").startswith("ai_image:") and not (self.visual_api_key or "").strip():
-            missing.append("visual_api_key (image generation)")
+        if (self.visual_mode or "").startswith(("ai_image:", "ai_video:")) and not (self.visual_api_key or "").strip():
+            missing.append("visual_api_key (AI visual generation)")
         return missing
 
 
@@ -417,29 +392,28 @@ class TenantConfigManager:
                     config.voice_delivery_wps = vc.data[0].get("delivery_wps")
             except Exception as e:
                 logger.warning(f"[TenantConfig] load default_settings/pace voice {vkey} gagal: {e}")
-        # F2-09 (§3.19): key per-elemen dari AKUN VAULT channel (tenant_api_accounts.key_enc).
-        # account_id NULL → TETAP pakai key tenant_configs (fallback, NON-BREAKING). Multi-akun
-        # → tiap channel boleh key berbeda untuk provider sama.
-        self._overlay_account_key(config, ch, "llm_account_id", "llm_api_key")
-        self._overlay_account_key(config, ch, "tts_account_id", "tts_api_key")
-        self._overlay_account_key(config, ch, "image_account_id", "visual_api_key")
+        # KUNCI per-elemen = channels.{llm,tts,visual}_key_enc (Fernet) — SATU tempat, NO-FALLBACK
+        # (owner 2026-06-24). Channel = sumber TUNGGAL: kunci kosong → biarkan kosong → produksi gagal
+        # jujur (tak diam-diam pinjam key tenant/brankas). Boleh sama/beda antar channel, dicatat eksplisit.
+        self._set_channel_key(config, ch, "llm_key_enc",    "llm_api_key")
+        self._set_channel_key(config, ch, "tts_key_enc",    "tts_api_key")
+        self._set_channel_key(config, ch, "visual_key_enc", "visual_api_key")
         logger.info(f"[TenantConfig] overlay ch={channel_id}: tts={config.tts_provider}/{config.tts_voice} "
                     f"llm={config.llm_model} visual={config.visual_mode}")
 
-    def _overlay_account_key(self, config: "TenantRunConfig", ch: dict, ref_col: str, key_attr: str) -> None:
-        """F2-09: set key dari akun vault (tenant_api_accounts.key_enc, Fernet) yang dipilih channel.
-        account_id NULL / error / status≠active → biarkan key tenant_configs (fallback non-breaking)."""
-        aid = ch.get(ref_col)
-        if not aid or not self._supabase:
+    def _set_channel_key(self, config: "TenantRunConfig", ch: dict, enc_col: str, key_attr: str) -> None:
+        """Set key elemen dari channels.<enc_col> (Fernet). NO-FALLBACK: channel = sumber tunggal —
+        kosong/None/gagal-decrypt → key kosong (produksi gagal jujur, tak pinjam key tenant)."""
+        enc = ch.get(enc_col)
+        if not enc:
+            setattr(config, key_attr, "")
             return
         try:
-            r = self._supabase.table("tenant_api_accounts").select("key_enc,status").eq("id", aid).limit(1).execute()
-            row = (r.data or [None])[0]
-            if row and row.get("status") == "active" and row.get("key_enc"):
-                from src.utils.crypto import decrypt
-                setattr(config, key_attr, decrypt(row["key_enc"]))
+            from src.utils.crypto import decrypt
+            setattr(config, key_attr, decrypt(enc) or "")
         except Exception as e:
-            logger.warning(f"[TenantConfig] resolve account key {ref_col}={aid} gagal: {e} — fallback key tenant")
+            logger.error(f"[TenantConfig] decrypt {enc_col} gagal: {e} — key kosong (gagal jujur, no-fallback)")
+            setattr(config, key_attr, "")
 
     def _load_from_supabase(self, tenant_id: str) -> Optional[TenantRunConfig]:
         """Load config dari Supabase. Return None jika gagal."""
@@ -538,19 +512,16 @@ class TenantConfigManager:
                 peak_region=row.get("peak_region", "us"),
                 tts_provider=row.get("tts_provider", "edge_tts"),
                 tts_voice=row.get("tts_voice", "en-US-GuyNeural"),
-                tts_api_key=_eff_key(row, "tts_api_key"),
-                visual_provider=row.get("visual_provider", "pexels"),
-                visual_max_clip_mb=row.get("visual_max_clip_mb", 50),
-                visual_api_key=_eff_key(row, "visual_api_key"),
+                tts_api_key=None,     # kunci = PER-CHANNEL (channels.tts_key_enc via overlay); no-fallback
+                visual_api_key=None,  # kunci = PER-CHANNEL (channels.visual_key_enc via overlay); no-fallback
                 visual_ai_model=row.get("visual_ai_model"),
                 image_quality=row.get("image_quality", "low"),
                 llm_provider=row.get("llm_provider"),
                 llm_model=row.get("llm_model"),
-                llm_api_key=_eff_key(row, "llm_api_key"),
+                llm_api_key=None,     # kunci = PER-CHANNEL (channels.llm_key_enc via overlay); no-fallback
                 llm_library=row.get("llm_library"),
                 llm_models=row.get("llm_models") if isinstance(row.get("llm_models"), dict) else None,
-                youtube_api_key=_eff_key(row, "youtube_api_key"),
-                visual_mode=row.get("visual_mode", "video"),
+                visual_mode=row.get("visual_mode", "") or "",
                 is_developer=row.get("is_developer", False),
                 discount_pct=row.get("discount_pct", 0),
                 script_min_viral_score=row.get("script_min_viral_score", 75),
@@ -567,9 +538,6 @@ class TenantConfigManager:
                 trailing_silence=float(row.get("trailing_silence") or 2.5),
                 niche_hashtags=row.get("niche_hashtags") if isinstance(row.get("niche_hashtags"), dict) else None,
                 duplicate_lookback_days = int(row.get("duplicate_lookback_days", 30) or 30),
-                production_on_api_error = row.get("production_on_api_error", "fallback") or "fallback",
-                tts_fallback_provider   = row.get("tts_fallback_provider", "edge_tts") or "edge_tts",
-                visual_fallback_mode    = row.get("visual_fallback_mode", "video") or "video",
                 channel_group           = row.get("channel_group", "default") or "default",
                 niche_visual_style      = niche_visual_style,
                 niche_visual_fallbacks  = niche_visual_fallbacks,
@@ -618,9 +586,6 @@ class TenantConfigManager:
             trailing_silence=2.5,
             niche_hashtags=None,
             duplicate_lookback_days = 30,
-            production_on_api_error = "fallback",
-            tts_fallback_provider   = "edge_tts",
-            visual_fallback_mode    = "video",
             channel_group           = "default",
             # Telegram (s81)
             telegram_enabled        = True,
@@ -674,7 +639,7 @@ if __name__ == "__main__":
     print(f"Platforms     : {config.publish_platforms}")
     print(f"Peak region   : {config.peak_region}")
     print(f"TTS Provider  : {config.tts_provider} ({config.tts_voice})")
-    print(f"Visual        : {config.visual_provider} (max {config.visual_max_clip_mb}MB)")
+    print(f"Visual        : {config.visual_mode}")
     print(f"LLM           : {config.llm_provider} / {config.llm_model}")
     print(f"Production    : {config.production_cron}")
     print(f"Analytics     : {config.analytics_cron}")

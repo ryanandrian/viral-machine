@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { fetchPricing, idrK } from "@/lib/pricing";
-import { Sparkles, Command, Music, Target, Bell, Shield, ChevronDown, Play, Settings, X, Clock, Wand2, Plus, Tv, HelpCircle, Check } from "lucide-react";
+import { Sparkles, Music, Target, Bell, Shield, ChevronDown, Play, X, Clock, Wand2, Plus, Tv, HelpCircle, Check } from "lucide-react";
 import "../config.css";
 
 // Config (D8-D19) STAGE 1 — port dari design-source/Config.html + config/cfg-engines.js (Hybrid).
@@ -22,97 +22,9 @@ function Mark({ label, color, size = 38 }: { label: string; color: string; size?
   return <span className="svc-ic" style={{ background: color, width: size, height: size, fontSize: size <= 24 ? 10 : 13, fontWeight: 700 }}>{label}</span>;
 }
 
-// waveform deterministik (ganti Math.random)
-function Svc({ mark, color, name, meta, defaultOpen = true, children }: { mark: string; color: string; name: string; meta: string; defaultOpen?: boolean; children: React.ReactNode }) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div className={`svc${open ? " open" : ""}`}>
-      <div className="svc-head" onClick={(e) => { if ((e.target as HTMLElement).closest("input,button,select,a,label,.selbox,.radio-pill")) return; setOpen((o) => !o); }}>
-        <Mark label={mark} color={color} />
-        <div><div className="svc-name">{name}</div><div className="svc-meta">{meta}</div></div>
-        <span className="badge badge-success" style={{ marginLeft: "auto" }}><span className="dot" />Connected</span>
-        <span className="chev"><ChevronDown size={16} /></span>
-      </div>
-      <div className="svc-body">{children}</div>
-    </div>
-  );
-}
-
 // ---------- panels ----------
-function AiEngines() {
-  const supabase = createClient();
-  const [llmKey, setLlmKey] = useState(""); const [ttsKey, setTtsKey] = useState(""); const [visualKey, setVisualKey] = useState("");
-  const [lib, setLib] = useState<"anthropic" | "openai">("openai");
-  const [has, setHas] = useState<{ llm: boolean; tts: boolean; visual: boolean }>({ llm: false, tts: false, visual: false });
-  const [saving, setSaving] = useState(false); const [saved, setSaved] = useState<string | null>(null);
-  useEffect(() => {
-    // Presence-check via kolom TERENKRIPSI (*_enc, migr 0044) — plaintext sudah di-null-kan.
-    supabase.from("tenant_configs").select("llm_library, llm_api_key_enc, tts_api_key_enc, visual_api_key_enc").maybeSingle().then(({ data }) => {
-      if (data) { setLib((data.llm_library as "anthropic" | "openai") || "openai"); setHas({ llm: !!data.llm_api_key_enc, tts: !!data.tts_api_key_enc, visual: !!data.visual_api_key_enc }); }
-    });
-  }, [supabase]);
-  async function save() {
-    setSaving(true); setSaved(null);
-    // API key (rahasia) → vault TERENKRIPSI Fernet (server pemegang-kunci). llm_library = passthrough.
-    const payload: Record<string, string> = { llm_library: lib };
-    if (llmKey.trim()) payload.llm_api_key = llmKey.trim();
-    if (ttsKey.trim()) payload.tts_api_key = ttsKey.trim();
-    if (visualKey.trim()) payload.visual_api_key = visualKey.trim();
-    const r = await fetch("/api/keys/set", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-    const ok = r.ok;
-    setSaving(false); setSaved(ok ? "Tersimpan (key terenkripsi Fernet, tak di-log)" : "Gagal menyimpan");
-    if (ok) { setHas({ llm: has.llm || !!payload.llm_api_key, tts: has.tts || !!payload.tts_api_key, visual: has.visual || !!payload.visual_api_key }); setLlmKey(""); setTtsKey(""); setVisualKey(""); }
-  }
-  const ph = (set: boolean) => set ? "•••••••• (tersimpan — isi untuk ganti)" : "Tempel API key";
-  return (
-    <>
-      <Svc mark="A" color="var(--anthropic)" name="Script LLM" meta="Anthropic / OpenAI · script & hook">
-        <div className="fld"><label className="label"><Bi id="Library" en="Library" /></label><div className="radio-row">{(["anthropic", "openai"] as const).map((o) => <span key={o} className={`radio-pill${lib === o ? " sel" : ""}`} onClick={() => setLib(o)} style={{ textTransform: "capitalize" }}>{o}</span>)}</div></div>
-        <div className="fld-row"><div className="k">API Key (LLM)</div><input className="input input-mono" type="password" placeholder={ph(has.llm)} value={llmKey} onChange={(e) => setLlmKey(e.target.value)} /></div>
-      </Svc>
-      <Svc mark="11" color="var(--elevenlabs)" name="Text-to-Speech" meta="ElevenLabs · voiceover">
-        <div className="fld-row"><div className="k">API Key (TTS)</div><input className="input input-mono" type="password" placeholder={ph(has.tts)} value={ttsKey} onChange={(e) => setTtsKey(e.target.value)} /></div>
-      </Svc>
-      <Svc mark="AI" color="var(--openai)" name="Visual AI" meta="OpenAI · image generation">
-        <div className="fld-row"><div className="k">API Key (Visual)</div><input className="input input-mono" type="password" placeholder={ph(has.visual)} value={visualKey} onChange={(e) => setVisualKey(e.target.value)} /></div>
-      </Svc>
-      <div className="save-bar"><span className="muted">{saved ?? <Bi id="BYOK — key milikmu, terenkripsi Fernet, tak pernah di-log" en="BYOK — your keys, Fernet-encrypted, never logged" />}</span><button className="btn btn-default" disabled={saving} onClick={save}>{saving ? "Menyimpan…" : <Bi id="Simpan" en="Save" />}</button></div>
-    </>
-  );
-}
-
-function ApiKeys() {
-  const supabase = createClient();
-  const [cfg, setCfg] = useState<Record<string, unknown> | null>(null);
-  useEffect(() => { supabase.from("tenant_configs").select("llm_api_key_enc, visual_api_key_enc, tts_api_key_enc, youtube_api_key_enc, telegram_chat_id, llm_library, tts_provider").maybeSingle().then(({ data }) => setCfg(data ?? {})); }, [supabase]);
-  const rows: [string, string, string, boolean][] = cfg ? [
-    ["A", `LLM (${(cfg.llm_library as string) || "—"})`, "var(--anthropic)", !!cfg.llm_api_key_enc],
-    ["AI", "Visual (OpenAI)", "var(--openai)", !!cfg.visual_api_key_enc],
-    ["11", `TTS (${(cfg.tts_provider as string) || "—"})`, "var(--elevenlabs)", !!cfg.tts_api_key_enc],
-    ["YT", "YouTube Data API", "var(--yt)", !!cfg.youtube_api_key_enc],
-    ["TG", "Telegram", "var(--telegram)", !!cfg.telegram_chat_id],
-  ] : [];
-  const st = (ok: boolean) => ok
-    ? <span className="badge badge-success"><span className="dot" />Tersimpan</span>
-    : <span className="badge badge-default"><span className="dot" />Belum diisi</span>;
-  return (
-    <>
-      <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl">
-        <thead><tr><th>Service</th><th>Status</th><th></th></tr></thead>
-        <tbody>
-          {!cfg && <tr><td colSpan={3} className="muted" style={{ padding: "1rem", textAlign: "center" }}>Memuat…</td></tr>}
-          {rows.map(([m, n, c, ok]) => (
-          <tr key={n}>
-            <td><span style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}><Mark label={m} color={c} size={24} /><b style={{ color: "var(--text-primary)", fontWeight: 500 }}>{n}</b></span></td>
-            <td>{st(ok)}</td>
-            <td style={{ textAlign: "right" }}><Link href="/config/ai-engines" className="btn btn-ghost btn-sm"><Settings size={13} /> <Bi id="Kelola" en="Manage" /></Link></td>
-          </tr>
-          ))}
-        </tbody></table></div></div>
-      <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".75rem" }}><Bi id="Key di-isi & dienkripsi (Fernet) di tab AI Engines / Notifikasi. Status di atas = ada/tidaknya key tersimpan (nilai tak pernah ditampilkan/di-log). Validasi koneksi nyata = saat run produksi." en="Keys are set & Fernet-encrypted in AI Engines / Notifications. Status above = whether a key is stored (values never shown/logged). Live connection validation happens at production run." /></div>
-    </>
-  );
-}
+// F2 (2026-06-24): kelola kunci AI = PER-CHANNEL (Channels → Manage). Tab "AI Engines" & "API Keys"
+// (tenant-level key di tenant_configs) DIBUANG — fosil; jalur tulis (/api/keys/set) juga dihapus.
 
 function Mood({ cols }: { cols: string[] }) {
   return <div style={{ height: 64, display: "flex" }}>{cols.map((c) => <span key={c} style={{ flex: 1, background: c }} />)}</div>;
@@ -321,8 +233,6 @@ function MovedToChannel() {
 
 type Panel = { title: { id: string; en: string }; desc: { id: string; en: string }; badge?: React.ReactNode; Body: () => React.ReactElement };
 const PANELS: Record<string, Panel> = {
-  "ai-engines": { title: { id: "Mesin AI", en: "AI Engines" }, desc: { id: "Pilih provider & model per tugas produksi. Hubungkan API key milikmu (BYOK).", en: "Choose provider & model per production task. Connect your own API keys (BYOK)." }, Body: AiEngines },
-  "api-keys": { title: { id: "API Keys", en: "API Keys" }, desc: { id: "Kelola semua API key. Dienkripsi Fernet AES-128, tidak pernah di-log.", en: "Manage all API keys. Encrypted with Fernet AES-128, never logged." }, Body: ApiKeys },
   "voice": { title: { id: "Suara", en: "Voice" }, desc: { id: "Voice difilter oleh bahasa konten channel aktif. Tetapkan voice default per niche.", en: "Voices are filtered by the active channel's content language. Set a default voice per niche." }, Body: MovedToChannel },
   "visual": { title: { id: "Visual", en: "Visual" }, desc: { id: "Pilih preset gaya visual & sesuaikan prompt per niche.", en: "Choose a visual style preset & customize prompts per niche." }, Body: MovedToChannel },
   "music": { title: { id: "Musik", en: "Music" }, desc: { id: "Library musik latar. Mesin memilih mood otomatis sesuai niche & performa.", en: "Background music library. The engine auto-selects mood by niche & performance." }, Body: MovedToChannel },
@@ -337,9 +247,6 @@ type NavItem = { grp: { id: string; en: string } } | { id: string; Icon: typeof 
 // F2-05: Voice/Visual/Music/Captions/Quality/Hashtags DIBUANG dari nav tenant → kini per-channel
 // (Channels → Manage). Sisa config tenant = item per-TENANT sejati: AI keys, Niches, Notifikasi.
 const NAV: NavItem[] = [
-  { grp: { id: "Mesin", en: "Engine" } },
-  { id: "ai-engines", Icon: Sparkles, t: { id: "Mesin AI", en: "AI Engines" } },
-  { id: "api-keys", Icon: Command, t: { id: "API Keys", en: "API Keys" } },
   { grp: { id: "Konten", en: "Content" } },
   { id: "niches", Icon: Target, t: { id: "Niches", en: "Niches" } },
   { grp: { id: "Sistem", en: "System" } },
@@ -348,7 +255,7 @@ const NAV: NavItem[] = [
 
 export default function ConfigTabPage() {
   const params = useParams<{ tab: string }>();
-  const active = (params?.tab as string) || "ai-engines";
+  const active = (params?.tab as string) || "niches";
 
   const panel = PANELS[active];
   const meta = NAV.find((n) => "id" in n && n.id === active) as Extract<NavItem, { id: string }> | undefined;

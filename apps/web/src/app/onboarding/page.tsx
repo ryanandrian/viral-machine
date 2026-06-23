@@ -128,25 +128,17 @@ export default function OnboardingPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setBusy(false); window.location.href = "/auth?view=login"; return; }
 
-    // (1a) Config NON-rahasia (voice + timezone) → SECURITY DEFINER RPC whitelist.
+    // (1) Config NON-rahasia (voice + timezone) → SECURITY DEFINER RPC whitelist.
     const voiceName = (VOICES[curLang] || VOICES["id-ID"])[voice]?.[0] ?? null;
     const { error: eCfg } = await supabase.rpc("set_tenant_config", { p_timezone: "Asia/Jakarta", p_tts_voice: voiceName });
     if (eCfg) { setBusy(false); setErr(eCfg.message); return; }
-    // (1b) API key (RAHASIA) → vault TERENKRIPSI Fernet (migr 0044); master key tak pernah ke Next.
-    const ak = svcKeys.anthropic?.trim(), ok = svcKeys.openai?.trim(), ek = svcKeys.elevenlabs?.trim();
-    const keyPayload: Record<string, string> = {};
-    if (ak) { keyPayload.llm_api_key = ak; keyPayload.llm_library = "anthropic"; }
-    if (ok) keyPayload.visual_api_key = ok;
-    if (ek) { keyPayload.tts_api_key = ek; keyPayload.tts_provider = "elevenlabs"; }
-    if (Object.keys(keyPayload).length) {
-      const rk = await fetch("/api/keys/set", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(keyPayload) });
-      if (!rk.ok) { setBusy(false); const j = await rk.json().catch(() => ({})); setErr(j.error || "Gagal menyimpan API key"); return; }
-    }
 
-    // (2) channel pertama (client-RLS; channels = kolom config, aman).
+    // (2) channel pertama = DRAFT NON-AKTIF (gerbang): provider terisi dari onboarding; tenant lengkapi
+    //     model/voice/visual di Manage lalu aktifkan. Kunci = PER-CHANNEL (no tenant-level key).
+    const ak = svcKeys.anthropic?.trim(), ok = svcKeys.openai?.trim(), ek = svcKeys.elevenlabs?.trim();
     const sel = NICHES.filter((_, i) => niches[i]);
     const keys = (sel.length ? sel : [NICHES[2]]).map((n) => n.key);
-    const { error: eCh } = await supabase.from("channels").insert({
+    const { data: chRow, error: eCh } = await supabase.from("channels").insert({
       tenant_id: user.id,
       channel_name: (sel[0] ?? NICHES[2]).en,
       channel_group: "default", // NOT NULL
@@ -157,10 +149,25 @@ export default function OnboardingPage() {
       platform: "youtube",
       publish_privacy: "private", // trial-safe (decisions: default private)
       publish_slots: ["13:00"],   // C2: jadwal default (1 slot, ≤ semua tier) — atur di /schedule
-      is_active: true,
-    });
+      is_active: false,           // F2-01/gerbang: aktif setelah readiness lengkap di Manage
+      llm_library: ak ? "anthropic" : null,
+      tts_provider: ek ? "elevenlabs" : null,
+    }).select("id").single();
+    if (eCh) { setBusy(false); setErr(eCh.message); return; }
+
+    // (3) Kunci AI PER-CHANNEL (vault Fernet, master key hanya di server) — yang diisi saat onboarding.
+    const cid = (chRow as { id?: string } | null)?.id;
+    if (cid) {
+      const jobs: [string, string][] = [];
+      if (ak) jobs.push(["llm", ak]);
+      if (ok) jobs.push(["visual", ok]);
+      if (ek) jobs.push(["tts", ek]);
+      for (const [element, key] of jobs) {
+        const rk = await fetch(`/api/channels/${cid}/keys`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ element, key }) });
+        if (!rk.ok) { setBusy(false); const j = await rk.json().catch(() => ({})); setErr(j.error || "Gagal menyimpan kunci AI"); return; }
+      }
+    }
     setBusy(false);
-    if (eCh) { setErr(eCh.message); return; }
     router.push("/dashboard"); // channel ada → onboarded-check lolos
   }
 

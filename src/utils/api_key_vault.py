@@ -1,22 +1,26 @@
 """
-Vault tulis API key AI tenant TERENKRIPSI (Fernet) ke tenant_configs.*_enc — service_role.
+Vault kunci AI per-CHANNEL TERENKRIPSI (Fernet) → channels.{llm,tts,visual}_key_enc — service_role.
 
-Owner 2026-06-15: seluruh kredensial tenant terenkripsi at-rest = nilai jual. Master key
-(ENCRYPTION_KEY) HANYA di server ini (Python) — tak pernah ke frontend/Vercel (sejalan Opsi A
-YouTube OAuth). Postgres tak punya master key → RPC set_tenant_config TAK lagi bisa tulis key
-(migr 0044 buang param key). Jalur tulis key satu-satunya = lewat sini (webhook_app /api/keys/set).
+Model bersih (owner 2026-06-24): tiap channel wajib Penyedia + Model + Kunci per elemen
+(LLM/TTS/Visual). NOL fallback. Kunci boleh sama/beda antar channel, DICATAT EKSPLISIT per channel.
 
-Hanya kolom WHITELIST yang ditulis (tak pernah billing/comp). Plaintext kolom lama di-null-kan.
+Master key (ENCRYPTION_KEY) HANYA di server ini (Python) — tak pernah ke frontend. Jalur tulis/baca
+kunci satu-satunya = lewat sini (webhook_app /api/channels/key & /api/channels/keys/get).
+Owner: kunci TIDAK di-mask di UI (boleh copy-paste) → get_channel_keys mengembalikan plaintext
+ke tenant PEMILIK channel (route authed).
+
+(Fosil DIBUANG 2026-06-24: set_api_keys→tenant_configs.*_enc & add_api_account→tenant_api_accounts —
+diganti kunci inline per-channel.)
 """
 
 import os
 from datetime import datetime, timezone
 from loguru import logger
 
-from src.utils.crypto import encrypt
+from src.utils.crypto import encrypt, decrypt
 
-SECRET_KEYS = ("llm_api_key", "visual_api_key", "tts_api_key", "youtube_api_key")  # → *_enc (Fernet)
-PASSTHROUGH = ("llm_library", "tts_provider")  # non-rahasia; pasangan key (provider/library)
+# elemen AI → kolom kunci di channels (Fernet)
+_CHANNEL_KEY_COL = {"llm": "llm_key_enc", "tts": "tts_key_enc", "visual": "visual_key_enc"}
 
 
 def _sb():
@@ -24,53 +28,35 @@ def _sb():
     return create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
 
 
-def set_api_keys(tenant_id: str, payload: dict) -> dict:
-    """Enkripsi & simpan key yang ada di payload. Mengembalikan {ok, set:[kolom key]}.
-    Key kosong/None diabaikan (idempoten — tak menimpa key lama dengan kosong)."""
-    if not tenant_id:
-        raise ValueError("tenant_id wajib")
-    upd: dict = {"updated_at": datetime.now(timezone.utc).isoformat()}
-    set_keys = []
-    for k in SECRET_KEYS:
-        v = payload.get(k)
-        if v and str(v).strip():
-            upd[f"{k}_enc"] = encrypt(str(v).strip())
-            upd[k] = None  # pastikan plaintext lama kosong
-            set_keys.append(k)
-    for k in PASSTHROUGH:
-        v = payload.get(k)
-        if v:
-            upd[k] = v
-    if payload.get("llm_library"):
-        upd["llm_provider"] = payload["llm_library"]  # jaga flat sinkron (spt RPC)
-    _sb().table("tenant_configs").update(upd).eq("tenant_id", tenant_id).execute()
-    logger.info(f"[key-vault] tenant={tenant_id} set keys={set_keys}")
-    return {"ok": True, "set": set_keys}
+def set_channel_key(tenant_id: str, channel_id: str, element: str, key: str) -> dict:
+    """Enkripsi & simpan kunci 1 elemen (llm/tts/visual) ke channels.<element>_key_enc (Fernet).
+    key kosong → kosongkan kolom (hapus kunci). RLS-aman: filter tenant_id + channel id."""
+    if not tenant_id or not channel_id:
+        raise ValueError("tenant_id & channel_id wajib")
+    col = _CHANNEL_KEY_COL.get(element)
+    if not col:
+        raise ValueError(f"element invalid: {element} (harus llm/tts/visual)")
+    val = encrypt(str(key).strip()) if (key and str(key).strip()) else None
+    _sb().table("channels").update(
+        {col: val, "updated_at": datetime.now(timezone.utc).isoformat()}
+    ).eq("id", channel_id).eq("tenant_id", tenant_id).execute()
+    logger.info(f"[key-vault] channel={channel_id} {element}: {'set' if val else 'cleared'}")
+    return {"ok": True, "element": element, "set": bool(val)}
 
 
-# ── F2-09: vault MULTI-akun (tenant_api_accounts) — encrypt + insert akun baru ──
-ALLOWED_COMPONENTS = ("llm", "tts", "image", "video")
-
-
-def add_api_account(tenant_id: str, component: str, label: str, key: str, provider: str | None = None) -> dict:
-    """Tambah AKUN API ke vault (tenant_api_accounts), key TERENKRIPSI (Fernet, server-only).
-    Dipakai FE pemilih akun per-channel-per-elemen (F2-09). Return {ok, id}."""
-    if not tenant_id:
-        raise ValueError("tenant_id wajib")
-    if component not in ALLOWED_COMPONENTS:
-        raise ValueError(f"component invalid: {component}")
-    if not (key and str(key).strip()):
-        raise ValueError("key wajib")
-    row = {
-        "tenant_id": tenant_id,
-        "component": component,
-        "provider": (str(provider).strip() or None) if provider else None,
-        "label": (str(label).strip() or f"{component} key")[:80],
-        "key_enc": encrypt(str(key).strip()),
-        "status": "active",
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }
-    res = _sb().table("tenant_api_accounts").insert(row).execute()
-    aid = (res.data or [{}])[0].get("id")
-    logger.info(f"[key-vault] tenant={tenant_id} add account component={component} id={aid}")
-    return {"ok": True, "id": aid}
+def get_channel_keys(tenant_id: str, channel_id: str) -> dict:
+    """Dekripsi kunci per-elemen channel untuk DITAMPILKAN (owner: kunci tak di-mask → copy-paste).
+    Hanya tenant pemilik channel (dipanggil via route authed). Return {ok, keys:{llm,tts,visual}}."""
+    if not tenant_id or not channel_id:
+        raise ValueError("tenant_id & channel_id wajib")
+    r = (_sb().table("channels").select("llm_key_enc,tts_key_enc,visual_key_enc")
+         .eq("id", channel_id).eq("tenant_id", tenant_id).limit(1).execute())
+    row = (r.data or [None])[0] or {}
+    out = {}
+    for el, col in _CHANNEL_KEY_COL.items():
+        enc = row.get(col)
+        try:
+            out[el] = decrypt(enc) if enc else ""
+        except Exception:
+            out[el] = ""
+    return {"ok": True, "keys": out}

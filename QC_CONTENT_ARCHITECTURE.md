@@ -136,7 +136,7 @@ Tujuan: tutup loop tidak hanya di **input** (script/hook dari analytics) tapi ju
 
 ### Kondisi nyata (tervalidasi 2026-06-13, vs kode)
 - **TTS fallback SILENT** — `tts_engine.generate` hanya `logger.warning` saat fallback; **tak ada notifikasi tenant**. Field `tts_fallback_provider` ADA (default `edge_tts`).
-- **Visual juga fallback** (bukan TTS saja): `visual_assembler` ai_image → **Pexels** → **black-screen**. Jadi kebijakan ini **umum**, bukan TTS-only.
+- **Visual = GENERATOR AI saja, NO-FALLBACK** (sejak 2026-06-24, Pexels dibuang): `visual_assembler` pakai HANYA generator pilihan channel (`ai_image:`/`ai_video:`); gagal → `[]` → pipeline raise → notify → retry manual. Tak ada lagi rantai ai_image→Pexels→black-screen. (Kebijakan transparansi/no-silent-degradasi tetap berlaku untuk TTS.)
 - **Konsekuensi kualitas edge_tts nyata**: timestamp **aproksimasi** (interpolasi batas-kalimat) → sinkron caption ~80% vs ElevenLabs char-level ~98%. ⚠️ *Inkonsistensi kode: docstring edge_tts klaim ~95%, engine label ~80% — REKONSILIASI dulu (verifikasi angka nyata) sebelum dipakai sebagai janji.*
 
 ### Model: dua sumbu, JANGAN disatukan jadi satu toggle
@@ -152,8 +152,7 @@ Tujuan: tutup loop tidak hanya di **input** (script/hook dari analytics) tapi ju
 | Komponen | Rantai | Boleh tayang (bila diizinkan)? |
 |---|---|---|
 | TTS | ElevenLabs → edge_tts | ✅ degradasi wajar (caption ~80%, suara generik) |
-| Visual | ai_image → Pexels | ✅ wajar (stock, bukan bespoke) |
-| Visual | … → **black-screen** | ❌ **TIDAK PERNAH** — itu video rusak; **selalu stop**, lepas dari checkbox |
+| Visual | generator AI (ai_image:/ai_video:) — **NO-FALLBACK** | ❌ tak ada cadangan; gagal → stop jujur (Pexels dibuang 2026-06-24) |
 
 ### Default & teknis
 - **Default** (keputusan owner — lihat §6): rekomendasi **stop** untuk provider **premium berbayar** (nilai jual = kualitas premium).
@@ -182,7 +181,7 @@ Tujuan: tutup loop tidak hanya di **input** (script/hook dari analytics) tapi ju
 2. **QC-fail durasi → REVIEW-IN-DOMAIN + APPROVE (OPSI C, owner 2026-06-17; supersede "publish-private" 2026-06-16)**, **bukan dibuang**. Video bermasalah **tetap di buffer S3** (`ready_with_issues`) → tenant **tinjau dari dashboard** + **advisory (alasan + rekomendasi)** → **tenant putuskan** Pakai (publish, kuota−1) / Buang / TTL. **TIDAK auto-upload ke YouTube** (tutup cheat flip-Studio + off-schedule). Retry/regenerate = §3/F3 + **direct** pasca-perbaikan (bukan loop bakar-kredit). **Integrasi alur §12c = OPSI C** (producer hanya stok; publisher hanya publish `ready`; issue ditinjau di domain kita — lihat §3).
 3. Self-critic = **heuristik dulu**; LLM-vision ditunda (biaya × ribuan tenant).
 4. Prioritas = **G-final integritas dulu (✅ DONE)** → QC-relatif nyusul bersama field Preset (F1).
-5. Default fallback = **stop** untuk provider premium berbayar (nilai jual = kualitas); per-komponen bisa beda (Visual ai_image→Pexels boleh).
+5. Default fallback = **stop** untuk provider premium berbayar (nilai jual = kualitas). Visual = generator AI **NO-FALLBACK** (Pexels dibuang 2026-06-24); TTS premium→edge boleh bila tenant izinkan (transparan).
 
 **Masih perlu DATA/biaya (jangan dikoding buta):**
 - Kalibrasi WPS per-provider + G-audio loop → butuh ukur WPS (run; ElevenLabs lapse) + validasi render (biaya owner).
