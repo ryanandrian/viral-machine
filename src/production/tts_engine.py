@@ -122,9 +122,9 @@ def _log_delivery_sample(tenant_config, config: dict, provider_name: str, word_c
 
 class TTSEngine:
     """
-    TTS Engine dengan fallback hierarchy.
-    ElevenLabs (best) → OpenAI TTS → Edge TTS (last resort).
-    Setiap fallback dicatat sebagai concern untuk user.
+    TTS Engine TUNGGAL — provider+voice dari CHANNEL, dispatch protokol via registry config-driven
+    (build_tts_provider → tts_profiles.adapter, F5-06). NO-FALLBACK (§3.8/F1-05): HANYA provider
+    terkonfigurasi channel; gagal = gagal jujur (tak pindah diam-diam). Adaptor per-protokol di src/providers/tts/.
     """
 
     def __init__(self):
