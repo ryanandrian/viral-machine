@@ -250,11 +250,10 @@ def _download_from_s3(s3_key: str, output_path: Path) -> bool:
         return False
 
 
-def _download_track(r2_key: str, output_path: Path) -> bool:
-    """Aset musik = S3 ONLY (aturan owner; NO-FALLBACK §3.8). Gagal S3 = gagal JUJUR (TIDAK diam-diam
-    pindah ke R2). `r2_key` = object-key (legacy nama kolom; key S3 = 'music/<key>'). R2 dihapus TOTAL
-    saat dekomisi — setelah migrasi terbukti 100% valid di seluruh area + dokumen + env."""
-    return _download_from_s3(f"music/{r2_key}", output_path)
+def _download_track(object_key: str, output_path: Path) -> bool:
+    """Aset musik = S3 Biznet Gio ONLY (NO-FALLBACK §3.8). `object_key` = kunci OPAK penuh
+    ('music/{id}.mp3', §10.G) — di-download apa adanya, TANPA prepend → tak ada kelas-bug double-prefix."""
+    return _download_from_s3(object_key, output_path)
 
 
 def _increment_play_count(track_id: str) -> None:
@@ -328,7 +327,7 @@ def select_and_download(
     track_name = candidate.get("name", "unknown")
     track_mood = candidate.get("mood", mood)
     duration_s = candidate.get("duration_s", 0)
-    r2_key     = candidate.get("r2_key", "")
+    object_key = candidate.get("object_key") or (f"music/{candidate.get('r2_key')}" if candidate.get("r2_key") else "")
     track_id   = candidate.get("id", "")
 
     logger.info(
@@ -336,18 +335,18 @@ def select_and_download(
         f"(mood={track_mood}, {duration_s}s, bpm={candidate.get('bpm')})"
     )
 
-    if not r2_key:
-        logger.error("[MusicSelector] Track tidak punya r2_key")
+    if not object_key:
+        logger.error("[MusicSelector] Track tidak punya object_key")
         return None
 
-    # 6. Download dari R2
+    # 6. Download dari S3 (kunci opak)
     output_path = Path(output_dir) / f"music_{mood}_{track_id[:8]}.mp3"
     if output_path.exists():
         logger.info(f"[MusicSelector] Cache hit: {output_path.name}")
         return str(output_path)
 
-    logger.info(f"[MusicSelector] Downloading from S3: {r2_key}")
-    if not _download_track(r2_key, output_path):
+    logger.info(f"[MusicSelector] Downloading from S3: {object_key}")
+    if not _download_track(object_key, output_path):
         logger.error("[MusicSelector] Download S3 gagal — skip music (NO-FALLBACK, gagal jujur)")
         return None
 
