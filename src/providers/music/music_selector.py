@@ -229,34 +229,6 @@ def _query_tracks(niche: str, mood: str, fallback_moods: list) -> list[dict]:
         return []
 
 
-def _download_from_r2(r2_key: str, output_path: Path) -> bool:
-    """DEPRECATED (tak dipakai lagi — aset = S3 ONLY). Dihapus TOTAL bersama R2 env/config/dok saat
-    dekomisi R2, setelah migrasi terbukti 100% valid. Dibiarkan sementara hanya sbg jejak."""
-    try:
-        import boto3
-        from botocore.client import Config
-        from dotenv import load_dotenv
-        load_dotenv()
-
-        s3 = boto3.client(
-            "s3",
-            endpoint_url          = os.getenv("R2_ENDPOINT"),
-            aws_access_key_id     = os.getenv("R2_ACCESS_KEY"),
-            aws_secret_access_key = os.getenv("R2_SECRET_KEY"),
-            config                = Config(signature_version="s3v4"),
-            region_name           = "auto",
-        )
-        bucket = os.getenv("R2_BUCKET")
-        if not bucket:
-            raise ValueError("R2_BUCKET tidak diset di .env — wajib untuk download musik dari R2 (no default).")
-        s3.download_file(bucket, r2_key, str(output_path))
-        return output_path.exists()
-
-    except Exception as e:
-        logger.error(f"[MusicSelector] R2 download error: {e}")
-        return False
-
-
 def _download_from_s3(s3_key: str, output_path: Path) -> bool:
     """Download track dari S3 (Biznet, bucket aset). Aturan owner: SELURUH aset di S3 (R2→S3)."""
     try:
@@ -374,7 +346,7 @@ def select_and_download(
     track_name = candidate.get("name", "unknown")
     track_mood = candidate.get("mood", mood)
     duration_s = candidate.get("duration_s", 0)
-    object_key = candidate.get("object_key") or (f"music/{candidate.get('r2_key')}" if candidate.get("r2_key") else "")
+    object_key = candidate.get("object_key", "")
     track_id   = candidate.get("id", "")
 
     logger.info(

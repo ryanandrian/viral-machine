@@ -76,10 +76,7 @@ class SystemConfig:
     """
     supabase_url: str = field(default_factory=lambda: os.getenv("SUPABASE_URL", ""))
     supabase_key: str = field(default_factory=lambda: os.getenv("SUPABASE_KEY", ""))
-    r2_endpoint: str = field(default_factory=lambda: os.getenv("R2_ENDPOINT", ""))
-    r2_access_key: str = field(default_factory=lambda: os.getenv("R2_ACCESS_KEY", ""))
-    r2_secret_key: str = field(default_factory=lambda: os.getenv("R2_SECRET_KEY", ""))
-    r2_bucket: str = field(default_factory=lambda: os.getenv("R2_BUCKET", ""))  # WAJIB di .env; kosong → raise saat R2 dipakai (no default)
+    # R2 (Cloudflare) DIHAPUS 2026-06-23 — aset musik = S3 Biznet Gio (kunci opak object_key, §10.G). Fosil v1.
 
 VIRAL_SCORE_WEIGHTS = {
     "search_volume": 0.25,
