@@ -78,6 +78,16 @@ class ElevenLabsProvider(TTSProvider):
                 "ElevenLabs: voice belum ter-resolve. Set voice di Channel (channels.voice_key, §10.B FINAL)."
             )
 
+        # POINT 1 (no-hardcode): model TTS dari config (channels.tts_model → katalog ai_models component='tts').
+        # Sebelumnya `eleven_turbo_v2_5` DIPAKU di generate() → tenant tak bisa pilih model + biaya per-model
+        # mustahil. Kini config-driven; default di-resolve di config layer (sort_order katalog). Gagal jujur bila kosong.
+        self.model = (config.get("tts_model") or "").strip()
+        if not self.model:
+            raise TTSError(
+                "ElevenLabs: model TTS belum ter-resolve. Set model di Channel (channels.tts_model) "
+                "atau pastikan katalog ai_models punya model 'tts' aktif untuk provider 'elevenlabs'."
+            )
+
         self._word_timestamps: list[dict] | None = None
 
     async def generate(self, text: str, output_path: Path) -> Path:
@@ -90,7 +100,7 @@ class ElevenLabsProvider(TTSProvider):
         except ImportError:
             raise TTSError("elevenlabs tidak terinstall. Jalankan: python3.11 -m pip install elevenlabs")
 
-        logger.info(f"[ElevenLabs] voice={self.voice} chars={len(text)}")
+        logger.info(f"[ElevenLabs] voice={self.voice} model={self.model} chars={len(text)}")
 
         try:
             from elevenlabs import VoiceSettings
@@ -118,7 +128,7 @@ class ElevenLabsProvider(TTSProvider):
             response = await client.text_to_speech.convert_with_timestamps(
                 voice_id=self.voice,
                 text=text,
-                model_id="eleven_turbo_v2_5",
+                model_id=self.model,
                 output_format="mp3_44100_128",
                 voice_settings=voice_settings,
             )

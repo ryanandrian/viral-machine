@@ -391,6 +391,18 @@ class TenantConfigManager:
             v = ch.get(f)
             if v is not None:
                 setattr(config, f, v)
+        # POINT 1 (no-hardcode model TTS): bila channel set tts_provider tapi tts_model kosong →
+        # pakai DEFAULT katalog (ai_models component='tts', provider channel, sort_order terkecil aktif).
+        # Adapter (elevenlabs/openai) jadi nol-hardcode model; channel baru tetap jalan tanpa paksa-isi.
+        if getattr(config, "tts_provider", None) and not (getattr(config, "tts_model", None) or "").strip():
+            try:
+                dm = self._supabase.table("ai_models").select("model_key") \
+                    .eq("component", "tts").eq("provider_key", config.tts_provider) \
+                    .eq("is_active", True).order("sort_order").limit(1).execute()
+                if dm.data:
+                    config.tts_model = dm.data[0]["model_key"]
+            except Exception as e:
+                logger.warning(f"[TenantConfig] resolve default tts_model gagal ({config.tts_provider}): {e}")
         # Resolusi VOICE (PER-CHANNEL, §10.B FINAL owner 2026-06-23): voice = channels.voice_key
         # (1 channel = 1 voice). NO-FALLBACK ke niche (niche provider-agnostik, tak punya voice).
         vkey = ch.get("voice_key")
