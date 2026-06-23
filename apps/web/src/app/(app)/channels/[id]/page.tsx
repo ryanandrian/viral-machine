@@ -116,7 +116,9 @@ export default function ChannelDetailPage() {
   const [ttsOpts, setTtsOpts] = useState<{ provider_key: string; display_name: string }[]>([]);
   const [ttsModelOpts, setTtsModelOpts] = useState<{ model_key: string; display_name: string; provider_key: string }[]>([]);  // ai_models component='tts' (migr 0087)
   const [voiceAll, setVoiceAll] = useState<VoiceOpt[]>([]);
+  const [llmProv, setLlmProv] = useState("");     // penyedia LLM (= llm_library); pilih DULU, lalu model
   const [llmModel, setLlmModel] = useState("");
+  const [visualProv, setVisualProv] = useState(""); // penyedia visual; pilih DULU, lalu model (image/video)
   const [imgModel, setImgModel] = useState("");  // Visual v2 = generator AI (gambar/video); footage/library Pexels dibuang
   const [ttsProv, setTtsProv] = useState("");
   const [ttsModel, setTtsModel] = useState("");  // model TTS dipilih tenant (eleven_turbo/multilingual/flash; tts-1/hd)
@@ -126,7 +128,7 @@ export default function ChannelDetailPage() {
   // Kunci AI per-CHANNEL per-elemen (channels.{llm,tts,visual}_key_enc). Owner 2026-06-24:
   // kunci TAK di-mask (boleh copy-paste). Wajib bila penyedia berbayar (auth_type<>'none').
   const [keys, setKeys] = useState<{ llm: string; tts: string; visual: string }>({ llm: "", tts: "", visual: "" });
-  const [provAuth, setProvAuth] = useState<Record<string, string>>({});  // provider_key → auth_type ('none' = gratis, tanpa kunci)
+  const [provMap, setProvMap] = useState<Record<string, { name: string; auth: string }>>({});  // provider_key → {display_name, auth_type}
   // F2-03: knob operasional per-channel (mutu & biaya — hak tenant)
   const [imgQuality, setImgQuality] = useState("low");
   const [musicOn, setMusicOn] = useState(false);
@@ -196,12 +198,11 @@ export default function ChannelDetailPage() {
   // F2-03 simpan: model+voice → channels (RLS UPDATE). llm_library diturunkan dari provider model LLM.
   async function saveAi() {
     setAiMsg(null); setSavingAi(true);
-    const lib = llmOpts.find((m) => m.model_key === llmModel)?.provider_key ?? null;
     // Prefix generator dari component model terpilih: image → ai_image:, video → ai_video: (no footage/library).
     const vModel = imgOpts.find((m) => m.model_key === imgModel);
     const visual_mode = imgModel && vModel ? `${vModel.component === "video" ? "ai_video" : "ai_image"}:${imgModel}` : null;
     const { error } = await supabase.from("channels").update({
-      llm_model: llmModel || null, llm_library: lib,
+      llm_model: llmModel || null, llm_library: llmProv || null,
       visual_mode, image_quality: imgQuality, tts_provider: ttsProv || null, tts_model: ttsModel || null, voice_key: voiceKey || null,
     }).eq("id", id);
     if (error) { setSavingAi(false); setAiMsg(`Gagal: ${error.message}`); return; }
@@ -301,7 +302,7 @@ export default function ChannelDetailPage() {
       setPrivacy(c.publish_privacy ?? "private"); setActive(c.is_active ?? true);
       setNicheMode((c.niche_mode === "random" ? "random" : "fixed")); setNiche(c.niche ?? "");
       setDpreset(c.duration_preset ?? null); setSlots(c.publish_slots ?? []); setTargetYt(c.platform_channel_id ?? "");
-      setLlmModel(c.llm_model ?? "");
+      setLlmProv(c.llm_library ?? ""); setLlmModel(c.llm_model ?? "");
       const vm = c.visual_mode ?? "";
       setImgModel(vm.startsWith("ai_image:") || vm.startsWith("ai_video:") ? vm.slice(9) : "");
       setTtsProv(c.tts_provider ?? ""); setTtsModel(c.tts_model ?? ""); setVoiceKey(c.voice_key ?? "");
@@ -319,15 +320,20 @@ export default function ChannelDetailPage() {
     // F2-03: katalog (ai_models/tts_profiles/voice_catalog — RLS read). Voice = CHANNEL (§10.B FINAL); tanpa pre-fill niche.
     const { data: am } = await supabase.from("ai_models").select("model_key,provider_key,component,display_name").eq("is_active", true).order("display_name");
     setLlmOpts(((am ?? []) as (ModelOpt & {component:string})[]).filter((m) => m.component === "llm"));
-    setImgOpts(((am ?? []) as (ModelOpt & {component:string})[]).filter((m) => m.component === "image" || m.component === "video"));
+    const imgList = ((am ?? []) as (ModelOpt & {component:string})[]).filter((m) => m.component === "image" || m.component === "video");
+    setImgOpts(imgList);
+    // visualProv = penyedia dari model visual tersimpan (visual_mode = ai_image:/ai_video:<model>)
+    const curVm = c?.visual_mode ?? "";
+    const curImgModel = curVm.startsWith("ai_image:") || curVm.startsWith("ai_video:") ? curVm.slice(9) : "";
+    setVisualProv(imgList.find((m) => m.model_key === curImgModel)?.provider_key ?? "");
     setTtsModelOpts(((am ?? []) as { model_key: string; display_name: string; provider_key: string; component: string }[]).filter((m) => m.component === "tts"));
     const { data: tp } = await supabase.from("tts_profiles").select("provider_key,display_name").eq("is_active", true);
     setTtsOpts((tp ?? []) as { provider_key: string; display_name: string }[]);
     const { data: vc } = await supabase.from("voice_catalog").select("voice_key,provider_key,display_name,gender,preview_url").eq("is_active", true).order("sort_order");
     setVoiceAll((vc ?? []) as VoiceOpt[]);
-    // auth_type penyedia → tahu mana yang gratis (tak butuh kunci, mis. edge_tts).
-    const { data: aps } = await supabase.from("ai_providers").select("provider_key,auth_type").eq("is_active", true);
-    setProvAuth(Object.fromEntries(((aps ?? []) as { provider_key: string; auth_type: string }[]).map((p) => [p.provider_key, p.auth_type])));
+    // penyedia: display_name (label pill) + auth_type (gratis 'none' → tak butuh kunci, mis. edge_tts).
+    const { data: aps } = await supabase.from("ai_providers").select("provider_key,display_name,auth_type").eq("is_active", true);
+    setProvMap(Object.fromEntries(((aps ?? []) as { provider_key: string; display_name: string; auth_type: string }[]).map((p) => [p.provider_key, { name: p.display_name, auth: p.auth_type }])));
     // Kunci per-elemen (decrypt via vault) → prefill field (owner: tak di-mask, copy-paste).
     try {
       const rk = await fetch(`/api/channels/${id}/keys`);
@@ -590,15 +596,19 @@ export default function ChannelDetailPage() {
           </p>
           <div className="tip" style={{ fontSize: "var(--text-xs)", marginBottom: "1rem", display: "flex", gap: 6, alignItems: "flex-start" }}>
             <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-            <span><Bi id="Biaya AI ditagih langsung ke akun penyedia Anda (BYOK) — bukan ke kami. Kosongkan kunci untuk memakai kunci default akun Anda." en="AI cost is billed directly to your provider account (BYOK) — not to us. Leave a key empty to use your account default key." /></span>
+            <span><Bi id="Tiap elemen: pilih penyedia → model → tempel kunci API penyedia itu. Biaya ditagih langsung ke akun penyedia Anda (BYOK). Kunci wajib lengkap agar channel bisa aktif." en="Each element: pick provider → model → paste that provider's API key. Cost is billed directly to your provider account (BYOK). Keys must be complete for the channel to activate." /></span>
           </div>
 
           {/* PENULIS NASKAH (LLM) */}
           <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: "var(--text-sm)" }}><PenLine size={15} /><Bi id="Penulis naskah" en="Script writer" /></div>
           <div className="muted" style={{ fontSize: "var(--text-xs)", margin: "0.15rem 0 0.6rem" }}><Bi id="AI yang menulis cerita & narasi video. Makin pintar = naskah makin bagus (biaya sedikit lebih tinggi)." en="The AI that writes your video's story & narration. Smarter = better script (slightly pricier)." /></div>
-          <div className="fld-row"><div className="k"><Bi id="Pilihan AI" en="Choose AI" /></div>
-            <div className="radio-row">{llmOpts.map((m) => <span key={m.model_key} className={`radio-pill${llmModel === m.model_key ? " sel" : ""}`} onClick={() => setLlmModel(m.model_key)}>{m.display_name}</span>)}</div></div>
-          {(() => { const p = llmOpts.find((m) => m.model_key === llmModel)?.provider_key; return !!p && provAuth[p] !== "none"; })() && (
+          <div className="fld-row"><div className="k"><Bi id="Penyedia" en="Provider" /></div>
+            <div className="radio-row">{[...new Set(llmOpts.map((m) => m.provider_key))].map((pk) => <span key={pk} className={`radio-pill${llmProv === pk ? " sel" : ""}`} onClick={() => { setLlmProv(pk); setLlmModel(""); }}>{provMap[pk]?.name ?? pk}</span>)}</div></div>
+          {llmProv && (
+            <div className="fld-row"><div className="k"><Bi id="Model" en="Model" /></div>
+              <div className="radio-row">{llmOpts.filter((m) => m.provider_key === llmProv).map((m) => <span key={m.model_key} className={`radio-pill${llmModel === m.model_key ? " sel" : ""}`} onClick={() => setLlmModel(m.model_key)}>{m.display_name}</span>)}</div></div>
+          )}
+          {llmProv && provMap[llmProv]?.auth !== "none" && (
             <div className="fld-row"><div className="k"><Bi id="Kunci akun" en="Account key" /><div className="sub"><Bi id="API key penyedia (boleh sama antar channel — tinggal salin)" en="provider API key (same across channels OK — just copy)" /></div></div>
               <input className="input input-mono" type="text" placeholder="Tempel API key penyedia" value={keys.llm} onChange={(e) => setKeys({ ...keys, llm: e.target.value })} /></div>
           )}
@@ -606,11 +616,15 @@ export default function ChannelDetailPage() {
           {/* VISUAL */}
           <div style={{ borderTop: "1px solid var(--border-subtle)", display: "flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: "var(--text-sm)", marginTop: "1rem", paddingTop: "1rem" }}><ImageIcon size={15} /><Bi id="Visual adegan" en="Scene visuals" /></div>
           <div className="muted" style={{ fontSize: "var(--text-xs)", margin: "0.15rem 0 0.6rem" }}><Bi id="Tiap adegan dibuat oleh AI (gambar atau video): pilih AI-nya → kualitas → kunci akun." en="Each scene is created by AI (image or video): pick the AI → quality → account key." /></div>
-          <div className="fld-row"><div className="k"><Bi id="Pilihan AI visual" en="Choose visual AI" /></div>
-            <div className="radio-row">{imgOpts.map((m) => <span key={m.model_key} className={`radio-pill${imgModel === m.model_key ? " sel" : ""}`} onClick={() => setImgModel(m.model_key)}>{m.display_name}</span>)}</div></div>
+          <div className="fld-row"><div className="k"><Bi id="Penyedia" en="Provider" /></div>
+            <div className="radio-row">{[...new Set(imgOpts.map((m) => m.provider_key))].map((pk) => <span key={pk} className={`radio-pill${visualProv === pk ? " sel" : ""}`} onClick={() => { setVisualProv(pk); setImgModel(""); }}>{provMap[pk]?.name ?? pk}</span>)}</div></div>
+          {visualProv && (
+            <div className="fld-row"><div className="k"><Bi id="Model" en="Model" /><div className="sub"><Bi id="gambar atau video" en="image or video" /></div></div>
+              <div className="radio-row">{imgOpts.filter((m) => m.provider_key === visualProv).map((m) => <span key={m.model_key} className={`radio-pill${imgModel === m.model_key ? " sel" : ""}`} onClick={() => setImgModel(m.model_key)}>{m.display_name}</span>)}</div></div>
+          )}
           <div className="fld-row"><div className="k"><Bi id="Kualitas gambar" en="Image quality" /><div className="sub"><Bi id="makin tinggi makin bagus & makin mahal" en="higher = nicer & pricier" /></div></div>
             <div className="radio-row">{([["low", "Hemat", "Saver"], ["medium", "Seimbang", "Balanced"], ["high", "Terbaik", "Best"]] as [string, string, string][]).map(([q, idL, enL]) => <span key={q} className={`radio-pill${imgQuality === q ? " sel" : ""}`} onClick={() => setImgQuality(q)}><Bi id={idL} en={enL} /></span>)}</div></div>
-          {(() => { const p = imgOpts.find((m) => m.model_key === imgModel)?.provider_key; return !!p && provAuth[p] !== "none"; })() && (
+          {visualProv && provMap[visualProv]?.auth !== "none" && (
             <div className="fld-row"><div className="k"><Bi id="Kunci akun" en="Account key" /><div className="sub"><Bi id="API key penyedia (boleh sama antar channel — tinggal salin)" en="provider API key (same across channels OK — just copy)" /></div></div>
               <input className="input input-mono" type="text" placeholder="Tempel API key penyedia" value={keys.visual} onChange={(e) => setKeys({ ...keys, visual: e.target.value })} /></div>
           )}
@@ -628,11 +642,11 @@ export default function ChannelDetailPage() {
             <div className="fld-row"><div className="k"><Bi id="Karakter suara" en="Voice character" /></div>
               <div className="radio-row">{voiceAll.filter((v) => v.provider_key === ttsProv).map((v) => <span key={v.voice_key} className={`radio-pill${(voiceKey || "") === v.voice_key ? " sel" : ""}`} onClick={() => setVoiceKey(v.voice_key)}><Mic size={13} />{v.display_name}{v.gender ? ` · ${v.gender}` : ""}{v.preview_url ? <span title="Dengar contoh" style={{ cursor: "pointer", marginLeft: 4 }} onClick={(e) => { e.stopPropagation(); new Audio(v.preview_url as string).play().catch(() => {}); }}>▶</span> : null}</span>)}</div></div>
           )}
-          {ttsProv && provAuth[ttsProv] !== "none" && (
+          {ttsProv && provMap[ttsProv]?.auth !== "none" && (
             <div className="fld-row"><div className="k"><Bi id="Kunci akun" en="Account key" /><div className="sub"><Bi id="API key penyedia (boleh sama antar channel — tinggal salin)" en="provider API key (same across channels OK — just copy)" /></div></div>
               <input className="input input-mono" type="text" placeholder="Tempel API key penyedia" value={keys.tts} onChange={(e) => setKeys({ ...keys, tts: e.target.value })} /></div>
           )}
-          {ttsProv && provAuth[ttsProv] === "none" && (
+          {ttsProv && provMap[ttsProv]?.auth === "none" && (
             <div className="muted" style={{ fontSize: "var(--text-xs)", margin: "0.1rem 0 0.4rem" }}><Bi id="Penyedia ini gratis — tak perlu kunci." en="This provider is free — no key needed." /></div>
           )}
           <div className="save-bar"><span className="muted">{aiMsg ?? <Bi id="Disimpan ke channel" en="Saves to channel" />}</span><button className="btn btn-default" disabled={savingAi} onClick={saveAi}>{savingAi ? "Menyimpan…" : <Bi id="Simpan & Terapkan" en="Save & Apply" />}</button></div>
