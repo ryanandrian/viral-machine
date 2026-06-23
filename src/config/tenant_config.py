@@ -392,17 +392,9 @@ class TenantConfigManager:
             v = ch.get(f)
             if v is not None:
                 setattr(config, f, v)
-        # Resolusi VOICE (Opsi 2 §10.B): channel.voice_key → (kosong) niches.voice_defaults[provider].
-        provider = config.tts_provider
+        # Resolusi VOICE (PER-CHANNEL, §10.B FINAL owner 2026-06-23): voice = channels.voice_key
+        # (1 channel = 1 voice). NO-FALLBACK ke niche (niche provider-agnostik, tak punya voice).
         vkey = ch.get("voice_key")
-        if not vkey:
-            run_niche = niche or config.niche
-            try:
-                from src.intelligence.config import get_niches
-                vdefs = (get_niches().get(run_niche) or {}).get("voice_defaults") or {}
-                vkey = vdefs.get(provider)
-            except Exception as e:
-                logger.warning(f"[TenantConfig] resolusi voice_defaults gagal (niche={run_niche}): {e}")
         if vkey:
             config.tts_voice = vkey
             # default_settings voice (baseline delivery, no-hardcode) dari voice_catalog.

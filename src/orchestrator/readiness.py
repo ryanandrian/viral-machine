@@ -42,16 +42,9 @@ def channel_readiness(sb, ch: dict) -> dict:
     if not vm:
         missing.append("mode visual")
 
-    # Voice resolvable: channels.voice_key → niches.voice_defaults[tts_provider] (Opsi 2).
-    vkey = ch.get("voice_key")
-    if not vkey and niche and ch.get("tts_provider"):
-        try:
-            from src.intelligence.config import get_niches
-            vkey = ((get_niches().get(niche) or {}).get("voice_defaults") or {}).get(ch.get("tts_provider"))
-        except Exception as e:
-            logger.warning(f"[Readiness] cek voice_defaults gagal: {e}")
-            check_failed = True
-    if not vkey and not check_failed:
+    # Voice (PER-CHANNEL, §10.B FINAL owner 2026-06-23): channels.voice_key WAJIB
+    # (voice = channel, 1/channel; NO fallback ke niche — niche provider-agnostik).
+    if not ch.get("voice_key"):
         missing.append("voice")
 
     # Credential per provider (key = per-tenant).

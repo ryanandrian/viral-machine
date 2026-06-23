@@ -66,7 +66,7 @@ def _build_emotional_peak_guidance(niche_profile: dict) -> str:
     Bangun retry guidance emotional_peak dari niche profile Supabase.
     Config-driven — tidak hardcode per niche.
     """
-    vp          = niche_profile.get("voice_profile") or {}
+    vp          = niche_profile.get("narration_persona") or niche_profile.get("voice_profile") or {}
     emotion_arc = vp.get("emotion_arc", "").strip()
     target      = niche_profile.get("target_emotion", "").strip()
     style       = vp.get("style", "").strip()
@@ -128,9 +128,9 @@ def _get_profile(niche: str) -> dict:
         niche_data = next(iter(active.values()), {})
         logger.warning(f"[ScriptEngine] Niche '{niche}' tidak ada di registry — pakai fallback")
 
-    vp = niche_data.get("voice_profile") or {}
+    vp = niche_data.get("narration_persona") or niche_data.get("voice_profile") or {}
 
-    # Jika admin belum isi voice_profile, derive dari base fields
+    # Jika admin belum isi narration_persona, derive dari base fields
     if not vp.get("tone"):
         style          = niche_data.get("style", "engaging and informative")
         target_emotion = niche_data.get("target_emotion", "curiosity and wonder")
