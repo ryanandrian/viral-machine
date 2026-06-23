@@ -52,9 +52,9 @@ def _build_full_script(script: dict) -> str:
 
 
 def _get_provider_config(tenant_config: TenantConfig) -> dict:
-    """F1-05: Load config CHANNEL-AWARE (provider+voice dari channel; voice sudah ter-resolve di
-    load_tenant_config: channels.voice_key → niches.voice_defaults[provider]). NO fallback provider,
-    NO map hardcode (voice = config['tts_voice'] yang sudah resolved). Keys dari tenant DB only.
+    """F1-05/§10.B FINAL: Load config CHANNEL-AWARE (provider+voice dari channel; voice ter-resolve di
+    load_tenant_config = channels.voice_key SAJA — voice = channel, niche provider-agnostik). NO fallback
+    provider, NO map hardcode (voice = config['tts_voice'] yang sudah resolved). Keys dari tenant DB only.
     """
     from src.config.tenant_config import load_tenant_config
     rc = load_tenant_config(

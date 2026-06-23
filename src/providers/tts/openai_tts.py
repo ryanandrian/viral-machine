@@ -53,8 +53,7 @@ class OpenAITTSProvider(TTSProvider):
         self.voice = config.get("tts_voice")
         if not self.voice:
             raise TTSError(
-                "OpenAI TTS: voice belum ter-resolve. Set channels.voice_key atau "
-                "niches.voice_defaults[openai_tts] (admin)."
+                "OpenAI TTS: voice belum ter-resolve. Set voice di Channel (channels.voice_key, §10.B FINAL)."
             )
         self.model = config.get("tts_model") or "tts-1"  # standard default
 

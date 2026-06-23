@@ -377,8 +377,8 @@ class TenantConfigManager:
     ]
 
     def _apply_channel_overlay(self, config: "TenantRunConfig", channel_id: str, niche: str | None) -> None:
-        """F1-05 (§10.E): overlay config per-channel + resolusi voice (channel.voice_key →
-        niches.voice_defaults[provider]). Key BYOK & plan TETAP dari tenant (tak di-overlay).
+        """F1-05/§10.B FINAL: overlay config per-channel + resolusi voice = `channels.voice_key` SAJA
+        (voice = CHANNEL; niche provider-agnostik tanpa voice). Key BYOK & plan TETAP dari tenant.
         Mutasi `config` in-place (instance fresh per cache_key → tak ada shared-mutation)."""
         if not self._supabase:
             return
@@ -601,7 +601,6 @@ class TenantConfigManager:
                 tts_voice_settings={},
                 niche_mode="fixed",
                 niche_pool=[],
-            tts_voice_per_niche=None,
             caption_style=None,
             hook_title_style=None,
             trailing_silence=2.5,

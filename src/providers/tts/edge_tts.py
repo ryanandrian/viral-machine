@@ -53,8 +53,7 @@ class EdgeTTSProvider(TTSProvider):
         self.voice = config.get("tts_voice")
         if not self.voice:
             raise TTSError(
-                "Edge TTS: voice belum ter-resolve. Set channels.voice_key atau "
-                "niches.voice_defaults[edge_tts] (admin)."
+                "Edge TTS: voice belum ter-resolve. Set voice di Channel (channels.voice_key, §10.B FINAL)."
             )
         # Durasi-via-speed (Pilihan A, multi-provider): rate dinamis = baseline rate × kecepatan ter-solve
         # gate. baseline (voice_catalog.default_settings.rate) = titik S=1.0 (perilaku lama, nol regresi);

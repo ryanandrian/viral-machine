@@ -75,8 +75,7 @@ class ElevenLabsProvider(TTSProvider):
         self.voice = config.get("tts_voice")
         if not self.voice:
             raise TTSError(
-                "ElevenLabs: voice belum ter-resolve. Set channels.voice_key atau "
-                "niches.voice_defaults[elevenlabs] (admin)."
+                "ElevenLabs: voice belum ter-resolve. Set voice di Channel (channels.voice_key, §10.B FINAL)."
             )
 
         self._word_timestamps: list[dict] | None = None
