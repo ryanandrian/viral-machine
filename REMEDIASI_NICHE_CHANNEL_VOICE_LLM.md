@@ -250,7 +250,9 @@
   - **BE** ✅ `cea2555` deployed mv-worker: resolusi voice = `channels.voice_key` SAJA (buang fallback niche) · `narration_persona` (config/script_engine/script_analyzer) · readiness=channel.
   - **FE** ✅ `3308047` deployed mv-web: niche-editor admin+tenant **buang voice** (allowlist+form) + rename `narration_persona`; channel **hapus pre-fill niche** (voice picker channel tetap). Build PASS, situs 200.
   - **RENDER-TEST ryan** ✅ PASS: overlay `tts=elevenlabs/pNInz`, `[ElevenLabs] voice=pNInz` dipakai, musik `stellar_dread` mixed, QC PASS 57.2s, published `shorts/cWcf8yBmkRc`. ryan = **1 voice channel** (Adam) semua niche.
-  - **SISA = MUSIK** (`music_selector` 3-mode dari `niches.music_config` + kunci opak `music_library` + admin Catalog→Music CRUD + niche music-picker) + polish komentar `voice_profile` (kosmetik, F5).
+  - 🟢 **MUSIK TUNTAS + deployed** (2026-06-23): migr **0085** (`object_key` opak `music/{id}.mp3` + 28 objek S3 re-keyed server-side) · migr **0086** (DROP fosil `r2_key`/`pixabay_id` + source default) · BE `d005306` (selector→object_key, render-test PASS `shorts/XURQhOvwr44` QC) + `af9a1a4` (**3-mode** `niches.music_config` fixed/random/auto + channel override, validated) + `1d0269c` (purge dead `_download_from_r2` + `config.r2_*`) · FE `928da8d` (admin **Catalog→Music CRUD** object_key + **niche music_config picker** admin+Niche Studio) deployed mv-web.
+  - 🧹 **Sweep fosil voice+musik:** niches voice cols + `tenant_configs.tts_voice_per_niche` + `music_library.r2_key/pixabay_id` DROP · dead-code R2 (music_selector/config) purge · komentar voice_profile→narration_persona. **DIPERTAHANKAN (aktif):** `tts_voice_settings`, `tts_voice`(onboarding), `channels.*`, `tenant_configs.music_*`(vestigial—dinilai saat fanout final), `videos.voice_id/music_mood`(record).
+  - ⏸️ Opsional polish (defer): niche music picker JSON→dropdown terstruktur (mode/mood/track + ▶) — kini JSON konsisten editor existing.
 
 ---
 ### FASE 2 — CHANNEL SETUP (wizard) + gerbang aktivasi + child (FE/BE tenant) `[buka pondasi ke pengguna]`
