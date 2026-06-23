@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { Plus, Target, ArrowRight, X } from "lucide-react";
+import { Plus, Target, ArrowRight, X, Trash2 } from "lucide-react";
 import PresetTables from "@/components/preset-tables";
 import "./catalog.css";
 
@@ -62,6 +62,43 @@ export default function AdminCatalogPage() {
     if (r.ok) { setToast(val.trim() === "" ? "Pace di-reset (ikut engine)" : "Pace voice disimpan"); setPaceEdit(null); await load(); }
     else { const j = await r.json().catch(() => ({})); setToast(`Gagal: ${j.error ?? r.status}`); }
   }
+  // M2: CRUD musik di catalog (upload→S3, edit, delete, play). Aset = S3 (aturan owner). Durasi dibaca client-side.
+  const [mUp, setMUp] = useState<{ name: string; niche: string; mood: string; bpm: string; duration_s: string; file: File | null } | null>(null);
+  const [mEdit, setMEdit] = useState<{ id: string; name: string; niche: string; mood: string; bpm: string } | null>(null);
+  const [uploading, setUploading] = useState(false);
+  function onMusicFile(f: File | null) {
+    if (!f) { setMUp((m) => m ? { ...m, file: null } : m); return; }
+    setMUp((m) => m ? { ...m, file: f } : m);
+    const url = URL.createObjectURL(f);
+    const au = new Audio(url);
+    au.addEventListener("loadedmetadata", () => { setMUp((m) => m ? { ...m, duration_s: au.duration ? String(Math.round(au.duration)) : m.duration_s } : m); URL.revokeObjectURL(url); }, { once: true });
+    au.addEventListener("error", () => URL.revokeObjectURL(url), { once: true });
+  }
+  async function uploadMusic() {
+    if (!mUp?.file || !mUp.name.trim() || !mUp.niche.trim() || !mUp.mood.trim()) { setToast("Lengkapi file, nama, niche, mood"); return; }
+    setUploading(true);
+    const fd = new FormData();
+    fd.append("file", mUp.file); fd.append("name", mUp.name.trim()); fd.append("niche", mUp.niche.trim()); fd.append("mood", mUp.mood.trim());
+    if (mUp.bpm.trim()) fd.append("bpm", mUp.bpm.trim());
+    if (mUp.duration_s.trim()) fd.append("duration_s", mUp.duration_s.trim());
+    const r = await fetch("/api/admin/music/upload", { method: "POST", body: fd });
+    setUploading(false);
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) { setToast("Musik diunggah ke S3"); setMUp(null); await load(); } else setToast(`Gagal: ${j.error ?? r.status}`);
+  }
+  async function saveMusicEdit() {
+    if (!mEdit) return;
+    const patch = { name: mEdit.name, niche: mEdit.niche, mood: mEdit.mood, bpm: mEdit.bpm.trim() === "" ? null : Number(mEdit.bpm) };
+    const r = await fetch("/api/admin/catalog", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table: "music_library", key: mEdit.id, patch }) });
+    if (r.ok) { setToast("Tersimpan"); setMEdit(null); await load(); } else { const j = await r.json().catch(() => ({})); setToast(`Gagal: ${j.error ?? ""}`); }
+  }
+  async function delAsset(table: string, key: string, label: string) {
+    if (typeof window !== "undefined" && !window.confirm(`Hapus "${label}"? Berkas di S3 ikut dihapus.`)) return;
+    const r = await fetch("/api/admin/catalog", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table, key }) });
+    if (r.ok) { setToast("Dihapus"); await load(); } else { const j = await r.json().catch(() => ({})); setToast(`Gagal: ${j.error ?? ""}`); }
+  }
+  function playUrl(url?: string | null) { if (url) new Audio(url).play().catch(() => setToast("Gagal memutar")); }
+
   async function createRow() {
     if (!add) return;
     const def = ADD_FIELDS[tab];
@@ -120,26 +157,46 @@ export default function AdminCatalogPage() {
         </>)}
 
         {tab === "music" && (<>
-          <div className="cat-toolbar"><span className="muted" style={{ fontSize: "var(--text-sm)" }}>{data.music_library.length} tracks</span><div className="right"><span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Bulk-upload via worker/seed (R2) — bukan dari browser" en="Bulk-upload via worker/seed (R2)" /></span></div></div>
+          <div className="cat-toolbar"><span className="muted" style={{ fontSize: "var(--text-sm)" }}>{data.music_library.length} tracks · S3</span><div className="right"><button className="btn btn-default btn-sm" onClick={() => setMUp({ name: "", niche: "", mood: "", bpm: "", duration_s: "", file: null })}><Plus size={14} /> <Bi id="Tambah musik" en="Add music" /></button></div></div>
           <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl cat-tbl">
-            <thead><tr><th>name</th><th>niche</th><th>mood</th><th>source</th><th className="num">durasi</th><th>active</th></tr></thead>
-            <tbody>{data.music_library.map((t) => (
-              <tr key={t.id as string}>
-                <td style={{ color: "var(--text-primary)" }}>{t.name as string}</td><td className="muted">{t.niche as string}</td>
-                <td><span className="badge badge-default">{t.mood as string}</span></td><td className="muted" style={{ fontSize: "var(--text-xs)" }}>{(t.source as string) || "—"}</td>
-                <td className="num muted">{t.duration_s ? `${t.duration_s}s` : "—"}</td>
-                <td><Switch table="music_library" k={t.id as string} on={t.is_active as boolean} /></td>
-              </tr>
-            ))}</tbody>
+            <thead><tr><th>name</th><th>niche</th><th>mood</th><th className="num">durasi</th><th className="num">bpm</th><th>putar</th><th>active</th><th></th></tr></thead>
+            <tbody>
+              {data.music_library.length === 0 && <tr><td colSpan={8} className="muted" style={{ padding: "1rem", textAlign: "center" }}>Belum ada musik. Unggah untuk mulai.</td></tr>}
+              {data.music_library.map((t) => (mEdit && mEdit.id === t.id ? (
+                <tr key={t.id as string}>
+                  <td><input className="input" style={{ height: 28 }} value={mEdit.name} onChange={(e) => setMEdit({ ...mEdit, name: e.target.value })} /></td>
+                  <td><input className="input" style={{ height: 28, width: 120 }} list="mus-niche-dl" value={mEdit.niche} onChange={(e) => setMEdit({ ...mEdit, niche: e.target.value })} /></td>
+                  <td><input className="input" style={{ height: 28, width: 100 }} list="mus-mood-dl" value={mEdit.mood} onChange={(e) => setMEdit({ ...mEdit, mood: e.target.value })} /></td>
+                  <td className="num muted">{t.duration_s ? `${t.duration_s}s` : "—"}</td>
+                  <td><input className="input" style={{ height: 28, width: 56 }} value={mEdit.bpm} placeholder="bpm" onChange={(e) => setMEdit({ ...mEdit, bpm: e.target.value })} /></td>
+                  <td colSpan={3}><button className="btn btn-default btn-sm" onClick={saveMusicEdit}>✓</button> <button className="btn btn-ghost btn-sm" onClick={() => setMEdit(null)}>✕</button></td>
+                </tr>
+              ) : (
+                <tr key={t.id as string}>
+                  <td style={{ color: "var(--text-primary)" }}>{t.name as string}</td><td className="muted">{t.niche as string}</td>
+                  <td><span className="badge badge-default">{t.mood as string}</span></td>
+                  <td className="num muted">{t.duration_s ? `${t.duration_s}s` : "—"}</td>
+                  <td className="num muted">{(t.bpm as number) || "—"}</td>
+                  <td>{t.public_url ? <button className="btn btn-ghost btn-sm" title="Putar" onClick={() => playUrl(t.public_url as string)}>▶</button> : <span className="muted" style={{ fontSize: "0.7rem" }}>—</span>}</td>
+                  <td><Switch table="music_library" k={t.id as string} on={t.is_active as boolean} /></td>
+                  <td style={{ whiteSpace: "nowrap" }}>
+                    <button className="btn btn-ghost btn-sm" title="Edit" onClick={() => setMEdit({ id: t.id as string, name: (t.name as string) || "", niche: (t.niche as string) || "", mood: (t.mood as string) || "", bpm: t.bpm != null ? String(t.bpm) : "" })}>✎</button>
+                    <button className="btn btn-ghost btn-sm" title="Hapus" onClick={() => delAsset("music_library", t.id as string, (t.name as string) || "track")}><Trash2 size={13} /></button>
+                  </td>
+                </tr>
+              )))}
+            </tbody>
           </table></div></div>
+          <datalist id="mus-niche-dl">{[...new Set(data.music_library.map((t) => t.niche as string).filter(Boolean))].map((n) => <option key={n} value={n} />)}</datalist>
+          <datalist id="mus-mood-dl">{[...new Set(data.music_library.map((t) => t.mood as string).filter(Boolean))].map((m) => <option key={m} value={m} />)}</datalist>
         </>)}
 
         {tab === "voice" && (<>
           <div className="cat-toolbar"><span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Voice catalog + kelas TTS provider" en="Voice catalog + TTS provider classes" /></span><div className="right"><button className="btn btn-default btn-sm" onClick={() => setAdd({})}><Plus size={14} /> <Bi id="Tambah voice" en="Add voice" /></button></div></div>
           <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl cat-tbl">
-            <thead><tr><th>voice_key</th><th>provider</th><th>display</th><th>locale</th><th>gender</th><th title="Pace voice (kata/detik @speed 1.0). Kosong = ikut pace DASAR engine di bawah. Override per-voice (mis. voice lebih cepat).">Pace voice</th><th>Contoh suara</th><th>active</th></tr></thead>
+            <thead><tr><th>voice_key</th><th>provider</th><th>display</th><th>locale</th><th>gender</th><th title="Pace voice (kata/detik @speed 1.0). Kosong = ikut pace DASAR engine di bawah. Override per-voice (mis. voice lebih cepat).">Pace voice</th><th>Contoh suara</th><th>active</th><th></th></tr></thead>
             <tbody>
-              {data.voice_catalog.length === 0 && <tr><td colSpan={8} className="muted" style={{ padding: "1rem", textAlign: "center" }}>Belum ada voice. Tambah untuk mulai.</td></tr>}
+              {data.voice_catalog.length === 0 && <tr><td colSpan={9} className="muted" style={{ padding: "1rem", textAlign: "center" }}>Belum ada voice. Tambah untuk mulai.</td></tr>}
               {data.voice_catalog.map((v) => (
                 <tr key={v.voice_key as string}>
                   <td className="mono" style={{ color: "var(--text-primary)" }}>{v.voice_key as string}</td><td>{v.provider_key as string}</td>
@@ -166,6 +223,7 @@ export default function AdminCatalogPage() {
                     </span>
                   </td>
                   <td><Switch table="voice_catalog" k={v.voice_key as string} on={v.is_active as boolean} /></td>
+                  <td><button className="btn btn-ghost btn-sm" title="Hapus voice (+ contoh S3)" onClick={() => delAsset("voice_catalog", v.voice_key as string, (v.display_name as string) || (v.voice_key as string))}><Trash2 size={13} /></button></td>
                 </tr>
               ))}
             </tbody>
@@ -213,6 +271,24 @@ export default function AdminCatalogPage() {
                 <div key={k}><label className="label">{label}</label><input className="input" value={add[k] ?? ""} onChange={(e) => setAdd({ ...add, [k]: e.target.value })} /></div>
               ))}
               <button className="btn btn-primary btn-sm" style={{ justifySelf: "end", marginTop: "0.25rem" }} onClick={createRow}>Simpan</button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {mUp && (
+        <>
+          <div className="cat-scrim open" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 60 }} onClick={() => { if (!uploading) setMUp(null); }} />
+          <div className="card" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(440px,92vw)", maxHeight: "85vh", overflowY: "auto", zIndex: 61, padding: "1.25rem" }}>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: "0.75rem" }}><strong><Bi id="Unggah musik (→ S3)" en="Upload music (→ S3)" /></strong><button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} disabled={uploading} onClick={() => setMUp(null)}><X size={16} /></button></div>
+            <div style={{ display: "grid", gap: "0.6rem" }}>
+              <div><label className="label">Berkas (.mp3, maks 25MB)</label><input className="input" type="file" accept="audio/mpeg,.mp3" onChange={(e) => onMusicFile(e.target.files?.[0] ?? null)} /></div>
+              {mUp.file && <div className="muted" style={{ fontSize: "0.7rem" }}>{mUp.file.name} · {(mUp.file.size / (1024 * 1024)).toFixed(1)}MB{mUp.duration_s ? ` · ${mUp.duration_s}s` : ""}</div>}
+              <div><label className="label">Nama</label><input className="input" value={mUp.name} onChange={(e) => setMUp({ ...mUp, name: e.target.value })} /></div>
+              <div><label className="label">Niche</label><input className="input" list="mus-niche-dl" value={mUp.niche} onChange={(e) => setMUp({ ...mUp, niche: e.target.value })} placeholder="mis. dark_history" /></div>
+              <div><label className="label">Mood</label><input className="input" list="mus-mood-dl" value={mUp.mood} onChange={(e) => setMUp({ ...mUp, mood: e.target.value })} placeholder="mis. dark" /></div>
+              <div><label className="label">BPM (opsional)</label><input className="input" value={mUp.bpm} onChange={(e) => setMUp({ ...mUp, bpm: e.target.value })} /></div>
+              <button className="btn btn-primary btn-sm" style={{ justifySelf: "end", marginTop: "0.25rem" }} disabled={uploading || !mUp.file} onClick={uploadMusic}>{uploading ? "Mengunggah…" : "Unggah ke S3"}</button>
             </div>
           </div>
         </>

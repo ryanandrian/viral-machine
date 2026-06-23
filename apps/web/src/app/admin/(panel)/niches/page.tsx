@@ -16,7 +16,7 @@ type Niche = {
   niche_id: string; name: string; keywords: unknown; default_hashtags: unknown; is_active: boolean; is_base: boolean;
   access_type: string; exclusive_to: string | null; exclusive_until: string | null; released_at: string | null;
   narration_persona: unknown; visual_style: unknown; mood_priority: unknown; emotion_scoring_criteria: string | null;
-  image_quality_tags: unknown; image_negative_prompt: string | null; visual_fallbacks: unknown; section_timing: unknown;
+  image_quality_tags: unknown; image_negative_prompt: string | null; visual_fallbacks: unknown; section_timing: unknown; music_config: unknown;
   video_count: number; tenant_count: number; avg_viral: number | null;
 };
 type Release = { id: string; niche_id: string; scheduled_at: string; status: string };
@@ -87,7 +87,7 @@ export default function AdminNichesPage() {
       name: n.name, keywords: asArr(n.keywords).join(", "), default_hashtags: asArr(n.default_hashtags).join(", "),
       is_active: n.is_active, is_base: n.is_base, access_type: n.access_type, exclusive_to: n.exclusive_to ?? "",
       exclusive_until: n.exclusive_until ?? "", released_at: n.released_at ?? "",
-      narration_persona: jstr(n.narration_persona), visual_style: jstr(n.visual_style), mood_priority: jstr(n.mood_priority),
+      narration_persona: jstr(n.narration_persona), music_config: jstr(n.music_config), visual_style: jstr(n.visual_style), mood_priority: jstr(n.mood_priority),
       emotion_scoring_criteria: n.emotion_scoring_criteria ?? "",
       image_quality_tags: asArr(n.image_quality_tags).join(", "), image_negative_prompt: n.image_negative_prompt ?? "",
       visual_fallbacks: asArr(n.visual_fallbacks).join(", "), section_timing: jstr(n.section_timing),
@@ -108,7 +108,7 @@ export default function AdminNichesPage() {
       image_quality_tags: String(edit.image_quality_tags || "").split(",").map((s) => s.trim()).filter(Boolean),
       visual_fallbacks: String(edit.visual_fallbacks || "").split(",").map((s) => s.trim()).filter(Boolean),
     };
-    for (const [k, v] of [["narration_persona", edit.narration_persona], ["visual_style", edit.visual_style], ["mood_priority", edit.mood_priority], ["section_timing", edit.section_timing]] as const) {
+    for (const [k, v] of [["narration_persona", edit.narration_persona], ["music_config", edit.music_config], ["visual_style", edit.visual_style], ["mood_priority", edit.mood_priority], ["section_timing", edit.section_timing]] as const) {
       try { patch[k] = JSON.parse(v as string); } catch { /* skip invalid JSON */ }
     }
     const r = await fetch(`/api/admin/niches/${cur.niche_id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
@@ -270,6 +270,7 @@ export default function AdminNichesPage() {
             </>}
             {dtab === 1 && <>
               <div className="nl-fld"><label className="label">narration_persona JSON <span className="muted" style={{ fontWeight: 400, fontSize: "var(--text-xs)" }}>gaya/tone narasi (membentuk TEKS via LLM — BUKAN pemilih suara; voice = channel)</span></label><textarea className="textarea input-mono" rows={6} value={edit.narration_persona as string} onChange={(e) => setEdit({ ...edit, narration_persona: e.target.value })} /></div>
+              <div className="nl-fld"><label className="label">music_config JSON <span className="muted" style={{ fontWeight: 400, fontSize: "var(--text-xs)" }}>{'{"mode":"auto|random|fixed","mood":"…","track_id":"…"}'} — §3#24/§10.G (auto=ikut naskah · random=acak di mood · fixed=1 track)</span></label><textarea className="textarea input-mono" rows={3} value={edit.music_config as string} onChange={(e) => setEdit({ ...edit, music_config: e.target.value })} placeholder={'{"mode":"auto"}'} /></div>
             </>}
             {dtab === 2 && <>
               <div className="nl-fld"><label className="label">visual_style JSON</label><textarea className="textarea input-mono" rows={5} value={edit.visual_style as string} onChange={(e) => setEdit({ ...edit, visual_style: e.target.value })} /></div>
