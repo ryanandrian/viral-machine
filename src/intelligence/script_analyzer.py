@@ -75,8 +75,8 @@ def _derive_emotion_criteria(niche_profile: dict | None) -> str:
     if explicit:
         return explicit
 
-    # Prioritas 2: derive dari voice_profile
-    vp          = niche_profile.get("voice_profile") or {}
+    # Prioritas 2: derive dari narration_persona (ex voice_profile — §10.B FINAL)
+    vp          = niche_profile.get("narration_persona") or niche_profile.get("voice_profile") or {}
     emotion_arc = vp.get("emotion_arc", "").strip()
     target      = niche_profile.get("target_emotion", "").strip()
     style       = vp.get("style", "").strip()
