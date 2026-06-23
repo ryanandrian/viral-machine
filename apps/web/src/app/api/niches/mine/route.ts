@@ -10,8 +10,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 // Field DNA yang boleh tenant edit pada niche PRIVATE miliknya (BUKAN access_type/exclusive_to/is_base).
 const EDITABLE = [
   "name", "keywords", "style", "target_emotion", "hook_templates", "default_hashtags", "is_active",
-  "visual_style", "visual_fallbacks", "mood_priority", "voice_profile", "emotion_scoring_criteria",
-  "section_timing", "image_quality_tags", "image_negative_prompt", "voice_key", "voice_defaults",
+  "visual_style", "visual_fallbacks", "mood_priority", "narration_persona", "emotion_scoring_criteria",
+  "section_timing", "image_quality_tags", "image_negative_prompt", "music_config",
 ];
 
 async function gate() {

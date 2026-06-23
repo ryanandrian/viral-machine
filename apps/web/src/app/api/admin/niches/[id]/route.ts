@@ -4,9 +4,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 const EDITABLE = [
   "name", "keywords", "style", "target_emotion", "hook_templates", "default_hashtags",
-  "is_active", "is_base", "visual_style", "visual_fallbacks", "mood_priority", "voice_profile",
+  "is_active", "is_base", "visual_style", "visual_fallbacks", "mood_priority", "narration_persona",
   "emotion_scoring_criteria", "section_timing", "image_quality_tags", "image_negative_prompt",
-  "voice_key", "voice_defaults",
+  "music_config",
   "access_type", "exclusive_to", "exclusive_until", "released_at", "release_scheduled_at",
 ];
 

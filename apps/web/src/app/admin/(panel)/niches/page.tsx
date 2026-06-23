@@ -15,8 +15,8 @@ function Bi({ id, en }: { id: string; en: string }) {
 type Niche = {
   niche_id: string; name: string; keywords: unknown; default_hashtags: unknown; is_active: boolean; is_base: boolean;
   access_type: string; exclusive_to: string | null; exclusive_until: string | null; released_at: string | null;
-  voice_profile: unknown; visual_style: unknown; mood_priority: unknown; emotion_scoring_criteria: string | null;
-  image_quality_tags: unknown; image_negative_prompt: string | null; visual_fallbacks: unknown; section_timing: unknown; voice_defaults: unknown;
+  narration_persona: unknown; visual_style: unknown; mood_priority: unknown; emotion_scoring_criteria: string | null;
+  image_quality_tags: unknown; image_negative_prompt: string | null; visual_fallbacks: unknown; section_timing: unknown;
   video_count: number; tenant_count: number; avg_viral: number | null;
 };
 type Release = { id: string; niche_id: string; scheduled_at: string; status: string };
@@ -87,10 +87,10 @@ export default function AdminNichesPage() {
       name: n.name, keywords: asArr(n.keywords).join(", "), default_hashtags: asArr(n.default_hashtags).join(", "),
       is_active: n.is_active, is_base: n.is_base, access_type: n.access_type, exclusive_to: n.exclusive_to ?? "",
       exclusive_until: n.exclusive_until ?? "", released_at: n.released_at ?? "",
-      voice_profile: jstr(n.voice_profile), visual_style: jstr(n.visual_style), mood_priority: jstr(n.mood_priority),
+      narration_persona: jstr(n.narration_persona), visual_style: jstr(n.visual_style), mood_priority: jstr(n.mood_priority),
       emotion_scoring_criteria: n.emotion_scoring_criteria ?? "",
       image_quality_tags: asArr(n.image_quality_tags).join(", "), image_negative_prompt: n.image_negative_prompt ?? "",
-      visual_fallbacks: asArr(n.visual_fallbacks).join(", "), section_timing: jstr(n.section_timing), voice_defaults: jstr(n.voice_defaults),
+      visual_fallbacks: asArr(n.visual_fallbacks).join(", "), section_timing: jstr(n.section_timing),
     } : {});
   }
 
@@ -108,7 +108,7 @@ export default function AdminNichesPage() {
       image_quality_tags: String(edit.image_quality_tags || "").split(",").map((s) => s.trim()).filter(Boolean),
       visual_fallbacks: String(edit.visual_fallbacks || "").split(",").map((s) => s.trim()).filter(Boolean),
     };
-    for (const [k, v] of [["voice_profile", edit.voice_profile], ["visual_style", edit.visual_style], ["mood_priority", edit.mood_priority], ["section_timing", edit.section_timing], ["voice_defaults", edit.voice_defaults]] as const) {
+    for (const [k, v] of [["narration_persona", edit.narration_persona], ["visual_style", edit.visual_style], ["mood_priority", edit.mood_priority], ["section_timing", edit.section_timing]] as const) {
       try { patch[k] = JSON.parse(v as string); } catch { /* skip invalid JSON */ }
     }
     const r = await fetch(`/api/admin/niches/${cur.niche_id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
@@ -269,8 +269,7 @@ export default function AdminNichesPage() {
               <div className="nl-fld" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}><span style={{ fontSize: "var(--text-sm)" }}>is_base <span className="muted">(trial/starter only)</span></span><label className="switch"><input type="checkbox" checked={!!edit.is_base} onChange={(e) => setEdit({ ...edit, is_base: e.target.checked })} /><span className="track" /><span className="thumb" /></label></div>
             </>}
             {dtab === 1 && <>
-              <div className="nl-fld"><label className="label">voice_profile JSON</label><textarea className="textarea input-mono" rows={6} value={edit.voice_profile as string} onChange={(e) => setEdit({ ...edit, voice_profile: e.target.value })} /></div>
-              <div className="nl-fld"><label className="label">voice_defaults JSON <span className="muted" style={{ fontWeight: 400, fontSize: "var(--text-xs)" }}>{"{provider: voice_key}"} — default voice per TTS model (Opsi 2 §10.B)</span></label><textarea className="textarea input-mono" rows={4} value={edit.voice_defaults as string} onChange={(e) => setEdit({ ...edit, voice_defaults: e.target.value })} placeholder={'{"elevenlabs":"VR6...","openai_tts":"fable","edge_tts":"en-US-GuyNeural"}'} /></div>
+              <div className="nl-fld"><label className="label">narration_persona JSON <span className="muted" style={{ fontWeight: 400, fontSize: "var(--text-xs)" }}>gaya/tone narasi (membentuk TEKS via LLM — BUKAN pemilih suara; voice = channel)</span></label><textarea className="textarea input-mono" rows={6} value={edit.narration_persona as string} onChange={(e) => setEdit({ ...edit, narration_persona: e.target.value })} /></div>
             </>}
             {dtab === 2 && <>
               <div className="nl-fld"><label className="label">visual_style JSON</label><textarea className="textarea input-mono" rows={5} value={edit.visual_style as string} onChange={(e) => setEdit({ ...edit, visual_style: e.target.value })} /></div>

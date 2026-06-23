@@ -121,7 +121,6 @@ export default function ChannelDetailPage() {
   const [imgModel, setImgModel] = useState("");
   const [ttsProv, setTtsProv] = useState("");
   const [voiceKey, setVoiceKey] = useState("");
-  const [nicheDefaults, setNicheDefaults] = useState<Record<string, string>>({});
   const [savingAi, setSavingAi] = useState(false);
   const [aiMsg, setAiMsg] = useState<string | null>(null);
   // F2-09: akun VAULT per-elemen (assign ke channel + tambah akun baru). account_id NULL → key default tenant (fallback BE).
@@ -330,7 +329,7 @@ export default function ChannelDetailPage() {
       setLogoSize(c.logo_size ?? 0.12); setLogoOpacity(c.logo_opacity ?? 0.85);
       setLandingLink(c.landing_link ?? ""); setLinkPos(c.link_position ?? "bottom");
     }
-    // F2-03: katalog (ai_models/tts_profiles/voice_catalog — RLS read) + voice_defaults niche (pre-fill).
+    // F2-03: katalog (ai_models/tts_profiles/voice_catalog — RLS read). Voice = CHANNEL (§10.B FINAL); tanpa pre-fill niche.
     const { data: am } = await supabase.from("ai_models").select("model_key,provider_key,component,display_name").eq("is_active", true).order("display_name");
     setLlmOpts(((am ?? []) as (ModelOpt & {component:string})[]).filter((m) => m.component === "llm"));
     setImgOpts(((am ?? []) as (ModelOpt & {component:string})[]).filter((m) => m.component === "image"));
@@ -340,7 +339,6 @@ export default function ChannelDetailPage() {
     setVoiceAll((vc ?? []) as VoiceOpt[]);
     const { data: accs } = await supabase.from("tenant_api_accounts").select("id,component,label").eq("status", "active").order("created_at");
     setAccounts((accs ?? []) as { id: string; component: string; label: string }[]);
-    if (c?.niche) { const { data: nd } = await supabase.from("niches").select("voice_defaults").eq("niche_id", c.niche).maybeSingle(); setNicheDefaults(((nd as { voice_defaults?: Record<string, string> } | null)?.voice_defaults) ?? {}); }
     // F2-07: status efektif → subscription + readiness (RPC tenant-scoped F2-fondasi).
     const { data: cfg } = await supabase.from("tenant_configs").select("plan_type,subscription_status").maybeSingle();
     setSub((cfg as { subscription_status?: string } | null)?.subscription_status ?? null);
@@ -610,7 +608,7 @@ export default function ChannelDetailPage() {
             <div className="radio-row">{ttsOpts.map((p) => <span key={p.provider_key} className={`radio-pill${ttsProv === p.provider_key ? " sel" : ""}`} onClick={() => { setTtsProv(p.provider_key); setVoiceKey(""); }}>{p.display_name}</span>)}</div></div>
           {ttsProv && (
             <div className="fld-row"><div className="k"><Bi id="Suara" en="Voice" /><div className="sub"><Bi id="default niche bila tak dipilih" en="niche default if unset" /></div></div>
-              <div className="radio-row">{voiceAll.filter((v) => v.provider_key === ttsProv).map((v) => { const eff = voiceKey || nicheDefaults[ttsProv] || ""; return <span key={v.voice_key} className={`radio-pill${eff === v.voice_key ? " sel" : ""}`} onClick={() => setVoiceKey(v.voice_key)}><Mic size={13} />{v.display_name}{v.gender ? ` · ${v.gender}` : ""}{v.preview_url ? <span title="Dengar contoh" style={{ cursor: "pointer", marginLeft: 4 }} onClick={(e) => { e.stopPropagation(); new Audio(v.preview_url as string).play().catch(() => {}); }}>▶</span> : null}</span>; })}</div></div>
+              <div className="radio-row">{voiceAll.filter((v) => v.provider_key === ttsProv).map((v) => { const eff = voiceKey || ""; return <span key={v.voice_key} className={`radio-pill${eff === v.voice_key ? " sel" : ""}`} onClick={() => setVoiceKey(v.voice_key)}><Mic size={13} />{v.display_name}{v.gender ? ` · ${v.gender}` : ""}{v.preview_url ? <span title="Dengar contoh" style={{ cursor: "pointer", marginLeft: 4 }} onClick={(e) => { e.stopPropagation(); new Audio(v.preview_url as string).play().catch(() => {}); }}>▶</span> : null}</span>; })}</div></div>
           )}
           {/* F2-09: akun API key (vault) per-elemen. Kosong → key default tenant (fallback BE). */}
           <div className="fld-row" style={{ borderTop: "1px solid var(--border-subtle)" }}><div className="k"><Bi id="Akun API (key)" en="API account (key)" /><div className="sub"><Bi id="key BYOK per elemen; kosong = key default tenant" en="BYOK key per element; empty = tenant default key" /></div></div></div>

@@ -39,7 +39,7 @@ export default function NicheStudioPage() {
     setEdit({
       name: n.name ?? "", is_active: !!n.is_active,
       keywords: asArr(n.keywords), default_hashtags: asArr(n.default_hashtags),
-      voice_profile: jstr(n.voice_profile), voice_defaults: jstr(n.voice_defaults),
+      narration_persona: jstr(n.narration_persona),
       visual_style: jstr(n.visual_style), image_quality_tags: asArr(n.image_quality_tags),
       image_negative_prompt: (n.image_negative_prompt as string) ?? "", visual_fallbacks: asArr(n.visual_fallbacks),
       mood_priority: jstr(n.mood_priority), section_timing: jstr(n.section_timing),
@@ -69,7 +69,7 @@ export default function NicheStudioPage() {
       image_quality_tags: String(edit.image_quality_tags || "").split(",").map((s) => s.trim()).filter(Boolean),
       visual_fallbacks: String(edit.visual_fallbacks || "").split(",").map((s) => s.trim()).filter(Boolean),
     };
-    for (const k of ["voice_profile", "voice_defaults", "visual_style", "mood_priority", "section_timing"]) {
+    for (const k of ["narration_persona", "visual_style", "mood_priority", "section_timing"]) {
       try { patch[k] = JSON.parse(edit[k] as string); } catch { /* skip JSON invalid */ }
     }
     const r = await fetch("/api/niches/mine", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
@@ -130,9 +130,8 @@ export default function NicheStudioPage() {
             <div className="fld"><label className="label"><Bi id="Nama tampilan" en="Display name" /></label><input className="input" value={edit.name as string} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></div>
             {fld("keywords", { id: "Keywords (pisah koma)", en: "Keywords (comma)" })}
             {fld("default_hashtags", { id: "Default hashtags (pisah koma)", en: "Default hashtags (comma)" })}
-            <div style={{ borderTop: "1px solid var(--border-subtle)", margin: "0.75rem 0", paddingTop: "0.5rem", fontWeight: 600, fontSize: "var(--text-sm)" }}>Voice DNA</div>
-            {fld("voice_profile", { id: "voice_profile JSON", en: "voice_profile JSON" }, true, 5)}
-            {fld("voice_defaults", { id: "voice_defaults JSON {provider: voice_key}", en: "voice_defaults JSON {provider: voice_key}" }, true, 3)}
+            <div style={{ borderTop: "1px solid var(--border-subtle)", margin: "0.75rem 0", paddingTop: "0.5rem", fontWeight: 600, fontSize: "var(--text-sm)" }}>Narrasi DNA <span style={{ fontWeight: 400, fontSize: "var(--text-xs)", color: "var(--text-muted)" }}>(suara dipilih di Channel)</span></div>
+            {fld("narration_persona", { id: "narration_persona JSON (gaya/tone narasi)", en: "narration_persona JSON (narration style/tone)" }, true, 5)}
             <div style={{ borderTop: "1px solid var(--border-subtle)", margin: "0.75rem 0", paddingTop: "0.5rem", fontWeight: 600, fontSize: "var(--text-sm)" }}>Visual DNA</div>
             {fld("visual_style", { id: "visual_style JSON", en: "visual_style JSON" }, true, 4)}
             {fld("image_quality_tags", { id: "image_quality_tags (pisah koma)", en: "image_quality_tags (comma)" })}
