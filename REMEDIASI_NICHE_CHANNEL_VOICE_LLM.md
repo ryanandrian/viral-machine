@@ -244,7 +244,13 @@
   5. **Sinkron**: update REALISASI item terdampak + log §9; pensiun `tenant_configs.tts_voice*` (verifikasi dulu — hati delivery ryan); regresi end-to-end.
 - DEPENDS: — (mengoreksi item ter-deploy). Bersinggungan: M2 (music CRUD, sebagian dibuat), F5-06 (registry), F4 (tts_params speed).
 - DONE-BILA: grep `niches.voice_defaults`/`voice_profile` bersih; voice dipilih di **Channel**; narration_persona + musik di Niche Studio; ryan render-confirm (1 voice channel); 2 channel beda voice→output beda; nol ambiguitas doc; FE = komponen design-source.
-- REALISASI: 🟡 STEP DOK ✅ sesi 2026-06-23 (revisi §3#3/#4/#24, §4, §10.B, §10.E.4/7/9, +§10.G, +§10.H, amandemen F2-03/06/F3-02). **SISA: verifikasi peta FE(admin&tenant) → peta 100% → persetujuan owner → DB/BE/FE impl** (per GATE KERAS).
+- REALISASI: 🟢 **VOICE TUNTAS + deployed + render-validated** (2026-06-23) · 🟡 MUSIK berikut.
+  - **DOK** ✅ dikunci (§3#3/#4/#24, §4, §10.B, §10.E.4/7/9, §10.G, §10.H, banner §0, amandemen F2-03/06/F3-02).
+  - **DB** ✅ migr **0082** (`narration_persona` salin + `music_config` mode auto + voice kedua channel: ryan=Adam/pNInz, admin_te=GuyNeural) · migr **0083** (REPLACE RPC `channel_readiness` → voice=`channels.voice_key`; DROP fosil `niches.voice_defaults`/`voice_key`/`voice_profile`).
+  - **BE** ✅ `cea2555` deployed mv-worker: resolusi voice = `channels.voice_key` SAJA (buang fallback niche) · `narration_persona` (config/script_engine/script_analyzer) · readiness=channel.
+  - **FE** ✅ `3308047` deployed mv-web: niche-editor admin+tenant **buang voice** (allowlist+form) + rename `narration_persona`; channel **hapus pre-fill niche** (voice picker channel tetap). Build PASS, situs 200.
+  - **RENDER-TEST ryan** ✅ PASS: overlay `tts=elevenlabs/pNInz`, `[ElevenLabs] voice=pNInz` dipakai, musik `stellar_dread` mixed, QC PASS 57.2s, published `shorts/cWcf8yBmkRc`. ryan = **1 voice channel** (Adam) semua niche.
+  - **SISA = MUSIK** (`music_selector` 3-mode dari `niches.music_config` + kunci opak `music_library` + admin Catalog→Music CRUD + niche music-picker) + polish komentar `voice_profile` (kosmetik, F5).
 
 ---
 ### FASE 2 — CHANNEL SETUP (wizard) + gerbang aktivasi + child (FE/BE tenant) `[buka pondasi ke pengguna]`
