@@ -57,6 +57,36 @@ def _load_niche_mood_priority(niche: str) -> list:
     return []
 
 
+def _load_music_config(niche: str) -> dict:
+    """Kebijakan musik niche (§3#24/§10.G): {mode: fixed|random|auto, mood?, track_id?}.
+    Kosong/None → 'auto' (deteksi mood per-naskah = perilaku existing). Config-driven."""
+    try:
+        from supabase import create_client
+        from dotenv import load_dotenv
+        load_dotenv()
+        sb  = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+        res = sb.table("niches").select("music_config").eq("niche_id", niche).single().execute()
+        if res.data and isinstance(res.data.get("music_config"), dict):
+            return res.data["music_config"]
+    except Exception as e:
+        logger.warning(f"[MusicSelector] Gagal load music_config: {e}")
+    return {}
+
+
+def _fetch_track_by_id(track_id: str) -> dict | None:
+    """Ambil 1 track spesifik (mode 'fixed'). None bila tak ada / non-aktif."""
+    try:
+        from supabase import create_client
+        from dotenv import load_dotenv
+        load_dotenv()
+        sb  = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+        res = sb.table("music_library").select("*").eq("id", track_id).eq("is_active", True).limit(1).execute()
+        return res.data[0] if res.data else None
+    except Exception as e:
+        logger.warning(f"[MusicSelector] Gagal fetch track {track_id}: {e}")
+        return None
+
+
 def _detect_mood_from_script(
     script: dict,
     mood_keywords: dict,
@@ -298,10 +328,27 @@ def select_and_download(
     # 2. Load mood_priority dari niches table (safety net + sumber rotasi)
     niche_mood_priority = _load_niche_mood_priority(niche)
 
-    # 3. Tentukan mood — rotasi diversity (§9.1) menang bila diset, else deteksi keyword
-    if preferred_mood:
+    # 2b. Kebijakan musik niche (§3#24/§10.G): fixed | random | auto. Channel override (music_default_mood) menang.
+    mc          = _load_music_config(niche)
+    mc_mode     = (mc.get("mode") or "auto").lower()
+    fixed_track = None
+    if mc_mode == "fixed" and mc.get("track_id") and not music_default_mood:
+        fixed_track = _fetch_track_by_id(mc["track_id"])
+        if not fixed_track:
+            logger.warning("[MusicSelector] music_config 'fixed': track_id tak valid → fallback auto")
+    if mc_mode == "random" and not fixed_track:
+        forced = music_default_mood or mc.get("mood")
+        if forced:
+            preferred_mood = forced
+            logger.info(f"[MusicSelector] music_config 'random' → mood '{forced}'")
+
+    # 3. Tentukan mood — fixed track menang; lalu rotasi/forced (§9.1/§3#24); else deteksi keyword
+    if fixed_track:
+        mood, scores = (fixed_track.get("mood") or "fixed"), {}
+        logger.info(f"[MusicSelector] music_config 'fixed' → track '{fixed_track.get('name')}'")
+    elif preferred_mood:
         mood, scores = preferred_mood, {}
-        logger.info(f"[MusicSelector] Diversity rotation mood (§9.1, niche-safe): {mood}")
+        logger.info(f"[MusicSelector] Mood (rotasi/random §9.1/§3#24): {mood}")
     else:
         mood, scores = _detect_mood_from_script(script, mood_keywords, niche_mood_priority, music_default_mood)
 
@@ -315,7 +362,7 @@ def select_and_download(
             fallback_moods.append(m)
 
     # 4. Query Supabase
-    tracks = _query_tracks(niche, mood, fallback_moods)
+    tracks = [fixed_track] if fixed_track else _query_tracks(niche, mood, fallback_moods)
     if not tracks:
         logger.warning("[MusicSelector] Tidak ada track di library — skip music")
         return None
