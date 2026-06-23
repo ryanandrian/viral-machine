@@ -32,7 +32,7 @@ type ChannelRow = {
   is_active: boolean | null; publish_privacy: string | null; duration_preset: number | null; publish_slots: string[] | null;
   production_paused: boolean | null; production_paused_reason: string | null;
   llm_model: string | null; llm_library: string | null; visual_mode: string | null;
-  tts_provider: string | null; voice_key: string | null;
+  tts_provider: string | null; tts_model: string | null; voice_key: string | null;
   llm_account_id: string | null; tts_account_id: string | null; image_account_id: string | null;
   image_quality: string | null; music_enabled: boolean | null; music_volume: number | null;
   music_default_mood: string | null; script_min_viral_score: number | null; script_max_retry: number | null;
@@ -115,11 +115,13 @@ export default function ChannelDetailPage() {
   const [llmOpts, setLlmOpts] = useState<ModelOpt[]>([]);
   const [imgOpts, setImgOpts] = useState<ModelOpt[]>([]);
   const [ttsOpts, setTtsOpts] = useState<{ provider_key: string; display_name: string }[]>([]);
+  const [ttsModelOpts, setTtsModelOpts] = useState<{ model_key: string; display_name: string; provider_key: string }[]>([]);  // ai_models component='tts' (migr 0087)
   const [voiceAll, setVoiceAll] = useState<VoiceOpt[]>([]);
   const [llmModel, setLlmModel] = useState("");
   const [vmode, setVmode] = useState<"video" | "ai_image">("video");
   const [imgModel, setImgModel] = useState("");
   const [ttsProv, setTtsProv] = useState("");
+  const [ttsModel, setTtsModel] = useState("");  // model TTS dipilih tenant (eleven_turbo/multilingual/flash; tts-1/hd)
   const [voiceKey, setVoiceKey] = useState("");
   const [savingAi, setSavingAi] = useState(false);
   const [aiMsg, setAiMsg] = useState<string | null>(null);
@@ -220,7 +222,7 @@ export default function ChannelDetailPage() {
     const visual_mode = vmode === "ai_image" ? (imgModel ? `ai_image:${imgModel}` : null) : "video";
     const { error } = await supabase.from("channels").update({
       llm_model: llmModel || null, llm_library: lib,
-      visual_mode, image_quality: imgQuality, tts_provider: ttsProv || null, voice_key: voiceKey || null,
+      visual_mode, image_quality: imgQuality, tts_provider: ttsProv || null, tts_model: ttsModel || null, voice_key: voiceKey || null,
       llm_account_id: llmAcct || null, tts_account_id: ttsAcct || null, image_account_id: imageAcct || null,
     }).eq("id", id);
     setSavingAi(false);
@@ -304,7 +306,7 @@ export default function ChannelDetailPage() {
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     const { data } = await supabase.from("channels")
-      .select("id,channel_name,platform_channel_id,subscriber_count,niche,niche_pool,niche_mode,content_language,is_active,publish_privacy,duration_preset,publish_slots,production_paused,production_paused_reason,llm_model,llm_library,visual_mode,tts_provider,voice_key,image_quality,music_enabled,music_volume,music_default_mood,script_min_viral_score,script_max_retry,llm_account_id,tts_account_id,image_account_id,caption_style,niche_hashtags,cta_mode,brand_name,brand_cta_text,brand_logo,logo_position,logo_size,logo_opacity,landing_link,link_position")
+      .select("id,channel_name,platform_channel_id,subscriber_count,niche,niche_pool,niche_mode,content_language,is_active,publish_privacy,duration_preset,publish_slots,production_paused,production_paused_reason,llm_model,llm_library,visual_mode,tts_provider,tts_model,voice_key,image_quality,music_enabled,music_volume,music_default_mood,script_min_viral_score,script_max_retry,llm_account_id,tts_account_id,image_account_id,caption_style,niche_hashtags,cta_mode,brand_name,brand_cta_text,brand_logo,logo_position,logo_size,logo_opacity,landing_link,link_position")
       .eq("id", id).maybeSingle();
     const c = data as ChannelRow | null;
     setCh(c);
@@ -316,7 +318,7 @@ export default function ChannelDetailPage() {
       setLlmModel(c.llm_model ?? "");
       const vm = c.visual_mode ?? "";
       if (vm.startsWith("ai_image:")) { setVmode("ai_image"); setImgModel(vm.slice(9)); } else { setVmode("video"); setImgModel(""); }
-      setTtsProv(c.tts_provider ?? ""); setVoiceKey(c.voice_key ?? "");
+      setTtsProv(c.tts_provider ?? ""); setTtsModel(c.tts_model ?? ""); setVoiceKey(c.voice_key ?? "");
       setLlmAcct(c.llm_account_id ?? ""); setTtsAcct(c.tts_account_id ?? ""); setImageAcct(c.image_account_id ?? "");
       setImgQuality(c.image_quality ?? "low"); setMusicOn(c.music_enabled ?? false);
       setMusicVol(c.music_volume ?? 0.1); setMusicMood(c.music_default_mood ?? "");
@@ -333,6 +335,7 @@ export default function ChannelDetailPage() {
     const { data: am } = await supabase.from("ai_models").select("model_key,provider_key,component,display_name").eq("is_active", true).order("display_name");
     setLlmOpts(((am ?? []) as (ModelOpt & {component:string})[]).filter((m) => m.component === "llm"));
     setImgOpts(((am ?? []) as (ModelOpt & {component:string})[]).filter((m) => m.component === "image"));
+    setTtsModelOpts(((am ?? []) as { model_key: string; display_name: string; provider_key: string; component: string }[]).filter((m) => m.component === "tts"));
     const { data: tp } = await supabase.from("tts_profiles").select("provider_key,display_name").eq("is_active", true);
     setTtsOpts((tp ?? []) as { provider_key: string; display_name: string }[]);
     const { data: vc } = await supabase.from("voice_catalog").select("voice_key,provider_key,display_name,gender,preview_url").eq("is_active", true).order("sort_order");
@@ -590,53 +593,81 @@ export default function ChannelDetailPage() {
         </div>
 
         <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 560 }}>
-          <h3 className="card-title" style={{ marginBottom: "0.35rem" }}><Bi id="Produksi AI — model & suara" en="AI production — models & voice" /></h3>
-          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1.25rem" }}>
-            <Bi id="Pilih model AI tiap elemen + suara. Biaya = penyedia AI Anda (BYOK), bukan biaya kami." en="Pick the AI model per element + voice. Cost = your AI provider (BYOK), not our fee." />
+          <h3 className="card-title" style={{ marginBottom: "0.35rem" }}><Bi id="Produksi AI — siapa yang membuat video Anda" en="AI production — who makes your video" /></h3>
+          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "0.5rem" }}>
+            <Bi id="Tiap bagian video dikerjakan oleh AI. Pilih AI-nya, lalu tempel kunci akun AI Anda di tiap bagian." en="Each part of your video is made by AI. Pick the AI, then paste your AI account key in each part." />
           </p>
-          <div className="fld-row"><div className="k"><Bi id="Model LLM (skrip)" en="LLM model (script)" /></div>
+          <div className="tip" style={{ fontSize: "var(--text-xs)", marginBottom: "1rem" }}>
+            <Bi id="💡 Biaya AI ditagih langsung ke akun penyedia Anda (BYOK) — bukan ke kami. Kosongkan kunci untuk memakai kunci default akun Anda." en="💡 AI cost is billed directly to your provider account (BYOK) — not to us. Leave a key empty to use your account default key." />
+          </div>
+
+          {/* ✍️ PENULIS NASKAH (LLM) */}
+          <div style={{ fontWeight: 700, fontSize: "var(--text-sm)" }}>✍️ <Bi id="Penulis naskah" en="Script writer" /></div>
+          <div className="muted" style={{ fontSize: "var(--text-xs)", margin: "0.15rem 0 0.6rem" }}><Bi id="AI yang menulis cerita & narasi video. Makin pintar = naskah makin bagus (biaya sedikit lebih tinggi)." en="The AI that writes your video's story & narration. Smarter = better script (slightly pricier)." /></div>
+          <div className="fld-row"><div className="k"><Bi id="Pilihan AI" en="Choose AI" /></div>
             <div className="radio-row">{llmOpts.map((m) => <span key={m.model_key} className={`radio-pill${llmModel === m.model_key ? " sel" : ""}`} onClick={() => setLlmModel(m.model_key)}>{m.display_name}</span>)}</div></div>
-          <div className="fld-row"><div className="k"><Bi id="Mode visual" en="Visual mode" /><div className="sub">video=stok · ai_image=generate</div></div>
-            <div className="radio-row">{(["video", "ai_image"] as const).map((m) => <span key={m} className={`radio-pill${vmode === m ? " sel" : ""}`} onClick={() => setVmode(m)}>{m === "video" ? "Stock video" : "AI Image"}</span>)}</div></div>
+          <div className="fld-row"><div className="k"><Bi id="Kunci akun" en="Account key" /><div className="sub"><Bi id="akun AI Anda untuk penulis naskah" en="your AI account for the writer" /></div></div>
+            <div className="radio-row">
+              {accounts.filter((a) => a.component === "llm").map((a) => <span key={a.id} className={`radio-pill${llmAcct === a.id ? " sel" : ""}`} onClick={() => setLlmAcct(a.id)}>{a.label}</span>)}
+              {llmAcct && <span className="radio-pill" onClick={() => setLlmAcct("")} title="pakai kunci default akun Anda"><Bi id="kunci default" en="default key" /></span>}
+              <span className="radio-pill" onClick={() => setAddAcct({ component: "llm", label: "", key: "" })}><Plus size={12} /> <Bi id="Tambah kunci" en="Add key" /></span>
+            </div></div>
+
+          {/* 🖼️ VISUAL */}
+          <div style={{ borderTop: "1px solid var(--border-subtle)", fontWeight: 700, fontSize: "var(--text-sm)", marginTop: "1rem", paddingTop: "1rem" }}>🖼️ <Bi id="Visual (gambar adegan)" en="Visuals (scene images)" /></div>
+          <div className="muted" style={{ fontSize: "var(--text-xs)", margin: "0.15rem 0 0.6rem" }}><Bi id="Sumber gambar tiap adegan: pakai video stok, atau biarkan AI menggambar." en="Source for each scene: use stock video, or let AI draw the images." /></div>
+          <div className="fld-row"><div className="k"><Bi id="Jenis visual" en="Visual type" /></div>
+            <div className="radio-row">{(["video", "ai_image"] as const).map((m) => <span key={m} className={`radio-pill${vmode === m ? " sel" : ""}`} onClick={() => setVmode(m)}><Bi id={m === "video" ? "Video stok" : "Gambar AI"} en={m === "video" ? "Stock video" : "AI image"} /></span>)}</div></div>
           {vmode === "ai_image" && <>
-            <div className="fld-row"><div className="k"><Bi id="Model gambar" en="Image model" /></div>
+            <div className="fld-row"><div className="k"><Bi id="Pilihan AI gambar" en="Choose image AI" /></div>
               <div className="radio-row">{imgOpts.map((m) => <span key={m.model_key} className={`radio-pill${imgModel === m.model_key ? " sel" : ""}`} onClick={() => setImgModel(m.model_key)}>{m.display_name}</span>)}</div></div>
-            <div className="fld-row"><div className="k"><Bi id="Kualitas gambar" en="Image quality" /><div className="sub"><Bi id="tinggi = bagus, lebih mahal" en="higher = better, pricier" /></div></div>
-              <div className="radio-row">{["low", "medium", "high"].map((q) => <span key={q} className={`radio-pill${imgQuality === q ? " sel" : ""}`} onClick={() => setImgQuality(q)}>{q}</span>)}</div></div>
+            <div className="fld-row"><div className="k"><Bi id="Kualitas gambar" en="Image quality" /><div className="sub"><Bi id="makin tinggi makin bagus & makin mahal" en="higher = nicer & pricier" /></div></div>
+              <div className="radio-row">{([["low", "Hemat", "Saver"], ["medium", "Seimbang", "Balanced"], ["high", "Terbaik", "Best"]] as [string, string, string][]).map(([q, idL, enL]) => <span key={q} className={`radio-pill${imgQuality === q ? " sel" : ""}`} onClick={() => setImgQuality(q)}><Bi id={idL} en={enL} /></span>)}</div></div>
+            <div className="fld-row"><div className="k"><Bi id="Kunci akun" en="Account key" /><div className="sub"><Bi id="akun AI Anda untuk gambar" en="your AI account for images" /></div></div>
+              <div className="radio-row">
+                {accounts.filter((a) => a.component === "image").map((a) => <span key={a.id} className={`radio-pill${imageAcct === a.id ? " sel" : ""}`} onClick={() => setImageAcct(a.id)}>{a.label}</span>)}
+                {imageAcct && <span className="radio-pill" onClick={() => setImageAcct("")} title="pakai kunci default akun Anda"><Bi id="kunci default" en="default key" /></span>}
+                <span className="radio-pill" onClick={() => setAddAcct({ component: "image", label: "", key: "" })}><Plus size={12} /> <Bi id="Tambah kunci" en="Add key" /></span>
+              </div></div>
           </>}
-          <div className="fld-row"><div className="k"><Bi id="Provider suara (TTS)" en="Voice provider (TTS)" /></div>
-            <div className="radio-row">{ttsOpts.map((p) => <span key={p.provider_key} className={`radio-pill${ttsProv === p.provider_key ? " sel" : ""}`} onClick={() => { setTtsProv(p.provider_key); setVoiceKey(""); }}>{p.display_name}</span>)}</div></div>
-          {ttsProv && (
-            <div className="fld-row"><div className="k"><Bi id="Suara" en="Voice" /><div className="sub"><Bi id="default niche bila tak dipilih" en="niche default if unset" /></div></div>
-              <div className="radio-row">{voiceAll.filter((v) => v.provider_key === ttsProv).map((v) => { const eff = voiceKey || ""; return <span key={v.voice_key} className={`radio-pill${eff === v.voice_key ? " sel" : ""}`} onClick={() => setVoiceKey(v.voice_key)}><Mic size={13} />{v.display_name}{v.gender ? ` · ${v.gender}` : ""}{v.preview_url ? <span title="Dengar contoh" style={{ cursor: "pointer", marginLeft: 4 }} onClick={(e) => { e.stopPropagation(); new Audio(v.preview_url as string).play().catch(() => {}); }}>▶</span> : null}</span>; })}</div></div>
+
+          {/* 🎙️ SUARA NARATOR (TTS) */}
+          <div style={{ borderTop: "1px solid var(--border-subtle)", fontWeight: 700, fontSize: "var(--text-sm)", marginTop: "1rem", paddingTop: "1rem" }}>🎙️ <Bi id="Suara narator" en="Narrator voice" /></div>
+          <div className="muted" style={{ fontSize: "var(--text-xs)", margin: "0.15rem 0 0.6rem" }}><Bi id="Suara yang membacakan narasi: pilih penyedia → model → karakter suara (▶ untuk dengar contoh)." en="The voice that reads your narration: pick provider → model → character (▶ to preview)." /></div>
+          <div className="fld-row"><div className="k"><Bi id="Penyedia suara" en="Voice provider" /></div>
+            <div className="radio-row">{ttsOpts.map((p) => <span key={p.provider_key} className={`radio-pill${ttsProv === p.provider_key ? " sel" : ""}`} onClick={() => { setTtsProv(p.provider_key); setTtsModel(""); setVoiceKey(""); }}>{p.display_name}</span>)}</div></div>
+          {ttsProv && ttsModelOpts.filter((m) => m.provider_key === ttsProv).length > 0 && (
+            <div className="fld-row"><div className="k"><Bi id="Model suara" en="Voice model" /><div className="sub"><Bi id="kualitas vs kecepatan" en="quality vs speed" /></div></div>
+              <div className="radio-row">{ttsModelOpts.filter((m) => m.provider_key === ttsProv).map((m) => <span key={m.model_key} className={`radio-pill${ttsModel === m.model_key ? " sel" : ""}`} onClick={() => setTtsModel(m.model_key)}>{m.display_name}</span>)}</div></div>
           )}
-          {/* F2-09: akun API key (vault) per-elemen. Kosong → key default tenant (fallback BE). */}
-          <div className="fld-row" style={{ borderTop: "1px solid var(--border-subtle)" }}><div className="k"><Bi id="Akun API (key)" en="API account (key)" /><div className="sub"><Bi id="key BYOK per elemen; kosong = key default tenant" en="BYOK key per element; empty = tenant default key" /></div></div></div>
-          {(([["llm", "LLM", llmAcct, setLlmAcct], ["image", "Image", imageAcct, setImageAcct], ["tts", "TTS", ttsAcct, setTtsAcct]] as [string, string, string, (v: string) => void][])
-            .filter(([c]) => c === "llm" || (c === "image" && vmode === "ai_image") || (c === "tts" && !!ttsProv))
-            .map(([comp, labelTxt, val, setter]) => (
-              <div className="fld-row" key={comp}><div className="k">{labelTxt}</div>
-                <div className="radio-row">
-                  {accounts.filter((a) => a.component === comp).map((a) => <span key={a.id} className={`radio-pill${val === a.id ? " sel" : ""}`} onClick={() => setter(a.id)}>{a.label}</span>)}
-                  {val && <span className="radio-pill" onClick={() => setter("")} title="pakai key default tenant"><Bi id="default" en="default" /></span>}
-                  <span className="radio-pill" onClick={() => setAddAcct({ component: comp, label: "", key: "" })}><Plus size={12} /> <Bi id="Tambah" en="Add" /></span>
-                </div>
-              </div>
-            )))}
+          {ttsProv && (
+            <div className="fld-row"><div className="k"><Bi id="Karakter suara" en="Voice character" /></div>
+              <div className="radio-row">{voiceAll.filter((v) => v.provider_key === ttsProv).map((v) => <span key={v.voice_key} className={`radio-pill${(voiceKey || "") === v.voice_key ? " sel" : ""}`} onClick={() => setVoiceKey(v.voice_key)}><Mic size={13} />{v.display_name}{v.gender ? ` · ${v.gender}` : ""}{v.preview_url ? <span title="Dengar contoh" style={{ cursor: "pointer", marginLeft: 4 }} onClick={(e) => { e.stopPropagation(); new Audio(v.preview_url as string).play().catch(() => {}); }}>▶</span> : null}</span>)}</div></div>
+          )}
+          {ttsProv && (
+            <div className="fld-row"><div className="k"><Bi id="Kunci akun" en="Account key" /><div className="sub"><Bi id="akun AI Anda untuk suara" en="your AI account for voice" /></div></div>
+              <div className="radio-row">
+                {accounts.filter((a) => a.component === "tts").map((a) => <span key={a.id} className={`radio-pill${ttsAcct === a.id ? " sel" : ""}`} onClick={() => setTtsAcct(a.id)}>{a.label}</span>)}
+                {ttsAcct && <span className="radio-pill" onClick={() => setTtsAcct("")} title="pakai kunci default akun Anda"><Bi id="kunci default" en="default key" /></span>}
+                <span className="radio-pill" onClick={() => setAddAcct({ component: "tts", label: "", key: "" })}><Plus size={12} /> <Bi id="Tambah kunci" en="Add key" /></span>
+              </div></div>
+          )}
+
+          {/* form tambah kunci (muncul kontekstual) */}
           {addAcct && (
-            <div className="fld-row"><div className="k"><Bi id="Akun baru" en="New account" /> ({addAcct.component})</div>
+            <div className="fld-row" style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: "0.75rem" }}><div className="k"><Bi id="Kunci akun baru" en="New account key" /></div>
               <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                <input className="input" placeholder="Label (mis. OpenAI akun-1)" value={addAcct.label} onChange={(e) => setAddAcct({ ...addAcct, label: e.target.value })} />
-                <input className="input input-mono" type="password" placeholder="API key" value={addAcct.key} onChange={(e) => setAddAcct({ ...addAcct, key: e.target.value })} />
+                <input className="input" placeholder="Nama akun (mis. Akun OpenAI saya)" value={addAcct.label} onChange={(e) => setAddAcct({ ...addAcct, label: e.target.value })} />
+                <input className="input input-mono" type="password" placeholder="Tempel API key dari penyedia" value={addAcct.key} onChange={(e) => setAddAcct({ ...addAcct, key: e.target.value })} />
                 <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                  <button className="btn btn-default btn-sm" disabled={addBusy || !addAcct.key.trim()} onClick={submitAddAcct}>{addBusy ? <Loader2 size={14} className="spin" /> : <Bi id="Simpan akun" en="Save account" />}</button>
+                  <button className="btn btn-default btn-sm" disabled={addBusy || !addAcct.key.trim()} onClick={submitAddAcct}>{addBusy ? <Loader2 size={14} className="spin" /> : <Bi id="Simpan kunci" en="Save key" />}</button>
                   <button className="btn btn-ghost btn-sm" onClick={() => setAddAcct(null)}><Bi id="Batal" en="Cancel" /></button>
                   {addMsg && <span style={{ fontSize: "var(--text-xs)", color: "var(--danger,#ef4444)" }}>{addMsg}</span>}
                 </div>
               </div>
             </div>
           )}
-          <div className="save-bar"><span className="muted">{aiMsg ?? <Bi id="Disimpan ke channel (model & suara)" en="Saves to channel (models & voice)" />}</span><button className="btn btn-default" disabled={savingAi} onClick={saveAi}>{savingAi ? "Menyimpan…" : <Bi id="Simpan & Terapkan" en="Save & Apply" />}</button></div>
+          <div className="save-bar"><span className="muted">{aiMsg ?? <Bi id="Disimpan ke channel" en="Saves to channel" />}</span><button className="btn btn-default" disabled={savingAi} onClick={saveAi}>{savingAi ? "Menyimpan…" : <Bi id="Simpan & Terapkan" en="Save & Apply" />}</button></div>
         </div>
 
         <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 560 }}>
