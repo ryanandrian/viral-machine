@@ -239,7 +239,10 @@ Format: tiap fase punya **Plan** (yang akan dilakukan) & **Realisasi** (diisi sa
   (tenant, provider dari channel, key_enc, status='unchecked'); dedup per (tenant,provider). (b)
   `channel_credentials`/`tenant_credentials` → INSERT `tenant_youtube_accounts` + set `channels.youtube_account_id`.
 - **Validasi:** rollback-test → ryan punya baris pool kunci (openai, elevenlabs) + 1 youtube account + channel ter-link.
-- **Realisasi:** _(kosong)_
+- **Realisasi:** ✅ **DITULIS + rollback-test PASS (2026-06-24)** `migrations/0091_credential_pools.sql`.
+  Buat `tenant_ai_accounts` + `tenant_youtube_accounts` (+ index + RLS select tenant) + `channels.youtube_account_id`.
+  Backfill: ryan → AI accounts {openai, elevenlabs} status='valid' (dedup per tenant×penyedia; openai dari llm+visual
+  satu baris), 1 youtube account 'valid', channel ter-link. ⏳ APPLY ke live = deploy batch Fase 9 (belum di-apply).
 
 ### Fase 3 — DB: lengkapi gerbang (migr `0092_channel_missing_complete.sql`)
 - **DB:** CREATE OR REPLACE `channel_missing(ch)` = pseudocode §0.8.C (tambah: model valid-katalog LLM/TTS, voice valid,
