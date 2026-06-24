@@ -250,7 +250,11 @@ Format: tiap fase punya **Plan** (yang akan dilakukan) & **Realisasi** (diisi sa
   provider-aware). RPC `channel_readiness`/`channel_missing_by_id` + trigger sudah otomatis ikut (panggil fungsi sama).
 - **Validasi:** rollback-test → ryan `channel_missing` sesuai (status pool 'unchecked' → mungkin perlu validasi Fase 5);
   channel kurang → tertahan trigger.
-- **Realisasi:** _(kosong)_
+- **Realisasi:** ✅ **DITULIS + rollback-test (0091+0092) PASS (2026-06-24)** `migrations/0092_channel_missing_complete.sql`.
+  `channel_missing` lengkap (model valid-katalog LLM/TTS/Visual · voice valid · kunci dari `tenant_ai_accounts`
+  status='valid' provider-aware · jadwal ≥1 · `youtube_account_id` valid + `platform_channel_id` · Telegram chat+enabled).
+  Hasil: **ryan = [] (ready)**; Admin Test = [kunci naskah, jenis visual, jadwal posting, koneksi YouTube, Telegram];
+  trigger loloskan re-aktivasi ryan. (Backfill 0091 set pool status='valid' → ryan lolos.) ⏳ APPLY = deploy batch Fase 9.
 
 ### Fase 4 — BE: baca kredensial dari pool + validate-early
 - **BE:** `tenant_config._apply_channel_overlay` → resolve kunci per elemen dari `tenant_ai_accounts`
