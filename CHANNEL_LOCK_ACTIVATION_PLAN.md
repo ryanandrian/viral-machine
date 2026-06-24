@@ -265,7 +265,15 @@ Format: tiap fase punya **Plan** (yang akan dilakukan) & **Realisasi** (diisi sa
   `set_youtube`/`validate` + `validate_telegram(chat_id)` (kirim pesan tes). `webhook_app.py` route baru:
   `/api/credentials/ai`, `/api/credentials/ai/validate`, `/api/credentials/youtube`, `/api/credentials/telegram/test`.
 - **Validasi:** uji produksi ryan (config-level identik) — kunci dari pool, no-fallback.
-- **Realisasi:** _(kosong)_
+- **Realisasi:** ✅ **DONE + tervalidasi LIVE (2026-06-24; 0091 sudah di-apply ke live, additif aman).**
+  `tenant_config`: `_set_key_from_pool` + `_visual_provider` → kunci LLM/TTS/Visual dari `tenant_ai_accounts`
+  (provider-aware, status='valid'); buang `_set_channel_key` (channels.*_key_enc). `tenant_credentials.py`:
+  `load_google_credentials`/`save_google_access_token` → dari `tenant_youtube_accounts` via `channels.youtube_account_id`
+  (+`_account_id_for`). `api_key_vault.py`: `set_ai_account`+`validate_ai_key`(test-call openai/anthropic/elevenlabs/
+  replicate; unknown→unchecked)+`list_ai_accounts`+`validate_telegram`(pesan tes). `webhook_app.py`: route
+  `/api/credentials/ai`, `/ai/list`, `/telegram/test`. **Validasi:** ryan kunci+OAuth dari pool ✓; validate-early
+  real→valid, bogus→invalid, provider-baru→unchecked ✓; compile+nol stray ✓.
+  ⏳ **YouTube OAuth flow tulis ke pool = Fase 5** (connect via Credential page). Deploy BE = batch Fase 9.
 
 ### Fase 5 — FE: Page Credential (perluas `/integrations`)
 - **FE:** `integrations/page.tsx` + Next routes. Section **Kunci AI**: list penyedia dari `ai_providers` (gratis=tanpa

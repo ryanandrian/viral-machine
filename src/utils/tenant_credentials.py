@@ -33,37 +33,43 @@ def _row_to_creds(r: dict | None) -> dict | None:
     }
 
 
+def _account_id_for(sb, tenant_id: str, channel_id: str | None) -> str | None:
+    """id koneksi YouTube (tenant_youtube_accounts) yang dipakai channel ini, atau akun pool tenant (tunggal/valid)."""
+    if channel_id:
+        r = sb.table("channels").select("youtube_account_id").eq("id", channel_id).limit(1).execute()
+        aid = (r.data or [{}])[0].get("youtube_account_id") if r.data else None
+        if aid:
+            return aid
+    r = sb.table("tenant_youtube_accounts").select("id").eq("tenant_id", tenant_id).eq("status", "valid").limit(1).execute()
+    return (r.data or [{}])[0].get("id") if r.data else None
+
+
 def load_google_credentials(tenant_id: str, channel_id: str | None = None) -> dict | None:
-    """Creds OAuth (decrypted) untuk google.oauth2 Credentials. PER-CHANNEL:
-      1. channel_id → `channel_credentials` (multi-channel, migr 0060)
-      2. fallback → `tenant_credentials` per-tenant (legacy/backward-compat)
-    None bila tak ada / belum di-seed. Caller tanpa channel_id = perilaku LAMA (tenant_credentials)."""
+    """Creds OAuth (decrypted) dari POOL `tenant_youtube_accounts` (model 2026-06-24):
+      channel.youtube_account_id → akun pool; fallback akun pool tenant (valid).
+    None bila tak ada / belum connect."""
     try:
         sb = _sb()
-        if channel_id:
-            res = sb.table("channel_credentials").select("*").eq("channel_id", channel_id).limit(1).execute()
-            if res.data:
-                creds = _row_to_creds(res.data[0])
-                if creds:
-                    return creds
-        res = sb.table("tenant_credentials").select("*").eq("tenant_id", tenant_id).limit(1).execute()
+        aid = _account_id_for(sb, tenant_id, channel_id)
+        if not aid:
+            return None
+        res = sb.table("tenant_youtube_accounts").select("*").eq("id", aid).limit(1).execute()
         return _row_to_creds(res.data[0]) if res.data else None
     except Exception as e:
-        logger.warning(f"[tenant_credentials] load gagal ({e}) — caller fallback ke file")
+        logger.warning(f"[tenant_credentials] load gagal ({e})")
         return None
 
 
 def save_google_access_token(tenant_id: str, access_token: str, token_expiry=None, channel_id: str | None = None) -> None:
-    """Update access_token terenkripsi pasca-refresh. PER-CHANNEL bila channel_id (→ channel_credentials);
-    else tenant_credentials (legacy). Best-effort (tak crash pipeline)."""
+    """Update access_token terenkripsi pasca-refresh ke akun pool YouTube. Best-effort (tak crash pipeline)."""
     try:
+        sb = _sb()
+        aid = _account_id_for(sb, tenant_id, channel_id)
+        if not aid:
+            return
         upd = {"google_access_token_enc": encrypt(access_token)}
         if token_expiry is not None:
             upd["token_expiry"] = token_expiry
-        sb = _sb()
-        if channel_id:
-            sb.table("channel_credentials").update(upd).eq("channel_id", channel_id).execute()
-        else:
-            sb.table("tenant_credentials").update(upd).eq("tenant_id", tenant_id).execute()
+        sb.table("tenant_youtube_accounts").update(upd).eq("id", aid).execute()
     except Exception as e:
         logger.warning(f"[tenant_credentials] simpan access_token gagal (non-fatal): {e}")

@@ -96,35 +96,42 @@ try:
     app.add_api_route("/api/youtube/oauth/disconnect", _yt_disconnect, methods=["POST"])
     app.add_api_route("/api/youtube/oauth/status", _yt_status, methods=["POST"])
 
-    # ── Vault kunci AI per-CHANNEL (Fernet, master key hanya di sini) — model bersih 2026-06-24 ──
-    # Tulis kunci 1 elemen (llm/tts/visual) ke channels.<element>_key_enc.
-    async def _channel_key_set(request: "Request"):
+    # ── Vault kredensial POOL (Fernet, master key hanya di sini) — model 2026-06-24 ──
+    # Kunci AI per penyedia → tenant_ai_accounts (+ validate-early). Telegram → uji pesan tes.
+    async def _cred_ai_set(request: "Request"):
         if not _internal_ok(request):
             return JSONResponse({"error": "unauthorized"}, status_code=401)
-        from src.utils.api_key_vault import set_channel_key
+        from src.utils.api_key_vault import set_ai_account
         try:
-            body = await request.json()
-            return set_channel_key(body.get("tenant_id"), body.get("channel_id"),
-                                   body.get("element"), body.get("key"))
+            b = await request.json()
+            return set_ai_account(b.get("tenant_id"), b.get("provider_key"), b.get("key"), b.get("label", ""))
         except Exception as e:
-            logger.warning(f"[key-vault] set channel key gagal: {e}")
+            logger.warning(f"[vault] cred ai set gagal: {e}")
             return JSONResponse({"error": str(e)}, status_code=400)
 
-    app.add_api_route("/api/channels/key", _channel_key_set, methods=["POST"])
-
-    # Baca-balik kunci (decrypt) utk tenant pemilik channel — owner: kunci tak di-mask (copy-paste).
-    async def _channel_keys_get(request: "Request"):
+    async def _cred_ai_list(request: "Request"):
         if not _internal_ok(request):
             return JSONResponse({"error": "unauthorized"}, status_code=401)
-        from src.utils.api_key_vault import get_channel_keys
+        from src.utils.api_key_vault import list_ai_accounts
         try:
-            body = await request.json()
-            return get_channel_keys(body.get("tenant_id"), body.get("channel_id"))
+            b = await request.json()
+            return list_ai_accounts(b.get("tenant_id"))
         except Exception as e:
-            logger.warning(f"[key-vault] get channel keys gagal: {e}")
             return JSONResponse({"error": str(e)}, status_code=400)
 
-    app.add_api_route("/api/channels/keys/get", _channel_keys_get, methods=["POST"])
+    async def _cred_telegram_test(request: "Request"):
+        if not _internal_ok(request):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        from src.utils.api_key_vault import validate_telegram
+        try:
+            b = await request.json()
+            return validate_telegram(b.get("tenant_id"), b.get("chat_id"))
+        except Exception as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+
+    app.add_api_route("/api/credentials/ai",            _cred_ai_set,        methods=["POST"])
+    app.add_api_route("/api/credentials/ai/list",       _cred_ai_list,       methods=["POST"])
+    app.add_api_route("/api/credentials/telegram/test", _cred_telegram_test, methods=["POST"])
 
 except ImportError:
     # fastapi belum terinstall di env dev — endpoint diaktifkan saat cutover (tambah ke requirements).

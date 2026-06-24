@@ -392,27 +392,46 @@ class TenantConfigManager:
                     config.voice_delivery_wps = vc.data[0].get("delivery_wps")
             except Exception as e:
                 logger.warning(f"[TenantConfig] load default_settings/pace voice {vkey} gagal: {e}")
-        # KUNCI per-elemen = channels.{llm,tts,visual}_key_enc (Fernet) — SATU tempat, NO-FALLBACK
-        # (owner 2026-06-24). Channel = sumber TUNGGAL: kunci kosong → biarkan kosong → produksi gagal
-        # jujur (tak diam-diam pinjam key tenant/brankas). Boleh sama/beda antar channel, dicatat eksplisit.
-        self._set_channel_key(config, ch, "llm_key_enc",    "llm_api_key")
-        self._set_channel_key(config, ch, "tts_key_enc",    "tts_api_key")
-        self._set_channel_key(config, ch, "visual_key_enc", "visual_api_key")
+        # KUNCI per-elemen = POOL tenant (tenant_ai_accounts, status='valid'), provider-aware (owner 2026-06-24).
+        # Penyedia tiap elemen: LLM=llm_library · TTS=tts_provider · Visual=penyedia model di visual_mode.
+        # NO-FALLBACK: tak ada di pool / invalid → kunci kosong → produksi gagal jujur (tak pinjam apa pun).
+        self._set_key_from_pool(config, config.tenant_id, getattr(config, "llm_library", None),  "llm_api_key")
+        self._set_key_from_pool(config, config.tenant_id, getattr(config, "tts_provider", None),  "tts_api_key")
+        self._set_key_from_pool(config, config.tenant_id, self._visual_provider(config),          "visual_api_key")
         logger.info(f"[TenantConfig] overlay ch={channel_id}: tts={config.tts_provider}/{config.tts_voice} "
                     f"llm={config.llm_model} visual={config.visual_mode}")
 
-    def _set_channel_key(self, config: "TenantRunConfig", ch: dict, enc_col: str, key_attr: str) -> None:
-        """Set key elemen dari channels.<enc_col> (Fernet). NO-FALLBACK: channel = sumber tunggal —
-        kosong/None/gagal-decrypt → key kosong (produksi gagal jujur, tak pinjam key tenant)."""
-        enc = ch.get(enc_col)
-        if not enc:
+    def _visual_provider(self, config: "TenantRunConfig") -> Optional[str]:
+        """Penyedia visual dari model di visual_mode (ai_image:/ai_video:<model> → ai_models.provider_key)."""
+        vm = getattr(config, "visual_mode", "") or ""
+        mkey = vm.split(":", 1)[1] if ":" in vm else ""
+        if not mkey or not self._supabase:
+            return None
+        try:
+            r = self._supabase.table("ai_models").select("provider_key").eq("model_key", mkey).limit(1).execute()
+            row = (r.data or [None])[0]
+            return row.get("provider_key") if row else None
+        except Exception:
+            return None
+
+    def _set_key_from_pool(self, config: "TenantRunConfig", tenant_id: str, provider: Optional[str], key_attr: str) -> None:
+        """Set key elemen dari POOL tenant_ai_accounts (tenant+provider, status='valid', Fernet).
+        NO-FALLBACK: tak ada/invalid → '' (produksi gagal jujur)."""
+        if not provider or not self._supabase:
             setattr(config, key_attr, "")
             return
         try:
-            from src.utils.crypto import decrypt
-            setattr(config, key_attr, decrypt(enc) or "")
+            r = (self._supabase.table("tenant_ai_accounts").select("key_enc")
+                 .eq("tenant_id", tenant_id).eq("provider_key", provider).eq("status", "valid")
+                 .order("validated_at", desc=True).limit(1).execute())
+            row = (r.data or [None])[0]
+            if row and row.get("key_enc"):
+                from src.utils.crypto import decrypt
+                setattr(config, key_attr, decrypt(row["key_enc"]) or "")
+            else:
+                setattr(config, key_attr, "")
         except Exception as e:
-            logger.error(f"[TenantConfig] decrypt {enc_col} gagal: {e} — key kosong (gagal jujur, no-fallback)")
+            logger.error(f"[TenantConfig] resolve pool key provider={provider} gagal: {e} — kosong (no-fallback)")
             setattr(config, key_attr, "")
 
     def _load_from_supabase(self, tenant_id: str) -> Optional[TenantRunConfig]:
