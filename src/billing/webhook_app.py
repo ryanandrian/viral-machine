@@ -61,9 +61,9 @@ try:
         try:
             body = await request.json()
             url = init_connection(
-                body.get("tenant_id"), body.get("client_id"),
-                body.get("client_secret"), channel_id=body.get("channel_id"),
-                ret=body.get("ret", "/settings"),
+                body.get("tenant_id"), body.get("client_id"), body.get("client_secret"),
+                account_id=body.get("account_id"), label=body.get("label", ""),
+                ret=body.get("ret", "/integrations"),
             )
             return {"authorize_url": url}
         except Exception as e:
@@ -81,15 +81,15 @@ try:
             return JSONResponse({"error": "unauthorized"}, status_code=401)
         from src.billing.youtube_oauth import disconnect
         body = await request.json()
-        disconnect(body.get("tenant_id"), channel_id=body.get("channel_id"))
+        disconnect(body.get("tenant_id"), body.get("account_id"))
         return {"ok": True}
 
     async def _yt_status(request: "Request"):
         if not _internal_ok(request):
             return JSONResponse({"error": "unauthorized"}, status_code=401)
-        from src.billing.youtube_oauth import connection_status
+        from src.billing.youtube_oauth import list_accounts
         body = await request.json()
-        return connection_status(body.get("tenant_id"), channel_id=body.get("channel_id"))
+        return list_accounts(body.get("tenant_id"))
 
     app.add_api_route("/api/youtube/oauth/init", _yt_init, methods=["POST"])
     app.add_api_route("/api/youtube/oauth/callback", _yt_callback, methods=["GET"])

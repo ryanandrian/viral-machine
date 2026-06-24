@@ -286,9 +286,12 @@ Format: tiap fase punya **Plan** (yang akan dilakukan) & **Realisasi** (diisi sa
   ✅ `/integrations` (judul→"Kredensial & Koneksi"): section **Kunci AI** (penyedia katalog yg punya model aktif, gratis
      disaring, field kunci + "Simpan & Uji" → validate-early → badge Valid/Tidak valid/Tersimpan/Belum) + tag "dipakai untuk".
   ✅ **Telegram validate-early**: `saveTelegram` → `/api/credentials/telegram` (pesan tes; hanya tersimpan bila terkirim).
-  ⏳ **BELUM:** (a) **YouTube OAuth → POOL** — `src/billing/youtube_oauth.py` masih tulis `channel_credentials`/
-     `tenant_credentials` (HARUS pindah ke `tenant_youtube_accounts`; kalau tidak, tenant BARU connect→tulis lama, baca pool→GAGAL).
-     FE YouTube section masih pakai flow lama. (b) `next build` belum dijalankan (validasi FE belum).
+  ✅ **YouTube OAuth → POOL DONE:** `youtube_oauth.py` rewrite account-based (`tenant_youtube_accounts`): state bawa
+     `account_id`, `_save_client`/`_store_tokens`/`_load_client`/`disconnect`/`list_accounts` ke pool; `init_connection`
+     account_id None=koneksi baru; status='valid' saat callback. webhook routes + Next routes (`connect`/`disconnect`/
+     `status`) + FE YouTube section = POOL (daftar koneksi + "Tambah koneksi" + per-akun hapus; bisa banyak akun Google).
+  ✅ **`next build` PASS** + BE py_compile PASS. ⏳ Runtime OAuth dance e2e (tenant connect nyata) = saat deploy/verify Fase 9.
+  **FASE 5 SELESAI.**
 
 ### Fase 6 — FE: Channel Setting (card terpisah + urut §2.2)
 - **FE:** `channels/[id]/page.tsx` — pisah jadi card urut: Niche&Format → LLM → TTS → Visual → Jadwal → YouTube

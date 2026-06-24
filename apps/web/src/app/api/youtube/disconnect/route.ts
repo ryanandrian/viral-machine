@@ -8,9 +8,9 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const { channel_id } = await req.json().catch(() => ({}));
+  const { account_id } = await req.json().catch(() => ({}));
   try {
-    const r = await vault("/api/youtube/oauth/disconnect", { tenant_id: user.id, channel_id: channel_id || null });
+    const r = await vault("/api/youtube/oauth/disconnect", { tenant_id: user.id, account_id: account_id || null });
     if (!r.ok) return NextResponse.json({ error: "disconnect gagal" }, { status: 502 });
     return NextResponse.json({ ok: true });
   } catch (e) {

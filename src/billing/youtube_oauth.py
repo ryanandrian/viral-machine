@@ -81,18 +81,18 @@ def _unb64u(s: str) -> bytes:
     return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
 
 
-def sign_state(tenant_id: str, channel_id: str | None = None, ret: str = "/settings", ttl: int = STATE_TTL) -> str:
-    """Tanda-tangani state {tenant_id, channel_id, nonce, exp, return-path}. channel_id mengikat
-    consent ke channel tertentu (multi-channel, migr 0060). Dipakai sbg param `state` OAuth."""
+def sign_state(tenant_id: str, account_id: str | None = None, ret: str = "/integrations", ttl: int = STATE_TTL) -> str:
+    """Tanda-tangani state {tenant_id, account_id, nonce, exp, return-path}. account_id = baris
+    tenant_youtube_accounts (POOL koneksi, model 2026-06-24). Dipakai sbg param `state` OAuth."""
     secret = _require("OAUTH_STATE_SECRET").encode()
-    body = {"t": tenant_id, "c": channel_id, "n": _b64u(os.urandom(9)), "e": int(time.time()) + ttl, "r": ret}
+    body = {"t": tenant_id, "a": account_id, "n": _b64u(os.urandom(9)), "e": int(time.time()) + ttl, "r": ret}
     payload = _b64u(json.dumps(body, separators=(",", ":")).encode())
     sig = _b64u(hmac.new(secret, payload.encode(), hashlib.sha256).digest())
     return f"{payload}.{sig}"
 
 
 def verify_state(state: str) -> dict | None:
-    """Verifikasi signature + expiry. Return {'t':tenant_id,'c':channel_id,'r':ret} atau None."""
+    """Verifikasi signature + expiry. Return {'t':tenant_id,'a':account_id,'r':ret} atau None."""
     try:
         secret = _require("OAUTH_STATE_SECRET").encode()
         payload, sig = state.split(".", 1)
@@ -104,7 +104,7 @@ def verify_state(state: str) -> dict | None:
             return None
         if not data.get("t"):
             return None
-        return {"t": data["t"], "c": data.get("c"), "r": data.get("r", "/settings")}
+        return {"t": data["t"], "a": data.get("a"), "r": data.get("r", "/integrations")}
     except Exception as e:
         logger.warning(f"[yt-oauth] verify_state gagal: {e}")
         return None
@@ -134,49 +134,44 @@ def _flow(client_id: str, client_secret: str, state: str | None = None):
 
 # ---------- Penyimpanan kredensial (service_role, Fernet) ----------
 
-def save_client_creds(tenant_id: str, client_id: str, client_secret: str, channel_id: str | None = None) -> None:
-    """Simpan OAuth app: client_id (plain) + client_secret (Fernet). PER-CHANNEL → channel_credentials
-    (upsert PK channel_id); legacy → tenant_credentials (PK tenant_id). Token diisi saat callback."""
+def _save_client(tenant_id: str, account_id: str | None, client_id: str, client_secret: str, label: str = "") -> str:
+    """Buat/replace baris koneksi YouTube (POOL tenant_youtube_accounts) dgn client creds. Return account_id."""
+    sb = _sb()
     row = {
         "google_client_id": client_id.strip(),
         "google_client_secret_enc": encrypt(client_secret.strip()),
         "updated_at": _now_iso(),
     }
-    if channel_id:
-        _sb().table("channel_credentials").upsert(
-            {**row, "channel_id": channel_id, "tenant_id": tenant_id}, on_conflict="channel_id").execute()
-    else:
-        _sb().table("tenant_credentials").upsert(
-            {**row, "tenant_id": tenant_id}, on_conflict="tenant_id").execute()
+    if account_id:
+        sb.table("tenant_youtube_accounts").update(row).eq("id", account_id).eq("tenant_id", tenant_id).execute()
+        return account_id
+    row.update({"tenant_id": tenant_id, "label": (label or "YouTube")[:80], "status": "unchecked"})
+    res = sb.table("tenant_youtube_accounts").insert(row).execute()
+    return (res.data or [{}])[0].get("id")
 
 
-def _load_client(tenant_id: str, channel_id: str | None) -> tuple[str, str] | None:
-    """(client_id, client_secret decrypted) dari channel_credentials (per-channel) / tenant_credentials."""
-    tbl, key, val = (("channel_credentials", "channel_id", channel_id) if channel_id
-                     else ("tenant_credentials", "tenant_id", tenant_id))
-    res = _sb().table(tbl).select("google_client_id,google_client_secret_enc").eq(key, val).limit(1).execute()
+def _load_client(tenant_id: str, account_id: str) -> tuple[str, str] | None:
+    """(client_id, client_secret decrypted) dari baris pool tenant_youtube_accounts."""
+    res = (_sb().table("tenant_youtube_accounts").select("google_client_id,google_client_secret_enc")
+           .eq("id", account_id).eq("tenant_id", tenant_id).limit(1).execute())
     if not res.data or not res.data[0].get("google_client_secret_enc"):
         return None
     return res.data[0]["google_client_id"], decrypt(res.data[0]["google_client_secret_enc"])
 
 
-def _store_tokens(tenant_id: str, creds, channel_id: str | None, yt_channel_id: str | None = None) -> None:
-    """Tulis token hasil consent (Fernet). refresh_token hanya ditimpa bila ada (Google kadang tak kirim
-    ulang). PER-CHANNEL → channel_credentials(channel_id, yt_channel_id); legacy → tenant_credentials."""
+def _store_tokens(tenant_id: str, account_id: str, creds, yt_channel_id: str | None = None) -> None:
+    """Tulis token hasil consent (Fernet) ke baris pool + status='valid'. refresh_token hanya ditimpa bila ada."""
     upd = {
         "google_access_token_enc": encrypt(creds.token),
         "token_expiry": creds.expiry.replace(tzinfo=timezone.utc).isoformat() if creds.expiry else None,
         "scopes": list(creds.scopes) if creds.scopes else SCOPES,
-        "updated_at": _now_iso(),
+        "status": "valid", "validated_at": _now_iso(), "updated_at": _now_iso(),
     }
     if creds.refresh_token:
         upd["google_refresh_token_enc"] = encrypt(creds.refresh_token)
-    if channel_id:
+    if yt_channel_id:
         upd["yt_channel_id"] = yt_channel_id
-        _sb().table("channel_credentials").update(upd).eq("channel_id", channel_id).execute()
-    else:
-        upd["channel_id"] = yt_channel_id   # legacy: tenant_credentials menyimpan YT-id di kolom channel_id
-        _sb().table("tenant_credentials").update(upd).eq("tenant_id", tenant_id).execute()
+    _sb().table("tenant_youtube_accounts").update(upd).eq("id", account_id).eq("tenant_id", tenant_id).execute()
 
 
 def _fetch_channel_id(creds) -> str | None:
@@ -193,13 +188,14 @@ def _fetch_channel_id(creds) -> str | None:
 
 # ---------- API publik (dipanggil route webhook_app) ----------
 
-def init_connection(tenant_id: str, client_id: str, client_secret: str, channel_id: str | None = None, ret: str = "/settings") -> str:
-    """Simpan OAuth app + bangun consent URL Google (offline + prompt consent → refresh_token).
-    channel_id mengikat consent ke 1 channel (multi-channel). Return authorize_url. Server-to-server dari Next."""
+def init_connection(tenant_id: str, client_id: str, client_secret: str, account_id: str | None = None,
+                    label: str = "", ret: str = "/integrations") -> str:
+    """Buat/replace baris koneksi YouTube (pool) + bangun consent URL (offline+prompt consent → refresh_token).
+    account_id None → koneksi BARU (tenant boleh banyak akun). Return authorize_url. Server-to-server dari Next."""
     if not (tenant_id and client_id and client_secret):
         raise ValueError("tenant_id/client_id/client_secret wajib.")
-    save_client_creds(tenant_id, client_id, client_secret, channel_id=channel_id)
-    flow = _flow(client_id, client_secret, state=sign_state(tenant_id, channel_id=channel_id, ret=ret))
+    aid = _save_client(tenant_id, account_id, client_id, client_secret, label=label)
+    flow = _flow(client_id, client_secret, state=sign_state(tenant_id, account_id=aid, ret=ret))
     url, _ = flow.authorization_url(
         access_type="offline",       # minta refresh_token (akses jangka panjang)
         include_granted_scopes="true",
@@ -226,9 +222,11 @@ def handle_callback(code: str | None, state: str | None, error: str | None = Non
         return _err("no_code")
 
     tenant_id = st["t"]
-    channel_id = st.get("c")   # channels.id (per-channel) dari state; None = legacy per-tenant
+    account_id = st.get("a")   # baris tenant_youtube_accounts (pool)
+    if not account_id:
+        return _err("no_account")
     try:
-        client = _load_client(tenant_id, channel_id)
+        client = _load_client(tenant_id, account_id)
         if not client:
             return _err("no_client")
         client_id, client_secret = client
@@ -241,8 +239,8 @@ def handle_callback(code: str | None, state: str | None, error: str | None = Non
             logger.warning(f"[yt-oauth] tenant={tenant_id} consent tanpa refresh_token")
             return _err("no_refresh_token")
         yt_channel_id = _fetch_channel_id(creds)
-        _store_tokens(tenant_id, creds, channel_id, yt_channel_id=yt_channel_id)
-        logger.info(f"[yt-oauth] tenant={tenant_id} ch={channel_id} tersambung (yt={yt_channel_id})")
+        _store_tokens(tenant_id, account_id, creds, yt_channel_id=yt_channel_id)
+        logger.info(f"[yt-oauth] tenant={tenant_id} akun={account_id} tersambung (yt={yt_channel_id})")
     except Exception as e:
         logger.error(f"[yt-oauth] callback gagal tenant={tenant_id}: {e}")
         return _err("exchange_failed")
@@ -250,42 +248,26 @@ def handle_callback(code: str | None, state: str | None, error: str | None = Non
     return f"{app}{ret}?youtube=connected"
 
 
-def disconnect(tenant_id: str, channel_id: str | None = None) -> None:
-    """Putuskan YouTube: hapus token (Fernet → null), simpan client (reconnect 1-klik). PER-CHANNEL
-    (channel_credentials) / legacy (tenant_credentials). service_role only."""
-    upd = {
-        "google_refresh_token_enc": None,
-        "google_access_token_enc": None,
-        "token_expiry": None,
-        "scopes": [],
-        "updated_at": _now_iso(),
-    }
-    if channel_id:
-        upd["yt_channel_id"] = None
-        _sb().table("channel_credentials").update(upd).eq("channel_id", channel_id).execute()
-    else:
-        upd["channel_id"] = None
-        _sb().table("tenant_credentials").update(upd).eq("tenant_id", tenant_id).execute()
+def disconnect(tenant_id: str, account_id: str) -> None:
+    """Putus + HAPUS koneksi YouTube dari pool + lepas channel yang menunjuknya. service_role only."""
+    if not account_id:
+        return
+    sb = _sb()
+    sb.table("channels").update({"youtube_account_id": None}).eq("tenant_id", tenant_id).eq("youtube_account_id", account_id).execute()
+    sb.table("tenant_youtube_accounts").delete().eq("id", account_id).eq("tenant_id", tenant_id).execute()
 
 
-def connection_status(tenant_id: str, channel_id: str | None = None) -> dict:
-    """Status untuk FE: connected/has_client/channel_id (YT). PER-CHANNEL (channel_credentials) /
-    legacy (tenant_credentials). Tak bocorkan secret."""
-    if channel_id:
-        res = (_sb().table("channel_credentials")
-               .select("google_client_id,google_refresh_token_enc,yt_channel_id")
-               .eq("channel_id", channel_id).limit(1).execute())
-        yt_key = "yt_channel_id"
-    else:
-        res = (_sb().table("tenant_credentials")
-               .select("google_client_id,google_refresh_token_enc,channel_id")
-               .eq("tenant_id", tenant_id).limit(1).execute())
-        yt_key = "channel_id"
-    if not res.data:
-        return {"connected": False, "has_client": False, "channel_id": None}
-    r = res.data[0]
-    return {
-        "connected": bool(r.get("google_refresh_token_enc")),
-        "has_client": bool(r.get("google_client_id")),
-        "channel_id": r.get(yt_key),
-    }
+def list_accounts(tenant_id: str) -> dict:
+    """Daftar koneksi YouTube tenant (untuk FE Credential). Tak bocorkan secret."""
+    res = (_sb().table("tenant_youtube_accounts")
+           .select("id,label,status,yt_channel_id,google_client_id,google_refresh_token_enc")
+           .eq("tenant_id", tenant_id).order("created_at").execute())
+    out = []
+    for r in (res.data or []):
+        out.append({
+            "id": r["id"], "label": r.get("label") or "YouTube",
+            "connected": bool(r.get("google_refresh_token_enc")),
+            "has_client": bool(r.get("google_client_id")),
+            "status": r.get("status"), "yt_channel_id": r.get("yt_channel_id"),
+        })
+    return {"ok": True, "accounts": out}

@@ -10,10 +10,10 @@ export async function GET(req: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const channel_id = new URL(req.url).searchParams.get("channel_id");
-  const fallback = { connected: false, has_client: false, channel_id: null, degraded: true };
+  // POOL: kembalikan daftar koneksi YouTube tenant (degraded bila vault tak terjangkau).
+  const fallback = { ok: false, accounts: [], degraded: true };
   try {
-    const r = await vault("/api/youtube/oauth/status", { tenant_id: user.id, channel_id: channel_id || null });
+    const r = await vault("/api/youtube/oauth/status", { tenant_id: user.id });
     if (!r.ok) return NextResponse.json(fallback);
     return NextResponse.json(await r.json());
   } catch {
