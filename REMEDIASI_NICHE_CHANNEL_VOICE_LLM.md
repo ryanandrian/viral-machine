@@ -1,5 +1,11 @@
 # 🎯 DOKUMEN FINAL MENUJU GO-LIVE — Tenant · Channel · Niche · Voice · Pipeline
 
+> 🔒 **KREDENSIAL (AI keys + YouTube) & LOCK AKTIVASI CHANNEL → acuan TUNGGAL = `CHANNEL_LOCK_ACTIVATION_PLAN.md`**
+> (arsitektur disetujui owner 2026-06-24). Apa pun di file ini yang bertentangan soal **model kredensial** (per-tenant
+> tunggal / per-channel inline / vault lama / penempatan kunci/voice/YouTube) = **OBSOLETE** → ikuti file itu (model
+> POOL tenant-wide; 2-halaman Credential+Channel-Setting; validate-early; gerbang DB `channel_missing`). Bagian niche/
+> voice-DNA/multi-channel lain di doc ini tetap berlaku selama tak bentrok dgn arsitektur kredensial/lock tsb.
+
 > **DOKUMEN LIVING (Plan + Realisasi)** — satu-satunya acuan pembenahan menuju **go-live + go-market**. Di-update terus (kolom REALISASI tiap item) hingga TUNTAS.
 > **Standar dokumen (WAJIB):** se-clear mungkin, nol miss-persepsi, **NOL asumsi liar**. Tiap klaim ber-bukti `file:baris`/`tabel.kolom` atau bertanda **`[VERIFIKASI DULU]`**. Tiap item self-contained — sesi baru tanpa ingatan chat ini tetap paham & bisa eksekusi.
 > **Provenance fakta (PENTING — hasil audit sub-agent TIDAK ditelan mentah):** seluruh fakta load-bearing di §5 sudah **diverifikasi-ulang LANGSUNG** dengan membaca kode/DB sendiri (sub-agent dipakai hanya sebagai *lead*, lalu dicek manual). Tesis utama (config-fanout per-tenant = pondasi belum tuntas, §4) berasal dari **bacaan langsung** `config.py:47-68` + `pipeline.py:58-65`, bukan kesimpulan agent (yang sempat keliru klaim "95% selesai"). Saat mengeksekusi tiap item, **BUKTI-nya wajib dicek-ulang sekali lagi** sebelum mengubah kode.

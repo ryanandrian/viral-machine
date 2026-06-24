@@ -4,8 +4,9 @@ Kirim laporan hasil produksi ke Telegram Bot.
 
 Prinsip:
 - Fire-and-forget: error TIDAK pernah menghentikan pipeline
-- Per-tenant: chat_id dari tenant_config, fallback ke env TELEGRAM_CHAT_ID
-- Satu bot (TELEGRAM_BOT_TOKEN) untuk semua tenant
+- Per-tenant: chat_id WAJIB dari tenant_config/DB (tenant_configs.telegram_chat_id). TANPA fallback env
+  (tenant belum connect → notif di-skip, tak nyasar ke chat platform/owner).
+- Satu bot (TELEGRAM_BOT_TOKEN) untuk semua tenant (platform)
 """
 
 import os
@@ -26,7 +27,8 @@ class TelegramNotifier:
 
     def __init__(self):
         self.bot_token      = os.getenv("TELEGRAM_BOT_TOKEN", "")
-        self.system_chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
+        # NO fallback env TELEGRAM_CHAT_ID: chat_id WAJIB per-tenant dari DB (tenant_configs.telegram_chat_id).
+        # Tenant belum connect → notif di-skip (bukan nyasar ke chat platform/owner).
 
         if not self.bot_token:
             logger.warning("[Telegram] TELEGRAM_BOT_TOKEN tidak di-set — notifikasi dinonaktifkan")
@@ -139,7 +141,7 @@ class TelegramNotifier:
                     return row["telegram_chat_id"]
         except Exception as e:
             logger.warning(f"[Telegram] resolve chat_id tenant gagal: {e}")
-        return self.system_chat_id
+        return ""   # tak ada fallback sistem — tenant belum set chat_id → notif di-skip
 
     def notify_published(self, tenant_id: str, url: str, title: str = "",
                          niche: str = "", run_id: str = "") -> bool:
@@ -202,12 +204,12 @@ class TelegramNotifier:
     # ──────────────────────────────────────────────────────────
 
     def _get_chat_id(self, run_config=None) -> str:
-        """Per-tenant chat_id dulu, fallback ke system."""
+        """Per-tenant chat_id dari run_config (DB). Kosong → "" (notif di-skip, no fallback)."""
         if run_config:
             per_tenant = getattr(run_config, "telegram_chat_id", None)
             if per_tenant:
                 return str(per_tenant)
-        return self.system_chat_id
+        return ""   # tak ada fallback sistem — tenant belum set chat_id → notif di-skip
 
     def _channel_name(self, run_config, result: dict) -> str:
         """Ambil nama channel untuk display di pesan."""

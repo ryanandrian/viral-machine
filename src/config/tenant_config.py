@@ -131,7 +131,7 @@ class TenantRunConfig:
 
     # Notifikasi Telegram (s81)
     telegram_enabled:   bool           = True
-    telegram_chat_id:   Optional[str]  = None   # Per-tenant; fallback ke env TELEGRAM_CHAT_ID
+    telegram_chat_id:   Optional[str]  = None   # Per-tenant (DB) — WAJIB; no fallback env (kosong=notif skip)
     channel_name:       str            = ""     # Display name: "RAD The Explorer"
 
     # Loop Ending Video (s83)

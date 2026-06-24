@@ -91,15 +91,10 @@ class AIImageProvider(VisualProvider):
         self.llm_models     = config.get("llm_models") or {}
         self.llm_model_flat = config.get("llm_model") or ""
 
-        if self.model_config["platform"] == "replicate":
-            self.api_key = (
-                config.get("visual_api_key")
-                or os.getenv("REPLICATE_API_TOKEN", "")
-            )
-        else:
-            # OpenAI image: pakai visual_api_key — bukan llm_api_key
-            # llm_api_key dipisah khusus untuk LLM (narasi + rejection rewrite)
-            self.api_key = config.get("visual_api_key") or ""
+        # Kunci visual = visual_api_key (BYOK per tenant) untuk SEMUA platform (openai/replicate/dst).
+        # NO-FALLBACK: tak ada env-token platform (Replicate tetap OPSI; tenant isi kunci sendiri).
+        # Kosong → di-raise di bawah (gagal jujur). llm_api_key dipisah khusus LLM (narasi + rejection rewrite).
+        self.api_key = config.get("visual_api_key") or ""
 
         if not self.api_key:
             raise VisualError(

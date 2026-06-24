@@ -1,5 +1,10 @@
 # MesinViral — Live Progress & Master Plan
 
+> 🔒 **KREDENSIAL & LOCK AKTIVASI CHANNEL → acuan TUNGGAL = `CHANNEL_LOCK_ACTIVATION_PLAN.md`** (arsitektur disetujui owner 2026-06-24).
+> Pernyataan LAMA di file ini soal model kredensial (kunci per-channel inline / per-tenant di `tenant_configs` / vault
+> `tenant_api_accounts` / `/config` AI-keys / YouTube tenant-vs-channel campur) = **OBSOLETE** → ikuti file itu (model POOL
+> tenant-wide + 2-halaman + validate-early + Telegram/YouTube/jadwal masuk gerbang). F4 pexels purge = SUDAH (valid).
+
 > **Single source of truth** untuk status implementasi. Update setiap selesai sub-phase.
 > Dibuat: 2026-06-10 | Update terakhir: 2026-06-18
 
