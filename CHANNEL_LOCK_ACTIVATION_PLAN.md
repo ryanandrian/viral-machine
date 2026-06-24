@@ -281,7 +281,14 @@ Format: tiap fase punya **Plan** (yang akan dilakukan) & **Realisasi** (diisi sa
   (status disimpan). Section **Koneksi YouTube**: list `tenant_youtube_accounts` + "Tambah akun" (OAuth) + status.
   Section **Telegram**: chat_id + "Kirim pesan tes" → validate. Pakai kelas design-system yang ADA.
 - **Validasi:** `next build`; isi kunci → uji → 🟢; webhook lokal jalan.
-- **Realisasi:** _(kosong)_
+- **Realisasi:** 🔄 **PARSIAL (2026-06-24):**
+  ✅ Next routes: `apps/web/src/app/api/credentials/ai/route.ts` (GET list + POST set) + `.../telegram/route.ts` (POST test).
+  ✅ `/integrations` (judul→"Kredensial & Koneksi"): section **Kunci AI** (penyedia katalog yg punya model aktif, gratis
+     disaring, field kunci + "Simpan & Uji" → validate-early → badge Valid/Tidak valid/Tersimpan/Belum) + tag "dipakai untuk".
+  ✅ **Telegram validate-early**: `saveTelegram` → `/api/credentials/telegram` (pesan tes; hanya tersimpan bila terkirim).
+  ⏳ **BELUM:** (a) **YouTube OAuth → POOL** — `src/billing/youtube_oauth.py` masih tulis `channel_credentials`/
+     `tenant_credentials` (HARUS pindah ke `tenant_youtube_accounts`; kalau tidak, tenant BARU connect→tulis lama, baca pool→GAGAL).
+     FE YouTube section masih pakai flow lama. (b) `next build` belum dijalankan (validasi FE belum).
 
 ### Fase 6 — FE: Channel Setting (card terpisah + urut §2.2)
 - **FE:** `channels/[id]/page.tsx` — pisah jadi card urut: Niche&Format → LLM → TTS → Visual → Jadwal → YouTube

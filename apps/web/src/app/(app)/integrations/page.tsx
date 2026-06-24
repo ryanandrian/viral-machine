@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Video, Send, Check, Loader2, ShieldCheck, Image as ImageIcon } from "lucide-react";
+import { Video, Send, Check, Loader2, ShieldCheck, Image as ImageIcon, KeyRound } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 // F2-08 — Integrasi/Koneksi platform = TENANT-level (MAIN), §3.18/§10.F.
@@ -34,6 +34,11 @@ export default function IntegrationsPage() {
 
   const [tgChat, setTgChat] = useState(""); const [tgEnabled, setTgEnabled] = useState(false);
 
+  // Kunci AI (POOL tenant_ai_accounts) per penyedia — validate-early
+  const [aiProvs, setAiProvs] = useState<{ key: string; name: string; auth: string; uses: string[] }[]>([]);
+  const [aiStatus, setAiStatus] = useState<Record<string, string>>({});  // provider_key → valid|invalid|unchecked
+  const [aiKey, setAiKey] = useState<Record<string, string>>({});
+
   const loadYt = useCallback(async () => {
     try { const r = await fetch("/api/youtube/status"); if (r.ok) setYt(await r.json()); } catch { /* abaikan */ }
   }, []);
@@ -41,7 +46,35 @@ export default function IntegrationsPage() {
     const { data } = await supabase.from("tenant_configs").select("plan_type,telegram_chat_id,telegram_enabled").maybeSingle();
     const t = data as { plan_type?: string; telegram_chat_id?: string; telegram_enabled?: boolean } | null;
     setPlan(t?.plan_type ?? "starter"); setTgChat(t?.telegram_chat_id ?? ""); setTgEnabled(!!t?.telegram_enabled);
+    // Penyedia AI dari katalog (yang punya model aktif) + status kunci tenant (pool)
+    const { data: am } = await supabase.from("ai_models").select("provider_key,component").eq("is_active", true);
+    const { data: ap } = await supabase.from("ai_providers").select("provider_key,display_name,auth_type").eq("is_active", true);
+    const byProv: Record<string, Set<string>> = {};
+    ((am ?? []) as { provider_key: string; component: string }[]).forEach((m) => { (byProv[m.provider_key] ??= new Set()).add(m.component); });
+    const CL: Record<string, string> = { llm: "Penulis Naskah", tts: "Pengisi Suara", image: "Pembuat Visual", video: "Pembuat Visual" };
+    setAiProvs(((ap ?? []) as { provider_key: string; display_name: string; auth_type: string }[])
+      .filter((p) => byProv[p.provider_key])
+      .map((p) => ({ key: p.provider_key, name: p.display_name, auth: p.auth_type, uses: [...new Set([...byProv[p.provider_key]].map((c) => CL[c] || c))] })));
+    try {
+      const r = await fetch("/api/credentials/ai");
+      if (r.ok) { const j = await r.json(); const st: Record<string, string> = {}; (j.accounts ?? []).forEach((a: { provider_key: string; status: string }) => { st[a.provider_key] = a.status; }); setAiStatus(st); }
+    } catch { /* non-fatal */ }
   }, [supabase]);
+
+  async function saveAiKey(provider: string) {
+    const key = (aiKey[provider] || "").trim();
+    if (!key) { setErr({ k: "ai:" + provider, m: "Tempel kunci dulu" }); return; }
+    setBusy("ai:" + provider); setErr(null);
+    try {
+      const r = await fetch("/api/credentials/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider_key: provider, key }) });
+      const j = await r.json();
+      setBusy("");
+      if (!r.ok) { setErr({ k: "ai:" + provider, m: j.error || "Gagal" }); return; }
+      setAiStatus((s) => ({ ...s, [provider]: j.status }));
+      setAiKey((s) => ({ ...s, [provider]: "" }));
+      if (j.status === "invalid") setErr({ k: "ai:" + provider, m: "Kunci ditolak penyedia — cek lagi." });
+    } catch { setBusy(""); setErr({ k: "ai:" + provider, m: "Server tak terjangkau" }); }
+  }
   useEffect(() => {
     load(); loadYt();
     const sp = new URLSearchParams(window.location.search);
@@ -70,9 +103,17 @@ export default function IntegrationsPage() {
     catch { setErr({ k: "yt", m: "Gagal memutus." }); } finally { setBusy(""); }
   }
   async function saveTelegram() {
-    setErr(null); setBusy("tg");
-    const { error } = await supabase.rpc("set_tenant_config", { p_telegram_chat_id: tgChat.trim(), p_telegram_enabled: tgEnabled });
-    setBusy(""); if (error) return setErr({ k: "tg", m: error.message }); flash("tg");
+    setErr(null);
+    if (!tgChat.trim()) { setErr({ k: "tg", m: "Isi Chat ID dulu" }); return; }
+    setBusy("tg");
+    // Validate-early: kirim pesan TES via bot → hanya tersimpan bila terkirim (bukti chat benar + bot di-Start).
+    try {
+      const r = await fetch("/api/credentials/telegram", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: tgChat.trim() }) });
+      const j = await r.json();
+      setBusy("");
+      if (!j.ok) { setErr({ k: "tg", m: j.error || "Tes gagal — pastikan sudah tekan Start di bot." }); return; }
+      setTgEnabled(true); flash("tg");
+    } catch { setBusy(""); setErr({ k: "tg", m: "Server tak terjangkau" }); }
   }
 
   function GatedCard({ icon, name, desc, minRank, minLabel }: { icon: React.ReactNode; name: string; desc: { id: string; en: string }; minRank: number; minLabel: string }) {
@@ -92,11 +133,42 @@ export default function IntegrationsPage() {
   return (
     <>
       <div style={{ marginBottom: "1.5rem" }}>
-        <h1><Bi id="Integrasi & Koneksi" en="Integrations & Connections" /></h1>
-        <div style={muted}><Bi id="Hubungkan platform sekali di sini — dipakai semua channel Anda." en="Connect platforms once here — used across all your channels." /></div>
+        <h1><Bi id="Kredensial & Koneksi" en="Credentials & Connections" /></h1>
+        <div style={muted}><Bi id="Isi kunci AI, hubungkan YouTube & Telegram sekali di sini — berlaku untuk semua channel Anda." en="Set AI keys, connect YouTube & Telegram once here — applies to all your channels." /></div>
       </div>
 
       <div style={{ display: "grid", gap: "1rem", maxWidth: 720 }}>
+        {/* Kunci AI — POOL tenant per penyedia (validate-early) */}
+        <div className="card card-pad">
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.5rem" }}>
+            <span style={iconBox("var(--accent,#7c3aed)")}><KeyRound size={18} /></span>
+            <div style={{ flex: 1 }}><div style={titleS}><Bi id="Kunci AI" en="AI Keys" /></div><div style={muted}><Bi id="Kunci penyedia AI Anda (BYOK) — dipakai semua channel. Penulis naskah (LLM), pengisi suara (TTS), pembuat visual (gambar/video)." en="Your AI provider keys (BYOK) — shared across channels. Script writer (LLM), voice (TTS), visual generator (image/video)." /></div></div>
+          </div>
+          {aiProvs.length === 0 && <div style={{ ...muted, fontSize: "var(--text-xs)" }}><Bi id="Memuat penyedia…" en="Loading providers…" /></div>}
+          {aiProvs.filter((p) => p.auth !== "none").map((p) => {
+            const st = aiStatus[p.key];
+            const badge = st === "valid" ? <span className="badge badge-success" style={{ fontSize: "0.625rem" }}><span className="dot" /> Valid</span>
+              : st === "invalid" ? <span className="badge badge-danger" style={{ fontSize: "0.625rem" }}><span className="dot" /> Tidak valid</span>
+              : st === "unchecked" ? <span className="badge badge-default" style={{ fontSize: "0.625rem" }}><span className="dot" /> Tersimpan</span>
+              : <span className="badge badge-default" style={{ fontSize: "0.625rem" }}><span className="dot" /> Belum diisi</span>;
+            return (
+              <div key={p.key} style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: "0.75rem", marginTop: "0.75rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.4rem" }}>
+                  <b style={{ fontSize: "var(--text-sm)", color: "var(--text-primary)" }}>{p.name}</b>
+                  <span style={{ ...muted, fontSize: "var(--text-xs)" }}>· {p.uses.join(", ")}</span>
+                  <span style={{ marginLeft: "auto" }}>{badge}</span>
+                </div>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <input className="input input-mono" type="text" placeholder={st ? "Isi untuk ganti kunci" : "Tempel API key penyedia"} value={aiKey[p.key] || ""} onChange={(e) => setAiKey((s) => ({ ...s, [p.key]: e.target.value }))} />
+                  <button className="btn btn-default btn-sm" disabled={busy === "ai:" + p.key} onClick={() => saveAiKey(p.key)}>{busy === "ai:" + p.key ? <Loader2 size={14} className="spin" /> : <Bi id="Simpan & Uji" en="Save & Test" />}</button>
+                </div>
+                {err?.k === "ai:" + p.key && <span style={{ color: "var(--danger,#ef4444)", fontSize: "var(--text-xs)" }}>{err.m}</span>}
+              </div>
+            );
+          })}
+          <div style={{ ...muted, fontSize: "var(--text-xs)", marginTop: "0.75rem" }}><Bi id="Penyedia gratis (mis. Edge) tak butuh kunci. Biaya ditagih langsung ke akun penyedia Anda (BYOK)." en="Free providers (e.g. Edge) need no key. Cost is billed directly to your provider account (BYOK)." /></div>
+        </div>
+
         {/* YouTube — tenant-level OAuth (BYO-CC) */}
         <div className="card card-pad">
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.75rem" }}>
