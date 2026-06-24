@@ -313,6 +313,13 @@ Format: tiap fase punya **Plan** (yang akan dilakukan) & **Realisasi** (diisi sa
 
 # §4. DEFINITION OF DONE (kriteria "bungkus" — TUNTAS, nol sisa)
 
+> 🎯 **ACCEPTANCE UTAMA (owner 2026-06-24): TENANT BARU dari NOL — BUKAN ryan.** ryan = tenant TEST (grandfathered).
+> Yang menentukan SELESAI = **tenant baru** bisa: daftar → Page Credential (isi kunci AI + connect YouTube + Telegram,
+> SEMUA tervalidasi 🟢) → Channel Setting (pilih penyedia+model+voice+jadwal+YouTube) → **semua indikator 🟢** →
+> **Aktifkan** → produksi + publish + analitik jalan. Kalau tenant baru TAK bisa sampai aktif mulus → **BELUM selesai**.
+> ⚠️ **NOL DUAL-STATE / "saklar setengah ON":** keadaan akhir = sistem 100% di model baru, jalur lama DIBUANG.
+> Bahaya yang DIHINDARI: demi ryan, jalur lama dibiarkan hidup → tenant real bermasalah. → Hijrah PENUH, lalu drop fosil.
+
 Pekerjaan ini dianggap SELESAI hanya bila SEMUA terpenuhi & tervalidasi:
 1. **`.env` (lokal+VPS) = 100% platform.** Nol kredensial tenant, nol fosil. (cek: grep tak ada
    OPENAI/ANTHROPIC/REPLICATE/TELEGRAM_CHAT_ID/R2_*.)
@@ -323,10 +330,12 @@ Pekerjaan ini dianggap SELESAI hanya bila SEMUA terpenuhi & tervalidasi:
 5. **Indikator 🔴/🟢** di tiap card channel + card Kesiapan; tombol Aktifkan enabled HANYA semua 🟢; tiap indikator
    ada link ke konfigurasinya; semua jalur aktivasi pesan ramah (nol error mentah).
 6. **NO-FALLBACK** total (termasuk Replicate env-fallback dibuang; Replicate tetap OPSI BYOK).
-7. **Tervalidasi end-to-end**: ryan produksi+publish+analitik jalan; channel baru dari onboarding bisa di-setup
-   sampai hijau & aktif; channel belum-lengkap TIDAK bisa aktif (DB tolak).
-8. **Fosil di-drop** (kolom/tabel kunci lama) — nol bangkai.
-9. **Tak ada bug/error terkait lock/kredensial** setelah deploy (dipantau 1 siklus produksi+publish).
+7. **Tervalidasi end-to-end — TENANT BARU (acceptance utama)**: buat tenant uji BARU dari nol → setup penuh →
+   semua 🟢 → aktif → produksi+publish+analitik jalan. (ryan grandfathered = cek regresi, bukan tolok ukur.)
+   Channel belum-lengkap TIDAK bisa aktif (DB tolak).
+8. **Fosil di-drop** (kolom `channels.*_key_enc`, tabel `channel_credentials`/`tenant_credentials`) — nol bangkai,
+   **nol dual-state**: sistem hanya punya SATU jalur (pool + gerbang baru). Tak ada kode/DB jalur lama tersisa.
+9. **Tak ada bug/error terkait lock/kredensial** setelah deploy (dipantau 1 siklus produksi+publish tenant baru + ryan).
 
 # §5. KEPUTUSAN TELEGRAM (FINAL, owner 2026-06-24)
 - **Notif Telegram = murni per-tenant dari DB** (`tenant_configs.telegram_chat_id`). Tiap tenant connect bot →
