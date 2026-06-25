@@ -293,7 +293,13 @@ Format: tiap fase punya **Plan** (yang akan dilakukan) & **Realisasi** (diisi sa
 >
 > 🟩 **STATUS: KODE Fase 5-9 SELESAI & tervalidasi lokal (2026-06-25)** — DB 0093/0094 LIVE · BE pool+vendor+OAuth-platform · FE Credential per-elemen multi-kunci · Channel picker akun · **Fase 7: komponen status bersama `lib/channel-status.tsx` + daftar `/channels` world-class (badge nyata, aktivasi ter-gate+ramah, handle benar, Video terbit nyata) + detail di-DRY** · onboarding keys→pool · admin test-lab lepas `tenant_credentials` · **NOL pembaca tabel fosil (FE+BE)** → 0095 drop-ready. Semua build PASS + regresi ryan AMAN.
 ✅ **DEPLOYED LIVE ke VPS (2026-06-25, commit `06c5e90`)** — git pull (worker+web repo) · `.env` VPS isi `GOOGLE_CLIENT_ID/SECRET` (mv-webhook EnvironmentFile + mv-worker load_dotenv) · mv-web rebuilt (✓ 23.4s) · restart mv-webhook/mv-worker/mv-web (semua active) · mesinviral.com=200. **Migr 0095 APPLIED** (drop channel_credentials/tenant_credentials/*_key_enc/token_path + null client-creds baris YT) → **NOL dual-state**. **Regresi ryan AMAN**: channel_missing=[], YouTube creds resolve (client_id .env + refresh pool → publish OK), worker restart bersih (nol error).
-**Sisa = GATED owner / opsional:** (1) verify tenant-baru e2e (OAuth consent=browser, langkah owner). (2) [opsional] onboarding pengarah penuh (wizard saat ini berfungsi). (3) [opsional] modernisasi admin test-lab QA.
+✅ **CLEANUP + EVALUASI MENYELURUH SELESAI (2026-06-25, commit `bb80162`, deployed):**
+- **onboarding → PENGARAH** (2-langkah Kredensial→Channel, sinyal nyata; wizard mock + endpoint mati dibuang).
+- **admin test-lab → POOL** (tak baca kolom tenant_configs yg didrop 0090).
+- **SAPU FOSIL:** buang file-fallback `token_youtube.json` di youtube_publisher + channel_analytics (no-fallback, nol dual-state) · sapu komentar/docstring usang (BYO-CC→OAuth Platform; tenant_credentials/channel_credentials=DI-DROP 0095; niches.voice_*=DI-DROP 0083) di BE+FE+marketing.
+- **EVALUASI PENUH HIJAU:** ryan gate=[] · kunci AI dari pool · YouTube creds resolve · **nol pembaca tabel fosil** (FE+BE) · `.env` lokal+VPS **platform-only** (backup VPS dihapus) · build PASS · py_compile PASS · 3 service VPS active · mesinviral.com=200 · worker nol error.
+
+**SISA = HANYA milik owner (tak bisa otomatis):** verify tenant-baru dari NOL e2e (signup→Kredensial→Channel→Aktif→produksi+publish; OAuth consent = klik browser Anda).
 > - **ATURAN restart server lokal:** `:3000` via `scratchpad/run_web.py` (muat root `.env` → S3+Google tak putus); vault `:8088` via `scratchpad/run_vault.py`.
 
 ### Fase 0 — Fondasi (SEBAGIAN SUDAH, sesi 2026-06-24)
