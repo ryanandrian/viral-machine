@@ -1,7 +1,43 @@
 # Channel Lock Activation — Arsitektur & Plan vs Realisasi
 
 > Status: **ARSITEKTUR DISETUJUI owner 2026-06-24** (A/B/C/D + trend-radar=platform + 2-page + pool).
-> Implementasi: **belum mulai** (Plan vs Realisasi di §3). Dokumen ini = acuan resmi.
+> Dokumen ini = acuan resmi tunggal. **Implementasi BELUM selaras penuh** — lihat banner DEVIASI §3.
+
+---
+
+# ⭐ KEPUTUSAN FINAL — TERKUNCI 2026-06-25 (COMPACTION-PROOF; JANGAN dibuka ulang, expert sudah putuskan)
+
+> Owner serahkan keputusan ke Claude (expert) + minta SEGERA dibereskan & terdokumentasi agar tak mentah lagi
+> pasca-compaction. Ini ringkas-mutlak; detail di §0.4/§0.5/§2. **Bangun PERSIS ini.**
+
+**1. Dua halaman:** Credential (`/integrations`, tenant-wide) + Channel Setting (`/channels/[id]`, per-channel).
+
+**2. AI = model VENDOR / key-group (FINAL):**
+- Kredensial di-key per **VENDOR (`key_group`)**, BUKAN provider mentah. **`openai` + `openai_tts` = vendor `openai`**
+  (satu kunci OpenAI `sk-…` melayani GPT + image + TTS — **FAKTA**: endpoint beda, **kunci SAMA**; bukti `api_key_vault.py:34-35`
+  validasi identik). Vendor lain: `anthropic`, `elevenlabs`, `replicate`. `edge_tts` = gratis (tanpa kunci).
+- Tenant boleh **>1 kunci per vendor** (label, mis. "OpenAI Utama/Cadangan"). **Tenant isi kunci OpenAI SEKALI** → otomatis dipakai semua elemen yg dilayani vendor itu (tak dobel).
+- **Credential UI per ELEMEN** (Penulis Naskah/LLM · Pengisi Suara/TTS · Pembuat Visual): tiap elemen tampilkan penyedia
+  yg melayaninya (katalog `ai_models.component`) + kunci vendornya + tombol **"Tambah kunci"** (banyak). **Nilai kunci TAMPIL APA ADANYA** (decrypt, `type=text`, TIDAK di-mask).
+- **Channel Setting** per elemen: penyedia → model → **akun** (auto bila 1 akun vendor; pilih bila >1).
+- **Replicate = OPSI** (aktifkan model image-nya di katalog agar muncul). Katalog-driven (tambah provider/model = nol koding).
+
+**3. YouTube = OAuth PLATFORM (FINAL — buang BYO-CC):**
+- Platform punya **1 Google OAuth app** (`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` di `.env` PLATFORM). Tenant cukup klik
+  **"Hubungkan dengan Google"** — **TANPA** Redirect URI / Client ID / Secret (tenant tak pegang hal teknis).
+- Kumpulan koneksi (1..N akun Google) di Credential; channel pilih **koneksi + channel tujuan**. 1 koneksi = publish + analitik.
+- Prasyarat owner (eksternal, di luar kode): daftar OAuth app + **verifikasi Google** (scope upload YouTube; pra-verifikasi ~100 akun uji). ryan **connect ulang** via app platform.
+
+**4. DB target:** `ai_providers.key_group` · `tenant_ai_accounts(tenant_id, key_group, label, key_enc, status, validated_at)` =
+banyak baris/vendor · `channels.{llm,tts,visual}_account_id` + `youtube_account_id` · `tenant_youtube_accounts` (token OAuth platform).
+**Drop fosil:** `channel_credentials`, `tenant_credentials`, `channels.{llm,tts,visual}_key_enc`, `channels.token_path`.
+
+**5. Sisanya (tetap):** Lock di DB (`channel_missing`, identik FE/worker/trigger) · validate-early (🟢=terverifikasi bekerja) ·
+**Kartu Kesiapan & Aktivasi di tab OVERVIEW** (Aktif enabled saat semua 🟢) · indikator 🔴/🟢 + `<ChannelStatusBadge>` ·
+onboarding = **pengarah** (lengkapi Credential→Channel; onboarded = channel pertama semua 🟢) · Telegram per-tenant (validate-early) ·
+trend-radar = `YOUTUBE_PLATFORM_API_KEY` platform · `.env` = HANYA platform · **nol dual-state** (acceptance = TENANT BARU dari nol).
+
+**Urutan build:** DB (key_group + tenant_ai_accounts vendor + channels account cols + youtube OAuth platform) → BE (resolve per akun + readback + OAuth platform) → FE (Credential per-elemen multi-key + tampil-apa-adanya + YouTube "Hubungkan dengan Google"; Channel pemilih akun) → gate → validasi tenant-baru → drop fosil.
 
 ---
 
@@ -33,12 +69,16 @@ Scale lever: naikkan TTL → frugal active-only (sudah) → **ajukan "Audit & Qu
 (granular system mempermudah kenaikan `search.list`) → shard multi-project.
 Beban milik-tenant (publish/analitik) pakai **OAuth tenant** → masuk kuota project tenant (terdistribusi alami).
 
-## 0.4 Model kredensial AI (matang, extensible)
-- **Page Credential → "Kunci AI":** tenant tempel kunci **per penyedia**. Daftar penyedia **otomatis bertambah**
-  seiring platform menambah dukungan (katalog `ai_providers`/`ai_models`, nol kode). Penyedia gratis (Edge) tanpa kunci.
-  (Opsi >1 akun/penyedia = lanjutan; default 1/penyedia.)
-- **Page Channel Setting:** tiap elemen pilih **penyedia → model** (boleh **sama/beda antar channel**). Kunci
-  otomatis dari kumpulan kunci tenant untuk penyedia itu.
+## 0.4 Model kredensial AI (FINAL — hasil diskusi owner 2026-06-25; SAMA POLA dgn YouTube)
+- **Page Credential → "Kumpulan Akun AI":** tenant tempel kunci API **per penyedia**. Daftar penyedia **otomatis
+  bertambah** (katalog `ai_providers`/`ai_models`, nol kode tiap tambah provider/model). Penyedia gratis (Edge) tanpa kunci.
+  **BOLEH >1 AKUN per penyedia** (mis. "OpenAI Utama", "OpenAI Cadangan") — tiap akun punya **label**. (BUKAN "opsi lanjutan" — ini bagian inti.)
+- **Page Channel Setting:** tiap elemen pilih **penyedia → model → AKUN**. Kalau tenant cuma punya **1 akun** penyedia
+  itu → **otomatis terpakai** (tak perlu pilih). Kalau **>1** → tenant **pilih akun**. Mendukung **sama/beda antar channel**
+  (channel A: OpenAI/gpt-4o; channel B: Anthropic/claude) — bahkan **kunci berbeda untuk penyedia sama** (pilih akun beda).
+- **🔓 KREDENSIAL TAMPIL APA ADANYA (kesepakatan owner — WAJIB):** nilai kunci/secret disimpan terenkripsi (Fernet)
+  TAPI **bisa dibaca-balik & ditampilkan TANPA mask** (`type=text`, field ter-prefill nilai decrypt) ke tenant pemilik —
+  agar mudah diperiksa & copy. **BUKAN write-only.** Berlaku kunci AI + Client ID/Secret YouTube + Telegram chat_id.
 - **Penjelasan elemen ke tenant:**
   - **LLM (Penulis Naskah):** AI penulis cerita/hook/narasi. Makin pintar model → naskah makin bagus.
   - **TTS (Pengisi Suara):** Text-to-Speech, ubah naskah jadi suara narator (pilih penyedia + karakter suara).
@@ -132,7 +172,8 @@ status text('valid'|'invalid'|'unchecked') · validated_at timestamptz · create
 **Tabel BARU `tenant_youtube_accounts`** (pool koneksi YouTube):
 `id uuid pk · tenant_id text · label text · google_client_id text · google_client_secret_enc text ·
 google_refresh_token_enc text · google_access_token_enc text · token_expiry · status · validated_at · created_at · updated_at`. RLS `tenant_id=auth.uid()`.
-**`channels`:** TAMBAH `youtube_account_id uuid`(→tenant_youtube_accounts) + `ai_*_account_id uuid` opsional (jika >1 akun/penyedia; NULL→auto akun tunggal). Pertahankan `platform_channel_id`(target). DROP (akhir): `llm_key_enc,tts_key_enc,visual_key_enc`.
+**`channels`:** TAMBAH `youtube_account_id uuid`(→tenant_youtube_accounts) + **`llm_account_id`/`tts_account_id`/`visual_account_id` uuid**(→tenant_ai_accounts). Resolusi: NULL → **auto akun tunggal valid** penyedia itu; bila tenant punya >1 akun penyedia → channel **WAJIB tunjuk akun** (NULL = tak ready). Pertahankan `platform_channel_id`(target). DROP (akhir): `llm_key_enc,tts_key_enc,visual_key_enc`.
+> ⚠️ `tenant_ai_accounts` mendukung **banyak baris per (tenant,provider)** (label beda). JANGAN dedup ke 1/penyedia (backfill 0091 lama men-dedup — perlu dikoreksi agar selaras §0.4).
 **Telegram:** tetap `tenant_configs.telegram_chat_id`; tambah `telegram_validated_at`/status (validate-early §0.7).
 **DROP fosil (akhir, setelah pool jalan):** `channel_credentials`, `tenant_credentials`.
 
@@ -169,9 +210,9 @@ Trigger + `channel_readiness` + `channel_missing_by_id` semua pakai `channel_mis
 | 4 | Koneksi YouTube (≥1 akun) | tenant (pool) | **Credential** | tabel pool koneksi YT |
 | 4b | **Telegram tersambung** (chat_id, validated via pesan tes) | tenant | **Credential** | tenant_configs.telegram_chat_id |
 | 5 | Niche | channel | **Channel Setting** | channels.niche |
-| 6 | LLM: penyedia + model | channel | **Channel Setting** | channels.llm_library/llm_model |
-| 7 | TTS: penyedia + model + voice | channel | **Channel Setting** | channels.tts_provider/tts_model/voice_key |
-| 8 | Visual: generator + model | channel | **Channel Setting** | channels.visual_mode |
+| 6 | LLM: penyedia + model + **akun** | channel | **Channel Setting** | channels.llm_library/llm_model/**llm_account_id** |
+| 7 | TTS: penyedia + model + voice + **akun** | channel | **Channel Setting** | channels.tts_provider/tts_model/voice_key/**tts_account_id** |
+| 8 | Visual: generator + model + **akun** | channel | **Channel Setting** | channels.visual_mode/**visual_account_id** |
 | 9 | Jadwal tayang (≥1 slot) | channel | **Channel Setting** | channels.publish_slots |
 | 10 | Pilih koneksi YouTube + channel tujuan | channel | **Channel Setting** | channels.* (yt connection ref + target) |
 
@@ -182,34 +223,77 @@ model wajib valid di katalog). Logika SATU sumber = fungsi DB `channel_missing` 
 
 # §2. UI/UX (tenant-friendly)
 
-## 2.1 Page Credential ("Akun & Koneksi") — perluas `/integrations` yang ADA
-- Section **Kunci AI**: daftar per penyedia (katalog), tiap penyedia 1 field kunci + tag "dipakai untuk: LLM/Visual/…"
-  + penjelasan elemen (0.4). Gratis (Edge) = tanpa field. Status tersimpan/belum.
-- Section **Koneksi YouTube**: daftar akun Google tersambung + "Tambah akun" (OAuth). Tiap akun tampil YouTube channel-nya.
-- Section **Telegram** (sudah ada) tetap.
+## 2.1 Page Credential ("Akun & Koneksi saya") — perluas `/integrations` yang ADA
+- Section **Kumpulan Akun AI**: per penyedia (katalog) + penjelasan elemen (0.4) + tag "dipakai untuk". **Boleh >1 akun/penyedia**
+  (label + "Tambah akun"). Tiap akun: field kunci **TAMPIL APA ADANYA** (`type=text`, prefill nilai decrypt, TIDAK di-mask) +
+  "Simpan & Uji" → badge valid/invalid (validate-early). Gratis (Edge) = tanpa field.
+- Section **Koneksi YouTube**: kumpulan koneksi — "Tambah koneksi" (OAuth), 1..N akun Google. Tiap akun tampil channel-nya + status. (Client ID/Secret tampil apa adanya bila BYO-CC.)
+- Section **Telegram** (sudah ada) tetap — chat_id tampil apa adanya + uji.
 
 ## 2.2 Page Channel Setting (`/channels/[id]`) — CARD TERPISAH, urut alur isi
-1. **Niche & Format** (niche, bahasa, durasi preset)
-2. **Penulis Naskah (LLM)** — penyedia → model
-3. **Pengisi Suara (TTS)** — penyedia → model → voice
-4. **Pembuat Visual** — generator → model → kualitas
-5. **Jadwal Tayang** — slot
-6. **YouTube** — pilih koneksi + channel tujuan
-7. **Branding & Caption** (opsional)
-8. **Kesiapan & Aktivasi** (card terakhir) — checklist 🔴/🟢 tiap syarat + link ke lokasinya; tombol **Aktifkan**
-   ENABLED hanya saat **semua 🟢**.
+> REVISI owner 2026-06-25: (a) **YouTube (koneksi+target) MASUK kartu pertama** "Pengaturan Channel"
+> karena = jati-diri & tujuan channel (jangan menggantung di paling bawah). (b) **Kesiapan & Aktivasi
+> PINDAH ke tab OVERVIEW** (lihat §2.3) — tab Setting = murni isi konfigurasi. (c) Jadwal = **tab terpisah**
+> dalam halaman channel (PINTU 2; PINTU 1 = menu `/schedule` semua-channel). Buang checkbox `is_active` lama.
 
-## 2.3 Indikator (D)
-- **Daftar channel:** tiap card channel tampil status ringkas (🔴 belum lengkap / 🟢 siap / Aktif / Dijeda / Dihentikan)
-  — pakai komponen status bersama (`<ChannelStatusBadge>`, satu sumber, tanpa drift).
-- **Channel Setting card "Kesiapan":** tiap syarat 🔴/🟢 + link; aktivasi terkunci sampai semua 🟢.
-- Pesan "kurang apa" dari `channel_missing` (dinamis), dipetakan ke kalimat manusiawi + tautan.
+**Tab SETTING — kartu konfigurasi (urut):**
+1. **Pengaturan Channel (identitas & tujuan)** — nama · **Koneksi YouTube (pilih dari pool) + Channel tujuan** (terisi-otomatis dari `yt_channel_id` koneksi, boleh ubah) · niche · bahasa · privasi
+2. **Durasi & Format** — preset
+3. **Penulis Naskah (LLM)** — penyedia → model → **akun** (auto bila 1 akun; pilih bila >1). Link "Lengkapi di Kredensial" bila belum ada akun.
+4. **Pengisi Suara (TTS)** — penyedia → model → voice → **akun**
+5. **Pembuat Visual** — generator → model → kualitas → **akun**
+6. **Branding & Caption** (opsional)
+7. **Operasional & mutu** (musik, QC) — opsional lanjutan
+
+**Tab JADWAL** (pintu 2): slot tayang channel ini (sudah ada).
+**Tab OVERVIEW**: kartu **Kesiapan & Aktivasi** (§2.3).
+
+## 2.3 Indikator (D) — kartu Kesiapan di tab OVERVIEW (REVISI 2026-06-25)
+- **Tab Overview → kartu "Kesiapan & Aktivasi"** (naikkan kartu readiness yg SUDAH ada di Overview, bukan bikin baru):
+  tiap syarat 🔴/🟢 + link ke lokasi konfigurasinya; tombol **Aktifkan** ENABLED hanya saat **semua 🟢**.
+- **Daftar channel (`/channels`):** tiap card status ringkas (🔴 belum lengkap / 🟢 siap / ● Aktif / ⏸ Dijeda / ⛔ Dihentikan)
+  — komponen bersama `<ChannelStatusBadge>` (satu sumber `effectiveStatus`+`channel_missing`, tanpa drift). Card = status-first,
+  aksi state-driven (belum lengkap→"Lengkapi"→Overview; siap→Aktifkan ter-gate; aktif→Kelola+Jeda; dihentikan→Pulihkan),
+  sinyal NYATA saja (Video=`videos` published, tren=`production_runs`/`video_analytics`; empty-state untuk channel baru; NOL angka palsu/error mentah).
+- Pesan "kurang apa" dari `channel_missing` (string: niche·penyedia/model/kunci naskah·penyedia/model/karakter/kunci suara·jenis/model/penyedia/kunci visual·jadwal posting·koneksi YouTube·Telegram) → dipetakan ke kalimat manusiawi + tautan.
+- ⚠️ Sumber data card TERVERIFIKASI BE (audit 2026-06-25): Video terbit=`videos`(published/channel) BUKAN `production_runs`; kuota=`published_today_count`; lihat memory `reference_be_pipeline_tables_fossils`.
 
 ---
 
 # §3. PLAN vs REALISASI
 
 Format: tiap fase punya **Plan** (yang akan dilakukan) & **Realisasi** (diisi saat dikerjakan).
+
+> 🔴 **DEVIASI HARUS DILURUSKAN (audit owner 2026-06-25)** — implementasi sebelumnya MENYIMPANG dari §0.4:
+> 1. **AI level-AKUN belum ada.** DB: tambah `channels.{llm,tts,visual}_account_id`; `tenant_ai_accounts` izinkan >1/penyedia
+>    (backfill 0091 yg men-dedup perlu dikoreksi). BE `_set_key_from_pool` → resolve per **akun yang ditunjuk channel**
+>    (NULL→auto bila tunggal). Gate `channel_missing` → cek akun valid yg ditugaskan. FE kartu AI → tambah **pemilih akun** (auto bila 1).
+> 2. **"Tampil apa adanya" belum ada.** BE: endpoint **decrypt readback** (kunci AI + YT client id/secret). FE: prefill `type=text`, bukan write-only.
+> Fase 4/5/6 Realisasi di bawah = SEBELUM koreksi ini; harus di-update setelah diluruskan.
+>
+> **PROGRES KOREKSI (2026-06-25):**
+> - ✅ **Migr 0093 APPLIED LIVE** (guarded, ryan `[]` sebelum+sesudah) — `ai_providers.key_group` (openai_tts→openai) · `tenant_ai_accounts.key_group` · `channels.{llm,tts,visual}_account_id` + backfill ryan (3 akun). **NOL tabel baru** (hanya add column).
+> - ✅ **Migr 0094 APPLIED LIVE** — `channel_missing` + helper `tenant_ai_key_ok` (vendor key-group + akun-ditugaskan/auto). ryan ready, openai_tts auto-pakai kunci openai ✓. (0092 di-skip — 0094 menggantikan.)
+> - ✅ **BE** `tenant_config._set_key_from_pool(...,account_id)` = resolusi akun-ditugaskan + vendor key-group (py_compile OK).
+> - ✅ **BE** `api_key_vault.list_ai_accounts` = baca-balik (decrypt) "tampil apa adanya"; **FE** `/integrations` prefill `type=text` (ryan keys ter-decrypt ✓, vault :8088 nyala).
+> - ✅ **BE vault**: `set_ai_account` vendor/multi(+account_id) · `delete_ai_account` · `list_ai_accounts` baca-balik(+key_group) · webhook route `/api/credentials/ai`(+account_id)+`/ai/delete`. py_compile OK. Vault lokal :8088 jalan (launcher `scratchpad/run_vault.py`).
+> - ✅ **YouTube OAuth PLATFORM**: `GOOGLE_CLIENT_ID/SECRET` di `.env` LOKAL (di-source dari app developer `963179529813-…` yg tersimpan di DB ryan — kredensial PLATFORM, swappable; tenant tak pegang). `.env` VPS perlu 2 kunci sama saat deploy.
+>
+> 🟧 **STATE MID-BUILD (2026-06-25) — lanjut PERSIS dari sini (anti-compaction):**
+> - `src/billing/youtube_oauth.py` SUDAH diubah ke OAuth Platform: `_platform_client()` (env), `_create_account()` (tanpa client creds), `init_connection(tenant_id, account_id, label, ret)` (TANPA client_id/secret), `handle_callback` pakai `_platform_client()`. (`_save_client`/`_load_client` DIBUANG.)
+> - ⚠️ **BELUM diselaraskan (rantai jadi tak konsisten sampai diselesaikan — JANGAN restart vault dulu):**
+>   1. `src/billing/webhook_app.py` `_yt_init` masih kirim `client_id/client_secret` ke `init_connection` → **HAPUS** arg itu (panggil `init_connection(tenant_id, account_id=…, label=…, ret=…)`).
+>   2. `src/utils/tenant_credentials.py` `load_google_credentials`/`_row_to_creds` masih bangun creds dari `account.google_client_id/secret` → ganti pakai **`os.getenv('GOOGLE_CLIENT_ID'/'GOOGLE_CLIENT_SECRET')`** + refresh_token akun.
+>   3. FE `apps/web/src/app/api/youtube/connect/route.ts` + `onboarding` + `/integrations` masih kirim/minta `client_id/secret` → FE jadi tombol **"Hubungkan dengan Google"** saja (POST `{label}` tanpa client creds).
+> - ✅ **(a) Rantai OAuth Platform SELESAI** (youtube_oauth+webhook+Next connect+FE tombol "Hubungkan dengan Google"; init kembalikan authorize_url tanpa client tenant; build PASS).
+> - ✅ **(b) FE `/integrations` per-elemen multi-kunci SELESAI** (3 kartu LLM/TTS/Visual; vendor map via `ai_providers.key_group`; Tambah/Edit(+account_id)/Hapus(`/api/credentials/ai/delete`); nilai `type=text` tampil-apa-adanya; build PASS, HTTP 200). Route Next: GET/POST(+account_id) + `/ai/delete` baru.
+> - ✅ **(c) FE `/channels/[id]` pemilih AKUN per-elemen SELESAI** (kartu LLM/TTS/Visual: penyedia→model(→voice)→**akun** auto-bila-1/pilih-bila->1; simpan `channels.{llm,tts,visual}_account_id`; build PASS). ✅ **Regresi ryan: worker dapat 3 kunci** (vendor-sharing visual=openai ✓).
+> - ✅ **(d) Onboarding** dibetulkan: kunci → POOL `/api/credentials/ai` (endpoint per-channel MATI dibuang), copy fallback-platform diralat. (Rework penuh ke "pengarah 2-langkah" = ranah FUNNEL, ditunda.)
+> - **SISA (butuh DEPLOY / manual — gated):** (e) **verify tenant-baru e2e** (signup→Kredensial→Channel→Aktif→produksi; OAuth consent butuh browser = langkah owner). (f) **drop fosil 0095** — DITUNDA sampai SETELAH deploy BE baru ke VPS (VPS worker lama mungkin masih baca tabel lama) + **fix FE admin test-lab** (`apps/web/.../admin/test-lab/*` masih baca `tenant_credentials`). 0095 sudah ditulis+rollback-test, apply pasca-deploy.
+>
+> 🟩 **STATUS: KODE Fase 5-9 SELESAI & tervalidasi lokal (2026-06-25)** — DB 0093/0094 LIVE · BE pool+vendor+OAuth-platform · FE Credential per-elemen multi-kunci · Channel picker akun · **Fase 7: komponen status bersama `lib/channel-status.tsx` + daftar `/channels` world-class (badge nyata, aktivasi ter-gate+ramah, handle benar, Video terbit nyata) + detail di-DRY** · onboarding keys→pool · admin test-lab lepas `tenant_credentials` · **NOL pembaca tabel fosil (FE+BE)** → 0095 drop-ready. Semua build PASS + regresi ryan AMAN.
+**Sisa = GATED owner:** (1) BATCH DEPLOY VPS: push → `git pull` VPS + isi `GOOGLE_CLIENT_ID/SECRET` di `.env` VPS (sama lokal) → rebuild mv-web + restart mv-worker/mv-webhook. (2) verify tenant-baru e2e (OAuth consent=browser). (3) apply 0095 (drop fosil) pasca-deploy. (4) [opsional] modernisasi admin test-lab QA (baca pool, bukan tenant_configs key yg sudah didrop 0090).
+> - **ATURAN restart server lokal:** `:3000` via `scratchpad/run_web.py` (muat root `.env` → S3+Google tak putus); vault `:8088` via `scratchpad/run_vault.py`.
 
 ### Fase 0 — Fondasi (SEBAGIAN SUDAH, sesi 2026-06-24)
 - **Plan:** purge Pexels (visual=generator AI), kolom config AI per-channel, gate DB awal (trigger+RPC), BE no-fallback, FE provider→model.
@@ -293,30 +377,40 @@ Format: tiap fase punya **Plan** (yang akan dilakukan) & **Realisasi** (diisi sa
   ✅ **`next build` PASS** + BE py_compile PASS. ⏳ Runtime OAuth dance e2e (tenant connect nyata) = saat deploy/verify Fase 9.
   **FASE 5 SELESAI.**
 
-### Fase 6 — FE: Channel Setting (card terpisah + urut §2.2)
-- **FE:** `channels/[id]/page.tsx` — pisah jadi card urut: Niche&Format → LLM → TTS → Visual → Jadwal → YouTube
-  (pilih `youtube_account_id` + `platform_channel_id`) → Branding → Kesiapan&Aktivasi. Tiap elemen: penyedia→model
-  (kunci dari pool, tak isi di sini); link "Lengkapi kunci di Credential" bila pool kosong. Buang checkbox is_active lama.
+### Fase 6 — FE: Channel Setting (card terpisah + urut §2.2 REVISI 2026-06-25)
+- **FE:** `channels/[id]/page.tsx` tab Setting — urut kartu §2.2: **(1) Pengaturan Channel = nama + KONEKSI YouTube(pool)+target + niche + bahasa + privasi (buang checkbox is_active)** → (2) Durasi → (3) LLM → (4) TTS → (5) Visual → (6) Branding&Caption → (7) Operasional. Tiap elemen AI: penyedia→model (kunci dari pool, TAK isi di sini); link "Lengkapi di Kredensial" bila pool kosong. Kesiapan&Aktivasi BUKAN di sini (→ Overview, Fase 7). Jadwal tetap tab.
+  - **Bereskan dead-code:** hapus state `keys`, fungsi `saveAi` lama, pemuat GET `/api/channels/[id]/keys`, dan **HAPUS file route `apps/web/src/app/api/channels/[id]/keys/route.ts`** (panggil endpoint vault yg TAK ADA → mati). Ganti dgn `saveLlm/saveTts/saveVisual` (hanya tulis penyedia/model/voice ke `channels`). Tambah pemilih `youtube_account_id` (dari `/api/youtube/status`) + simpan bareng `platform_channel_id`.
 - **Validasi:** `next build`; ryan tampil benar; pilih penyedia/model jalan.
-- **Realisasi:** _(kosong)_
+- **Realisasi:** 🔄 **SEDANG DIKERJAKAN (2026-06-25)** — desain dikunci pasca audit BE + revisi owner (YouTube→kartu-1, Kesiapan→Overview, Jadwal=tab). Eksekusi kode menyusul.
 
-### Fase 7 — FE: indikator 🔴/🟢 + lock konsisten
+### Fase 7 — FE: indikator 🔴/🟢 + lock konsisten (Kesiapan di OVERVIEW)
 - **FE:** komponen bersama `lib/channel-status.ts` + `<ChannelStatusBadge>` (pindah `effectiveStatus`); dipakai
-  `channels/[id]`, `channels/page.tsx`, `dashboard`. RPC batch `channels_readiness_mine()` (migr) utk daftar.
-  Card "Kesiapan": tiap syarat 🔴/🟢 + link ke konfigurasinya; tombol Aktifkan enabled hanya semua 🟢.
+  `channels/[id]` (badge header), `channels/page.tsx` (card daftar), `dashboard`. RPC batch `channels_readiness_mine()` (migr baru) utk daftar.
+  **Kartu "Kesiapan & Aktivasi" di tab OVERVIEW** (naikkan kartu readiness yg sudah ada): tiap syarat 🔴/🟢 + link ke konfigurasinya (peta string `channel_missing`→kalimat+tautan); tombol Aktifkan enabled hanya semua 🟢.
+  **Card daftar `/channels` (redesign world-class):** status-first + aksi state-driven + sinyal nyata (Video=`videos` published, sparkline produksi=`production_runs`) + empty-state + overflow ⋯ + perbaiki handle (`youtube.com/channel/{id}`, bukan `@platform_channel_id`).
   `toggleActive` (daftar) + semua jalur: pre-check readiness, tangkap error DB → pesan ramah (nol error mentah).
 - **Validasi:** `next build`; channel belum-lengkap → 🔴 + tombol mati + pesan ramah; lengkap → 🟢 + aktif.
 - **Realisasi:** _(kosong)_
 
-### Fase 8 — Onboarding & data existing (jangan putus)
-- **FE/BE:** `onboarding/page.tsx` → kunci AI saat onboarding masuk **pool** (`/api/credentials/ai`), channel pertama
-  draft non-aktif. Validasi ryan (sudah ter-backfill Fase 2) tetap ready → produksi+publish+analitik jalan.
+### Fase 8 — Onboarding = PENGARAH 2-langkah (SIMPLIFIKASI owner 2026-06-25)
+- **Keputusan:** onboarding TIDAK lagi wizard yg menduplikasi konfigurasi. Cukup **pengarah**: arahkan tenant baru
+  melengkapi **(1) Page Kredensial** (`/integrations`: kunci AI + koneksi YouTube + Telegram, semua 🟢) lalu
+  **(2) Page Channel** (`/channels/[id]`: niche/LLM/TTS/Visual/jadwal/YouTube). **Onboarded = channel pertama semua
+  indikator 🟢.** Pakai SINYAL SAMA (`channel_missing` + status pool), nol mock, nol drift.
+- **FE:** rombak `onboarding/page.tsx` jadi guide ringkas 2-checklist (Kredensial → Channel) yg membaca status nyata
+  (kredensial pool + `channel_readiness`); auto-buat channel draft (atau arahkan `/channels/new`). **BUANG:** wizard mock
+  niche/voice/bahasa (hardcode baris 50-77), pemanggilan endpoint MATI `/api/channels/${cid}/keys` (baris 166), copy
+  "fallback kredensial platform" (baris 353, langgar no-fallback). Kunci kalau diisi di onboarding → pool `/api/credentials/ai`.
+- **Catatan:** rework mendalam katalog niche/voice di onboarding = ranah FUNNEL (setelah remediasi), bukan epik lock.
 - **Realisasi:** _(kosong)_
 
 ### Fase 9 — Validasi total, deploy, drop fosil (migr `0093_drop_legacy_credentials.sql`)
-- **Validasi:** e2e (ryan + 1 channel uji dari nol via onboarding sampai 🟢 & aktif), `next build` PASS, rollback-test semua migrasi.
+> Fosil TERVERIFIKASI audit BE 2026-06-25 (memory `reference_be_pipeline_tables_fossils`): worker baca 0× `channel_credentials`/`tenant_credentials` (grep terbukti); kredensial YouTube hidup = `tenant_youtube_accounts` (via `channels.youtube_account_id`); kunci AI hidup = `tenant_ai_accounts`.
+- **Validasi:** e2e (ryan + 1 channel uji dari nol via onboarding sampai 🟢 & aktif), `next build` PASS, rollback-test semua migrasi. Apply 0092 (belum live).
 - **Deploy:** urut aman (DB additif 0091/0092 → kode BE+FE → verifikasi ryan → drop 0093).
-- **DB drop (0093):** `channels.{llm,tts,visual}_key_enc`; tabel `channel_credentials`, `tenant_credentials` (setelah pool jalan).
+- **DB drop (0093):** `channels.{llm,tts,visual}_key_enc` · `channels.token_path` · tabel `channel_credentials`, `tenant_credentials`.
+- **Bereskan sebelum drop:** FE admin test-lab (`apps/web/.../admin/test-lab/{route,test/route}.ts`) masih baca `tenant_credentials` → pindah ke pool/atau matikan; matikan fallback file `token_youtube.json` di `youtube_publisher.py`/`channel_analytics.py` (bahaya multi-tenant); sapu komentar usang (tenant_config.py:534-540, TTS adapters niches.voice_*).
+- **Di LUAR epik lock (catat ke remediasi multi-channel):** `channels.content_language` orphan (bahasa run masih `tenant_configs.language`); `performance_analyzer` insight per-tenant (bleed antar-channel).
 - **Realisasi:** _(kosong)_
 
 ---

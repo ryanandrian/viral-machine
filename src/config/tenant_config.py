@@ -395,9 +395,9 @@ class TenantConfigManager:
         # KUNCI per-elemen = POOL tenant (tenant_ai_accounts, status='valid'), provider-aware (owner 2026-06-24).
         # Penyedia tiap elemen: LLM=llm_library · TTS=tts_provider · Visual=penyedia model di visual_mode.
         # NO-FALLBACK: tak ada di pool / invalid → kunci kosong → produksi gagal jujur (tak pinjam apa pun).
-        self._set_key_from_pool(config, config.tenant_id, getattr(config, "llm_library", None),  "llm_api_key")
-        self._set_key_from_pool(config, config.tenant_id, getattr(config, "tts_provider", None),  "tts_api_key")
-        self._set_key_from_pool(config, config.tenant_id, self._visual_provider(config),          "visual_api_key")
+        self._set_key_from_pool(config, config.tenant_id, getattr(config, "llm_library", None),  "llm_api_key",    ch.get("llm_account_id"))
+        self._set_key_from_pool(config, config.tenant_id, getattr(config, "tts_provider", None),  "tts_api_key",    ch.get("tts_account_id"))
+        self._set_key_from_pool(config, config.tenant_id, self._visual_provider(config),          "visual_api_key", ch.get("visual_account_id"))
         logger.info(f"[TenantConfig] overlay ch={channel_id}: tts={config.tts_provider}/{config.tts_voice} "
                     f"llm={config.llm_model} visual={config.visual_mode}")
 
@@ -414,24 +414,35 @@ class TenantConfigManager:
         except Exception:
             return None
 
-    def _set_key_from_pool(self, config: "TenantRunConfig", tenant_id: str, provider: Optional[str], key_attr: str) -> None:
-        """Set key elemen dari POOL tenant_ai_accounts (tenant+provider, status='valid', Fernet).
-        NO-FALLBACK: tak ada/invalid → '' (produksi gagal jujur)."""
+    def _set_key_from_pool(self, config: "TenantRunConfig", tenant_id: str, provider: Optional[str],
+                           key_attr: str, account_id: Optional[str] = None) -> None:
+        """Set key elemen dari POOL tenant_ai_accounts (Fernet). Model VENDOR/key-group (CHANNEL_LOCK final 2026-06-25):
+        Prioritas (1) AKUN yg DITUGASKAN channel (account_id, harus status='valid'); (2) fallback AUTO = akun tunggal
+        valid utk VENDOR (key_group) penyedia itu — `openai_tts` pakai kunci vendor `openai` (1 kunci OpenAI utk GPT+TTS+image).
+        NO-FALLBACK lain → '' (produksi gagal jujur)."""
         if not provider or not self._supabase:
             setattr(config, key_attr, "")
             return
         try:
-            r = (self._supabase.table("tenant_ai_accounts").select("key_enc")
-                 .eq("tenant_id", tenant_id).eq("provider_key", provider).eq("status", "valid")
-                 .order("validated_at", desc=True).limit(1).execute())
-            row = (r.data or [None])[0]
-            if row and row.get("key_enc"):
-                from src.utils.crypto import decrypt
-                setattr(config, key_attr, decrypt(row["key_enc"]) or "")
-            else:
-                setattr(config, key_attr, "")
+            from src.utils.crypto import decrypt
+            row = None
+            if account_id:
+                r = (self._supabase.table("tenant_ai_accounts").select("key_enc,status")
+                     .eq("id", account_id).eq("tenant_id", tenant_id).limit(1).execute())
+                cand = (r.data or [None])[0]
+                row = cand if (cand and cand.get("status") == "valid") else None  # ditugaskan tapi tak valid → no-fallback
+            if not row:
+                kg = provider  # vendor key-group; openai_tts → openai
+                pr = self._supabase.table("ai_providers").select("key_group").eq("provider_key", provider).limit(1).execute()
+                if pr.data and pr.data[0].get("key_group"):
+                    kg = pr.data[0]["key_group"]
+                r = (self._supabase.table("tenant_ai_accounts").select("key_enc")
+                     .eq("tenant_id", tenant_id).eq("key_group", kg).eq("status", "valid")
+                     .order("validated_at", desc=True).limit(1).execute())
+                row = (r.data or [None])[0]
+            setattr(config, key_attr, (decrypt(row["key_enc"]) if row and row.get("key_enc") else "") or "")
         except Exception as e:
-            logger.error(f"[TenantConfig] resolve pool key provider={provider} gagal: {e} — kosong (no-fallback)")
+            logger.error(f"[TenantConfig] resolve pool key provider={provider} acct={account_id} gagal: {e} — kosong (no-fallback)")
             setattr(config, key_attr, "")
 
     def _load_from_supabase(self, tenant_id: str) -> Optional[TenantRunConfig]:

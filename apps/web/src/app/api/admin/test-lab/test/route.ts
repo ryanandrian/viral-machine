@@ -14,7 +14,7 @@ export async function POST() {
   const a = createAdminClient();
   const { data: cfg } = await a.from("tenant_configs")
     .select("llm_library, llm_api_key, visual_api_key, tts_api_key").eq("tenant_id", ADMIN_TEST_TID).maybeSingle();
-  const { data: cred } = await a.from("tenant_credentials").select("google_refresh_token_enc").eq("tenant_id", ADMIN_TEST_TID).maybeSingle();
+  const { data: cred } = await a.from("tenant_youtube_accounts").select("google_refresh_token_enc").eq("tenant_id", ADMIN_TEST_TID).limit(1).maybeSingle();
 
   const out: Record<string, { ok: boolean; msg: string }> = {};
 

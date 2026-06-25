@@ -134,29 +134,26 @@ def _flow(client_id: str, client_secret: str, state: str | None = None):
 
 # ---------- Penyimpanan kredensial (service_role, Fernet) ----------
 
-def _save_client(tenant_id: str, account_id: str | None, client_id: str, client_secret: str, label: str = "") -> str:
-    """Buat/replace baris koneksi YouTube (POOL tenant_youtube_accounts) dgn client creds. Return account_id."""
+def _platform_client() -> tuple[str, str]:
+    """Kredensial OAuth app PLATFORM (1 app utk SEMUA tenant) dari .env. Tenant TIDAK pegang ini.
+    Swappable: ganti GOOGLE_CLIENT_ID/SECRET di .env (mis. developer → lumite.biz.id) tanpa sentuh data tenant."""
+    cid = os.getenv("GOOGLE_CLIENT_ID", "").strip()
+    sec = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
+    if not (cid and sec):
+        raise ValueError("GOOGLE_CLIENT_ID/SECRET platform belum diset di .env")
+    return cid, sec
+
+
+def _create_account(tenant_id: str, account_id: str | None, label: str = "") -> str:
+    """Buat baris koneksi YouTube (pool) — TANPA client creds (OAuth Platform). Return account_id."""
     sb = _sb()
-    row = {
-        "google_client_id": client_id.strip(),
-        "google_client_secret_enc": encrypt(client_secret.strip()),
-        "updated_at": _now_iso(),
-    }
     if account_id:
-        sb.table("tenant_youtube_accounts").update(row).eq("id", account_id).eq("tenant_id", tenant_id).execute()
+        sb.table("tenant_youtube_accounts").update({"updated_at": _now_iso()}).eq("id", account_id).eq("tenant_id", tenant_id).execute()
         return account_id
-    row.update({"tenant_id": tenant_id, "label": (label or "YouTube")[:80], "status": "unchecked"})
-    res = sb.table("tenant_youtube_accounts").insert(row).execute()
+    res = sb.table("tenant_youtube_accounts").insert(
+        {"tenant_id": tenant_id, "label": (label or "YouTube")[:80], "status": "unchecked", "updated_at": _now_iso()}
+    ).execute()
     return (res.data or [{}])[0].get("id")
-
-
-def _load_client(tenant_id: str, account_id: str) -> tuple[str, str] | None:
-    """(client_id, client_secret decrypted) dari baris pool tenant_youtube_accounts."""
-    res = (_sb().table("tenant_youtube_accounts").select("google_client_id,google_client_secret_enc")
-           .eq("id", account_id).eq("tenant_id", tenant_id).limit(1).execute())
-    if not res.data or not res.data[0].get("google_client_secret_enc"):
-        return None
-    return res.data[0]["google_client_id"], decrypt(res.data[0]["google_client_secret_enc"])
 
 
 def _store_tokens(tenant_id: str, account_id: str, creds, yt_channel_id: str | None = None) -> None:
@@ -188,14 +185,14 @@ def _fetch_channel_id(creds) -> str | None:
 
 # ---------- API publik (dipanggil route webhook_app) ----------
 
-def init_connection(tenant_id: str, client_id: str, client_secret: str, account_id: str | None = None,
-                    label: str = "", ret: str = "/integrations") -> str:
-    """Buat/replace baris koneksi YouTube (pool) + bangun consent URL (offline+prompt consent → refresh_token).
-    account_id None → koneksi BARU (tenant boleh banyak akun). Return authorize_url. Server-to-server dari Next."""
-    if not (tenant_id and client_id and client_secret):
-        raise ValueError("tenant_id/client_id/client_secret wajib.")
-    aid = _save_client(tenant_id, account_id, client_id, client_secret, label=label)
-    flow = _flow(client_id, client_secret, state=sign_state(tenant_id, account_id=aid, ret=ret))
+def init_connection(tenant_id: str, account_id: str | None = None, label: str = "", ret: str = "/integrations") -> str:
+    """OAuth PLATFORM: buat baris koneksi (pool) + consent URL pakai app PLATFORM (GOOGLE_CLIENT_ID/SECRET .env).
+    Tenant TIDAK pegang client creds — cukup "Hubungkan dengan Google". account_id None → koneksi BARU (boleh banyak akun)."""
+    if not tenant_id:
+        raise ValueError("tenant_id wajib.")
+    cid, sec = _platform_client()
+    aid = _create_account(tenant_id, account_id, label=label)
+    flow = _flow(cid, sec, state=sign_state(tenant_id, account_id=aid, ret=ret))
     url, _ = flow.authorization_url(
         access_type="offline",       # minta refresh_token (akses jangka panjang)
         include_granted_scopes="true",
@@ -226,12 +223,8 @@ def handle_callback(code: str | None, state: str | None, error: str | None = Non
     if not account_id:
         return _err("no_account")
     try:
-        client = _load_client(tenant_id, account_id)
-        if not client:
-            return _err("no_client")
-        client_id, client_secret = client
-
-        flow = _flow(client_id, client_secret, state=state)
+        cid, sec = _platform_client()   # OAuth Platform: pakai app platform, bukan client per-tenant
+        flow = _flow(cid, sec, state=state)
         flow.fetch_token(code=code)
         creds = flow.credentials
         if not creds.refresh_token:

@@ -18,13 +18,14 @@ def _sb():
 
 
 def _row_to_creds(r: dict | None) -> dict | None:
-    """Map baris (channel_credentials / tenant_credentials) → dict creds decrypted, atau None
-    bila tak ada refresh_token. Kedua tabel memakai nama kolom google_* yang sama."""
+    """Map baris tenant_youtube_accounts → dict creds decrypted, atau None bila tak ada refresh_token.
+    OAuth PLATFORM: client_id/secret dari .env PLATFORM (GOOGLE_CLIENT_ID/SECRET), BUKAN dari baris tenant
+    (kolom google_client_id/secret di baris = artefak BYO-CC lama, tak dipakai lagi)."""
     if not r or not r.get("google_refresh_token_enc"):
         return None
     return {
-        "client_id":     r.get("google_client_id"),
-        "client_secret": decrypt(r.get("google_client_secret_enc")) if r.get("google_client_secret_enc") else None,
+        "client_id":     os.getenv("GOOGLE_CLIENT_ID") or r.get("google_client_id"),
+        "client_secret": os.getenv("GOOGLE_CLIENT_SECRET") or (decrypt(r.get("google_client_secret_enc")) if r.get("google_client_secret_enc") else None),
         "refresh_token": decrypt(r.get("google_refresh_token_enc")),
         "token":         decrypt(r.get("google_access_token_enc")) if r.get("google_access_token_enc") else None,
         "token_uri":     "https://oauth2.googleapis.com/token",

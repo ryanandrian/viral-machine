@@ -61,7 +61,7 @@ try:
         try:
             body = await request.json()
             url = init_connection(
-                body.get("tenant_id"), body.get("client_id"), body.get("client_secret"),
+                body.get("tenant_id"),
                 account_id=body.get("account_id"), label=body.get("label", ""),
                 ret=body.get("ret", "/integrations"),
             )
@@ -104,9 +104,20 @@ try:
         from src.utils.api_key_vault import set_ai_account
         try:
             b = await request.json()
-            return set_ai_account(b.get("tenant_id"), b.get("provider_key"), b.get("key"), b.get("label", ""))
+            return set_ai_account(b.get("tenant_id"), b.get("provider_key"), b.get("key"),
+                                  b.get("label", ""), b.get("account_id"))
         except Exception as e:
             logger.warning(f"[vault] cred ai set gagal: {e}")
+            return JSONResponse({"error": str(e)}, status_code=400)
+
+    async def _cred_ai_delete(request: "Request"):
+        if not _internal_ok(request):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        from src.utils.api_key_vault import delete_ai_account
+        try:
+            b = await request.json()
+            return delete_ai_account(b.get("tenant_id"), b.get("account_id"))
+        except Exception as e:
             return JSONResponse({"error": str(e)}, status_code=400)
 
     async def _cred_ai_list(request: "Request"):
@@ -131,6 +142,7 @@ try:
 
     app.add_api_route("/api/credentials/ai",            _cred_ai_set,        methods=["POST"])
     app.add_api_route("/api/credentials/ai/list",       _cred_ai_list,       methods=["POST"])
+    app.add_api_route("/api/credentials/ai/delete",     _cred_ai_delete,     methods=["POST"])
     app.add_api_route("/api/credentials/telegram/test", _cred_telegram_test, methods=["POST"])
 
 except ImportError:

@@ -20,7 +20,8 @@ export async function GET() {
   }
 }
 
-// POST {provider_key, key, label?} → simpan + UJI; balas {status: valid|invalid|unchecked}
+// POST {provider_key, key, label?, account_id?} → simpan/edit + UJI; balas {status, id}.
+// account_id ada → EDIT baris itu; tidak ada → INSERT baru (boleh >1 akun/vendor — §0.4).
 export async function POST(req: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -31,7 +32,7 @@ export async function POST(req: Request) {
   if (!provider_key) return NextResponse.json({ error: "provider_key wajib" }, { status: 400 });
   if (!key) return NextResponse.json({ error: "key wajib" }, { status: 400 });
   try {
-    const r = await vault("/api/credentials/ai", { tenant_id: user.id, provider_key, key, label: String(b.label || "") });
+    const r = await vault("/api/credentials/ai", { tenant_id: user.id, provider_key, key, label: String(b.label || ""), account_id: b.account_id || null });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) return NextResponse.json({ error: j.error || "simpan gagal" }, { status: 502 });
     return NextResponse.json(j);

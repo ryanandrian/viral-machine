@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ExternalLink, Settings, Zap, ArrowRight, BarChart3, Calendar, Activity, Loader2, Check, Pause, Play, RotateCw, AlertTriangle, Mic, ShieldCheck, Sparkles, Clock, Trash2, Plus, PenLine, Image as ImageIcon, Info } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { effectiveStatus, TONE } from "@/lib/channel-status";
 import PresetTables from "@/components/preset-tables";
 import { ComplianceView, type Compliance } from "@/components/compliance-view";
 import { InsightsView, type Insights } from "@/components/insights-view";
@@ -27,11 +28,12 @@ function Bi({ id, en }: { id: string; en: string }) {
 }
 
 type ChannelRow = {
-  id: string; channel_name: string | null; platform_channel_id: string | null; subscriber_count: number | null;
+  id: string; channel_name: string | null; platform_channel_id: string | null; youtube_account_id: string | null; subscriber_count: number | null;
   niche: string | null; niche_pool: string[] | null; niche_mode: string | null; content_language: string | null;
   is_active: boolean | null; publish_privacy: string | null; duration_preset: number | null; publish_slots: string[] | null;
   production_paused: boolean | null; production_paused_reason: string | null;
   llm_model: string | null; llm_library: string | null; visual_mode: string | null;
+  llm_account_id: string | null; tts_account_id: string | null; visual_account_id: string | null;
   tts_provider: string | null; tts_model: string | null; voice_key: string | null;
   image_quality: string | null; music_enabled: boolean | null; music_volume: number | null;
   music_default_mood: string | null; script_min_viral_score: number | null; script_max_retry: number | null;
@@ -45,22 +47,7 @@ const CAP_DEFAULT = { font_name: "Anton", font_size: 68, bold: true, active_word
 type ModelOpt = { model_key: string; provider_key: string; display_name: string };
 type VoiceOpt = { voice_key: string; provider_key: string; display_name: string; gender: string | null; preview_url: string | null };
 
-// F2-07/F1-09: status efektif terpadu — SATU sumber (bukan is_active saja yg menyesatkan).
-type Eff = { key: string; label_id: string; label_en: string; tone: "ok" | "warn" | "stop" | "muted"; reason?: string; reco_id?: string; reco_en?: string };
-function effectiveStatus(ch: ChannelRow, sub: string | null, rd: { ready: boolean; missing: string[] } | null): Eff {
-  if (sub && !["active", "trialing", "trial", "grace"].includes(sub))
-    return { key: "sub", label_id: "Langganan nonaktif", label_en: "Subscription inactive", tone: "stop", reco_id: "Aktifkan langganan untuk melanjutkan produksi.", reco_en: "Reactivate subscription to resume." };
-  if (ch.production_paused)
-    return { key: "halted", label_id: "Dihentikan sistem", label_en: "Halted by system", tone: "stop", reason: ch.production_paused_reason ?? undefined,
-      reco_id: "Perbaiki penyebabnya (kredit/konfigurasi), lalu klik “Jalankan ulang & pulihkan” — produksi-test; bila sukses channel aktif lagi.",
-      reco_en: "Fix the cause (credit/config), then “Run & recover” — a test production; success reactivates the channel." };
-  if (rd && !rd.ready)
-    return { key: "incomplete", label_id: "Belum lengkap", label_en: "Incomplete", tone: "warn", reason: rd.missing?.length ? `Kurang: ${rd.missing.join(", ")}` : undefined,
-      reco_id: "Lengkapi konfigurasi & kredensial di bawah, lalu aktifkan.", reco_en: "Complete config & credentials below, then activate." };
-  if (!ch.is_active)
-    return { key: "paused", label_id: "Dijeda", label_en: "Paused", tone: "warn", reco_id: "Channel dijeda manual. Klik Play untuk melanjutkan.", reco_en: "Manually paused. Click Play to resume." };
-  return { key: "active", label_id: "Aktif", label_en: "Active", tone: "ok" };
-}
+// F2-07/F1-09: status efektif terpadu = komponen bersama `lib/channel-status` (satu sumber, anti-drift).
 
 const PALETTE = ["#6366F1", "#047857", "#9f1239", "#b45309", "#1d4ed8", "#7c3aed"];
 function colorFor(id: string) { let h = 0; for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0; return PALETTE[h % PALETTE.length]; }
@@ -93,7 +80,6 @@ export default function ChannelDetailPage() {
   const [name, setName] = useState("");
   const [clang, setClang] = useState("id-ID");
   const [privacy, setPrivacy] = useState("private");
-  const [active, setActive] = useState(true);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -123,12 +109,15 @@ export default function ChannelDetailPage() {
   const [ttsProv, setTtsProv] = useState("");
   const [ttsModel, setTtsModel] = useState("");  // model TTS dipilih tenant (eleven_turbo/multilingual/flash; tts-1/hd)
   const [voiceKey, setVoiceKey] = useState("");
-  const [savingAi, setSavingAi] = useState(false);
-  const [aiMsg, setAiMsg] = useState<string | null>(null);
-  // Kunci AI per-CHANNEL per-elemen (channels.{llm,tts,visual}_key_enc). Owner 2026-06-24:
-  // kunci TAK di-mask (boleh copy-paste). Wajib bila penyedia berbayar (auth_type<>'none').
-  const [keys, setKeys] = useState<{ llm: string; tts: string; visual: string }>({ llm: "", tts: "", visual: "" });
-  const [provMap, setProvMap] = useState<Record<string, { name: string; auth: string }>>({});  // provider_key → {display_name, auth_type}
+  const [savingAi, setSavingAi] = useState("");  // elemen yg sedang disimpan ("llm"/"tts"/"visual")
+  const [aiMsg, setAiMsg] = useState<{ el: string; text: string; ok: boolean } | null>(null);
+  // Kunci AI = tenant-wide POOL di Page Credential (/integrations). Channel pilih penyedia→model→voice→AKUN.
+  // provMap: provider_key → {display_name, auth_type, key_group(vendor)}. Akun dari tenant_ai_accounts (status valid).
+  const [provMap, setProvMap] = useState<Record<string, { name: string; auth: string; kg: string }>>({});
+  const [aiAccts, setAiAccts] = useState<{ id: string; provider_key: string; key_group: string; label: string; status: string }[]>([]);
+  const [llmAcct, setLlmAcct] = useState("");      // channels.llm_account_id (kosong = auto akun tunggal vendor)
+  const [ttsAcct, setTtsAcct] = useState("");      // channels.tts_account_id
+  const [visualAcct, setVisualAcct] = useState(""); // channels.visual_account_id
   // F2-03: knob operasional per-channel (mutu & biaya — hak tenant)
   const [imgQuality, setImgQuality] = useState("low");
   const [musicOn, setMusicOn] = useState(false);
@@ -195,26 +184,41 @@ export default function ChannelDetailPage() {
     if (!error) load();
   }
 
-  // F2-03 simpan: model+voice → channels (RLS UPDATE). llm_library diturunkan dari provider model LLM.
-  async function saveAi() {
-    setAiMsg(null); setSavingAi(true);
+  // F2-03 simpan AI per-ELEMEN (card terpisah §2.2). Hanya penyedia/model/voice → channels (RLS UPDATE).
+  // Kunci TIDAK lagi di sini — di Page Credential (/integrations), worker resolusi dari tenant_ai_accounts.
+  async function saveAiPart(el: string, patch: Record<string, unknown>) {
+    setAiMsg(null); setSavingAi(el);
+    const { error } = await supabase.from("channels").update(patch).eq("id", id);
+    setSavingAi("");
+    setAiMsg({ el, text: error ? `Gagal: ${error.message}` : "Tersimpan", ok: !error });
+    if (!error) load();
+  }
+  const saveLlm = () => saveAiPart("llm", { llm_model: llmModel || null, llm_library: llmProv || null, llm_account_id: llmAcct || null });
+  const saveTts = () => saveAiPart("tts", { tts_provider: ttsProv || null, tts_model: ttsModel || null, voice_key: voiceKey || null, tts_account_id: ttsAcct || null });
+  const saveVisual = () => {
     // Prefix generator dari component model terpilih: image → ai_image:, video → ai_video: (no footage/library).
     const vModel = imgOpts.find((m) => m.model_key === imgModel);
     const visual_mode = imgModel && vModel ? `${vModel.component === "video" ? "ai_video" : "ai_image"}:${imgModel}` : null;
-    const { error } = await supabase.from("channels").update({
-      llm_model: llmModel || null, llm_library: llmProv || null,
-      visual_mode, image_quality: imgQuality, tts_provider: ttsProv || null, tts_model: ttsModel || null, voice_key: voiceKey || null,
-    }).eq("id", id);
-    if (error) { setSavingAi(false); setAiMsg(`Gagal: ${error.message}`); return; }
-    // Kunci per-elemen → vault (Fernet, master key hanya di server). Kirim semua (kosong = hapus kunci).
-    try {
-      for (const el of ["llm", "tts", "visual"] as const) {
-        const r = await fetch(`/api/channels/${id}/keys`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ element: el, key: keys[el] }) });
-        if (!r.ok) { const j = await r.json().catch(() => ({})); setSavingAi(false); setAiMsg(`Gagal simpan kunci ${el}: ${j.error || r.status}`); return; }
-      }
-    } catch { setSavingAi(false); setAiMsg("Server kunci tak terjangkau"); return; }
-    setSavingAi(false); setAiMsg("Tersimpan"); load();
-  }
+    return saveAiPart("visual", { visual_mode, image_quality: imgQuality, visual_account_id: visualAcct || null });
+  };
+  // Akun valid utk vendor penyedia terpilih (untuk pemilih akun; auto bila 1, pilih bila >1).
+  const acctsFor = (provider: string) => {
+    const kg = provMap[provider]?.kg || provider;
+    return aiAccts.filter((a) => a.key_group === kg && a.status === "valid");
+  };
+  // Pemilih AKUN per-elemen: penyedia gratis → null; 0 akun → link Kredensial; 1 → auto; >1 → pilih.
+  const acctPicker = (provider: string, sel: string, setSel: (v: string) => void) => {
+    if (!provider || provMap[provider]?.auth === "none") return null;
+    const as = acctsFor(provider);
+    return (
+      <div className="fld-row"><div className="k"><Bi id="Akun (kunci)" en="Account (key)" /></div>
+        <div className="radio-row">
+          {as.length === 0 && <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Belum ada kunci — " en="No key — " /><Link href="/integrations" className="link"><Bi id="lengkapi di Kredensial" en="add in Credentials" /></Link></span>}
+          {as.length === 1 && <span className="muted" style={{ fontSize: "var(--text-xs)" }}>{as[0].label} ✓ <Bi id="(otomatis)" en="(auto)" /></span>}
+          {as.length > 1 && as.map((a) => <span key={a.id} className={`radio-pill${sel === a.id ? " sel" : ""}`} onClick={() => setSel(a.id)}>{a.label}</span>)}
+        </div></div>
+    );
+  };
 
   // C3: editor niche per-channel (fixed/random) — opsi dari ENTITLEMENT tenant; tulis via RPC.
   const [nicheMode, setNicheMode] = useState<"fixed" | "random">("fixed");
@@ -228,18 +232,11 @@ export default function ChannelDetailPage() {
   const [savingPreset, setSavingPreset] = useState(false);
   const [presetMsg, setPresetMsg] = useState<string | null>(null);
 
-  // F2-08: koneksi YouTube/Google diatur TENANT-level di menu Integrasi (/integrations).
-  // Channel HANYA pilih TARGET = youtube channel id yang dipublish (channels.platform_channel_id).
+  // YouTube = bagian IDENTITAS channel (kartu 1): pilih KONEKSI (pool tenant_youtube_accounts, diatur di
+  // /integrations) + channel TUJUAN (channels.platform_channel_id). Disimpan bareng identitas via save().
   const [targetYt, setTargetYt] = useState("");
-  const [savingTarget, setSavingTarget] = useState(false);
-  const [targetMsg, setTargetMsg] = useState<string | null>(null);
-  async function saveTarget() {
-    setTargetMsg(null); setSavingTarget(true);
-    const { error } = await supabase.from("channels").update({ platform_channel_id: targetYt.trim() || null }).eq("id", id);
-    setSavingTarget(false);
-    setTargetMsg(error ? `Gagal: ${error.message}` : "Target tersimpan");
-    if (!error) load();
-  }
+  const [ytAccountId, setYtAccountId] = useState("");
+  const [ytAccounts, setYtAccounts] = useState<{ id: string; label: string; status: string | null; yt_channel_id: string | null; connected: boolean }[]>([]);
 
   async function savePreset() {
     setPresetMsg(null); setSavingPreset(true);
@@ -287,25 +284,26 @@ export default function ChannelDetailPage() {
     const { error } = await supabase.from("channels").update({ is_active: toActive }).eq("id", id);
     setBusy(false);
     if (error) return setErr(error.message);
-    setActive(toActive); load();
+    load();
   }
 
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     const { data } = await supabase.from("channels")
-      .select("id,channel_name,platform_channel_id,subscriber_count,niche,niche_pool,niche_mode,content_language,is_active,publish_privacy,duration_preset,publish_slots,production_paused,production_paused_reason,llm_model,llm_library,visual_mode,tts_provider,tts_model,voice_key,image_quality,music_enabled,music_volume,music_default_mood,script_min_viral_score,script_max_retry,caption_style,niche_hashtags,cta_mode,brand_name,brand_cta_text,brand_logo,logo_position,logo_size,logo_opacity,landing_link,link_position")
+      .select("id,channel_name,platform_channel_id,youtube_account_id,subscriber_count,niche,niche_pool,niche_mode,content_language,is_active,publish_privacy,duration_preset,publish_slots,production_paused,production_paused_reason,llm_model,llm_library,visual_mode,llm_account_id,tts_account_id,visual_account_id,tts_provider,tts_model,voice_key,image_quality,music_enabled,music_volume,music_default_mood,script_min_viral_score,script_max_retry,caption_style,niche_hashtags,cta_mode,brand_name,brand_cta_text,brand_logo,logo_position,logo_size,logo_opacity,landing_link,link_position")
       .eq("id", id).maybeSingle();
     const c = data as ChannelRow | null;
     setCh(c);
     if (c) {
       setName(c.channel_name ?? ""); setClang(c.content_language ?? "id-ID");
-      setPrivacy(c.publish_privacy ?? "private"); setActive(c.is_active ?? true);
+      setPrivacy(c.publish_privacy ?? "private");
       setNicheMode((c.niche_mode === "random" ? "random" : "fixed")); setNiche(c.niche ?? "");
-      setDpreset(c.duration_preset ?? null); setSlots(c.publish_slots ?? []); setTargetYt(c.platform_channel_id ?? "");
+      setDpreset(c.duration_preset ?? null); setSlots(c.publish_slots ?? []); setTargetYt(c.platform_channel_id ?? ""); setYtAccountId(c.youtube_account_id ?? "");
       setLlmProv(c.llm_library ?? ""); setLlmModel(c.llm_model ?? "");
       const vm = c.visual_mode ?? "";
       setImgModel(vm.startsWith("ai_image:") || vm.startsWith("ai_video:") ? vm.slice(9) : "");
       setTtsProv(c.tts_provider ?? ""); setTtsModel(c.tts_model ?? ""); setVoiceKey(c.voice_key ?? "");
+      setLlmAcct(c.llm_account_id ?? ""); setTtsAcct(c.tts_account_id ?? ""); setVisualAcct(c.visual_account_id ?? "");
       setImgQuality(c.image_quality ?? "low"); setMusicOn(c.music_enabled ?? false);
       setMusicVol(c.music_volume ?? 0.1); setMusicMood(c.music_default_mood ?? "");
       setMinScore(c.script_min_viral_score ?? 75); setMaxRetry(c.script_max_retry ?? 3);
@@ -332,13 +330,13 @@ export default function ChannelDetailPage() {
     const { data: vc } = await supabase.from("voice_catalog").select("voice_key,provider_key,display_name,gender,preview_url").eq("is_active", true).order("sort_order");
     setVoiceAll((vc ?? []) as VoiceOpt[]);
     // penyedia: display_name (label pill) + auth_type (gratis 'none' → tak butuh kunci, mis. edge_tts).
-    const { data: aps } = await supabase.from("ai_providers").select("provider_key,display_name,auth_type").eq("is_active", true);
-    setProvMap(Object.fromEntries(((aps ?? []) as { provider_key: string; display_name: string; auth_type: string }[]).map((p) => [p.provider_key, { name: p.display_name, auth: p.auth_type }])));
-    // Kunci per-elemen (decrypt via vault) → prefill field (owner: tak di-mask, copy-paste).
-    try {
-      const rk = await fetch(`/api/channels/${id}/keys`);
-      if (rk.ok) { const jk = await rk.json(); if (jk.keys) setKeys({ llm: jk.keys.llm ?? "", tts: jk.keys.tts ?? "", visual: jk.keys.visual ?? "" }); }
-    } catch { /* non-fatal */ }
+    const { data: aps } = await supabase.from("ai_providers").select("provider_key,display_name,auth_type,key_group").eq("is_active", true);
+    setProvMap(Object.fromEntries(((aps ?? []) as { provider_key: string; display_name: string; auth_type: string; key_group: string | null }[]).map((p) => [p.provider_key, { name: p.display_name, auth: p.auth_type, kg: p.key_group || p.provider_key }])));
+    // Akun AI tenant (untuk pemilih akun per-elemen; baca-balik tak perlu di sini — cukup id/status/vendor).
+    try { const ra = await fetch("/api/credentials/ai"); if (ra.ok) { const ja = await ra.json(); setAiAccts((ja.accounts || []).map((a: { id: string; provider_key: string; key_group: string; label: string; status: string }) => ({ id: a.id, provider_key: a.provider_key, key_group: a.key_group, label: a.label, status: a.status }))); } } catch { /* non-fatal */ }
+    // Kunci AI = POOL tenant-wide (Page Credential /integrations). Tidak dibaca per-channel di sini.
+    // Koneksi YouTube (pool) untuk pemilih di kartu identitas.
+    try { const ry = await fetch("/api/youtube/status"); if (ry.ok) { const jy = await ry.json(); setYtAccounts(jy.accounts || []); } } catch { /* non-fatal */ }
     // F2-07: status efektif → subscription + readiness (RPC tenant-scoped F2-fondasi).
     const { data: cfg } = await supabase.from("tenant_configs").select("plan_type,subscription_status").maybeSingle();
     setSub((cfg as { subscription_status?: string } | null)?.subscription_status ?? null);
@@ -372,7 +370,8 @@ export default function ChannelDetailPage() {
   async function save() {
     setErr(null); setSaved(false); setBusy(true);
     const { error } = await supabase.from("channels").update({
-      channel_name: name.trim() || null, content_language: clang, publish_privacy: privacy, is_active: active,
+      channel_name: name.trim() || null, content_language: clang, publish_privacy: privacy,
+      youtube_account_id: ytAccountId || null, platform_channel_id: targetYt.trim() || null,
     }).eq("id", id);
     setBusy(false);
     if (error) { setErr(error.message); return; }
@@ -386,7 +385,6 @@ export default function ChannelDetailPage() {
 
   const name0 = ch.channel_name || "Channel";
   const eff = effectiveStatus(ch, sub, rd);
-  const TONE: Record<string, string> = { ok: "badge-success", warn: "badge-warning", stop: "badge-danger", muted: "badge-default" };
 
   return (
     <>
@@ -543,10 +541,16 @@ export default function ChannelDetailPage() {
                 {PRIVACY.map(([v, idT]) => <option key={v} value={v}>{idT}</option>)}
               </select>
             </div>
-            <label style={{ display: "flex", alignItems: "center", gap: "0.625rem", fontSize: "var(--text-sm)" }}>
-              <span className="switch"><input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /><span className="track" /><span className="thumb" /></span>
-              <Bi id="Channel aktif (produksi berjalan)" en="Channel active (production runs)" />
-            </label>
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
+              <label className="label"><Bi id="Koneksi YouTube (akun publish)" en="YouTube connection (publish account)" /></label>
+              <div className="radio-row" style={{ marginBottom: "0.5rem" }}>
+                {ytAccounts.length === 0 && <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Belum ada koneksi — tambah di " en="No connection — add in " /><Link href="/integrations" className="link"><Bi id="Kredensial" en="Credentials" /></Link>.</span>}
+                {ytAccounts.map((a) => <span key={a.id} className={`radio-pill${ytAccountId === a.id ? " sel" : ""}`} onClick={() => { setYtAccountId(a.id); if (!targetYt.trim() && a.yt_channel_id) setTargetYt(a.yt_channel_id); }}>{a.label}{a.status === "valid" ? " ✓" : ""}</span>)}
+              </div>
+              <label className="label"><Bi id="Channel YouTube tujuan (ID)" en="Target YouTube channel (ID)" /></label>
+              <input className="input input-mono" value={targetYt} onChange={(e) => setTargetYt(e.target.value)} placeholder="UCxxxxxxxxxxxxxxxxxxxxxx" />
+              <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.4rem" }}><Bi id="Terisi otomatis dari koneksi; ubah bila publish ke channel lain milik akun itu." en="Auto-filled from the connection; change if publishing to another channel on that account." /></div>
+            </div>
             <div style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
               <label className="label"><Bi id="Niche channel" en="Channel niche" /></label>
               <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center", marginBottom: "0.5rem" }}>
@@ -589,49 +593,30 @@ export default function ChannelDetailPage() {
           </div>
         </div>
 
-        <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 560 }}>
-          <h3 className="card-title" style={{ marginBottom: "0.35rem" }}><Bi id="Produksi AI — siapa yang membuat video Anda" en="AI production — who makes your video" /></h3>
-          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "0.5rem" }}>
-            <Bi id="Tiap bagian video dikerjakan oleh AI. Pilih AI-nya, lalu tempel kunci akun AI Anda di tiap bagian." en="Each part of your video is made by AI. Pick the AI, then paste your AI account key in each part." />
-          </p>
-          <div className="tip" style={{ fontSize: "var(--text-xs)", marginBottom: "1rem", display: "flex", gap: 6, alignItems: "flex-start" }}>
-            <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-            <span><Bi id="Tiap elemen: pilih penyedia → model → tempel kunci API penyedia itu. Biaya ditagih langsung ke akun penyedia Anda (BYOK). Kunci wajib lengkap agar channel bisa aktif." en="Each element: pick provider → model → paste that provider's API key. Cost is billed directly to your provider account (BYOK). Keys must be complete for the channel to activate." /></span>
-          </div>
+        {/* Catatan kunci → Kredensial (pindah dari sini ke Page Credential, tenant-wide) */}
+        <div className="tip" style={{ maxWidth: 560, marginTop: "1rem", fontSize: "var(--text-xs)", display: "flex", gap: 6, alignItems: "flex-start" }}>
+          <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+          <span><Bi id="Pilih penyedia & model AI di tiap kartu di bawah. Kunci API diisi SEKALI di " en="Pick the AI provider & model in each card below. API keys are set ONCE in " /><Link href="/integrations" className="link"><Bi id="Kredensial & Koneksi" en="Credentials & Connections" /></Link><Bi id=" (berlaku untuk semua channel)." en=" (applies to all channels)." /></span>
+        </div>
 
-          {/* PENULIS NASKAH (LLM) */}
-          <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: "var(--text-sm)" }}><PenLine size={15} /><Bi id="Penulis naskah" en="Script writer" /></div>
-          <div className="muted" style={{ fontSize: "var(--text-xs)", margin: "0.15rem 0 0.6rem" }}><Bi id="AI yang menulis cerita & narasi video. Makin pintar = naskah makin bagus (biaya sedikit lebih tinggi)." en="The AI that writes your video's story & narration. Smarter = better script (slightly pricier)." /></div>
+        {/* CARD: Penulis Naskah (LLM) */}
+        <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 560 }}>
+          <h3 className="card-title" style={{ marginBottom: "0.2rem", display: "flex", alignItems: "center", gap: 6 }}><PenLine size={15} /> <Bi id="Penulis Naskah (LLM)" en="Script Writer (LLM)" /></h3>
+          <p className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "0.6rem" }}><Bi id="AI yang menulis cerita & narasi video. Makin pintar = naskah makin bagus." en="AI that writes your video's story & narration. Smarter = better script." /></p>
           <div className="fld-row"><div className="k"><Bi id="Penyedia" en="Provider" /></div>
             <div className="radio-row">{[...new Set(llmOpts.map((m) => m.provider_key))].map((pk) => <span key={pk} className={`radio-pill${llmProv === pk ? " sel" : ""}`} onClick={() => { setLlmProv(pk); setLlmModel(""); }}>{provMap[pk]?.name ?? pk}</span>)}</div></div>
           {llmProv && (
             <div className="fld-row"><div className="k"><Bi id="Model" en="Model" /></div>
               <div className="radio-row">{llmOpts.filter((m) => m.provider_key === llmProv).map((m) => <span key={m.model_key} className={`radio-pill${llmModel === m.model_key ? " sel" : ""}`} onClick={() => setLlmModel(m.model_key)}>{m.display_name}</span>)}</div></div>
           )}
-          {llmProv && provMap[llmProv]?.auth !== "none" && (
-            <div className="fld-row"><div className="k"><Bi id="Kunci akun" en="Account key" /><div className="sub"><Bi id="API key penyedia (boleh sama antar channel — tinggal salin)" en="provider API key (same across channels OK — just copy)" /></div></div>
-              <input className="input input-mono" type="text" placeholder="Tempel API key penyedia" value={keys.llm} onChange={(e) => setKeys({ ...keys, llm: e.target.value })} /></div>
-          )}
+          {acctPicker(llmProv, llmAcct, setLlmAcct)}
+          <div className="save-bar">{aiMsg?.el === "llm" && <span style={{ color: aiMsg.ok ? "var(--success)" : "var(--danger,#ef4444)" }}>{aiMsg.text}</span>}<button className="btn btn-default btn-sm" disabled={savingAi === "llm"} onClick={saveLlm}>{savingAi === "llm" ? <Loader2 size={14} className="spin" /> : <Bi id="Simpan" en="Save" />}</button></div>
+        </div>
 
-          {/* VISUAL */}
-          <div style={{ borderTop: "1px solid var(--border-subtle)", display: "flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: "var(--text-sm)", marginTop: "1rem", paddingTop: "1rem" }}><ImageIcon size={15} /><Bi id="Visual adegan" en="Scene visuals" /></div>
-          <div className="muted" style={{ fontSize: "var(--text-xs)", margin: "0.15rem 0 0.6rem" }}><Bi id="Tiap adegan dibuat oleh AI (gambar atau video): pilih AI-nya → kualitas → kunci akun." en="Each scene is created by AI (image or video): pick the AI → quality → account key." /></div>
-          <div className="fld-row"><div className="k"><Bi id="Penyedia" en="Provider" /></div>
-            <div className="radio-row">{[...new Set(imgOpts.map((m) => m.provider_key))].map((pk) => <span key={pk} className={`radio-pill${visualProv === pk ? " sel" : ""}`} onClick={() => { setVisualProv(pk); setImgModel(""); }}>{provMap[pk]?.name ?? pk}</span>)}</div></div>
-          {visualProv && (
-            <div className="fld-row"><div className="k"><Bi id="Model" en="Model" /><div className="sub"><Bi id="gambar atau video" en="image or video" /></div></div>
-              <div className="radio-row">{imgOpts.filter((m) => m.provider_key === visualProv).map((m) => <span key={m.model_key} className={`radio-pill${imgModel === m.model_key ? " sel" : ""}`} onClick={() => setImgModel(m.model_key)}>{m.display_name}</span>)}</div></div>
-          )}
-          <div className="fld-row"><div className="k"><Bi id="Kualitas gambar" en="Image quality" /><div className="sub"><Bi id="makin tinggi makin bagus & makin mahal" en="higher = nicer & pricier" /></div></div>
-            <div className="radio-row">{([["low", "Hemat", "Saver"], ["medium", "Seimbang", "Balanced"], ["high", "Terbaik", "Best"]] as [string, string, string][]).map(([q, idL, enL]) => <span key={q} className={`radio-pill${imgQuality === q ? " sel" : ""}`} onClick={() => setImgQuality(q)}><Bi id={idL} en={enL} /></span>)}</div></div>
-          {visualProv && provMap[visualProv]?.auth !== "none" && (
-            <div className="fld-row"><div className="k"><Bi id="Kunci akun" en="Account key" /><div className="sub"><Bi id="API key penyedia (boleh sama antar channel — tinggal salin)" en="provider API key (same across channels OK — just copy)" /></div></div>
-              <input className="input input-mono" type="text" placeholder="Tempel API key penyedia" value={keys.visual} onChange={(e) => setKeys({ ...keys, visual: e.target.value })} /></div>
-          )}
-
-          {/* SUARA NARATOR (TTS) */}
-          <div style={{ borderTop: "1px solid var(--border-subtle)", display: "flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: "var(--text-sm)", marginTop: "1rem", paddingTop: "1rem" }}><Mic size={15} /><Bi id="Suara narator" en="Narrator voice" /></div>
-          <div className="muted" style={{ fontSize: "var(--text-xs)", margin: "0.15rem 0 0.6rem" }}><Bi id="Suara yang membacakan narasi: pilih penyedia → model → karakter suara (▶ untuk dengar contoh)." en="The voice that reads your narration: pick provider → model → character (▶ to preview)." /></div>
+        {/* CARD: Pengisi Suara (TTS) */}
+        <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 560 }}>
+          <h3 className="card-title" style={{ marginBottom: "0.2rem", display: "flex", alignItems: "center", gap: 6 }}><Mic size={15} /> <Bi id="Pengisi Suara (TTS)" en="Voice (TTS)" /></h3>
+          <p className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "0.6rem" }}><Bi id="Suara narator: pilih penyedia → model → karakter suara (▶ dengar contoh)." en="Narrator voice: pick provider → model → character (▶ preview)." /></p>
           <div className="fld-row"><div className="k"><Bi id="Penyedia suara" en="Voice provider" /></div>
             <div className="radio-row">{ttsOpts.map((p) => <span key={p.provider_key} className={`radio-pill${ttsProv === p.provider_key ? " sel" : ""}`} onClick={() => { setTtsProv(p.provider_key); setTtsModel(""); setVoiceKey(""); }}>{p.display_name}</span>)}</div></div>
           {ttsProv && ttsModelOpts.filter((m) => m.provider_key === ttsProv).length > 0 && (
@@ -642,32 +627,24 @@ export default function ChannelDetailPage() {
             <div className="fld-row"><div className="k"><Bi id="Karakter suara" en="Voice character" /></div>
               <div className="radio-row">{voiceAll.filter((v) => v.provider_key === ttsProv).map((v) => <span key={v.voice_key} className={`radio-pill${(voiceKey || "") === v.voice_key ? " sel" : ""}`} onClick={() => setVoiceKey(v.voice_key)}><Mic size={13} />{v.display_name}{v.gender ? ` · ${v.gender}` : ""}{v.preview_url ? <span title="Dengar contoh" style={{ cursor: "pointer", marginLeft: 4 }} onClick={(e) => { e.stopPropagation(); new Audio(v.preview_url as string).play().catch(() => {}); }}>▶</span> : null}</span>)}</div></div>
           )}
-          {ttsProv && provMap[ttsProv]?.auth !== "none" && (
-            <div className="fld-row"><div className="k"><Bi id="Kunci akun" en="Account key" /><div className="sub"><Bi id="API key penyedia (boleh sama antar channel — tinggal salin)" en="provider API key (same across channels OK — just copy)" /></div></div>
-              <input className="input input-mono" type="text" placeholder="Tempel API key penyedia" value={keys.tts} onChange={(e) => setKeys({ ...keys, tts: e.target.value })} /></div>
-          )}
-          {ttsProv && provMap[ttsProv]?.auth === "none" && (
-            <div className="muted" style={{ fontSize: "var(--text-xs)", margin: "0.1rem 0 0.4rem" }}><Bi id="Penyedia ini gratis — tak perlu kunci." en="This provider is free — no key needed." /></div>
-          )}
-          <div className="save-bar"><span className="muted">{aiMsg ?? <Bi id="Disimpan ke channel" en="Saves to channel" />}</span><button className="btn btn-default" disabled={savingAi} onClick={saveAi}>{savingAi ? "Menyimpan…" : <Bi id="Simpan & Terapkan" en="Save & Apply" />}</button></div>
+          {acctPicker(ttsProv, ttsAcct, setTtsAcct)}
+          <div className="save-bar">{aiMsg?.el === "tts" && <span style={{ color: aiMsg.ok ? "var(--success)" : "var(--danger,#ef4444)" }}>{aiMsg.text}</span>}<button className="btn btn-default btn-sm" disabled={savingAi === "tts"} onClick={saveTts}>{savingAi === "tts" ? <Loader2 size={14} className="spin" /> : <Bi id="Simpan" en="Save" />}</button></div>
         </div>
 
+        {/* CARD: Pembuat Visual (Image/Video Generator) */}
         <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 560 }}>
-          <h3 className="card-title" style={{ marginBottom: "0.35rem" }}><Bi id="Operasional & mutu" en="Operations & quality" /></h3>
-          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1.25rem" }}><Bi id="Musik latar & ambang mutu (QC) per-channel." en="Background music & quality gate (QC) per-channel." /></p>
-          <div className="fld-row"><div className="k"><Bi id="Aktifkan musik latar" en="Enable background music" /></div>
-            <label className="switch"><input type="checkbox" checked={musicOn} onChange={(e) => setMusicOn(e.target.checked)} /><span className="track" /><span className="thumb" /></label></div>
-          {musicOn && <>
-            <div className="fld-row"><div className="k"><Bi id="Volume" en="Volume" /><div className="sub">{Math.round(musicVol * 100)}%</div></div>
-              <input type="range" className="slider" min={0} max={50} value={Math.round(musicVol * 100)} onChange={(e) => setMusicVol(+e.target.value / 100)} /></div>
-            <div className="fld-row"><div className="k"><Bi id="Mood default (opsional)" en="Default mood (optional)" /></div>
-              <div className="radio-row">{["", "tegang", "misterius", "epik", "tenang", "ceria"].map((m) => <span key={m || "auto"} className={`radio-pill${musicMood === m ? " sel" : ""}`} onClick={() => setMusicMood(m)}>{m || "auto"}</span>)}</div></div>
-          </>}
-          <div className="fld-row"><div className="k"><Bi id="Skor viral min (QC)" en="Min viral score (QC)" /><div className="sub">{minScore}/100</div></div>
-            <input type="range" className="slider" min={0} max={100} value={minScore} onChange={(e) => setMinScore(+e.target.value)} /></div>
-          <div className="fld-row"><div className="k"><Bi id="Maks retry skrip" en="Max script retry" /></div>
-            <div className="radio-row">{[1, 2, 3, 4, 5].map((n) => <span key={n} className={`radio-pill${maxRetry === n ? " sel" : ""}`} onClick={() => setMaxRetry(n)}>{n}</span>)}</div></div>
-          <div className="save-bar"><span className="muted">{opsMsg ?? <Bi id="Disimpan ke channel (operasional)" en="Saves to channel (operations)" />}</span><button className="btn btn-default" disabled={savingOps} onClick={saveOps}>{savingOps ? "Menyimpan…" : <Bi id="Simpan & Terapkan" en="Save & Apply" />}</button></div>
+          <h3 className="card-title" style={{ marginBottom: "0.2rem", display: "flex", alignItems: "center", gap: 6 }}><ImageIcon size={15} /> <Bi id="Pembuat Visual (gambar/video)" en="Visual Generator (image/video)" /></h3>
+          <p className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "0.6rem" }}><Bi id="Tiap adegan dibuat AI: pilih penyedia → model → kualitas." en="Each scene is AI-made: pick provider → model → quality." /></p>
+          <div className="fld-row"><div className="k"><Bi id="Penyedia" en="Provider" /></div>
+            <div className="radio-row">{[...new Set(imgOpts.map((m) => m.provider_key))].map((pk) => <span key={pk} className={`radio-pill${visualProv === pk ? " sel" : ""}`} onClick={() => { setVisualProv(pk); setImgModel(""); }}>{provMap[pk]?.name ?? pk}</span>)}</div></div>
+          {visualProv && (
+            <div className="fld-row"><div className="k"><Bi id="Model" en="Model" /><div className="sub"><Bi id="gambar atau video" en="image or video" /></div></div>
+              <div className="radio-row">{imgOpts.filter((m) => m.provider_key === visualProv).map((m) => <span key={m.model_key} className={`radio-pill${imgModel === m.model_key ? " sel" : ""}`} onClick={() => setImgModel(m.model_key)}>{m.display_name}</span>)}</div></div>
+          )}
+          <div className="fld-row"><div className="k"><Bi id="Kualitas gambar" en="Image quality" /><div className="sub"><Bi id="makin tinggi makin bagus & makin mahal" en="higher = nicer & pricier" /></div></div>
+            <div className="radio-row">{([["low", "Hemat", "Saver"], ["medium", "Seimbang", "Balanced"], ["high", "Terbaik", "Best"]] as [string, string, string][]).map(([q, idL, enL]) => <span key={q} className={`radio-pill${imgQuality === q ? " sel" : ""}`} onClick={() => setImgQuality(q)}><Bi id={idL} en={enL} /></span>)}</div></div>
+          {acctPicker(visualProv, visualAcct, setVisualAcct)}
+          <div className="save-bar">{aiMsg?.el === "visual" && <span style={{ color: aiMsg.ok ? "var(--success)" : "var(--danger,#ef4444)" }}>{aiMsg.text}</span>}<button className="btn btn-default btn-sm" disabled={savingAi === "visual"} onClick={saveVisual}>{savingAi === "visual" ? <Loader2 size={14} className="spin" /> : <Bi id="Simpan" en="Save" />}</button></div>
         </div>
 
         <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 760 }}>
@@ -753,18 +730,23 @@ export default function ChannelDetailPage() {
         </div>
 
         <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 560 }}>
-          <h3 className="card-title" style={{ marginBottom: "0.35rem" }}><Bi id="Target YouTube channel" en="YouTube target channel" /></h3>
-          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}>
-            <Bi id="Koneksi Google/YouTube diatur sekali di menu Integrasi (berlaku semua channel). Di sini pilih channel YouTube TUJUAN publish untuk channel ini." en="Google/YouTube connection is set once in the Integrations menu (all channels). Here, choose the destination YouTube channel for this channel." />
-            {" "}<Link href="/integrations" className="link" style={{ color: "var(--brand)" }}><Bi id="Buka Integrasi →" en="Open Integrations →" /></Link>
-          </p>
-          <div className="fld"><label className="label"><Bi id="YouTube Channel ID (target)" en="YouTube Channel ID (target)" /></label>
-            <input className="input input-mono" value={targetYt} onChange={(e) => setTargetYt(e.target.value)} placeholder="UCxxxxxxxxxxxxxxxxxxxxxx" /></div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "0.5rem" }}>
-            <button className="btn btn-default btn-sm" onClick={saveTarget} disabled={savingTarget}>{savingTarget ? <Loader2 size={14} className="spin" /> : <Bi id="Simpan target" en="Save target" />}</button>
-            {targetMsg && <span style={{ fontSize: "var(--text-xs)", color: targetMsg.includes("tersimpan") ? "var(--success)" : "var(--danger,#ef4444)" }}>{targetMsg}</span>}
-          </div>
+          <h3 className="card-title" style={{ marginBottom: "0.35rem" }}><Bi id="Operasional & mutu" en="Operations & quality" /></h3>
+          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1.25rem" }}><Bi id="Musik latar & ambang mutu (QC) per-channel." en="Background music & quality gate (QC) per-channel." /></p>
+          <div className="fld-row"><div className="k"><Bi id="Aktifkan musik latar" en="Enable background music" /></div>
+            <label className="switch"><input type="checkbox" checked={musicOn} onChange={(e) => setMusicOn(e.target.checked)} /><span className="track" /><span className="thumb" /></label></div>
+          {musicOn && <>
+            <div className="fld-row"><div className="k"><Bi id="Volume" en="Volume" /><div className="sub">{Math.round(musicVol * 100)}%</div></div>
+              <input type="range" className="slider" min={0} max={50} value={Math.round(musicVol * 100)} onChange={(e) => setMusicVol(+e.target.value / 100)} /></div>
+            <div className="fld-row"><div className="k"><Bi id="Mood default (opsional)" en="Default mood (optional)" /></div>
+              <div className="radio-row">{["", "tegang", "misterius", "epik", "tenang", "ceria"].map((m) => <span key={m || "auto"} className={`radio-pill${musicMood === m ? " sel" : ""}`} onClick={() => setMusicMood(m)}>{m || "auto"}</span>)}</div></div>
+          </>}
+          <div className="fld-row"><div className="k"><Bi id="Skor viral min (QC)" en="Min viral score (QC)" /><div className="sub">{minScore}/100</div></div>
+            <input type="range" className="slider" min={0} max={100} value={minScore} onChange={(e) => setMinScore(+e.target.value)} /></div>
+          <div className="fld-row"><div className="k"><Bi id="Maks retry skrip" en="Max script retry" /></div>
+            <div className="radio-row">{[1, 2, 3, 4, 5].map((n) => <span key={n} className={`radio-pill${maxRetry === n ? " sel" : ""}`} onClick={() => setMaxRetry(n)}>{n}</span>)}</div></div>
+          <div className="save-bar"><span className="muted">{opsMsg ?? <Bi id="Disimpan ke channel (operasional)" en="Saves to channel (operations)" />}</span><button className="btn btn-default" disabled={savingOps} onClick={saveOps}>{savingOps ? "Menyimpan…" : <Bi id="Simpan & Terapkan" en="Save & Apply" />}</button></div>
         </div>
+
         </>
       )}
     </>

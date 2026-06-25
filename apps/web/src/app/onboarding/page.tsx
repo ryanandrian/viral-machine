@@ -155,20 +155,17 @@ export default function OnboardingPage() {
     }).select("id").single();
     if (eCh) { setBusy(false); setErr(eCh.message); return; }
 
-    // (3) Kunci AI PER-CHANNEL (vault Fernet, master key hanya di server) — yang diisi saat onboarding.
-    const cid = (chRow as { id?: string } | null)?.id;
-    if (cid) {
-      const jobs: [string, string][] = [];
-      if (ak) jobs.push(["llm", ak]);
-      if (ok) jobs.push(["visual", ok]);
-      if (ek) jobs.push(["tts", ek]);
-      for (const [element, key] of jobs) {
-        const rk = await fetch(`/api/channels/${cid}/keys`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ element, key }) });
-        if (!rk.ok) { setBusy(false); const j = await rk.json().catch(() => ({})); setErr(j.error || "Gagal menyimpan kunci AI"); return; }
-      }
+    // (3) Kunci AI (bila diisi) → POOL tenant per PENYEDIA (/api/credentials/ai). Endpoint per-channel lama DIBUANG.
+    //     Non-fatal: tenant bisa lengkapi/ubah di Page Kredensial. (Model VENDOR: 1 kunci OpenAI utk GPT+TTS+image.)
+    const keyJobs: [string, string][] = [];
+    if (ak) keyJobs.push(["anthropic", ak]);
+    if (ok) keyJobs.push(["openai", ok]);
+    if (ek) keyJobs.push(["elevenlabs", ek]);
+    for (const [provider_key, key] of keyJobs) {
+      try { await fetch("/api/credentials/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider_key, key, label: provider_key }) }); } catch { /* non-fatal */ }
     }
     setBusy(false);
-    router.push("/dashboard"); // channel ada → onboarded-check lolos
+    router.push("/dashboard"); // channel draft ada → lengkapi Kredensial + Channel (semua 🟢) = onboarded
   }
 
   // YouTube connect = BYO-CC Google OAuth NYATA. Tenant bawa OAuth app sendiri (client_id+secret).
@@ -350,7 +347,7 @@ export default function OnboardingPage() {
                     );
                   })}
                 </div>
-                <div className="note-box"><Info size={16} style={{ color: "var(--info)" }} /><span data-id><b style={{ color: "var(--text-primary)" }}>Belum punya keys?</b> Lewati saja — selama trial Anda bisa pakai kredensial platform (fitur terbatas). Wajib lengkap setelah trial.</span><span data-en><b style={{ color: "var(--text-primary)" }}>No keys yet?</b> Skip for now — during the trial you can use platform credentials (limited). Required after trial.</span></div>
+                <div className="note-box"><Info size={16} style={{ color: "var(--info)" }} /><span data-id><b style={{ color: "var(--text-primary)" }}>Belum punya keys?</b> Lewati dulu — bisa dilengkapi nanti di halaman <b>Kredensial</b>. Kunci wajib lengkap sebelum channel bisa diaktifkan (tak ada kredensial pinjaman).</span><span data-en><b style={{ color: "var(--text-primary)" }}>No keys yet?</b> Skip for now — add them later in <b>Credentials</b>. Keys are required before a channel can be activated (no borrowed credentials).</span></div>
               </div>
             )}
 

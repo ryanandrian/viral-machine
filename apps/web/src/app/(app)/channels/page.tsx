@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Plus, Tv, Zap, ArrowRight, Pause, Play } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { effectiveStatus, ChannelStatusBadge, type Eff } from "@/lib/channel-status";
 import "./channels.css";
 
 // D2 Channels List — Phase 9.2 VERTICAL SLICE (wired ke Supabase v2, anon + RLS).
@@ -24,6 +25,8 @@ type ChannelRow = {
   niche: string | null;
   niche_pool: string[] | null;
   is_active: boolean | null;
+  production_paused: boolean | null;
+  production_paused_reason: string | null;
 };
 
 const PALETTE = ["#6366F1", "#047857", "#9f1239", "#b45309", "#1d4ed8", "#7c3aed"];
@@ -42,38 +45,34 @@ function prettyNiche(key: string) {
 
 const PLAN_LABEL: Record<string, string> = { trial: "Trial", starter: "Starter", pro: "Pro", business: "Business" };
 
-function ChannelCard({ ch, busy, onToggle }: { ch: ChannelRow; busy: boolean; onToggle: (ch: ChannelRow) => void }) {
+// Card daftar — status-first (badge bersama), sinyal NYATA (Video terbit), aksi sesuai status, handle benar.
+function ChannelCard({ ch, eff, vid, busy, onToggle }: { ch: ChannelRow; eff: Eff; vid: number; busy: boolean; onToggle: (ch: ChannelRow) => void }) {
   const name = ch.channel_name || "Channel";
   const col = colorFor(ch.id);
   const niches = (ch.niche_pool?.length ? ch.niche_pool : ch.niche ? [ch.niche] : []).map(prettyNiche);
-  const active = ch.is_active ?? false;
   return (
     <div className="ch-card">
       <div className="ch-card-top">
         <span className="ch-logo" style={{ background: col }}>{initials(name)}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="ch-name">{name}</div>
-          <div className="ch-handle"><span className="yt" /> {ch.platform_channel_id ? `@${ch.platform_channel_id}` : <span className="muted"><Bi id="belum terhubung" en="not connected" /></span>}</div>
+          <div className="ch-handle"><span className="yt" /> {ch.platform_channel_id
+            ? <a href={`https://youtube.com/channel/${ch.platform_channel_id}`} target="_blank" rel="noopener noreferrer" style={{ color: "inherit" }}>youtube.com/channel/{ch.platform_channel_id.slice(0, 12)}…</a>
+            : <span className="muted"><Bi id="belum terhubung" en="not connected" /></span>}</div>
         </div>
-        {active
-          ? <span className="badge badge-success"><span className="dot" />Active</span>
-          : <span className="badge badge-warning"><span className="dot" />Paused</span>}
+        <ChannelStatusBadge eff={eff} />
       </div>
       <div className="niche-row">{niches.length ? niches.map((n) => <span key={n} className="badge badge-default">{n}</span>) : <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Belum ada niche" en="No niche set" /></span>}</div>
-      <div className="ch-chart" style={{ display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: "0.625rem" }}>
-        <Bi id="Statistik 30 hari — segera" en="30-day stats — coming soon" />
-      </div>
+      {eff.reason && <div className="muted" style={{ fontSize: "var(--text-xs)", padding: "0 0 0.25rem" }}>{eff.reason}</div>}
       <div className="ch-stats">
-        <div className="ch-stat"><div className="v">—</div><div className="l">Video</div></div>
-        <div className="ch-stat"><div className="v">—</div><div className="l">Views</div></div>
-        <div className="ch-stat"><div className="v">—</div><div className="l">CTR</div></div>
-        <div className="ch-stat"><div className="v">—</div><div className="l">Subs</div></div>
+        <div className="ch-stat"><div className="v">{vid.toLocaleString("id-ID")}</div><div className="l"><Bi id="Video terbit" en="Published" /></div></div>
       </div>
       <div className="ch-foot">
         <Link href={`/channels/${ch.id}`} className="btn btn-secondary btn-sm" style={{ flex: 1 }}><Bi id="Kelola" en="Manage" /> <ArrowRight size={14} /></Link>
-        <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => onToggle(ch)} aria-label={active ? "Pause" : "Activate"}>
-          {active ? <><Pause size={14} /> <Bi id="Jeda" en="Pause" /></> : <><Play size={14} /> <Bi id="Aktifkan" en="Activate" /></>}
-        </button>
+        {eff.key === "active" && <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => onToggle(ch)} aria-label="Pause"><Pause size={14} /> <Bi id="Jeda" en="Pause" /></button>}
+        {eff.key === "paused" && <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => onToggle(ch)} aria-label="Activate"><Play size={14} /> <Bi id="Aktifkan" en="Activate" /></button>}
+        {eff.key === "incomplete" && <Link href={`/channels/${ch.id}`} className="btn btn-ghost btn-sm"><Bi id="Lengkapi" en="Complete" /></Link>}
+        {eff.key === "halted" && <Link href={`/channels/${ch.id}`} className="btn btn-ghost btn-sm"><Bi id="Pulihkan" en="Recover" /></Link>}
       </div>
     </div>
   );
@@ -106,22 +105,37 @@ export default function ChannelsPage() {
   const [err, setErr] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [f, setF] = useState("all");
+  const [sub, setSub] = useState<string | null>(null);
+  const [rdMap, setRdMap] = useState<Record<string, { ready: boolean; missing: string[] }>>({});
+  const [vidCount, setVidCount] = useState<Record<string, number>>({});
 
-  const COLS = "id,channel_name,platform_channel_id,niche,niche_pool,is_active";
+  const COLS = "id,channel_name,platform_channel_id,niche,niche_pool,is_active,production_paused,production_paused_reason";
 
   const load = useCallback(async () => {
     const [{ data: chs, error: e1 }, { data: tc }] = await Promise.all([
       supabase.from("channels").select(COLS).order("created_at", { ascending: true }),
-      supabase.from("tenant_configs").select("plan_type").maybeSingle(),
+      supabase.from("tenant_configs").select("plan_type,subscription_status").maybeSingle(),
     ]);
     if (e1) { setErr(e1.message); setLoading(false); return; }
-    setChannels((chs as ChannelRow[]) ?? []);
+    const rows = (chs as ChannelRow[]) ?? [];
+    setChannels(rows);
+    setSub((tc as { subscription_status?: string } | null)?.subscription_status ?? null);
     const pt = (tc as { plan_type?: string } | null)?.plan_type ?? "";
     setPlan(pt);
     if (pt) {
       const { data: pl } = await supabase.from("plan_limits").select("max_channels").eq("plan_type", pt).maybeSingle();
       setMaxCh((pl as { max_channels?: number } | null)?.max_channels ?? null);
     }
+    // Kesiapan per channel (RPC channel_missing/readiness — sumber gerbang yg sama) + Video NYATA (videos published).
+    const rd: Record<string, { ready: boolean; missing: string[] }> = {};
+    await Promise.all(rows.map(async (c) => {
+      try { const { data } = await supabase.rpc("channel_readiness", { p_channel_id: c.id }); if (data) rd[c.id] = data as { ready: boolean; missing: string[] }; } catch { /* non-fatal */ }
+    }));
+    setRdMap(rd);
+    const { data: vids } = await supabase.from("videos").select("channel_id").eq("status", "published");
+    const vc: Record<string, number> = {};
+    ((vids ?? []) as { channel_id: string | null }[]).forEach((v) => { if (v.channel_id) vc[v.channel_id] = (vc[v.channel_id] || 0) + 1; });
+    setVidCount(vc);
     setLoading(false);
   }, [supabase]);
 
@@ -136,13 +150,18 @@ export default function ChannelsPage() {
   }, [supabase, load]);
 
   async function toggleActive(c: ChannelRow) {
-    setBusyId(c.id);
     const next = !(c.is_active ?? false);
+    // Gerbang: aktivasi HANYA bila kesiapan terbaca DAN ready → pesan RAMAH (bukan error DB mentah).
+    if (next) {
+      const rd = rdMap[c.id];
+      if (!rd || !rd.ready) { setErr(`"${c.channel_name || "Channel"}" belum bisa diaktifkan — lengkapi: ${rd?.missing?.join(", ") || "konfigurasi & kredensial"} (buka Kelola).`); return; }
+    }
+    setBusyId(c.id); setErr(null);
     setChannels((prev) => prev.map((x) => (x.id === c.id ? { ...x, is_active: next } : x))); // optimistic
     const { error } = await supabase.from("channels").update({ is_active: next }).eq("id", c.id);
     if (error) {
       setChannels((prev) => prev.map((x) => (x.id === c.id ? { ...x, is_active: !next } : x))); // revert
-      setErr(error.message);
+      setErr(/channel|gate|missing|aktif/i.test(error.message) ? "Belum bisa diaktifkan — lengkapi konfigurasi & kredensial dulu (buka Kelola)." : error.message);
     }
     setBusyId(null);
   }
@@ -179,7 +198,7 @@ export default function ChannelsPage() {
             ? <IncompleteCard />
             : shown.length === 0
               ? <div className="muted" style={{ padding: "2rem", gridColumn: "1/-1", textAlign: "center" }}><Bi id="Tidak ada channel pada filter ini." en="No channels in this filter." /></div>
-              : shown.map((c) => <ChannelCard key={c.id} ch={c} busy={busyId === c.id} onToggle={toggleActive} />)}
+              : shown.map((c) => <ChannelCard key={c.id} ch={c} eff={effectiveStatus(c, sub, rdMap[c.id] ?? null)} vid={vidCount[c.id] ?? 0} busy={busyId === c.id} onToggle={toggleActive} />)}
       </div>
     </>
   );

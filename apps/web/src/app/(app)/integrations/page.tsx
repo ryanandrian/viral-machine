@@ -19,6 +19,13 @@ const muted: React.CSSProperties = { fontSize: "var(--text-sm)", color: "var(--t
 const titleS: React.CSSProperties = { fontWeight: 600, color: "var(--text-primary)" };
 const iconBox = (bg: string): React.CSSProperties => ({ width: 36, height: 36, borderRadius: "var(--r-md)", background: bg, display: "grid", placeItems: "center", color: "#fff", flex: "none" });
 
+// 3 ELEMEN AI (§0.4). Tiap elemen: penyedia disaring per komponen katalog; tenant boleh >1 kunci.
+const AI_ELEMENTS: { key: string; comps: string[]; id: string; en: string; desc_id: string; desc_en: string }[] = [
+  { key: "llm", comps: ["llm"], id: "Penulis Naskah (LLM)", en: "Script Writer (LLM)", desc_id: "AI penulis cerita, hook & narasi. Makin pintar = naskah makin bagus.", desc_en: "AI that writes story, hook & narration." },
+  { key: "tts", comps: ["tts"], id: "Pengisi Suara (TTS)", en: "Voice (TTS)", desc_id: "Ubah naskah jadi suara narator.", desc_en: "Turns the script into narrator voice." },
+  { key: "visual", comps: ["image", "video"], id: "Pembuat Visual", en: "Visual Generator", desc_id: "Buat gambar/video tiap adegan.", desc_en: "Makes the image/video for each scene." },
+];
+
 export default function IntegrationsPage() {
   const [supabase] = useState(() => createClient());
   const [plan, setPlan] = useState("starter");
@@ -29,17 +36,20 @@ export default function IntegrationsPage() {
   type YtAccount = { id: string; label: string; connected: boolean; has_client: boolean; status: string; yt_channel_id: string | null };
   const [ytAccounts, setYtAccounts] = useState<YtAccount[]>([]);
   const [ytDegraded, setYtDegraded] = useState(false);
-  const [ytCid, setYtCid] = useState(""); const [ytSecret, setYtSecret] = useState(""); const [ytLabel, setYtLabel] = useState("");
+  const [ytLabel, setYtLabel] = useState("");
   const [ytAdd, setYtAdd] = useState(false);
   const [ytMsg, setYtMsg] = useState<string | null>(null);
-  const YT_REDIRECT = process.env.NEXT_PUBLIC_YT_REDIRECT_URI || "(lihat dokumentasi)";
 
   const [tgChat, setTgChat] = useState(""); const [tgEnabled, setTgEnabled] = useState(false);
 
-  // Kunci AI (POOL tenant_ai_accounts) per penyedia — validate-early
-  const [aiProvs, setAiProvs] = useState<{ key: string; name: string; auth: string; uses: string[] }[]>([]);
-  const [aiStatus, setAiStatus] = useState<Record<string, string>>({});  // provider_key → valid|invalid|unchecked
-  const [aiKey, setAiKey] = useState<Record<string, string>>({});
+  // Kunci AI model VENDOR (§0.4): per-elemen, boleh >1 kunci/vendor, nilai TAMPIL APA ADANYA.
+  type Prov = { key: string; name: string; auth: string; key_group: string; comps: string[] };
+  type AiAcct = { id: string; provider_key: string; key_group: string; label: string; status: string; key: string };
+  const [provs, setProvs] = useState<Prov[]>([]);
+  const [aiAccts, setAiAccts] = useState<AiAcct[]>([]);
+  const [editKey, setEditKey] = useState<Record<string, string>>({});  // account id → nilai kunci (edit)
+  const [addF, setAddF] = useState<Record<string, { provider: string; label: string; key: string }>>({});  // element key → form tambah
+  const [openAdd, setOpenAdd] = useState<string>("");  // element key yg form-tambahnya terbuka
 
   const loadYt = useCallback(async () => {
     try { const r = await fetch("/api/youtube/status"); if (r.ok) { const j = await r.json(); setYtAccounts(j.accounts || []); setYtDegraded(!!j.degraded); } } catch { /* abaikan */ }
@@ -48,35 +58,47 @@ export default function IntegrationsPage() {
     const { data } = await supabase.from("tenant_configs").select("plan_type,telegram_chat_id,telegram_enabled").maybeSingle();
     const t = data as { plan_type?: string; telegram_chat_id?: string; telegram_enabled?: boolean } | null;
     setPlan(t?.plan_type ?? "starter"); setTgChat(t?.telegram_chat_id ?? ""); setTgEnabled(!!t?.telegram_enabled);
-    // Penyedia AI dari katalog (yang punya model aktif) + status kunci tenant (pool)
+    // Penyedia AI dari katalog (punya model aktif) + VENDOR (key_group) untuk pemetaan per-elemen.
     const { data: am } = await supabase.from("ai_models").select("provider_key,component").eq("is_active", true);
-    const { data: ap } = await supabase.from("ai_providers").select("provider_key,display_name,auth_type").eq("is_active", true);
+    const { data: ap } = await supabase.from("ai_providers").select("provider_key,display_name,auth_type,key_group").eq("is_active", true);
     const byProv: Record<string, Set<string>> = {};
     ((am ?? []) as { provider_key: string; component: string }[]).forEach((m) => { (byProv[m.provider_key] ??= new Set()).add(m.component); });
-    const CL: Record<string, string> = { llm: "Penulis Naskah", tts: "Pengisi Suara", image: "Pembuat Visual", video: "Pembuat Visual" };
-    setAiProvs(((ap ?? []) as { provider_key: string; display_name: string; auth_type: string }[])
+    setProvs(((ap ?? []) as { provider_key: string; display_name: string; auth_type: string; key_group: string | null }[])
       .filter((p) => byProv[p.provider_key])
-      .map((p) => ({ key: p.provider_key, name: p.display_name, auth: p.auth_type, uses: [...new Set([...byProv[p.provider_key]].map((c) => CL[c] || c))] })));
+      .map((p) => ({ key: p.provider_key, name: p.display_name, auth: p.auth_type, key_group: p.key_group || p.provider_key, comps: [...byProv[p.provider_key]] })));
     try {
       const r = await fetch("/api/credentials/ai");
-      if (r.ok) { const j = await r.json(); const st: Record<string, string> = {}; (j.accounts ?? []).forEach((a: { provider_key: string; status: string }) => { st[a.provider_key] = a.status; }); setAiStatus(st); }
+      if (r.ok) {
+        const j = await r.json();
+        const accts = (j.accounts ?? []) as AiAcct[];
+        setAiAccts(accts);
+        // TAMPIL APA ADANYA (§0.4): prefill nilai kunci ter-decrypt per akun (editable).
+        setEditKey(Object.fromEntries(accts.map((a) => [a.id, a.key || ""])));
+      }
     } catch { /* non-fatal */ }
   }, [supabase]);
 
-  async function saveAiKey(provider: string) {
-    const key = (aiKey[provider] || "").trim();
-    if (!key) { setErr({ k: "ai:" + provider, m: "Tempel kunci dulu" }); return; }
-    setBusy("ai:" + provider); setErr(null);
+  // Simpan/edit 1 kunci AI (vendor). accountId ada → edit; tidak ada → tambah baru. errKey = id akun / "add:"+elemen.
+  async function saveAccount(provider: string, key: string, label: string, accountId: string | undefined, errKey: string) {
+    if (!key.trim()) { setErr({ k: errKey, m: "Tempel kunci dulu" }); return; }
+    if (!provider) { setErr({ k: errKey, m: "Pilih penyedia dulu" }); return; }
+    setBusy("acct:" + errKey); setErr(null);
     try {
-      const r = await fetch("/api/credentials/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider_key: provider, key }) });
-      const j = await r.json();
-      setBusy("");
-      if (!r.ok) { setErr({ k: "ai:" + provider, m: j.error || "Gagal" }); return; }
-      setAiStatus((s) => ({ ...s, [provider]: j.status }));
-      setAiKey((s) => ({ ...s, [provider]: "" }));
-      if (j.status === "invalid") setErr({ k: "ai:" + provider, m: "Kunci ditolak penyedia — cek lagi." });
-    } catch { setBusy(""); setErr({ k: "ai:" + provider, m: "Server tak terjangkau" }); }
+      const r = await fetch("/api/credentials/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider_key: provider, key: key.trim(), label, account_id: accountId || null }) });
+      const j = await r.json(); setBusy("");
+      if (!r.ok) { setErr({ k: errKey, m: j.error || "Gagal" }); return; }
+      if (j.status === "invalid") setErr({ k: errKey, m: "Kunci ditolak penyedia — cek lagi." });
+      setOpenAdd(""); await load();  // muat ulang daftar (status + nilai)
+    } catch { setBusy(""); setErr({ k: errKey, m: "Server tak terjangkau" }); }
   }
+  async function deleteAccount(id: string) {
+    setBusy("del:" + id); setErr(null);
+    try { await fetch("/api/credentials/ai/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account_id: id }) }); await load(); }
+    catch { setErr({ k: id, m: "Gagal hapus" }); } finally { setBusy(""); }
+  }
+  // Helper pemetaan elemen → penyedia & akun (vendor key-group).
+  const provsForEl = (comps: string[]) => provs.filter((p) => p.comps.some((c) => comps.includes(c)));
+  const acctsForEl = (comps: string[]) => { const v = new Set(provsForEl(comps).map((p) => p.key_group)); return aiAccts.filter((a) => v.has(a.key_group)); };
   useEffect(() => {
     load(); loadYt();
     const sp = new URLSearchParams(window.location.search);
@@ -89,11 +111,10 @@ export default function IntegrationsPage() {
   const rank = PLAN_RANK[plan] ?? 1;
 
   async function connectYt() {
-    setErr(null);
-    if (!ytCid.trim() || !ytSecret.trim()) { setErr({ k: "yt", m: "Isi Client ID & Secret dulu." }); return; }
-    setBusy("yt");
+    setErr(null); setBusy("yt");
+    // OAuth PLATFORM: tenant cukup klik → consent Google. Tak ada client id/secret/URL.
     try {
-      const r = await fetch("/api/youtube/connect", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ client_id: ytCid, client_secret: ytSecret, label: ytLabel, ret: "/integrations" }) });
+      const r = await fetch("/api/youtube/connect", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ label: ytLabel, ret: "/integrations" }) });
       const j = await r.json();
       if (r.ok && j.authorize_url) { window.location.href = j.authorize_url; return; }
       setBusy(""); setErr({ k: "yt", m: j.error || "Gagal memulai koneksi." });
@@ -140,36 +161,62 @@ export default function IntegrationsPage() {
       </div>
 
       <div style={{ display: "grid", gap: "1rem", maxWidth: 720 }}>
-        {/* Kunci AI — POOL tenant per penyedia (validate-early) */}
-        <div className="card card-pad">
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.5rem" }}>
-            <span style={iconBox("var(--accent,#7c3aed)")}><KeyRound size={18} /></span>
-            <div style={{ flex: 1 }}><div style={titleS}><Bi id="Kunci AI" en="AI Keys" /></div><div style={muted}><Bi id="Kunci penyedia AI Anda (BYOK) — dipakai semua channel. Penulis naskah (LLM), pengisi suara (TTS), pembuat visual (gambar/video)." en="Your AI provider keys (BYOK) — shared across channels. Script writer (LLM), voice (TTS), visual generator (image/video)." /></div></div>
-          </div>
-          {aiProvs.length === 0 && <div style={{ ...muted, fontSize: "var(--text-xs)" }}><Bi id="Memuat penyedia…" en="Loading providers…" /></div>}
-          {aiProvs.filter((p) => p.auth !== "none").map((p) => {
-            const st = aiStatus[p.key];
-            const badge = st === "valid" ? <span className="badge badge-success" style={{ fontSize: "0.625rem" }}><span className="dot" /> Valid</span>
-              : st === "invalid" ? <span className="badge badge-danger" style={{ fontSize: "0.625rem" }}><span className="dot" /> Tidak valid</span>
-              : st === "unchecked" ? <span className="badge badge-default" style={{ fontSize: "0.625rem" }}><span className="dot" /> Tersimpan</span>
-              : <span className="badge badge-default" style={{ fontSize: "0.625rem" }}><span className="dot" /> Belum diisi</span>;
-            return (
-              <div key={p.key} style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: "0.75rem", marginTop: "0.75rem" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.4rem" }}>
-                  <b style={{ fontSize: "var(--text-sm)", color: "var(--text-primary)" }}>{p.name}</b>
-                  <span style={{ ...muted, fontSize: "var(--text-xs)" }}>· {p.uses.join(", ")}</span>
-                  <span style={{ marginLeft: "auto" }}>{badge}</span>
-                </div>
-                <div style={{ display: "flex", gap: "0.5rem" }}>
-                  <input className="input input-mono" type="text" placeholder={st ? "Isi untuk ganti kunci" : "Tempel API key penyedia"} value={aiKey[p.key] || ""} onChange={(e) => setAiKey((s) => ({ ...s, [p.key]: e.target.value }))} />
-                  <button className="btn btn-default btn-sm" disabled={busy === "ai:" + p.key} onClick={() => saveAiKey(p.key)}>{busy === "ai:" + p.key ? <Loader2 size={14} className="spin" /> : <Bi id="Simpan & Uji" en="Save & Test" />}</button>
-                </div>
-                {err?.k === "ai:" + p.key && <span style={{ color: "var(--danger,#ef4444)", fontSize: "var(--text-xs)" }}>{err.m}</span>}
+        {/* Kunci AI — per ELEMEN (LLM/TTS/Visual), boleh >1 kunci/vendor, nilai TAMPIL APA ADANYA (§0.4) */}
+        {AI_ELEMENTS.map((el) => {
+          const eProvs = provsForEl(el.comps).filter((p) => p.auth !== "none");   // berbayar → butuh kunci
+          const freeProvs = provsForEl(el.comps).filter((p) => p.auth === "none"); // gratis (Edge) → tanpa kunci
+          const accts = acctsForEl(el.comps);
+          const badge = (s: string) => s === "valid" ? <span className="badge badge-success" style={{ fontSize: "0.625rem" }}><span className="dot" /> Valid</span>
+            : s === "invalid" ? <span className="badge badge-danger" style={{ fontSize: "0.625rem" }}><span className="dot" /> Tidak valid</span>
+            : <span className="badge badge-default" style={{ fontSize: "0.625rem" }}><span className="dot" /> Tersimpan</span>;
+          const f = addF[el.key] || { provider: "", label: "", key: "" };
+          const setF = (patch: Partial<{ provider: string; label: string; key: string }>) => setAddF((s) => ({ ...s, [el.key]: { ...f, ...patch } }));
+          return (
+            <div key={el.key} className="card card-pad">
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.25rem" }}>
+                <span style={iconBox("var(--accent,#7c3aed)")}><KeyRound size={18} /></span>
+                <div style={{ flex: 1 }}><div style={titleS}><Bi id={el.id} en={el.en} /></div><div style={muted}><Bi id={el.desc_id} en={el.desc_en} /></div></div>
               </div>
-            );
-          })}
-          <div style={{ ...muted, fontSize: "var(--text-xs)", marginTop: "0.75rem" }}><Bi id="Penyedia gratis (mis. Edge) tak butuh kunci. Biaya ditagih langsung ke akun penyedia Anda (BYOK)." en="Free providers (e.g. Edge) need no key. Cost is billed directly to your provider account (BYOK)." /></div>
-        </div>
+              <div style={{ ...muted, fontSize: "var(--text-xs)", marginBottom: "0.25rem" }}>
+                <Bi id="Penyedia tersedia: " en="Available providers: " />{[...eProvs, ...freeProvs].map((p) => p.name).join(" · ") || "—"}
+                {freeProvs.length > 0 && <Bi id=" (gratis tanpa kunci)" en=" (free, no key)" />}
+              </div>
+              {accts.length === 0 && <div style={{ ...muted, fontSize: "var(--text-xs)", padding: "0.4rem 0" }}><Bi id="Belum ada kunci untuk elemen ini." en="No key for this element yet." /></div>}
+              {accts.map((a) => (
+                <div key={a.id} style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: "0.6rem", marginTop: "0.6rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.35rem" }}>
+                    <b style={{ fontSize: "var(--text-sm)", color: "var(--text-primary)" }}>{a.label || a.provider_key}</b>
+                    <span style={{ ...muted, fontSize: "var(--text-xs)" }}>· {(provs.find((p) => p.key === a.provider_key)?.name) || a.provider_key}</span>
+                    <span style={{ marginLeft: "auto" }}>{badge(a.status)}</span>
+                  </div>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <input className="input input-mono" type="text" value={editKey[a.id] ?? ""} onChange={(e) => setEditKey((s) => ({ ...s, [a.id]: e.target.value }))} />
+                    <button className="btn btn-default btn-sm" disabled={busy === "acct:" + a.id} onClick={() => saveAccount(a.provider_key, editKey[a.id] || "", a.label, a.id, a.id)}>{busy === "acct:" + a.id ? <Loader2 size={14} className="spin" /> : <Bi id="Simpan & Uji" en="Save & Test" />}</button>
+                    <button className="btn btn-outline btn-sm" disabled={busy === "del:" + a.id} onClick={() => deleteAccount(a.id)}>{busy === "del:" + a.id ? <Loader2 size={14} className="spin" /> : <Bi id="Hapus" en="Remove" />}</button>
+                  </div>
+                  {err?.k === a.id && <span style={{ color: "var(--danger,#ef4444)", fontSize: "var(--text-xs)" }}>{err.m}</span>}
+                </div>
+              ))}
+              {eProvs.length > 0 && (openAdd === el.key ? (
+                <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: "0.6rem", marginTop: "0.6rem", display: "grid", gap: "0.4rem" }}>
+                  <select className="input" value={f.provider} onChange={(e) => setF({ provider: e.target.value })}>
+                    <option value="">— pilih penyedia —</option>
+                    {eProvs.map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}
+                  </select>
+                  <input className="input" placeholder="Label (mis. Utama / Cadangan)" value={f.label} onChange={(e) => setF({ label: e.target.value })} />
+                  <input className="input input-mono" type="text" placeholder="Tempel API key penyedia" value={f.key} onChange={(e) => setF({ key: e.target.value })} />
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <button className="btn btn-default btn-sm" disabled={busy === "acct:add:" + el.key} onClick={() => saveAccount(f.provider, f.key, f.label, undefined, "add:" + el.key)}>{busy === "acct:add:" + el.key ? <Loader2 size={14} className="spin" /> : <Bi id="Simpan & Uji" en="Save & Test" />}</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setOpenAdd("")}><Bi id="Batal" en="Cancel" /></button>
+                    {err?.k === "add:" + el.key && <span style={{ color: "var(--danger,#ef4444)", fontSize: "var(--text-xs)" }}>{err.m}</span>}
+                  </div>
+                </div>
+              ) : (
+                <button className="btn btn-secondary btn-sm" style={{ marginTop: "0.6rem" }} onClick={() => { setOpenAdd(el.key); setF({ provider: eProvs[0]?.key || "", label: "", key: "" }); setErr(null); }}><KeyRound size={13} /> <Bi id="Tambah kunci" en="Add key" /></button>
+              ))}
+            </div>
+          );
+        })}
 
         {/* YouTube — POOL koneksi (banyak akun Google; channel pilih + target di Channel Setting) */}
         <div className="card card-pad">
@@ -196,12 +243,10 @@ export default function IntegrationsPage() {
             <button className="btn btn-default btn-sm" style={{ marginTop: "0.875rem" }} onClick={() => { setYtAdd(true); setErr(null); }}><Video size={14} /> <Bi id="Tambah koneksi YouTube" en="Add YouTube connection" /></button>
           ) : (
             <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: "0.875rem", marginTop: "0.875rem" }}>
-              <div style={{ fontSize: "var(--text-xs)", marginBottom: "0.75rem", padding: "0.5rem 0.625rem", borderRadius: "var(--r-md)", background: "var(--surface-2)", border: "1px solid var(--border-subtle)", display: "flex", gap: "0.4rem", alignItems: "center" }}><ShieldCheck size={14} style={{ color: "var(--accent)", flex: "none" }} /><span><Bi id="Daftarkan Redirect URI ini di OAuth app Google Anda: " en="Register this Redirect URI in your Google OAuth app: " /><code>{YT_REDIRECT}</code></span></div>
+              <div style={{ fontSize: "var(--text-xs)", marginBottom: "0.75rem", padding: "0.5rem 0.625rem", borderRadius: "var(--r-md)", background: "var(--surface-2)", border: "1px solid var(--border-subtle)", display: "flex", gap: "0.4rem", alignItems: "center" }}><ShieldCheck size={14} style={{ color: "var(--accent)", flex: "none" }} /><span><Bi id="Anda akan diarahkan ke Google untuk memberi izin. Tak perlu Client ID/Secret/URL." en="You'll be sent to Google to grant access. No Client ID/Secret/URL needed." /></span></div>
               <div className="fld"><label className="label"><Bi id="Nama koneksi (mis. Akun Brand A)" en="Connection name (e.g. Brand A account)" /></label><input className="input" value={ytLabel} onChange={(e) => setYtLabel(e.target.value)} placeholder="Akun YouTube saya" /></div>
-              <div className="fld"><label className="label">Google Client ID</label><input className="input input-mono" value={ytCid} onChange={(e) => setYtCid(e.target.value)} placeholder="xxxxx.apps.googleusercontent.com" /></div>
-              <div className="fld"><label className="label">Google Client Secret</label><input className="input input-mono" type="password" value={ytSecret} onChange={(e) => setYtSecret(e.target.value)} placeholder="GOCSPX-xxxxxxxx" /></div>
               <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "0.75rem" }}>
-                <button className="btn btn-default btn-sm" onClick={connectYt} disabled={busy === "yt"}>{busy === "yt" ? <Loader2 size={14} className="spin" /> : <><Video size={14} /> <Bi id="Hubungkan via Google" en="Connect via Google" /></>}</button>
+                <button className="btn btn-default btn-sm" onClick={connectYt} disabled={busy === "yt"}>{busy === "yt" ? <Loader2 size={14} className="spin" /> : <><Video size={14} /> <Bi id="Hubungkan dengan Google" en="Connect with Google" /></>}</button>
                 <button className="btn btn-ghost btn-sm" onClick={() => setYtAdd(false)}><Bi id="Batal" en="Cancel" /></button>
                 {err?.k === "yt" && <span style={{ color: "var(--danger,#ef4444)", fontSize: "var(--text-xs)" }}>{err.m}</span>}
               </div>

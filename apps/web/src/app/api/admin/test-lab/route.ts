@@ -13,7 +13,7 @@ export async function GET() {
   const { data: cfg } = await a.from("tenant_configs")
     .select("llm_library, llm_api_key, visual_api_key, tts_api_key").eq("tenant_id", ADMIN_TEST_TID).maybeSingle();
   const { data: ch } = await a.from("channels").select("id, channel_name").eq("tenant_id", ADMIN_TEST_TID).maybeSingle();
-  const { data: cred } = await a.from("tenant_credentials").select("google_refresh_token_enc").eq("tenant_id", ADMIN_TEST_TID).maybeSingle();
+  const { data: cred } = await a.from("tenant_youtube_accounts").select("google_refresh_token_enc").eq("tenant_id", ADMIN_TEST_TID).limit(1).maybeSingle();
   return NextResponse.json({
     llm_library: cfg?.llm_library ?? "openai",
     has: { llm: !!cfg?.llm_api_key, visual: !!cfg?.visual_api_key, tts: !!cfg?.tts_api_key, youtube: !!cred?.google_refresh_token_enc },
