@@ -448,23 +448,41 @@ export default function ChannelDetailPage() {
             </h3>
             {rd == null ? (
               <p className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Memeriksa kesiapan…" en="Checking readiness…" /></p>
-            ) : rd.ready ? (
-              <p style={{ fontSize: "var(--text-sm)", color: "var(--success)", display: "flex", alignItems: "center", gap: "0.4rem", margin: 0 }}>
-                <Check size={15} /> <Bi id="Semua syarat lengkap — channel siap diaktifkan." en="All requirements met — channel is ready to activate." />
-              </p>
-            ) : (
-              <>
-                <p className="muted" style={{ fontSize: "var(--text-sm)", marginTop: 0, marginBottom: "0.625rem" }}><Bi id="Lengkapi item berikut agar channel bisa aktif:" en="Complete these to activate the channel:" /></p>
-                <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-                  {rd.missing.map((m) => (
-                    <li key={m} style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "var(--text-sm)", padding: "0.3rem 0" }}>
-                      <AlertTriangle size={14} style={{ color: "var(--warning)", flexShrink: 0 }} /> <span>{m}</span>
-                    </li>
-                  ))}
-                </ul>
-                <button className="btn btn-default btn-sm" style={{ marginTop: "0.75rem" }} onClick={() => setTab("settings")}><Settings size={14} /> <Bi id="Lengkapi di Pengaturan" en="Complete in Settings" /></button>
-              </>
-            )}
+            ) : (() => {
+              // Checklist PENUH 🟢/🔴 (§2.3): tiap syarat tampil — hijau=lengkap, merah=kurang + link ke lokasi perbaikan.
+              const has = (s: string) => rd.missing.some((m) => m.toLowerCase().includes(s));
+              const REQS = [
+                { id: "Niche", en: "Niche", bad: rd.missing.includes("niche"), kred: false, tab: "settings" as const },
+                { id: "Penulis Naskah (LLM)", en: "Script Writer (LLM)", bad: has("naskah"), kred: has("kunci naskah"), tab: "settings" as const },
+                { id: "Pengisi Suara (TTS)", en: "Voice (TTS)", bad: has("suara"), kred: has("kunci suara"), tab: "settings" as const },
+                { id: "Pembuat Visual", en: "Visual generator", bad: has("visual"), kred: has("kunci visual"), tab: "settings" as const },
+                { id: "Jadwal tayang", en: "Publish schedule", bad: has("jadwal"), kred: false, tab: "schedule" as const },
+                { id: "Koneksi YouTube + target", en: "YouTube connection + target", bad: has("youtube"), kred: false, tab: "settings" as const },
+                { id: "Telegram", en: "Telegram", bad: rd.missing.includes("Telegram"), kred: true, tab: "settings" as const },
+              ];
+              return (
+                <>
+                  <ul style={{ listStyle: "none", margin: "0 0 0.75rem", padding: 0 }}>
+                    {REQS.map((r) => (
+                      <li key={r.id} style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "var(--text-sm)", padding: "0.3rem 0" }}>
+                        {r.bad ? <span style={{ width: 9, height: 9, borderRadius: "50%", background: "var(--danger,#ef4444)", flexShrink: 0 }} />
+                               : <Check size={14} style={{ color: "var(--success)", flexShrink: 0 }} />}
+                        <span style={{ flex: 1, color: r.bad ? "var(--text-primary)" : "var(--text-secondary)" }}><Bi id={r.id} en={r.en} /></span>
+                        {r.bad && (r.kred
+                          ? <Link href="/integrations" className="link" style={{ fontSize: "var(--text-xs)" }}><Bi id="Perbaiki →" en="Fix →" /></Link>
+                          : <button className="link" style={{ fontSize: "var(--text-xs)", background: "none", border: "none", cursor: "pointer", padding: 0, color: "var(--brand)" }} onClick={() => setTab(r.tab)}><Bi id="Perbaiki →" en="Fix →" /></button>)}
+                      </li>
+                    ))}
+                  </ul>
+                  {/* Aktifkan DI DALAM kartu — ENABLED hanya saat semua 🟢 + langganan aktif + tak dihentikan */}
+                  {(sub === null || ["active", "trialing", "trial", "grace"].includes(sub)) && !ch.production_paused && (
+                    ch.is_active
+                      ? <span style={{ fontSize: "var(--text-sm)", color: "var(--success)", display: "inline-flex", alignItems: "center", gap: "0.4rem" }}><Check size={15} /> <Bi id="Channel aktif & berproduksi" en="Channel active & producing" /></span>
+                      : <button className="btn btn-default btn-sm" disabled={busy || !rd.ready} onClick={() => pausePlay(true)} title={rd.ready ? "" : "Lengkapi semua syarat dulu"}><Play size={14} /> <Bi id="Aktifkan channel" en="Activate channel" /></button>
+                  )}
+                </>
+              );
+            })()}
           </div>
           {/* Ringkasan kinerja — KPI nyata di header; kinerja-mesin menyusul (F5-05/F2-13) */}
           <div className="card card-pad">
