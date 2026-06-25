@@ -1,5 +1,5 @@
 """
-Enkripsi kredensial sensitif tenant (OAuth refresh_token/client_secret dll) — Phase 4 BYO-CC.
+Enkripsi kredensial sensitif tenant (kunci AI pool + OAuth refresh/access token) — Fernet.
 
 Fernet (AES-128-CBC + HMAC) dengan master key di env `ENCRYPTION_KEY` (di `.env` VPS,
 TIDAK pernah di-commit). Prinsip: plaintext kredensial sensitif TIDAK pernah disimpan di DB —

@@ -47,13 +47,12 @@ class ChannelAnalytics:
 
     def __init__(self, token_path: str = None, tenant_id: str = None, channel_id: str = None):
         """
-        token_path: eksplisit path ke token file (opsional)
-        tenant_id:  jika diisi, resolve path via konvensi tokens/{tenant_id}.json
-        channel_id: jika diisi → creds PER-CHANNEL (channel_credentials); else fallback per-tenant.
-        Fallback:   token_youtube.json (backward compatible)
+        token_path: legacy (tak dipakai lagi — kredensial dari POOL tenant_youtube_accounts).
+        tenant_id:  tenant pemilik (wajib utk resolve kredensial pool).
+        channel_id: pilih koneksi YouTube channel (channels.youtube_account_id); else akun pool tunggal.
         """
         self._tenant_id  = tenant_id
-        self._channel_id = channel_id   # per-channel creds (channel_credentials, migr 0060)
+        self._channel_id = channel_id   # → channels.youtube_account_id (pool tenant_youtube_accounts)
         self._token_path = self._resolve_token_path(token_path, tenant_id)
         self._supabase   = self._init_supabase()
         self._creds      = None
@@ -119,24 +118,18 @@ class ChannelAnalytics:
             logger.error(f"[Analytics] API client init gagal: {e}")
 
     def _load_credentials(self):
-        """OAuth credentials — DB-first (tenant_credentials, Phase 4.4) → fallback file."""
+        """OAuth credentials dari POOL tenant_youtube_accounts (OAuth Platform 2026-06-25). NO-FALLBACK file."""
         try:
             from google.oauth2.credentials import Credentials
             from google.auth.transport.requests import Request
 
             token_data = None
             if self._tenant_id:
-                try:
-                    from src.utils.tenant_credentials import load_google_credentials
-                    token_data = load_google_credentials(self._tenant_id, channel_id=self._channel_id)
-                except Exception as e:
-                    logger.warning(f"[Analytics] DB creds gagal ({e}) — coba file")
+                from src.utils.tenant_credentials import load_google_credentials
+                token_data = load_google_credentials(self._tenant_id, channel_id=self._channel_id)
             if not token_data:
-                if not os.path.exists(self._token_path):
-                    logger.error(f"[Analytics] OAuth tak ada (tenant_credentials & file {self._token_path})")
-                    return None
-                with open(self._token_path) as f:
-                    token_data = json.load(f)
+                logger.error(f"[Analytics] OAuth YouTube belum tersambung (tenant {self._tenant_id})")
+                return None
 
             creds = Credentials(
                 token         = token_data.get("token"),
@@ -150,17 +143,13 @@ class ChannelAnalytics:
             if creds.expired and creds.refresh_token:
                 logger.info("[Analytics] Refreshing token...")
                 creds.refresh(Request())
-                # Simpan access_token baru: DB (tenant_credentials) bila ada tenant; else file.
+                # Simpan access_token baru ke POOL (tenant_youtube_accounts).
                 if self._tenant_id:
                     try:
                         from src.utils.tenant_credentials import save_google_access_token
                         save_google_access_token(self._tenant_id, creds.token, channel_id=self._channel_id)
                     except Exception as e:
-                        logger.warning(f"[Analytics] simpan token DB gagal (non-fatal): {e}")
-                elif os.path.exists(self._token_path):
-                    token_data["token"] = creds.token
-                    with open(self._token_path, "w") as f:
-                        json.dump(token_data, f)
+                        logger.warning(f"[Analytics] simpan token pool gagal (non-fatal): {e}")
                 logger.info("[Analytics] Token refreshed")
 
             return creds

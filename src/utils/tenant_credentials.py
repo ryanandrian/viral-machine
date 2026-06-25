@@ -1,9 +1,8 @@
 """
-Loader/writer OAuth Google (YouTube) dari tabel tenant_credentials — Phase 4.4 BYO-CC.
-
-Kredensial tersimpan TERENKRIPSI (Fernet, src/utils/crypto.py). DB-first; caller boleh
-fallback ke file (transisi sampai creds tiap tenant di-seed ke DB). Butuh SUPABASE_KEY =
-service_role di env (RLS tenant_credentials = service_role only).
+Loader/writer OAuth Google (YouTube) dari POOL `tenant_youtube_accounts` — model OAuth PLATFORM (2026-06-25).
+client_id/secret = app PLATFORM (.env GOOGLE_CLIENT_*); refresh/access token per koneksi (Fernet, src/utils/crypto.py).
+Resolusi: channels.youtube_account_id → akun pool; fallback akun pool tunggal valid tenant. NO-FALLBACK file.
+Butuh SUPABASE_KEY = service_role di env. (Tabel lama tenant_credentials/channel_credentials sudah DI-DROP migr 0095.)
 """
 
 import os

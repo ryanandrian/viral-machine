@@ -45,7 +45,7 @@ try:
         app.add_api_route(_p, _midtrans_notify, methods=["POST"])
     app.add_api_route("/health", _health, methods=["GET"])
 
-    # ── YouTube OAuth BYO-CC (Opsi A: server ini memegang Fernet + dance OAuth) ──────────
+    # ── YouTube OAuth PLATFORM (app platform .env; server ini pegang Fernet + dance OAuth) ──────────
     # init/disconnect/status = server-to-server dari Next, di-AUTH via X-Internal-Secret
     # (== MV_INTERNAL_SECRET). Next sudah verifikasi sesi Supabase tenant SEBELUM memanggil →
     # tenant_id yg dikirim sudah ter-otentikasi. callback = redirect dari Google (publik).

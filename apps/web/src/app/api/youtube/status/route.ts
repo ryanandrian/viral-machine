@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { vault } from "@/lib/youtube";
 
 // Status sambungan YouTube tenant (connected/has_client/channel_id). AUTHED. Baca via vault Python
-// (tenant_credentials = RLS service_role-only → tak bisa dibaca anon dari FE). Jika vault tak terjangkau
+// (pool tenant_youtube_accounts dibaca via vault service_role). Jika vault tak terjangkau
 // (mis. dev tanpa worker) → balas 'degraded' supaya FE tampil jujur, bukan crash.
 export async function GET(req: Request) {
   const supabase = await createClient();

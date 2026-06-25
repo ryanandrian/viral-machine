@@ -70,7 +70,7 @@ class ElevenLabsProvider(TTSProvider):
                 "ElevenLabs membutuhkan API key. "
                 "Set ELEVENLABS_API_KEY di .env atau tts_api_key di tenant_configs."
             )
-        # F1-05: voice sudah ter-resolve di config layer (channels.voice_key → niches.voice_defaults[provider]).
+        # F1-05: voice sudah ter-resolve di config layer (channels.voice_key → voice_catalog; niches.voice_* dibuang 0083).
         # Provider pakai apa adanya — NO map hardcode, NO fallback (gagal jujur bila kosong).
         self.voice = config.get("tts_voice")
         if not self.voice:

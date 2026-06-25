@@ -1,13 +1,13 @@
 """
-YouTube OAuth BYO-CC — alur web per-tenant (gate-cutover real-build, owner-approved Opsi A).
+YouTube OAuth PLATFORM (model final 2026-06-25) — alur web; tenant TIDAK pegang client creds.
 
-PRINSIP KEAMANAN (owner 2026-06-15: "seluruh kredensial tenant AMAN" = nilai jual):
-- Tenant membawa Google OAuth app SENDIRI (client_id + client_secret). Kita TIDAK pernah
-  memegang password Google mereka — hanya refresh_token hasil consent mereka.
-- SELURUH enkripsi (Fernet, ENCRYPTION_KEY) + tukar-token + tulis tenant_credentials terjadi
-  DI SERVER ini (Python). Master key TIDAK pernah ke frontend/Vercel (Opsi A — pilihan owner).
-- tenant_credentials: client_secret/refresh_token/access_token = Fernet; RLS service_role-only
-  (frontend/tenant TIDAK bisa baca raw). PK = tenant_id (1 user = 1 tenant).
+PRINSIP:
+- App Google = PLATFORM (1 app utk semua tenant): GOOGLE_CLIENT_ID/SECRET di .env (swappable).
+  Tenant cukup "Hubungkan dengan Google" → consent → kita simpan refresh/access token mereka.
+- Enkripsi (Fernet, ENCRYPTION_KEY) + tukar-token + tulis ke POOL `tenant_youtube_accounts`
+  terjadi DI SERVER ini. Master key tak pernah ke frontend.
+- 1 tenant boleh banyak koneksi (pool); channel pilih koneksi + channel tujuan.
+  (Model BYO-CC lama — tenant bawa client sendiri — sudah DIBUANG.)
 
 Modul ini BEBAS-fastapi (diuji via panggil-fungsi langsung, pola sama spt billing.midtrans).
 Route tipis di src/billing/webhook_app.py men-delegate ke fungsi di sini.

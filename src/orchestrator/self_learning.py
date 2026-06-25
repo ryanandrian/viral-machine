@@ -30,7 +30,7 @@ def run_once(sb=None) -> dict:
     for ch in channels:
         tid = ch["tenant_id"]
         cid = str(ch.get("id"))
-        # ANALYTICS + meta PER-CHANNEL: ChannelAnalytics pakai creds channel ini (channel_credentials).
+        # ANALYTICS + meta PER-CHANNEL: ChannelAnalytics pakai koneksi YouTube channel ini (pool tenant_youtube_accounts).
         try:
             from src.analytics.channel_analytics import ChannelAnalytics
             ca = ChannelAnalytics(tenant_id=tid, channel_id=cid)

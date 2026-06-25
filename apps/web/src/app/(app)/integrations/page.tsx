@@ -4,12 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import { Video, Send, Check, Loader2, ShieldCheck, Image as ImageIcon, KeyRound } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
-// F2-08 — Integrasi/Koneksi platform = TENANT-level (MAIN), §3.18/§10.F.
-// Satu koneksi dipakai SEMUA channel (channel hanya pilih target id). Multi-platform:
-// YouTube (semua) · Telegram (notif) · Instagram (Pro+) · TikTok (Business) — gated.
-// YouTube OAuth tenant-level: /api/youtube/connect TANPA channel_id → tenant_credentials.
-// NON-BREAKING: channel_credentials per-channel lama tetap di-resolve publisher (fallback).
-// Hanya kelas GLOBAL (components.css) + inline — TANPA css scoped halaman lain.
+// Page Kredensial (tenant-wide) — CHANNEL_LOCK_ACTIVATION_PLAN.md §2.1. Tiga bagian:
+//  · Kunci AI PER-ELEMEN (LLM/TTS/Visual), model VENDOR/key-group, boleh >1 kunci, TAMPIL APA ADANYA.
+//  · Koneksi YouTube = OAuth PLATFORM (kumpulan koneksi; tenant klik "Hubungkan dengan Google", tak pegang Client/URL).
+//  · Telegram (notif, validate-early). Channel menugaskan penyedia+model+akun & koneksi+target di Channel Setting.
+// Hanya kelas GLOBAL (components.css) + inline.
 
 function Bi({ id, en }: { id: string; en: string }) { return (<><span data-id>{id}</span><span data-en>{en}</span></>); }
 function Saved({ on }: { on: boolean }) { return on ? <span style={{ color: "var(--success)", fontSize: "var(--text-xs)", display: "inline-flex", alignItems: "center", gap: "0.25rem" }}><Check size={13} /> <Bi id="Tersimpan" en="Saved" /></span> : null; }
@@ -222,7 +221,7 @@ export default function IntegrationsPage() {
         <div className="card card-pad">
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.75rem" }}>
             <span style={iconBox("#ff0000")}><Video size={18} /></span>
-            <div style={{ flex: 1 }}><div style={titleS}>YouTube</div><div style={muted}><Bi id="Hubungkan akun Google (BYO-CC) — bisa lebih dari satu. Tiap channel pilih akun + tujuan di Pengaturan Channel." en="Connect Google accounts (BYO-CC) — more than one allowed. Each channel picks an account + target in Channel Settings." /></div></div>
+            <div style={{ flex: 1 }}><div style={titleS}>YouTube</div><div style={muted}><Bi id="Hubungkan akun Google Anda — bisa lebih dari satu. Tiap channel pilih akun + tujuan di Pengaturan Channel." en="Connect your Google accounts — more than one allowed. Each channel picks an account + target in Channel Settings." /></div></div>
           </div>
           {ytMsg === "connected" && <div style={{ marginBottom: "0.75rem", fontSize: "var(--text-sm)", color: "var(--success)" }}><Check size={13} style={{ verticalAlign: "-2px" }} /> <Bi id="YouTube berhasil tersambung." en="YouTube connected." /></div>}
           {ytMsg?.startsWith("error:") && <div style={{ marginBottom: "0.75rem", fontSize: "var(--text-sm)", color: "var(--danger,#ef4444)" }}>OAuth gagal: {ytMsg.slice(6)}</div>}

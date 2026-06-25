@@ -1,44 +1,28 @@
 import { NextResponse } from "next/server";
 import { requireSuperAdmin } from "@/lib/admin/guard";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { validateProviderKey } from "@/lib/providers/validate-key";
 import { ADMIN_TEST_TID } from "../route";
 
-// "Test semua kredensial" — validasi NYATA: panggil API provider dgn key tersimpan (channel admin_test).
-// Bukan palsu — benar-benar hit endpoint provider + laporkan ok/gagal per kredensial.
-// Logika validasi (incl. EL scope-aware F1-09) = SATU sumber `@/lib/providers/validate-key` (nol-duplikat).
-
+// "Test semua kredensial" (model POOL/VENDOR) — status sudah divalidasi saat disimpan (validate-early di /integrations),
+// jadi cukup baca STATUS pool (tenant_ai_accounts) + koneksi YouTube. Kunci AI/Telegram diatur di Page Kredensial.
 export async function POST() {
   const g = await requireSuperAdmin();
   if (g.error) return g.error;
   const a = createAdminClient();
-  const { data: cfg } = await a.from("tenant_configs")
-    .select("llm_library, llm_api_key, visual_api_key, tts_api_key").eq("tenant_id", ADMIN_TEST_TID).maybeSingle();
+  const { data: aiacc } = await a.from("tenant_ai_accounts").select("key_group,status").eq("tenant_id", ADMIN_TEST_TID);
   const { data: cred } = await a.from("tenant_youtube_accounts").select("google_refresh_token_enc").eq("tenant_id", ADMIN_TEST_TID).limit(1).maybeSingle();
 
-  const out: Record<string, { ok: boolean; msg: string }> = {};
+  const accs = (aiacc ?? []) as { key_group: string; status: string }[];
+  const stOf = (...kgs: string[]) => { const x = accs.find((y) => kgs.includes(y.key_group)); return x ? x.status : null; };
+  const rep = (s: string | null) => s === "valid" ? { ok: true, msg: "valid" } : s === "invalid" ? { ok: false, msg: "kunci ditolak penyedia" } : { ok: false, msg: "belum diisi (di Kredensial)" };
 
-  // LLM (anthropic / openai)
-  out.llm = cfg?.llm_api_key
-    ? await validateProviderKey(cfg.llm_library === "anthropic" ? "anthropic" : "openai", cfg.llm_api_key)
-    : { ok: false, msg: "belum diisi" };
-
-  // Visual (OpenAI image)
-  out.visual = cfg?.visual_api_key
-    ? await validateProviderKey("openai", cfg.visual_api_key)
-    : { ok: false, msg: "belum diisi" };
-
-  // TTS (ElevenLabs) — scope-aware (F1-09: key TTS-scoped tak lagi false-negative); edge_tts tak perlu key
-  out.tts = cfg?.tts_api_key
-    ? await validateProviderKey("elevenlabs", cfg.tts_api_key)
-    : { ok: false, msg: "belum diisi (edge_tts fallback tak perlu key)" };
-
-  // YouTube — presence (alur OAuth BYO-CC terpisah)
-  out.youtube = cred?.google_refresh_token_enc
-    ? { ok: true, msg: "kredensial OAuth tersimpan" }
-    : { ok: false, msg: "belum terhubung (Connect YouTube)" };
-
-  const allOk = out.llm.ok && out.visual.ok && (out.tts.ok || out.tts.msg.includes("edge_tts"));
+  const out: Record<string, { ok: boolean; msg: string }> = {
+    llm: rep(stOf("openai", "anthropic")),        // vendor LLM
+    visual: rep(stOf("openai")),                  // vendor Visual (openai serves image)
+    tts: rep(stOf("elevenlabs", "openai")),       // vendor TTS (elevenlabs / openai_tts→openai)
+    youtube: cred?.google_refresh_token_enc ? { ok: true, msg: "kredensial OAuth tersimpan" } : { ok: false, msg: "belum terhubung (Connect YouTube)" },
+  };
+  const allOk = out.llm.ok && out.visual.ok && out.tts.ok;
   await a.from("admin_audit").insert({ admin_uid: g.user.id, action: "test_lab.test_credentials", detail: { result: out } });
   return NextResponse.json({ result: out, ready: allOk });
 }

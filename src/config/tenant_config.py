@@ -267,7 +267,7 @@ class TenantRunConfig:
     def missing_credentials(self) -> list[str]:
         """Phase 4.5: daftar key WAJIB yang belum diisi, per provider terpilih tenant.
         Dipakai pipeline utk fail-loud SEBELUM produksi (35 mnt). Provider gratis
-        (edge_tts) tak perlu key. YouTube OAuth dicek di publish (tenant_credentials/file)."""
+        (edge_tts) tak perlu key. YouTube OAuth dicek di publish (pool tenant_youtube_accounts)."""
         missing = []
         if not (self.llm_api_key or "").strip():
             missing.append(f"llm_api_key (LLM: {self.effective_llm_provider() or '?'})")

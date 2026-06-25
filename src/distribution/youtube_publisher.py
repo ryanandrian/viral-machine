@@ -27,26 +27,15 @@ class YouTubePublisher:
     TOKEN_PATH = "token_youtube.json"  # backward compatible fallback
 
     def _get_credentials(self, tenant_config: TenantConfig, channel_id: str | None = None) -> Credentials:
-        # Phase 4.4 BYO-CC: DB-first → fallback file. PER-CHANNEL (migr 0060): pakai channel_id
-        # (param ATAU tenant_config.channel_id=channels.id) → channel_credentials; fallback tenant_credentials.
+        # OAuth Platform (model POOL 2026-06-25): kredensial dari tenant_youtube_accounts (via channels.youtube_account_id).
+        # client_id/secret = app PLATFORM (.env GOOGLE_CLIENT_*). NO-FALLBACK file (fosil single-tenant dibuang).
         from src.utils.tenant_credentials import load_google_credentials, save_google_access_token
-        source     = "db"
-        token_path = None
         ch_id      = channel_id or getattr(tenant_config, "channel_id", None)
         token_data = load_google_credentials(tenant_config.tenant_id, channel_id=ch_id)
         if not token_data:
-            source = "file"
-            if hasattr(tenant_config, 'get_youtube_token_path'):
-                token_path = tenant_config.get_youtube_token_path()
-            else:
-                token_path = getattr(tenant_config, 'youtube_token_path', self.TOKEN_PATH) or self.TOKEN_PATH
-            if not os.path.exists(token_path):
-                raise FileNotFoundError(
-                    f"OAuth YouTube tidak ada di tenant_credentials maupun file ({token_path})"
-                )
-            with open(token_path) as f:
-                token_data = json.load(f)
-
+            raise RuntimeError(
+                f"OAuth YouTube belum tersambung utk tenant {tenant_config.tenant_id} — hubungkan di Kredensial (no-fallback)."
+            )
         creds = Credentials(
             token=token_data.get("token"),
             refresh_token=token_data.get("refresh_token"),
@@ -55,18 +44,11 @@ class YouTubePublisher:
             client_secret=token_data.get("client_secret"),
             scopes=token_data.get("scopes") or self.SCOPES
         )
-
         if creds.expired and creds.refresh_token:
-            logger.info(f"Refreshing expired YouTube token (source={source})...")
+            logger.info("Refreshing expired YouTube token (pool)...")
             creds.refresh(Request())
-            if source == "db":
-                save_google_access_token(tenant_config.tenant_id, creds.token, channel_id=ch_id)
-            else:
-                token_data["token"] = creds.token
-                with open(token_path, "w") as f:
-                    json.dump(token_data, f)
+            save_google_access_token(tenant_config.tenant_id, creds.token, channel_id=ch_id)
             logger.info("Token refreshed successfully")
-
         return creds
 
     # Category ID per niche

@@ -21,7 +21,7 @@ from src.providers.tts.base import TTSProvider, TTSError
 
 
 # F1-05: OPENAI_VOICES (map niche→voice hardcode) DIHAPUS — voice single-source
-# (channels.voice_key → niches.voice_defaults[openai_tts] → voice_catalog).
+# (channels.voice_key → voice_catalog; niches.voice_* sudah dibuang migr 0083).
 
 OPENAI_MODELS = {
     "standard": "tts-1",     # Lebih cepat, sedikit kurang natural

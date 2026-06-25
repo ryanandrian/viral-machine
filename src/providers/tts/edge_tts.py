@@ -20,7 +20,7 @@ from src.providers.tts.base import TTSProvider, TTSError
 
 # Voice mapping per niche — bisa di-override via tenant_configs.tts_voice
 # F1-05: NICHE_VOICES (map niche→voice hardcode) DIHAPUS — voice kini single-source
-# (channels.voice_key → niches.voice_defaults[edge_tts] → voice_catalog). rate baseline = voice_catalog.default_settings.
+# (channels.voice_key → voice_catalog; niches.voice_* dibuang migr 0083). rate baseline = voice_catalog.default_settings.
 DEFAULT_RATE  = "+10%"
 
 
@@ -48,7 +48,7 @@ class EdgeTTSProvider(TTSProvider):
 
     def __init__(self, config: dict):
         super().__init__(config)
-        # F1-05: voice ter-resolve di config layer (channels.voice_key → niches.voice_defaults[edge_tts]).
+        # F1-05: voice ter-resolve di config layer (channels.voice_key → voice_catalog).
         # NO map hardcode, NO fallback (gagal jujur bila kosong). rate = baseline voice_catalog.default_settings.
         self.voice = config.get("tts_voice")
         if not self.voice:
