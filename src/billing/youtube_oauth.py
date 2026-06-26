@@ -41,10 +41,11 @@ from src.utils.crypto import encrypt, decrypt
 # (Tak menurunkan keamanan: kita tetap simpan refresh_token utk scope YouTube yang kita pakai.)
 os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
 
-# Scope identik dgn youtube_publisher.YouTubePublisher.SCOPES (upload + analytics).
+# Scope identik dgn youtube_publisher.YouTubePublisher.SCOPES (upload + baca + analitik).
+# B4: scope "kelola penuh" (.../auth/youtube) DIBUANG — verifikasi Google lebih ringan; dulu cuma
+# dipakai update deskripsi channel hardcode yg sudah dihapus.
 SCOPES = [
     "https://www.googleapis.com/auth/youtube.upload",
-    "https://www.googleapis.com/auth/youtube",
     "https://www.googleapis.com/auth/youtube.readonly",
     "https://www.googleapis.com/auth/yt-analytics.readonly",
 ]

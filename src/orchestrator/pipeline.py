@@ -395,15 +395,6 @@ class Pipeline:
             published_platforms = []
 
             if publish and qc_passed:
-                # One-time channel description update (flag-guarded)
-                CHANNEL_DESC = (
-                    "Exploring the ocean's darkest mysteries, strangest space phenomena, "
-                    "and science facts that feel illegal to know. New Shorts daily.\n"
-                    "Follow for mind-blowing discoveries from the deep ocean and beyond.\n\n"
-                    "#OceanMysteries #SpaceFacts #ScienceFacts #DeepSea #Shorts"
-                )
-                self.youtube_publisher.update_channel_description(tenant_config, CHANNEL_DESC)
-
                 # YouTube
                 logger.info("PUBLISHING | Uploading to YouTube Shorts...")
                 yt_result = self.youtube_publisher.publish(

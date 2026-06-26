@@ -17,9 +17,10 @@ class YouTubePublisher:
     Multi-tenant ready — setiap tenant punya token sendiri.
     """
 
+    # B4: scope "kelola penuh" (.../auth/youtube) DIBUANG — dulu hanya dipakai update deskripsi channel
+    # (hardcode, sudah dihapus). Sisa = upload (tulis judul+deskripsi video) + baca channel + analitik.
     SCOPES = [
         "https://www.googleapis.com/auth/youtube.upload",
-        "https://www.googleapis.com/auth/youtube",
         "https://www.googleapis.com/auth/youtube.readonly",
         "https://www.googleapis.com/auth/yt-analytics.readonly",
     ]
@@ -348,48 +349,6 @@ class YouTubePublisher:
         except Exception as e:
             logger.error(f"Get channel stats error: {e}")
         return {}
-
-    def update_channel_description(self, tenant_config: TenantConfig, description: str) -> bool:
-        """
-        Update channel description via YouTube API channels.update.
-        Dipanggil satu kali — cek flag .data/channel_updated.flag sebelum run.
-        Return True jika berhasil atau sudah pernah dijalankan.
-        """
-        flag_path = ".data/channel_updated.flag"
-        if os.path.exists(flag_path):
-            logger.info("[YouTube] Channel description sudah diupdate sebelumnya — skip")
-            return True
-        try:
-            creds = self._get_credentials(tenant_config)
-            youtube = build("youtube", "v3", credentials=creds)
-
-            # FIX: deskripsi channel = brandingSettings.channel.description (BUKAN snippet — snippet
-            # read-only di channels.update → 400 ERROR_PART_UNEXPECTED). Read-modify-write brandingSettings.
-            channel_response = youtube.channels().list(
-                part="brandingSettings", mine=True
-            ).execute()
-            if not channel_response.get("items"):
-                logger.warning("[YouTube] Channel tidak ditemukan — skip update description")
-                return False
-
-            channel_id = channel_response["items"][0]["id"]
-            branding = channel_response["items"][0].get("brandingSettings", {}) or {}
-            branding.setdefault("channel", {})["description"] = description
-
-            youtube.channels().update(
-                part="brandingSettings",
-                body={"id": channel_id, "brandingSettings": branding}
-            ).execute()
-
-            os.makedirs(".data", exist_ok=True)
-            with open(flag_path, "w") as f:
-                f.write(time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
-
-            logger.info(f"[YouTube] Channel description updated OK: {channel_id}")
-            return True
-        except Exception as e:
-            logger.error(f"[YouTube] update_channel_description gagal (non-critical): {e}")
-            return False
 
 
 if __name__ == "__main__":
