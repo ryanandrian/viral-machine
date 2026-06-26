@@ -10,7 +10,8 @@ function Bi({ id, en }: { id: string; en: string }) {
   return (<><span data-id>{id}</span><span data-en>{en}</span></>);
 }
 
-const TABS: [string, string, string][] = [["about", "Tentang", "About"], ["contact", "Kontak", "Contact"], ["status", "Status", "Status"], ["legal", "Privacy", "Privacy"]];
+// Tab "Privacy" lama dihapus → kini halaman tersendiri /privacy & /terms (patuh Google/YouTube).
+const TABS: [string, string, string][] = [["about", "Tentang", "About"], ["contact", "Kontak", "Contact"], ["status", "Status", "Status"]];
 const SVC: [string, string, number][] = [["API Produksi", "Production API", 1], ["Pipeline Worker", "Pipeline Worker", 1], ["Dashboard", "Dashboard", 1], ["YouTube Upload", "YouTube Upload", 2], ["Database", "Database", 1], ["Notifikasi", "Notifications", 1]];
 
 export default function AboutPage() {
@@ -67,18 +68,6 @@ export default function AboutPage() {
         </div>
       </>}
 
-      {tab === "legal" && <>
-        <div className="ab-hero"><h1 style={{ fontSize: "var(--text-4xl)" }}><Bi id="Kebijakan Privasi" en="Privacy Policy" /></h1><p className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Berlaku 1 Juni 2026" en="Effective June 1, 2026" /></p></div>
-        <div className="ab-legal">
-          <p><Bi id="MesinViral menghormati privasi Anda. Dokumen ini menjelaskan bagaimana kami mengumpulkan, menggunakan, dan melindungi data Anda." en="MesinViral respects your privacy. This document explains how we collect, use, and protect your data." /></p>
-          <h2><Bi id="Data yang kami kumpulkan" en="Data we collect" /></h2>
-          <p><Bi id="Kami mengumpulkan informasi akun (email, nama), data channel YouTube yang Anda hubungkan, dan metrik penggunaan. API keys Anda dienkripsi dengan Fernet AES-128 dan tidak pernah disimpan dalam log." en="We collect account info (email, name), data from the YouTube channels you connect, and usage metrics. Your API keys are encrypted with Fernet AES-128 and never stored in logs." /></p>
-          <h2><Bi id="Bagaimana kami menggunakannya" en="How we use it" /></h2>
-          <p><Bi id="Data digunakan untuk menjalankan produksi video, menghasilkan insight self-learning per-channel, dan meningkatkan layanan. Kami tidak menjual data Anda ke pihak ketiga." en="Data is used to run video production, generate per-channel self-learning insights, and improve the service. We do not sell your data to third parties." /></p>
-          <h2><Bi id="Hak Anda" en="Your rights" /></h2>
-          <p><Bi id="Anda dapat mengekspor atau menghapus seluruh data Anda kapan saja melalui Pengaturan → Zona berbahaya." en="You can export or delete all your data anytime via Settings → Danger zone." /></p>
-        </div>
-      </>}
       <div style={{ height: "4rem" }} />
     </div>
   );

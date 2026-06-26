@@ -21,4 +21,9 @@
 .ab-legal { max-width: 760px; margin: 0 auto; }
 .ab-legal h2 { font-size: var(--text-xl); font-weight: 700; color: var(--text-primary); margin: 2rem 0 0.75rem; }
 .ab-legal p { font-size: var(--text-base); color: var(--text-secondary); line-height: 1.7; margin: 0 0 1rem; }
+.ab-legal ul { margin: 0 0 1rem; padding-left: 1.25rem; list-style: disc; }
+.ab-legal li { font-size: var(--text-base); color: var(--text-secondary); line-height: 1.7; margin: 0 0 0.5rem; }
+.ab-legal strong { color: var(--text-primary); font-weight: 600; }
+.ab-legal a { color: var(--brand); text-decoration: underline; text-underline-offset: 2px; }
+.ab-legal a:hover { opacity: 0.85; }
 @media (max-width:900px){ .ab-values{ grid-template-columns:1fr; } .ab-contact-grid{ grid-template-columns:1fr; } }

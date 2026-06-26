@@ -89,7 +89,7 @@ export function MarketingShell({ children, active }: { children: React.ReactNode
               {fcol("Produk", "Product", [["Fitur", "Features", "/#features"], ["Harga", "Pricing", "/pricing"], ["Demo", "Demo", "/demo"], ["Roadmap", "Roadmap", null]])}
               {fcol("Resources", "Resources", [["Dokumentasi", "Docs", "/docs"], ["Blog", "Blog", "/blog"], ["Case Studies", "Case Studies", null], ["API", "API", null]])}
               {fcol("Perusahaan", "Company", [["Tentang", "About", "/about"], ["Kontak", "Contact", "/about"], ["Karir", "Careers", null]])}
-              {fcol("Legal", "Legal", [["Privacy", "Privacy", "/about"], ["Terms", "Terms", "/about"], ["Refund", "Refund", "/about"]])}
+              {fcol("Legal", "Legal", [["Privacy", "Privacy", "/privacy"], ["Terms", "Terms", "/terms"], ["Refund", "Refund", null]])}
             </div>
           </div>
           <div className="mk-foot-bottom">
