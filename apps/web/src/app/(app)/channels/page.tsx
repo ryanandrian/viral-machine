@@ -62,7 +62,7 @@ function ChannelCard({ ch, eff, vid, busy, onToggle }: { ch: ChannelRow; eff: Ef
         </div>
         <ChannelStatusBadge eff={eff} />
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.35rem" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0 1.25rem 0.4rem" }}>
         <span className="muted" style={{ fontSize: "var(--text-xs)", fontWeight: 500 }}><Bi id="Menggunakan Niche" en="Used Niche" /></span>
         {niches.length > 1 && <span className="badge" style={{ gap: "0.25rem" }}><Shuffle size={11} /> <Bi id="acak" en="random" /></span>}
       </div>

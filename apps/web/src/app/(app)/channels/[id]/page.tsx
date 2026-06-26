@@ -132,6 +132,8 @@ export default function ChannelDetailPage() {
   const [tags, setTags] = useState<Record<string, string>>({}); // niche → "#a, #b" (editing)
   const [savingBrand, setSavingBrand] = useState(false);
   const [brandMsg, setBrandMsg] = useState<string | null>(null);
+  const [savingHash, setSavingHash] = useState(false);
+  const [hashMsg, setHashMsg] = useState<string | null>(null);
   // F2-04: branded (CTA/logo/landing) per-channel → channels (DB+BE sudah ada, migr 0015)
   const [ctaMode, setCtaMode] = useState("implicit");
   const [brandName, setBrandName] = useState("");
@@ -159,16 +161,23 @@ export default function ChannelDetailPage() {
   const capNum = (k: string, d: number) => Number((cap[k] as number) ?? d);
   const capStr = (k: string, d: string) => String((cap[k] as string) ?? d);
 
-  async function saveBrand() {
+  async function saveCaption() {
     setBrandMsg(null); setSavingBrand(true);
+    const { error } = await supabase.from("channels").update({ caption_style: cap }).eq("id", id);
+    setSavingBrand(false);
+    setBrandMsg(error ? `Gagal: ${error.message}` : "Tersimpan");
+    if (!error) load();
+  }
+  async function saveHashtags() {
+    setHashMsg(null); setSavingHash(true);
     const nh: Record<string, string[]> = {};
     for (const [n, s] of Object.entries(tags)) {
       const arr = s.split(",").map((t) => t.trim()).filter(Boolean).map((t) => (t.startsWith("#") ? t : `#${t}`));
       if (arr.length) nh[n] = arr;
     }
-    const { error } = await supabase.from("channels").update({ caption_style: cap, niche_hashtags: nh }).eq("id", id);
-    setSavingBrand(false);
-    setBrandMsg(error ? `Gagal: ${error.message}` : "Tersimpan");
+    const { error } = await supabase.from("channels").update({ niche_hashtags: nh }).eq("id", id);
+    setSavingHash(false);
+    setHashMsg(error ? `Gagal: ${error.message}` : "Tersimpan");
     if (!error) load();
   }
 
@@ -683,8 +692,8 @@ export default function ChannelDetailPage() {
         </div>
 
         <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 760 }}>
-          <h3 className="card-title" style={{ marginBottom: "0.35rem" }}><Bi id="Caption & Hashtag" en="Caption & Hashtags" /></h3>
-          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}><Bi id="Tampilan teks subtitle di video + hashtag postingan (brand channel ini)." en="On-screen subtitle styling + post hashtags (this channel's brand)." /></p>
+          <h3 className="card-title" style={{ marginBottom: "0.35rem" }}><Bi id="Caption (subtitle video)" en="Caption (video subtitles)" /></h3>
+          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}><Bi id="Tampilan teks subtitle yang muncul di dalam video (brand channel ini)." en="On-screen subtitle styling shown inside the video (this channel's brand)." /></p>
           <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: "1.5rem", alignItems: "start" }}>
             {/* Preview 9:16 LIVE — pakai nilai caption_style sebenarnya */}
             <div style={{ position: "sticky", top: 72 }}>
@@ -721,27 +730,7 @@ export default function ChannelDetailPage() {
                 <label className="switch"><input type="checkbox" checked={Boolean(cap.bold ?? true)} onChange={(e) => setCap({ ...cap, bold: e.target.checked })} /><span className="track" /><span className="thumb" /></label></div>
             </div>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.875rem", marginTop: "1rem" }}>
-            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.875rem" }}>
-              <label className="label"><Bi id="Hashtag per niche" en="Hashtags per niche" /></label>
-              <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "0.5rem" }}><Bi id="Pisahkan dengan koma. Tanda # otomatis." en="Comma-separated. # added automatically." /></div>
-              {pool.length === 0 && <div className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Pilih niche dulu di kartu di atas." en="Pick a niche in the card above first." /></div>}
-              {pool.map((pid) => {
-                const nm = nicheOpts.find((o) => o.id === pid)?.name ?? pid;
-                const def = (nicheDefaults[pid] ?? []).join(", ");
-                return (
-                  <div key={pid} style={{ marginBottom: "0.5rem" }}>
-                    <label className="muted" style={{ fontSize: "var(--text-xs)" }}>{nm}</label>
-                    <input className="input" value={tags[pid] ?? ""} onChange={(e) => setTags({ ...tags, [pid]: e.target.value })} placeholder={def ? `Default niche: ${def}` : "space, science, viral"} />
-                  </div>
-                );
-              })}
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-              <button className="btn btn-default" onClick={saveBrand} disabled={savingBrand}>{savingBrand ? <Loader2 size={15} className="spin" /> : <Bi id="Simpan caption & hashtag" en="Save caption & hashtags" />}</button>
-              {brandMsg && <span style={{ fontSize: "var(--text-sm)", color: brandMsg.includes("Tersimpan") ? "var(--success)" : "var(--danger,#ef4444)" }}>{brandMsg}</span>}
-            </div>
-          </div>
+          <div className="save-bar" style={{ marginTop: "1rem" }}><span className="muted">{brandMsg ?? <Bi id="Disimpan ke channel (caption)" en="Saves to channel (caption)" />}</span><button className="btn btn-default" disabled={savingBrand} onClick={saveCaption}>{savingBrand ? "Menyimpan…" : <Bi id="Simpan caption" en="Save caption" />}</button></div>
         </div>
 
         <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 560 }}>
@@ -785,6 +774,24 @@ export default function ChannelDetailPage() {
           <div className="fld-row"><div className="k"><Bi id="Maks retry skrip" en="Max script retry" /></div>
             <div className="radio-row">{[1, 2, 3, 4, 5].map((n) => <span key={n} className={`radio-pill${maxRetry === n ? " sel" : ""}`} onClick={() => setMaxRetry(n)}>{n}</span>)}</div></div>
           <div className="save-bar"><span className="muted">{opsMsg ?? <Bi id="Disimpan ke channel (operasional)" en="Saves to channel (operations)" />}</span><button className="btn btn-default" disabled={savingOps} onClick={saveOps}>{savingOps ? "Menyimpan…" : <Bi id="Simpan & Terapkan" en="Save & Apply" />}</button></div>
+        </div>
+
+        <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 560 }}>
+          <h3 className="card-title" style={{ marginBottom: "0.35rem" }}><Bi id="Hashtag" en="Hashtags" /></h3>
+          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}><Bi id="Hashtag postingan per niche di pool channel ini. Dikosongkan = otomatis pakai default niche." en="Post hashtags per niche in this channel's pool. Left empty = uses the niche default automatically." /></p>
+          <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "0.75rem" }}><Bi id="Pisahkan dengan koma. Tanda # otomatis." en="Comma-separated. # added automatically." /></div>
+          {pool.length === 0 && <div className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Pilih niche dulu di kartu Pengaturan di atas." en="Pick a niche in the Settings card above first." /></div>}
+          {pool.map((pid) => {
+            const nm = nicheOpts.find((o) => o.id === pid)?.name ?? pid;
+            const def = (nicheDefaults[pid] ?? []).join(", ");
+            return (
+              <div key={pid} style={{ marginBottom: "0.625rem" }}>
+                <label className="muted" style={{ fontSize: "var(--text-xs)", display: "block", marginBottom: "0.2rem" }}>{nm}</label>
+                <input className="input" value={tags[pid] ?? ""} onChange={(e) => setTags({ ...tags, [pid]: e.target.value })} placeholder={def ? `Default niche: ${def}` : "space, science, viral"} />
+              </div>
+            );
+          })}
+          <div className="save-bar"><span className="muted">{hashMsg ?? <Bi id="Disimpan ke channel (hashtag)" en="Saves to channel (hashtags)" />}</span><button className="btn btn-default" disabled={savingHash} onClick={saveHashtags}>{savingHash ? "Menyimpan…" : <Bi id="Simpan hashtag" en="Save hashtags" />}</button></div>
         </div>
 
         </>
