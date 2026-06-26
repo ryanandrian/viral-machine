@@ -197,11 +197,13 @@ Setelah Langkah 1–8 selesai (app masih mode **Testing**):
 
 | ID | Tugas | Status |
 |---|---|---|
-| **B1** | Buat halaman **`/privacy`** (URL sendiri, bukan tab) dengan konten **patuh Google API + YouTube API** (§7) — bilingual sesuai pola situs | ⬜ belum |
-| **B2** | Buat halaman **`/terms`** (URL sendiri) — termasuk pernyataan tunduk pada **YouTube Terms of Service** | ⬜ belum |
-| **B3** | Tambahkan link **Privacy** & **Terms** di footer marketing + arahkan tab lama `/about` "Privacy" ke `/privacy` | ⬜ belum |
-| **B4** | *(opsional, nunggu keputusan Owner §2)* Minimisasi scope: lepas `youtube` penuh → 3 scope | ⬜ belum |
-| **B5** | Tukar `GOOGLE_CLIENT_ID/SECRET` di `.env` lokal + VPS + restart `mv-webhook`/`mv-worker` | ⬜ nunggu Client baru dari Owner |
+| **B1** | Buat halaman **`/privacy`** (URL sendiri, bukan tab) dengan konten **patuh Google API + YouTube API** (§7) — bilingual sesuai pola situs | ✅ **SELESAI** — LIVE `https://mesinviral.com/privacy` (HTTP 200); server component+metadata; link Limited Use+revoke+Google Privacy+YouTube ToS terverifikasi |
+| **B2** | Buat halaman **`/terms`** (URL sendiri) — termasuk pernyataan tunduk pada **YouTube Terms of Service** | ✅ **SELESAI** — LIVE `https://mesinviral.com/terms` (HTTP 200); link YouTube ToS + Google Privacy terverifikasi |
+| **B3** | Tambahkan link **Privacy** & **Terms** di footer marketing + arahkan tab lama `/about` "Privacy" ke `/privacy` | ✅ **SELESAI** — footer Legal → `/privacy`+`/terms` (Refund disembunyikan); tab Privacy lama di `/about` dihapus (anti-duplikat); commit `8c8b6cc` |
+| **B4** | *(opsional, nunggu keputusan Owner §2)* Minimisasi scope: lepas `youtube` penuh → 3 scope | ⬜ belum (nunggu keputusan Owner) |
+| **B5** | Tukar `GOOGLE_CLIENT_ID/SECRET` di `.env` lokal + VPS + restart `mv-webhook`/`mv-worker` | ⬜ nunggu Client baru dari Owner (Langkah 6) |
+
+> ✅ **Catatan deploy B1–B3 (2026-06-27):** commit `8c8b6cc`, build VPS sukses, `mv-web` restart, kedua URL HTTP 200 dengan seluruh link wajib. **Halaman siap diisi di Branding (Langkah 3) & verifikasi (Langkah 9).**
 
 > B1–B3 = halaman web baru (aman, **tidak** menyentuh fitur berjalan). B5 = setelah Owner kirim Client baru.
 
