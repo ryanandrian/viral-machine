@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Plus, Tv, Zap, ArrowRight, Pause, Play } from "lucide-react";
+import { Plus, Tv, Zap, ArrowRight, Pause, Play, Shuffle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { effectiveStatus, ChannelStatusBadge, type Eff } from "@/lib/channel-status";
 import "./channels.css";
@@ -62,7 +62,13 @@ function ChannelCard({ ch, eff, vid, busy, onToggle }: { ch: ChannelRow; eff: Ef
         </div>
         <ChannelStatusBadge eff={eff} />
       </div>
-      <div className="niche-row">{niches.length ? niches.map((n) => <span key={n} className="badge badge-default">{n}</span>) : <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Belum ada niche" en="No niche set" /></span>}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.35rem" }}>
+        <span className="muted" style={{ fontSize: "var(--text-xs)", fontWeight: 500 }}><Bi id="Menggunakan Niche" en="Used Niche" /></span>
+        {niches.length > 1 && <span className="badge" style={{ gap: "0.25rem" }}><Shuffle size={11} /> <Bi id="acak" en="random" /></span>}
+      </div>
+      <div className="niche-row">{niches.length
+        ? (niches.length > 4 ? [...niches.slice(0, 4), `+${niches.length - 4}`] : niches).map((n) => <span key={n} className="badge badge-default">{n}</span>)
+        : <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Belum ada niche" en="No niche set" /></span>}</div>
       {eff.reason && <div className="muted" style={{ fontSize: "var(--text-xs)", padding: "0 0 0.25rem" }}>{eff.reason}</div>}
       <div className="ch-stats">
         <div className="ch-stat"><div className="v">{vid.toLocaleString("id-ID")}</div><div className="l"><Bi id="Video terbit" en="Published" /></div></div>

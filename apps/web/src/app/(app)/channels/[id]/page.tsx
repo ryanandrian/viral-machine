@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ExternalLink, Settings, Zap, ArrowRight, BarChart3, Calendar, Activity, Loader2, Check, Pause, Play, RotateCw, AlertTriangle, Mic, ShieldCheck, Sparkles, Clock, Trash2, Plus, PenLine, Image as ImageIcon, Info } from "lucide-react";
+import { ExternalLink, Settings, Zap, ArrowRight, BarChart3, Calendar, Activity, Loader2, Check, Pause, Play, RotateCw, AlertTriangle, Mic, ShieldCheck, Sparkles, Clock, Trash2, Plus, PenLine, Image as ImageIcon, Info, Search, X, Shuffle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { effectiveStatus, TONE } from "@/lib/channel-status";
 import PresetTables from "@/components/preset-tables";
@@ -220,12 +220,13 @@ export default function ChannelDetailPage() {
     );
   };
 
-  // C3: editor niche per-channel (fixed/random) — opsi dari ENTITLEMENT tenant; tulis via RPC.
-  const [nicheMode, setNicheMode] = useState<"fixed" | "random">("fixed");
-  const [niche, setNiche] = useState("");
+  // C3: editor niche per-channel — pilih dari ENTITLEMENT tenant (pool); mode disimpulkan dari jumlah; tulis via RPC.
   const [nicheOpts, setNicheOpts] = useState<{ id: string; name: string }[]>([]);
   const [nicheMsg, setNicheMsg] = useState<string | null>(null);
   const [savingNiche, setSavingNiche] = useState(false);
+  const [pool, setPool] = useState<string[]>([]);                 // niche_pool channel (1=fixed, >1=random)
+  const [nicheSearch, setNicheSearch] = useState("");             // kotak cari (skala ratusan)
+  const [nicheDefaults, setNicheDefaults] = useState<Record<string, string[]>>({}); // niches.default_hashtags (placeholder hashtag)
 
   // Preset durasi per-channel (channels.duration_preset) — kolom "bersih", tulis via RLS UPDATE langsung.
   const [dpreset, setDpreset] = useState<number | null>(null);
@@ -258,7 +259,9 @@ export default function ChannelDetailPage() {
 
   async function saveNiche() {
     setNicheMsg(null); setSavingNiche(true);
-    const { error } = await supabase.rpc("set_channel_niche", { p_channel_id: id, p_niche: niche, p_niche_mode: nicheMode });
+    // Mode disimpulkan dari jumlah: 1 niche = fixed, >1 = random (otomatis). Niche utama = pool[0].
+    const mode = pool.length > 1 ? "random" : "fixed";
+    const { error } = await supabase.rpc("set_channel_niche", { p_channel_id: id, p_niche: pool[0] ?? "", p_niche_mode: mode, p_niche_pool: pool });
     setSavingNiche(false);
     setNicheMsg(error ? (error.message.includes("entitlement") ? "Niche itu di luar paket Anda" : `Gagal: ${error.message}`) : "Niche tersimpan");
     if (!error) load();
@@ -297,7 +300,7 @@ export default function ChannelDetailPage() {
     if (c) {
       setName(c.channel_name ?? ""); setClang(c.content_language ?? "id-ID");
       setPrivacy(c.publish_privacy ?? "private");
-      setNicheMode((c.niche_mode === "random" ? "random" : "fixed")); setNiche(c.niche ?? "");
+      setPool(Array.isArray(c.niche_pool) && c.niche_pool.length ? c.niche_pool : (c.niche ? [c.niche] : []));
       setDpreset(c.duration_preset ?? null); setSlots(c.publish_slots ?? []); setTargetYt(c.platform_channel_id ?? ""); setYtAccountId(c.youtube_account_id ?? "");
       setLlmProv(c.llm_library ?? ""); setLlmModel(c.llm_model ?? "");
       const vm = c.visual_mode ?? "";
@@ -356,12 +359,12 @@ export default function ChannelDetailPage() {
     const { count: vCount } = await supabase.from("production_runs").select("id", { count: "exact", head: true }).eq("channel_id", id).eq("status", "success");
     setTotalVids(vCount ?? 0);
     const tier = (cfg as { plan_type?: string } | null)?.plan_type ?? "starter";
-    const { data: nrows } = await supabase.from("niches").select("niche_id,name,is_base,access_type,exclusive_to").eq("is_active", true);
+    const { data: nrows } = await supabase.from("niches").select("niche_id,name,is_base,access_type,exclusive_to,default_hashtags").eq("is_active", true);
     const me = user?.id ?? "";
-    const opts = (nrows ?? []).filter((n: { access_type: string; is_base: boolean; exclusive_to: string | null }) =>
-      n.exclusive_to === me || (n.access_type === "public" && (["pro", "business"].includes(tier) || n.is_base))
-    ).map((n: { niche_id: string; name: string }) => ({ id: n.niche_id, name: n.name }));
-    setNicheOpts(opts);
+    const entitledN = (nrows ?? []).filter((n: { access_type: string; is_base: boolean; exclusive_to: string | null }) =>
+      n.exclusive_to === me || (n.access_type === "public" && (["pro", "business"].includes(tier) || n.is_base)));
+    setNicheOpts(entitledN.map((n: { niche_id: string; name: string }) => ({ id: n.niche_id, name: n.name })));
+    setNicheDefaults(Object.fromEntries(entitledN.map((n: { niche_id: string; default_hashtags: string[] | null }) => [n.niche_id, Array.isArray(n.default_hashtags) ? n.default_hashtags : []])));
     setLoading(false);
   }, [supabase, id]);
 
@@ -571,21 +574,35 @@ export default function ChannelDetailPage() {
             </div>
             <div style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
               <label className="label"><Bi id="Niche channel" en="Channel niche" /></label>
-              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center", marginBottom: "0.5rem" }}>
-                <select className="input" value={nicheMode} onChange={(e) => setNicheMode(e.target.value as "fixed" | "random")} style={{ width: "fit-content" }}>
-                  <option value="fixed">Fixed — 1 niche</option>
-                  <option value="random">Random — putar semua niche paket</option>
-                </select>
-                {nicheMode === "fixed" && (
-                  <select className="input" value={niche} onChange={(e) => setNiche(e.target.value)} style={{ width: "fit-content" }}>
-                    <option value="">— pilih niche —</option>
-                    {nicheOpts.map((n) => <option key={n.id} value={n.id}>{n.name}</option>)}
-                  </select>
-                )}
-                <button className="btn btn-secondary btn-sm" onClick={saveNiche} disabled={savingNiche || (nicheMode === "fixed" && !niche)}>{savingNiche ? <Loader2 size={14} className="spin" /> : <Bi id="Simpan niche" en="Save niche" />}</button>
+              <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "0.6rem" }}>
+                <Bi id="Pilih 1 niche → channel fokus 1 tema. Pilih lebih dari 1 → otomatis diacak antar tema terpilih." en="Pick 1 niche → single-theme channel. Pick more than 1 → auto-shuffled across selected themes." />
               </div>
-              <div className="muted" style={{ fontSize: "var(--text-xs)" }}>
-                <Bi id="Random = putar otomatis SELURUH niche yang jadi hak paket Anda. Pilihan terbatas pada entitlement Anda." en="Random = auto-rotate ALL niches your plan entitles. Options are limited to your entitlement." />
+              {/* Terpilih (chip, bisa dihapus) */}
+              {pool.length > 0 && (
+                <div className="chip-input" style={{ marginBottom: "0.5rem" }}>
+                  {pool.map((pid) => (
+                    <span key={pid} className="chip">{nicheOpts.find((o) => o.id === pid)?.name ?? pid}
+                      <span className="x" onClick={() => setPool(pool.filter((x) => x !== pid))}><X size={12} /></span></span>
+                  ))}
+                </div>
+              )}
+              {/* Kotak cari (skala ratusan niche) */}
+              <div style={{ position: "relative", marginBottom: "0.5rem" }}>
+                <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)" }} />
+                <input className="input" style={{ paddingLeft: 30 }} placeholder="Cari niche…" value={nicheSearch} onChange={(e) => setNicheSearch(e.target.value)} />
+              </div>
+              {/* Hasil ter-filter — niche yang tersedia utk tenant & belum dipilih */}
+              <div className="radio-row" style={{ maxHeight: 180, overflowY: "auto" }}>
+                {nicheOpts.filter((o) => !pool.includes(o.id) && o.name.toLowerCase().includes(nicheSearch.toLowerCase())).map((n) => (
+                  <span key={n.id} className="radio-pill" onClick={() => { setPool([...pool, n.id]); setNicheSearch(""); }}><Plus size={11} /> {n.name}</span>
+                ))}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginTop: "0.6rem" }}>
+                <span className="badge">{pool.length > 1 ? <><Shuffle size={12} /> <Bi id="Acak" en="Random" /></> : <Bi id="Tetap (1 niche)" en="Fixed (1 niche)" />}</span>
+                <button className="btn btn-secondary btn-sm" onClick={saveNiche} disabled={savingNiche || pool.length === 0}>{savingNiche ? <Loader2 size={14} className="spin" /> : <Bi id="Simpan niche" en="Save niche" />}</button>
+              </div>
+              <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.4rem" }}>
+                <Bi id="Hanya niche yang tersedia untuk paket Anda + niche khusus milik Anda." en="Only niches available to your plan + your own custom niches." />
                 {" "}<Link href="/config/niches" className="link"><Bi id="Ajukan niche khusus →" en="Request custom niche →" /></Link>
               </div>
               {nicheMsg && <div style={{ fontSize: "var(--text-sm)", marginTop: "0.4rem", color: nicheMsg.includes("tersimpan") ? "var(--success)" : "var(--danger,#ef4444)" }}>{nicheMsg}</div>}
@@ -708,12 +725,17 @@ export default function ChannelDetailPage() {
             <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.875rem" }}>
               <label className="label"><Bi id="Hashtag per niche" en="Hashtags per niche" /></label>
               <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "0.5rem" }}><Bi id="Pisahkan dengan koma. Tanda # otomatis." en="Comma-separated. # added automatically." /></div>
-              {(nicheMode === "fixed" ? (niche ? [{ id: niche, name: nicheOpts.find((o) => o.id === niche)?.name ?? niche }] : []) : nicheOpts).map((n) => (
-                <div key={n.id} style={{ marginBottom: "0.5rem" }}>
-                  <label className="muted" style={{ fontSize: "var(--text-xs)" }}>{n.name}</label>
-                  <input className="input" value={tags[n.id] ?? ""} onChange={(e) => setTags({ ...tags, [n.id]: e.target.value })} placeholder="space, science, viral" />
-                </div>
-              ))}
+              {pool.length === 0 && <div className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Pilih niche dulu di kartu di atas." en="Pick a niche in the card above first." /></div>}
+              {pool.map((pid) => {
+                const nm = nicheOpts.find((o) => o.id === pid)?.name ?? pid;
+                const def = (nicheDefaults[pid] ?? []).join(", ");
+                return (
+                  <div key={pid} style={{ marginBottom: "0.5rem" }}>
+                    <label className="muted" style={{ fontSize: "var(--text-xs)" }}>{nm}</label>
+                    <input className="input" value={tags[pid] ?? ""} onChange={(e) => setTags({ ...tags, [pid]: e.target.value })} placeholder={def ? `Default niche: ${def}` : "space, science, viral"} />
+                  </div>
+                );
+              })}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
               <button className="btn btn-default" onClick={saveBrand} disabled={savingBrand}>{savingBrand ? <Loader2 size={15} className="spin" /> : <Bi id="Simpan caption & hashtag" en="Save caption & hashtags" />}</button>
