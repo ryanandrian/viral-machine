@@ -11,6 +11,22 @@ from src.intelligence.config import TenantConfig, system_config
 
 load_dotenv()
 
+
+def _niche_default_hashtags(niche: str) -> list:
+    """Lapis DEFAULT hashtag niche (niches.default_hashtags, diatur admin via Niche Studio).
+    Dipakai sebagai fallback saat channel belum override (channels.niche_hashtags[niche] kosong).
+    Fail-soft → []."""
+    try:
+        from supabase import create_client
+        sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+        r = sb.table("niches").select("default_hashtags").eq("niche_id", niche).limit(1).execute()
+        dh = (r.data or [{}])[0].get("default_hashtags") or []
+        return dh if isinstance(dh, list) else []
+    except Exception as e:
+        logger.warning(f"[YouTube] ambil default_hashtags niche {niche} gagal (non-fatal): {e}")
+        return []
+
+
 class YouTubePublisher:
     """
     Auto-publish video ke YouTube Shorts menggunakan OAuth token tenant.
@@ -93,7 +109,10 @@ class YouTubePublisher:
             rc = load_tenant_config(tenant_config.tenant_id, getattr(tenant_config, "channel_id", None), getattr(tenant_config, "niche", None))
             niche_tags = []
             if hasattr(rc, "niche_hashtags") and rc.niche_hashtags:
-                niche_tags = rc.niche_hashtags.get(niche, [])
+                niche_tags = rc.niche_hashtags.get(niche, []) or []
+            if not niche_tags:
+                # Channel belum override → fallback default hashtag niche (lapis niche, admin/Niche Studio).
+                niche_tags = _niche_default_hashtags(niche)
         except Exception:
             niche_tags = []
 

@@ -36,29 +36,25 @@ def default_buffer_depth() -> int:
 def _resolve_niche(channel_row: dict) -> str | None:
     """Resolusi niche per-channel SEBELUM pipeline (jalur SCHEDULED saja — `run_direct` pakai niche
     EKSPLISIT job & TIDAK lewat sini, jadi niche test/rerun tak pernah ditimpa rotasi).
-    `niche_mode='fixed'` → `channels.niche` apa adanya; `'random'` → **cara V1 (sederhana, owner
-    2026-06-18): pilih ACAK dari SELURUH entitlement tenant, lalu cek histori — bila niche pilihan SAMA
-    dengan 1-2 video TERAKHIR channel (berdekatan), acak lagi.** Sifat acak per-panggilan otomatis
-    memvariasikan produksi burst-paralel (beda dari LRU deterministik lama yg memilih sama saat window
-    sama). ([[decisions_niche_model]]: random = seluruh entitlement; `niche_pool` deprecated, TIDAK
-    dipakai.) Fail-soft → `channels.niche`."""
+    `niche_mode='fixed'` → `channels.niche` apa adanya; `'random'` → pilih ACAK dari **`channels.niche_pool`**
+    (PILIHAN tenant, BUKAN seluruh entitlement — revisi owner 2026-06-27 agar channel multi-niche tak rusak),
+    lalu hindari 1-2 niche TERAKHIR channel (berdekatan) → acak lagi. Entitlement tiap niche pool sudah
+    divalidasi saat di-set (RPC set_channel_niche). ([[decisions_niche_model]]: random = dari niche_pool.)
+    Fail-soft → `channels.niche`."""
     base = channel_row.get("niche")
     if (channel_row.get("niche_mode") or "fixed").lower() != "random":
         return base
     try:
         import random as _rand
         from supabase import create_client
-        from src.billing.limits import entitled_niches
-        from src.config.tenant_config import load_tenant_config
-        tenant_id  = channel_row["tenant_id"]
-        channel_id = str(channel_row.get("id") or channel_row.get("channel_id") or tenant_id)
-        plan_type  = getattr(load_tenant_config(tenant_id), "plan_type", "starter")
-        sb         = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
-        entitled   = entitled_niches(sb, plan_type, tenant_id)
-        if not entitled:
+        channel_id = str(channel_row.get("id") or channel_row.get("channel_id") or channel_row.get("tenant_id"))
+        # POOL = pilihan tenant (niche_pool); fallback ke channels.niche bila pool kosong/absen.
+        pool = [n for n in (channel_row.get("niche_pool") or []) if n]
+        if not pool:
             return base
-        if len(entitled) == 1:
-            return entitled[0]
+        if len(pool) == 1:
+            return pool[0]
+        sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
         # 1-2 niche TERAKHIR channel (content_inventory = sinyal terbaru, mencakup yg baru diproduksi).
         recent = []
         try:
@@ -67,13 +63,13 @@ def _resolve_niche(channel_row: dict) -> str | None:
             recent = [x["niche"] for x in (_r.data or []) if x.get("niche")]
         except Exception:
             recent = []
-        chosen = _rand.choice(entitled)
+        chosen = _rand.choice(pool)
         for _ in range(8):                 # acak lagi bila berdekatan; mentok → pakai apa adanya
             if chosen not in recent:
                 break
-            chosen = _rand.choice(entitled)
+            chosen = _rand.choice(pool)
         if chosen != base:
-            logger.info(f"[Producer] niche random (V1-style, hindari {recent}): {base} → {chosen} (ch={channel_id})")
+            logger.info(f"[Producer] niche random dari pool (hindari {recent}): {base} → {chosen} (ch={channel_id})")
         return chosen
     except Exception as e:
         logger.warning(f"[Producer] resolusi niche random gagal ({e}) — pakai channels.niche '{base}'")
