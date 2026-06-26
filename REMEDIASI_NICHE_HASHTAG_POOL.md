@@ -53,15 +53,15 @@
 - [x] `youtube_publisher.py` — `_niche_default_hashtags()` helper + niche-tags fallback ke `niches.default_hashtags[niche]` saat channel kosong.
 - **Validasi lokal:** py_compile OK · random 100× selalu ∈ pool · fixed→base · pool kosong→base · default niche terbaca dari DB. (Deploy bareng BATCH 3.)
 
-### BATCH 3 — FE  ⬜
-- [ ] `channels/[id]` kartu niche: **pemilih skala-besar** (reuse `.input` cari + hasil `.radio-pill` + terpilih `.chip`/`.chip-input`); **mode disimpulkan** dari jumlah (1=fixed, >1=random); simpan via RPC (pool). Hapus toggle fixed/random eksplisit.
-- [ ] `channels/[id]` kartu Caption & Hashtag: **input hashtag ikut `niche_pool`** (bukan semua niche) + **prefill dari `niches.default_hashtags`** bila channel belum override (tampilkan saran niche, boleh edit→jadi milik channel). (Pemisahan card caption vs hashtag — opsional, konfirmasi owner.)
-- [ ] `channels/page.tsx` ChannelCard: label **"Menggunakan Niche / Used Niche"** dari `niche_pool`; >1 → ikon lucide `Shuffle` + "(acak)"; banyak → "+N".
-- **Validasi:** build lokal; pilih 1→fixed, 3→random; hashtag input = pool; card tampil benar.
+### BATCH 3 — FE  ✅ SELESAI (2026-06-27, build EXIT=0, deployed)
+- [x] `channels/[id]` kartu niche: pemilih skala-besar (kotak cari `.input` + chip `.chip-input`/`.chip` + hasil `.radio-pill`); mode disimpulkan dari jumlah; simpan via RPC `p_niche_pool`. State `niche`/`nicheMode` mati dibuang.
+- [x] `channels/[id]` kartu hashtag: input IKUT `niche_pool` + placeholder dari `niches.default_hashtags`.
+- [x] `channels/page.tsx` ChannelCard: label "Menggunakan Niche/Used Niche" + ikon `Shuffle` + "(acak)" saat >1 + truncate "+N".
+- **Validasi:** `next build` EXIT=0 nol error; deployed (commit `fea42a4`), mv-web active.
 
-### BATCH 4 — Memory & dok  ⬜
-- [ ] Update `[[decisions_niche_model]]`: random = **dari `niche_pool` pilihan** (bukan entitlement penuh); mode disimpulkan dari jumlah.
-- [ ] Tandai doc ini SELESAI + DoD.
+### BATCH 4 — Memory & dok  ✅ SELESAI (2026-06-27)
+- [x] `[[decisions_niche_model]]`: tambah keputusan 2026-06-27 (random = dari `niche_pool`; mode disimpulkan) → supersede keputusan 2026-06-18.
+- [x] Doc ini SELESAI + DoD (lihat §5).
 
 ## 5. Definition of Done
 - Random hanya memproduksi niche di dalam `niche_pool` (terbukti BE).
