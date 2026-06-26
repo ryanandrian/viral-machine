@@ -203,7 +203,9 @@ Setelah Langkah 1–8 selesai (app masih mode **Testing**):
 | **B4** | Minimisasi scope: lepas `youtube` penuh → 3 scope | ✅ **SELESAI** (2026-06-27, commit `5382cb3`) — buang scope `.../auth/youtube` di `youtube_oauth.py`+`youtube_publisher.py` (3 scope identik) + hapus hardcode `CHANNEL_DESC`+method `update_channel_description` (fosil single-tenant). Console Data Access Owner juga sudah dibuang. Deskripsi video aman. |
 | **B5** | Tukar `GOOGLE_CLIENT_ID/SECRET` di `.env` lokal + VPS + restart `mv-webhook`/`mv-worker` | ✅ **SELESAI** (2026-06-27) — `.env` lokal+VPS → app lumite `153190496639-i41l1fp3...`; backup `.env.bak.b5`; services restart active. Sisa: ryan+kumala reconnect YouTube (token app lama mati). |
 
-> ✅ **MIGRASI KREDENSIAL TUNTAS (2026-06-27):** SEMUA kredensial Google = lumite — Supabase signup, API key trend radar (`mesin-viral-api`), OAuth client (`.env`), scope (3). Project lumite = `mesin-viral`. **Sisa = (a) ryan+kumala reconnect YouTube via app lumite, (b) Langkah 9 verifikasi (publish app + demo video + submit).**
+> ✅ **MIGRASI KREDENSIAL TUNTAS (2026-06-27):** SEMUA kredensial Google = lumite — Supabase signup, API key trend radar (`mesin-viral-api`), OAuth client (`.env`), scope (3). Project lumite = `mesin-viral`.
+> ✅ **ryan RECONNECT + TERVERIFIKASI (2026-06-27):** reconnect via app lumite → koneksi baru `85398276` (yt=`UCo5d8bH2MnNdIuwItgPtJ6Q`) status valid; channel `410d4538` di-repoint ke koneksi baru; koneksi mati "Backfill YouTube" dihapus; **tes `creds.refresh()` SUKSES** → publish ryan jalan lagi. Produksi tak pernah berhenti.
+> **Sisa = (a) kumala reconnect (tak mendesak — channel belum unlock), (b) Langkah 9 verifikasi Google (publish app + demo video + submit) — bisa direkam sekarang karena alur sudah jalan e2e.**
 
 > ✅ **Catatan deploy B1–B3 (2026-06-27):** commit `8c8b6cc`, build VPS sukses, `mv-web` restart, kedua URL HTTP 200 dengan seluruh link wajib. **Halaman siap diisi di Branding (Langkah 3) & verifikasi (Langkah 9).**
 
