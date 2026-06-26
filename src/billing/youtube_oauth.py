@@ -36,6 +36,11 @@ from loguru import logger
 
 from src.utils.crypto import encrypt, decrypt
 
+# Google sering MENGEMBALIKAN scope lebih banyak dari yang diminta (mis. openid/email/profile karena akun
+# sudah login Google) → oauthlib menolak "Scope has changed" saat fetch_token. Relax = terima scope superset.
+# (Tak menurunkan keamanan: kita tetap simpan refresh_token utk scope YouTube yang kita pakai.)
+os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
+
 # Scope identik dgn youtube_publisher.YouTubePublisher.SCOPES (upload + analytics).
 SCOPES = [
     "https://www.googleapis.com/auth/youtube.upload",
@@ -124,11 +129,16 @@ def _client_config(client_id: str, client_secret: str) -> dict:
 
 def _flow(client_id: str, client_secret: str, state: str | None = None):
     from google_auth_oauthlib.flow import Flow
+    # autogenerate_code_verifier=False → MATIKAN PKCE. Client ini = web-app rahasia (punya client_secret),
+    # jadi PKCE tak diperlukan. Default lib = True → init kirim code_challenge, tapi callback bikin Flow baru
+    # tanpa code_verifier asli → Google tolak "Missing code verifier" (invalid_grant). Mematikan PKCE =
+    # init tak kirim challenge → callback tak butuh verifier. (Stateless: tak perlu simpan verifier antar-request.)
     return Flow.from_client_config(
         _client_config(client_id, client_secret),
         scopes=SCOPES,
         redirect_uri=_redirect_uri(),
         state=state,
+        autogenerate_code_verifier=False,
     )
 
 
@@ -158,10 +168,11 @@ def _create_account(tenant_id: str, account_id: str | None, label: str = "") -> 
 
 def _store_tokens(tenant_id: str, account_id: str, creds, yt_channel_id: str | None = None) -> None:
     """Tulis token hasil consent (Fernet) ke baris pool + status='valid'. refresh_token hanya ditimpa bila ada."""
+    # CATATAN: tabel tenant_youtube_accounts TIDAK punya kolom `scopes` → jangan ditulis (dulu bikin
+    # update gagal → exchange_failed). Scope tak perlu disimpan: publisher fallback ke SCOPES bila kosong.
     upd = {
         "google_access_token_enc": encrypt(creds.token),
         "token_expiry": creds.expiry.replace(tzinfo=timezone.utc).isoformat() if creds.expiry else None,
-        "scopes": list(creds.scopes) if creds.scopes else SCOPES,
         "status": "valid", "validated_at": _now_iso(), "updated_at": _now_iso(),
     }
     if creds.refresh_token:
