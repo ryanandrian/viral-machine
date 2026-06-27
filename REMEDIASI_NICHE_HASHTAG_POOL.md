@@ -1,7 +1,7 @@
 # Remediasi: Niche-Pool (random dari pilihan) + Hashtag per-niche channel-owned
 
 > **Dibuat:** 2026-06-27 · Format: **Plan vs Realisasi** (disiplin aturan kerja).
-> **Fokus terkunci owner:** **caption + hashtag SAJA.** Card "Branded (CTA·logo·link)" + fosil CTA/kategori/tag = **DITUNDA** (lihat §6).
+> ✅ **STATUS 2026-06-27: SELESAI 100% (A-Z) + deployed + regresi ryan aman.** BATCH 1-5 semua realized (lihat §4 & §6) — terverifikasi: 3 fosil per-niche (`NICHE_BASE_TAGS`/`NICHE_CATEGORY`/`NICHE_CTA`) NOL SISA di kode; `niches.youtube_category_id` ada; RPC `set_channel_niche` ber-`p_niche_pool`; 4 niche `default_hashtags` terisi. Caption tak disentuh (sudah benar). **Bonus: upload file logo Branded → S3 (lihat §7).**
 > **Prinsip:** nol asumsi liar · tanpa merusak yang sudah baik · reuse komponen design-source (nol komponen baru) · validasi lokal per-batch sebelum deploy.
 
 ---
@@ -45,7 +45,7 @@
 ### BATCH 1 — DB (migrasi 0096)  ✅ SELESAI (2026-06-27)
 - [x] **Perluas RPC `set_channel_niche`** → terima `p_niche_pool text[]` (default NULL); validasi entitlement tiap niche di pool; simpan `niche`, `niche_mode`, `niche_pool`. (Pertahankan validasi entitlement yang ada.)
 - Fasilitas admin default-hashtag **SUDAH ADA** (Niche Studio `niche-studio/page.tsx:132` → `niches.default_hashtags`). Tak perlu bikin.
-- [ ] **(OPSIONAL — nunggu OK owner)** Seed `niches.default_hashtags` utk 4 niche dari data nyata channel ryan (proven) biar tak mulai kosong. Sisanya admin isi via Niche Studio.
+- [x] **Seed `niches.default_hashtags`** utk 4 niche dari data nyata channel ryan (owner OK 2026-06-27; di migr 0096). Sisanya admin isi via Niche Studio.
 - **Validasi:** RPC dipanggil dgn pool → tersimpan; ryan tetap valid.
 
 ### BATCH 2 — BE  ✅ SELESAI (2026-06-27, validasi lokal lolos)
@@ -71,7 +71,7 @@
 
 ## 6. BATCH 5 — Fosil per-niche → DB (KEPUTUSAN OWNER 2026-06-27, siap eksekusi)
 
-> 🔵 **MULAI DI SINI (sesi baru).** BATCH 1-4 (random-pool + hashtag 2-lapis + FE picker/card + pisah card caption/hashtag) **SELESAI + deployed + regresi ryan aman**. Yang TERSISA = 3 fosil hardcode di `src/distribution/youtube_publisher.py` (terikat 4 niche ryan: universe_mysteries/dark_history/ocean_mysteries/fun_facts → niche lain SALAH/KOSONG). Owner sudah memutuskan pendekatannya (di bawah). **Urutan: 5A dulu (tag video) → lapor → 5B (kategori) → 5C (CTA, bareng Branded).** Disiplin: validasi LOKAL penuh tiap sub-batch → deploy. JANGAN bikin bug baru.
+> ✅ **BATCH 5 SELESAI (2026-06-27, deployed, regresi aman).** Ketiga fosil hardcode per-niche di `src/distribution/youtube_publisher.py` (NICHE_BASE_TAGS/NICHE_CATEGORY/NICHE_CTA — dulu terikat 4 niche ryan, niche lain salah/kosong) DIBUANG → kini dari DB/channel. 5A tag video · 5B kategori · 5C CTA semua realized + deployed + nol sisa (terverifikasi).
 >
 > **Konteks "tag video":** field `snippet.tags` YouTube = label TERSEMBUNYI (penonton tak lihat) untuk pencarian & rekomendasi YouTube. BEDA dari #hashtag (terlihat). Saat ini diisi hardcode `NICHE_BASE_TAGS`.
 
@@ -103,8 +103,17 @@
 - **DB/FE:** tidak ada.
 - **Catatan:** CTA NARASI (beat, dari preset+section_timing) & MODE (implicit/soft_sell) = SUDAH benar, JANGAN disentuh. 5C hanya footer deskripsi.
 
-### Definition of Done BATCH 5
-- Nol dict hardcode per-niche di `youtube_publisher.py` (`NICHE_BASE_TAGS`, `NICHE_CATEGORY`, `NICHE_CTA` — 5C bareng Branded).
-- Tag video & kategori dari DB `niches` (admin/tenant atur via editor niche). CTA dari channel (Branded).
-- Niche baru apa pun dapat tag/kategori benar (tak lagi fallback ke "fun_facts"/"28"/[]).
-- Regresi ryan aman; nol bug baru; validasi lokal tiap sub-batch.
+### Definition of Done BATCH 5 — ✅ TERPENUHI (terverifikasi 2026-06-27)
+- ✅ Nol dict hardcode per-niche di `youtube_publisher.py` (`NICHE_BASE_TAGS`, `NICHE_CATEGORY`, `NICHE_CTA`) — grep NOL SISA.
+- ✅ Tag video & kategori dari DB `niches` (admin/tenant atur via editor niche). CTA dari channel (`cta_mode`/`brand_cta_text` Branded).
+- ✅ Niche baru apa pun dapat tag/kategori benar (tak lagi fallback ke "fun_facts"/"28"/[]).
+- ✅ Regresi ryan aman; nol bug baru; validasi lokal tiap sub-batch. Pipeline terverifikasi pakai niche per-video yg benar.
+
+## 7. BONUS — Upload file logo Branded → S3 (✅ SELESAI 2026-06-27, commit `e696b6b`/`bd8a218`)
+Di luar scope niche/hashtag, tapi dikerjakan menyusul (owner minta). Card Branded kini bisa **upload file logo** (bukan cuma tempel URL):
+- **API** `apps/web/src/app/api/channels/upload-logo/route.ts`: auth pemilik channel (RLS) → validasi PNG + ≤5MB + **baca dimensi header IHDR → TOLAK bila > maks** (`branding_config` DB id=1, default 220×220 — SAMA dgn renderer) → upload S3 `mesinviral-assets/brand-logo/{tenant}/{channel}.png` → URL (cache-bust `?v=`).
+- **FE** `channels/[id]` card Branded: tombol **"Unggah PNG"** ber-style (`<label className="btn btn-secondary btn-sm">` + input native disembunyikan + ikon `Upload` lucide) + preview thumbnail + tetap bisa tempel URL. Simpan via `saveBranded` (`channels.brand_logo`).
+- **Pipeline TAK berubah:** `video_renderer._overlay_logo` (dipanggil baris 939) sudah download URL + overlay (posisi/ukuran/opacity dari `branding_config`).
+- **Env VPS terverifikasi:** `mv-web` `.env.local` punya `S3_ENDPOINT/ACCESS_KEY/SECRET_KEY` (`S3_ASSET_BUCKET` default `mesinviral-assets`).
+- Validasi: build EXIT=0 · deploy mv-web · route live (401 tanpa auth).
+> Card Branded (CTA·logo·link) keseluruhan = **fully-implemented di pipeline** (CTA via cta_mode, logo overlay nyata, link di deskripsi). Sisa poles minor saja.
