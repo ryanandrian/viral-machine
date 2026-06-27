@@ -5,9 +5,9 @@ s84b: Dua layer analytics:
   Layer Basic : YouTube Data API v3  — views, likes, comments
                 (scope youtube.readonly — sudah ada di token)
   Layer Full  : YouTube Analytics v2 — watch_time, avg_view_pct, CTR, subscriber_gain
-                (scope yt-analytics.readonly — aktifkan via scripts/reauth_youtube.py)
+                (scope yt-analytics.readonly — aktifkan via reconnect YouTube di dashboard)
 
-Dijalankan harian via cron: scripts/fetch_analytics.sh
+Dijalankan otomatis oleh worker (self_learning loop di mv-worker) — bukan cron lagi.
 Data tersedia 48 jam setelah video dipublish (YouTube delay normal).
 """
 
@@ -111,7 +111,7 @@ class ChannelAnalytics:
                 logger.warning(
                     "[Analytics] yt-analytics scope tidak ditemukan di token. "
                     "Hanya basic stats (views/likes/comments). "
-                    "Jalankan scripts/reauth_youtube.py untuk full analytics."
+                    "Reconnect YouTube di dashboard (Hubungkan dengan Google) untuk full analytics."
                 )
 
         except Exception as e:
@@ -404,7 +404,7 @@ class ChannelAnalytics:
                     if self._analytics_403_count >= 3:
                         logger.error(
                             "[Analytics] 3x 403 berturut-turut — scope kemungkinan invalid. "
-                            "Jalankan scripts/reauth_youtube.py"
+                            "Reconnect YouTube di dashboard (Hubungkan dengan Google)."
                         )
                         self._has_analytics_scope = False
                 else:
