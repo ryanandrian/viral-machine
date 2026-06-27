@@ -27,6 +27,21 @@ def _niche_default_hashtags(niche: str) -> list:
         return []
 
 
+def _niche_video_tags(niche: str) -> list:
+    """Tag video (snippet.tags = kata-kunci TERSEMBUNYI utk pencarian/rekomendasi YouTube; beda dari #hashtag).
+    Sumber = `niches.keywords` (diatur admin via Niche Library / tenant via Niche Studio) — BUKAN lagi hardcode
+    per-niche ryan. Niche tanpa keywords → [] (graceful; admin isi). Fail-soft → []."""
+    try:
+        from supabase import create_client
+        sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+        r = sb.table("niches").select("keywords").eq("niche_id", niche).limit(1).execute()
+        kw = (r.data or [{}])[0].get("keywords") or []
+        return kw if isinstance(kw, list) else []
+    except Exception as e:
+        logger.warning(f"[YouTube] ambil keywords niche {niche} gagal (non-fatal): {e}")
+        return []
+
+
 class YouTubePublisher:
     """
     Auto-publish video ke YouTube Shorts menggunakan OAuth token tenant.
@@ -74,13 +89,6 @@ class YouTubePublisher:
         "dark_history":       "27",
         "ocean_mysteries":    "28",
         "fun_facts":          "27",
-    }
-
-    NICHE_BASE_TAGS = {
-        "universe_mysteries": ["universe","space","NASA","astronomy","cosmos","space facts","galaxy","black hole","universe mysteries","space shorts"],
-        "dark_history":       ["history","dark history","historical facts","history shorts","ancient history","world history","untold history","shocking history"],
-        "ocean_mysteries":    ["ocean","deep sea","ocean mysteries","marine life","underwater","sea creatures","ocean facts","deep ocean","sea mystery"],
-        "fun_facts":          ["fun facts","did you know","amazing facts","mind blowing","interesting facts","science facts","random facts","cool facts"],
     }
 
     NICHE_CTA = {
@@ -163,7 +171,7 @@ class YouTubePublisher:
             else:
                 room = max(0, MAX_DESC - len(link) - 2)
                 description = f"{description[:room]}\n\n{link}"
-        tags = list(self.NICHE_BASE_TAGS.get(niche, []))
+        tags = list(_niche_video_tags(niche))   # 5A: dari niches.keywords (DB), bukan hardcode
         for tag in hashtags:
             clean = tag.replace("#", "").strip().lower()
             if clean and clean not in tags:
@@ -171,7 +179,7 @@ class YouTubePublisher:
         for word in [w.strip(".,!?").lower() for w in title.split() if len(w) > 4]:
             if word not in tags:
                 tags.append(word)
-        for t in ["shorts", "youtubeshorts", "viral", "facts"]:
+        for t in ["shorts", "youtubeshorts", "viral"]:
             if t not in tags:
                 tags.append(t)
         return {
