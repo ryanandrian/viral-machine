@@ -25,8 +25,9 @@ def run_once(sb=None) -> dict:
     sb = sb or _sb()
     channels = (sb.table("channels").select("tenant_id,id,channel_name")
                 .eq("is_active", True).execute().data) or []
-    fetched = computed = 0
+    fetched = computed = weighted = 0
     fetched_tenants = set()
+    weighted_tenants = set()
     for ch in channels:
         tid = ch["tenant_id"]
         cid = str(ch.get("id"))
@@ -49,8 +50,18 @@ def run_once(sb=None) -> dict:
             logger.info(f"[self_learning] insights ch={cid}: grade={res.get('grade')} n={res.get('videos_analyzed')}")
         except Exception as e:
             logger.warning(f"[self_learning] compute insights gagal ch={cid}: {e}")
-    logger.info(f"[self_learning] run_once: fetch={fetched} tenant | compute={computed} channel")
-    return {"fetched": fetched, "computed": computed}
+        # VIRAL-WEIGHTS adaptif (S3-A) — PER-TENANT (kolom tenant_configs), sekali per tenant.
+        if tid not in weighted_tenants:
+            try:
+                from src.analytics.viral_weight_optimizer import ViralWeightOptimizer
+                vw = ViralWeightOptimizer(sb).compute_and_store(tid)
+                weighted += 1
+                weighted_tenants.add(tid)
+                logger.info(f"[self_learning] viral_weights tenant={tid}: status={vw.get('status')} n={vw.get('n')}")
+            except Exception as e:
+                logger.warning(f"[self_learning] viral_weights gagal tenant={tid}: {e}")
+    logger.info(f"[self_learning] run_once: fetch={fetched} tenant | compute={computed} channel | weights={weighted} tenant")
+    return {"fetched": fetched, "computed": computed, "weighted": weighted}
 
 
 def run_forever(interval_seconds=None) -> None:
