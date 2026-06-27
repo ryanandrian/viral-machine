@@ -78,8 +78,8 @@ class PerformanceAnalyzer:
             logger.warning(f"[Analyzer] compliance compute gagal (non-fatal): {_ce}")
             compliance = {}
 
-        # 1. Ambil semua video analytics yang punya data cukup
-        rows = self._fetch_analytics(tenant_id)
+        # 1. Ambil video analytics — PER-CHANNEL (6.4): insight channel ini saja, bukan se-tenant.
+        rows = self._fetch_analytics(tenant_id, channel_id)
         n = len(rows)
         logger.info(f"[Analyzer] {n} videos dengan analytics data")
 
@@ -138,10 +138,13 @@ class PerformanceAnalyzer:
 
     # ── Data fetching ─────────────────────────────────────────────────────
 
-    def _fetch_analytics(self, tenant_id: str) -> list:
-        """Ambil semua rows dari video_analytics yang sudah punya views > 0."""
+    def _fetch_analytics(self, tenant_id: str, channel_id: Optional[str] = None) -> list:
+        """Ambil rows dari video_analytics yang sudah punya views > 0.
+        PER-CHANNEL (6.4): bila channel_id diberi → filter ke channel itu saja (video_analytics.channel_id
+        terisi 100%). channel_id=None (blok __main__/demo) → perilaku lama tenant-wide (backward-compatible).
+        Tanpa filter ini, insight tiap channel berisi data SE-TENANT (bleed antar-channel di tenant multi-channel)."""
         try:
-            result = (
+            query = (
                 self._supabase
                 .table("video_analytics")
                 .select(
@@ -150,6 +153,11 @@ class PerformanceAnalyzer:
                     "likes, comments, subscriber_gain, published_at"
                 )
                 .eq("tenant_id", tenant_id)
+            )
+            if channel_id:
+                query = query.eq("channel_id", channel_id)
+            result = (
+                query
                 .gt("views", 0)
                 .order("published_at", desc=True)
                 .limit(200)
