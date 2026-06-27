@@ -11,10 +11,10 @@
 | Compute insights → `channel_insights` | ✅ | `performance_analyzer.py::compute_and_store` (niche_weights/top_hooks[by CTR]/content_type_perf/avoid_patterns). Grade: insufficient(<5)/learning(5-20)/peak(50+). 15 row. |
 | Inject insights ke generasi | ✅ | ScriptEngine (`_build_insights_block`), NicheSelector (smart-focus), HookOptimizer (historical hooks). |
 | Diversity guard NICHE | ✅ parsial | `schedule_manager._apply_diversity_guard` (anti-dominasi niche, max N/6 terakhir). |
-| Cadence harian | ✅ v1 | `scripts/compute_insights.sh` (cron v1). **v2 worker belum wire.** |
+| Cadence harian | ✅ v2 (LIVE 2026-06-28) | `self_learning` loop di `worker_decoupled` (24j; fetch + compute insights + viral_score_weights). Cron v1 `compute_insights.sh` **DIHAPUS** 2026-06-28. |
 
 ## 1. GAP yang Phase 6 bangun
-- **6.1 Self-learning LOOP di v2** — jadwalkan `fetch_and_store` + `compute_and_store` di **`worker_decoupled`** (loop/cadence harian + post-publish 24-72h per §8), **channel-scoped** (`channel_id`, kini per-tenant). Ganti cron v1.
+- **6.1 Self-learning LOOP di v2** ✅ LIVE — `fetch_and_store` + `compute_and_store` (+ `ViralWeightOptimizer`) di **`worker_decoupled`** (loop 24j + post-publish 24-72h per §8), **channel-scoped** (`channel_id`; insight bleed se-tenant DIPERBAIKI 2026-06-28 commit `3bd32ee`). Cron v1 DIHAPUS. Detail [[project_self_learning_remediation_2026_06_28]].
 - **6.2 Diversity Engine PENUH (AI Slop Defense §9.1)** — selain niche (ada), tambah rotasi algoritmik per-channel: **voice** (pool per-paket), **hook style** (6 pattern round-robin), **music mood**, **visual seed/fingerprint**. Anti "output seragam" → hindari demonetisasi YouTube AI-policy 2026.
 - **6.3 AI Disclosure tag (§9.2)** — `youtube_publisher` set flag "altered/synthetic content" + metadata "made with AI". (Catatan: verifikasi field API YouTube terkini.)
 - **6.4 Insights lebih dalam** — visual_style adaptation; **per-tag performance** (`videos.topic_tags`, [[decisions_niche_model]]); insights **per-channel** (bukan per-tenant) untuk multi-channel.

@@ -43,7 +43,7 @@ Pipeline `src/orchestrator/pipeline.py` (7 step) dengan gate kualitas di beberap
 Janji landing "self-improve tiap hari" **sudah berdiri sebagian**:
 ```
 video nyata → video_analytics (views, watch_time, avg_view_pct, ctr, subscriber_gain)
-   → PerformanceAnalyzer.compute_and_store()  [scripts/compute_insights.sh — cron harian]
+   → PerformanceAnalyzer.compute_and_store()  [self_learning worker — loop 24j; cron compute_insights.sh DIHAPUS 2026-06-28]
    → channel_insights (grade, niche_weights, top_hooks[by CTR], avoid_patterns, content_types)
    → di-inject balik ke: NicheSelector (smart focus) · ScriptEngine (top hooks/content types) · HookOptimizer (historical hooks)
 ```

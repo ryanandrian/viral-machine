@@ -19,7 +19,7 @@
 ## 1. Kondisi sekarang (kode nyata)
 `src/intelligence/trend_radar.py` → 5 sumber, fetch **per-produce**, regional (`peak_region`), keyword per-niche. Output sinyal mentah → `niche_selector`:
 - **Seleksi (`niche_selector`):** LLM **buat kandidat topik + skor 5 dimensi (0–100)** dari ringkasan teks → `_calculate_viral_score` (`VIRAL_SCORE_WEIGHTS`, **di-blend bobot hasil-belajar channel** bila ≥20 video) → `historical_factor` (performa channel) → ranking.
-- **Sudah ada (bagus):** pembobotan objektif + **self-learning weights per-channel** + faktor performa historis.
+- **Sudah ada (bagus):** pembobotan objektif + **self-learning `viral_score_weights` (per-TENANT, di `tenant_configs` — bukan per-channel)** — LIVE 2026-06-28 via `self_learning` worker (commit `21f41fe`; sebelumnya dorman krn penulisnya cron v1 tak ter-wire) + faktor performa historis.
 
 ### Masalah (terverifikasi)
 | # | Masalah | Bukti |
@@ -80,7 +80,7 @@ Tiga permukaan data YouTube, dipakai sesuai biaya/akses. **Inilah yang membuat r
 - ✅ **Retensi:** `averageViewPercentage` (uji ryan live: **67.72%**), `averageViewDuration`, `estimatedMinutesWatched`.
 - ✅ **`insightTrafficSourceType`** (uji ryan live: SHORTS 34k / YT_SEARCH 1.1k / SUBSCRIBER / NOTIFICATION …) → **"apakah ALGORITMA mendorong topik ini"** + asal penonton.
 - **CTR** `impressionClickThroughRate` (per-video — sudah di `channel_analytics.py`), **`searchTerms`** (kata kunci yang membawa penonton ke video KITA), **kurva retensi per-detik** (`audienceWatchRatio`) → enrichment (F4).
-- ⚠️ `channel_insights.avg_view_pct=0` saat ini = **loop fetch belum dijalankan**, BUKAN tak bisa — kapabilitas **terbukti live**. (Unlock = jalankan loop / gate cutover E3.)
+- ✅ *(update 2026-06-28)* loop fetch+compute **BERJALAN** di `self_learning` worker (24j); `avg_view_pct` mengalir (~54% baris; sisanya data clone v1). **CTR per-video = 0 PERMANEN** — `impressionClickThroughRate` tak tersedia per-video di YouTube Analytics API (batas eksternal, bukan bug; `channel_analytics.py` set ctr=0 jujur).
 
 **C. Demand (gratis/murah):**
 - **Google Trends `gprop='youtube'`** — tren pencarian KHUSUS di YouTube (beda web search). Fitur pytrends valid (library sama); uji kena **429** → konfirmasi alasan cache wajib.

@@ -423,7 +423,7 @@ admin.mesinviral.com (Internal — super-admin only; login terpisah /admin/login
 
 #### 🥇 1. Self-Learning Loop dari Real YouTube Analytics — **MOAT UTAMA**
 - Mesin pull analytics tenant 24-72 jam post-publish → score CTR/retention/AVD per video
-- Adapt niche weight, hook pattern, visual style **per channel** tenant
+- Adapt niche weight, hook pattern, **topik** **per channel** tenant *(koreksi 2026-06-28: self-learning TIDAK mengadaptasi visual style — variasi visual = `visual_seed` DiversityEngine, bukan hasil-belajar; klaim landing diluruskan commit `61a7fd7`)*
 - Pakai Claude Haiku untuk meta-learning (cheap), Sonnet untuk strategy adjustment weekly
 - **Unique value:** Tidak ada kompetitor lakukan ini. Pictory/AutoShorts/OpusClip cuma punya "virality prediction" pre-publish, bukan post-publish learning loop.
 - **Moat duration:** 12-18 bulan sampai kompetitor catch up
