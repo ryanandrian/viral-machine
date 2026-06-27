@@ -75,7 +75,7 @@
 >
 > **Konteks "tag video":** field `snippet.tags` YouTube = label TERSEMBUNYI (penonton tak lihat) untuk pencarian & rekomendasi YouTube. BEDA dari #hashtag (terlihat). Saat ini diisi hardcode `NICHE_BASE_TAGS`.
 
-### 5A — TAG VIDEO (KERJAKAN DULU; BE-only, TANPA DB, TANPA FE) ⬜
+### 5A — TAG VIDEO  ✅ SELESAI (2026-06-27, commit `5899824`, deployed mv-worker, regresi aman)
 **Keputusan owner: Opsi A — pakai-ulang `niches.keywords`** (kolom SUDAH ada + SUDAH terisi + SUDAH bisa diedit di Admin Niche Library `Identity tab` & Niche Studio). Tak perlu kolom/field baru.
 - File: `src/distribution/youtube_publisher.py`.
   - Hapus dict hardcode **`NICHE_BASE_TAGS`** (saat ini ~baris 79-84).
