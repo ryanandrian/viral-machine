@@ -40,7 +40,7 @@ const CMP_ROWS: [string, boolean | string, ...(boolean | string)[]][] = [
   ["BYOK (bawa API keys)", true, false, false, false, false],
   ["Diversity / AI Slop defense", true, false, false, false, false],
   ["Multi-channel paralel", true, true, false, false, true],
-  ["Max video / hari", "24", "2", "—", "—", "—"],
+  ["Max video / hari", "50", "2", "—", "—", "—"],
   ["Custom voice (ElevenLabs)", true, false, true, false, false],
   ["Pembayaran Indonesia (Midtrans)", true, false, false, false, false],
   ["Harga / video", "Rp 75", "Rp 18.000", "—", "—", "—"],
@@ -97,7 +97,7 @@ export default function LandingPage() {
               <span data-id>Mesin produksi video YouTube yang <span className="grad">belajar dari channelmu sendiri.</span></span>
               <span data-en>The YouTube video machine that <span className="grad">learns from your own channel.</span></span>
             </h1>
-            <p className="sub"><Bi id="5–24 video Shorts per hari dengan kualitas viral-grade. Tools lain bikin video. MesinViral belajar dari analytics channelmu — dan makin pintar tiap hari." en="5–24 Shorts per day at viral-grade quality. Other tools just make videos. MesinViral learns from your channel's analytics — and gets smarter every day." /></p>
+            <p className="sub"><Bi id="Hingga 50 video Shorts per hari (multi-channel) dengan kualitas viral-grade. Tools lain bikin video. MesinViral belajar dari analytics channelmu — dan makin pintar tiap hari." en="Up to 50 Shorts per day (multi-channel) at viral-grade quality. Other tools just make videos. MesinViral learns from your channel's analytics — and gets smarter every day." /></p>
             <div className="hero-cta">
               <a href="/auth?view=signup" className="btn btn-default btn-xl"><Bi id="Mulai Gratis 7 Hari" en="Start 7-Day Free Trial" /> <ArrowRight size={18} /></a>
               <a href="/demo" className="btn btn-outline btn-xl"><Play size={16} /> <Bi id="Tonton Demo" en="Watch Demo" /></a>
@@ -204,7 +204,7 @@ export default function LandingPage() {
           </div>
           <div className="feat"><span className="fic"><Command size={22} /></span><h3><Bi id="BYOK Transparan" en="Transparent BYOK" /></h3><p><Bi id="Kamu pegang API keys Anthropic, OpenAI, ElevenLabs. Lihat biaya AI real-time per video. Tanpa markup." en="You hold your Anthropic, OpenAI, ElevenLabs keys. See AI cost per video in real time. No markup." /></p></div>
           <div className="feat"><span className="fic" style={{ background: "var(--success-soft)", color: "var(--success)" }}><ShieldCheck size={22} /></span><h3><Bi id="AI Slop Defense" en="AI Slop Defense" /></h3><p><Bi id="Diversity engine otomatis melindungi channel dari YouTube AI policy 2026. Compliance score real-time." en="A diversity engine automatically protects your channel from YouTube's 2026 AI policy. Real-time compliance score." /></p></div>
-          <div className="feat"><span className="fic"><Zap size={22} /></span><h3><Bi id="5–24 Video / Hari" en="5–24 Videos / Day" /></h3><p><Bi id="Multi-channel paralel. Scale produksi tanpa hire tim editor." en="Parallel multi-channel. Scale production without hiring an editing team." /></p></div>
+          <div className="feat"><span className="fic"><Zap size={22} /></span><h3><Bi id="Hingga 50 Video / Hari" en="Up to 50 Videos / Day" /></h3><p><Bi id="Multi-channel paralel. Scale produksi tanpa hire tim editor." en="Parallel multi-channel. Scale production without hiring an editing team." /></p></div>
           <div className="feat"><span className="fic" style={{ background: "var(--warning-soft)", color: "var(--warning)" }}><Clock size={22} /></span><h3><Bi id="Beragam Opsi Durasi Konten" en="Flexible Content Durations" /></h3><p><Bi id="Pilih durasi 8–90 detik sesuai gaya & platform — teaser cepat 15 detik atau cerita utuh 60 detik. Tiap durasi diramu otomatis dengan struktur cerita yang pas, bukan sekadar dipotong, jadi tiap detik tetap menahan penonton." en="Pick 8–90s to match your style & platform — a fast 15s teaser or a full 60s story. Each duration is auto-crafted with the right story structure, never just trimmed, so every second keeps viewers watching." /></p></div>
           <div className="feat"><span className="fic" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}><Zap size={22} /></span><h3>🌐 <Bi id="Konten Multi-Bahasa" en="Multi-Language Content" /></h3><p><Bi id="Produksi narasi + caption dalam Bahasa Indonesia, English, dan bahasa Asia Tenggara. Pilih bahasa per channel — jangkau audiens lintas negara dari satu platform." en="Produce narration + captions in Indonesian, English, and Southeast Asian languages. Pick a language per channel — reach cross-border audiences from one platform." /></p><div style={{ display: "flex", gap: "0.4rem", marginTop: "0.875rem", fontSize: "var(--text-lg)" }}>🇮🇩 🇬🇧 🇲🇾 🇵🇭 🇹🇭 🇻🇳</div></div>
         </div>
