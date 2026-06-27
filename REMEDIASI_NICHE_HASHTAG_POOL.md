@@ -86,17 +86,22 @@
 - **Deploy:** BE-only → `git pull` di `/home/rad4vm/viral-machine-v2` + restart **`mv-worker`** (publisher dipakai worker). Tak ada FE/DB. Regresi: produksi/publish ryan tetap jalan.
 - **niches.keywords saat ini (verified):** universe_mysteries=[space,universe,galaxy,black hole,nasa,cosmos,astronomy] · dark_history=[history,mystery,ancient,secret,civilization,unsolved] · ocean_mysteries=[ocean,deep sea,marine,underwater,creature,abyss] · fun_facts=[did you know,facts,amazing,incredible,surprising,world record] · imunitas_tubuh=[] (admin isi nanti — graceful).
 
-### 5B — KATEGORI YOUTUBE per-niche (BERIKUTNYA; DB + BE + FE) ⬜
-**Keputusan owner: kategori = sifat TOPIK → field per-niche (dropdown).**
+### 5B — KATEGORI YOUTUBE per-niche (DB + BE + FE admin & tenant) ⬜
+**Keputusan owner: kategori = sifat TOPIK → field per-niche (dropdown). FE BELUM ADA (verified) → harus ditambah di admin + tenant.**
 - **DB (migrasi 0097):** `ALTER TABLE niches ADD COLUMN youtube_category_id text;` + seed 4 dari `NICHE_CATEGORY` lama (universe=28, dark_history=27, ocean=28, fun_facts=27).
-- **BE:** `youtube_publisher.py` — `categoryId` (saat ini ~baris 183 `self.NICHE_CATEGORY.get(niche,"28")`) → baca `niches.youtube_category_id` via helper, fallback `"27"` (Education) atau `"24"` (Entertainment). Hapus dict `NICHE_CATEGORY` (~baris 72-77).
-- **FE:** tambah **dropdown "Kategori YouTube"** di (a) Admin Niche Library `admin/(panel)/niches/page.tsx` tab Identity (dtab 0, dekat Keywords/Default hashtags), (b) Niche Studio `niche-studio/page.tsx`. Pakai daftar kategori RESMI YouTube (id→nama; mis. 24 Entertainment, 27 Education, 28 Science & Tech, 26 Howto & Style, 22 People & Blogs, 1 Film & Animation, 10 Music, 20 Gaming, 25 News & Politics). DROPDOWN (bukan ketik bebas). Simpan via API niche masing-masing (`/api/admin/niches` & `/api/niches/mine` — cek apakah field auto-passthrough atau perlu ditambah ke patch).
-- **Validasi:** py_compile + build FE; dropdown tampil & tersimpan; publisher pakai kategori DB.
+- **BE:** `youtube_publisher.py` — `categoryId` (`self.NICHE_CATEGORY.get(niche,"28")`) → baca `niches.youtube_category_id` via helper baru `_niche_category(niche)` (pola sama `_niche_video_tags`), fallback `"27"` (Education) / `"24"` (Entertainment). Hapus dict `NICHE_CATEGORY`.
+- **FE admin** `admin/(panel)/niches/page.tsx` tab Identity (dtab 0, dekat Keywords/Default hashtags): tambah **dropdown "Kategori YouTube"** (state `edit.youtube_category_id`). **+ WAJIB tambah `"youtube_category_id"` ke allowlist `EDITABLE`** di `api/admin/niches/[id]/route.ts` (baris 5-11) — kalau tidak, tak tersimpan.
+- **FE tenant** `niche-studio/page.tsx` (Business, niche privat): tambah dropdown sama (state + di `openEdit` load + di `save` patch). **+ WAJIB tambah `"youtube_category_id"` ke allowlist `EDITABLE`** di `api/niches/mine/route.ts` (baris 11-15).
+- **Daftar kategori (dropdown, id→nama resmi YouTube):** 1 Film & Animation · 10 Music · 20 Gaming · 22 People & Blogs · 23 Comedy · 24 Entertainment · 25 News & Politics · 26 Howto & Style · 27 Education · 28 Science & Technology. (Definisikan sbg const bersama; default 27.)
+- **Validasi:** migr applied + seed; py_compile BE; build FE; dropdown tampil & TERSIMPAN (cek DB) di admin & niche studio; publisher pakai kategori DB.
+- **Deploy:** DB (migr) + BE (mv-worker) + FE (mv-web build).
 
-### 5C — CTA (TERAKHIR; bareng card "Branded" — owner menunda Branded) ⬜
-**Keputusan owner: CTA SEHARUSNYA milik CHANNEL, BUKAN per-topik.** Temuan: publisher MEMAKSA "Follow for more…" per-niche (`NICHE_CTA`, ~baris 86-91, dipakai ~baris 104), **padahal `script_engine` MELARANG menyuruh follow/subscribe** → kontradiksi. Card "Branded" sudah punya `cta_mode` (implicit/soft_sell) + `brand_cta_text`.
-- **Rencana:** HAPUS `NICHE_CTA` hardcode; deskripsi pakai CTA channel — `cta_mode='implicit'` → TANPA baris CTA (bersih); `'soft_sell'` → `brand_cta_text`. Footer (`youtube_publisher.py` ~baris 132 `footer = f"\n{cta}\n\n{hashtag_str}"`) sesuaikan.
-- **JANGAN dikerjakan sebelum** owner buka kerja card Branded (ditunda eksplisit). Catat sebagai dependensi Branded.
+### 5C — CTA deskripsi (BE-only; FE SUDAH ADA = card Branded tenant) ⬜
+**FE SUDAH ADA (verified):** konfigurasi CTA = **tenant → Channel Settings → card "Branded (CTA · logo · link)"** = `channels.cta_mode` (implicit/soft_sell) + `brand_cta_text` (`channels/[id]/page.tsx` ~baris 747-770). **TIDAK di admin. TIDAK perlu FE baru.** → 5C = **perubahan BE kecil, bisa MANDIRI** (tak wajib nunggu kerja Branded besar).
+**Temuan:** publisher MEMAKSA "Follow for more…" per-niche (`NICHE_CTA`, dipakai di `cta = self.NICHE_CTA.get(...)` lalu `footer = f"\n{cta}\n\n{hashtag_str}"`), **padahal narasi DILARANG menyuruh follow/subscribe** → kontradiksi; juga di-tempel ke SEMUA preset (termasuk 8/15s yg tak punya beat cta).
+- **BE:** `youtube_publisher.py` — HAPUS dict `NICHE_CTA`; footer deskripsi ikut `channels.cta_mode` (dari `tenant_config`): `implicit` → **tanpa baris CTA** (bersih); `soft_sell` → `brand_cta_text` (kalau kosong → tanpa baris). `cta_mode`/`brand_cta_text` sudah ada di `tenant_config` (config.py:24-31,47-68).
+- **DB/FE:** tidak ada.
+- **Catatan:** CTA NARASI (beat, dari preset+section_timing) & MODE (implicit/soft_sell) = SUDAH benar, JANGAN disentuh. 5C hanya footer deskripsi.
 
 ### Definition of Done BATCH 5
 - Nol dict hardcode per-niche di `youtube_publisher.py` (`NICHE_BASE_TAGS`, `NICHE_CATEGORY`, `NICHE_CTA` — 5C bareng Branded).
