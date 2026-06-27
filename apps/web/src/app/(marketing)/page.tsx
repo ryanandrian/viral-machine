@@ -141,7 +141,7 @@ export default function LandingPage() {
       {/* STATS */}
       <section className="mk-section-sm"><div className="mk-container">
         <div className="stats reveal">
-          <div className="stat"><div className="big">10×</div><div className="lbl">Volume</div><div className="desc"><Bi id="Kompetitor 2/hari, kami 24/hari/channel" en="Competitors 2/day, us 24/day/channel" /></div></div>
+          <div className="stat"><div className="big">50</div><div className="lbl"><Bi id="Video / hari" en="Videos / day" /></div><div className="desc"><Bi id="Hingga — Business 5/channel × 10 channel (kompetitor ~2/hari)" en="Up to — Business 5/channel × 10 channels (~2/day on competitors)" /></div></div>
           <div className="stat"><div className="big">7.5×</div><div className="lbl"><Bi id="Lebih murah" en="Cheaper" /></div><div className="desc"><Bi id="Rp 75/video vs Rp 18.000 di AutoShorts" en="Rp 75/video vs Rp 18,000 on AutoShorts" /></div></div>
           <div className="stat"><div className="big">100%</div><div className="lbl">BYOK</div><div className="desc"><Bi id="Tenant pegang API keys, biaya transparan" en="You hold the API keys, transparent cost" /></div></div>
         </div>
