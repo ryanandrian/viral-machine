@@ -146,6 +146,7 @@ export default function ChannelDetailPage() {
   const [linkPos, setLinkPos] = useState("bottom");
   const [savingBr2, setSavingBr2] = useState(false);
   const [br2Msg, setBr2Msg] = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
 
   async function saveBranded() {
     setBr2Msg(null); setSavingBr2(true);
@@ -157,6 +158,17 @@ export default function ChannelDetailPage() {
     setSavingBr2(false);
     setBr2Msg(error ? `Gagal: ${error.message}` : "Tersimpan");
     if (!error) load();
+  }
+  async function uploadLogo(file: File) {
+    setBr2Msg(null); setLogoUploading(true);
+    try {
+      const fd = new FormData(); fd.append("file", file); fd.append("channel_id", id);
+      const res = await fetch("/api/channels/upload-logo", { method: "POST", body: fd });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok) { setBrandLogo(j.public_url); setBr2Msg(`Logo terupload (${j.width}×${j.height}px) — klik “Simpan & Terapkan”.`); }
+      else setBr2Msg(j.error || "Upload gagal");
+    } catch (e) { setBr2Msg(`Error: ${(e as Error).message}`); }
+    setLogoUploading(false);
   }
   const capNum = (k: string, d: number) => Number((cap[k] as number) ?? d);
   const capStr = (k: string, d: string) => String((cap[k] as string) ?? d);
@@ -742,8 +754,15 @@ export default function ChannelDetailPage() {
             <div className="fld-row"><div className="k"><Bi id="Nama brand" en="Brand name" /></div><input className="input" value={brandName} onChange={(e) => setBrandName(e.target.value)} style={{ maxWidth: 280 }} /></div>
             <div className="fld-row"><div className="k"><Bi id="Teks CTA" en="CTA text" /></div><input className="input" value={ctaText} onChange={(e) => setCtaText(e.target.value)} placeholder="Follow for more" style={{ maxWidth: 280 }} /></div>
           </>}
-          <div className="fld-row"><div className="k"><Bi id="Logo (URL)" en="Logo (URL)" /><div className="sub"><Bi id="PNG transparan · overlay di video · upload file: segera" en="transparent PNG · video overlay · file upload: soon" /></div></div>
-            <input className="input input-mono" value={brandLogo} onChange={(e) => setBrandLogo(e.target.value)} placeholder="https://… .png" style={{ maxWidth: 320 }} /></div>
+          <div className="fld-row"><div className="k"><Bi id="Logo brand" en="Brand logo" /><div className="sub"><Bi id="PNG transparan · maks 220×220px · overlay di video" en="transparent PNG · max 220×220px · video overlay" /></div></div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", maxWidth: 360 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <input type="file" accept="image/png,.png" disabled={logoUploading} onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadLogo(f); e.target.value = ""; }} />
+                {logoUploading && <Loader2 size={14} className="spin" />}
+              </div>
+              <input className="input input-mono" value={brandLogo} onChange={(e) => setBrandLogo(e.target.value)} placeholder="atau tempel URL https://… .png" style={{ fontSize: "var(--text-xs)" }} />
+              {brandLogo && <img src={brandLogo} alt="logo" style={{ maxWidth: 110, maxHeight: 60, objectFit: "contain", borderRadius: "var(--r-sm)", border: "1px solid var(--border)", background: "var(--surface-2)", padding: 4 }} />}
+            </div></div>
           {brandLogo && <>
             <div className="fld-row"><div className="k"><Bi id="Posisi logo" en="Logo position" /></div>
               <div className="radio-row">{[["top-left", "↖"], ["top-right", "↗"], ["bottom-left", "↙"], ["bottom-right", "↘"]].map(([v, l]) => <span key={v} className={`radio-pill${logoPos === v ? " sel" : ""}`} onClick={() => setLogoPos(v)} style={{ fontSize: "1rem" }}>{l}</span>)}</div></div>
