@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ExternalLink, Settings, Zap, ArrowRight, BarChart3, Calendar, Activity, Loader2, Check, Pause, Play, RotateCw, AlertTriangle, Mic, ShieldCheck, Sparkles, Clock, Trash2, Plus, PenLine, Image as ImageIcon, Info, Search, X, Shuffle } from "lucide-react";
+import { ExternalLink, Settings, Zap, ArrowRight, BarChart3, Calendar, Activity, Loader2, Check, Pause, Play, RotateCw, AlertTriangle, Mic, ShieldCheck, Sparkles, Clock, Trash2, Plus, PenLine, Image as ImageIcon, Info, Search, X, Shuffle, Upload } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { effectiveStatus, TONE } from "@/lib/channel-status";
 import PresetTables from "@/components/preset-tables";
@@ -755,13 +755,15 @@ export default function ChannelDetailPage() {
             <div className="fld-row"><div className="k"><Bi id="Teks CTA" en="CTA text" /></div><input className="input" value={ctaText} onChange={(e) => setCtaText(e.target.value)} placeholder="Follow for more" style={{ maxWidth: 280 }} /></div>
           </>}
           <div className="fld-row"><div className="k"><Bi id="Logo brand" en="Brand logo" /><div className="sub"><Bi id="PNG transparan · maks 220×220px · overlay di video" en="transparent PNG · max 220×220px · video overlay" /></div></div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", maxWidth: 360 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <input type="file" accept="image/png,.png" disabled={logoUploading} onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadLogo(f); e.target.value = ""; }} />
-                {logoUploading && <Loader2 size={14} className="spin" />}
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: 360 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                <label className="btn btn-secondary btn-sm" style={{ cursor: logoUploading ? "default" : "pointer", opacity: logoUploading ? 0.7 : 1 }}>
+                  {logoUploading ? <Loader2 size={14} className="spin" /> : <Upload size={14} />} <Bi id="Unggah PNG" en="Upload PNG" />
+                  <input type="file" accept="image/png,.png" disabled={logoUploading} onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadLogo(f); e.target.value = ""; }} style={{ display: "none" }} />
+                </label>
+                {brandLogo && <img src={brandLogo} alt="logo" style={{ height: 36, maxWidth: 96, objectFit: "contain", borderRadius: "var(--r-sm)", border: "1px solid var(--border)", background: "var(--surface-2)", padding: 3 }} />}
               </div>
               <input className="input input-mono" value={brandLogo} onChange={(e) => setBrandLogo(e.target.value)} placeholder="atau tempel URL https://… .png" style={{ fontSize: "var(--text-xs)" }} />
-              {brandLogo && <img src={brandLogo} alt="logo" style={{ maxWidth: 110, maxHeight: 60, objectFit: "contain", borderRadius: "var(--r-sm)", border: "1px solid var(--border)", background: "var(--surface-2)", padding: 4 }} />}
             </div></div>
           {brandLogo && <>
             <div className="fld-row"><div className="k"><Bi id="Posisi logo" en="Logo position" /></div>
