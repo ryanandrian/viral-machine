@@ -97,13 +97,6 @@ class YouTubePublisher:
             logger.info("Token refreshed successfully")
         return creds
 
-    NICHE_CTA = {
-        "universe_mysteries": "Follow for more mind-blowing universe mysteries every day!",
-        "dark_history":       "Follow for more shocking history facts you were never taught!",
-        "ocean_mysteries":    "Follow for more terrifying ocean mysteries from the deep!",
-        "fun_facts":          "Follow for more amazing facts that will blow your mind!",
-    }
-
     def _build_metadata(self, script: dict, tenant_config: TenantConfig) -> dict:
         niche    = tenant_config.niche
         title    = script.get("title", script.get("topic", "Amazing Facts"))
@@ -115,7 +108,7 @@ class YouTubePublisher:
         core_facts = script.get("core_facts", "")
         climax     = script.get("climax", "")
         hashtags   = script.get("hashtags", [])
-        cta        = self.NICHE_CTA.get(niche, self.NICHE_CTA["fun_facts"])
+        cta        = self._resolve_cta(tenant_config)   # 5C: ikut channel cta_mode (Branded), bukan hardcode per-niche
 
         # ── s73: Hashtag strategy — topik + niche + universal ──
         try:
@@ -142,8 +135,10 @@ class YouTubePublisher:
                 final_hashtags.append(h)
         hashtag_str = " ".join(final_hashtags[:5])
 
-        # ── s73: Description — CTA + hashtag dijamin masuk ──
-        footer     = f"\n{cta}\n\n{hashtag_str}"
+        # ── Description footer — CTA (kalau ada, dari cta_mode channel) + hashtag ──
+        # 5C: CTA kosong (implicit) → TANPA baris CTA (tak ada baris kosong nyangkut).
+        _foot_parts = [p for p in [cta, hashtag_str] if p]
+        footer     = ("\n" + "\n\n".join(_foot_parts)) if _foot_parts else ""
         MAX_DESC   = 4500
         hook_block = f"{hook}\n\n" if hook else ""
         budget     = MAX_DESC - len(footer) - len(hook_block)
@@ -209,6 +204,17 @@ class YouTubePublisher:
             }
         }
 
+
+    @staticmethod
+    def _resolve_cta(tenant_config) -> str:
+        """CTA deskripsi (footer) = ikut Branded channel (`cta_mode`), BUKAN hardcode per-niche (5C).
+        `implicit` → "" (TANPA baris CTA — selaras filosofi narasi yg melarang follow/subscribe);
+        `soft_sell` → `brand_cta_text` channel (kosong → ""). CTA NARASI (beat) & mode di script_engine
+        TIDAK disentuh — ini hanya footer deskripsi."""
+        mode = (getattr(tenant_config, "cta_mode", "implicit") or "implicit").lower()
+        if mode == "soft_sell":
+            return (getattr(tenant_config, "brand_cta_text", None) or "").strip()
+        return ""
 
     @staticmethod
     def _privacy_status(tenant_config) -> str:

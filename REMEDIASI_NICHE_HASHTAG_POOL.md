@@ -96,7 +96,7 @@
 - **Validasi:** migr applied + seed; py_compile BE; build FE; dropdown tampil & TERSIMPAN (cek DB) di admin & niche studio; publisher pakai kategori DB.
 - **Deploy:** DB (migr) + BE (mv-worker) + FE (mv-web build).
 
-### 5C — CTA deskripsi (BE-only; FE SUDAH ADA = card Branded tenant) ⬜
+### 5C — CTA deskripsi  ✅ SELESAI (2026-06-27): BE helper `_resolve_cta` ikut `channels.cta_mode` (implicit→tanpa baris CTA; soft_sell→`brand_cta_text`); dict `NICHE_CTA` dihapus; footer rapi. FE/DB nihil (card Branded sudah ada). Validasi lokal: compile+nol sisa+desc benar (implicit tanpa "Follow", soft_sell pakai teks brand). Deploy: mv-worker.
 **FE SUDAH ADA (verified):** konfigurasi CTA = **tenant → Channel Settings → card "Branded (CTA · logo · link)"** = `channels.cta_mode` (implicit/soft_sell) + `brand_cta_text` (`channels/[id]/page.tsx` ~baris 747-770). **TIDAK di admin. TIDAK perlu FE baru.** → 5C = **perubahan BE kecil, bisa MANDIRI** (tak wajib nunggu kerja Branded besar).
 **Temuan:** publisher MEMAKSA "Follow for more…" per-niche (`NICHE_CTA`, dipakai di `cta = self.NICHE_CTA.get(...)` lalu `footer = f"\n{cta}\n\n{hashtag_str}"`), **padahal narasi DILARANG menyuruh follow/subscribe** → kontradiksi; juga di-tempel ke SEMUA preset (termasuk 8/15s yg tak punya beat cta).
 - **BE:** `youtube_publisher.py` — HAPUS dict `NICHE_CTA`; footer deskripsi ikut `channels.cta_mode` (dari `tenant_config`): `implicit` → **tanpa baris CTA** (bersih); `soft_sell` → `brand_cta_text` (kalau kosong → tanpa baris). `cta_mode`/`brand_cta_text` sudah ada di `tenant_config` (config.py:24-31,47-68).
