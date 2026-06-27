@@ -23,7 +23,7 @@ type TierCopy = { ttId: string; ttEn: string; feats: string[]; pop: boolean };
 const TIER_COPY: Record<string, TierCopy> = {
   starter:  { ttId: "Untuk mulai scaling", ttEn: "To start scaling", feats: ["Niche dasar", "Self-learning", "Telegram notif"], pop: false },
   pro:      { ttId: "Paling diminati creator serius", ttEn: "Most chosen by serious creators", feats: ["Semua niche", "Quality Gate + Compliance", "Custom voice", "Captions & hashtags"], pop: true },
-  business: { ttId: "Untuk agency & power user", ttEn: "For agencies & power users", feats: ["Priority queue", "Cross-channel insights", "Webhook & API", "Quiet hours"], pop: false },
+  business: { ttId: "Untuk agency & power user", ttEn: "For agencies & power users", feats: ["Priority queue", "Multi-channel dashboard", "Webhook & API", "Quiet hours"], pop: false },
 };
 
 type FRow = { grp: [string, string] } | { row: [string, boolean | string, boolean | string, boolean | string, boolean | string] };

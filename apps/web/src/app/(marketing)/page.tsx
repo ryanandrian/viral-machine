@@ -52,7 +52,7 @@ function Cell({ v, us }: { v: boolean | string; us?: boolean }) {
 }
 
 const TST = [
-  { q: "MesinViral menambah views channel saya 2.3× dalam 2 bulan. Set & forget — mesinnya benar-benar belajar.", nm: "Riko Pratama", ch: "Misteri Samudra · 12.4K", av: "RP", c: "#1d4ed8", gr: "2.3×", gl: "views / 60 hari" },
+  { q: "Set & forget — mesinnya benar-benar belajar dari channel saya dan makin pintar tiap minggu. Saya tinggal pantau hasilnya.", nm: "Riko Pratama", ch: "Misteri Samudra · 12.4K", av: "RP", c: "#1d4ed8", gr: "24/7", gl: "set & forget" },
   { q: "Sebagai agency, saya manage 8 channel klien dari satu dashboard. Compliance score bikin saya tenang soal policy YouTube.", nm: "Sarah Wibowo", ch: "Agency · 8 channel", av: "SW", c: "#9f1239", gr: "8", gl: "channel aktif" },
   { q: "Biaya AI transparan banget. Saya tahu persis Rp 75 per video — jauh lebih murah dari tools lain.", nm: "Dimas Aryo", ch: "Fakta Yang Bikin Mikir · 32.7K", av: "DA", c: "#047857", gr: "7.5×", gl: "lebih hemat" },
   { q: 'Niche "Sejarah Kelam" saya akhirnya konsisten upload 5×/hari tanpa saya sentuh editing sama sekali.', nm: "Bagus Pratomo", ch: "Jejak Kelam Sejarah · 8.2K", av: "BP", c: "#7c3aed", gr: "5/hari", gl: "auto-publish" },
@@ -82,7 +82,7 @@ export default function LandingPage() {
   const PREVIEW_COPY: Record<string, { ttId: string; ttEn: string; feats: string[]; pop: boolean }> = {
     starter:  { ttId: "Untuk mulai scaling", ttEn: "To start scaling", feats: ["Niche dasar", "Self-learning"], pop: false },
     pro:      { ttId: "Paling diminati creator", ttEn: "Most chosen by creators", feats: ["Semua niche", "Quality Gate + Compliance", "Custom voice"], pop: true },
-    business: { ttId: "Untuk agency & power user", ttEn: "For agencies & power users", feats: ["Priority queue", "Cross-channel insights"], pop: false },
+    business: { ttId: "Untuk agency & power user", ttEn: "For agencies & power users", feats: ["Priority queue", "Multi-channel dashboard"], pop: false },
   };
 
   return (
@@ -132,7 +132,7 @@ export default function LandingPage() {
                 </div>
               </div>
             </div>
-            <div className="float-badge" style={{ top: -14, right: "8%" }}><Sparkles size={14} style={{ color: "var(--accent)" }} /> <Bi id="Hook 'gap' +2.3×" en="Hook 'gap' +2.3×" /></div>
+            <div className="float-badge" style={{ top: -14, right: "8%" }}><Sparkles size={14} style={{ color: "var(--accent)" }} /> <Bi id="Hook 'gap' · viral-grade" en="Hook 'gap' · viral-grade" /></div>
             <div className="float-badge" style={{ bottom: "6%", left: -18 }}><ShieldCheck size={14} style={{ color: "var(--success)" }} /> Compliance 87</div>
           </div>
         </div>
@@ -200,7 +200,7 @@ export default function LandingPage() {
             <span className="badge badge-brand"><Sparkles size={12} /> <Bi id="Moat #1" en="Moat #1" /></span>
             <span className="fic"><Sparkles size={24} /></span>
             <h3><Bi id="Self-Learning Engine" en="Self-Learning Engine" /></h3>
-            <p><Bi id="Belajar dari real YouTube Analytics channelmu. Mesin mengadaptasi niche, hook, dan visual style otomatis — output makin viral tiap minggu, khusus untuk audiens-mu." en="Learns from your real YouTube Analytics. The engine adapts niche, hooks, and visual style automatically — output gets more viral each week, tailored to your audience." /></p>
+            <p><Bi id="Belajar dari real YouTube Analytics channelmu. Mesin mengadaptasi niche, hook, dan topik otomatis — dan menghindari pola yang kurang perform — output makin viral tiap minggu, khusus untuk audiens-mu." en="Learns from your real YouTube Analytics. The engine adapts niche, hooks, and topics automatically — and avoids underperforming patterns — output gets more viral each week, tailored to your audience." /></p>
           </div>
           <div className="feat"><span className="fic"><Command size={22} /></span><h3><Bi id="BYOK Transparan" en="Transparent BYOK" /></h3><p><Bi id="Kamu pegang API keys Anthropic, OpenAI, ElevenLabs. Lihat biaya AI real-time per video. Tanpa markup." en="You hold your Anthropic, OpenAI, ElevenLabs keys. See AI cost per video in real time. No markup." /></p></div>
           <div className="feat"><span className="fic" style={{ background: "var(--success-soft)", color: "var(--success)" }}><ShieldCheck size={22} /></span><h3><Bi id="AI Slop Defense" en="AI Slop Defense" /></h3><p><Bi id="Diversity engine otomatis melindungi channel dari YouTube AI policy 2026. Compliance score real-time." en="A diversity engine automatically protects your channel from YouTube's 2026 AI policy. Real-time compliance score." /></p></div>

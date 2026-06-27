@@ -259,14 +259,14 @@ export default function AuthPage() {
 
       <div className="auth-right">
         <div className="mesh" />
-        <div className="stat-ticker"><span style={{ width: 7, height: 7, borderRadius: "50%", background: "#34D399", display: "inline-block" }} /> <Bi id="500+ creator · 1JT+ video diproduksi" en="500+ creators · 1M+ videos produced" /></div>
+        <div className="stat-ticker"><span style={{ width: 7, height: 7, borderRadius: "50%", background: "#34D399", display: "inline-block" }} /> <Bi id="Produksi 24/7 · hingga 24 video/hari per channel" en="Runs 24/7 · up to 24 videos/day per channel" /></div>
         <div className="quote-card">
           <Stars />
-          <blockquote>&quot;<Bi id="MesinViral menambah views channel saya 2.3× dalam 2 bulan. Set & forget — mesinnya benar-benar belajar." en="MesinViral grew my channel's views 2.3× in 2 months. Set & forget — the engine really learns." />&quot;</blockquote>
+          <blockquote>&quot;<Bi id="Set & forget — mesinnya benar-benar belajar dari channel saya dan makin pintar tiap minggu. Saya tinggal pantau hasilnya." en="Set & forget — the engine really learns from my channel and gets smarter every week. I just watch the results." />&quot;</blockquote>
           <div className="quote-author">
             <span className="av">RP</span>
             <div><div className="nm">Riko Pratama</div><div className="ch">Misteri Samudra · 12.4K subs</div></div>
-            <div className="delta"><div className="big">2.3×</div><div className="lbl"><Bi id="views / 60 hari" en="views / 60 days" /></div></div>
+            <div className="delta"><div className="big">24/7</div><div className="lbl"><Bi id="set & forget" en="set & forget" /></div></div>
           </div>
         </div>
         <div className="trust-row">

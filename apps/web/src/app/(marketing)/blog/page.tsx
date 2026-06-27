@@ -15,8 +15,8 @@ function Bi({ id, en }: { id: string; en: string }) {
 
 const GRAD = ["linear-gradient(135deg,#1e3a8a,#6366F1)", "linear-gradient(135deg,#7f1d1d,#ec4899)", "linear-gradient(135deg,#064e3b,#10b981)", "linear-gradient(135deg,#4c1d95,#8b5cf6)", "linear-gradient(135deg,#0c4a6e,#0ea5e9)", "linear-gradient(135deg,#78350f,#f59e0b)"];
 const CASES: [string, string, string, string, string, string][] = [
-  ["Misteri Samudra", "Faceless ocean mystery channel", "2.3×", "views dalam 60 hari", "MS", "#1d4ed8"],
-  ["Fakta Yang Bikin Mikir", "Educational facts channel", "32.7K", "subs (dari 4K)", "FB", "#047857"],
+  ["Misteri Samudra", "Faceless ocean mystery channel", "24/hari", "produksi otomatis", "MS", "#1d4ed8"],
+  ["Fakta Yang Bikin Mikir", "Educational facts channel", "Rp 75", "per video (BYOK)", "FB", "#047857"],
   ["Jejak Kelam Sejarah", "Dark history storytelling", "5/hari", "auto-publish konsisten", "JS", "#9f1239"],
   ["Sarah Wibowo Agency", "Mengelola 8 channel klien", "8", "channel dari 1 dashboard", "SW", "#7c3aed"],
 ];
