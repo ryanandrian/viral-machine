@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Sparkles, Plus, X, Check, Loader2 } from "lucide-react";
+import { YT_CATEGORIES } from "@/lib/youtube-categories";
 
 // F3-03 / F2-10 — Niche Studio (tenant Business+, GATED). Buat/edit niche CUSTOM PRIVATE sendiri
 // via /api/niches/mine (server-enforce: private + exclusive_to=tenant + gating min-rank).
@@ -39,6 +40,7 @@ export default function NicheStudioPage() {
     setEdit({
       name: n.name ?? "", is_active: !!n.is_active,
       keywords: asArr(n.keywords), default_hashtags: asArr(n.default_hashtags),
+      youtube_category_id: (n.youtube_category_id as string) ?? "",
       narration_persona: jstr(n.narration_persona), music_config: jstr(n.music_config),
       visual_style: jstr(n.visual_style), image_quality_tags: asArr(n.image_quality_tags),
       image_negative_prompt: (n.image_negative_prompt as string) ?? "", visual_fallbacks: asArr(n.visual_fallbacks),
@@ -66,6 +68,7 @@ export default function NicheStudioPage() {
       image_negative_prompt: (edit.image_negative_prompt as string) || null,
       keywords: String(edit.keywords || "").split(",").map((s) => s.trim()).filter(Boolean),
       default_hashtags: String(edit.default_hashtags || "").split(",").map((s) => s.trim()).filter(Boolean),
+      youtube_category_id: (edit.youtube_category_id as string) || null,
       image_quality_tags: String(edit.image_quality_tags || "").split(",").map((s) => s.trim()).filter(Boolean),
       visual_fallbacks: String(edit.visual_fallbacks || "").split(",").map((s) => s.trim()).filter(Boolean),
     };
@@ -130,6 +133,11 @@ export default function NicheStudioPage() {
             <div className="fld"><label className="label"><Bi id="Nama tampilan" en="Display name" /></label><input className="input" value={edit.name as string} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></div>
             {fld("keywords", { id: "Keywords (pisah koma)", en: "Keywords (comma)" })}
             {fld("default_hashtags", { id: "Default hashtags (pisah koma)", en: "Default hashtags (comma)" })}
+            <div className="fld"><label className="label"><Bi id="Kategori YouTube" en="YouTube category" /></label>
+              <select className="input" value={(edit.youtube_category_id as string) ?? ""} onChange={(e) => setEdit({ ...edit, youtube_category_id: e.target.value })}>
+                <option value="">— pilih (default Education) —</option>
+                {YT_CATEGORIES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select></div>
             <div style={{ borderTop: "1px solid var(--border-subtle)", margin: "0.75rem 0", paddingTop: "0.5rem", fontWeight: 600, fontSize: "var(--text-sm)" }}>Narrasi DNA <span style={{ fontWeight: 400, fontSize: "var(--text-xs)", color: "var(--text-muted)" }}>(suara dipilih di Channel)</span></div>
             {fld("narration_persona", { id: "narration_persona JSON (gaya/tone narasi)", en: "narration_persona JSON (narration style/tone)" }, true, 5)}
             <div style={{ borderTop: "1px solid var(--border-subtle)", margin: "0.75rem 0", paddingTop: "0.5rem", fontWeight: 600, fontSize: "var(--text-sm)" }}>Musik DNA <span style={{ fontWeight: 400, fontSize: "var(--text-xs)", color: "var(--text-muted)" }}>(library per-mood; auto/random/fixed)</span></div>

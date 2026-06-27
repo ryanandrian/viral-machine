@@ -42,6 +42,20 @@ def _niche_video_tags(niche: str) -> list:
         return []
 
 
+def _niche_category(niche: str) -> str:
+    """categoryId YouTube per-niche dari `niches.youtube_category_id` (diatur admin via Niche Library /
+    tenant via Niche Studio) — BUKAN lagi hardcode per-niche ryan. Fallback "27" (Education). Fail-soft."""
+    try:
+        from supabase import create_client
+        sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+        r = sb.table("niches").select("youtube_category_id").eq("niche_id", niche).limit(1).execute()
+        cat = (r.data or [{}])[0].get("youtube_category_id")
+        return str(cat) if cat else "27"
+    except Exception as e:
+        logger.warning(f"[YouTube] ambil category niche {niche} gagal (non-fatal): {e}")
+        return "27"
+
+
 class YouTubePublisher:
     """
     Auto-publish video ke YouTube Shorts menggunakan OAuth token tenant.
@@ -82,14 +96,6 @@ class YouTubePublisher:
             save_google_access_token(tenant_config.tenant_id, creds.token, channel_id=ch_id)
             logger.info("Token refreshed successfully")
         return creds
-
-    # Category ID per niche
-    NICHE_CATEGORY = {
-        "universe_mysteries": "28",
-        "dark_history":       "27",
-        "ocean_mysteries":    "28",
-        "fun_facts":          "27",
-    }
 
     NICHE_CTA = {
         "universe_mysteries": "Follow for more mind-blowing universe mysteries every day!",
@@ -187,7 +193,7 @@ class YouTubePublisher:
                 "title":                title,
                 "description":          description,
                 "tags":                 tags[:500],
-                "categoryId":           self.NICHE_CATEGORY.get(niche, "28"),
+                "categoryId":           _niche_category(niche),
                 "defaultLanguage":      "en",
                 "defaultAudioLanguage": "en"
             },

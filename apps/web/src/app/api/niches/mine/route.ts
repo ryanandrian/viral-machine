@@ -11,7 +11,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 const EDITABLE = [
   "name", "keywords", "style", "target_emotion", "hook_templates", "default_hashtags", "is_active",
   "visual_style", "visual_fallbacks", "mood_priority", "narration_persona", "emotion_scoring_criteria",
-  "section_timing", "image_quality_tags", "image_negative_prompt", "music_config",
+  "section_timing", "image_quality_tags", "image_negative_prompt", "music_config", "youtube_category_id",
 ];
 
 async function gate() {

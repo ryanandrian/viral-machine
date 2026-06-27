@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Calendar, Plus, X, Clock, Sparkles, Check } from "lucide-react";
+import { YT_CATEGORIES } from "@/lib/youtube-categories";
 import "./niches.css";
 
 // E2.3 Admin Niche Library (Phase 10.3) — DATA NYATA via /api/admin/niches (service_role).
@@ -13,7 +14,7 @@ function Bi({ id, en }: { id: string; en: string }) {
 }
 
 type Niche = {
-  niche_id: string; name: string; keywords: unknown; default_hashtags: unknown; is_active: boolean; is_base: boolean;
+  niche_id: string; name: string; keywords: unknown; default_hashtags: unknown; youtube_category_id: string | null; is_active: boolean; is_base: boolean;
   access_type: string; exclusive_to: string | null; exclusive_until: string | null; released_at: string | null;
   narration_persona: unknown; visual_style: unknown; mood_priority: unknown; emotion_scoring_criteria: string | null;
   image_quality_tags: unknown; image_negative_prompt: string | null; visual_fallbacks: unknown; section_timing: unknown; music_config: unknown;
@@ -85,6 +86,7 @@ export default function AdminNichesPage() {
     const n = niches.find((x) => x.niche_id === id); setSel(id); setDtab(0);
     setEdit(n ? {
       name: n.name, keywords: asArr(n.keywords).join(", "), default_hashtags: asArr(n.default_hashtags).join(", "),
+      youtube_category_id: n.youtube_category_id ?? "",
       is_active: n.is_active, is_base: n.is_base, access_type: n.access_type, exclusive_to: n.exclusive_to ?? "",
       exclusive_until: n.exclusive_until ?? "", released_at: n.released_at ?? "",
       narration_persona: jstr(n.narration_persona), music_config: jstr(n.music_config), visual_style: jstr(n.visual_style), mood_priority: jstr(n.mood_priority),
@@ -107,6 +109,7 @@ export default function AdminNichesPage() {
       default_hashtags: String(edit.default_hashtags || "").split(",").map((s) => s.trim()).filter(Boolean),
       image_quality_tags: String(edit.image_quality_tags || "").split(",").map((s) => s.trim()).filter(Boolean),
       visual_fallbacks: String(edit.visual_fallbacks || "").split(",").map((s) => s.trim()).filter(Boolean),
+      youtube_category_id: (edit.youtube_category_id as string) || null,
     };
     for (const [k, v] of [["narration_persona", edit.narration_persona], ["music_config", edit.music_config], ["visual_style", edit.visual_style], ["mood_priority", edit.mood_priority], ["section_timing", edit.section_timing]] as const) {
       try { patch[k] = JSON.parse(v as string); } catch { /* skip invalid JSON */ }
@@ -265,6 +268,7 @@ export default function AdminNichesPage() {
               <div className="nl-fld"><label className="label">Display name</label><input className="input" value={edit.name as string} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></div>
               <div className="nl-fld"><label className="label">Keywords (pisah koma)</label><textarea className="textarea" rows={2} value={edit.keywords as string} onChange={(e) => setEdit({ ...edit, keywords: e.target.value })} /></div>
               <div className="nl-fld"><label className="label">Default hashtags (pisah koma)</label><textarea className="textarea" rows={2} value={edit.default_hashtags as string} onChange={(e) => setEdit({ ...edit, default_hashtags: e.target.value })} /></div>
+              <div className="nl-fld"><label className="label">Kategori YouTube <span className="muted" style={{ fontWeight: 400, fontSize: "var(--text-xs)" }}>(categoryId saat publish)</span></label><select className="input" value={(edit.youtube_category_id as string) ?? ""} onChange={(e) => setEdit({ ...edit, youtube_category_id: e.target.value })}><option value="">— pilih (default Education) —</option>{YT_CATEGORIES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
               <div className="nl-fld" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}><span style={{ fontSize: "var(--text-sm)" }}>is_active</span><label className="switch"><input type="checkbox" checked={!!edit.is_active} onChange={(e) => setEdit({ ...edit, is_active: e.target.checked })} /><span className="track" /><span className="thumb" /></label></div>
               <div className="nl-fld" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}><span style={{ fontSize: "var(--text-sm)" }}>is_base <span className="muted">(trial/starter only)</span></span><label className="switch"><input type="checkbox" checked={!!edit.is_base} onChange={(e) => setEdit({ ...edit, is_base: e.target.checked })} /><span className="track" /><span className="thumb" /></label></div>
             </>}

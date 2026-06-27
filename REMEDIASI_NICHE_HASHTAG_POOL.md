@@ -86,7 +86,7 @@
 - **Deploy:** BE-only → `git pull` di `/home/rad4vm/viral-machine-v2` + restart **`mv-worker`** (publisher dipakai worker). Tak ada FE/DB. Regresi: produksi/publish ryan tetap jalan.
 - **niches.keywords saat ini (verified):** universe_mysteries=[space,universe,galaxy,black hole,nasa,cosmos,astronomy] · dark_history=[history,mystery,ancient,secret,civilization,unsolved] · ocean_mysteries=[ocean,deep sea,marine,underwater,creature,abyss] · fun_facts=[did you know,facts,amazing,incredible,surprising,world record] · imunitas_tubuh=[] (admin isi nanti — graceful).
 
-### 5B — KATEGORI YOUTUBE per-niche (DB + BE + FE admin & tenant) ⬜
+### 5B — KATEGORI YOUTUBE per-niche  ✅ SELESAI (2026-06-27): migr 0097 + BE helper `_niche_category` + FE dropdown admin & tenant + 2 allowlist API. Validasi lokal lolos (BE compile+helper; FE build EXIT=0). Deploy: worker + web.
 **Keputusan owner: kategori = sifat TOPIK → field per-niche (dropdown). FE BELUM ADA (verified) → harus ditambah di admin + tenant.**
 - **DB (migrasi 0097):** `ALTER TABLE niches ADD COLUMN youtube_category_id text;` + seed 4 dari `NICHE_CATEGORY` lama (universe=28, dark_history=27, ocean=28, fun_facts=27).
 - **BE:** `youtube_publisher.py` — `categoryId` (`self.NICHE_CATEGORY.get(niche,"28")`) → baca `niches.youtube_category_id` via helper baru `_niche_category(niche)` (pola sama `_niche_video_tags`), fallback `"27"` (Education) / `"24"` (Entertainment). Hapus dict `NICHE_CATEGORY`.
