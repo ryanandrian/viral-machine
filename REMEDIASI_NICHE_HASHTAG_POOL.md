@@ -69,9 +69,37 @@
 - Hashtag: per-niche, channel-owned (RLS), seed dari niche-default, **nol hardcode #hashtag**, nol bocor antar tenant.
 - Caption & Branded **tak tersentuh**; produksi/publish ryan tetap jalan (regresi aman).
 
-## 6. ⛔ FOSIL DITUNDA — WAJIB dievaluasi mendalam SETELAH remediasi ini tuntas
-> Owner 2026-06-27: catat & evaluasi mendalam setelahnya. Semua di `src/distribution/youtube_publisher.py`, hardcode per-4-niche-ryan (tidak aman multi-tenant):
-1. **`NICHE_CTA`** (baris ~70) — kalimat ajakan per-niche. **Terkait card "Branded (CTA·logo·link)"** → evaluasi bareng desain Branded.
-2. **`NICHE_CATEGORY`** (baris ~56) — `categoryId` YouTube per-niche → harus dari DB `niches` (kolom baru).
-3. **`NICHE_BASE_TAGS`** (baris ~63) — tag kata-kunci video (beda dari #hashtag) → harus dari DB `niches`.
-> Plus: `#Shorts` universal hardcode (`publisher` ~baris 102) — tinjau apakah jadi config format-level.
+## 6. BATCH 5 — Fosil per-niche → DB (KEPUTUSAN OWNER 2026-06-27, siap eksekusi)
+
+> 🔵 **MULAI DI SINI (sesi baru).** BATCH 1-4 (random-pool + hashtag 2-lapis + FE picker/card + pisah card caption/hashtag) **SELESAI + deployed + regresi ryan aman**. Yang TERSISA = 3 fosil hardcode di `src/distribution/youtube_publisher.py` (terikat 4 niche ryan: universe_mysteries/dark_history/ocean_mysteries/fun_facts → niche lain SALAH/KOSONG). Owner sudah memutuskan pendekatannya (di bawah). **Urutan: 5A dulu (tag video) → lapor → 5B (kategori) → 5C (CTA, bareng Branded).** Disiplin: validasi LOKAL penuh tiap sub-batch → deploy. JANGAN bikin bug baru.
+>
+> **Konteks "tag video":** field `snippet.tags` YouTube = label TERSEMBUNYI (penonton tak lihat) untuk pencarian & rekomendasi YouTube. BEDA dari #hashtag (terlihat). Saat ini diisi hardcode `NICHE_BASE_TAGS`.
+
+### 5A — TAG VIDEO (KERJAKAN DULU; BE-only, TANPA DB, TANPA FE) ⬜
+**Keputusan owner: Opsi A — pakai-ulang `niches.keywords`** (kolom SUDAH ada + SUDAH terisi + SUDAH bisa diedit di Admin Niche Library `Identity tab` & Niche Studio). Tak perlu kolom/field baru.
+- File: `src/distribution/youtube_publisher.py`.
+  - Hapus dict hardcode **`NICHE_BASE_TAGS`** (saat ini ~baris 79-84).
+  - Di `_build_metadata`, baris yang isi `tags` (saat ini ~baris 166: `tags = list(self.NICHE_BASE_TAGS.get(niche, []))`) → ganti baca **`niches.keywords`** dari DB via helper baru `_niche_video_tags(niche)` (pola SAMA dgn `_niche_default_hashtags()` yg sudah ada di file ini — fungsi modul-level, fail-soft `[]`, baca `sb.table("niches").select("keywords").eq("niche_id",niche)`).
+  - Daftar universal video-tags (saat ini ~baris 174: `["shorts","youtubeshorts","viral","facts"]`) → **buang `"facts"`** (mengasumsikan niche fakta). Sisakan `["shorts","youtubeshorts","viral"]`.
+- **JANGAN sentuh** #hashtag (sudah benar), `_niche_default_hashtags` (sudah benar), CTA, kategori.
+- **Validasi lokal (WAJIB sebelum deploy):** `py_compile`; grep nol sisa `NICHE_BASE_TAGS`; uji `_niche_video_tags("ocean_mysteries")` → `['ocean','deep sea',...]` (dari DB), niche tak-ada → `[]`; pastikan `_build_metadata` masih hasilkan `tags` non-kosong (keywords + script.hashtags + kata judul + universal).
+- **Deploy:** BE-only → `git pull` di `/home/rad4vm/viral-machine-v2` + restart **`mv-worker`** (publisher dipakai worker). Tak ada FE/DB. Regresi: produksi/publish ryan tetap jalan.
+- **niches.keywords saat ini (verified):** universe_mysteries=[space,universe,galaxy,black hole,nasa,cosmos,astronomy] · dark_history=[history,mystery,ancient,secret,civilization,unsolved] · ocean_mysteries=[ocean,deep sea,marine,underwater,creature,abyss] · fun_facts=[did you know,facts,amazing,incredible,surprising,world record] · imunitas_tubuh=[] (admin isi nanti — graceful).
+
+### 5B — KATEGORI YOUTUBE per-niche (BERIKUTNYA; DB + BE + FE) ⬜
+**Keputusan owner: kategori = sifat TOPIK → field per-niche (dropdown).**
+- **DB (migrasi 0097):** `ALTER TABLE niches ADD COLUMN youtube_category_id text;` + seed 4 dari `NICHE_CATEGORY` lama (universe=28, dark_history=27, ocean=28, fun_facts=27).
+- **BE:** `youtube_publisher.py` — `categoryId` (saat ini ~baris 183 `self.NICHE_CATEGORY.get(niche,"28")`) → baca `niches.youtube_category_id` via helper, fallback `"27"` (Education) atau `"24"` (Entertainment). Hapus dict `NICHE_CATEGORY` (~baris 72-77).
+- **FE:** tambah **dropdown "Kategori YouTube"** di (a) Admin Niche Library `admin/(panel)/niches/page.tsx` tab Identity (dtab 0, dekat Keywords/Default hashtags), (b) Niche Studio `niche-studio/page.tsx`. Pakai daftar kategori RESMI YouTube (id→nama; mis. 24 Entertainment, 27 Education, 28 Science & Tech, 26 Howto & Style, 22 People & Blogs, 1 Film & Animation, 10 Music, 20 Gaming, 25 News & Politics). DROPDOWN (bukan ketik bebas). Simpan via API niche masing-masing (`/api/admin/niches` & `/api/niches/mine` — cek apakah field auto-passthrough atau perlu ditambah ke patch).
+- **Validasi:** py_compile + build FE; dropdown tampil & tersimpan; publisher pakai kategori DB.
+
+### 5C — CTA (TERAKHIR; bareng card "Branded" — owner menunda Branded) ⬜
+**Keputusan owner: CTA SEHARUSNYA milik CHANNEL, BUKAN per-topik.** Temuan: publisher MEMAKSA "Follow for more…" per-niche (`NICHE_CTA`, ~baris 86-91, dipakai ~baris 104), **padahal `script_engine` MELARANG menyuruh follow/subscribe** → kontradiksi. Card "Branded" sudah punya `cta_mode` (implicit/soft_sell) + `brand_cta_text`.
+- **Rencana:** HAPUS `NICHE_CTA` hardcode; deskripsi pakai CTA channel — `cta_mode='implicit'` → TANPA baris CTA (bersih); `'soft_sell'` → `brand_cta_text`. Footer (`youtube_publisher.py` ~baris 132 `footer = f"\n{cta}\n\n{hashtag_str}"`) sesuaikan.
+- **JANGAN dikerjakan sebelum** owner buka kerja card Branded (ditunda eksplisit). Catat sebagai dependensi Branded.
+
+### Definition of Done BATCH 5
+- Nol dict hardcode per-niche di `youtube_publisher.py` (`NICHE_BASE_TAGS`, `NICHE_CATEGORY`, `NICHE_CTA` — 5C bareng Branded).
+- Tag video & kategori dari DB `niches` (admin/tenant atur via editor niche). CTA dari channel (Branded).
+- Niche baru apa pun dapat tag/kategori benar (tak lagi fallback ke "fun_facts"/"28"/[]).
+- Regresi ryan aman; nol bug baru; validasi lokal tiap sub-batch.
