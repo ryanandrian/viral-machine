@@ -260,15 +260,15 @@ class ChannelAnalytics:
         if not self._supabase:
             return []
         try:
-            cutoff_publish = (
-                datetime.now(timezone.utc) - timedelta(hours=self.MIN_HOURS_AFTER_PUBLISH)
-            ).isoformat()
-            # SEMUA video eligible (cap aman 1000), bukan hanya 50 terbaru.
+            # SEMUA video published eligible (cap aman 1000). TIDAK lagi mengecualikan <48j:
+            # view-count DASAR (Data API) tersedia seketika → harus tampil cepat. Gate 48 jam
+            # dipindah ke _fetch_video_metrics (HANYA menahan FULL analytics yg memang baru reliabel
+            # ~48j); video baru tetap ditarik utk views/likes basic. (Sebelumnya .lt publish 48j =
+            # views nyata tertunda 2 hari padahal sudah ada di YouTube.)
             result = (
                 self._supabase.table("videos")
                 .select("video_id, title, hook, niche, published_at, channel_id")
                 .eq("tenant_id", tenant_id).eq("status", "published")
-                .lt("published_at", cutoff_publish)
                 .order("published_at", desc=True).limit(1000).execute()
             )
             all_videos = [v for v in (result.data or []) if v.get("video_id")]
@@ -347,9 +347,19 @@ class ChannelAnalytics:
             return None
 
         # ── Full stats via Analytics API v2 ──────────────────────────────
-        if self._has_analytics_scope and self._analytics:
+        # Gate 48 jam HANYA di sini (full analytics baru reliabel ~48j). Video <48j: LEWATI
+        # Analytics API → cegah 403/insufficient beruntun yang men-disable scope utk SEMUA video.
+        # Basic views (di atas) tetap tersimpan → tampil seketika.
+        published_at = video.get("published_at", "")
+        full_eligible = True
+        if published_at:
             try:
-                published_at = video.get("published_at", "")
+                _pub = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
+                full_eligible = (datetime.now(timezone.utc) - _pub) >= timedelta(hours=self.MIN_HOURS_AFTER_PUBLISH)
+            except Exception:
+                full_eligible = True  # parse gagal → jangan blokir
+        if self._has_analytics_scope and self._analytics and full_eligible:
+            try:
                 start_date   = published_at[:10] if published_at else "2020-01-01"
                 end_date     = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 

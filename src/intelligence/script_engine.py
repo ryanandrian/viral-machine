@@ -166,12 +166,15 @@ def _build_insights_block(insights: dict) -> str:
 
     top_hooks = insights.get("top_hooks", [])
     if top_hooks:
-        lines.append("TOP PERFORMING HOOKS from this channel (highest CTR — study these patterns):")
+        lines.append("TOP PERFORMING HOOKS from this channel (highest engagement — study these patterns):")
         for i, h in enumerate(top_hooks[:3], 1):
-            ctr     = h.get("avg_ctr", 0)
-            pattern = h.get("hook_pattern", "")
+            # Kunci sesuai yang DISIMPAN PerformanceAnalyzer._compute_top_hooks: pattern/avg_view_pct/views.
+            # CTR per-video tak tersedia YouTube API (selalu 0) → pakai retensi+views (sinyal nyata).
+            pattern = h.get("pattern", "")
+            ret     = h.get("avg_view_pct", 0) or 0
+            views   = h.get("views", 0) or 0
             text    = h.get("hook", "")[:80]
-            lines.append(f"  {i}. \"{text}\" | Pattern: {pattern} | CTR: {ctr:.1f}%")
+            lines.append(f"  {i}. \"{text}\" | Pattern: {pattern} | Retention: {ret:.0f}% | Views: {views:,}")
 
     ct_perf_raw = insights.get("content_type_perf", {})
     # content_type_perf dari PerformanceAnalyzer adalah dict {ct_name: {...}}
@@ -705,11 +708,11 @@ class ScriptEngine:
             )
             return None
 
-    def _load_insights(self, tenant_id: str) -> dict | None:
-        """Load channel_insights terbaru. Fire-and-forget — tidak pernah crash pipeline."""
+    def _load_insights(self, tenant_id: str, channel_id: str | None = None) -> dict | None:
+        """Load channel_insights terbaru CHANNEL INI (isolasi per-channel). Fire-and-forget."""
         try:
             from src.analytics.performance_analyzer import PerformanceAnalyzer
-            return PerformanceAnalyzer().load_latest_insights(tenant_id)
+            return PerformanceAnalyzer().load_latest_insights(tenant_id, channel_id)
         except Exception as e:
             logger.warning(f"[ScriptEngine] Load insights gagal (non-fatal): {e}")
             return None
@@ -899,7 +902,7 @@ Return ONLY valid JSON:
         _brand_cta = getattr(tenant_config, "brand_cta_text", None)
 
         # S1-B: load channel insights — inject ke semua attempt jika grade cukup
-        insights       = self._load_insights(tenant_config.tenant_id)
+        insights       = self._load_insights(tenant_config.tenant_id, getattr(tenant_config, "channel_id", None))
         insights_block = None
         insights_grade = ""
         if insights:

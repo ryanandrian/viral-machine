@@ -32,7 +32,7 @@ class NicheSelector:
     s84d: Self-learning feedback loop.
     - Load channel_insights terbaru sebelum AI call
     - Inject proven patterns ke AI prompt sebagai "evidence"
-    - Apply historical_factor ke viral_score jika grade >= optimizing
+    - Apply historical_factor ke rank_score (RANKING) jika grade >= optimizing — viral_score (tampil) tetap base jujur
     """
 
     MAX_RETRIES = 3
@@ -175,25 +175,18 @@ class NicheSelector:
             row  = result.data or {}
             meta = row.get("viral_score_weights") or {}
 
-            computed         = meta.get("weights") or {}
+            # CATATAN: ViralWeightOptimizer SUDAH menyimpan bobot ter-blend (baseline⊕computed by alpha).
+            # Jadi di sini PAKAI LANGSUNG (jangan re-blend = double-blend). Gate n<20 → baseline (selaras
+            # optimizer yg juga return baseline saat n<20). Satu sumber = FE/composition baca meta.weights yg sama.
+            weights          = meta.get("weights") or {}
             videos_analyzed  = int(meta.get("videos_analyzed", 0))
 
-            if not computed or videos_analyzed < 20:
+            if not weights or videos_analyzed < 20:
                 return VIRAL_SCORE_WEIGHTS
 
-            MIN_VIDEOS    = 20
-            TARGET_VIDEOS = 50
-            alpha = min(1.0, (videos_analyzed - MIN_VIDEOS) / (TARGET_VIDEOS - MIN_VIDEOS))
-
-            blended = {
-                dim: round((1 - alpha) * VIRAL_SCORE_WEIGHTS[dim] + alpha * computed.get(dim, VIRAL_SCORE_WEIGHTS[dim]), 4)
-                for dim in VIRAL_SCORE_WEIGHTS
-            }
-            logger.info(
-                f"[NicheSelector] Blended weights | α={alpha:.2f} | "
-                f"n={videos_analyzed} | weights={blended}"
-            )
-            return blended
+            effective = {dim: float(weights.get(dim, VIRAL_SCORE_WEIGHTS[dim])) for dim in VIRAL_SCORE_WEIGHTS}
+            logger.info(f"[NicheSelector] Effective viral weights | n={videos_analyzed} | weights={effective}")
+            return effective
 
         except Exception as e:
             logger.debug(f"[NicheSelector] _get_blended_weights fallback ({e})")
@@ -270,8 +263,9 @@ class NicheSelector:
 
     def _apply_historical_factor(self, topic: dict, insights: dict) -> dict:
         """
-        Sesuaikan viral_score berdasarkan channel performance history.
-        Range: 0.7× (proven poor) → 1.5× (proven winner).
+        Sesuaikan rank_score (RANKING pemilihan) berdasarkan channel performance history.
+        Range: 0.7× (proven poor) → 1.5× (proven winner). Compound dgn signal_factor.
+        viral_score (tampil/simpan) TETAP base jujur 0-100 — boost tak menggelembungkan skor tampil.
         Hanya diterapkan jika grade >= optimizing.
         """
         factor     = 1.0
@@ -301,12 +295,14 @@ class NicheSelector:
                 break
 
         if factor != 1.0:
-            original = topic["viral_score"]
-            topic["viral_score"]       = round(original * factor, 1)
+            base = topic["viral_score"]
+            prev = topic.get("rank_score") or base  # compound bila signal_factor sudah set rank_score
             topic["historical_factor"] = round(factor, 2)
+            # viral_score TETAP = base jujur (0-100, nyaris tak pernah 100 = no over-claim).
+            # Boost dipakai untuk RANKING pemilihan (rank_score), BUKAN menggelembungkan skor tampil.
+            topic["rank_score"] = round(prev * factor, 1)
             logger.debug(
-                f"[NicheSelector] Score adjusted: {original} → {topic['viral_score']} "
-                f"(×{factor:.2f}) | topic='{topic.get('topic', '')[:40]}'"
+                f"[NicheSelector] rank boost ×{factor:.2f} (historical) | base={base} | rank={topic['rank_score']} | topic='{topic.get('topic', '')[:40]}'"
             )
         return topic
 
@@ -509,7 +505,7 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
                     t["viral_score"] = self._calculate_viral_score(t, tenant_config.tenant_id)
 
                 logger.info(f"AI analysis success on attempt {attempt}: {len(topics)} topics")
-                return sorted(topics, key=lambda x: x["viral_score"], reverse=True)
+                return sorted(topics, key=lambda x: x.get("rank_score", x["viral_score"]), reverse=True)
 
             except (json.JSONDecodeError, ValueError) as e:
                 last_error = e
@@ -529,9 +525,9 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
         return []
 
     def _apply_signal_factor(self, topic: dict, signals: dict) -> dict:
-        """F3b — 'ukur, jangan menebak' (TREND_RADAR §3 Pilar-3): boost viral_score topik yang
+        """F3b — 'ukur, jangan menebak' (TREND_RADAR §3 Pilar-3): boost rank_score (RANKING) topik yang
         SELARAS dgn sinyal NYATA yang sedang meledak (YouTube velocity tinggi / Trends momentum
-        positif). Hanya MENAIKKAN (1.0×–1.25×); base score dimensi LLM tetap. Per-topik. Fail-soft.
+        positif). Hanya MENAIKKAN (1.0×–1.25×); viral_score (tampil) tetap base jujur. Per-topik. Fail-soft.
         (Konstanta boost = heuristik, tunable.)"""
         try:
             text   = " ".join([str(topic.get("topic", "")), str(topic.get("angle", "")), str(topic.get("hook", ""))]).lower()
@@ -560,8 +556,9 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
 
             if factor > 1.0:
                 base = topic.get("viral_score", 0) or 0
-                topic["viral_score"]   = round(base * factor, 1)
+                prev = topic.get("rank_score") or base  # compound bila historical_factor sudah set rank_score
                 topic["signal_factor"] = round(factor, 3)
+                topic["rank_score"]    = round(prev * factor, 1)  # boost RANKING; viral_score (tampil) tetap base jujur
                 logger.info(f"[NicheSelector] signal_factor ×{factor:.2f} [{why}] → {str(topic.get('topic',''))[:40]}")
         except Exception as e:
             logger.debug(f"[NicheSelector] signal_factor skip: {e}")
@@ -587,7 +584,7 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
             logger.info(f"[NicheSelector] Focus constraint: '{focus}'")
 
         # s84d: load channel insights (fire-and-forget jika gagal)
-        insights    = self._load_insights(tenant_config.tenant_id)
+        insights    = self._load_insights(tenant_config.tenant_id, getattr(tenant_config, "channel_id", None))
         focus_is_smart = False  # True jika focus di-derive oleh mesin (bukan dari user)
 
         # S2-B: smart focus derivation jika user tidak set focus
@@ -646,22 +643,16 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
 
         # F3b: boost topik yang selaras dgn sinyal NYATA meledak (velocity/momentum) → "ukur, jangan menebak"
         topics = [self._apply_signal_factor(t, signals) for t in topics]
-        topics = sorted(topics, key=lambda x: x.get("viral_score", 0), reverse=True)
+        # Urut by rank_score (boost trend) — viral_score (tampil/simpan) tetap base jujur 0-100 (no over-claim).
+        topics = sorted(topics, key=lambda x: x.get("rank_score", x.get("viral_score", 0)), reverse=True)
 
         # s84d: apply historical_factor jika grade >= optimizing
         if insights:
             grade = insights.get("performance_grade", "insufficient_data")
             if grade in ("optimizing", "peak"):
-                before = [t["viral_score"] for t in topics]
                 topics = [self._apply_historical_factor(t, insights) for t in topics]
-                after  = [t["viral_score"] for t in topics]
-                if before != after:
-                    logger.info(
-                        f"[NicheSelector] Historical factor applied | "
-                        f"scores: {before} → {after}"
-                    )
-                # Re-sort setelah score adjustment
-                topics = sorted(topics, key=lambda x: x["viral_score"], reverse=True)
+                # Re-sort by rank_score (boost historical+signal) — viral_score (tampil/simpan) tetap base jujur.
+                topics = sorted(topics, key=lambda x: x.get("rank_score", x.get("viral_score", 0)), reverse=True)
 
         # s71: Duplicate prevention (pass _recent_topics agar tidak re-query Supabase)
         topics = self._filter_duplicates(topics, tenant_config, recent=_recent_topics)
@@ -680,15 +671,15 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
         logger.info(f"Selected {len(topics)} topics after duplicate filter")
         return topics
 
-    def _load_insights(self, tenant_id: str) -> dict | None:
+    def _load_insights(self, tenant_id: str, channel_id: str | None = None) -> dict | None:
         """
-        Load channel_insights terbaru. Fire-and-forget — tidak pernah crash pipeline.
+        Load channel_insights terbaru CHANNEL INI (isolasi per-channel). Fire-and-forget.
         Return None jika tidak tersedia atau grade=insufficient_data.
         """
         if not self._analyzer:
             return None
         try:
-            insights = self._analyzer.load_latest_insights(tenant_id)
+            insights = self._analyzer.load_latest_insights(tenant_id, channel_id)
             if insights:
                 grade = insights.get("performance_grade", "insufficient_data")
                 logger.info(

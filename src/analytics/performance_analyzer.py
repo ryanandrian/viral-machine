@@ -239,7 +239,17 @@ class PerformanceAnalyzer:
         else:
             hooks_data.sort(key=lambda x: x["views"], reverse=True)
 
-        top = hooks_data[:top_n]
+        # Dedup by teks hook (hook sama dipakai di banyak video → jangan tampil berulang).
+        # Sudah terurut desc → first-seen = performa tertinggi.
+        seen_hooks, deduped = set(), []
+        for h in hooks_data:
+            key = h["hook"].strip().lower()
+            if key in seen_hooks:
+                continue
+            seen_hooks.add(key)
+            deduped.append(h)
+
+        top = deduped[:top_n]
 
         # Tambah extracted pattern untuk tiap hook
         for item in top:
@@ -411,7 +421,15 @@ class PerformanceAnalyzer:
             })
 
         topics.sort(key=lambda x: x["composite_score"], reverse=True)
-        return topics[:top_n]
+        # Dedup by judul (topik sama diproduksi berulang → jangan tampil berkali). First-seen = skor tertinggi.
+        seen_titles, deduped = set(), []
+        for t in topics:
+            key = t["title"].strip().lower()
+            if key in seen_titles:
+                continue
+            seen_titles.add(key)
+            deduped.append(t)
+        return deduped[:top_n]
 
     # ── Storage ───────────────────────────────────────────────────────────
 
@@ -443,21 +461,31 @@ class PerformanceAnalyzer:
 
     # ── Load latest insights (dipakai NicheSelector) ──────────────────────
 
-    def load_latest_insights(self, tenant_id: str) -> Optional[dict]:
+    def load_latest_insights(self, tenant_id: str, channel_id: Optional[str] = None) -> Optional[dict]:
         """
-        Load insights terbaru untuk tenant.
-        Dipanggil oleh NicheSelector setiap pipeline run.
+        Load insights terbaru. Dipanggil ScriptEngine/NicheSelector/HookOptimizer tiap pipeline run.
+
+        ISOLASI PER-CHANNEL (6.4): insights ditulis per-channel (compute_and_store pakai channel_id).
+        Bila channel_id diberi → ambil insight CHANNEL ITU saja. Tanpa filter ini, tenant multi-channel
+        akan memuat insight channel lain (paling baru lintas channel) = bleed antar-channel di sisi
+        KONSUMSI — channel B "belajar" dari data channel A, melanggar DNA per-channel.
+        channel_id=None (blok __main__/demo) → perilaku lama tenant-wide (backward-compatible).
 
         Returns None jika grade=insufficient_data atau tidak ada data.
         """
         if not self._supabase:
             return None
         try:
-            result = (
+            query = (
                 self._supabase
                 .table("channel_insights")
                 .select("*")
                 .eq("tenant_id", tenant_id)
+            )
+            if channel_id:
+                query = query.eq("channel_id", channel_id)
+            result = (
+                query
                 .order("computed_at", desc=True)
                 .limit(1)
                 .execute()

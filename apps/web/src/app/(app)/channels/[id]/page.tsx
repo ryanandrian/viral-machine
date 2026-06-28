@@ -9,7 +9,7 @@ import { effectiveStatus, TONE } from "@/lib/channel-status";
 import PresetTables from "@/components/preset-tables";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { ComplianceView, type Compliance } from "@/components/compliance-view";
-import { InsightsView, type Insights } from "@/components/insights-view";
+import { InsightsView, type Insights, type LearnedWeights } from "@/components/insights-view";
 import "./channel-detail.css";
 
 // F2-13b: status produksi → label + varian badge design-system (tab Runs).
@@ -92,6 +92,7 @@ export default function ChannelDetailPage() {
   // F2-13b: data per-channel utk tab (channel_insights + production_runs + publish_slots)
   const [chCmp, setChCmp] = useState<Compliance | null>(null);
   const [chIns, setChIns] = useState<Insights | null>(null);
+  const [chLearned, setChLearned] = useState<LearnedWeights>(null);  // formula adaptif S3-A (tenant-wide)
   const [chRuns, setChRuns] = useState<{ id: string; status: string; niche: string | null; topic: string | null; created_at: string }[]>([]);
   const [chRunStats, setChRunStats] = useState<{ total: number; success: number; failed: number; review: number } | null>(null);  // COUNT penuh (bukan chRuns yg .limit(60))
   const [slots, setSlots] = useState<string[]>([]);
@@ -389,12 +390,13 @@ export default function ChannelDetailPage() {
     // Koneksi YouTube (pool) untuk pemilih di kartu identitas.
     try { const ry = await fetch("/api/youtube/status"); if (ry.ok) { const jy = await ry.json(); setYtAccounts(jy.accounts || []); } } catch { /* non-fatal */ }
     // F2-07: status efektif → subscription + readiness (RPC tenant-scoped F2-fondasi).
-    const { data: cfg } = await supabase.from("tenant_configs").select("plan_type,subscription_status").maybeSingle();
+    const { data: cfg } = await supabase.from("tenant_configs").select("plan_type,subscription_status,viral_score_weights").maybeSingle();
     setSub((cfg as { subscription_status?: string } | null)?.subscription_status ?? null);
+    { const w = (cfg as { viral_score_weights?: LearnedWeights } | null)?.viral_score_weights; setChLearned(w && w.weights ? w : null); }
     try { const { data: rdd } = await supabase.rpc("channel_readiness", { p_channel_id: id }); if (rdd) setRd(rdd as { ready: boolean; missing: string[] }); } catch { /* non-fatal */ }
     // F2-13b: insight per-channel (channel_insights by channel_id) + runs per-channel (production_runs).
     const { data: ci } = await supabase.from("channel_insights")
-      .select("compliance,performance_grade,videos_analyzed,niche_weights,top_hooks,avoid_patterns,computed_at")
+      .select("compliance,performance_grade,videos_analyzed,niche_weights,top_hooks,avoid_patterns,content_type_perf,top_topics,computed_at")
       .eq("channel_id", id).order("computed_at", { ascending: false }).limit(1).maybeSingle();
     if (ci) {
       setChCmp(((ci as { compliance?: Compliance }).compliance) ?? null);
@@ -586,7 +588,7 @@ export default function ChannelDetailPage() {
         <ComplianceView compliance={chCmp} loading={loading} hasRow={!!chCmp} showEdu={false} />
       )}
       {tab === "insights" && (
-        <InsightsView insights={chIns} loading={loading} scopeLabel={{ id: "channel ini", en: "this channel" }} />
+        <InsightsView insights={chIns} loading={loading} scopeLabel={{ id: "channel ini", en: "this channel" }} learnedWeights={chLearned} />
       )}
       {tab === "schedule" && (
         <div className="card card-pad" style={{ maxWidth: 560 }}>

@@ -13,9 +13,11 @@ from loguru import logger
 
 
 def _default_expiry_iso() -> str:
-    """TTL buffer default (config-driven BUFFER_TTL_HOURS, default 168j=7hr). Item ready yang
-    tak pernah ter-publish akan disapu janitor setelah lewat ini → cegah sampah S3 menumpuk."""
-    hours = float(os.getenv("BUFFER_TTL_HOURS", "168"))
+    """TTL buffer 'ready' (config-driven BUFFER_TTL_HOURS, default 72j=3hr). PENJAGA KESEGARAN:
+    konten lolos QC yang tak ter-publish dalam 72j → disapu janitor (jangan publish basi/tren lewat).
+    Diperpendek 168→72 (2026-06-28): operasi normal tayang ~1 hari (FIFO + buffer dangkal); TTL = jaring
+    pengaman agar TAKKAN publish konten basi >3 hari. Override per-kebutuhan via env BUFFER_TTL_HOURS."""
+    hours = float(os.getenv("BUFFER_TTL_HOURS", "72"))
     return (datetime.now(timezone.utc) + timedelta(hours=hours)).isoformat()
 
 
@@ -40,14 +42,14 @@ def record_producing(tenant_id: str, channel_id: str | None, niche: str | None,
 def mark_ready(inv_id: int, s3_key: str, target_slot=None, expires_at=None,
                metadata: dict | None = None) -> None:
     """Video selesai + ter-upload ke buffer → siap-tayang."""
-    upd = {"status": "ready", "s3_key": s3_key, "produced_at": "now()"}
+    # produced_at = waktu produksi selesai (app-side ISO; "now()" string tak jalan via REST).
+    # FIX 2026-06-28: dulu di-pop TANPA pengganti → produced_at selalu NULL → claim_oldest_ready acak.
+    upd = {"status": "ready", "s3_key": s3_key, "produced_at": datetime.now(timezone.utc).isoformat()}
     if target_slot is not None:
         upd["target_slot"] = target_slot
     upd["expires_at"] = expires_at if expires_at is not None else _default_expiry_iso()
     if metadata is not None:
         upd["metadata"] = metadata
-    # produced_at = now() via DB default tak bisa lewat REST string → pakai timestamp app-side
-    upd.pop("produced_at", None)
     _sb().table("content_inventory").update(upd).eq("id", inv_id).execute()
 
 
@@ -62,8 +64,11 @@ def claim_oldest_ready(channel_id: str) -> dict | None:
     """Ambil item ready tertua untuk channel → set status=publishing (anti-rebut via
     guard status). Return row atau None bila buffer kosong."""
     sb = _sb()
+    # FIFO sungguhan: created_at SELALU terisi (produced_at bisa NULL utk baris lama pra-fix 2026-06-28).
+    # Sebelumnya order by target_slot+produced_at (keduanya NULL utk item ready) → urutan ACAK → konten
+    # lama (tren basi) terlewat. created_at = umur sebenarnya → tertua tayang lebih dulu.
     res = sb.table("content_inventory").select("*").eq("channel_id", channel_id).eq(
-        "status", "ready").order("target_slot", desc=False).order("produced_at", desc=False).limit(1).execute()
+        "status", "ready").order("created_at", desc=False).limit(1).execute()
     if not res.data:
         return None
     row = res.data[0]

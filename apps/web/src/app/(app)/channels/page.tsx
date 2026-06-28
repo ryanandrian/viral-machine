@@ -28,6 +28,7 @@ type ChannelRow = {
   is_active: boolean | null;
   production_paused: boolean | null;
   production_paused_reason: string | null;
+  subscriber_count: number | null;
 };
 
 const PALETTE = ["#6366F1", "#047857", "#9f1239", "#b45309", "#1d4ed8", "#7c3aed"];
@@ -47,7 +48,9 @@ function prettyNiche(key: string) {
 const PLAN_LABEL: Record<string, string> = { trial: "Trial", starter: "Starter", pro: "Pro", business: "Business" };
 
 // Card daftar — status-first (badge bersama), sinyal NYATA (Video terbit), aksi sesuai status, handle benar.
-function ChannelCard({ ch, eff, vid, busy, onToggle }: { ch: ChannelRow; eff: Eff; vid: number; busy: boolean; onToggle: (ch: ChannelRow) => void }) {
+const fmtK = (n: number) => n >= 1_000_000 ? `${(n / 1e6).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
+
+function ChannelCard({ ch, eff, vid, ana, busy, onToggle }: { ch: ChannelRow; eff: Eff; vid: number; ana?: { total_views: number; avg_engagement: number | null }; busy: boolean; onToggle: (ch: ChannelRow) => void }) {
   const name = ch.channel_name || "Channel";
   const col = colorFor(ch.id);
   const niches = (ch.niche_pool?.length ? ch.niche_pool : ch.niche ? [ch.niche] : []).map(prettyNiche);
@@ -73,6 +76,9 @@ function ChannelCard({ ch, eff, vid, busy, onToggle }: { ch: ChannelRow; eff: Ef
       {eff.reason && <div className="muted" style={{ fontSize: "var(--text-xs)", padding: "0 0 0.25rem" }}>{eff.reason}</div>}
       <div className="ch-stats">
         <div className="ch-stat"><div className="v">{vid.toLocaleString("id-ID")}</div><div className="l"><Bi id="Video terbit" en="Published" /></div></div>
+        <div className="ch-stat"><div className="v">{ch.subscriber_count != null ? fmtK(ch.subscriber_count) : "—"}</div><div className="l">Subscribers</div></div>
+        <div className="ch-stat"><div className="v">{ana?.total_views != null ? fmtK(ana.total_views) : "—"}</div><div className="l"><Bi id="Total Views" en="Total Views" /></div></div>
+        <div className="ch-stat"><div className="v">{ana?.avg_engagement != null ? `${ana.avg_engagement}%` : "—"}</div><div className="l"><Bi id="Engagement" en="Engagement" /></div></div>
       </div>
       <div className="ch-foot">
         <Link href={`/channels/${ch.id}`} className="btn btn-secondary btn-sm" style={{ flex: 1 }}><Bi id="Kelola" en="Manage" /> <ArrowRight size={14} /></Link>
@@ -115,9 +121,10 @@ export default function ChannelsPage() {
   const [sub, setSub] = useState<string | null>(null);
   const [rdMap, setRdMap] = useState<Record<string, { ready: boolean; missing: string[] }>>({});
   const [vidCount, setVidCount] = useState<Record<string, number>>({});
+  const [anaMap, setAnaMap] = useState<Record<string, { total_views: number; avg_engagement: number | null }>>({});  // resume per-channel (RPC get_channel_analytics)
   const [confirmCfg, setConfirmCfg] = useState<null | { title: ReactNode; message: ReactNode; confirmLabel: ReactNode; onConfirm: () => void }>(null);
 
-  const COLS = "id,channel_name,platform_channel_id,niche,niche_pool,is_active,production_paused,production_paused_reason";
+  const COLS = "id,channel_name,platform_channel_id,niche,niche_pool,is_active,production_paused,production_paused_reason,subscriber_count";
 
   const load = useCallback(async () => {
     const [{ data: chs, error: e1 }, { data: tc }] = await Promise.all([
@@ -134,12 +141,19 @@ export default function ChannelsPage() {
       const { data: pl } = await supabase.from("plan_limits").select("max_channels").eq("plan_type", pt).maybeSingle();
       setMaxCh((pl as { max_channels?: number } | null)?.max_channels ?? null);
     }
-    // Kesiapan per channel (RPC channel_missing/readiness — sumber gerbang yg sama) + Video NYATA (videos published).
+    // Kesiapan + resume analytics per channel (RPC) — Video NYATA (videos published) di bawah.
     const rd: Record<string, { ready: boolean; missing: string[] }> = {};
+    const am: Record<string, { total_views: number; avg_engagement: number | null }> = {};
     await Promise.all(rows.map(async (c) => {
       try { const { data } = await supabase.rpc("channel_readiness", { p_channel_id: c.id }); if (data) rd[c.id] = data as { ready: boolean; missing: string[] }; } catch { /* non-fatal */ }
+      try {
+        const { data: ca } = await supabase.rpc("get_channel_analytics", { p_channel_id: c.id });
+        const a = (Array.isArray(ca) ? ca[0] : ca) as { total_views: number; avg_engagement: number | null } | null;
+        if (a) am[c.id] = { total_views: a.total_views, avg_engagement: a.avg_engagement };
+      } catch { /* non-fatal */ }
     }));
     setRdMap(rd);
+    setAnaMap(am);
     const { data: vids } = await supabase.from("videos").select("channel_id").eq("status", "published");
     const vc: Record<string, number> = {};
     ((vids ?? []) as { channel_id: string | null }[]).forEach((v) => { if (v.channel_id) vc[v.channel_id] = (vc[v.channel_id] || 0) + 1; });
@@ -217,7 +231,7 @@ export default function ChannelsPage() {
             ? <IncompleteCard />
             : shown.length === 0
               ? <div className="muted" style={{ padding: "2rem", gridColumn: "1/-1", textAlign: "center" }}><Bi id="Tidak ada channel pada filter ini." en="No channels in this filter." /></div>
-              : shown.map((c) => <ChannelCard key={c.id} ch={c} eff={effectiveStatus(c, sub, rdMap[c.id] ?? null)} vid={vidCount[c.id] ?? 0} busy={busyId === c.id} onToggle={askToggle} />)}
+              : shown.map((c) => <ChannelCard key={c.id} ch={c} eff={effectiveStatus(c, sub, rdMap[c.id] ?? null)} vid={vidCount[c.id] ?? 0} ana={anaMap[c.id]} busy={busyId === c.id} onToggle={askToggle} />)}
       </div>
 
       <ConfirmDialog

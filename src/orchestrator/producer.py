@@ -9,6 +9,7 @@ yang melakukan publish dari buffer.
 """
 
 import os
+import re
 import time
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -17,6 +18,14 @@ from loguru import logger
 
 from src.orchestrator import inventory
 from src.utils import s3_buffer
+
+
+def _yt_video_id(url: str) -> str | None:
+    """Ekstrak video_id dari URL YouTube (shorts / youtu.be / watch?v=). Robust — URL selalu memuat id."""
+    if not url:
+        return None
+    m = re.search(r"(?:youtube\.com/shorts/|youtu\.be/|[?&]v=)([\w-]{6,})", url)
+    return m.group(1) if m else None
 
 
 def max_concurrent_render() -> int:
@@ -260,10 +269,14 @@ def run_direct(sb, job: dict) -> None:
     # Tulis production_runs (muncul di Runs/D5). queue_id NULL (bukan jalur pipeline_queue).
     try:
         _script = result.get("script", {}) or {}
+        # Tautkan video_id agar kolom Views di /runs ketemu (jalur buffer sudah; jalur direct
+        # SEBELUMNYA tak menulisnya → Views selalu "—"). Sumber: hasil publish, fallback ekstrak URL.
+        _yt_obj = result.get("published", {}).get("youtube") or {}
+        _yt_vid = _yt_obj.get("video_id") or _yt_video_id(yt_url)
         sb.table("production_runs").insert({
             "tenant_id": tenant_id, "run_id": run_id, "channel_id": str(job["channel_id"]),
             "niche": niche, "topic": _script.get("topic", ""), "status": status,
-            "youtube_url": yt_url, "qc_passed": qc_ok,
+            "youtube_url": yt_url, "youtube_video_id": _yt_vid, "qc_passed": qc_ok,
             "viral_score": _script.get("viral_score"),
             "llm_provider": _script.get("llm_provider_used"),
             "elapsed_seconds": result.get("elapsed_seconds"),

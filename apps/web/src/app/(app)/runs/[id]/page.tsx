@@ -5,10 +5,14 @@ import { useParams } from "next/navigation";
 import {
   ArrowLeft, Tag, Calendar, Clock, RefreshCw, ExternalLink, Search, Pause, Play,
   Radar, Target, FileText, Sparkles, AudioLines, Image as ImageIcon, Film, Upload,
-  Check, Loader2, X, AlertTriangle, Eye, type LucideIcon,
+  Check, Loader2, X, AlertTriangle, Eye, Trash2, type LucideIcon,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { BASELINE_WEIGHTS, DIM_LABEL } from "@/components/insights-view";
 import "./run-detail.css";
+
+// Urutan dimensi skor viral (selaras src/intelligence/config.py).
+const SCORE_DIMS = ["search_volume", "trend_momentum", "emotional_trigger", "competition_gap", "evergreen_potential"];
 
 // D5 Run Detail — Phase 9.3 (wired Supabase v2, anon + RLS). Header + log = data NYATA.
 // Log: fetch pipeline_run_logs by queue_id + REALTIME subscribe (live-tail). Pipeline 8-step =
@@ -23,9 +27,11 @@ type RunRow = {
   error_message: string | null; llm_provider: string | null; created_at: string;
 };
 
-function statusKey(s: string | null): "completed" | "running" | "failed" | "queued" | "review" {
+function statusKey(s: string | null): "completed" | "running" | "failed" | "queued" | "review" | "discarded" {
   const v = (s || "").toLowerCase();
   if (v.includes("complete") || v === "published" || v === "success") return "completed";
+  // discarded = tenant sudah Buang konten cacat (resolved) → bukan "perlu ditinjau". Cek sebelum qc_fail/fail.
+  if (v.includes("discard")) return "discarded";
   // qc_failed / ready_with_issues = PRODUK JADI + catatan QC → "Perlu Ditinjau" (cek SEBELUM 'fail').
   if (v.includes("qc_fail") || v.includes("ready_with_issues") || v.includes("issue")) return "review";
   if (v.includes("fail") || v.includes("error")) return "failed";
@@ -73,6 +79,9 @@ export default function RunDetailPage() {
   const logRef = useRef<HTMLDivElement>(null);
   const pausedRef = useRef(paused); pausedRef.current = paused;
   const [retryMsg, setRetryMsg] = useState<string | null>(null);
+  // #5 breakdown skor viral: dimensi mentah (videos.topic_scores by run_id) × bobot adaptif (tenant_configs).
+  const [dims, setDims] = useState<Record<string, number> | null>(null);
+  const [scoreW, setScoreW] = useState<Record<string, number> | null>(null);
 
   // Jalankan ulang run yang gagal — direct_job retry (mis. setelah beli kredit AI).
   async function retry() {
@@ -99,6 +108,14 @@ export default function RunDetailPage() {
     else if (r?.queue_id != null) q = q.eq("queue_id", String(r.queue_id));
     else q = null as never;
     if (q) { const { data: lg } = await q.order("created_at", { ascending: true }).limit(2000); setLogs((lg as LogRow[]) ?? []); }
+    // #5: dimensi skor via RPC satu-pintu (videos → fallback content_inventory) + bobot adaptif tenant.
+    if (r?.run_id) {
+      const { data: ts } = await supabase.rpc("get_run_topic_scores", { p_run_id: r.run_id });
+      const t = ts as Record<string, number> | null;
+      setDims(t && SCORE_DIMS.every((d) => typeof t[d] === "number") ? t : null);
+    } else { setDims(null); }
+    const { data: tc } = await supabase.from("tenant_configs").select("viral_score_weights").maybeSingle();
+    setScoreW((tc as { viral_score_weights?: { weights?: Record<string, number> } } | null)?.viral_score_weights?.weights ?? null);
     setLoading(false);
   }, [supabase, id]);
 
@@ -136,6 +153,10 @@ export default function RunDetailPage() {
   const completed = STEP_DEFS.filter((d) => stepState(d.key) === "completed").length;
   const q = filter.toLowerCase();
   const shown = q ? logs.filter((l) => `${l.level} ${l.step} ${l.message}`.toLowerCase().includes(q)) : logs;
+  // #5 komposisi skor viral: tiap dimensi (0-100) × bobot adaptif → kontribusi; urut kontribusi desc.
+  const W = scoreW ?? BASELINE_WEIGHTS;
+  const brk = dims ? SCORE_DIMS.map((d) => { const score = dims[d]; const weight = W[d] ?? BASELINE_WEIGHTS[d]; return { d, score, weight, contrib: score * weight }; }).sort((a, b) => b.contrib - a.contrib) : [];
+  const brkTotal = brk.reduce((s, r) => s + r.contrib, 0);
 
   return (
     <>
@@ -154,7 +175,7 @@ export default function RunDetailPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", alignItems: "flex-end" }}>
             <span className={`status-lg ${st === "completed" ? "badge-success" : st === "review" ? "badge-warning" : st === "failed" ? "badge-error" : st === "running" ? "badge-running" : "badge-default"}`}>
               <span className="dot" style={{ width: 7, height: 7, borderRadius: "50%", background: "currentColor" }} />
-              {st === "completed" ? <><span data-id>Selesai</span><span data-en>Completed</span></> : st === "review" ? <><span data-id>Perlu Ditinjau</span><span data-en>Needs Review</span></> : st === "failed" ? <><span data-id>Gagal</span><span data-en>Failed</span></> : st === "running" ? <><span data-id>Berjalan</span><span data-en>Running</span></> : <><span data-id>Antre</span><span data-en>Queued</span></>}
+              {st === "completed" ? <><span data-id>Selesai</span><span data-en>Completed</span></> : st === "review" ? <><span data-id>Perlu Ditinjau</span><span data-en>Needs Review</span></> : st === "discarded" ? <><span data-id>Dibuang</span><span data-en>Discarded</span></> : st === "failed" ? <><span data-id>Gagal</span><span data-en>Failed</span></> : st === "running" ? <><span data-id>Berjalan</span><span data-en>Running</span></> : <><span data-id>Antre</span><span data-en>Queued</span></>}
             </span>
             <div className="run-actions">
               <button className="btn btn-secondary btn-sm" onClick={load}><RefreshCw size={15} /> <span data-id>Muat ulang</span><span data-en>Refresh</span></button>
@@ -171,6 +192,13 @@ export default function RunDetailPage() {
           <AlertTriangle size={16} style={{ color: "var(--warning)", flex: "none" }} />
           <span style={{ fontSize: "var(--text-sm)", flex: 1 }}><b><span data-id>Produk berhasil dibuat</span><span data-en>Product was produced</span></b> — <span data-id>ada catatan QC</span><span data-en>QC note</span>: {run.error_message || "—"}. <span data-id>Tinjau (pakai/buang) di halaman Perlu Ditinjau.</span><span data-en>Review (use/discard) on the Needs Review page.</span></span>
           <a href="/review" className="btn btn-secondary btn-sm"><Eye size={14} /> <span data-id>Tinjau</span><span data-en>Review</span></a>
+        </div>
+      )}
+
+      {st === "discarded" && (
+        <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", flexWrap: "wrap", padding: "0.875rem 1.25rem", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", marginBottom: "1rem" }}>
+          <Trash2 size={16} style={{ color: "var(--text-muted)", flex: "none" }} />
+          <span style={{ fontSize: "var(--text-sm)", flex: 1 }}><b><span data-id>Sudah dibuang</span><span data-en>Discarded</span></b> — <span data-id>konten ini Anda tolak saat tinjauan QC dan tidak dipublikasikan.</span><span data-en>you rejected this during QC review; it was not published.</span> {run.error_message ? <><span data-id>Catatan QC</span><span data-en>QC note</span>: {run.error_message}.</> : null}</span>
         </div>
       )}
 
@@ -235,8 +263,42 @@ export default function RunDetailPage() {
             <div className="meta-row"><span className="k">LLM</span><span className="v">{run.llm_provider || "—"}</span></div>
           </div>
           <div className="card card-pad">
-            <h3 className="rail-title"><span data-id>Rincian biaya</span><span data-en>Cost breakdown</span></h3>
-            <p className="muted" style={{ fontSize: "var(--text-xs)", margin: 0 }}><span data-id>Segera hadir.</span><span data-en>Coming soon.</span></p>
+            <h3 className="rail-title"><span data-id>Komposisi skor viral</span><span data-en>Viral score breakdown</span></h3>
+            {brk.length > 0 ? (
+              <>
+                <p className="muted" style={{ fontSize: "var(--text-xs)", margin: "0 0 0.75rem", lineHeight: 1.5 }}>
+                  <span data-id>Skor disusun dari 5 sinyal, masing-masing dikali bobot yang dipelajari mesin.</span>
+                  <span data-en>The score is built from 5 signals, each times the engine-learned weight.</span>
+                </p>
+                {brk.map((r) => (
+                  <div key={r.d} style={{ marginBottom: "0.625rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--text-xs)", marginBottom: "0.25rem" }}>
+                      <span style={{ color: "var(--text-secondary)" }}>{DIM_LABEL[r.d] ? <><span data-id>{DIM_LABEL[r.d].id}</span><span data-en>{DIM_LABEL[r.d].en}</span></> : r.d}</span>
+                      <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>+{r.contrib.toFixed(1)}</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                      <div className="progress" style={{ flex: 1 }}><span style={{ width: `${Math.min(100, r.score)}%` }} /></div>
+                      <span className="muted" style={{ fontSize: "0.65rem", whiteSpace: "nowrap" }}>{r.score} × {(r.weight * 100).toFixed(0)}%</span>
+                    </div>
+                  </div>
+                ))}
+                <div className="meta-row" style={{ borderTop: "1px solid var(--border)", marginTop: "0.5rem", paddingTop: "0.5rem" }}>
+                  <span className="k"><span data-id>Total skor</span><span data-en>Total score</span></span>
+                  <span className="v" style={{ fontSize: "var(--text-sm)", fontWeight: 700 }}>{brkTotal.toFixed(1)}</span>
+                </div>
+                {run.viral_score != null && Math.abs(brkTotal - Number(run.viral_score)) >= 1.5 && (
+                  <p className="muted" style={{ fontSize: "0.65rem", margin: "0.4rem 0 0", lineHeight: 1.45 }}>
+                    <span data-id>Tercatat saat produksi: {run.viral_score}. Selisih kecil = formula mesin terus belajar.</span>
+                    <span data-en>Recorded at production: {run.viral_score}. Small gap = the engine keeps learning.</span>
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="muted" style={{ fontSize: "var(--text-xs)", margin: 0, lineHeight: 1.5 }}>
+                <span data-id>Rincian belum tersedia untuk run ini (tidak ada data dimensi skor).</span>
+                <span data-en>Breakdown not available for this run (no score dimension data).</span>
+              </p>
+            )}
           </div>
         </div>
       </div>

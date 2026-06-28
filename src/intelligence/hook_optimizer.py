@@ -32,16 +32,19 @@ class HookOptimizer:
         if not top_hooks:
             return ""
         lines = [
-            "HISTORICAL HIGH-CTR HOOKS from this channel (real data — these formulas worked):"
+            "HISTORICAL TOP HOOKS from this channel (real data — these patterns worked):"
         ]
         for i, h in enumerate(top_hooks[:3], 1):
-            ctr     = h.get("avg_ctr", 0)
-            pattern = h.get("hook_pattern", "unknown")
+            # Kunci sesuai yang DISIMPAN PerformanceAnalyzer._compute_top_hooks: pattern/avg_view_pct/views.
+            # CTR per-video tak tersedia YouTube API (selalu 0) → pakai retensi+views (sinyal nyata).
+            pattern = h.get("pattern", "unknown")
+            ret     = h.get("avg_view_pct", 0) or 0
+            views   = h.get("views", 0) or 0
             text    = h.get("hook", "")[:80]
-            lines.append(f"  {i}. [{pattern}] \"{text}\" — CTR: {ctr:.1f}%")
+            lines.append(f"  {i}. [{pattern}] \"{text}\" — Retention: {ret:.0f}% | Views: {views:,}")
         lines.append(
             "Use these as formula inspiration. "
-            "Generate a 6th hook variant inspired by the highest-CTR pattern above. "
+            "Generate a 6th hook variant inspired by the highest-engagement pattern above. "
             "Rate it honestly — if it truly rivals the historical winners, score it high."
         )
         return "\n".join(lines)
@@ -114,11 +117,11 @@ IMPORTANT: Return ONLY the JSON object. No markdown, no explanation, no extra te
         raw = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', raw)
         return raw.strip()
 
-    def _load_insights(self, tenant_id: str) -> dict | None:
-        """Load channel_insights terbaru. Fire-and-forget — tidak pernah crash pipeline."""
+    def _load_insights(self, tenant_id: str, channel_id: str | None = None) -> dict | None:
+        """Load channel_insights terbaru CHANNEL INI (isolasi per-channel). Fire-and-forget."""
         try:
             from src.analytics.performance_analyzer import PerformanceAnalyzer
-            return PerformanceAnalyzer().load_latest_insights(tenant_id)
+            return PerformanceAnalyzer().load_latest_insights(tenant_id, channel_id)
         except Exception as e:
             logger.warning(f"[HookOptimizer] Load insights gagal (non-fatal): {e}")
             return None
@@ -241,7 +244,7 @@ IMPORTANT: Return ONLY the JSON object. No markdown, no explanation, no extra te
 
         # S1-C: load channel insights → ambil top_hooks untuk formula ke-6
         top_hooks = None
-        insights  = self._load_insights(tenant_config.tenant_id)
+        insights  = self._load_insights(tenant_config.tenant_id, getattr(tenant_config, "channel_id", None))
         if insights:
             grade = insights.get("performance_grade", "insufficient_data")
             if grade != "insufficient_data":
