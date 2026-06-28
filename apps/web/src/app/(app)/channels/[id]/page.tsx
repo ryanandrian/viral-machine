@@ -93,11 +93,13 @@ export default function ChannelDetailPage() {
   const [chCmp, setChCmp] = useState<Compliance | null>(null);
   const [chIns, setChIns] = useState<Insights | null>(null);
   const [chRuns, setChRuns] = useState<{ id: string; status: string; niche: string | null; topic: string | null; created_at: string }[]>([]);
+  const [chRunStats, setChRunStats] = useState<{ total: number; success: number; failed: number; review: number } | null>(null);  // COUNT penuh (bukan chRuns yg .limit(60))
   const [slots, setSlots] = useState<string[]>([]);
   const [newSlot, setNewSlot] = useState("");
   const [slotMsg, setSlotMsg] = useState<string | null>(null);
   const [savingSlot, setSavingSlot] = useState(false);
-  const [totalVids, setTotalVids] = useState<number | null>(null);  // video produksi sukses channel ini
+  const [totalVids, setTotalVids] = useState<number | null>(null);  // = Video terbit (videos.published) per channel (std 0098)
+  const [chAnalytics, setChAnalytics] = useState<{ published_videos: number; total_views: number; avg_engagement: number | null } | null>(null);
   // F2-03: pemilih AI per-channel (model + voice). Katalog dari ai_models/tts_profiles/voice_catalog (RLS read).
   const [llmOpts, setLlmOpts] = useState<ModelOpt[]>([]);
   const [imgOpts, setImgOpts] = useState<(ModelOpt & { component: string })[]>([]);  // generator visual: image + video (BUKAN library/footage)
@@ -401,9 +403,21 @@ export default function ChannelDetailPage() {
     const { data: pr } = await supabase.from("production_runs")
       .select("id,status,niche,topic,created_at").eq("channel_id", id).order("created_at", { ascending: false }).limit(60);
     setChRuns((pr ?? []) as { id: string; status: string; niche: string | null; topic: string | null; created_at: string }[]);
-    // Total video per-channel = produksi SUKSES (production_runs.channel_id terisi 100%; akurat).
-    const { count: vCount } = await supabase.from("production_runs").select("id", { count: "exact", head: true }).eq("channel_id", id).eq("status", "success");
-    setTotalVids(vCount ?? 0);
+    // Analytics per-channel (all-time, std 0098): Video terbit=videos.published · Views/Engagement=video_analytics latest-per-video.
+    try {
+      const { data: ca } = await supabase.rpc("get_channel_analytics", { p_channel_id: id });
+      const a = (Array.isArray(ca) ? ca[0] : ca) as { published_videos: number; total_views: number; avg_engagement: number | null } | null;
+      setChAnalytics(a ?? null);
+      setTotalVids(a?.published_videos ?? 0);
+    } catch { setChAnalytics(null); setTotalVids(0); }
+    // KPI tab Analytics = COUNT PENUH per status (chRuns ter-limit 60 → tak akurat utk total).
+    const cntRun = async (st?: string[]) => {
+      let qb = supabase.from("production_runs").select("id", { count: "exact", head: true }).eq("channel_id", id);
+      if (st) qb = qb.in("status", st);
+      const { count } = await qb; return count ?? 0;
+    };
+    const [rTot, rOk, rFail, rRev] = await Promise.all([cntRun(), cntRun(["success"]), cntRun(["failed"]), cntRun(["qc_failed", "ready_with_issues"])]);
+    setChRunStats({ total: rTot, success: rOk, failed: rFail, review: rRev });
     const tier = (cfg as { plan_type?: string } | null)?.plan_type ?? "starter";
     const { data: nrows } = await supabase.from("niches").select("niche_id,name,is_base,access_type,exclusive_to,default_hashtags").eq("is_active", true);
     const me = user?.id ?? "";
@@ -445,11 +459,11 @@ export default function ChannelDetailPage() {
             ? <a href={`https://youtube.com/channel/${ch.platform_channel_id}`} target="_blank" rel="noopener noreferrer" className="cd-yt-link"><span className="yt" /> youtube.com/channel/{ch.platform_channel_id} <ExternalLink size={13} /></a>
             : <span className="cd-yt-link muted"><span className="yt" /> <Bi id="YouTube belum terhubung" en="YouTube not connected" /></span>}
           <div className="cd-kpi-strip">
-            {/* Total video + Subscribers = NYATA per-channel. Views/Engagement = metrik YouTube → tab Analytics/Studio; per-channel menunggu backfill video_analytics.channel_id (F1-06). */}
-            <div className="item"><div className="v">{totalVids != null ? totalVids.toLocaleString("id-ID") : "—"}</div><div className="l"><Bi id="Total video" en="Total videos" /></div></div>
+            {/* Std 0098 (all-time): Video terbit=videos.published · Views/Engagement=video_analytics latest-per-video (video MesinViral). Subscribers=channels.subscriber_count. RPC get_channel_analytics. */}
+            <div className="item"><div className="v">{totalVids != null ? totalVids.toLocaleString("id-ID") : "—"}</div><div className="l"><Bi id="Video terbit" en="Published" /></div></div>
             <div className="item"><div className="v">{ch.subscriber_count != null ? ch.subscriber_count.toLocaleString("id-ID") : "—"}</div><div className="l">Subscribers</div></div>
-            <div className="item" title="Metrik YouTube — buka YouTube Studio (tab Analytics). Per-channel menunggu F1-06."><div className="v">—</div><div className="l"><Bi id="Views bulan ini" en="Views this month" /></div></div>
-            <div className="item" title="Metrik YouTube — buka YouTube Studio (tab Analytics). Per-channel menunggu F1-06."><div className="v">—</div><div className="l"><Bi id="Avg engagement" en="Avg engagement" /></div></div>
+            <div className="item" title="Akumulasi views video yang diproduksi MesinViral (per sinkronisasi terakhir). Total channel penuh → YouTube Studio."><div className="v">{chAnalytics?.total_views != null ? chAnalytics.total_views.toLocaleString("id-ID") : "—"}</div><div className="l"><Bi id="Total Views" en="Total Views" /></div></div>
+            <div className="item" title="(like+komentar)/views video MesinViral, per sinkronisasi terakhir."><div className="v">{chAnalytics?.avg_engagement != null ? `${chAnalytics.avg_engagement}%` : "—"}</div><div className="l"><Bi id="Avg engagement" en="Avg engagement" /></div></div>
           </div>
         </div>
         <div style={{ display: "flex", gap: "0.5rem" }}>
@@ -557,7 +571,7 @@ export default function ChannelDetailPage() {
       {tab === "analytics" && (
         <div className="card card-pad">
           <h3 className="card-title" style={{ marginBottom: "0.75rem" }}><Bi id="Kinerja mesin — channel ini" en="Engine performance — this channel" /></h3>
-          {(() => { const tot = chRuns.length, ok = chRuns.filter((r) => r.status === "success").length, qc = chRuns.filter((r) => r.status === "qc_failed" || r.status === "ready_with_issues").length, fail = chRuns.filter((r) => r.status === "failed").length;
+          {(() => { const tot = chRunStats?.total ?? 0, ok = chRunStats?.success ?? 0, qc = chRunStats?.review ?? 0, fail = chRunStats?.failed ?? 0;
             return (<div className="cd-kpi-strip">
               <div className="item"><div className="v">{tot}</div><div className="l"><Bi id="Total run" en="Total runs" /></div></div>
               <div className="item"><div className="v">{tot ? Math.round((ok / tot) * 100) : 0}%</div><div className="l"><Bi id="Success rate" en="Success rate" /></div></div>

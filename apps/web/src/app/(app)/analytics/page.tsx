@@ -69,10 +69,10 @@ export default function AnalyticsPage() {
 
   const KPI = ov ? [
     { Icon: Users, l: ["Followers", "Followers"], v: fmtK(ov.total_followers), sub: "YouTube" },
-    { Icon: Eye, l: ["Total Views", "Total Views"], v: fmtK(ov.total_views), sub: `${fmtK(ov.views_30d)} / 30hr` },
+    { Icon: Eye, l: ["Total Views", "Total Views"], v: fmtK(ov.total_views), sub: "video MesinViral · semua channel" },
     { Icon: Percent, l: ["Avg Retensi", "Avg Retention"], v: pct(ov.avg_retention), sub: `${ov.retention_videos} video ber-data` },
     { Icon: TrendingUp, l: ["Avg Engagement", "Avg Engagement"], v: pct(ov.avg_engagement), sub: "like+komentar / views" },
-    { Icon: Film, l: ["Total Video", "Total Videos"], v: fmtK(ov.videos), sub: `${ov.videos_30d} / 30hr` },
+    { Icon: Film, l: ["Video terbit", "Published videos"], v: fmtK(ov.videos), sub: "semua channel" },
     { Icon: MessageSquare, l: ["Komentar", "Comments"], v: fmtK(ov.total_comments), sub: `${fmtK(ov.total_likes)} likes` },
   ] : [];
 
