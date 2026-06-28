@@ -43,6 +43,7 @@ class TenantConfig:
     preferred_hook_pattern: str | None = None   # saran LRU hook formula — PREFERENSI (quality-first), bukan paksa
     visual_seed:            int | None = None   # seed image-gen → frame fingerprint unik
     preferred_music_mood:   str | None = None   # mood LRU dari niches.mood_priority (niche-safe) — §9.1
+    run_kind:               str = ""            # asal run: ""=terjadwal · "test"=Test now tenant · "admin_test" · "retry" (utk tandai laporan)
 
 def tenant_config_from_channel(channel_row: dict, niche=None) -> "TenantConfig":
     """Bangun TenantConfig dari row `channels` — thread field Multi-Format + Branded sekaligus.

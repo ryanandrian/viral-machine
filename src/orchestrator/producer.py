@@ -235,6 +235,7 @@ def run_direct(sb, job: dict) -> None:
         tc = tenant_config_from_channel(ch, niche=niche)
         try:
             tc.publish_privacy = job.get("publish_privacy") or "private"
+            tc.run_kind = job.get("job_type") or ""   # "test"/"admin_test" → ditandai di laporan Telegram
         except Exception:
             pass
         with logger.contextualize(tenant_id=tenant_id, run_id=run_id):

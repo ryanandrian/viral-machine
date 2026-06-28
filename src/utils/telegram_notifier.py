@@ -70,12 +70,22 @@ class TelegramNotifier:
         clips = result.get("steps", {}).get("visuals", {}).get("clips", 0)
         ts    = result.get("steps", {}).get("tts", {}).get("timestamps", 0)
 
-        lines = [
-            f"✅ <b>[{channel}] Video Published!</b>",
-            f"🎬 <i>{self._escape(title)}</i>",
-            f"🎯 Hook score: <b>{hook_score}/100</b>  |  🏷 Niche: {niche}",
-            f"⏱ Durasi: {duration_str}  |  💾 {size_mb} MB  |  🎞 {clips} clips",
-        ]
+        is_test = result.get("run_kind") in ("test", "admin_test")
+        if is_test:
+            lines = [
+                f"🧪 <b>[{channel}] VIDEO UJI (PRIVATE)</b>",
+                "⚠️ <i>Pratinjau konfigurasi via tombol \"Test now\" — di-upload PRIVAT di YouTube (bukan publikasi publik) & memakai kredit AI (BYOK) Anda.</i>",
+                f"🎬 <i>{self._escape(title)}</i>",
+                f"🎯 Hook score: <b>{hook_score}/100</b>  |  🏷 Niche: {niche}",
+                f"⏱ Durasi: {duration_str}  |  💾 {size_mb} MB  |  🎞 {clips} clips",
+            ]
+        else:
+            lines = [
+                f"✅ <b>[{channel}] Video Published!</b>",
+                f"🎬 <i>{self._escape(title)}</i>",
+                f"🎯 Hook score: <b>{hook_score}/100</b>  |  🏷 Niche: {niche}",
+                f"⏱ Durasi: {duration_str}  |  💾 {size_mb} MB  |  🎞 {clips} clips",
+            ]
         if video_id:
             lines.append(f"🔗 {url}")
         lines += [
@@ -87,11 +97,13 @@ class TelegramNotifier:
 
     def notify_qc_fail(self, run_id: str, tenant_id: str, topic: str,
                        qc_reason: str, duration_secs, size_mb: float,
-                       run_config=None, url: str = "", recommendation: str = "") -> bool:
+                       run_config=None, url: str = "", recommendation: str = "",
+                       is_test: bool = False) -> bool:
         """
         ADVISORY (Opsi A — QC_CONTENT_ARCHITECTURE.md §3/§6.2): video gagal QC TIDAK dibuang
         → di-publish PRIVAT untuk ditinjau tenant. Sertakan alasan + rekomendasi (dinamis,
         no-hardcode) + URL privat. Tenant putuskan: jadikan publik atau hapus.
+        is_test=True (tombol "Test now") → tandai jelas di awal bahwa ini video uji.
         """
         chat_id = self._get_chat_id(run_config)
         if not chat_id:
@@ -100,7 +112,10 @@ class TelegramNotifier:
         channel      = self._channel_name(run_config, {"tenant_id": tenant_id})
         duration_str = f"{duration_secs:.1f}s" if duration_secs else "—"
 
-        lines = [
+        lines = []
+        if is_test:
+            lines.append("🧪 <b>VIDEO UJI (PRIVATE)</b> — dari tombol \"Test now\", memakai kredit AI (BYOK) Anda.")
+        lines += [
             f"⚠️ <b>[{channel}] QC tak lolos — di-publish PRIVAT untuk Anda tinjau</b>",
             f"📋 Topik: <i>{self._escape(str(topic)[:100])}</i>",
             f"❌ Alasan: {self._escape(qc_reason)}",

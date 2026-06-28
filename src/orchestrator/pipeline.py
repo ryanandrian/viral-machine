@@ -118,6 +118,7 @@ class Pipeline:
             "video_path":   None,
             "published":    {},
             "storage":      {},
+            "run_kind":     getattr(tenant_config, "run_kind", ""),  # tandai laporan (test/private)
         }
 
         video_path = None
@@ -374,6 +375,7 @@ class Pipeline:
                             run_config     = run_config,
                             url            = _private_url,
                             recommendation = recommendation,
+                            is_test        = getattr(tenant_config, "run_kind", "") in ("test", "admin_test"),
                         )
                     except Exception as _te:
                         logger.warning(f"[Telegram] notify_qc_fail gagal: {_te}")
