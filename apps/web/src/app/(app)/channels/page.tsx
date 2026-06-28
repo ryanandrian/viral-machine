@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Plus, Tv, Zap, ArrowRight, Pause, Play, Shuffle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { effectiveStatus, ChannelStatusBadge, type Eff } from "@/lib/channel-status";
+import ConfirmDialog from "@/components/confirm-dialog";
 import "./channels.css";
 
 // D2 Channels List — Phase 9.2 VERTICAL SLICE (wired ke Supabase v2, anon + RLS).
@@ -114,6 +115,7 @@ export default function ChannelsPage() {
   const [sub, setSub] = useState<string | null>(null);
   const [rdMap, setRdMap] = useState<Record<string, { ready: boolean; missing: string[] }>>({});
   const [vidCount, setVidCount] = useState<Record<string, number>>({});
+  const [confirmCfg, setConfirmCfg] = useState<null | { title: ReactNode; message: ReactNode; confirmLabel: ReactNode; onConfirm: () => void }>(null);
 
   const COLS = "id,channel_name,platform_channel_id,niche,niche_pool,is_active,production_paused,production_paused_reason";
 
@@ -172,6 +174,17 @@ export default function ChannelsPage() {
     setBusyId(null);
   }
 
+  // Pause = konfirmasi (cegah hentikan produksi tak sengaja). Resume = langsung (sudah ada gerbang readiness).
+  function askToggle(c: ChannelRow) {
+    if (!c.is_active) { toggleActive(c); return; }
+    setConfirmCfg({
+      title: <Bi id="Jeda produksi channel ini?" en="Pause this channel's production?" />,
+      message: <Bi id="Produksi video baru akan berhenti sampai Anda aktifkan lagi. Tidak memakai kredit, bisa dilanjutkan kapan saja." en="New video production will stop until you resume. It uses no credit and can be resumed anytime." />,
+      confirmLabel: <Bi id="Ya, jeda" en="Yes, pause" />,
+      onConfirm: () => { setConfirmCfg(null); toggleActive(c); },
+    });
+  }
+
   const shown = channels.filter((c) => f === "all" || (f === "active" ? c.is_active : !c.is_active));
   const used = channels.length;
 
@@ -204,8 +217,19 @@ export default function ChannelsPage() {
             ? <IncompleteCard />
             : shown.length === 0
               ? <div className="muted" style={{ padding: "2rem", gridColumn: "1/-1", textAlign: "center" }}><Bi id="Tidak ada channel pada filter ini." en="No channels in this filter." /></div>
-              : shown.map((c) => <ChannelCard key={c.id} ch={c} eff={effectiveStatus(c, sub, rdMap[c.id] ?? null)} vid={vidCount[c.id] ?? 0} busy={busyId === c.id} onToggle={toggleActive} />)}
+              : shown.map((c) => <ChannelCard key={c.id} ch={c} eff={effectiveStatus(c, sub, rdMap[c.id] ?? null)} vid={vidCount[c.id] ?? 0} busy={busyId === c.id} onToggle={askToggle} />)}
       </div>
+
+      <ConfirmDialog
+        open={!!confirmCfg}
+        title={confirmCfg?.title}
+        message={confirmCfg?.message}
+        confirmLabel={confirmCfg?.confirmLabel}
+        confirmClass="btn-default"
+        busy={!!busyId}
+        onConfirm={() => confirmCfg?.onConfirm()}
+        onCancel={() => setConfirmCfg(null)}
+      />
     </>
   );
 }

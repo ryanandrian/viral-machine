@@ -7,6 +7,7 @@ import { ExternalLink, Settings, Zap, ArrowRight, BarChart3, Calendar, Activity,
 import { createClient } from "@/lib/supabase/client";
 import { effectiveStatus, TONE } from "@/lib/channel-status";
 import PresetTables from "@/components/preset-tables";
+import ConfirmDialog from "@/components/confirm-dialog";
 import { ComplianceView, type Compliance } from "@/components/compliance-view";
 import { InsightsView, type Insights } from "@/components/insights-view";
 import "./channel-detail.css";
@@ -84,6 +85,7 @@ export default function ChannelDetailPage() {
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [testMsg, setTestMsg] = useState<string | null>(null);
+  const [confirmCfg, setConfirmCfg] = useState<null | { title: React.ReactNode; message: React.ReactNode; confirmLabel: React.ReactNode; confirmClass: string; onConfirm: () => void }>(null);
   // F2-07/F1-09: status efektif
   const [sub, setSub] = useState<string | null>(null);
   const [rd, setRd] = useState<{ ready: boolean; missing: string[] } | null>(null);
@@ -289,6 +291,29 @@ export default function ChannelDetailPage() {
   }
 
   // Test sekarang (private) — direct_job: produksi 1 dgn config channel ini, publish private (preview).
+  // Konfirmasi WAJIB — Test now memakai kredit AI (BYOK) tenant untuk 1 video.
+  function askTestNow() {
+    setConfirmCfg({
+      title: <Bi id="Produksi video uji sekarang?" en="Produce a test video now?" />,
+      message: <Bi
+        id="Ini memproduksi 1 video uji (PRIVATE) untuk pratinjau konfigurasi — di-upload privat di YouTube, BUKAN publikasi publik. Proses ini MEMAKAI kredit AI (BYOK) Anda untuk 1 video."
+        en="This produces 1 test video (PRIVATE) to preview your config — uploaded privately to YouTube, NOT a public post. It USES your AI (BYOK) credit for 1 video." />,
+      confirmLabel: <Bi id="Ya, produksi uji" en="Yes, run test" />,
+      confirmClass: "btn-ai",
+      onConfirm: () => { setConfirmCfg(null); testNow(); },
+    });
+  }
+  // Konfirmasi ringan — Pause menghentikan produksi baru channel ini.
+  function askPause() {
+    setConfirmCfg({
+      title: <Bi id="Jeda produksi channel ini?" en="Pause this channel's production?" />,
+      message: <Bi id="Produksi video baru akan berhenti sampai Anda aktifkan lagi. Tidak memakai kredit, dan bisa dilanjutkan kapan saja." en="New video production will stop until you resume. It uses no credit and can be resumed anytime." />,
+      confirmLabel: <Bi id="Ya, jeda" en="Yes, pause" />,
+      confirmClass: "btn-default",
+      onConfirm: () => { setConfirmCfg(null); pausePlay(false); },
+    });
+  }
+
   async function testNow() {
     setTestMsg(null); setBusy(true);
     const { data: { user } } = await supabase.auth.getUser();
@@ -432,10 +457,10 @@ export default function ChannelDetailPage() {
           {/* F2-07: pause/play (is_active). Play ter-gate readiness. Sembunyikan saat halted/sub (pakai aksi di banner). */}
           {!ch.production_paused && (sub === null || ["active","trialing","trial","grace"].includes(sub)) && (
             ch.is_active
-              ? <button className="btn btn-secondary" disabled={busy} onClick={() => pausePlay(false)}><Pause size={15} /> <Bi id="Jeda" en="Pause" /></button>
+              ? <button className="btn btn-secondary" disabled={busy} onClick={askPause}><Pause size={15} /> <Bi id="Jeda" en="Pause" /></button>
               : <button className="btn btn-secondary" disabled={busy} onClick={() => pausePlay(true)}><Play size={15} /> <Bi id="Aktifkan" en="Activate" /></button>
           )}
-          <button className="btn btn-ai" disabled={busy} onClick={testNow} title="Produksi 1 video private untuk preview config"><Zap size={15} /> <Bi id="Test sekarang (private)" en="Test now (private)" /></button>
+          <button className="btn btn-ai" disabled={busy} onClick={askTestNow} title="Produksi 1 video private untuk preview config"><Zap size={15} /> <Bi id="Test sekarang (private)" en="Test now (private)" /></button>
         </div>
         {testMsg && <div style={{ flexBasis: "100%", fontSize: "var(--text-xs)", color: "var(--text-secondary)", marginTop: ".5rem" }}>{testMsg}</div>}
       </div>
@@ -450,7 +475,7 @@ export default function ChannelDetailPage() {
               {eff.reason && <div style={{ fontSize: "var(--text-sm)", color: "var(--text-secondary)", marginTop: "0.25rem" }}>{eff.reason}</div>}
               {eff.reco_id && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.35rem" }}><Bi id={eff.reco_id} en={eff.reco_en!} /></div>}
               <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.625rem", flexWrap: "wrap" }}>
-                {eff.key === "halted" && <button className="btn btn-ai btn-sm" disabled={busy} onClick={testNow}><RotateCw size={14} /> <Bi id="Jalankan ulang & pulihkan" en="Run & recover" /></button>}
+                {eff.key === "halted" && <button className="btn btn-ai btn-sm" disabled={busy} onClick={askTestNow}><RotateCw size={14} /> <Bi id="Jalankan ulang & pulihkan" en="Run & recover" /></button>}
                 {eff.key === "incomplete" && <button className="btn btn-default btn-sm" onClick={() => setTab("settings")}><Settings size={14} /> <Bi id="Lengkapi konfigurasi" en="Complete config" /></button>}
                 {eff.key === "paused" && <button className="btn btn-default btn-sm" disabled={busy} onClick={() => pausePlay(true)}><Play size={14} /> <Bi id="Aktifkan" en="Activate" /></button>}
               </div>
@@ -817,6 +842,17 @@ export default function ChannelDetailPage() {
 
         </>
       )}
+
+      <ConfirmDialog
+        open={!!confirmCfg}
+        title={confirmCfg?.title}
+        message={confirmCfg?.message}
+        confirmLabel={confirmCfg?.confirmLabel}
+        confirmClass={confirmCfg?.confirmClass}
+        busy={busy}
+        onConfirm={() => confirmCfg?.onConfirm()}
+        onCancel={() => setConfirmCfg(null)}
+      />
     </>
   );
 }
