@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Activity, BarChart3, Target, Zap, Eye, TrendingUp, Users, MessageSquare, Sparkles, ArrowRight, Film, Percent, Flame, ChevronDown } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { PageHeader } from "@/components/page-header";
 import "./analytics.css";
 
 // D6 Analytics — DATA NYATA via RPC server-side (0058): overview/by-niche/monthly/top-videos/learning.
@@ -94,7 +95,7 @@ export default function AnalyticsPage() {
 
   if (!ov || ov.videos === 0) return (
     <>
-      <div className="an-head"><div><h1>Analytics</h1><div className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Performa channel dari data nyata" en="Real channel performance" /></div></div></div>
+      <PageHeader icon={BarChart3} title="Analytics" subtitle={<Bi id="Performa channel dari data nyata" en="Real channel performance" />} />
       <div className="card card-pad" style={{ textAlign: "center", padding: "3rem 1.5rem" }}>
         <BarChart3 size={32} style={{ color: "var(--text-muted)", marginBottom: "0.75rem" }} />
         <p className="muted"><Bi id="Belum ada data analitik. Muncul 24-72 jam setelah video pertama tayang." en="No analytics yet. Appears 24-72h after your first video goes live." /></p>
@@ -104,13 +105,9 @@ export default function AnalyticsPage() {
 
   return (
     <>
-      <div className="an-head">
-        <div>
-          <h1>Analytics</h1>
-          <div className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Performa channel dari data nyata" en="Real channel performance" /> · <Bi id="diperbarui" en="updated" /> {ago(learn?.computed_at ?? null)}</div>
-        </div>
-        {grade && <span className="badge" style={{ background: "var(--success-soft)", color: "var(--success)", textTransform: "capitalize" }}><Flame size={13} style={{ verticalAlign: -2 }} /> {grade}</span>}
-      </div>
+      <PageHeader icon={BarChart3} title="Analytics"
+        subtitle={<><Bi id="Performa channel dari data nyata" en="Real channel performance" /> · <Bi id="diperbarui" en="updated" /> {ago(learn?.computed_at ?? null)}</>}
+        action={grade ? <span className="badge" style={{ background: "var(--success-soft)", color: "var(--success)", textTransform: "capitalize" }}><Flame size={13} style={{ verticalAlign: -2 }} /> {grade}</span> : undefined} />
 
       <div className="an-kpi-strip">
         {KPI.map((k, i) => (

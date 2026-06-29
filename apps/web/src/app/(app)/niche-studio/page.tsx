@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Sparkles, Plus, X, Check, Loader2 } from "lucide-react";
+import { Palette, Plus, X, Check, Loader2 } from "lucide-react";
 import { YT_CATEGORIES } from "@/lib/youtube-categories";
+import { PageHeader } from "@/components/page-header";
 
 // F3-03 / F2-10 — Niche Studio (tenant Business+, GATED). Buat/edit niche CUSTOM PRIVATE sendiri
 // via /api/niches/mine (server-enforce: private + exclusive_to=tenant + gating min-rank).
@@ -88,19 +89,15 @@ export default function NicheStudioPage() {
 
   return (
     <>
-      <div style={{ display: "flex", alignItems: "center", marginBottom: "1.5rem" }}>
-        <div style={{ flex: 1 }}>
-          <h1><Sparkles size={26} style={{ color: "var(--accent)", verticalAlign: "-4px" }} /> Niche Studio</h1>
-          <div style={muted}><Bi id="Buat & sesuaikan niche custom PRIVAT milik Anda (DNA: voice/visual/musik/timing)." en="Create & tune your own PRIVATE custom niches (DNA: voice/visual/music/timing)." /></div>
-        </div>
-        {gated && <button className="btn btn-default" onClick={() => setNewN({ niche_id: "", name: "" })}><Plus size={15} /> <Bi id="Niche baru" en="New niche" /></button>}
-      </div>
+      <PageHeader icon={Palette} title="Niche Studio"
+        subtitle={<Bi id="Buat & sesuaikan niche custom PRIVAT milik Anda (DNA: voice/visual/musik/timing)." en="Create & tune your own PRIVATE custom niches (DNA: voice/visual/music/timing)." />}
+        action={gated ? <button className="btn btn-default" onClick={() => setNewN({ niche_id: "", name: "" })}><Plus size={15} /> <Bi id="Niche baru" en="New niche" /></button> : undefined} />
 
       {gated === null && <div style={{ ...muted, padding: "2rem", textAlign: "center" }}><Bi id="Memuat…" en="Loading…" /></div>}
 
       {gated === false && (
         <div className="card card-pad" style={{ maxWidth: 560, textAlign: "center", padding: "2.5rem" }}>
-          <Sparkles size={32} style={{ color: "var(--accent)", margin: "0 auto 0.75rem" }} />
+          <Palette size={32} style={{ color: "var(--accent)", margin: "0 auto 0.75rem" }} />
           <h3 style={{ marginBottom: "0.5rem" }}><Bi id="Niche Studio — fitur paket Business" en="Niche Studio — Business plan feature" /></h3>
           <p style={muted}><Bi id="Buat niche custom DNA sendiri tersedia di paket Business+. Tier lain bisa request niche khusus dari pemilih niche di channel." en="Building your own custom-DNA niches is available on Business+. Other tiers can request a custom niche from the channel niche picker." /></p>
         </div>

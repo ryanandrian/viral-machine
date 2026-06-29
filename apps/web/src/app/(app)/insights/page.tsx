@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { InsightsView, type Insights, type LearnedWeights } from "@/components/insights-view";
+import { PageHeader } from "@/components/page-header";
 
 // D21 Self-Learning Insights — F2-13: AGREGAT semua channel via RPC get_tenant_insights_agg.
 // Render = komponen bersama <InsightsView> (dipakai juga di tab Channel Detail per-channel).
@@ -26,12 +27,7 @@ export default function InsightsPage() {
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1><Sparkles size={26} style={{ color: "var(--accent)" }} /> Self-Learning Insights</h1>
-          <div className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Apa yang mesin pelajari dari semua channelmu" en="What the engine learned across all your channels" /></div>
-        </div>
-      </div>
+      <PageHeader icon={Sparkles} title="Self-Learning Insights" subtitle={<Bi id="Apa yang mesin pelajari dari semua channelmu" en="What the engine learned across all your channels" />} />
       <InsightsView insights={ins} loading={loading} scopeLabel={{ id: "semua channel", en: "all your channels" }} learnedWeights={learned} />
     </>
   );

@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { Plus, Sparkles, X, Clock } from "lucide-react";
+import { Plus, Sparkles, X, Clock, Calendar } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { PageHeader } from "@/components/page-header";
 import "./schedule.css";
 
 // D7 Schedule — model terkunci §12c: jadwal = JAM PUBLISH per-channel di `channels.publish_slots`
@@ -69,9 +70,8 @@ export default function SchedulePage() {
 
   return (
     <>
-      <div className="page-head">
-        <div><h1><Bi id="Jadwal" en="Schedule" /></h1><div className="muted" style={{ fontSize: "var(--text-sm)" }}>{loading ? "Memuat…" : <><b>{totalSlots}</b> slot · {channels.length} channel · max <b>{cap}</b>/hari/channel (tier)</>}</div></div>
-      </div>
+      <PageHeader icon={Calendar} title={<Bi id="Jadwal" en="Schedule" />}
+        subtitle={loading ? "Memuat…" : <><b>{totalSlots}</b> slot · {channels.length} channel · max <b>{cap}</b>/hari/channel (tier)</>} />
 
       <div className="opt-banner">
         <span className="ic"><Sparkles size={18} /></span>

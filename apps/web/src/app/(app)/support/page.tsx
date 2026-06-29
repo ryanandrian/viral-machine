@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Plus, X, Send, ArrowLeft } from "lucide-react";
+import { Plus, X, Send, ArrowLeft, HelpCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { PageHeader } from "@/components/page-header";
 
 // Support sisi TENANT (Phase 10.9) — buat/lihat/balas tiket SENDIRI (anon + RLS auth.uid()).
 // Realtime support_messages (live chat dgn admin). Sumber tiket untuk admin E4.
@@ -61,10 +62,8 @@ export default function TenantSupportPage() {
   return (
     <div style={{ maxWidth: 760 }}>
       {!open ? (<>
-        <div style={{ display: "flex", alignItems: "center", marginBottom: "1.25rem" }}>
-          <div><h1 style={{ fontSize: "var(--text-2xl)", fontWeight: 700 }}>Bantuan</h1><div className="muted" style={{ fontSize: "var(--text-sm)" }}>Tiket dukungan Anda</div></div>
-          <button className="btn btn-primary btn-sm" style={{ marginLeft: "auto" }} onClick={() => setNewT({ subject: "", body: "" })}><Plus size={14} /> Tiket baru</button>
-        </div>
+        <PageHeader icon={HelpCircle} title="Bantuan" subtitle="Tiket dukungan Anda"
+          action={<button className="btn btn-primary btn-sm" onClick={() => setNewT({ subject: "", body: "" })}><Plus size={14} /> Tiket baru</button>} />
         <div className="card"><div style={{ padding: "0.5rem" }}>
           {tickets.length === 0 && <div className="muted" style={{ padding: "1.25rem", textAlign: "center" }}>Belum ada tiket. Buat tiket baru untuk menghubungi tim.</div>}
           {tickets.map((t) => (

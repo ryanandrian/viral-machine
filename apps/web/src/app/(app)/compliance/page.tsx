@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { ShieldCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { ComplianceView, type Compliance } from "@/components/compliance-view";
+import { PageHeader } from "@/components/page-header";
 
 // D20 Compliance — F2-13: AGREGAT semua channel via RPC get_tenant_compliance_agg (bukan limit(1)).
 // Render = komponen bersama <ComplianceView> (dipakai juga di tab Channel Detail per-channel).
@@ -23,12 +24,7 @@ export default function CompliancePage() {
 
   return (
     <>
-      <div className="cmp-head">
-        <div>
-          <h1><ShieldCheck size={26} style={{ color: "var(--success)" }} /> Compliance Score</h1>
-          <div className="sub"><Bi id="AI Slop Defense · rata-rata semua channel" en="AI Slop Defense · averaged across all channels" /></div>
-        </div>
-      </div>
+      <PageHeader icon={ShieldCheck} title="Compliance Score" subtitle={<Bi id="AI Slop Defense · rata-rata semua channel" en="AI Slop Defense · averaged across all channels" />} />
       <ComplianceView compliance={cmp} loading={loading} hasRow={hasRow} />
     </>
   );

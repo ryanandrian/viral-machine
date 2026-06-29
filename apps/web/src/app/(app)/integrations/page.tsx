@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Video, Send, Check, Loader2, ShieldCheck, Image as ImageIcon, KeyRound } from "lucide-react";
+import { Video, Send, Check, Loader2, ShieldCheck, Image as ImageIcon, KeyRound, Globe } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { PageHeader } from "@/components/page-header";
 
 // Page Kredensial (tenant-wide) — CHANNEL_LOCK_ACTIVATION_PLAN.md §2.1. Tiga bagian:
 //  · Kunci AI PER-ELEMEN (LLM/TTS/Visual), model VENDOR/key-group, boleh >1 kunci, TAMPIL APA ADANYA.
@@ -154,10 +155,7 @@ export default function IntegrationsPage() {
 
   return (
     <>
-      <div style={{ marginBottom: "1.5rem" }}>
-        <h1><Bi id="Kredensial & Koneksi" en="Credentials & Connections" /></h1>
-        <div style={muted}><Bi id="Isi kunci AI, hubungkan YouTube & Telegram sekali di sini — berlaku untuk semua channel Anda." en="Set AI keys, connect YouTube & Telegram once here — applies to all your channels." /></div>
-      </div>
+      <PageHeader icon={Globe} title={<Bi id="Kredensial & Koneksi" en="Credentials & Connections" />} subtitle={<Bi id="Isi kunci AI, hubungkan YouTube & Telegram sekali di sini — berlaku untuk semua channel Anda." en="Set AI keys, connect YouTube & Telegram once here — applies to all your channels." />} />
 
       <div style={{ display: "grid", gap: "1rem", maxWidth: 720 }}>
         {/* Kunci AI — per ELEMEN (LLM/TTS/Visual), boleh >1 kunci/vendor, nilai TAMPIL APA ADANYA (§0.4) */}

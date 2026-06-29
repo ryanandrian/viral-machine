@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { AlertTriangle, Check, Trash2, Play, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { PageHeader } from "@/components/page-header";
 
 // OPSI C (QC_CONTENT_ARCHITECTURE §3 / DESAIN §12d.F) — tinjau video 'ready_with_issues':
 // lolos render tapi ada catatan QC (mis. durasi meleset). DI DOMAIN KITA (bukan auto-upload YouTube).
@@ -82,16 +83,8 @@ export default function ReviewPage() {
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1><Bi id="Perlu Ditinjau" en="Needs Review" /></h1>
-          <div className="muted" style={{ fontSize: "var(--text-sm)" }}>
-            {loading
-              ? "Memuat…"
-              : <><b>{items.length}</b> video lolos render tapi ada catatan QC — Anda putuskan: pakai atau buang.</>}
-          </div>
-        </div>
-      </div>
+      <PageHeader icon={AlertTriangle} title={<Bi id="Perlu Ditinjau" en="Needs Review" />}
+        subtitle={loading ? "Memuat…" : <><b>{items.length}</b> video lolos render tapi ada catatan QC — Anda putuskan: pakai atau buang.</>} />
 
       {!loading && items.length === 0 && (
         <div className="card" style={{ padding: 24, textAlign: "center" }}>

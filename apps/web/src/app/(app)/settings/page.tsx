@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useTheme } from "next-themes";
-import { User, Shield, Bell, Globe, AlertTriangle, Moon, Monitor, Check, Loader2 } from "lucide-react";
+import { User, Shield, Bell, Globe, AlertTriangle, Moon, Monitor, Check, Loader2, Settings as SettingsIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { PageHeader } from "@/components/page-header";
 import "./settings.css";
 
 // B5 Settings — Phase 9.3 (wired Supabase v2). Profil (email read + display_handle via RPC),
@@ -71,7 +72,7 @@ export default function SettingsPage() {
   }
   return (
     <>
-      <div className="page-head"><h1><Bi id="Pengaturan" en="Settings" /></h1></div>
+      <PageHeader icon={SettingsIcon} title={<Bi id="Pengaturan" en="Settings" />} />
       <div className="set-layout">
         <nav className="set-nav">
           {NAV.map(([id, ic, t, en]) => (

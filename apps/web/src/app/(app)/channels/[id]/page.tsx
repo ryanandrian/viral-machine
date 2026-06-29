@@ -10,14 +10,8 @@ import PresetTables from "@/components/preset-tables";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { ComplianceView, type Compliance } from "@/components/compliance-view";
 import { InsightsView, type Insights, type LearnedWeights } from "@/components/insights-view";
+import RunsTable from "@/components/runs-table";
 import "./channel-detail.css";
-
-// F2-13b: status produksi → label + varian badge design-system (tab Runs).
-const RUN_ST: Record<string, [string, string, string]> = {
-  success: ["Sukses", "Success", "badge-success"], failed: ["Gagal", "Failed", "badge-danger"],
-  qc_failed: ["QC gagal", "QC failed", "badge-warning"], ready_with_issues: ["Perlu tinjau", "Needs review", "badge-warning"],
-  running: ["Berjalan", "Running", "badge-brand"], queued: ["Antre", "Queued", "badge-default"],
-};
 
 // D3 Channel Detail — Phase 9.3 (wired Supabase v2, anon + RLS).
 // Header + Settings = data NYATA (read channels by id, write via channels RLS UPDATE — tanpa kolom
@@ -93,8 +87,7 @@ export default function ChannelDetailPage() {
   const [chCmp, setChCmp] = useState<Compliance | null>(null);
   const [chIns, setChIns] = useState<Insights | null>(null);
   const [chLearned, setChLearned] = useState<LearnedWeights>(null);  // formula adaptif S3-A (tenant-wide)
-  const [chRuns, setChRuns] = useState<{ id: string; status: string; niche: string | null; topic: string | null; created_at: string }[]>([]);
-  const [chRunStats, setChRunStats] = useState<{ total: number; success: number; failed: number; review: number } | null>(null);  // COUNT penuh (bukan chRuns yg .limit(60))
+  const [chRunStats, setChRunStats] = useState<{ total: number; success: number; failed: number; review: number } | null>(null);  // COUNT penuh utk KPI tab Analytics
   const [slots, setSlots] = useState<string[]>([]);
   const [newSlot, setNewSlot] = useState("");
   const [slotMsg, setSlotMsg] = useState<string | null>(null);
@@ -402,9 +395,6 @@ export default function ChannelDetailPage() {
       setChCmp(((ci as { compliance?: Compliance }).compliance) ?? null);
       setChIns(ci as unknown as Insights);
     } else { setChCmp(null); setChIns(null); }
-    const { data: pr } = await supabase.from("production_runs")
-      .select("id,status,niche,topic,created_at").eq("channel_id", id).order("created_at", { ascending: false }).limit(60);
-    setChRuns((pr ?? []) as { id: string; status: string; niche: string | null; topic: string | null; created_at: string }[]);
     // Analytics per-channel (all-time, std 0098): Video terbit=videos.published · Views/Engagement=video_analytics latest-per-video.
     try {
       const { data: ca } = await supabase.rpc("get_channel_analytics", { p_channel_id: id });
@@ -556,20 +546,7 @@ export default function ChannelDetailPage() {
           </div>
         </div>
       )}
-      {tab === "runs" && (
-        chRuns.length === 0
-          ? <Placeholder icon={<BarChart3 size={32} />} idT="Belum ada run untuk channel ini." enT="No runs for this channel yet." />
-          : <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl">
-              <thead><tr><th>Status</th><th>Niche</th><th>Topik</th><th>Waktu</th></tr></thead>
-              <tbody>{chRuns.map((r) => { const st = RUN_ST[r.status] ?? [r.status, r.status, "badge-default"]; return (
-                <tr key={r.id}>
-                  <td><span className={`badge ${st[2]}`}><span className="dot" /><Bi id={st[0]} en={st[1]} /></span></td>
-                  <td className="muted">{r.niche ?? "—"}</td>
-                  <td style={{ color: "var(--text-primary)", maxWidth: 360 }}>{r.topic ?? "—"}</td>
-                  <td className="muted" style={{ fontSize: "var(--text-xs)" }}>{new Date(r.created_at).toLocaleString("id-ID")}</td>
-                </tr>); })}</tbody>
-            </table></div></div>
-      )}
+      {tab === "runs" && <RunsTable channelId={id} />}
       {tab === "analytics" && (
         <div className="card card-pad">
           <h3 className="card-title" style={{ marginBottom: "0.75rem" }}><Bi id="Kinerja mesin — channel ini" en="Engine performance — this channel" /></h3>

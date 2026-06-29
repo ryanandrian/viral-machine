@@ -6,6 +6,7 @@ import { Plus, Tv, Zap, ArrowRight, Pause, Play, Shuffle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { effectiveStatus, ChannelStatusBadge, type Eff } from "@/lib/channel-status";
 import ConfirmDialog from "@/components/confirm-dialog";
+import { PageHeader } from "@/components/page-header";
 import "./channels.css";
 
 // D2 Channels List — Phase 9.2 VERTICAL SLICE (wired ke Supabase v2, anon + RLS).
@@ -204,10 +205,7 @@ export default function ChannelsPage() {
 
   return (
     <>
-      <div className="ch-head">
-        <h1>Channels</h1>
-        <a href="/channels/new" className="btn btn-default"><Plus size={16} /> <Bi id="Tambah Channel" en="Add Channel" /></a>
-      </div>
+      <PageHeader icon={Tv} title="Channels" action={<a href="/channels/new" className="btn btn-default"><Plus size={16} /> <Bi id="Tambah Channel" en="Add Channel" /></a>} />
 
       {maxCh != null && (
         <div className="quota">

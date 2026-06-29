@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Zap, CreditCard, FileText, Plus, X, DollarSign, ShieldCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { PageHeader } from "@/components/page-header";
 import "./billing.css";
 
 // D13 Billing — Phase 9.3 (wired Supabase v2, anon + RLS). Plan/status/usage = NYATA
@@ -68,10 +69,7 @@ export default function BillingPage() {
 
   return (
     <>
-      <div className="bl-head">
-        <h1>Billing</h1>
-        <div className="sub"><Bi id="Kelola langganan, pembayaran, dan invoice" en="Manage subscription, payment, and invoices" /></div>
-      </div>
+      <PageHeader icon={CreditCard} title="Billing" subtitle={<Bi id="Kelola langganan, pembayaran, dan invoice" en="Manage subscription, payment, and invoices" />} />
 
       {loading ? <div className="muted" style={{ padding: "2rem" }}><Bi id="Memuat…" en="Loading…" /></div> : (
       <div className="bl-grid2">

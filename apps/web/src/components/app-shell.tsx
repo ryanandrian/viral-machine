@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
-  LayoutDashboard, Tv, List, BarChart3, Calendar, ShieldCheck, Sparkles,
+  LayoutDashboard, Tv, List, BarChart3, Calendar, ShieldCheck, Sparkles, Palette,
   CreditCard, Settings, HelpCircle,
   Menu, Moon, Sun, ChevronRight, LogOut, AlertTriangle, Globe,
 } from "lucide-react";
@@ -32,7 +32,7 @@ const NAV: NavEntry[] = [
   { id: "schedule", icon: Calendar, idL: "Jadwal", en: "Schedule", href: "/schedule" },
   { id: "compliance", icon: ShieldCheck, idL: "Kepatuhan", en: "Compliance", href: "/compliance" },
   { id: "insights", icon: Sparkles, idL: "Wawasan", en: "Insights", href: "/insights" },
-  { id: "niche-studio", icon: Sparkles, idL: "Niche Studio", en: "Niche Studio", href: "/niche-studio", gated: true },
+  { id: "niche-studio", icon: Palette, idL: "Niche Studio", en: "Niche Studio", href: "/niche-studio", gated: true },
   // Grup "Konfigurasi" DIPENSIUNKAN (F2-11, §10.F): AI-Engines/API-Keys → key per-channel (vault F2-09);
   // Voice/Visual → channel (F2-05); Niche → Niche Studio + picker channel; Notifikasi → Settings.
   { section: { id: "Akun", en: "Account" } },
