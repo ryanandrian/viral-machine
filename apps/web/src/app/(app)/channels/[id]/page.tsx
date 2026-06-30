@@ -605,11 +605,13 @@ export default function ChannelDetailPage() {
               <label className="label"><Bi id="Koneksi YouTube (akun publish)" en="YouTube connection (publish account)" /></label>
               <div className="radio-row" style={{ marginBottom: "0.5rem" }}>
                 {ytAccounts.length === 0 && <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Belum ada koneksi — tambah di " en="No connection — add in " /><Link href="/integrations" className="link"><Bi id="Kredensial" en="Credentials" /></Link>.</span>}
-                {ytAccounts.map((a) => <span key={a.id} className={`radio-pill${ytAccountId === a.id ? " sel" : ""}`} onClick={() => { setYtAccountId(a.id); if (!targetYt.trim() && a.yt_channel_id) setTargetYt(a.yt_channel_id); }}>{a.label}{a.status === "valid" ? " ✓" : ""}</span>)}
+                {ytAccounts.map((a) => <span key={a.id} className={`radio-pill${ytAccountId === a.id ? " sel" : ""}`} onClick={() => { setYtAccountId(a.id); setTargetYt(a.yt_channel_id || ""); }}>{a.label}{a.status === "valid" ? " ✓" : ""}</span>)}
               </div>
               <label className="label"><Bi id="Channel YouTube tujuan (ID)" en="Target YouTube channel (ID)" /></label>
-              <input className="input input-mono" value={targetYt} onChange={(e) => setTargetYt(e.target.value)} placeholder="UCxxxxxxxxxxxxxxxxxxxxxx" />
-              <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.4rem" }}><Bi id="Terisi otomatis dari koneksi; ubah bila publish ke channel lain milik akun itu." en="Auto-filled from the connection; change if publishing to another channel on that account." /></div>
+              <input className="input input-mono" value={targetYt || "—"} readOnly tabIndex={-1} aria-readonly="true"
+                style={{ background: "var(--surface-2)", color: "var(--text-secondary)", cursor: "default" }}
+                title="Terisi otomatis dari koneksi YouTube" />
+              <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.4rem" }}><Bi id="Terisi otomatis dari koneksi YouTube yang dipilih (tidak bisa diubah manual)." en="Auto-filled from the selected YouTube connection (not manually editable)." /></div>
             </div>
             <div style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
               <label className="label"><Bi id="Niche channel" en="Channel niche" /></label>
