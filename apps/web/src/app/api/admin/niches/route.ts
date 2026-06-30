@@ -51,6 +51,7 @@ export async function POST(req: Request) {
   const { data, error } = await admin.from("niches").insert({
     niche_id, name: b.name ?? niche_id, is_base: !!b.is_base, is_active: b.is_active ?? true,
     access_type: b.access_type ?? "public", exclusive_to: b.exclusive_to ?? null, exclusive_until: b.exclusive_until ?? null,
+    origin: "admin",
   }).select("*").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   await admin.from("admin_audit").insert({ admin_uid: g.user.id, action: "niche.create", detail: { niche_id } });

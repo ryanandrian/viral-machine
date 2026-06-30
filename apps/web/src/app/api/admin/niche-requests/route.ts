@@ -70,7 +70,7 @@ export async function POST(req: Request) {
     const exclusive_until = r.request_type === "public_90d" ? new Date(Date.now() + 90 * 864e5).toISOString() : null;
     const { error: ne } = await admin.from("niches").insert({
       niche_id, name: r.title, is_active: false, is_base: false,
-      access_type: "private", exclusive_to: r.tenant_id, exclusive_until,
+      access_type: "private", exclusive_to: r.tenant_id, exclusive_until, origin: "request",
     });
     if (ne) return NextResponse.json({ error: `buat niche gagal: ${ne.message}` }, { status: 500 });
     await admin.from("niche_requests").update({ status: "in_progress", niche_id, paid_at: now, updated_at: now }).eq("request_id", r.request_id);

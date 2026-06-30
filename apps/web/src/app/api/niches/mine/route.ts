@@ -29,7 +29,9 @@ async function gate() {
 
 export async function GET() {
   const g = await gate(); if (g.error) return g.error;
-  const { data, error } = await g.admin.from("niches").select("*").eq("exclusive_to", g.user.id).order("niche_id");
+  // HANYA niche bikinan-sendiri di Studio (origin='studio'). Niche PESANAN custom (origin='request')
+  // dikelola tim & tampil di Pustaka Niche — TAK boleh diedit tenant (cegah campur-aduk/rusak deliverable).
+  const { data, error } = await g.admin.from("niches").select("*").eq("exclusive_to", g.user.id).eq("origin", "studio").order("niche_id");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ niches: data ?? [] });
 }
@@ -41,7 +43,7 @@ export async function POST(req: Request) {
   if (!/^[a-z0-9_]+$/.test(niche_id)) return NextResponse.json({ error: "niche_id invalid (a-z0-9_)" }, { status: 400 });
   const { data, error } = await g.admin.from("niches").insert({
     niche_id, name: b.name || niche_id, is_active: true, is_base: false,
-    access_type: "private", exclusive_to: g.user.id,   // ENFORCED (tak dari klien)
+    access_type: "private", exclusive_to: g.user.id, origin: "studio",   // ENFORCED (tak dari klien)
   }).select("*").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true, row: data });
@@ -57,7 +59,7 @@ export async function PATCH(req: Request) {
   if (Object.keys(patch).length === 0) return NextResponse.json({ error: "no_editable_fields" }, { status: 400 });
   // ENFORCE: hanya niche PRIVATE milik tenant ini.
   const { data, error } = await g.admin.from("niches").update(patch)
-    .eq("niche_id", niche_id).eq("exclusive_to", g.user.id).eq("access_type", "private").select("*");
+    .eq("niche_id", niche_id).eq("exclusive_to", g.user.id).eq("access_type", "private").eq("origin", "studio").select("*");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data || data.length === 0) return NextResponse.json({ error: "niche tak ditemukan / bukan milik Anda" }, { status: 404 });
   return NextResponse.json({ ok: true, row: data[0] });
