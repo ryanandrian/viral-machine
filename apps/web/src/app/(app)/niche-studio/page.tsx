@@ -90,7 +90,7 @@ export default function NicheStudioPage() {
   return (
     <>
       <PageHeader icon={Palette} title="Niche Studio"
-        subtitle={<Bi id="Buat & sesuaikan niche custom PRIVAT bikinan Anda sendiri (DNA: voice/visual/musik/timing). Niche PESANAN custom dikelola tim & tampil di Pustaka Niche." en="Create & tune your own self-made PRIVATE custom niches (DNA: voice/visual/music/timing). Custom-ordered niches are team-managed & appear in the Niche Library." />}
+        subtitle={<Bi id="Buat & sesuaikan niche custom PRIVAT milik Anda (DNA: voice/visual/musik/timing)." en="Create & tune your own PRIVATE custom niches (DNA: voice/visual/music/timing)." />}
         action={gated ? <button className="btn btn-default" onClick={() => setNewN({ niche_id: "", name: "" })}><Plus size={15} /> <Bi id="Niche baru" en="New niche" /></button> : undefined} />
 
       {gated === null && <div style={{ ...muted, padding: "2rem", textAlign: "center" }}><Bi id="Memuat…" en="Loading…" /></div>}
