@@ -644,7 +644,7 @@ export default function ChannelDetailPage() {
               </div>
               <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.4rem" }}>
                 <Bi id="Hanya niche yang tersedia untuk paket Anda + niche khusus milik Anda." en="Only niches available to your plan + your own custom niches." />
-                {" "}<Link href="/config/niches" className="link"><Bi id="Ajukan niche khusus →" en="Request custom niche →" /></Link>
+                {" "}<Link href="/niches" className="link"><Bi id="Ajukan niche khusus →" en="Request custom niche →" /></Link>
               </div>
               {nicheMsg && <div style={{ fontSize: "var(--text-sm)", marginTop: "0.4rem", color: nicheMsg.includes("tersimpan") ? "var(--success)" : "var(--danger,#ef4444)" }}>{nicheMsg}</div>}
             </div>

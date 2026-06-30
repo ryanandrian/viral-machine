@@ -2,25 +2,23 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useTheme } from "next-themes";
-import { User, Shield, Bell, Globe, AlertTriangle, Moon, Monitor, Check, Loader2, Settings as SettingsIcon } from "lucide-react";
+import { User, Shield, Globe, Moon, Check, Loader2, Settings as SettingsIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { PageHeader } from "@/components/page-header";
 import "./settings.css";
 
-// B5 Settings — Phase 9.3 (wired Supabase v2). Profil (email read + display_handle via RPC),
-// Keamanan (ganti password via supabase.auth.updateUser — NYATA), Integrasi Telegram (RPC).
-// Lang/theme = client toggle. 2FA/sesi/notif-email/danger = placeholder/gate. Config-write lewat
-// RPC whitelist set_tenant_config (aman dari escalation).
+// B5 Settings — Phase 9.3 (wired Supabase v2). 3 tab: Profil (email read + display_handle via RPC),
+// Keamanan (ganti password via supabase.auth.updateUser — NYATA), Bahasa & tema (client toggle).
+// 2FA/sesi + Danger zone (ekspor/hapus akun) DIHAPUS 2026-06-30 (placeholder belum dibutuhkan; 2FA
+// menyusul opt-in pasca-launch). Config-write lewat RPC whitelist set_tenant_config (aman dari escalation).
 
 function Bi({ id, en }: { id: string; en: string }) { return (<><span data-id>{id}</span><span data-en>{en}</span></>); }
 
-type Tab = "profile" | "security" | "notif" | "language" | "danger";
+type Tab = "profile" | "security" | "language";
 const NAV: [Tab, React.ReactNode, string, string][] = [
   ["profile", <User size={18} key="p" />, "Profil", "Profile"],
   ["security", <Shield size={18} key="s" />, "Keamanan", "Security"],
-  ["notif", <Bell size={18} key="n" />, "Notifikasi", "Notifications"],
   ["language", <Globe size={18} key="l" />, "Bahasa", "Language"],
-  ["danger", <AlertTriangle size={18} key="d" />, "Zona berbahaya", "Danger zone"],
 ];
 
 function Saved({ on }: { on: boolean }) { return on ? <span style={{ color: "var(--success)", fontSize: "var(--text-xs)", display: "inline-flex", alignItems: "center", gap: "0.25rem" }}><Check size={13} /> <Bi id="Tersimpan" en="Saved" /></span> : null; }
@@ -76,7 +74,7 @@ export default function SettingsPage() {
       <div className="set-layout">
         <nav className="set-nav">
           {NAV.map(([id, ic, t, en]) => (
-            <div key={id} className={`set-item${id === "danger" ? " danger" : ""}${tab === id ? " active" : ""}`} onClick={() => { setTab(id); window.scrollTo(0, 0); }}>{ic}<span><Bi id={t} en={en} /></span></div>
+            <div key={id} className={`set-item${tab === id ? " active" : ""}`} onClick={() => { setTab(id); window.scrollTo(0, 0); }}>{ic}<span><Bi id={t} en={en} /></span></div>
           ))}
         </nav>
 
@@ -99,29 +97,14 @@ export default function SettingsPage() {
           )}
 
           {tab === "security" && (
-            <>
-              <div className="sec-card">
-                <h2><Bi id="Password" en="Password" /></h2>
-                <p className="desc"><Bi id="Ubah password akun Anda." en="Change your account password." /></p>
-                <div className="fld-2"><div className="fld"><label className="label"><Bi id="Password baru" en="New password" /></label><input className="input" type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="Min. 8 karakter" /></div><div className="fld"><label className="label"><Bi id="Konfirmasi" en="Confirm" /></label><input className="input" type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} /></div></div>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "0.5rem" }}>
-                  <button className="btn btn-default btn-sm" onClick={updatePassword} disabled={busy === "security"}>{busy === "security" ? <Loader2 size={14} className="spin" /> : <Bi id="Perbarui password" en="Update password" />}</button>
-                  <Err msg={err?.k === "security" ? err.m : null} /><Saved on={saved === "security"} />
-                </div>
-              </div>
-              <div className="sec-card">
-                <h2>2FA · <Bi id="Sesi aktif" en="Active sessions" /></h2>
-                <p className="desc"><Bi id="Segera — 2FA & manajemen sesi belum aktif di rilis ini." en="Coming soon — 2FA & session management not in this release." /></p>
-                <div className="session"><span className="ic"><Monitor size={16} /></span><div style={{ flex: 1 }}><div className="t"><Bi id="Sesi ini" en="This session" /> <span className="badge badge-success" style={{ marginLeft: "0.375rem" }}><span className="dot" /><Bi id="Aktif" en="Current" /></span></div></div></div>
-              </div>
-            </>
-          )}
-
-          {tab === "notif" && (
             <div className="sec-card">
-              <h2><Bi id="Preferensi notifikasi" en="Notification preferences" /></h2>
-              <p className="desc"><Bi id="Hubungkan Telegram di menu Integrasi. Matriks lengkap di Config → Notifikasi." en="Connect Telegram in the Integrations menu. Full matrix in Config → Notifications." /></p>
-              <a href="/config/notifications" className="link" style={{ color: "var(--brand)", textDecoration: "none", fontSize: "var(--text-sm)", display: "inline-block", marginTop: "0.5rem" }}><Bi id="Buka matriks notifikasi" en="Open notification matrix" /> →</a>
+              <h2><Bi id="Password" en="Password" /></h2>
+              <p className="desc"><Bi id="Ubah password akun Anda." en="Change your account password." /></p>
+              <div className="fld-2"><div className="fld"><label className="label"><Bi id="Password baru" en="New password" /></label><input className="input" type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="Min. 8 karakter" /></div><div className="fld"><label className="label"><Bi id="Konfirmasi" en="Confirm" /></label><input className="input" type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} /></div></div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "0.5rem" }}>
+                <button className="btn btn-default btn-sm" onClick={updatePassword} disabled={busy === "security"}>{busy === "security" ? <Loader2 size={14} className="spin" /> : <Bi id="Perbarui password" en="Update password" />}</button>
+                <Err msg={err?.k === "security" ? err.m : null} /><Saved on={saved === "security"} />
+              </div>
             </div>
           )}
 
@@ -132,15 +115,6 @@ export default function SettingsPage() {
               <div className={`lang-opt${lang === "id" ? " sel" : ""}`} onClick={() => pickLang("id")}><span className="flag">🇮🇩</span><div><div className="t">Bahasa Indonesia</div><div className="s">Default</div></div><span className="radio" /></div>
               <div className={`lang-opt${lang === "en" ? " sel" : ""}`} onClick={() => pickLang("en")}><span className="flag">🇬🇧</span><div><div className="t">English</div><div className="s">English (US)</div></div><span className="radio" /></div>
               <div className="row-between" style={{ marginTop: "0.5rem" }}><div><div className="t"><Bi id="Tema" en="Theme" /></div><div className="s"><Bi id="Dark / Light mode" en="Dark / Light mode" /></div></div><button className="btn btn-secondary btn-sm" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}><Moon size={14} /> <Bi id="Ganti tema" en="Toggle theme" /></button></div>
-            </div>
-          )}
-
-          {tab === "danger" && (
-            <div className="sec-card danger-zone">
-              <h2 style={{ color: "var(--error)" }}><Bi id="Zona berbahaya" en="Danger zone" /></h2>
-              <p className="desc"><Bi id="Ekspor & hapus akun belum aktif di rilis ini (butuh alur konfirmasi aman)." en="Export & account deletion not in this release (needs a safe confirmation flow)." /></p>
-              <div className="danger-row" style={{ opacity: 0.6 }}><div><div className="t"><Bi id="Ekspor data" en="Export data" /></div><div className="s"><Bi id="Segera" en="Coming soon" /></div></div><button className="btn btn-outline btn-sm" disabled><Bi id="Ekspor" en="Export" /></button></div>
-              <div className="danger-row" style={{ opacity: 0.6 }}><div><div className="t" style={{ color: "var(--error)" }}><Bi id="Hapus akun" en="Delete account" /></div><div className="s"><Bi id="Segera" en="Coming soon" /></div></div><button className="btn btn-destructive btn-sm" disabled><Bi id="Hapus akun" en="Delete account" /></button></div>
             </div>
           )}
         </main>

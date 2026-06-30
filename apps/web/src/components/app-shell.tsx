@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
-  LayoutDashboard, Tv, List, BarChart3, Calendar, ShieldCheck, Sparkles, Palette,
+  LayoutDashboard, Tv, List, BarChart3, Calendar, ShieldCheck, Sparkles, Palette, Target,
   CreditCard, Settings, HelpCircle,
   Menu, Moon, Sun, ChevronRight, LogOut, AlertTriangle, Globe,
 } from "lucide-react";
@@ -25,6 +25,7 @@ const NAV: NavEntry[] = [
   { section: { id: "Menu", en: "Menu" } },
   { id: "dashboard", icon: LayoutDashboard, idL: "Beranda", en: "Dashboard", href: "/dashboard" },
   { id: "integrations", icon: Globe, idL: "Integrasi", en: "Integrations", href: "/integrations" },
+  { id: "niches", icon: Target, idL: "Niche", en: "Niches", href: "/niches" },
   { id: "channels", icon: Tv, idL: "Kanal", en: "Channels", href: "/channels" },
   { id: "runs", icon: List, idL: "Produksi", en: "Runs", href: "/runs" },
   { id: "review", icon: AlertTriangle, idL: "Perlu Ditinjau", en: "Needs Review", href: "/review" },

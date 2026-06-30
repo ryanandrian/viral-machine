@@ -74,6 +74,7 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
   const [queue, setQueue] = useState<{ id: number; niche: string | null; channel_id: string | null; runId: string | null; topic: string | null; created_at: string; duration: number | null; viralScore: number | null; grade: string | null }[]>([]);  // content_inventory.ready (menunggu publish)
   const [pvBusy, setPvBusy] = useState<number | null>(null);  // tombol Pratinjau antrean
   const [pvMsg, setPvMsg] = useState<string | null>(null);
+  const [pvUrl, setPvUrl] = useState<string | null>(null);    // URL video → diputar di modal <video> (BUKAN window.open yg men-download)
   const [confirmCfg, setConfirmCfg] = useState<null | { title: ReactNode; message: ReactNode; confirmLabel: ReactNode; onConfirm: () => void }>(null);
   const [chMap, setChMap] = useState<Record<string, string>>({});
   const [views, setViews] = useState<Record<string, number>>({});
@@ -130,7 +131,7 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
     try {
       const r = await fetch(`/api/review/preview?id=${id}`);
       const j = await r.json();
-      if (r.ok && j.url) window.open(j.url as string, "_blank", "noopener");
+      if (r.ok && j.url) setPvUrl(j.url as string);   // putar di modal <video> (file S3 = attachment → window.open men-download)
       else setPvMsg(`Pratinjau gagal: ${j.error ?? r.status}`);
     } catch (e) {
       setPvMsg(`Pratinjau gagal: ${(e as Error).message}`);
@@ -388,6 +389,20 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
           );
         })()}
       </aside>
+
+      {/* Modal pemutar pratinjau — putar inline (seragam dgn /review), bukan unduh */}
+      {pvUrl && (
+        <div onClick={(e) => { if (e.target === e.currentTarget) setPvUrl(null); }}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 90, display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem" }}>
+          <div className="card" style={{ maxWidth: 420, width: "100%", overflow: "hidden" }}>
+            <div className="card-head" style={{ justifyContent: "space-between" }}>
+              <h3 className="card-title"><Play size={15} /> <span data-id>Pratinjau video</span><span data-en>Video preview</span></h3>
+              <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setPvUrl(null)}><X size={16} /></button>
+            </div>
+            <video controls autoPlay preload="metadata" src={pvUrl} style={{ width: "100%", display: "block", background: "#000", maxHeight: "78vh" }} />
+          </div>
+        </div>
+      )}
     </>
   );
 }

@@ -45,7 +45,8 @@ export default function AdminNichesPage() {
   const [sched, setSched] = useState<{ niche_id: string; date: string }>({ niche_id: "", date: "" });
   type NReq = { request_id: string; tenant_id: string; tenant_email: string | null; request_type: string; title: string; clues: Record<string, string>; status: string; created_at: string; niche_id: string | null };
   const [reqs, setReqs] = useState<NReq[]>([]);
-  const [appr, setAppr] = useState<{ req: NReq; niche_id: string } | null>(null);
+  const [actModal, setActModal] = useState<{ req: NReq; action: "mark_paid" | "deliver"; niche_id: string; note: string } | null>(null);
+  const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 40);
   // F3-01: buat niche baru dari nol (POST /api/admin/niches; detail diedit via drawer/PATCH).
   const [newN, setNewN] = useState<{ niche_id: string; name: string; is_base: boolean; access_type: string } | null>(null);
   async function createNiche() {
@@ -66,12 +67,12 @@ export default function AdminNichesPage() {
     setLoading(false);
   }, []);
 
-  async function processReq(request_id: string, action: "approve" | "reject", niche_id?: string) {
+  async function processReq(request_id: string, action: string, extra?: { niche_id?: string; delivery_note?: string }) {
     setBusy(true);
-    const r = await fetch("/api/admin/niche-requests", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ request_id, action, niche_id }) });
-    setBusy(false); setAppr(null);
+    const r = await fetch("/api/admin/niche-requests", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ request_id, action, ...(extra || {}) }) });
+    setBusy(false); setActModal(null);
     const j = await r.json().catch(() => ({}));
-    if (r.ok) { setToast(action === "approve" ? `Niche dibuat: ${j.niche_id}` : "Request ditolak"); await load(); }
+    if (r.ok) { setToast("Tersimpan"); await load(); }
     else setToast(j.error || "Gagal");
   }
   useEffect(() => { load(); }, [load]);
@@ -175,6 +176,10 @@ export default function AdminNichesPage() {
       </table></div></div>
 
       <div className="nl-section-title"><Sparkles size={18} style={{ color: "var(--accent)" }} /> <Bi id="Pengajuan Custom Niche" en="Custom Niche Requests" /> {reqs.filter((r) => r.status === "pending").length > 0 && <span className="badge badge-info">{reqs.filter((r) => r.status === "pending").length} pending</span>}</div>
+      <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "0.75rem", lineHeight: 1.6 }}>
+        <Bi id="Alur: 1) Terima (kirim tagihan ke tenant) → 2) Tandai lunas (niche dibuat, BELUM aktif) → 3) klik niche_id untuk isi DNA-nya (drawer) → 4) Serahkan (niche aktif + email + masa evaluasi tenant). Tenant lalu Terima/Minta-perbaikan."
+          en="Flow: 1) Accept (sends invoice) → 2) Mark paid (niche created, INACTIVE) → 3) click the niche_id to fill its DNA (drawer) → 4) Deliver (activates niche + email + tenant evaluation). Tenant then Accepts/Requests revision." />
+      </div>
       <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl">
         <thead><tr><th>Tenant</th><th>Tipe</th><th><Bi id="Ide & clue" en="Idea & clues" /></th><th>Status</th><th></th></tr></thead>
         <tbody>
@@ -184,29 +189,43 @@ export default function AdminNichesPage() {
               <td style={{ fontSize: "var(--text-xs)" }}>{r.tenant_email ?? r.tenant_id.slice(0, 8)}</td>
               <td><span className={`badge ${r.request_type === "private" ? "badge-brand" : "badge-default"}`}>{r.request_type === "private" ? "🔒 Private" : "🌍 90d"}</span></td>
               <td style={{ maxWidth: 360 }}><div style={{ color: "var(--text-primary)", fontWeight: 500 }}>{r.title}</div><div className="muted" style={{ fontSize: "0.6875rem" }}>{[r.clues?.audience, r.clues?.references, r.clues?.viral_angle].filter(Boolean).join(" · ") || "—"}</div></td>
-              <td><span className={`badge ${r.status === "pending" ? "badge-info" : r.status === "live" ? "badge-success" : "badge-default"}`}>{r.status}{r.niche_id ? ` · ${r.niche_id}` : ""}</span></td>
+              <td><span className={`badge ${r.status === "closed" || r.status === "live" ? "badge-success" : r.status === "rejected" || r.status === "cancelled" ? "badge-default" : r.status === "awaiting_payment" ? "badge-warning" : "badge-info"}`}>{r.status}</span>{r.niche_id ? <button className="btn btn-ghost btn-sm mono" style={{ fontSize: "0.6875rem", marginLeft: ".35rem", padding: "0 .35rem", height: "1.5rem" }} title="Buka editor DNA niche" onClick={() => openRow(r.niche_id!)}>{r.niche_id} ✎</button> : null}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                 {r.status === "pending" && <>
-                  <button className="btn btn-default btn-sm" disabled={busy} onClick={() => setAppr({ req: r, niche_id: r.title.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 40) })}><Check size={13} /> Approve</button>
+                  <button className="btn btn-default btn-sm" disabled={busy} onClick={() => processReq(r.request_id, "accept")}><Check size={13} /> Terima</button>
                   <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => processReq(r.request_id, "reject")}>Tolak</button>
                 </>}
+                {r.status === "awaiting_payment" && <div><button className="btn btn-default btn-sm" disabled={busy} onClick={() => setActModal({ req: r, action: "mark_paid", niche_id: slugify(r.title), note: "" })}>Tandai lunas</button><div className="muted" style={{ fontSize: "0.625rem", marginTop: 2 }}>setelah tenant bayar</div></div>}
+                {r.status === "in_progress" && <div><button className="btn btn-default btn-sm" disabled={busy} onClick={() => setActModal({ req: r, action: "deliver", niche_id: r.niche_id ?? "", note: "" })}>Serahkan</button><div className="muted" style={{ fontSize: "0.625rem", marginTop: 2 }}>isi DNA dulu (klik {r.niche_id})</div></div>}
+                {r.status === "delivered" && <span className="muted" style={{ fontSize: "0.6875rem" }}>menunggu evaluasi tenant</span>}
               </td>
             </tr>
           ))}
         </tbody>
       </table></div></div>
 
-      {appr && (
-        <div onClick={(e) => { if (e.target === e.currentTarget) setAppr(null); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem" }}>
-          <div className="card card-pad" style={{ maxWidth: 460, width: "100%" }}>
-            <h3 className="card-title" style={{ marginBottom: ".75rem" }}><Bi id="Buat niche eksklusif" en="Create exclusive niche" /></h3>
-            <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: ".75rem" }}>{appr.req.title} · {appr.req.request_type === "private" ? "permanen private" : "exclusive 90 hari → public"} · untuk {appr.req.tenant_email ?? appr.req.tenant_id.slice(0, 8)}</p>
-            <label className="label">niche_id (slug a-z0-9_)</label>
-            <input className="input input-mono" value={appr.niche_id} onChange={(e) => setAppr({ ...appr, niche_id: e.target.value })} />
-            <div style={{ display: "flex", gap: ".5rem", justifyContent: "flex-end", marginTop: "1rem" }}>
-              <button className="btn btn-ghost" onClick={() => setAppr(null)}>Batal</button>
-              <button className="btn btn-default" disabled={busy || !/^[a-z0-9_]+$/.test(appr.niche_id)} onClick={() => processReq(appr.req.request_id, "approve", appr.niche_id)}><Check size={14} /> Buat & tetapkan eksklusif</button>
-            </div>
+      {actModal && (
+        <div onClick={(e) => { if (e.target === e.currentTarget) setActModal(null); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem" }}>
+          <div className="card card-pad" style={{ maxWidth: 480, width: "100%" }}>
+            {actModal.action === "mark_paid" ? <>
+              <h3 className="card-title" style={{ marginBottom: ".5rem" }}><Bi id="Tandai lunas & mulai proses" en="Mark paid & start" /></h3>
+              <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: ".75rem" }}>{actModal.req.title} · {actModal.req.request_type === "private" ? "permanen private" : "exclusive 90 hari → public"} · {actModal.req.tenant_email ?? actModal.req.tenant_id.slice(0, 8)}. Niche dibuat <b>belum aktif</b> — isi DNA via drawer Niche Library, lalu Serahkan.</p>
+              <label className="label">niche_id (slug a-z0-9_)</label>
+              <input className="input input-mono" value={actModal.niche_id} onChange={(e) => setActModal({ ...actModal, niche_id: e.target.value })} />
+              <div style={{ display: "flex", gap: ".5rem", justifyContent: "flex-end", marginTop: "1rem" }}>
+                <button className="btn btn-ghost" onClick={() => setActModal(null)}>Batal</button>
+                <button className="btn btn-default" disabled={busy || !/^[a-z0-9_]+$/.test(actModal.niche_id)} onClick={() => processReq(actModal.req.request_id, "mark_paid", { niche_id: actModal.niche_id })}><Check size={14} /> Lunas & buat niche</button>
+              </div>
+            </> : <>
+              <h3 className="card-title" style={{ marginBottom: ".5rem" }}><Bi id="Serahkan niche ke tenant" en="Deliver niche to tenant" /></h3>
+              <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: ".75rem" }}>Pastikan DNA niche <b>{actModal.req.niche_id}</b> sudah diisi (Niche Library). Menyerahkan akan <b>mengaktifkan</b> niche + kirim email serah-terima + mulai masa evaluasi tenant.</p>
+              <label className="label"><Bi id="Tautan video contoh / catatan (opsional)" en="Sample video link / note (optional)" /></label>
+              <textarea className="textarea" rows={3} value={actModal.note} onChange={(e) => setActModal({ ...actModal, note: e.target.value })} placeholder="mis. https://youtube.com/shorts/... (video uji dari Test niche)" />
+              <div style={{ display: "flex", gap: ".5rem", justifyContent: "flex-end", marginTop: "1rem" }}>
+                <button className="btn btn-ghost" onClick={() => setActModal(null)}>Batal</button>
+                <button className="btn btn-default" disabled={busy} onClick={() => processReq(actModal.req.request_id, "deliver", { delivery_note: actModal.note })}><Check size={14} /> Serahkan & aktifkan</button>
+              </div>
+            </>}
           </div>
         </div>
       )}

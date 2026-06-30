@@ -144,15 +144,15 @@ class TelegramNotifier:
         return self._send(chat_id, text)
 
     def _chat_id_for_tenant(self, tenant_id: str) -> str:
-        """Resolve chat_id tenant dari tenant_configs (hormati telegram_notify_enabled); fallback system."""
+        """Resolve chat_id tenant dari tenant_configs (hormati toggle telegram_enabled). Tak ada fallback sistem."""
         try:
             from supabase import create_client
             sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
-            r = (sb.table("tenant_configs").select("telegram_chat_id,telegram_notify_enabled")
+            r = (sb.table("tenant_configs").select("telegram_chat_id,telegram_enabled")
                  .eq("tenant_id", tenant_id).limit(1).execute())
             if r.data:
                 row = r.data[0]
-                if row.get("telegram_notify_enabled", True) and row.get("telegram_chat_id"):
+                if row.get("telegram_enabled", True) and row.get("telegram_chat_id"):
                     return row["telegram_chat_id"]
         except Exception as e:
             logger.warning(f"[Telegram] resolve chat_id tenant gagal: {e}")
@@ -219,8 +219,11 @@ class TelegramNotifier:
     # ──────────────────────────────────────────────────────────
 
     def _get_chat_id(self, run_config=None) -> str:
-        """Per-tenant chat_id dari run_config (DB). Kosong → "" (notif di-skip, no fallback)."""
+        """Per-tenant chat_id dari run_config (DB), hormati toggle telegram_enabled.
+        Kosong / toggle off → "" (notif di-skip, no fallback)."""
         if run_config:
+            if not getattr(run_config, "telegram_enabled", True):
+                return ""   # tenant matikan notif Telegram → skip
             per_tenant = getattr(run_config, "telegram_chat_id", None)
             if per_tenant:
                 return str(per_tenant)

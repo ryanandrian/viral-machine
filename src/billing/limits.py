@@ -90,28 +90,6 @@ def available_niches(sb, plan_type: str) -> list:
         return []
 
 
-def entitled_niches(sb, plan_type: str, tenant_id: str) -> list:
-    """ENTITLEMENT niche penuh tenant = katalog-included per tier (available_niches)
-    + niche custom/private MILIK tenant (`niches.exclusive_to = tenant_id`, aktif).
-    Dipakai pemilihan niche channel mode='random' (= seluruh entitlement, [[decisions_niche_model]])."""
-    base = available_niches(sb, plan_type)
-    if not sb or not tenant_id:
-        return base
-    try:
-        res = (sb.table("niches").select("niche_id")
-               .eq("is_active", True).eq("exclusive_to", tenant_id).execute())
-        mine = [r["niche_id"] for r in (res.data or [])]
-    except Exception as e:
-        logger.debug(f"[Limits] entitled_niches exclusive {tenant_id} gagal: {e}")
-        mine = []
-    # union jaga urutan stabil
-    out = list(base)
-    for n in mine:
-        if n not in out:
-            out.append(n)
-    return out
-
-
 def can_request_custom_niche(plan_type) -> bool:
     """
     Boleh AJUKAN custom niche (add-on berbayar: public-after-90d / private-permanent — [[decisions_niche_model]]).

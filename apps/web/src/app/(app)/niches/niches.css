@@ -1,0 +1,31 @@
+/* Pustaka Niche (tenant) — 2026-06-30. Kelas global (card/badge/btn/tbl/segmented/chip/input)
+   dari components.css. Di sini hanya: toolbar cari+filter, drawer detail (pola identik Admin Niche
+   Library .nl-*), baris definisi, dan grid-2/price-dyn untuk modal pesan custom. */
+
+/* toolbar cari + filter */
+.nlib-toolbar { display: flex; gap: 0.625rem; flex-wrap: wrap; align-items: center; margin: 0 0 1rem; }
+.nlib-search { position: relative; flex: 1; min-width: 220px; max-width: 360px; }
+.nlib-search svg { position: absolute; left: 0.625rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; }
+.nlib-search .input { padding-left: 2rem; }
+.nlib-cat { width: auto; min-width: 200px; }
+.nlib-tbl tbody tr { cursor: pointer; }
+
+/* drawer detail (baca-saja) — nilai identik dengan .nl-drawer Admin Niche Library */
+.nlib-scrim { position: fixed; inset: 0; background: rgba(0,0,0,0.5); opacity: 0; pointer-events: none; transition: opacity var(--d-mid); z-index: 40; }
+.nlib-scrim.open { opacity: 1; pointer-events: auto; }
+.nlib-drawer { position: fixed; top: 0; right: 0; height: 100vh; width: 460px; max-width: 96vw; background: var(--bg-elevated); border-left: 1px solid var(--border); box-shadow: var(--shadow-xl); transform: translateX(100%); transition: transform var(--d-mid) var(--ease-out); z-index: 41; display: flex; flex-direction: column; }
+.nlib-drawer.open { transform: none; }
+.nlib-drawer-head { padding: 1.125rem 1.25rem; border-bottom: 1px solid var(--border-subtle); display: flex; align-items: flex-start; gap: 0.75rem; }
+.nlib-dpanel { padding: 1.25rem; overflow-y: auto; flex: 1; }
+.nlib-drawer-foot { padding: 1rem 1.25rem; border-top: 1px solid var(--border-subtle); display: flex; justify-content: flex-end; }
+.nlib-def { margin-bottom: 1.1rem; }
+.nlib-def .k { font-size: var(--text-xs); font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.3rem; }
+.nlib-def .v { font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.55; }
+
+/* modal pesan niche custom */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.875rem; }
+.price-dyn { font-family: var(--font-mono); color: var(--brand); }
+.nlib-pick { border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 0.875rem; cursor: pointer; display: flex; flex-direction: column; gap: 0.3rem; transition: border-color var(--d-fast), background var(--d-fast); }
+.nlib-pick.sel { border-color: var(--brand); background: var(--brand-soft); }
+
+@media (max-width: 720px) { .grid-2 { grid-template-columns: 1fr; } }

@@ -138,6 +138,13 @@ export default function IntegrationsPage() {
       setTgEnabled(true); flash("tg");
     } catch { setBusy(""); setErr({ k: "tg", m: "Server tak terjangkau" }); }
   }
+  // Toggle aktif/nonaktif notif Telegram — persist ke telegram_enabled (RPC whitelist). BE menghormati toggle ini.
+  async function toggleTg(on: boolean) {
+    setErr(null); setTgEnabled(on);  // optimistik
+    const { error } = await supabase.rpc("set_tenant_config", { p_telegram_enabled: on });
+    if (error) { setTgEnabled(!on); setErr({ k: "tg", m: error.message }); return; }
+    flash("tg");
+  }
 
   function GatedCard({ icon, name, desc, minRank, minLabel }: { icon: React.ReactNode; name: string; desc: { id: string; en: string }; minRank: number; minLabel: string }) {
     const ok = rank >= minRank;
@@ -256,7 +263,7 @@ export default function IntegrationsPage() {
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.875rem" }}>
             <span style={iconBox("var(--telegram,#229ED9)")}><Send size={18} /></span>
             <div style={{ flex: 1 }}><div style={titleS}>Telegram</div><div style={muted}><Bi id="Notif real-time per run ke chat Anda" en="Real-time per-run notifications to your chat" /></div></div>
-            <label className="switch"><input type="checkbox" checked={tgEnabled} onChange={(e) => setTgEnabled(e.target.checked)} /><span className="track" /><span className="thumb" /></label>
+            <label className="switch"><input type="checkbox" checked={tgEnabled} onChange={(e) => toggleTg(e.target.checked)} /><span className="track" /><span className="thumb" /></label>
           </div>
           <div className="fld"><label className="label">Telegram Chat ID</label><input className="input input-mono" value={tgChat} onChange={(e) => setTgChat(e.target.value)} placeholder="mis. 123456789" /></div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "0.75rem" }}>

@@ -7,8 +7,8 @@ import { NextResponse, type NextRequest } from "next/server";
 // Prefix yang WAJIB login tenant. (app) route-group tak muncul di URL → cek path nyata tiap layar.
 // /admin DITANGANI TERPISAH (gate super-admin di bawah), BUKAN di sini.
 const PROTECTED = [
-  "/dashboard", "/channels", "/runs", "/analytics", "/insights",
-  "/compliance", "/config", "/schedule", "/settings", "/billing",
+  "/dashboard", "/channels", "/niches", "/runs", "/analytics", "/insights",
+  "/compliance", "/schedule", "/settings", "/billing",
   "/onboarding", "/support",
 ];
 
