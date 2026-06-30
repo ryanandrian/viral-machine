@@ -94,7 +94,7 @@ Alur A-Z: **Diajukan → (batal/tolak) / Menunggu pembayaran → Diproses → Di
 | Email tagihan/bayar/serah-terima/pengingat/penutup | ✅ antre ke email_outbox (admin route + worker); KIRIM saat worker jalan (deploy) |
 | 🔌 Integrasi Midtrans live (§7) | ⏸️ DITUNDA — bareng pembayaran sewa (GATE CUTOVER B2) |
 
-**Catatan deploy:** kode FE/BE/route = LOKAL, **belum di-deploy ke VPS**. Migrasi DB (0104/0105/0106) sudah diterapkan ke DB v2 (aman/additive). migr 0103 (telegram) masih menunggu deploy bareng. Email & auto-close baru AKTIF setelah worker di-deploy (lokal: SMTP egress diblok + worker tak jalan, jadi email hanya ter-antre).
+**Status deploy:** ✅ **DEPLOYED LIVE 2026-06-30** (commit `e263e1a`). FE (mv-web rebuild) + BE (mv-worker restart, thread NicheSweep up) + migr 0103/0104/0105/0106 applied ke DB v2. Email (via email_outbox→SMTP) & auto-close worker kini AKTIF di produksi. **Pembayaran = concierge/manual** (admin "Tandai lunas"); integrasi Midtrans live tetap DITUNDA → GATE CUTOVER B2 (§7).
 
 ## §11. Catatan rekonsiliasi
 - `PROGRESS.md` ~baris 120 ("loop custom-niche tertutup penuh") = **over-claim** (hanya ajukan→approve→eksklusif; tanpa bayar/batal/riwayat/evaluasi). Doc ini = spesifikasi A-Z sebenarnya.
