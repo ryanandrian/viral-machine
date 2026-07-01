@@ -33,23 +33,34 @@
 - **Prinsip NON-NEGOTIABLE:** kualitas>kuantitas (lebih baik tak produksi daripada jelek) · **no silent degradation** (gagal→tenant tahu via Telegram+dashboard) · **diversity/compliance-first** (bertahan dari YouTube AI-slop crackdown Jan 2026 = **PILAR SURVIVAL**, bukan opsional) · self-learning · **almost fully config-driven (no-hardcode)** · transparansi (BYOK + biaya AI terlihat + log auditable).
 - **⭐ TUJUAN OWNER = SEGERA JUALAN (go-to-market).** Ukuran "SELESAI" yang BENAR = **produk bisa DIJUAL ke tenant baru**, BUKAN menyempurnakan internal/ryan. Pertanyaan pemandu tiap saat: *"apakah ini memblok tenant berbayar pertama?"* Tidak → DEFER (pasca-launch). STOP rabbit-hole perfeksionisme. (memory `project_audit_setup_gaps_2026_06_23`)
 
-### 📏 ATURAN KERJA LENGKAP (WAJIB patuh — tiap `[[...]]` = memory) — pelanggaran = ditegur owner
-1. **[[feedback_comprehend_before_work]]** ⛔ — paham SELURUH konteks 1000% SEBELUM bertindak. Nol asumsi.
-2. **[[feedback_analysis_discipline]]** — tiap klaim dari FAKTA (file:baris / query DB), bukan tebakan/nama-fungsi. Verifikasi via DATA nyata.
-3. **[[feedback_workflow]]** — propose dulu + tunggu approval untuk perubahan besar/berisiko sebelum koding.
-4. **[[feedback_world_class_quality]]** 🏆 — DB/BE/FE semua TERBAIK; reuse/relokasi UI bagus yang ada (jangan bikin versi lebih jelek); "selesai" = kualitas + nol-duplikat + lama-dibereskan + tervalidasi.
-5. **[[feedback_no_silent_ui_changes]]** 🚫🎨 — JANGAN tambah/ubah/hapus elemen UI tanpa izin owner. Tugas logika/BE = ubah itu SAJA; usulkan dulu bila perlu UI.
-6. **[[feedback_no_hardcode]]** — komponen AI/pricing/biaya = config-driven (DB/`app_config`), no silent fallback.
-7. **[[feedback_define_done_no_scope_creep]]** — tarik garis SELESAI vs poles-opsional; defer opsional sampai ada sinyal nyata; menjelaskan ≠ tugas baru.
-8. **[[feedback_review_whole_remediation_before_item]]** 🔗 — sebelum item apa pun: review SELURUH dokumen terkait (item saling terhubung); cek DEPENDS + yang menumpang seam.
-9. **[[feedback_local_test_batch_deploy]]** ⚡ — validasi PENUH di LOKAL (dev box mampu render-test/build/DDL); deploy VPS hanya per-BATCH (rebuild FE VPS lambat).
-10. **[[feedback_plain_language]]** 🗣️ — owner NON-TEKNIS: bahasa sederhana/bisnis, jelaskan DAMPAK bukan mekanisme, nol jargon.
-11. **[[feedback_all_assets_on_s3]]** 🗄️ — semua aset/media WAJIB di S3 (`mesinviral-assets`); Supabase = DB saja. JANGAN keputusan biaya/infra (bucket/generate-berbayar/pindah-storage) tanpa restu owner.
-12. **[[feedback_owner_delegates_expert_decisions]]** — owner = konsep/bisnis; Claude putuskan detail teknis (dalam aturan). Tiap build untuk produk LAKU + skala ribuan tenant.
-13. **[[feedback_master_docs_first]]** — kuasai dokumen dulu; banyak keputusan SUDAH ada (spec) — implementasi sesuai spec, jangan re-teori.
-14. **[[feedback_vps_clean]]** / **[[feedback_vps_ssh_long_commands]]** — VPS = runtime (`.md` di-exclude); perintah VPS lama = detached/poll (SSH nganggur putus).
-15. **[[feedback_post_compaction]]** — pasca-compaction: percayai summary+memory, lanjut thread aktif, jangan re-investigasi yang sudah jelas.
-16. **JANGAN sentuh v1** (pensiun; arsip+DB disimpan) · **JANGAN drop `niche_pool`/`niche_mode`** · **JANGAN ngoding di VPS**.
+### 📏 ATURAN KERJA LENGKAP — 18 memory (WAJIB patuh; tiap `[[...]]` = file memory) — pelanggaran = ditegur owner
+**A. Sebelum bertindak — paham & disiplin**
+1. **[[feedback_comprehend_before_work]]** ⛔ — paham **1000%** peta (DB/BE/FE/koneksi/progress/prioritas) SEBELUM menyentuh apa pun. Darurat = containment dulu, baru diagnosa (jangan menebak komponen).
+2. **[[feedback_post_compaction]]** — pasca-compaction JANGAN "bayi baru lahir": percayai summary+memory, baca URUTAN KANONIK berurut, tulis peta-state, lanjut thread aktif — jangan re-investigasi yang sudah jelas.
+3. **[[feedback_analysis_discipline]]** — **NOL asumsi.** Trace end-to-end dgn angka nyata; baca kode sebelum klaim; **build PASS ≠ running well** (validasi RUNTIME sebelum klaim selesai).
+4. **[[feedback_master_docs_first]]** — kuasai dokumen dulu; **GROUND TRUTH = KODE + DB LIVE** (dok bisa drift/aspiratif — jangan kutip dok sbg bukti perilaku); kontradiksi→terbaru+konfirmasi; hormati banner "JANGAN ANALISA ULANG"; FE = referensi backend.
+5. **[[feedback_review_whole_remediation_before_item]]** 🔗 — sebelum kerjakan 1 item: review SELURUH dokumen terkait + cek DEPENDS + item yang menumpang seam (hindari rework).
+
+**B. Cara memutuskan & komunikasi**
+6. **[[feedback_workflow]]** — **propose dulu + tunggu approval** untuk perubahan; saat ditanya: jawab+opsi+rekomendasi+tunggu konfirmasi (jangan langsung bongkar kode).
+7. **[[feedback_owner_delegates_expert_decisions]]** — owner delegasi teknis: putuskan yang reversible/jelas; **propose untuk yang berisiko/fork bisnis**. North-star = produk **LAKU + skala ribuan tenant + viral NYATA**.
+8. **[[feedback_plain_language]]** 🗣️ — owner **non-teknis**: bahasa dampak bukan mekanisme; nol jargon; status = checklist sederhana.
+9. **[[feedback_no_silent_ui_changes]]** 🚫🎨 — JANGAN tambah/ubah/hapus elemen UI tanpa izin owner. Tugas BE/logika = ubah itu SAJA; usul dulu bila perlu UI.
+10. **[[feedback_define_done_no_scope_creep]]** — tarik garis tegas **SELESAI / poles-opsional / wajib-jualan**; defer opsional; menjelaskan ≠ tugas baru; jangan bingkai follow-up sbg "cacat".
+
+**C. Standar kualitas & teknis**
+11. **[[feedback_world_class_quality]]** 🏆 — DB/BE/FE semua TERBAIK; reuse/relokasi UI bagus yang ada (jangan bikin lebih jelek); nol-duplikat; "selesai" = kualitas + lama-dibereskan + tervalidasi.
+12. **[[feedback_no_hardcode]]** — AI/pricing/business = config-driven (`pricing_config`/`app_config`/DB); no silent fallback (gagal→stop+notify); nol literal nominal/model di kode.
+13. **[[feedback_design_for_multichannel_scale]]** — asumsi default **tenant MULTI-channel**; atribusi data **per-entitas** (per-video/run), bukan "channel tenant"; ryan (1 channel) = test, bukan patokan.
+14. **[[feedback_all_assets_on_s3]]** 🗄️ — semua aset/media di **S3** (`mesinviral-assets`); Supabase = DB saja. **JANGAN keputusan biaya/infra tanpa izin owner.**
+
+**D. Validasi & deploy**
+15. **[[feedback_local_test_batch_deploy]]** ⚡ — validasi PENUH di LOKAL (dev box mampu render-test/build/DDL); deploy VPS **1× di akhir task** (rebuild FE VPS lambat), jangan per-langkah.
+16. **[[feedback_vps_clean]]** — VPS = runtime bersih (`.md` di-exclude sparse-checkout); alur lokal→commit→push→`git pull` VPS+restart.
+17. **[[feedback_vps_ssh_long_commands]]** — perintah VPS lama/menunggu = **detached + poll** (SSH nganggur diputus→error 255); jangan foreground.
+18. **[[feedback_f4_locked_gate]]** — *(GERBANG SUDAH TERBUKA — F4 durasi SELESAI `8670fc3`)*; prinsip tetap: durasi = hulu, hilir rusak bila hulu meleset.
+
+**⛔ PANTANGAN keras:** JANGAN sentuh v1 (pensiun; arsip+DB disimpan) · JANGAN drop `channels.niche_pool`/`niche_mode` (AKTIF) · JANGAN ngoding di VPS.
 
 ---
 
