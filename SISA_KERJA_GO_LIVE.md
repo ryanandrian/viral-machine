@@ -27,7 +27,29 @@
 - **S3** (aset/video/logo) = Biznet bucket `mesinviral-assets`, kredensial `S3-CONNECTION.md`. Supabase = DB saja.
 - **Repo lokal** = `/home/rad/viral-machine`, branch `v2-backend`. FE = `apps/web` (Next.js 16; `npm --prefix apps/web run build`). `.md` di-exclude dari VPS (sparse-checkout).
 
-**Aturan kerja keras (memory `feedback_*`):** paham dulu sebelum kerja · propose dulu utk perubahan besar · nol-asumsi (bukti file:baris/DB) · no-hardcode · bahasa sederhana ke owner (non-teknis) · **JANGAN ubah UI tanpa izin owner** · validasi PENUH di lokal, deploy per-batch.
+### 🎯 VISI / MISI (WAJIB paham — arah tiap keputusan) — sumber: `DESAIN_PRODUK_SAAS.md §1/§8/§9` + memory `project_vision`
+- **Tagline/misi:** *"Mesin produksi konten YouTube Shorts otomatis yang **belajar dari channelmu sendiri**."* Untuk **faceless creator (Indonesia-first)** yang mau scale ke 5+ video/hari — video viral-grade harian + adaptasi real-time dari analytics channel mereka.
+- **3 pembeda / MOAT:** (1) **BYOK transparan** (tenant bawa kunci AI sendiri, tanpa vendor lock-in, jauh lebih murah/video) · (2) **Self-learning loop** dari YouTube Analytics post-publish (tak ada kompetitor lakukan — moat 12-18 bln) · (3) **Indonesia-first** (UI ID, Midtrans, niche kurasi, concierge).
+- **Prinsip NON-NEGOTIABLE:** kualitas>kuantitas (lebih baik tak produksi daripada jelek) · **no silent degradation** (gagal→tenant tahu via Telegram+dashboard) · **diversity/compliance-first** (bertahan dari YouTube AI-slop crackdown Jan 2026 = **PILAR SURVIVAL**, bukan opsional) · self-learning · **almost fully config-driven (no-hardcode)** · transparansi (BYOK + biaya AI terlihat + log auditable).
+- **⭐ TUJUAN OWNER = SEGERA JUALAN (go-to-market).** Ukuran "SELESAI" yang BENAR = **produk bisa DIJUAL ke tenant baru**, BUKAN menyempurnakan internal/ryan. Pertanyaan pemandu tiap saat: *"apakah ini memblok tenant berbayar pertama?"* Tidak → DEFER (pasca-launch). STOP rabbit-hole perfeksionisme. (memory `project_audit_setup_gaps_2026_06_23`)
+
+### 📏 ATURAN KERJA LENGKAP (WAJIB patuh — tiap `[[...]]` = memory) — pelanggaran = ditegur owner
+1. **[[feedback_comprehend_before_work]]** ⛔ — paham SELURUH konteks 1000% SEBELUM bertindak. Nol asumsi.
+2. **[[feedback_analysis_discipline]]** — tiap klaim dari FAKTA (file:baris / query DB), bukan tebakan/nama-fungsi. Verifikasi via DATA nyata.
+3. **[[feedback_workflow]]** — propose dulu + tunggu approval untuk perubahan besar/berisiko sebelum koding.
+4. **[[feedback_world_class_quality]]** 🏆 — DB/BE/FE semua TERBAIK; reuse/relokasi UI bagus yang ada (jangan bikin versi lebih jelek); "selesai" = kualitas + nol-duplikat + lama-dibereskan + tervalidasi.
+5. **[[feedback_no_silent_ui_changes]]** 🚫🎨 — JANGAN tambah/ubah/hapus elemen UI tanpa izin owner. Tugas logika/BE = ubah itu SAJA; usulkan dulu bila perlu UI.
+6. **[[feedback_no_hardcode]]** — komponen AI/pricing/biaya = config-driven (DB/`app_config`), no silent fallback.
+7. **[[feedback_define_done_no_scope_creep]]** — tarik garis SELESAI vs poles-opsional; defer opsional sampai ada sinyal nyata; menjelaskan ≠ tugas baru.
+8. **[[feedback_review_whole_remediation_before_item]]** 🔗 — sebelum item apa pun: review SELURUH dokumen terkait (item saling terhubung); cek DEPENDS + yang menumpang seam.
+9. **[[feedback_local_test_batch_deploy]]** ⚡ — validasi PENUH di LOKAL (dev box mampu render-test/build/DDL); deploy VPS hanya per-BATCH (rebuild FE VPS lambat).
+10. **[[feedback_plain_language]]** 🗣️ — owner NON-TEKNIS: bahasa sederhana/bisnis, jelaskan DAMPAK bukan mekanisme, nol jargon.
+11. **[[feedback_all_assets_on_s3]]** 🗄️ — semua aset/media WAJIB di S3 (`mesinviral-assets`); Supabase = DB saja. JANGAN keputusan biaya/infra (bucket/generate-berbayar/pindah-storage) tanpa restu owner.
+12. **[[feedback_owner_delegates_expert_decisions]]** — owner = konsep/bisnis; Claude putuskan detail teknis (dalam aturan). Tiap build untuk produk LAKU + skala ribuan tenant.
+13. **[[feedback_master_docs_first]]** — kuasai dokumen dulu; banyak keputusan SUDAH ada (spec) — implementasi sesuai spec, jangan re-teori.
+14. **[[feedback_vps_clean]]** / **[[feedback_vps_ssh_long_commands]]** — VPS = runtime (`.md` di-exclude); perintah VPS lama = detached/poll (SSH nganggur putus).
+15. **[[feedback_post_compaction]]** — pasca-compaction: percayai summary+memory, lanjut thread aktif, jangan re-investigasi yang sudah jelas.
+16. **JANGAN sentuh v1** (pensiun; arsip+DB disimpan) · **JANGAN drop `niche_pool`/`niche_mode`** · **JANGAN ngoding di VPS**.
 
 ---
 
