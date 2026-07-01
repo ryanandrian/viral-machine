@@ -13,16 +13,24 @@ function Bi({ id, en }: { id: string; en: string }) {
 type AppCfg = { key: string; value: number; description: string | null };
 
 // Metadata tampilan (label ramah + unit + grup). Keterangan detail = description (DB, bahasa admin).
-const G_TRIAL = "Trial & Akses";
+const G_BILLING = "Langganan, Trial & Penagihan";
 const G_TREND = "Bobot Sumber Tren";
 const G_ENGINE = "Performa Mesin Tren";
+const G_OTHER = "Lainnya";
 const CFG_GROUPS: [string, string][] = [
-  [G_TRIAL, "Trial & Access"],
+  [G_BILLING, "Subscription, Trial & Billing"],
   [G_TREND, "Trend Source Weights"],
   [G_ENGINE, "Trend Engine Performance"],
+  [G_OTHER, "Others"],   // ← catch-all: SETIAP key app_config tanpa metadata TETAP tampil (anti-hilang selamanya)
 ];
 const CFG_META: Record<string, { label: string; group: string; unit: string; hint?: string }> = {
-  trial_duration_days:     { label: "Masa Trial Gratis", group: G_TRIAL, unit: "hari" },
+  trial_duration_days:          { label: "Masa Trial Gratis", group: G_BILLING, unit: "hari" },
+  trial_reminder_days_before:   { label: "Pengingat Sebelum Trial Habis", group: G_BILLING, unit: "hari", hint: "H-x; 0 = matikan" },
+  renewal_reminder_days_before: { label: "Pengingat Sebelum Langganan Habis", group: G_BILLING, unit: "hari", hint: "H-x; 0 = matikan" },
+  subscription_period_days:     { label: "Durasi Periode Langganan", group: G_BILLING, unit: "hari", hint: "default 30 (bulanan)" },
+  billing_grace_days:           { label: "Masa Tenggang Sebelum Dihentikan", group: G_BILLING, unit: "hari" },
+  checkout_expiry_hours:        { label: "Masa Berlaku Link Bayar", group: G_BILLING, unit: "jam" },
+  niche_eval_window_days:       { label: "Masa Evaluasi Niche Custom", group: G_OTHER, unit: "hari" },
   trend_weight_youtube:    { label: "YouTube (utama)", group: G_TREND, unit: "%" },
   trend_weight_trends:     { label: "Google Trends", group: G_TREND, unit: "%" },
   trend_weight_news:       { label: "Google News", group: G_TREND, unit: "%" },
@@ -75,7 +83,7 @@ export default function AppConfigPage() {
           </div>
           <div className="card-body" style={{ display: "grid", gap: "1.5rem" }}>
             {CFG_GROUPS.map(([grp, grpEn]) => {
-              const items = cfg.filter((a) => (CFG_META[a.key]?.group ?? "Lainnya") === grp);
+              const items = cfg.filter((a) => (CFG_META[a.key]?.group ?? G_OTHER) === grp);
               if (items.length === 0) return null;
               const total = grp === G_TREND ? items.reduce((n, a) => n + (a.value || 0), 0) : null;
               return (

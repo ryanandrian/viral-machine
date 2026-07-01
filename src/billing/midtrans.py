@@ -21,7 +21,6 @@ from datetime import datetime, timezone, timedelta
 
 from loguru import logger
 
-_PERIOD_DAYS = 30  # 1 siklus langganan (bulanan)
 
 
 def _is_production() -> bool:
@@ -198,7 +197,7 @@ def _apply_settlement(sb, order: dict, txn: str | None, fraud, payment_type=None
             except Exception as _re:
                 logger.error(f"[Midtrans] settle addon gagal order={order_id} ref={order.get('ref_id')}: {_re}")
         else:
-            start = _now(); end = start + timedelta(days=_PERIOD_DAYS)
+            start = _now(); end = start + timedelta(days=_app_cfg_int(sb, "subscription_period_days", 30))
             upd["period_start"] = start.isoformat(); upd["period_end"] = end.isoformat()
             # Aktivasi + RESET penanda reminder/suspend → siklus baru dapat reminder segar (perpanjangan berikut).
             sb.table("tenant_configs").update({
