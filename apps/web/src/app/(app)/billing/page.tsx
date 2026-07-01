@@ -124,10 +124,11 @@ export default function BillingPage() {
             {invoices.length === 0
               ? <div className="card-body" style={{ padding: "1.5rem", textAlign: "center" }}><span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Belum ada invoice." en="No invoices yet." /></span></div>
               : <div style={{ overflowX: "auto" }}><table className="tbl">
-                  <thead><tr><th>Order</th><th>Tanggal</th><th className="num">Jumlah</th><th>Status</th></tr></thead>
+                  <thead><tr><th>Order</th><th>Tanggal</th><th className="num">Jumlah</th><th>Status</th><th></th></tr></thead>
                   <tbody>{invoices.map((p) => (
-                    <tr key={p.order_id}><td className="mono" style={{ color: "var(--text-primary)" }}>{p.order_id}</td><td className="muted">{new Date(p.created_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}</td><td className="num"><b style={{ color: "var(--text-primary)", fontWeight: 600 }}>{fmtIDR(p.gross_amount)}</b></td>
-                      <td><span className={`badge ${(p.status || "").includes("settle") || (p.status || "").includes("capture") || p.status === "paid" ? "badge-success" : "badge-default"}`}><span className="dot" />{p.status}</span></td></tr>
+                    <tr key={p.order_id}><td className="mono"><a href={`/billing/invoice/${p.order_id}`} target="_blank" rel="noopener" style={{ color: "var(--brand)", textDecoration: "none" }} title="Lihat / cetak invoice">{p.order_id}</a></td><td className="muted">{new Date(p.created_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}</td><td className="num"><b style={{ color: "var(--text-primary)", fontWeight: 600 }}>{fmtIDR(p.gross_amount)}</b></td>
+                      <td><span className={`badge ${(p.status || "").includes("settle") || (p.status || "").includes("capture") || p.status === "paid" ? "badge-success" : "badge-default"}`}><span className="dot" />{p.status}</span></td>
+                      <td><a href={`/billing/invoice/${p.order_id}`} target="_blank" rel="noopener" className="btn btn-ghost btn-sm"><Bi id="Cetak" en="Print" /></a></td></tr>
                   ))}</tbody>
                 </table></div>}
           </div>

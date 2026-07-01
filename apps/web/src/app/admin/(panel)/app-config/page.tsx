@@ -30,6 +30,7 @@ const CFG_META: Record<string, { label: string; group: string; unit: string; hin
   subscription_period_days:     { label: "Durasi Periode Langganan", group: G_BILLING, unit: "hari", hint: "default 30 (bulanan)" },
   billing_grace_days:           { label: "Masa Tenggang Sebelum Dihentikan", group: G_BILLING, unit: "hari" },
   checkout_expiry_hours:        { label: "Masa Berlaku Link Bayar", group: G_BILLING, unit: "jam" },
+  ppn_percent:                  { label: "PPN Invoice", group: G_BILLING, unit: "%", hint: "0 = harga final; 11 = PKP" },
   niche_eval_window_days:       { label: "Masa Evaluasi Niche Custom", group: G_OTHER, unit: "hari" },
   trend_weight_youtube:    { label: "YouTube (utama)", group: G_TREND, unit: "%" },
   trend_weight_trends:     { label: "Google Trends", group: G_TREND, unit: "%" },

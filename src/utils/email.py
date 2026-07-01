@@ -77,6 +77,10 @@ def _upgrade_url() -> str:
     return os.getenv("UPGRADE_URL", "https://mesinviral.com/billing")
 
 
+def _site_url() -> str:
+    return os.getenv("APP_BASE_URL", "https://mesinviral.com").rstrip("/")
+
+
 def _cfg_int(sb, key: str, default: int) -> int:
     """Baca angka dari app_config (admin-editable, no-hardcode). Gagal → default."""
     try:
@@ -97,7 +101,7 @@ def _bi(en: str, id_: str) -> str:
 
 
 # ── Notifikasi billing (fail-soft; dipanggil dari webhook/renewal) ───────────
-def notify_payment_receipt(tenant_id: str, plan_type: str, amount, sb=None) -> bool:
+def notify_payment_receipt(tenant_id: str, plan_type: str, amount, sb=None, order_id: str | None = None) -> bool:
     to = tenant_email(tenant_id, sb)
     if not to:
         return False
@@ -105,11 +109,13 @@ def notify_payment_receipt(tenant_id: str, plan_type: str, amount, sb=None) -> b
         amt = f"Rp {int(amount):,}".replace(",", ".")
     except Exception:
         amt = str(amount)
+    inv_en = f"\nInvoice / receipt: {_site_url()}/billing/invoice/{order_id}\n" if order_id else ""
+    inv_id = f"\nInvoice / bukti bayar: {_site_url()}/billing/invoice/{order_id}\n" if order_id else ""
     return send_email(
         to, "Payment received / Pembayaran diterima — MesinViral",
-        _bi(f"Hi,\n\nYour payment for the {plan_type} plan ({amt}) was successful. Your subscription is now ACTIVE.\n"
+        _bi(f"Hi,\n\nYour payment for the {plan_type} plan ({amt}) was successful. Your subscription is now ACTIVE.\n{inv_en}"
             f"Happy creating!\n\n— The MesinViral Team",
-            f"Halo,\n\nPembayaran paket {plan_type} ({amt}) berhasil. Langganan Anda kini AKTIF.\n"
+            f"Halo,\n\nPembayaran paket {plan_type} ({amt}) berhasil. Langganan Anda kini AKTIF.\n{inv_id}"
             f"Selamat berkarya!\n\n— Tim MesinViral"),
     )
 

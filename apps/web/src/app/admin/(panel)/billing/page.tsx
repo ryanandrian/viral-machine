@@ -74,7 +74,7 @@ export default function AdminBillingPage() {
           {!loading && view.length === 0 && <tr><td colSpan={7} className="muted" style={{ padding: "1.5rem", textAlign: "center" }}><Bi id="Belum ada transaksi." en="No transactions yet." /></td></tr>}
           {view.map((p) => (
             <tr key={p.order_id}>
-              <td className="mono" style={{ fontSize: "0.6875rem", color: "var(--text-primary)" }}>{p.order_id}</td>
+              <td className="mono" style={{ fontSize: "0.6875rem" }}><a href={`/billing/invoice/${p.order_id}`} target="_blank" rel="noopener" style={{ color: "var(--brand)", textDecoration: "none" }} title="Lihat / cetak invoice">{p.order_id}</a></td>
               <td className="muted" style={{ fontSize: "var(--text-xs)" }}>{p.tenant_email ?? p.tenant_id.slice(0, 8)}</td>
               <td><span className="badge badge-default">{(CAT_LABEL[p.category] ?? { id: p.category, en: p.category }) && <><span data-id>{CAT_LABEL[p.category]?.id ?? p.category}</span><span data-en>{CAT_LABEL[p.category]?.en ?? p.category}</span></>}{p.plan_type ? ` · ${p.plan_type}` : ""}</span></td>
               <td className="num"><b style={{ color: "var(--text-primary)", fontWeight: 600 }}>{fmtIDR(p.gross_amount)}</b></td>

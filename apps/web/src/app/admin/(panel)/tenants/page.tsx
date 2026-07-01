@@ -20,7 +20,7 @@ type Row = {
 };
 type Kpi = { total: number; mrr_idr: number; trials: number; trial_expired: number; suspended: number };
 type Detail = {
-  tenant: Row & { timezone?: string };
+  tenant: Row & { timezone?: string; is_developer?: boolean; discount_pct?: number };
   channels: { id: string; channel_name: string; niche: string; platform: string; is_active: boolean; publish_privacy: string }[];
   runs: { id: number; topic: string; niche: string; status: string; created_at: string; youtube_url: string | null }[];
   payments: { order_id: string; plan_type: string; gross_amount: number; status: string; created_at: string }[];
@@ -73,6 +73,7 @@ export default function AdminTenantsPage() {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [busy, setBusy] = useState(false);
   const [compose, setCompose] = useState<{ subject: string; body: string } | null>(null);
+  const [compModal, setCompModal] = useState<{ is_developer: boolean; discount_pct: number } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -85,7 +86,7 @@ export default function AdminTenantsPage() {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { setSel(null); setCompose(null); } };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { setSel(null); setCompose(null); setCompModal(null); } };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, []);
@@ -126,6 +127,17 @@ export default function AdminTenantsPage() {
     setBusy(false);
     if (r.ok) { setToast("Email diantre (dikirim worker)"); setCompose(null); }
     else setToast("Gagal mengantre email");
+  }
+
+  async function saveComp() {
+    if (!cur || !compModal) return;
+    setBusy(true);
+    const r = await fetch(`/api/admin/tenants/${cur.tenant_id}/comp`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(compModal),
+    });
+    setBusy(false);
+    if (r.ok) { setToast("Comp/diskon disimpan"); setCompModal(null); await load(); }
+    else setToast("Gagal simpan comp/diskon");
   }
 
   return (
@@ -214,6 +226,7 @@ export default function AdminTenantsPage() {
             <button className="btn btn-secondary btn-sm" disabled={busy} style={{ color: cur.status === "suspended" ? "var(--success)" : "var(--warning)" }} onClick={toggleSuspend}>
               {cur.status === "suspended" ? <><Play size={14} /> Unsuspend</> : <><Pause size={14} /> Suspend</>}
             </button>
+            <button className="btn btn-secondary btn-sm" disabled={busy || !detail} onClick={() => setCompModal({ is_developer: !!detail?.tenant?.is_developer, discount_pct: detail?.tenant?.discount_pct ?? 0 })}>{cur.comp ? "Comp ✓" : "Comp/Diskon"}</button>
           </div>
         </>)}
       </aside>
@@ -231,6 +244,30 @@ export default function AdminTenantsPage() {
               <textarea className="input" placeholder="Isi pesan" rows={6} value={compose.body} onChange={(e) => setCompose({ ...compose, body: e.target.value })} />
               <div className="muted" style={{ fontSize: "var(--text-xs)" }}>Email diantre & dikirim oleh worker (bukan instan).</div>
               <button className="btn btn-primary btn-sm" disabled={busy || !compose.subject.trim() || !compose.body.trim()} style={{ justifySelf: "end" }} onClick={sendEmail}><Send size={14} /> Antre kirim</button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {compModal && cur && (
+        <>
+          <div className="adm-scrim open" style={{ zIndex: 60 }} onClick={() => setCompModal(null)} />
+          <div className="card" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(420px,92vw)", zIndex: 61, padding: "1.25rem" }}>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: "0.75rem" }}>
+              <strong>Comp / Diskon — {cur.handle || cur.email}</strong>
+              <button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} onClick={() => setCompModal(null)}><X size={16} /></button>
+            </div>
+            <div style={{ display: "grid", gap: "0.75rem" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: ".5rem", fontSize: "var(--text-sm)" }}>
+                <input type="checkbox" checked={compModal.is_developer} onChange={(e) => setCompModal({ ...compModal, is_developer: e.target.checked })} />
+                Comp / Developer — gratis selamanya (exempt sweep tagihan)
+              </label>
+              <div>
+                <label className="label">Diskon (%)</label>
+                <input className="input" type="number" min={0} max={100} value={compModal.discount_pct} onChange={(e) => setCompModal({ ...compModal, discount_pct: Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0)) })} />
+                <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: 3 }}>≥100% = gratis (setara comp). 0 = tanpa diskon.</div>
+              </div>
+              <button className="btn btn-primary btn-sm" disabled={busy} style={{ justifySelf: "end" }} onClick={saveComp}>Simpan</button>
             </div>
           </div>
         </>

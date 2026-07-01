@@ -72,11 +72,18 @@ export default function AuthPage() {
     if (pw.length < 8) return setErr(lang === "id" ? "Password minimal 8 karakter." : "Password must be at least 8 characters.");
     if (pw !== pw2) return setErr(lang === "id" ? "Konfirmasi password tidak cocok." : "Passwords do not match.");
     setBusy(true);
-    // emailRedirectTo → /auth/callback (tukar PKCE code → session cookie) → lalu view=verified.
-    const after = `${origin()}/auth/callback?next=${encodeURIComponent("/auth?view=verified")}`;
-    const { error } = await supabase.auth.signUp({ email, password: pw, options: { emailRedirectTo: after } });
+    // Email konfirmasi DIKIRIM SENDIRI oleh mv-web (ber-brand, dwibahasa, link token_hash lintas-alat)
+    // via /api/auth/signup → BUKAN supabase.auth.signUp (email default Supabase + PKCE rapuh lintas-alat).
+    const res = await fetch("/api/auth/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email.trim(), password: pw, lang }),
+    }).catch(() => null);
     setBusy(false);
-    if (error) return setErr(error.message);
+    if (!res || !res.ok) {
+      const j = res ? await res.json().catch(() => ({})) : {};
+      return setErr(j?.msg || (lang === "id" ? "Gagal mendaftar. Coba lagi." : "Signup failed. Try again."));
+    }
     go("verify");
   }
   async function doLogin() {
@@ -123,11 +130,22 @@ export default function AuthPage() {
     window.location.href = "/dashboard"; // recovery session aktif → langsung masuk
   }
   async function doResend() {
-    if (!email) return setErr(lang === "id" ? "Masukkan email dulu." : "Enter your email first.");
-    setErr(null); setBusy(true);
-    const { error } = await supabase.auth.resend({ type: "signup", email });
+    setErr(null);
+    if (!email.trim()) return setErr(lang === "id" ? "Masukkan email dulu." : "Enter your email first.");
+    // Kirim-ulang lewat route yang sama (idempoten utk user belum-konfirmasi). Butuh password (route
+    // pakai generateLink type=signup); state pw masih terisi tepat setelah daftar. Bila kosong (mis. reload) → minta isi.
+    if (pw.length < 8) return setErr(lang === "id" ? "Masukkan password (min. 8 karakter) lalu kirim ulang." : "Enter your password (min. 8) then resend.");
+    setBusy(true);
+    const res = await fetch("/api/auth/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email.trim(), password: pw, lang }),
+    }).catch(() => null);
     setBusy(false);
-    if (error) setErr(error.message);
+    if (!res || !res.ok) {
+      const j = res ? await res.json().catch(() => ({})) : {};
+      return setErr(j?.msg || (lang === "id" ? "Gagal mengirim ulang. Coba lagi." : "Failed to resend. Try again."));
+    }
   }
   async function doGoogle() {
     setErr(null);

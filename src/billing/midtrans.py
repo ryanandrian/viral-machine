@@ -79,8 +79,20 @@ def _order_id(tenant_id: str, plan_type: str, ts: int) -> str:
     return f"MV-{plan_type}-{str(tenant_id).replace('-', '')[:12]}-{ts}"
 
 
+def _tenant_name(sb, tenant_id: str) -> str | None:
+    """Nama tenant (display_handle) untuk customer_details Midtrans — rekonsiliasi jelas di dashboard."""
+    try:
+        r = sb.table("tenant_configs").select("display_handle").eq("tenant_id", tenant_id).limit(1).execute()
+        if r.data and r.data[0].get("display_handle"):
+            return str(r.data[0]["display_handle"])
+    except Exception:
+        pass
+    return None
+
+
 def _snap_post(order_id: str, amount: int, item_id: str, item_name: str,
-               customer_email: str | None, finish_url: str | None, expiry_hours: int = 24) -> dict:
+               customer_email: str | None, finish_url: str | None, expiry_hours: int = 24,
+               customer_name: str | None = None) -> dict:
     """POST ke Snap API → {token, redirect_url}.
     Notification PER-TRANSAKSI via X-Override-Notification: akun Midtrans DIBAGI dgn app lain
     (mis. aiwa, awalan order 'AIWA') di domain berbeda → JANGAN andalkan Notification URL GLOBAL
@@ -92,8 +104,13 @@ def _snap_post(order_id: str, amount: int, item_id: str, item_name: str,
                                                         "https://mesinviral.com/billing")},
         "expiry": {"unit": "hours", "duration": expiry_hours},  # masa berlaku link bayar (config-driven)
     }
+    cust: dict = {}
+    if customer_name:
+        cust["first_name"] = customer_name[:20]  # Midtrans first_name maks 20 char
     if customer_email:
-        body["customer_details"] = {"email": customer_email}
+        cust["email"] = customer_email
+    if cust:
+        body["customer_details"] = cust
     notif_url = os.getenv("MIDTRANS_NOTIFICATION_URL") or (
         os.getenv("APP_BASE_URL", "https://mesinviral.com").rstrip("/") + "/api/webhooks/midtrans")
     auth = base64.b64encode((_server_key() + ":").encode()).decode()
@@ -120,7 +137,7 @@ def snap_create_transaction(sb, tenant_id: str, plan_type: str,
     }).execute()
     try:
         d = _snap_post(order_id, amount, plan_type, f"MesinViral {plan_type} (bulanan)", customer_email, finish_url,
-                       _app_cfg_int(sb, "checkout_expiry_hours", 24))
+                       _app_cfg_int(sb, "checkout_expiry_hours", 24), customer_name=_tenant_name(sb, tenant_id))
     except urllib.error.HTTPError as e:
         logger.error(f"[Midtrans] Snap subscription gagal order={order_id}: HTTP {e.code} {e.read().decode()[:300]}")
         sb.table("payments").update({"status": "create_failed"}).eq("order_id", order_id).execute()
@@ -159,7 +176,7 @@ def snap_create_niche_addon(sb, tenant_id: str, request_id: str,
     sb.table("niche_requests").update({"order_id": order_id}).eq("request_id", request_id).execute()
     try:
         d = _snap_post(order_id, amount, r["price_key"], f"Niche custom: {r['title']}", customer_email, finish_url,
-                       _app_cfg_int(sb, "checkout_expiry_hours", 24))
+                       _app_cfg_int(sb, "checkout_expiry_hours", 24), customer_name=_tenant_name(sb, tenant_id))
     except urllib.error.HTTPError as e:
         logger.error(f"[Midtrans] Snap addon gagal order={order_id}: HTTP {e.code} {e.read().decode()[:300]}")
         sb.table("payments").update({"status": "create_failed"}).eq("order_id", order_id).execute()
@@ -206,6 +223,10 @@ def _apply_settlement(sb, order: dict, txn: str | None, fraud, payment_type=None
                 "renewal_reminder_sent_at": None, "suspend_notified_at": None,
             }).eq("tenant_id", order["tenant_id"]).execute()
             activated = True
+    elif txn in ("refund", "partial_refund", "chargeback") and order.get("category") != "addon":
+        # Refund/chargeback LANGGANAN → CABUT akses (suspend). Add-on: niche telanjur dibuat → keputusan admin.
+        sb.table("tenant_configs").update({"subscription_status": "suspended"}).eq("tenant_id", order["tenant_id"]).execute()
+        logger.info(f"[Midtrans] refund order={order_id} → tenant {order['tenant_id']} SUSPENDED (akses dicabut)")
 
     sb.table("payments").update(upd).eq("order_id", order_id).execute()
 
@@ -213,7 +234,7 @@ def _apply_settlement(sb, order: dict, txn: str | None, fraud, payment_type=None
     if activated and order.get("category") != "addon" and prev_status not in ("settlement", "capture"):
         try:
             from src.utils.email import notify_payment_receipt
-            notify_payment_receipt(order["tenant_id"], order.get("plan_type"), order.get("gross_amount") or 0, sb)
+            notify_payment_receipt(order["tenant_id"], order.get("plan_type"), order.get("gross_amount") or 0, sb, order_id=order_id)
         except Exception as _ee:
             logger.debug(f"[Midtrans] receipt email skip (non-fatal): {_ee}")
     logger.info(f"[Midtrans] settle order={order_id} txn={txn} fraud={fraud} activated={activated}")
@@ -282,7 +303,3 @@ def reconcile_pending(sb, max_age_hours: int = 48) -> dict:
     if checked:
         logger.info(f"[Midtrans] reconcile: checked={checked} settled={settled}")
     return {"checked": checked, "settled": settled}
-
-    logger.info(f"[Midtrans] notif order={order_id} txn={txn} fraud={fraud} activated={activated}")
-    return {"ok": True, "order_id": order_id, "transaction_status": txn,
-            "tenant_id": order["tenant_id"], "activated": activated}
