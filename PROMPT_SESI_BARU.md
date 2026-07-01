@@ -1,4 +1,12 @@
-# PROMPT SESI BARU — Lanjutkan Remediasi menuju Go-Live (TANPA asumsi liar)
+# PROMPT SESI BARU — Lanjutkan menuju Go-Live (TANPA asumsi liar)
+
+> 🎯🔒 **FOKUS KERJA SESI BARU = [`SISA_KERJA_GO_LIVE.md`](SISA_KERJA_GO_LIVE.md)** (backlog tunggal, verified 2026-07-01 DB/BE/FE/git/VPS). Baca gerbang-paham (§1) untuk konteks, tapi **daftar kerja aktif = file backlog itu** — bukan §2/§3 di bawah (banyak USANG: FASE 1 selesai, kredensial POOL selesai, Cacat-B selesai). Semua dokumen lain sudah di-CLOSE jadi spec/arsip + ber-banner ke file backlog.
+
+> **🔄 KOREKSI AUDIT 2026-07-01 (terverifikasi DB/kode — §2 di bawah USANG di beberapa titik):**
+> - **"FASE 1 config-fanout masih per-tenant" = USANG.** FASE 1 SUDAH SELESAI: `channels` punya semua kolom per-channel (`voice_key`/`caption_style`/`niche_hashtags`/`visual_mode`/`image_quality`/`music_*`/quality + `*_account_id`), `pipeline.py:65` muat config **per-channel**. → JANGAN kerjakan F1-01 sebagai "berikutnya".
+> - **"belum ada kode PRODUKSI disentuh" = SALAH BESAR.** v2 LIVE di VPS (`mesinviral.com`, mv-web/mv-worker/mv-webhook aktif); banyak fitur deployed.
+> - **Sisa pekerjaan SEBENARNYA** = `PROGRESS.md` blok "AUDIT REKONSILIASI 2026-07-01" + tabel sisa (journal). Pakai ITU sebagai sumber prioritas, BUKAN §2 di bawah.
+> Gerbang-paham & aturan kerja (§1) tetap berlaku; hanya status/prioritas (§2) yang basi.
 
 > Tempel/baca ini di awal sesi baru. Kamu melanjutkan pekerjaan **MesinViral v2**. **JANGAN bertindak / menyentuh apa pun sebelum benar-benar MENGUASAI kondisi terkini.** Ikuti urutan di bawah PERSIS. Insiden berulang: bertindak sambil berasumsi karena belum paham → pelanggaran berat.
 

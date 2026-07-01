@@ -1,5 +1,13 @@
 # Rencana Funnel Onboarding — "Pikat Dulu, Todong Belakangan"
 
+> ✅🔒 **CLOSED sbg backlog aktif (2026-07-01).** Onboarding SETUP (credential-first) sudah LIVE; **growth-funnel** doc ini = **decision-gated** → tercatat di **[`SISA_KERJA_GO_LIVE.md`](SISA_KERJA_GO_LIVE.md)** (D1). **Dokumen ini = USULAN/spec** (perlu keputusan owner §9 + selaraskan ke model credential-first sebelum dibangun).
+
+> **🔄 REKONSILIASI AUDIT 2026-07-01 (verified DB/BE/FE) — BACA DULU:**
+> - **`/onboarding` SETUP sudah DIBANGUN & LIVE** — tapi model **credential-first** (2 langkah: Kredensial→Channel, aktif saat semua 🟢), BUKAN growth-funnel doc ini. Lihat `CHANNEL_LOCK_ACTIVATION_PLAN.md §Fase 8`.
+> - **"Growth funnel" doc ini (video-gratis/galeri/kredit-trial/banner) = BELUM dibangun + TERKUNCI KEPUTUSAN OWNER (§9).** Bukan sekadar "tinggal bangun".
+> - **§2 sudah sebagian USANG:** blocker lama **RESOLVED** → OAuth YouTube (mv-webhook LIVE + "Hubungkan dengan Google" PLATFORM), `voice_catalog` (dulu 0 → kini **10 baris terisi**), webhook deploy DONE. Bila kelak dikerjakan, **selaraskan dulu** ke model credential-first — jangan eksekusi §2 apa adanya.
+> - **Sisa kerja DEFINITIF = `PROGRESS.md` blok AUDIT REKONSILIASI [D]** (growth funnel = keputusan owner).
+>
 > **Status:** USULAN MATANG (belum dieksekusi). Dibuat 2026-06-19. Berpijak pada audit FE/BE/DB nyata (3 penjelajah, kutip file/tabel/migrasi — bukan asumsi).
 > **North-star:** di akhir trial, tenant **sudah terlanjur punya konten bermutu LIVE di YouTube mereka, hasil mesin ini** → sayang ditinggal → **bayar paket + beli kredit**. Sekaligus **hemat bakar uang** lewat batas trial yang masuk akal.
 > ⚠️ Dokumen ini **merevisi** "trial = strict BYOK" (DESAIN §3) jadi **hybrid** & menutup kontradiksi §3↔§5 (lihat §7).

@@ -1,7 +1,10 @@
 # Channel Lock Activation — Arsitektur & Plan vs Realisasi
 
+> ✅🔒 **CLOSED sbg backlog aktif (2026-07-01).** Fase 0-9 = SELESAI+deployed (`06c5e90`/`bb80162`). Satu-satunya sisa (acceptance tenant-baru-dari-nol e2e = butuh browser owner) sudah masuk **[`SISA_KERJA_GO_LIVE.md`](SISA_KERJA_GO_LIVE.md)** (A5). **Dokumen ini = SPEC arsitektur kredensial/lock (rujukan), bukan backlog.**
+
 > Status: **ARSITEKTUR DISETUJUI owner 2026-06-24** (A/B/C/D + trend-radar=platform + 2-page + pool).
-> Dokumen ini = acuan resmi tunggal. **Implementasi BELUM selaras penuh** — lihat banner DEVIASI §3.
+> Dokumen ini = acuan resmi tunggal.
+> **🔄 AUDIT REKONSILIASI 2026-07-01 (verified DB+kode):** model POOL = **SUDAH TERIMPLEMENTASI** — `tenant_ai_accounts` + `tenant_youtube_accounts` ADA; fosil `tenant_credentials`/`channel_credentials` = TIADA; `channels.{llm,tts,visual}_account_id` ADA; lock `channel_missing` dipakai (`readiness.py`); channel-detail redesign (Overview/Kesiapan/Jadwal) LIVE. Banner "DEVIASI §3" + "SEDANG DIKERJAKAN" (§391) = **BASI**. Sisa kecil bila ada → daftar master `PROGRESS.md` blok AUDIT 2026-07-01.
 
 ---
 
@@ -388,7 +391,7 @@ Format: tiap fase punya **Plan** (yang akan dilakukan) & **Realisasi** (diisi sa
 - **FE:** `channels/[id]/page.tsx` tab Setting — urut kartu §2.2: **(1) Pengaturan Channel = nama + KONEKSI YouTube(pool)+target + niche + bahasa + privasi (buang checkbox is_active)** → (2) Durasi → (3) LLM → (4) TTS → (5) Visual → (6) Branding&Caption → (7) Operasional. Tiap elemen AI: penyedia→model (kunci dari pool, TAK isi di sini); link "Lengkapi di Kredensial" bila pool kosong. Kesiapan&Aktivasi BUKAN di sini (→ Overview, Fase 7). Jadwal tetap tab.
   - **Bereskan dead-code:** hapus state `keys`, fungsi `saveAi` lama, pemuat GET `/api/channels/[id]/keys`, dan **HAPUS file route `apps/web/src/app/api/channels/[id]/keys/route.ts`** (panggil endpoint vault yg TAK ADA → mati). Ganti dgn `saveLlm/saveTts/saveVisual` (hanya tulis penyedia/model/voice ke `channels`). Tambah pemilih `youtube_account_id` (dari `/api/youtube/status`) + simpan bareng `platform_channel_id`.
 - **Validasi:** `next build`; ryan tampil benar; pilih penyedia/model jalan.
-- **Realisasi:** 🔄 **SEDANG DIKERJAKAN (2026-06-25)** — desain dikunci pasca audit BE + revisi owner (YouTube→kartu-1, Kesiapan→Overview, Jadwal=tab). Eksekusi kode menyusul.
+- **Realisasi:** ✅ **SELESAI + DEPLOYED (verified audit 2026-07-01)** — Channel Setting card-terpisah + pemilih AKUN per-elemen (llm/tts/visual `account_id`, auto-bila-1/pilih-bila->1) + YouTube di kartu identitas + Kesiapan di Overview. FE `channels/[id]/page.tsx:116-429` (verified). Bagian dari deploy `06c5e90`/`bb80162`.
 
 ### Fase 7 — FE: indikator 🔴/🟢 + lock konsisten (Kesiapan di OVERVIEW)
 - **FE:** komponen bersama `lib/channel-status.ts` + `<ChannelStatusBadge>` (pindah `effectiveStatus`); dipakai
@@ -397,7 +400,7 @@ Format: tiap fase punya **Plan** (yang akan dilakukan) & **Realisasi** (diisi sa
   **Card daftar `/channels` (redesign world-class):** status-first + aksi state-driven + sinyal nyata (Video=`videos` published, sparkline produksi=`production_runs`) + empty-state + overflow ⋯ + perbaiki handle (`youtube.com/channel/{id}`, bukan `@platform_channel_id`).
   `toggleActive` (daftar) + semua jalur: pre-check readiness, tangkap error DB → pesan ramah (nol error mentah).
 - **Validasi:** `next build`; channel belum-lengkap → 🔴 + tombol mati + pesan ramah; lengkap → 🟢 + aktif.
-- **Realisasi:** _(kosong)_
+- **Realisasi:** ✅ **SELESAI + DEPLOYED (verified audit 2026-07-01)** — komponen status bersama `lib/channel-status.tsx` + `<ChannelStatusBadge>`, daftar `/channels` world-class (badge nyata, aktivasi ter-gate), kartu Kesiapan & Aktivasi di Overview. Bagian deploy `06c5e90`/`bb80162`.
 
 ### Fase 8 — Onboarding = PENGARAH 2-langkah (SIMPLIFIKASI owner 2026-06-25)
 - **Keputusan:** onboarding TIDAK lagi wizard yg menduplikasi konfigurasi. Cukup **pengarah**: arahkan tenant baru
@@ -409,7 +412,7 @@ Format: tiap fase punya **Plan** (yang akan dilakukan) & **Realisasi** (diisi sa
   niche/voice/bahasa (hardcode baris 50-77), pemanggilan endpoint MATI `/api/channels/${cid}/keys` (baris 166), copy
   "fallback kredensial platform" (baris 353, langgar no-fallback). Kunci kalau diisi di onboarding → pool `/api/credentials/ai`.
 - **Catatan:** rework mendalam katalog niche/voice di onboarding = ranah FUNNEL (setelah remediasi), bukan epik lock.
-- **Realisasi:** _(kosong)_
+- **Realisasi:** ✅ **SELESAI + DEPLOYED (verified audit 2026-07-01)** — `onboarding/page.tsx` = pengarah 2-langkah (Kredensial → Channel; baca `channel_readiness` + status AI/YouTube/Telegram nyata; wizard mock + endpoint mati dibuang). Bagian deploy `bb80162`. *(Growth-funnel video-gratis = ranah `ONBOARDING_FUNNEL_PLAN.md`, decision-gated — lihat PROGRESS AUDIT [D].)*
 
 ### Fase 9 — Validasi total, deploy, drop fosil (migr `0093_drop_legacy_credentials.sql`)
 > Fosil TERVERIFIKASI audit BE 2026-06-25 (memory `reference_be_pipeline_tables_fossils`): worker baca 0× `channel_credentials`/`tenant_credentials` (grep terbukti); kredensial YouTube hidup = `tenant_youtube_accounts` (via `channels.youtube_account_id`); kunci AI hidup = `tenant_ai_accounts`.
@@ -417,8 +420,8 @@ Format: tiap fase punya **Plan** (yang akan dilakukan) & **Realisasi** (diisi sa
 - **Deploy:** urut aman (DB additif 0091/0092 → kode BE+FE → verifikasi ryan → drop 0093).
 - **DB drop (0093):** `channels.{llm,tts,visual}_key_enc` · `channels.token_path` · tabel `channel_credentials`, `tenant_credentials`.
 - **Bereskan sebelum drop:** FE admin test-lab (`apps/web/.../admin/test-lab/{route,test/route}.ts`) masih baca `tenant_credentials` → pindah ke pool/atau matikan; matikan fallback file `token_youtube.json` di `youtube_publisher.py`/`channel_analytics.py` (bahaya multi-tenant); sapu komentar usang (tenant_config.py:534-540, TTS adapters niches.voice_*).
-- **Di LUAR epik lock (catat ke remediasi multi-channel):** `channels.content_language` orphan (bahasa run masih `tenant_configs.language`); `performance_analyzer` insight per-tenant (bleed antar-channel).
-- **Realisasi:** _(kosong)_
+- **Di LUAR epik lock (catat ke remediasi multi-channel):** `channels.content_language` orphan (bahasa run masih `tenant_configs.language`); `performance_analyzer` insight per-tenant (bleed antar-channel — ✅ FIX `3bd32ee`).
+- **Realisasi:** ✅ **SELESAI + DEPLOYED (verified audit 2026-07-01)** — **migr 0095 APPLIED** (drop `channel_credentials`/`tenant_credentials`/`*_key_enc`/`token_path`); NOL dual-state; nol pembaca fosil (FE+BE); `.env` platform-only; regresi ryan aman. Deploy `06c5e90`. **SISA (bukan epik lock) = acceptance tenant-baru-dari-nol e2e = butuh browser owner (OAuth consent) → PROGRESS §GATE D1.**
 
 ---
 

@@ -1,5 +1,7 @@
 # Alur Bisnis Custom Niche Request — Sumber Kebenaran Tunggal
 
+> ✅🔒 **CLOSED sbg backlog aktif (2026-07-01).** Lifecycle A-Z = BUILT+DEPLOYED (`e263e1a`, pembayaran concierge/manual). Satu sisa (**integrasi Midtrans live** §7, bareng gate Midtrans) = tercatat di **[`SISA_KERJA_GO_LIVE.md`](SISA_KERJA_GO_LIVE.md)** (E1). **Dokumen ini = SPEC alur (rujukan).**
+
 > **Status:** PLAN final (disetujui owner 2026-06-30) + Realisasi BERTAHAP. Living doc — update kolom REALISASI saat dikerjakan.
 > **Ground truth = kode + DB live.** Bila doc ini ≠ kode, kode menang → update doc.
 > **🔌 PENTING:** Bagian **§7 (Pembayaran)** memuat integrasi Midtrans yang **SENGAJA DITUNDA** — **WAJIB dieksekusi saat finalisasi pembayaran sewa tenant** (lihat `PROGRESS.md` §GATE CUTOVER B2). Jangan sampai terlewat.
@@ -87,7 +89,7 @@ Alur A-Z: **Diajukan → (batal/tolak) / Menunggu pembayaran → Diproses → Di
 | Item | Status |
 |---|---|
 | Desain alur A-Z (doc ini) | ✅ PLAN final (2026-06-30) |
-| DB: status set + kolom + RPC cancel/aksi-tenant + app_config | ✅ migr 0104+0105+0106 (APPLIED ke DB v2; LOKAL, belum di-deploy bareng kode) |
+| DB: status set + kolom + RPC cancel/aksi-tenant + app_config | ✅ migr 0104+0105+0106 APPLIED + **DEPLOYED 06-30** (`e263e1a`, verified VPS 2026-07-01) |
 | BE: worker auto-close + pengingat (email via email_outbox) | ✅ `src/orchestrator/niche_request_sweeper.py` + wired worker_decoupled (py_compile OK; jalan saat deploy) |
 | FE tenant: riwayat+status+batal+evaluasi (countdown) | ✅ `(app)/niches/page.tsx` (build OK) |
 | FE admin: tombol proses (accept/mark_paid/deliver) | ✅ `admin/(panel)/niches/page.tsx` + route `api/admin/niche-requests` (build OK) |

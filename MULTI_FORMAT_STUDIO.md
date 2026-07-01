@@ -1,9 +1,13 @@
 # Multi-Format Short Studio — Spec Teknis Tervalidasi (Epic)
 
+> ✅🔒 **CLOSED sbg backlog aktif (2026-07-01).** Mayoritas LIVE (durasi/QC/logo/link/visual-beats/adapter/compression-mapping). Sisa (**ai_video 8s** + **multi-platform Reels/TikTok**) = tercatat di **[`SISA_KERJA_GO_LIVE.md`](SISA_KERJA_GO_LIVE.md)** (B6/D2). **Dokumen ini = SPEC teknis (rujukan).**
+
 > **Status:** 📋 PROPOSAL TERVALIDASI · 2026-06-11 · **Lampiran teknis** dari konsep di `DESAIN_PRODUK_SAAS.md` (induk). Tracker status A-to-Z di `PROGRESS.md`. Ringkasan + cross-link di memory [[plan_multi_format_studio]].
 > Tujuan: MesinViral menampung **sebanyak mungkin kategori creator short-video faceless** (mystery/facts/edukasi-softsell/motivasi/brand) lintas durasi & platform.
 
 ---
+
+> **🔄 REKONSILIASI AUDIT 2026-07-01 (verified DB/BE/git):** SEBAGIAN verdict §0 di bawah sudah USANG (diselesaikan): **durasi 30-90s + Cacat-B akurasi = TUNTAS** (F4 durasi-via-speed `8670fc3`) · **QC relatif** LIVE · **logo overlay + link deskripsi + soft-sell** LIVE · **variable visual beats** (N=`visual_beats` per preset) LIVE · **katalog `ai_models` DB-driven + adapter registry TTS/visual** LIVE (F5-06) · **compression-mapping per-preset** LIVE. **Masih BELUM:** `ai_video`/8s (file `ai_video.py` **tak ada** — belum dibangun) · **multi-platform Reels/TikTok** (belum ada abstraksi publisher; butuh audit eksternal 2-4 mgg — fitur tier). **Sisa DEFINITIF = `PROGRESS.md` blok AUDIT REKONSILIASI.**
 
 ## 0. ⚠️ VALIDASI TEKNIS TERVALIDASI (2026-06-11) — PEGANGAN, JANGAN ANALISA ULANG
 

@@ -1,8 +1,12 @@
 # QC & Content-Quality Architecture — MesinViral v2
 
+> ✅🔒 **CLOSED sbg backlog aktif (2026-07-01).** QC v2 (F0-F2) + durasi (F4) = LIVE. Roadmap belum-dibangun (F3 quarantine/F4 self-critic/F5 belajar-QC-fail/F6 dashboard/F7 consent-fallback) = tercatat di **[`SISA_KERJA_GO_LIVE.md`](SISA_KERJA_GO_LIVE.md)** (data-gated/pasca-launch). **Dokumen ini = SPEC/living-design QC.**
+
 > **Living document.** Tujuan: arsitektur khusus untuk *quality control* + *self-improvement* yang **terus dievaluasi & di-improve** sampai ideal. Cakupan: **dari ScriptAnalyzer → seluruh tahap produksi → file hasil (pra-submit)** + **loop self-analyzer/self-improvement** (janji landing page: "robot pintar, makin pintar tiap hari").
 >
 > Status LIVE per-fase = `PROGRESS.md`. Pondasi multi-format = `MULTI_FORMAT_STUDIO.md`. Prinsip: [[feedback_no_hardcode]] · [[feedback_analysis_discipline]].
+>
+> **🔄 REKONSILIASI AUDIT 2026-07-01:** **Akar durasi (§2) + E3 length-gate = TUNTAS** via REMEDIASI **F4 durasi-via-speed** (LLM pilih kata+speed + per-beat word-budget; commit `8670fc3`, migr 0078/0079; 9/9 preset lolos). QC v2 Lapis 1-3 (F0-F2) = LIVE. **Masih ROADMAP (belum dibangun):** F3 quarantine · F4 self-critic pra-submit · F5 belajar-dari-QC-fail · F6 dashboard "robot belajar apa" · F7 consent-fallback penuh. **Sumber sisa DEFINITIF = `PROGRESS.md` blok AUDIT REKONSILIASI.**
 >
 > **Aturan dokumen ini:** setiap perubahan QC/quality WAJIB lewat sini dulu (propose → approve → implement). Jangan ubah ambang QC di kode tanpa update dokumen ini.
 

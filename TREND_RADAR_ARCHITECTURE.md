@@ -1,5 +1,7 @@
 # TREND RADAR ARCHITECTURE — MesinViral v2
 
+> ✅🔒 **CLOSED sbg backlog aktif (2026-07-01).** F1 cache + F2 source_weights + YouTube velocity = LIVE. Sisa (F3 ukur-dimensi lanjutan/F4 kalibrasi bobot dari outcome + agregat lintas-tenant) = **DATA-GATED** → tercatat di **[`SISA_KERJA_GO_LIVE.md`](SISA_KERJA_GO_LIVE.md)** (C2). **Dokumen ini = SPEC/living-design trend radar.**
+
 > **Living document.** Tujuan: Trend Radar **terbaik** yang menghasilkan Shorts **benar-benar viral**, **skalabel ribuan tenant**, dengan **self-learning & self-improvement** nyata (bukan klaim). Semua angka/sumber/bobot **config-driven, no-hardcode** ([[feedback_no_hardcode]]). Status LIVE per-fase = `PROGRESS.md`. Saudara dokumen: `QC_CONTENT_ARCHITECTURE.md` (kualitas file), `MULTI_FORMAT_STUDIO.md` (preset/format).
 >
 > **Aturan dokumen ini:** tiap perubahan trend-radar/seleksi-topik lewat sini dulu (propose → approve → implement). **Hanya item yang sudah DIVALIDASI nyata yang masuk arsitektur** (lihat §2).

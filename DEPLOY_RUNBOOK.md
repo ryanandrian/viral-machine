@@ -1,6 +1,10 @@
 # DEPLOY RUNBOOK — v2 Cutover (worker_decoupled + webhook_app)
 
-> ⚠️ **UPDATE 2026-06-17 — ARSITEKTUR HOSTING BERUBAH (keputusan owner): frontend SELF-HOST di VPS, BUKAN Vercel** (hemat biaya + tanpa akun baru). Semua referensi "Vercel" di runbook ini **SUPERSEDED** → baca sebagai "VPS (systemd `mv-web` Next.js :3000 + nginx + Let's Encrypt)". Status real: `https://mesinviral.com` LIVE di VPS (frontend `mv-web` + mesin `mv-worker`). Detail: progress_journal 2026-06-17 + PROGRESS §B3. Webhook (`api.mesinviral.com`) belum.
+> ✅🔒 **CLOSED sbg backlog aktif (2026-07-01).** Deploy worker+web+webhook = SELESAI+LIVE. Sisa = **gate eksternal owner** (Midtrans prod/Supabase SMTP+Google/rotasi secret) → tercatat di **[`SISA_KERJA_GO_LIVE.md`](SISA_KERJA_GO_LIVE.md)** (A). **Dokumen ini = RUNBOOK teknis (rujukan langkah deploy).**
+
+> ⚠️ **UPDATE 2026-06-17 — ARSITEKTUR HOSTING BERUBAH (keputusan owner): frontend SELF-HOST di VPS, BUKAN Vercel** (hemat biaya + tanpa akun baru). Semua referensi "Vercel" di runbook ini **SUPERSEDED** → baca sebagai "VPS (systemd `mv-web` Next.js :3000 + nginx + Let's Encrypt)". Status real: `https://mesinviral.com` LIVE di VPS (frontend `mv-web` + mesin `mv-worker`). Detail: progress_journal 2026-06-17 + PROGRESS §B3.
+>
+> **🔄 REKONSILIASI 2026-07-01:** **Webhook SUDAH LIVE** = systemd `mv-webhook` (uvicorn `127.0.0.1:8088`) + nginx route `mesinviral.com/api/youtube/oauth/*` (BUKAN subdomain `api.mesinviral.com` — tak dipakai). YouTube = **OAuth PLATFORM** ("Hubungkan dengan Google"; `GOOGLE_CLIENT_ID/SECRET` di `.env`). Model **BYO-CC + `tenant_credentials`** di runbook ini = **SUPERSEDED** → POOL `tenant_ai_accounts`/`tenant_youtube_accounts` (fosil di-drop migr 0090/0095). Yang TERSISA dari runbook = **HANYA gate eksternal owner** (Midtrans PRODUKSI + Supabase SMTP/Google + rotasi secret). Sumber tunggal sisa = `PROGRESS.md §GATE CUTOVER` + blok AUDIT [A].
 >
 > Panduan eksekusi GATE CUTOVER (§GATE CUTOVER di `PROGRESS.md`). **v1 produksi: SUDAH PENSIUN 2026-06-16** (worker v2 live).
 > Catatan: file `.md` **tidak** ikut ke VPS (sparse-checkout exclude `*.md`) — runbook ini dibaca lokal.

@@ -1,6 +1,8 @@
 # Migrasi OAuth/Kredensial: Single-channel-per-tenant → MULTI-channel-per-tenant
 
-> **STATUS: Fase 1-6 SELESAI, tervalidasi, ter-deploy (2026-06-19).** Sisa = 1 aksi OWNER (daftar redirect URI di Google) + opsi masa depan B2. Dokumen ini = sumber kebenaran migrasi ini. Dibaca SETELAH compaction agar paham 100% & lanjut tanpa asumsi.
+> **STATUS: Fase 1-6 SELESAI, tervalidasi, ter-deploy (2026-06-19).** Dokumen ini = sumber kebenaran migrasi INI (historis).
+>
+> **🔄 REKONSILIASI AUDIT 2026-07-01 — DOKUMEN INI SEBAGIAN SUPERSEDED:** model **BYO-CC + tabel `channel_credentials`/`tenant_credentials`** di doc ini **SUDAH DIGANTI** oleh: (a) **OAuth PLATFORM** ("Hubungkan dengan Google", `GOOGLE_CLIENT_ID/SECRET` platform — opsi B2 §8 = ADOPTED, lihat `GOOGLE_OAUTH_PLATFORM_MIGRATION.md`) + (b) **model POOL `tenant_youtube_accounts`** (koneksi 1..N per tenant, channel pilih via `channels.youtube_account_id`). **Tabel `channel_credentials`+`tenant_credentials` sudah di-DROP (migr 0095).** Multi-channel-per-tenant TETAP berlaku; hanya penyimpanan kredensial yang pindah ke pool. Arsitektur kredensial FINAL = **`CHANNEL_LOCK_ACTIVATION_PLAN.md`**. **Aksi owner tersisa** = verifikasi Google app (bukan lagi "daftar redirect URI BYO-CC per tenant").
 > **Model:** 1 user = 1 tenant (TAK berubah). 1 tenant = **MULTI channel** (Pro 3, Business 10). Tiap channel = **koneksi YouTube SENDIRI**.
 
 ---

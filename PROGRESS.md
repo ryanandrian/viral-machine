@@ -1,5 +1,7 @@
 # MesinViral — Live Progress & Master Plan
 
+> 🎯 **BACKLOG AKTIF (sisa kerja) PINDAH → [`SISA_KERJA_GO_LIVE.md`](SISA_KERJA_GO_LIVE.md)** (2026-07-01). Semua yang BELUM tuntas dikonsolidasi ke file itu = satu titik fokus. **PROGRESS.md tetap = arsip historis + status + rujukan §GATE**; blok "AUDIT REKONSILIASI 2026-07-01" di bawah = ringkasan verified. **Jangan jadikan checklist `[ ]` lama di sini sbg daftar kerja aktif** — kerjakan dari `SISA_KERJA_GO_LIVE.md`.
+
 > 🔒 **KREDENSIAL & LOCK AKTIVASI CHANNEL → acuan TUNGGAL = `CHANNEL_LOCK_ACTIVATION_PLAN.md`** (arsitektur disetujui owner 2026-06-24).
 > Pernyataan LAMA di file ini soal model kredensial (kunci per-channel inline / per-tenant di `tenant_configs` / vault
 > `tenant_api_accounts` / `/config` AI-keys / YouTube tenant-vs-channel campur) = **OBSOLETE** → ikuti file itu (model POOL
@@ -11,6 +13,34 @@
 ---
 
 ## ⏭️ RESUME POINT — BACA INI DULU SETIAP SESI BARU (jangan salah arah)
+
+> **🔄 AUDIT REKONSILIASI 2026-07-01 (FINAL, diperdalam) — DAFTAR SISA DEFINITIF. Diverifikasi LANGSUNG ke DB LIVE + kode BE (`file:baris`/grep) + FE (tenant & admin) + git (commit) + BACA SELURUH dokumen kanonik. Ini SUMBER KEBENARAN sisa-kerja; checklist `[ ]` lama di bawah yang bentrok = "yang terbaru menang".**
+>
+> **✅ SUDAH SELESAI & LIVE (terbukti — JANGAN dikerjakan ulang / JANGAN "diperbaiki"):**
+> v2 CUTOVER (`mesinviral.com` LIVE `mv-web`; `mv-worker`+`mv-webhook` aktif; v1 PENSIUN) · produksi+publish jalan (videos=273/185 published, production_runs=130) · Wiring FE **Phase 9-10** (tenant+admin) · **Kredensial model POOL** (`tenant_ai_accounts` key_group + `tenant_youtube_accounts`; DB+BE `tenant_config.py:395-439`+FE `/integrations` per-elemen+FE channel account-picker) — **seluruh CHANNEL_LOCK Fase 0-9 DEPLOYED** (`06c5e90`/`bb80162`; fosil `tenant_credentials`/`channel_credentials`/`*_key_enc`/`token_path` sudah DI-DROP migr 0090/0095) · **Lock aktivasi** trigger DB `channels_activation_gate` LIVE · **config per-channel** (voice/caption/hashtag/visual/music/quality/`*_account_id`) + voice PER-CHANNEL (§10.B) · **Cacat-B durasi-via-speed** (F4-02/03/04, commit `8670fc3`, migr 0078/0079, validated 9/9 preset) · image-gen per-preset (Cacat A) + LLM per-preset · trend-decouple cache (migr 0048) + source_weights + YouTube velocity (migr 0049) · self-learning loop (`viral_score_weights` hidup, `21f41fe`) · remediasi niche/hashtag (BATCH 1-5) · Branded panel + upload logo S3 · OAuth PLATFORM Google (ryan verified) + multi-channel OAuth · Pustaka Niche + **alur custom-niche A-Z** (built+deployed `e263e1a`, pembayaran concierge/manual) · pemisahan niche Studio vs pesanan (`origin`) · bersih FE (notif/config/danger dihapus) · compliance/AI-slop defense (DiversityEngine + ComplianceScorer + ai_disclosure, DESAIN §9) · onboarding wizard credential-first (setup, bukan growth-funnel).
+>
+> **🟢 VERIFIKASI VPS LIVE (2026-07-01, `ssh vps` read-only):** `mv-web`+`mv-worker`+`mv-webhook` = **active** · worker HEAD `8d44f01` (mengandung `e263e1a` custom-niche + batch 06-28) · web HEAD `ee01575` (mutakhir) · `mesinviral.com` = **200** · `/api/youtube/oauth/callback` = **302** (webhook hidup). Kode terdeploy = current (yg belum di VPS hanya commit docs `.md` yg memang di-exclude sparse-checkout). **→ klaim "LIVE" di atas TERKONFIRMASI, bukan dari dokumen.**
+>
+> **⏳ SISA NYATA — ini SAJA yang belum:**
+> **🔑 [A] GATE EKSTERNAL / OWNER (satu-satunya pemblokir JUALAN):**
+>  - **A1 Midtrans PRODUKSI** — server/client key + `MIDTRANS_ENV=production` + 6 URL dashboard. `payments=0`, masih sandbox → **blokir pembayaran sewa + auto-bayar custom-niche** (§7 CUSTOM_NICHE + §GATE B2).
+>  - **A2 Supabase Auth** — custom SMTP (`mail.lumite.biz.id`) + aktifkan Google provider.
+>  - **A3 Rotasi semua secret dev** sebelum publik (DB pw, service_role, anon, OAUTH_STATE_SECRET, MV_INTERNAL_SECRET, SMTP, Midtrans, ElevenLabs).
+>  - **A4 Verifikasi Google app** (publish app + demo video, ≤10 hari) + **kumala reconnect** (tak mendesak).
+>  - **A5 Smoke-test live** (butuh browser owner): OAuth consent 1×, transaksi Midtrans 1×, email egress dari VPS.
+> **🛠️ [B] DEV (bisa dikerjakan; terbukti belum ada — pasca-launch/hardening):**
+>  - **B1 System-secrets admin panel (S1-S4)** — tabel `system_secrets` **tak ada**; secret masih env (interim sah).
+>  - **B2 Cost-tracking REAL per-konten** (F5-03) — **nol kolom cost** di DB; kartu "Biaya AI" masih coming-soon.
+>  - **B3 Sapu hardcode sisa** (F5-02): Ken-Burns motion→`niches.motion_profiles`, `BASE_NICHE_TIERS`/`OPTIMAL_PUBLISH_SLOTS`→app_config.
+>  - **B4 Pivot Analytics** (F5-05) ke kinerja-mesin (kini re-display YT-mentah — jalan, belum di-pivot).
+>  - **B5 Sapu fosil inert:** `channels.production_cron` (dimuat, tak menjadwalkan) + tabel `pipeline_queue` (cuma komentar). ⚠️ `niche_pool`/`niche_mode` = **AKTIF, JANGAN drop**.
+>  - **B6 ai_video 8s** — file `ai_video.py` **tak ada** (mode `ai_video` belum dibangun). DITUNDA.
+>  - **B7 Go-live checklist F5-04** — regression end-to-end + regenerate `DB_SCHEMA_V2.md` (stale di 0043; live jauh lebih maju).
+> **⏳ [C] DATA-GATED (mekanisme siap, aktif seiring data pasca-cutover):** closed-loop kalibrasi durasi (F5-01; `tts_delivery_samples`=48 DITULIS tapi belum DIBACA) · self-learning deepening (kalibrasi `source_weights` + panen sinyal Analytics kaya, trend F3/F4).
+> **📋 [D] KEPUTUSAN OWNER (belum bisa dimulai tanpa jawaban):** **Growth funnel** (video-gratis/galeri/kredit-trial/banner konversi — `ONBOARDING_FUNNEL_PLAN.md §9`: A1/A2 traktir?, kuota 1/3?, watermark?) · **Multi-platform** Reels(Pro)/TikTok(Business) — fitur tier, butuh audit eksternal IG/TikTok 2-4 minggu.
+> **📌 [E] Add-on custom-niche via Midtrans live** (`CUSTOM_NICHE_REQUEST_FLOW.md §7`) — dikerjakan BARENG A1 Midtrans; pondasi sudah ada.
+>
+> **⚠️ KOREKSI marker basi (sudah ditangani audit ini):** Cacat-B BUKAN lagi sisa (F4 deployed `8670fc3`) · CHANNEL_LOCK "Fase 1-9 belum" = SALAH (deployed) · §GATE "B2 webhook belum deploy" = `mv-webhook` LIVE (:8088) · baris FRAMING "v2 belum di-pull ke VPS" = USANG (cutover 2026-06-17).
 
 > **🟢 DOKUMEN FINAL MENUJU GO-LIVE (2026-06-20) — anti-dualisme:** seluruh **pekerjaan teknis pending** kini DIKELOLA di **[`REMEDIASI_NICHE_CHANNEL_VOICE_LLM.md`](REMEDIASI_NICHE_CHANNEL_VOICE_LLM.md)** (FASE 1–5, format Plan vs Realisasi). Item yang dulu tersebar di PROGRESS.md — editor niche + form custom-niche, `/compliance` per-channel + cost-tracking, dedup hooks, buang fosil V1, **config per-channel (voice/caption/hashtag/visual/music/quality)**, durasi/Cacat-B — **DISERAP** ke remediasi; **jangan dobel-kerjakan di sini.** **PROGRESS.md = arsip historis + status + GATE OPS/EKSTERNAL go-live** yang TIDAK diserap remediasi: Midtrans prod · Supabase Auth SMTP+Google · DNS api · YouTube OAuth live · rotasi secret · deploy webhook/admin-secrets. **Bila kontradiksi → REMEDIASI menang** (item teknis). Setelah remediasi 1–5 tuntas → onboarding funnel (go-market).
 
@@ -63,8 +93,8 @@
 - [x] **BE — soft-sell CTA** (`script_engine.py:285,355`): `cta_mode='soft_sell'`+`brand_name` → satu sebutan brand halus (hard-sell tetap dilarang).
 - [x] **BE — logo overlay** (`video_renderer.py:937` `_overlay_logo`, fail-soft, posisi/ukuran/opacity; image_sequence & ai_video).
 - [x] **BE — link landing di deskripsi** (`youtube_publisher.py:153`; `link_position` top\|bottom).
-- [ ] **FE** — panel "Branded" di `/channels/[id]`: CTA (radio + `brand_name`) · upload logo + pemilih posisi + slider ukuran/opacity + preview · `landing_link` + posisi. Tulis via RLS UPDATE `channels`.
-- [ ] **Storage** — bucket/lokasi upload logo → simpan URL ke `brand_logo` (BE sudah terima URL http).
+- [x] **FE** — panel "Branded" di `/channels/[id]` (CTA/`brand_name`/posisi/ukuran/opacity/`landing_link`) — ✅ LIVE (terverifikasi 2026-07-01; card Branded ada di channel detail).
+- [x] **Storage** — upload logo → S3 `mesinviral-assets/brand-logo/{tenant}/{channel}.png` (route `/api/channels/upload-logo`, validasi PNG+dimensi) → `channels.brand_logo`. ✅ commit `e696b6b` (2026-06-27).
 
 **JANGAN diulang (sudah dikerjakan):** Phase 0 audit ✅; framing v1/v2 (terkunci); **frontend track ✅ (28 screen)**; **backend Phase 1-5 ✅** (clone DB v2 ✅, decouple terbukti). Deploy backend v2 ke VPS = **cutover** (keputusan operasional owner, bukan "jangan") — v1 tetap jangan disentuh sampai saat itu.
 
@@ -147,14 +177,14 @@
 
 ### D. Trend Radar — revisi arsitektur + build bertahap — `TREND_RADAR_ARCHITECTURE.md`
 - [x] **D1** *(doc — SELESAI + owner setuju, sinyal LIVE-VALIDATED)* — `TREND_RADAR_ARCHITECTURE.md` direvisi: **§2b rasio bobot** (`source_weights` config-driven: YouTube velocity PRIMER ~0.45 · Trends ~0.30 · News ~0.13 niche-flag · Wikipedia ~0.07 filter-only · HN ~0.05 tech-only, Wiki&HN kandidat-drop) · **§2c inventaris sinyal YouTube + status validasi** · **§3 out-of-the-box** (velocity mining + pola channel-sendiri + agregat lintas-tenant) · **§4a self-learning vs self-improvement + diagram loop** · §6/§7/changelog. **Validasi LIVE (ryan):** Analytics API scope+data NYATA (avg_view_pct **67.72%**, trafficSourceType SHORTS/SEARCH/…), autocomplete live, Trends-youtube 429(→cache), Data API quota-limited. *(2026-06-16)*
-- [ ] **D2 — F1 Decouple + cache (kritikal scaling 429, NOL kredit AI):**
+- [x] **D2 — F1 Decouple + cache (kritikal scaling 429, NOL kredit AI) — ✅ SELESAI (sub-item F1a-d done + verified 2026-07-01: `trend_radar` baca `trend_cache`, `trend_refresher` thread aktif di worker):**
   - [x] **F1a** — migr **0048** `trend_cache` (cache_key unik niche+geo+source+timeframe, signals jsonb, fetched_at, ttl_sec) + RLS **service-role only** + config `app_config.trend_cache_ttl_sec`(43200)/`trend_refresh_pacing_ms`(3000). **Applied v2 + verified** (10 kolom, RLS on, 40 tabel). DB_SCHEMA_V2.md diupdate. *(2026-06-16)*
   - [x] **F1b** — `src/orchestrator/trend_refresher.py` (`run_once`/`run_forever`) + thread di `worker_decoupled`. Loop **niche-aktif × geo-aktif** (§5: O(niche×geo)) → `radar.refresh_niche_geo` (trends/yt/news per niche+geo) + `radar.refresh_global` (HN/Wiki sekali). **only_stale** (skip cache fresh) + **pacing** `app_config.trend_refresh_pacing_ms` (anti-429). yt key = platform env (graceful kosong). *(2026-06-16)*
   - [x] **F1c** — `trend_radar.scan()` **baca `trend_cache`** (`_read_cache` per sumber), **NOL panggil sumber eksternal**; graceful (cache kosong → sinyal minim + warning, produce lanjut). + helper `_cache_sb/_read_cache/_write_cache/_cache_age_sec`. *(2026-06-16)*
   - [x] **F1d** — **Validasi LIVE PASS:** refresher tulis 5 cache (news20/HN6/wiki10; trends0=429-graceful/yt0=no-key); **run#2 tulis 0 (staleness)**; **scan 0.72s baca 36 sinyal, NOL fetch eksternal** → 429 hanya di refresher (paced), hot-path kebal. py_compile 3 file PASS. *(2026-06-16)*
 
   **🎉 F1 SELESAI** — fix scaling 429 (M1) terbukti: produce decoupled dari sumber, request_sumber konstan vs tenant. Migr 0048. **Sisa radar (F2 sumber+bobot · F3 ukur-dimensi · F4 self-improvement) = propose-first.**
-- [ ] **D2** — **F1 Decouple + cache** (KRITIKAL skala 429, **nol kredit AI**): tabel `trend_cache` + `TrendRefresher` (thread paced di `worker_decoupled`, TTL config `app_config`) + produce **baca cache** (tak panggil sumber langsung). Validasi: produce nol-fetch-eksternal + refresher tulis cache + resilient saat sumber 429.
+- [x] **D2** (duplikat baris di atas) — **F1 Decouple + cache SELESAI** (lihat F1a-d). ✅
 - [x] **D3 — F2 Sumber + bobot (buildable parts SELESAI + validated):** migr **0049** `source_weights` (config app_config trend_weight_*, §2b) · `niche_selector._prepare_signals_summary` **terapkan bobot** (urutan + jumlah item ∝ bobot) · **filter-niche HackerNews** (M2 — buang HN off-niche) · **Wikipedia di-DROP** dari seleksi (§2b verdict; de-facto sudah unused) · **autocomplete** sumber demand baru (`_get_youtube_autocomplete`, gratis, di refresher+scan+summary). **Validated** (unit summary + autocomplete live 18 query + cache roundtrip). *(2026-06-16)*
   - [x] **YouTube velocity mining — SELESAI + LIVE-VALIDATED** (`_get_youtube_trending_search`: 1 search OR-join → `videos.list?part=statistics` batch → **velocity=views/jam**, terurut; ~101u/niche frugal §7; key=`YOUTUBE_PLATFORM_API_KEY`). niche_selector summary surface views+velocity (angka NYATA). **Live (universe_mysteries):** 25 video, top **349.504 views/jam**; rantai fetch→cache→scan→summary PASS. **Key GCP:** ✅ **restricted ke IP VPS `103.103.22.227`** (owner, 2026-06-16) — dev tak bisa panggil lagi (normal; uji selesai), worker VPS jalan saat deploy. *(velocity live-validated sebelum restrict.)*
     - 📌 **Refinemen presisi (→F3):** velocity bawa sedikit noise lintas-niche (mis. teaser film); **hard keyword-filter merugikan recall** (buang "Moon/NASA" relevan, simpan "Marvel universe" noise) → sekarang LLM kontekstualisasi; fix robust = `videos.list?part=topicDetails` (kategori topik, 1 unit sama) di F3.
@@ -192,7 +222,7 @@
 
 ## 🎨 RENCANA KERJA — IMAGE-GEN PER-PRESET + LLM 2-TAHAP (Opsi A) + AKURASI DURASI (Cacat B)  [AKTIF 2026-06-17]
 
-> **Status (2026-06-17):** **✅ CACAT A SELESAI + DEPLOYED (`e964a9e`)** — image-gen 2-tahap + VISUAL DNA (no-hardcode, 4 niche), validated 6 preset, ryan **UNPAUSED + produksi jalan** (preset 60s lolos QC). Spec di MULTI_FORMAT §3+§10. **⚠️ TERSISA = CACAT B** (durasi 15s/30s overshoot) — root-cause + plan di FASE 2 (B2) bawah. *(QC §2 + DESAIN §12b pointer ditulis saat Cacat B tuntas.)*
+> **Status (audit 2026-07-01): ✅ CACAT A & CACAT B SELESAI + DEPLOYED.** Cacat A (`e964a9e`) — image-gen 2-tahap + VISUAL DNA. **Cacat B (durasi) TUNTAS via REMEDIASI F4-02/03/04 durasi-via-speed (`8670fc3`, migr 0078/0079)** — 9/9 preset lolos window (incl. 15s/30s). Spec di MULTI_FORMAT §3+§10. **Sisa poles = F5-01 closed-loop kalibrasi (data-gated), bukan blocker.** *(Section ini = ARSIP; status sisa DEFINITIF = blok AUDIT REKONSILIASI teratas.)*
 >
 > **Arsitektur (disepakati owner):** Tahap-1 LLM = narasi saja (→ TTS → caption) ⟂ Tahap-2 LLM terdedikasi = prompt-image per-beat (→ image-gen). Clue prompt per-scene = **teks beat FINAL + niche_visual_style + peran arc**. Per-tenant: durasi→preset(beat/budget/jumlah-image) · niche→style/voice/speed/timing · topik→narasi+clue.
 
@@ -205,9 +235,9 @@
 - [x] A6 — **Ken-Burns motion BEAT-ROLE-aware** (role→motion). ✓ validated
 - [x] **VISUAL DNA (no-hardcode):** Tahap-2 inject SELURUH key `visual_style`(=visual_dna) generik + `style_exemplars` (eks-visual_fallbacks) + mandat "beauty-first". `visual_dna` universe_mysteries diperkaya 10-key (admin-editable via `/admin/niches` JSON; update-API whitelist). ✓ validated (60s sinematik). **3 niche lain belum diisi.**
 
-**FASE 2 — Cacat B (akurasi durasi → lolos QC):** ⚠️ **SEBAGIAN.**
-- [x] B1 — **budget speed-adjust** (`detik × delivery_wps × niche_speed`, EL ×0.9→1.62). → **45/60/75/90 LOLOS** ✓. 15s/30s masih overshoot.
-- [ ] B2 (REFRAMED — root-cause data: bukan delivery/v1, tapi **LLM melebihi word-budget §3 di preset pendek**; TTS sudah benar): **PAKSA kepatuhan word-budget §3 di preset pendek** — hard word-cap per beat di BEAT PLAN (ultra-terse) + length-gate batas-atas lebih galak (pangkas saat > budget×1.12). Validasi 15s/30s masuk window. *(Bukti: bila LLM patuh, 15s→24kata÷1.43=16.8s LOLOS, 30s→49÷1.65=29.7s LOLOS.)*
+**FASE 2 — Cacat B (akurasi durasi → lolos QC):** ✅ **SELESAI + DEPLOYED (audit 2026-07-01).** Diselesaikan tuntas di **REMEDIASI F4-02/03/04 = durasi-via-speed** (commit `8670fc3` + migr 0078/0079; LLM pilih kata+speed + per-beat word-budget absolut + gate durasi). Validated LLM-only **9/9 preset first-pass** (incl. 15s/30s) + render nyata QC PASS. **Menggantikan B2 di bawah.**
+- [x] B1 — **budget speed-adjust** (`detik × delivery_wps × niche_speed`). → 45/60/75/90 lolos (pendahulu; kini disempurnakan durasi-via-speed F4).
+- [x] B2 — ✅ **DITUTUP via F4 durasi-via-speed** (per-beat word-cap absolut + speed-lever multi-provider + gate durasi). 15s/30s mendarat di window (validated). *(Sisa poles = F5-01 closed-loop kalibrasi, data-gated.)*
 
 **VALIDASI & RILIS (SOP):**
 - [x] V1 — Validasi SOP lokal 6 preset: image=visual_beats ✓ · prompt BERSIH 6/6 ✓ · universe 60s sinematik ✓ · durasi: 45/60/75/90 lolos, 15/30 overshoot (Cacat B). *(2026-06-17)*
@@ -298,7 +328,7 @@
 - [x] **B1 — Worker v2 DEPLOYED + LIVE (2026-06-16 CUTOVER).** `~/viral-machine-v2` (clone v2-backend sparse-checkout, venv 109 deps, `.env`→v2). systemd **`mv-worker`** active+enabled (0 restart). **7 thread "up"** di worker_heartbeats. **Test ryan e2e LULUS dari VPS** (`shorts/asGyGt20zH0` privat + QC-fail self-healing + Telegram). **v1 PENSIUN**: worker.py stop, crontab v1 dihapus, `~/viral-machine`+backup-lama dihapus; **disimpan arsip v1 `.tar.gz` + DB v1 utuh**. Update lanjutan v2 = local→validasi→push→`git pull` di `~/viral-machine-v2`+restart.
   - ✅ **Bug platform `channel_analytics` DONE (2026-06-17, commit `044102e`):** `impressionClickThroughRate` (impression tak tersedia per-video → 400 men-poison query, retensi ikut hilang) **dibuang**; index kolom disesuaikan; retensi/watch/subs recover; CTR per-video jujur 0. Deployed ke `~/viral-machine-v2`. *(Catatan: mv-worker kini STOP karena insiden runaway — fix ada di kode, worker belum jalan.)*
   - *(B2 webhook_app + B3 Vercel/frontend + B4 env-prod-domain = untuk SaaS PUBLIK, belum — ini baru cutover MESIN ryan.)*
-- [ ] B2 — `webhook_app` (uvicorn+nginx) → VPS → Midtrans webhook + YouTube OAuth + `/api/keys/set`.
+- [~] B2 — `webhook_app`: **✅ DEPLOYED sbg systemd `mv-webhook`** (uvicorn `127.0.0.1:8088`, nginx route `mesinviral.com/api/youtube/oauth/*`, LIVE) — YouTube OAuth (PLATFORM) + kredensial vault jalan. **SISA (bagian Midtrans saja):** daftar webhook Midtrans PRODUKSI (bareng C1) + `/api/webhooks/midtrans` prod. *(Catatan: subdomain `api.mesinviral.com` rencana lama tak dipakai — OAuth kini via `mesinviral.com/api/youtube/oauth` di nginx.)*
   - 🔌 **SAAT WIRING MIDTRANS INI: JANGAN LUPA add-on pembayaran CUSTOM NICHE** (pondasi sudah disiapkan, integrasi sengaja ditunda). Checklist persis = **`CUSTOM_NICHE_REQUEST_FLOW.md` §7** (generalisasi `snap_create_transaction` ke `price_key` add-on + `handle_notification` set `niche_requests.paid_at`+`awaiting_payment`→`in_progress` otomatis). Tanpa ini, custom niche tak tertagih otomatis.
 - [x] **B3 — Frontend DEPLOYED (2026-06-17) — SELF-HOST di VPS, BUKAN Vercel (keputusan owner: hemat biaya + tanpa akun baru).** `~/mesinviral-web` (clone v2-backend sparse `/apps/web`, `npm ci`+`next build`, systemd **`mv-web`** `next start :3000`). nginx `mesinviral.com`+`www`→:3000. **HTTPS Let's Encrypt (certbot via snap; apt-certbot rusak)** auto-renew, HTTP→HTTPS 301. **`https://mesinviral.com` LIVE + cert valid.** *(Menyimpang dari rencana "Vercel" lama — VPS tak lagi "bersih"; trade-off demi hemat, owner-approved.)*
   - 🔶 **Follow-up (ATURAN: fix LOKAL→validasi→push→pull VPS+rebuild+restart; JANGAN di VPS):**
