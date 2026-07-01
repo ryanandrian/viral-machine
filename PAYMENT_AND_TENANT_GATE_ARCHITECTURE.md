@@ -1,11 +1,13 @@
 # 💳🔐 PAYMENT & TENANT GATE ARCHITECTURE — MesinViral
 
+> **🔒 CLOSED — SPEC FINAL (2026-07-02).** Arsitektur payment + gate tenant (s/d `suspended`) **SELESAI + deployed `04cf0a2` + tervalidasi server-side** (build/DB/endpoint/customer_details sandbox). Dokumen ini **BEKU sebagai referensi** — **status hidup & sisa aksi = `SISA_KERJA_GO_LIVE.md`** (HUB): [A1] flip produksi + last-mile 1 bayar sandbox = **aksi owner, BUKAN celah doc**. Lanjutan pasca-`suspended` (nurture/dunning/blokir/hapus-data) = `LIFECYCLE_NURTURE_ARCHITECTURE.md`. Jangan pakai isi doc ini sbg daftar kerja.
+
 > **Sumber kebenaran TUNGGAL** untuk arsitektur *gate tenant* (siklus akun trial→berbayar) + *pembayaran Midtrans*.
 > Dibuat 2026-07-01 setelah implementasi + validasi e2e (sandbox & live). Baca ini sebelum menyentuh apa pun
 > yang berkaitan dengan billing/pembayaran/status langganan. **Prinsip: NO-HARDCODE** (semua angka di `app_config`,
 > admin-editable via **System Configuration** `/admin/app-config`) + **world-class** + **dwibahasa EN/ID**.
 >
-> **🔗 Rantai kanonik:** backlog/status = **`SISA_KERJA_GO_LIVE.md`** (HUB — item [A1] Midtrans prod · [E1] add-on · [B8] /feedback · [B9] siklus-hidup). Dokumen ini meng-cover gate **s/d `suspended`**; **LANJUTAN** (`suspended→blocked→deleted` + nurture + hapus-data) = **`LIFECYCLE_NURTURE_PLAN.md`**.
+> **🔗 Rantai kanonik:** backlog/status = **`SISA_KERJA_GO_LIVE.md`** (HUB — item [A1] Midtrans prod · [E1] add-on · [B8] /feedback · [B9] siklus-hidup). Dokumen ini meng-cover gate **s/d `suspended`**; **LANJUTAN** (`suspended→blocked→deleted` + nurture + hapus-data) = **`LIFECYCLE_NURTURE_ARCHITECTURE.md`**.
 
 ---
 
@@ -52,7 +54,7 @@ link bayar) = **config di `app_config`**, bisa diubah admin tanpa sentuh kode.
 
 > **⛳ Batas dokumen ini:** state machine di sini berhenti di **`suspended`**. Lanjutan `suspended → blocked → deleted`
 > (dunning 30h → kunci akun 30h + peringatan H-30/7/1 → hapus data + cabut token YouTube) + mesin **nurture** trial-lapse
-> = **`LIFECYCLE_NURTURE_PLAN.md`** (backlog [B9]). Keduanya **satu mesin** (`renewal.py`), non-redundan.
+> = **`LIFECYCLE_NURTURE_ARCHITECTURE.md`** (backlog [B9]). Keduanya **satu mesin** (`renewal.py`), non-redundan.
 
 **Mesin state:** `src/billing/renewal.py` — thread `billing_renewal` di worker, cadence `BILLING_CHECK_INTERVAL_SEC`
 (default 86400s/harian). Tiap sweep: (1) kirim reminder pra-habis (anti-dobel via penanda), (2) transisi status + notif.

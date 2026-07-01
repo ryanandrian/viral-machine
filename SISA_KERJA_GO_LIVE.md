@@ -9,9 +9,9 @@
 > 4. Selesai + tervalidasi → **isi kolom REALISASI** (status + commit + bukti) di item ini. Update juga dokumen SPEC terkait bila perlu.
 > 5. Legend status: **⬜ belum · 🟡 sebagian · ✅ selesai+validasi · ⏳ data-gated · 🔒 nunggu keputusan/aksi owner.**
 >
-> **Sumber kebenaran status = FILE INI.** Dokumen lain (REMEDIASI/CHANNEL_LOCK/QC/TREND/MULTI_FORMAT/DEPLOY_RUNBOOK/CUSTOM_NICHE/ONBOARDING_FUNNEL/**PAYMENT_AND_TENANT_GATE_ARCHITECTURE**/**LIFECYCLE_NURTURE_PLAN**) = **SPEC/ARSIP** (rujuk untuk detail arsitektur; jangan pakai marker `[ ]` mereka sbg daftar kerja).
+> **Sumber kebenaran status = FILE INI.** Dokumen lain (REMEDIASI/CHANNEL_LOCK/QC/TREND/MULTI_FORMAT/DEPLOY_RUNBOOK/CUSTOM_NICHE/ONBOARDING_FUNNEL/**PAYMENT_AND_TENANT_GATE_ARCHITECTURE**/**LIFECYCLE_NURTURE_ARCHITECTURE**) = **SPEC/ARSIP** (rujuk untuk detail arsitektur; jangan pakai marker `[ ]` mereka sbg daftar kerja).
 >
-> **🔗 RANTAI KANONIK BILLING & SIKLUS-HIDUP (jangan miss-link):** `SISA_KERJA` (backlog/status = **HUB**) → **`PAYMENT_AND_TENANT_GATE_ARCHITECTURE.md`** (arsitektur bayar Midtrans + gate `trial→active→grace→suspended`; **SELESAI + deployed `04cf0a2`**) → **`LIFECYCLE_NURTURE_PLAN.md`** (LANJUTAN: nurture trial-lapse + dunning `suspended→blocked→deleted`+hapus-data; **rencana, belum build**). Pemetaan item: **[A1]/[E1]** (Midtrans) → PAYMENT · **[B8]** (/feedback) + **[B9]** (mesin siklus-hidup) → LIFECYCLE · **[D1]** (funnel) ⟷ LIFECYCLE.
+> **🔗 RANTAI KANONIK BILLING & SIKLUS-HIDUP (jangan miss-link):** `SISA_KERJA` (backlog/status = **HUB**) → **`PAYMENT_AND_TENANT_GATE_ARCHITECTURE.md`** (arsitektur bayar Midtrans + gate `trial→active→grace→suspended`; **SELESAI + deployed `04cf0a2`**) → **`LIFECYCLE_NURTURE_ARCHITECTURE.md`** (LANJUTAN: nurture trial-lapse + dunning `suspended→blocked→deleted`+hapus-data; **rencana, belum build**). Pemetaan item: **[A1]/[E1]** (Midtrans) → PAYMENT · **[B8]** (/feedback) + **[B9]** (mesin siklus-hidup) → LIFECYCLE · **[D1]** (funnel) ⟷ LIFECYCLE.
 
 ---
 
@@ -187,7 +187,7 @@
 ### [B9] Mesin siklus-hidup & nurture (trial-lapse + suspended→blocked→deleted) — ⬜ *(rencana; sequencing owner)*
 - **TUJUAN:** selamatkan trial-lapse + pelanggan berhenti-bayar (dunning/win-back) + blokir & **hapus data** yang tak kembali (bebaskan storage) — world-class, no-hardcode, patuh UU PDP.
 - **KONTEKS:** SATU mesin (perluas thread `billing_renewal`/`renewal.py`, BUKAN thread baru). Keputusan owner TERKUNCI (nurture 4–5 email/~2–3 mgg; suspended 30h → blocked 30h → deleted; purge S3 video-mentah dini; hot-lead→Telegram admin; ekspor self-service DITUNDA). Reuse `/feedback` [B8] + Leads admin + email lifecycle.
-- **SPEC LENGKAP + Plan-vs-Realisasi (13 item) = `LIFECYCLE_NURTURE_PLAN.md`** (sumber kebenaran fitur ini).
+- **SPEC LENGKAP + Plan-vs-Realisasi (13 item) = `LIFECYCLE_NURTURE_ARCHITECTURE.md`** (sumber kebenaran fitur ini).
 - **DONE-BILA:** sekuens nurture jalan; `suspended→blocked→deleted` otomatis + peringatan H-30/7/1; purge S3 dini; token YouTube dicabut saat delete; knob tampil di System Config.
 - **DEPENDS:** idealnya SETELAH **[A1]** (butuh aliran tenant nyata). **Nyambung:** [B8] /feedback · [D1] funnel · `PAYMENT_AND_TENANT_GATE_ARCHITECTURE.md` (state machine gate).
 - **REALISASI:** ⬜ *(decisions locked; build belum mulai — nunggu urutan owner)*
@@ -219,7 +219,7 @@
 - **BUKTI:** DB nol kolom/tabel credit/free-video; FE galeri/unlock/banner tak ada. Sebagian blocker plan itu sudah RESOLVED (OAuth platform, `voice_catalog` 10 baris, webhook live) → plan perlu diselaraskan dulu.
 - **KEPUTUSAN OWNER DIBUTUHKAN (`ONBOARDING_FUNNEL_PLAN.md §9`):** traktir video gratis atau strict-BYOK (A1/A2)? · kuota gratis 1 atau 3? · watermark ya/tidak? · setuju update DESAIN §3/§5 ke hybrid?
 - **PLAN (setelah keputusan):** ledger kredit-trial (DB) + jalur LLM platform-murah (trial) + FE galeri/unlock-cards/modal-video-pertama/banner. Selaraskan ke model credential-first.
-- **REALISASI:** 🔒 nunggu keputusan owner. **Nyambung:** `LIFECYCLE_NURTURE_PLAN.md` (mesin nurture/dunning melengkapi funnel; sebagian keputusan owner sudah TERKUNCI di sana).
+- **REALISASI:** 🔒 nunggu keputusan owner. **Nyambung:** `LIFECYCLE_NURTURE_ARCHITECTURE.md` (mesin nurture/dunning melengkapi funnel; sebagian keputusan owner sudah TERKUNCI di sana).
 
 ### [D2] Multi-platform (Reels/TikTok) — 🔒⬜
 - **KONTEKS:** kini YouTube-only (cukup untuk launch, Starter=YouTube). Reels(Pro)/TikTok(Business) = fitur tier. Spec `MULTI_FORMAT_STUDIO.md §7`.
@@ -246,7 +246,7 @@
 2. **[B1] system-secrets + [A3] rotasi** — hardening pra-publik.
 3. **[A5] smoke-test** tenant-baru e2e (validasi acceptance).
 4. Sisa **[B2-B8]** — poles pasca fungsi jualan aktif. *(**[B8]** = fix link mati email trial-lapse; bug live customer-facing, layak didahulukan meski bukan pemblokir jualan.)*
-5. **[D1] funnel** + **[B9] siklus-hidup/nurture** (`LIFECYCLE_NURTURE_PLAN.md`) setelah [A1] go-live & ada aliran tenant nyata; **[C]** matang otomatis; **[B6]/[D2]** prioritas terendah.
+5. **[D1] funnel** + **[B9] siklus-hidup/nurture** (`LIFECYCLE_NURTURE_ARCHITECTURE.md`) setelah [A1] go-live & ada aliran tenant nyata; **[C]** matang otomatis; **[B6]/[D2]** prioritas terendah.
 
 ## ⛔ PANTANGAN (agar tak muncul "bug"/kerancuan)
 - JANGAN sentuh v1 (pensiun; arsip+DB disimpan). JANGAN drop `niche_pool`/`niche_mode`. JANGAN ngoding di VPS.
@@ -257,4 +257,4 @@
 ### Changelog
 - **2026-07-01** — dibuat dari audit menyeluruh (verified DB/BE/FE/git/VPS). Konsolidasi seluruh sisa-kerja + Plan-vs-Realisasi. Semua dokumen lain di-CLOSE jadi SPEC/arsip + ber-banner ke sini. Memory (`MEMORY.md`) arahkan sesi baru ke file ini.
 - **2026-07-01** — tambah **[B8]** (halaman `/feedback` — perbaiki link MATI di email trial-lapse; keputusan owner Opsi B halaman-sendiri). Bug live customer-facing terverifikasi (`/feedback` → 404; email `email.py:92-101` mengarah ke sana). Urutan rekomendasi + Changelog disesuaikan.
-- **2026-07-02** — **rantai kanonik billing & siklus-hidup dibereskan (anti miss-link)**: daftarkan `PAYMENT_AND_TENANT_GATE_ARCHITECTURE.md` (SELESAI+deployed `04cf0a2`) + `LIFECYCLE_NURTURE_PLAN.md` (rencana) ke peta dokumen; tambah item **[B9]** (mesin siklus-hidup/nurture); cross-link [A1]/[E1]→PAYMENT, [B8]/[B9]/[D1]→LIFECYCLE. Klarifikasi [A1]: switch = `MIDTRANS_ENV` `.env`+restart (bukan tombol admin=[B1]); pemblokir = kunci PRODUKSI approved.
+- **2026-07-02** — **rantai kanonik billing & siklus-hidup dibereskan (anti miss-link)**: daftarkan `PAYMENT_AND_TENANT_GATE_ARCHITECTURE.md` (SELESAI+deployed `04cf0a2`) + `LIFECYCLE_NURTURE_ARCHITECTURE.md` (rencana) ke peta dokumen; tambah item **[B9]** (mesin siklus-hidup/nurture); cross-link [A1]/[E1]→PAYMENT, [B8]/[B9]/[D1]→LIFECYCLE. Klarifikasi [A1]: switch = `MIDTRANS_ENV` `.env`+restart (bukan tombol admin=[B1]); pemblokir = kunci PRODUKSI approved.
