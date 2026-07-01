@@ -194,7 +194,51 @@ INFRA  nginx /etc/nginx/sites-enabled/mesinviral (location /api/webhooks/ → :8
 
 ---
 
+## 8. FITUR PERUSAHAAN / INVOICE / PAJAK (batch kelengkapan world-class)
+- **Profil penerbit** = tabel `company_profile` (single-row, admin-editable, migr 0112) — PT. LUMITE AUTOMASI
+  INDONESIA (brand Lumite), NPWP/NIB/SK-Menkum/alamat/telp/email. Dipakai di invoice + kebutuhan sistem ke depan.
+  NO-HARDCODE (di DB, bukan di kode).
+- **customer_details Midtrans** = `{first_name: <nama tenant>, email}` (+ item_details) → rekonsiliasi jelas di dashboard.
+- **Invoice / bukti bayar** = halaman siap-cetak `/billing/invoice/[order_id]` (pemilik + admin, via `/api/invoice/[id]`):
+  kop perusahaan (company_profile), No. invoice (order_id), pembeli (tenant), item+periode, subtotal, PPN (bila `ppn_percent`>0),
+  total, status LUNAS, metode. Print-to-PDF (browser), dwibahasa. Link di Riwayat invoice + admin + email struk.
+- **PPN** = `app_config.ppn_percent` (default 0 = harga final; set 11 bila PKP) — invoice tampilkan DPP+PPN bila >0.
+- **Refund/chargeback** = webhook `refund/partial_refund/chargeback` (langganan) → tenant `suspended` (akses dicabut).
+- **Admin Comp/Diskon** = set `is_developer`/`discount_pct` per-tenant dari panel admin.
+- **Konfirmasi pendaftaran** = email ber-brand kita (token_hash lintas-alat), bukan Supabase default.
+
+## 9. PLAN vs REALISASI — kelengkapan fitur world-class (living tracker)
+> Update tiap item ke ✅ saat tervalidasi 100%, lalu kerjakan berikutnya. (⬜ belum · 🟡 sebagian · ✅ selesai+validasi)
+
+| # | Item | Realisasi |
+|---|---|---|
+| 0 | `company_profile` table + seed Lumite + `ppn_percent` (migr 0112) | ✅ applied + verified DB live |
+| 1 | customer_details (nama+email) + item_details ke Midtrans (`midtrans.py::_snap_post`,`_tenant_name`) | ✅ deployed `04cf0a2` — **e2e sandbox: Midtrans terima payload → token** (visual di dashboard = last-mile owner) |
+| 2 | Refund/chargeback → suspend (`midtrans.py::_apply_settlement` cabang refund) | ✅ deployed `04cf0a2` — logika verified (baca kolom benar, set suspended); e2e butuh event refund nyata |
+| 3 | Invoice API `/api/invoice/[id]/route.ts` (pemilik+admin, company+ppn) | ✅ deployed — LIVE: no-auth **401** (gate benar); pola super-admin cocok `guard.ts` |
+| 4 | Invoice page `apps/web/src/app/billing/invoice/[id]/page.tsx` (dwibahasa, PPN, print) | ✅ deployed — LIVE: `/billing/invoice/x` → **307 login+next** (privat+fungsional); render visual = saat ada payment |
+| 5 | Invoice link: Billing history + `/admin/billing` + email struk (`email.py::notify_payment_receipt` +order_id/`_site_url`) | ✅ deployed — verified di FE (tenant order_id+"Cetak", admin order_id) + email receipt +order_id |
+| 6 | `ppn_percent` di CFG_META grup Billing (`admin/app-config/page.tsx`) | ✅ deployed — build punya rute; PATCH app-config **nol allowlist** → PPN editable admin (no-hardcode) |
+| 7 | Admin Comp/Diskon: API `/api/admin/tenants/[id]/comp` + FE modal (`admin/tenants/page.tsx`) | ✅ deployed — LIVE: no-auth **401**; renewal.py **EXEMPT** comp (baris 52+84); modal+reload wired |
+| 8 | Signup branded: route `/api/auth/signup` + `auth/page.tsx` doSignup/doResend di-rewire | ✅ deployed — LIVE: GET **405** (POST-only); callback `verifyOtp(type=signup)`; FE buang `supabase.auth.signUp/resend` |
+| 9 | Validasi (build+py_compile+e2e) + deploy 1× (worker+FE) | ✅ **DONE** `04cf0a2` — py_compile OK · npm build exit 0 · DB live verified · 3 service active · endpoint LIVE tervalidasi |
+
+**STATUS: DEPLOYED `04cf0a2` (2026-07-01), mode `MIDTRANS_ENV=sandbox`.** 3 service active (mv-worker/mv-webhook/mv-web). Go-live pembayaran nyata = set `MIDTRANS_ENV=production` + restart (gate [A1] owner di `SISA_KERJA_GO_LIVE.md`).
+
+### 🧪 LAST-MILE INTERAKTIF (perlu browser/sesi owner — server-side sudah tervalidasi)
+Validasi visual yang hanya bisa lewat aksi nyata (server-side & gating semua sudah lolos):
+1. **1 pembayaran sandbox** (Billing → Ubah paket → bayar kartu tes `4811 1111 1111 1114`, CVV `123`, OTP `112233`) → cek: (a) di dashboard Midtrans **customer_details** (nama+email) tampil, (b) status → active, (c) **email struk** masuk berisi link invoice.
+2. Buka link invoice → halaman **LUNAS** ber-kop Lumite, PPN muncul hanya bila `ppn_percent>0`, tombol **Cetak/PDF**.
+3. Admin `/admin/tenants` → tenant → **Comp/Diskon** → set is_developer → simpan → badge "Comp" muncul, tenant EXEMPT sweep.
+4. **Signup** email baru → email konfirmasi **ber-brand** (From: `mesinviral@lumite.biz.id`) → klik → `verifyOtp` → `/auth?view=verified`. (Syarat: Supabase "Confirm email" = ON.)
+
 ### Changelog
 - **2026-07-01** — dibuat setelah implementasi penuh + validasi e2e sandbox (langganan+add-on) & live (reconciler,
   webhook Midtrans terbukti, feedback insert). Commit terkait: `53e272c` (checkout A1+E1), `9d0c8e5` (switch env + admin
   Payments), `d9f0171` (reconciler), `4d861ed` (siklus lengkap: reminder/dunning/banner/routing/feedback, config-driven, dwibahasa).
+- **2026-07-01** — batch kelengkapan world-class (§8/§9) **DEPLOYED `04cf0a2`**: invoice siap-cetak (halaman+API, dwibahasa,
+  PPN, kop company_profile), customer_details+item_details ke Midtrans (e2e sandbox: token diterima), refund/chargeback→suspend,
+  `ppn_percent` no-hardcode di System Config, admin Comp/Diskon (renewal EXEMPT), signup ber-brand (token_hash lintas-alat,
+  `auth/page.tsx` di-rewire, buang `supabase.auth.signUp/resend`), `company_profile` migr 0112 + seed Lumite. Validasi: py_compile+
+  npm build(exit 0)+kolom/keys DB live+customer_details sandbox+endpoint LIVE (invoice 401, comp 401, signup 405, situs 200).
+  Last-mile interaktif (1 bayar sandbox + comp toggle + signup email) = aksi owner. Bersih: hapus kode-mati `reconcile_pending`.
