@@ -46,7 +46,7 @@ link bayar) = **config di `app_config`**, bisa diubah admin tanpa sentuh kode.
 | `comp` (bukan status, tapi flag) | ✅ | ✅ | is_developer / discount≥100 → gratis | — (exempt) |
 
 **Prinsip kunci:** login SELALU boleh (agar tenant lapsed bisa upgrade); yang di-gate = **PRODUKSI**
-(`src/billing/limits.py::is_producing`, `PRODUCING_STATUSES = {active, trial, grace}`).
+(`src/billing/limits.py::can_produce`, `PRODUCING_STATUSES = {active, trial, grace}`).
 
 **Mesin state:** `src/billing/renewal.py` — thread `billing_renewal` di worker, cadence `BILLING_CHECK_INTERVAL_SEC`
 (default 86400s/harian). Tiap sweep: (1) kirim reminder pra-habis (anti-dobel via penanda), (2) transisi status + notif.
@@ -173,7 +173,7 @@ BE     src/billing/midtrans.py     — snap_create_transaction / snap_create_nic
        src/billing/renewal.py      — sweep_subscriptions (reminder+transisi, config-driven) [thread billing_renewal]
        src/billing/webhook_app.py  — route webhook + checkout internal (mv-webhook :8088)
        src/orchestrator/payment_reconciler.py — thread reconciler (pull) [thread payment_reconciler]
-       src/billing/limits.py       — is_producing / is_comp_account / PRODUCING_STATUSES
+       src/billing/limits.py       — can_produce / is_comp_account / PRODUCING_STATUSES
        src/utils/email.py          — notifikasi lifecycle (dwibahasa, config-driven)
 FE     apps/web/src/components/app-shell.tsx (banner) · admin-shell.tsx (nav)
        apps/web/src/app/(app)/billing/page.tsx · auth/page.tsx · auth/callback/route.ts
