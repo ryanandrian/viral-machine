@@ -21,7 +21,9 @@ type Payment = { order_id: string; plan_type: string | null; gross_amount: numbe
 
 export default function BillingPage() {
   const [supabase] = useState(() => createClient());
-  const [open, setOpen] = useState(false);
+  const [drawer, setDrawer] = useState<null | "plan" | "addon">(null);
+  const [paying, setPaying] = useState<string | null>(null);
+  const [payErr, setPayErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [plan, setPlan] = useState<{ plan_type: string; subscription_status: string; current_period_end: string | null; is_developer: boolean; discount_pct: number } | null>(null);
   const [prices, setPrices] = useState<Record<string, Pricing>>({});
@@ -57,10 +59,20 @@ export default function BillingPage() {
 
   useEffect(() => {
     load();
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setDrawer(null); };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [load]);
+
+  async function checkout(plan_type: string) {
+    setPayErr(null); setPaying(plan_type);
+    try {
+      const res = await fetch("/api/billing/checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ plan_type }) });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok && j.redirect_url) { window.location.href = j.redirect_url; return; }
+      setPayErr(j.error || "Gagal memulai pembayaran."); setPaying(null);
+    } catch { setPayErr("Gagal terhubung. Coba lagi."); setPaying(null); }
+  }
 
   const comp = !!plan && (plan.is_developer || (plan.discount_pct ?? 0) >= 100);
   const planName = plan ? (PLAN_LABEL[plan.plan_type] ?? plan.plan_type) : "—";
@@ -87,10 +99,7 @@ export default function BillingPage() {
                     </>}
               </div>
               {!comp && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", alignItems: "flex-end" }}>
-                  <button className="btn btn-default" disabled title="Midtrans Snap aktif saat cutover"><Zap size={15} /> <Bi id="Upgrade" en="Upgrade" /></button>
-                  <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="checkout Midtrans saat cutover" en="Midtrans checkout at cutover" /></span>
-                </div>
+                <button className="btn btn-default" onClick={() => setDrawer("plan")}><Zap size={15} /> <Bi id="Ubah paket" en="Change plan" /></button>
               )}
             </div>
             <div className="usage-row">
@@ -128,7 +137,7 @@ export default function BillingPage() {
         {/* right rail */}
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           <div className="card card-pad">
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.875rem" }}><h3 className="card-title"><Plus size={16} /> <Bi id="Add-ons" en="Add-ons" /></h3><button className="btn btn-secondary btn-sm" onClick={() => setOpen(true)}><Plus size={14} /></button></div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.875rem" }}><h3 className="card-title"><Plus size={16} /> <Bi id="Add-ons" en="Add-ons" /></h3><button className="btn btn-secondary btn-sm" onClick={() => setDrawer("addon")}><Plus size={14} /></button></div>
             <div className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Belum ada add-on aktif. Lihat katalog →" en="No active add-ons. Browse catalog →" /></div>
           </div>
 
@@ -140,18 +149,38 @@ export default function BillingPage() {
       </div>
       )}
 
-      {/* add-ons drawer (katalog dari pricing_config) */}
-      <div className={`scrim${open ? " open" : ""}`} onClick={() => setOpen(false)} />
-      <aside className={`drawer${open ? " open" : ""}`}>
-        <div className="drawer-head"><h3 className="card-title"><Bi id="Katalog Add-on" en="Add-on catalog" /></h3><button className="btn btn-ghost btn-icon btn-sm" onClick={() => setOpen(false)}><X size={16} /></button></div>
+      {/* drawer: pilih paket (Ubah paket) ATAU katalog add-on — SATU drawer, dua mode (reuse) */}
+      <div className={`scrim${drawer ? " open" : ""}`} onClick={() => setDrawer(null)} />
+      <aside className={`drawer${drawer ? " open" : ""}`}>
+        <div className="drawer-head"><h3 className="card-title">{drawer === "plan" ? <Bi id="Pilih paket" en="Choose a plan" /> : <Bi id="Katalog Add-on" en="Add-on catalog" />}</h3><button className="btn btn-ghost btn-icon btn-sm" onClick={() => setDrawer(null)}><X size={16} /></button></div>
         <div className="drawer-body">
-          {addons.length === 0 ? <div className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Belum ada add-on di katalog." en="No add-ons in catalog." /></div>
+          {payErr && <div style={{ color: "var(--danger, #ef4444)", fontSize: "var(--text-sm)", marginBottom: ".75rem" }}>{payErr}</div>}
+          {drawer === "plan" ? (
+            <>
+              <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}><Bi id="Pembayaran aman via Midtrans (VA / e-wallet / kartu / QRIS). Langganan berlaku 30 hari." en="Secure payment via Midtrans (VA / e-wallet / card / QRIS). Subscription lasts 30 days." /></p>
+              {["starter", "pro", "business"].map((tier) => {
+                const p = prices[`plan_${tier}`]; if (!p) return null;
+                const isCurrent = plan?.plan_type === tier && plan?.subscription_status === "active";
+                return (
+                  <div className="addon-cat" key={tier}><span className="ic"><Zap size={18} /></span><div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: "var(--text-sm)" }}>{PLAN_LABEL[tier]} {isCurrent && <span className="badge badge-success"><Bi id="Aktif" en="Active" /></span>}</div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: ".5rem" }}>
+                      <span style={{ color: "var(--brand)", fontWeight: 600 }}>{fmtIDR(p.value_idr)}<small>/bln</small></span>
+                      <button className="btn btn-default btn-sm" disabled={paying !== null} onClick={() => checkout(tier)}>{paying === tier ? "…" : <Bi id="Pilih & bayar" en="Choose & pay" />}</button>
+                    </div>
+                  </div></div>
+                );
+              })}
+            </>
+          ) : (
+            addons.length === 0 ? <div className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Belum ada add-on di katalog." en="No add-ons in catalog." /></div>
             : addons.map((a) => (
               <div className="addon-cat" key={a.key}><span className="ic"><ShieldCheck size={18} /></span><div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 600, fontSize: "var(--text-sm)" }}>{a.description || a.key}</div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: ".5rem" }}><span style={{ color: "var(--brand)", fontWeight: 600 }}>{fmtIDR(a.value_idr)}{a.category === "add_on" ? "" : ""}</span><button className="btn btn-outline btn-sm" disabled title="checkout saat cutover"><Bi id="Tambah" en="Add" /></button></div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: ".5rem" }}><span style={{ color: "var(--brand)", fontWeight: 600 }}>{fmtIDR(a.value_idr)}</span><a className="btn btn-outline btn-sm" href="/niches"><Bi id="Pesan di Pustaka Niche" en="Order in Niche Library" /></a></div>
               </div></div>
-            ))}
+            ))
+          )}
         </div>
       </aside>
     </>

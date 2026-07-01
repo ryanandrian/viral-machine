@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { fetchPricing, idrK } from "@/lib/pricing";
 import { PageHeader } from "@/components/page-header";
 import { YT_CATEGORIES } from "@/lib/youtube-categories";
-import { Target, Search, X, Wand2, Clock, ChevronRight, Tv, Check, Loader2 } from "lucide-react";
+import { Target, Search, X, Wand2, Clock, ChevronRight, Tv, Check, Loader2, CreditCard } from "lucide-react";
 import "./niches.css";
 
 // Pustaka Niche (tenant) — daftar SEMUA niche yang jadi hak tenant (dasar/umum/khusus miliknya),
@@ -169,6 +169,16 @@ export default function NichesPage() {
     if (error) { setReqMsg(error.message); return; }
     setReviseFor(null); setRevNote(""); load();
   }
+  // Bayar add-on via Midtrans (status awaiting_payment) → redirect ke halaman bayar. Aktivasi via webhook.
+  async function payReq(id: string) {
+    setReqBusy(id); setReqMsg(null);
+    try {
+      const res = await fetch(`/api/niche-requests/${id}/pay`, { method: "POST" });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok && j.redirect_url) { window.location.href = j.redirect_url; return; }
+      setReqMsg(j.error || "Gagal memulai pembayaran."); setReqBusy(null);
+    } catch { setReqMsg("Gagal terhubung. Coba lagi."); setReqBusy(null); }
+  }
 
   useEffect(() => { load(); fetchPricing().then(setPricing); }, [load]);
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") setSel(null); }; document.addEventListener("keydown", k); return () => document.removeEventListener("keydown", k); }, []);
@@ -261,6 +271,7 @@ export default function NichesPage() {
                   <td><span className={`badge ${st.cls}`}>{st.label}</span>{rq.status === "delivered" && dl != null && <div style={{ fontSize: "var(--text-xs)", marginTop: 3, color: dl <= 1 ? "var(--warning)" : "var(--text-muted)" }}>{dl > 0 ? `Sisa evaluasi: ${dl} hari` : "Evaluasi berakhir hari ini"}</div>}</td>
                   <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                     {rq.status === "pending" && <button className="btn btn-ghost btn-sm" disabled={reqBusy === rq.request_id} onClick={() => cancelReq(rq.request_id)}>{reqBusy === rq.request_id ? <Loader2 size={13} className="spin" /> : <Bi id="Batalkan" en="Cancel" />}</button>}
+                    {rq.status === "awaiting_payment" && <button className="btn btn-default btn-sm" disabled={reqBusy === rq.request_id} onClick={() => payReq(rq.request_id)}>{reqBusy === rq.request_id ? <Loader2 size={13} className="spin" /> : <><CreditCard size={13} /> <Bi id="Bayar" en="Pay" /></>}</button>}
                     {rq.status === "delivered" && <>
                       <button className="btn btn-default btn-sm" disabled={reqBusy === rq.request_id} onClick={() => actReq(rq.request_id, "accept")} style={{ marginRight: ".375rem" }}><Check size={13} /> <Bi id="Terima & Selesaikan" en="Accept & close" /></button>
                       <button className="btn btn-ghost btn-sm" disabled={reqBusy === rq.request_id} onClick={() => { setReviseFor(rq); setRevNote(""); }}><Bi id="Minta perbaikan" en="Request revision" /></button>

@@ -145,6 +145,36 @@ try:
     app.add_api_route("/api/credentials/ai/delete",     _cred_ai_delete,     methods=["POST"])
     app.add_api_route("/api/credentials/telegram/test", _cred_telegram_test, methods=["POST"])
 
+    # ── Checkout Midtrans (buat transaksi Snap) — dipanggil server-to-server dari Next (mv-web),
+    #    di-AUTH via X-Internal-Secret; tenant_id sudah diverifikasi sesi Supabase oleh pemanggil.
+    #    Return {redirect_url,...} → Next redirect user ke halaman bayar Midtrans. ──
+    async def _billing_checkout(request: "Request"):
+        if not _internal_ok(request):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        from src.billing.midtrans import snap_create_transaction
+        try:
+            b = await request.json()
+            return snap_create_transaction(_sb(), b.get("tenant_id"), b.get("plan_type"),
+                                           customer_email=b.get("email"), finish_url=b.get("finish_url"))
+        except Exception as e:
+            logger.warning(f"[billing] checkout langganan gagal: {e}")
+            return JSONResponse({"error": str(e)}, status_code=400)
+
+    async def _billing_niche_checkout(request: "Request"):
+        if not _internal_ok(request):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        from src.billing.midtrans import snap_create_niche_addon
+        try:
+            b = await request.json()
+            return snap_create_niche_addon(_sb(), b.get("tenant_id"), b.get("request_id"),
+                                           customer_email=b.get("email"), finish_url=b.get("finish_url"))
+        except Exception as e:
+            logger.warning(f"[billing] checkout add-on niche gagal: {e}")
+            return JSONResponse({"error": str(e)}, status_code=400)
+
+    app.add_api_route("/api/billing/checkout",       _billing_checkout,       methods=["POST"])
+    app.add_api_route("/api/billing/niche-checkout", _billing_niche_checkout, methods=["POST"])
+
 except ImportError:
     # fastapi belum terinstall di env dev — endpoint diaktifkan saat cutover (tambah ke requirements).
     app = None

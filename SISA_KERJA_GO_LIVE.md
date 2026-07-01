@@ -87,13 +87,13 @@
 - **DEPENDS:** — (BE siap). **Nyambung:** [E1] add-on custom-niche.
 - **REALISASI:** ⬜ *(belum; gate owner)*
 
-### [A2] Supabase Auth — SMTP + Google provider — 🔒⬜
+### [A2] Supabase Auth — SMTP + Google provider — ✅ *(validated 2026-07-01)*
 - **TUJUAN:** email auth (verify/reset) ber-brand + terkirim andal; "Daftar dengan Google" jalan untuk tenant publik.
 - **KONTEKS:** kode auth (signup/verify/reset/OAuth callback) SUDAH jalan (Phase 9.1, runtime-validated). Kurang = konfig dashboard Supabase.
 - **BUKTI:** reset email dulu kena rate-limit default Supabase (bukan bug kode); Google provider status di dashboard = belum aktif. SMTP tersedia (`mail.lumite.biz.id:465`, di `S3-CONNECTION.md`).
 - **PLAN (aksi owner):** Supabase Dashboard `atliatnjhysdibmfypul` → Authentication → (1) **custom SMTP** `mail.lumite.biz.id` (host/port/user/pass/from) · (2) **Google provider** = Client ID/Secret app lumite (`153190496639-i41l1fp3...`).
 - **DONE-BILA:** signup email verify terkirim ber-brand; "Daftar dengan Google" e2e sukses (redirect `mesinviral.com`, bukan localhost — bug ini sudah fix `a18d451`).
-- **REALISASI:** ⬜ *(gate owner)*
+- **REALISASI:** ✅ **SELESAI + VALIDATED 2026-07-01** (owner setting di dashboard Supabase; Claude validasi otomatis dari server, bukan tebakan). (1) **Custom SMTP lumite** dibuktikan END-TO-END: trigger `POST /auth/v1/recover` (200) → email masuk inbox `mesinviral@lumite.biz.id` (dibaca via IMAP) dgn **From: `Mesin Viral <mesinviral@lumite.biz.id>`** (bukan `noreply@…supabase.io`) → SMTP lumite aktif & dipakai Supabase. (2) **Google provider** valid: `GET /auth/v1/authorize?provider=google` → 302 ke `accounts.google.com` dgn `client_id=153190496639-i41l1f…` (app lumite) + `redirect_uri=…supabase.co/auth/v1/callback` benar + scope `email profile` → provider aktif & terwire benar. Yang TAK-testable headless = klik-pilih-akun interaktif utk PUBLIK (butuh browser + app di Production) → menyusul saat **[A4] publish**; selama Testing hanya test-user (normal). Catatan minor (poles opsional, non-blocker): template email auth Supabase masih bhs Inggris ("Reset your password"). **Investigasi link-reset 2026-07-01 (owner lapor "link tak benar"):** alur RESET dari SITUS (PKCE) TERBUKTI benar — verify → `…/auth/callback?code=…&next=%2Fauth%3Fview%3Dreset` → callback `exchangeCodeForSession` (route.ts:33-36) → form set-password (same-device OK). Gejala owner = klik EMAIL TES raw-API (tanpa PKCE → jatuh ke beranda/fragment `#access_token` yg tak terbaca server), BUKAN alur situs. ⚠️ **KELEMAHAN NYATA (hardening, non-blocker):** PKCE reset gagal **LINTAS-ALAT** (minta di laptop, buka email di HP → tak ada code_verifier → "link tidak valid"). ✅ **DIBERESKAN 2026-07-01 (commit `db3d859`, deployed + LIVE-validated) — world-class in-code:** reset email kini **DIKIRIM SENDIRI oleh mv-web** (bukan Supabase): route `/api/auth/forgot-password` → `admin.generate_link` (service_role) → link **`token_hash`** → `/auth/callback` `verifyOtp` → **JALAN DI SEMUA ALAT** (tak butuh browser asal; PKCE dibuang utk reset). Template email **ID/EN ber-brand di kode** (`apps/web/src/lib/email/templates.ts`) + pengirim SMTP (`smtp.ts`, nodemailer, config env, anti-enumeration). **Template Supabase reset TAK dipakai lagi.** Validasi LIVE (nol asumsi): POST→email brand `mesinviral@lumite.biz.id`→link `mesinviral.com/auth/callback`→callback 307 `/auth?view=reset` (nol error). **Konfirmasi SIGNUP:** template ID/EN SUDAH dibuat (siap), tapi **wiring MENYUSUL** — signup masih `supabase.auth.signUp` (template Supabase); wiring butuh cek dulu setelan Supabase "Confirm email" (nol asumsi) → item berikutnya.
 
 ### [A3] Rotasi semua secret dev — 🔒⬜
 - **TUJUAN:** secret yang dipakai saat dev tidak bocor ke produksi publik.
@@ -105,7 +105,7 @@
 ### [A4] Verifikasi Google app + kumala reconnect — 🔒⬜
 - **TUJUAN:** pelanggan asing lihat brand MesinViral (bukan warning "unverified"); refresh-token permanen (bukan kedaluwarsa 7 hari mode Testing).
 - **KONTEKS:** materi SIAP di `GOOGLE_OAUTH_PLATFORM_MIGRATION.md` — justifikasi scope (§8a, 3 scope: youtube.upload/readonly/yt-analytics.readonly), shot-list demo video (§8b), `/privacy`+`/terms` sudah LIVE & patuh. Scope SENSITIVE (bukan Restricted → tanpa CASA berbayar).
-- **PLAN (aksi owner):** Google Auth Platform (akun `lumite.biz.id@gmail.com`, project `mesin-viral`) → Publish app (Testing→Production) → Verification Center → submit (justifikasi §8a + demo video §8b). Timeline ~10 hari. + kumala reconnect YouTube (tak mendesak — channel belum unlock).
+- **PLAN (aksi owner):** Google Auth Platform (akun `lumite.biz.id@gmail.com`, project `mesin-viral`) → Publish app (Testing→Production) → Verification Center → submit (justifikasi §8a + demo video §8b). Timeline ~10 hari. ~~+ kumala reconnect~~ → **kumala reconnect YouTube = ✅ SELESAI (owner konfirmasi 2026-07-01)**. Sisa A4 = HANYA Langkah 9 (publish + submit verifikasi).
 - **DONE-BILA:** app verified (warning hilang, token permanen).
 - **REALISASI:** ⬜ *(gate owner; Claude bisa bantu rekam demo/teks)*
 
@@ -168,6 +168,20 @@
 - **DONE-BILA:** semua hijau; `DB_SCHEMA_V2.md` cocok DB live.
 - **REALISASI:** ⬜
 
+### [B8] Halaman `/feedback` (masukan trial-lapse) — perbaiki link MATI di email — ⬜ *(bug live customer-facing)*
+- **TUJUAN:** tenant yang trial habis (dan siapa pun penerima email trial-lapse) punya halaman masukan NYATA ber-brand → kumpulkan alasan tak-upgrade (lead insight berharga) + hilangkan kesan buruk link mati. **Keputusan owner 2026-07-01: Opsi B (halaman sendiri, bukan Google Form).**
+- **KONTEKS:** email `notify_trial_lapse` (`src/utils/email.py:92-101`) mengajak isi survei ke `_survey_url()` → default `https://mesinviral.com/feedback` (`email.py:72-73`), TAPI rute `/feedback` **TIDAK ADA** di FE → **404 LIVE** ke tenant nyata (dilaporkan owner: email trial-lapse yang diterima). Trial-expired ditandai **LEAD marketing** (`billing/renewal.py:49`) → masukan ini punya nilai bisnis. Kata "feedback" lain di FE hanya copy marketing (`(marketing)/page.tsx:168`) + widget docs "Apakah artikel ini membantu" (`docs/page.tsx:47`) — **bukan** halaman.
+- **BUKTI (verified 2026-07-01):** `curl -L https://mesinviral.com/feedback` → **HTTP 404**. `find/grep apps/web/src/app` → nol rute `/feedback`. Saklar `TRIAL_SURVEY_URL` sudah ada (env-override, default arahkan ke halaman ini → nol perubahan email saat halaman hidup).
+- **PLAN (world-class; propose rincian sebelum koding — [[feedback_workflow]] + [[feedback_world_class_quality]]):**
+  - **FE:** halaman **publik** `/feedback` (marketing group — penerima email mungkin belum login) — form ber-brand: alasan belum upgrade (pilihan terkurasi + isian bebas) + pesan + email (prefill bila token/login) + i18n ID/EN (pola Bi seperti halaman lain). Sukses → state terima-kasih (bukan reload). Reuse komponen/kelas UI yang ada (jangan bikin versi lebih jelek).
+  - **Atribusi:** email sisipkan token/ref tenant (mis. `?ref=<token>`) agar masukan terhubung ke lead/tenant tanpa tenant mengetik ulang.
+  - **DB (no-hardcode, RLS service-role):** simpan submission — putuskan saat propose: perluas `leads` (trial-expired sudah lead) ATAU tabel `feedback_submissions` dedicated. Update `DB_SCHEMA_V2.md`.
+  - **Notifikasi + admin:** Telegram admin saat masuk + tampil di admin panel (reuse pola **Leads** `/admin`, Phase 10.1) — jangan bikin subsistem duplikat.
+  - **Email:** pertahankan `TRIAL_SURVEY_URL` (default kini VALID) → link email otomatis hidup, nol link mati.
+- **DONE-BILA:** klik link di email trial-lapse → halaman `/feedback` hidup (bukan 404); kirim masukan → tersimpan di DB + admin bisa lihat + Telegram masuk; email tetap arahkan ke sini.
+- **DEPENDS:** — (mandiri). **Nyambung:** admin **Leads** (Phase 10.1), email `notify_trial_lapse`.
+- **REALISASI:** ⬜
+
 ---
 
 # ⏳ KELOMPOK C — DATA-GATED *(mekanisme SIAP; matang seiring data pasca-cutover — bukan "koding besar")*
@@ -221,7 +235,7 @@
 1. **[A1] Midtrans prod** (+ Claude siapkan **[A4]** materi verifikasi Google + pandu **[A2]**) → buka pintu jualan. Bareng: **[E1]**.
 2. **[B1] system-secrets + [A3] rotasi** — hardening pra-publik.
 3. **[A5] smoke-test** tenant-baru e2e (validasi acceptance).
-4. Sisa **[B2-B7]** — poles pasca fungsi jualan aktif.
+4. Sisa **[B2-B8]** — poles pasca fungsi jualan aktif. *(**[B8]** = fix link mati email trial-lapse; bug live customer-facing, layak didahulukan meski bukan pemblokir jualan.)*
 5. **[D1] funnel** setelah owner putuskan; **[C]** matang otomatis; **[B6]/[D2]** prioritas terendah.
 
 ## ⛔ PANTANGAN (agar tak muncul "bug"/kerancuan)
@@ -232,3 +246,4 @@
 ---
 ### Changelog
 - **2026-07-01** — dibuat dari audit menyeluruh (verified DB/BE/FE/git/VPS). Konsolidasi seluruh sisa-kerja + Plan-vs-Realisasi. Semua dokumen lain di-CLOSE jadi SPEC/arsip + ber-banner ke sini. Memory (`MEMORY.md`) arahkan sesi baru ke file ini.
+- **2026-07-01** — tambah **[B8]** (halaman `/feedback` — perbaiki link MATI di email trial-lapse; keputusan owner Opsi B halaman-sendiri). Bug live customer-facing terverifikasi (`/feedback` → 404; email `email.py:92-101` mengarah ke sana). Urutan rekomendasi + Changelog disesuaikan.

@@ -62,21 +62,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  // ── Tandai lunas (interim concierge) → in_progress + BUAT niche (belum aktif) (+ konfirmasi bayar) ──
+  // ── Tandai lunas (concierge fallback bila bayar OFFLINE) → RPC settle_niche_request_paid ──
+  //   SATU sumber dgn webhook Midtrans (buat niche belum-aktif + status in_progress + email). Anti-duplikat.
+  //   (Alur utama: tenant bayar via Midtrans → webhook panggil RPC yang SAMA otomatis.)
   if (action === "mark_paid") {
     if (r.status !== "awaiting_payment") return NextResponse.json({ error: `status saat ini '${r.status}', bukan 'awaiting_payment'` }, { status: 409 });
-    const niche_id = String(b.niche_id ?? "").trim();
-    if (!/^[a-z0-9_]+$/.test(niche_id)) return NextResponse.json({ error: "niche_id slug invalid (a-z0-9_)" }, { status: 400 });
-    const exclusive_until = r.request_type === "public_90d" ? new Date(Date.now() + 90 * 864e5).toISOString() : null;
-    const { error: ne } = await admin.from("niches").insert({
-      niche_id, name: r.title, is_active: false, is_base: false,
-      access_type: "private", exclusive_to: r.tenant_id, exclusive_until, origin: "request",
-    });
-    if (ne) return NextResponse.json({ error: `buat niche gagal: ${ne.message}` }, { status: 500 });
-    await admin.from("niche_requests").update({ status: "in_progress", niche_id, paid_at: now, updated_at: now }).eq("request_id", r.request_id);
-    await enqueue(`Pembayaran diterima — ${r.title}`,
-      `Halo,\n\nPembayaran untuk niche custom "${r.title}" sudah kami terima. Tim mulai menyiapkan niche Anda sekarang.\n` +
-      `Anda akan kami beri tahu via email saat niche siap untuk dievaluasi.\n\n— Tim MesinViral`);
+    const { data: niche_id, error: se } = await admin.rpc("settle_niche_request_paid", { p_request_id: r.request_id, p_order_id: null });
+    if (se) return NextResponse.json({ error: `settle gagal: ${se.message}` }, { status: 500 });
     await audit("niche_request.mark_paid", { request_id: r.request_id, niche_id });
     return NextResponse.json({ ok: true, niche_id });
   }
