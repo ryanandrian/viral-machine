@@ -91,12 +91,21 @@ export default function AuthPage() {
     window.location.href = (count ?? 0) > 0 ? "/dashboard" : "/onboarding"; // full reload → middleware sinkron
   }
   async function doForgot() {
-    setErr(null); setBusy(true);
-    // reset link → /auth/callback (recovery session) → form set password baru (view=reset).
-    const after = `${origin()}/auth/callback?next=${encodeURIComponent("/auth?view=reset")}`;
-    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: after });
+    setErr(null);
+    if (!email.trim()) return setErr(lang === "id" ? "Masukkan email dulu." : "Enter your email first.");
+    setBusy(true);
+    // Dikirim via endpoint kita sendiri: email ber-brand + link token_hash (JALAN DI SEMUA ALAT),
+    // BUKAN resetPasswordForEmail (PKCE ?code yang gagal lintas-alat). Server anti-enumeration.
+    const res = await fetch("/api/auth/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email.trim(), lang }),
+    }).catch(() => null);
     setBusy(false);
-    if (error) return setErr(error.message);
+    if (!res || !res.ok) {
+      const j = res ? await res.json().catch(() => ({})) : {};
+      return setErr(j?.msg || (lang === "id" ? "Gagal mengirim. Coba lagi." : "Failed to send. Try again."));
+    }
     go("forgot-sent");
   }
   async function doReset() {
@@ -205,7 +214,7 @@ export default function AuthPage() {
             <div className="auth-card">
               <div className="state-ico" style={{ background: "var(--success-soft)", color: "var(--success)" }}><CheckCircle size={28} /></div>
               <h1><Bi id="Cek email Anda" en="Check your email" /></h1>
-              <p className="lead"><span data-id>Kami sudah mengirim link reset ke <b style={{ color: "var(--text-primary)" }}>riko@channel.id</b>. Cek folder spam jika tidak ada.</span><span data-en>We sent a reset link to <b style={{ color: "var(--text-primary)" }}>riko@channel.id</b>. Check spam if you don&apos;t see it.</span></p>
+              <p className="lead"><span data-id>Kami sudah mengirim link reset ke <b style={{ color: "var(--text-primary)" }}>{email || "email Anda"}</b>. Cek folder spam jika tidak ada.</span><span data-en>We sent a reset link to <b style={{ color: "var(--text-primary)" }}>{email || "your email"}</b>. Check spam if you don&apos;t see it.</span></p>
               <button className="btn btn-secondary btn-lg" style={{ width: "100%" }} onClick={doForgot} disabled={busy}><Bi id="Kirim ulang link" en="Resend link" /></button>
               <ErrBox />
               <div className="auth-foot"><a className="link" onClick={() => go("login")}><ArrowLeft size={14} style={{ verticalAlign: -2 }} /> <Bi id="Kembali ke masuk" en="Back to sign in" /></a></div>
