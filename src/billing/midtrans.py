@@ -34,9 +34,12 @@ def _snap_base() -> str:
 
 
 def _server_key() -> str:
-    key = os.getenv("MIDTRANS_SERVER_KEY", "")
+    # Switch sandbox↔production = ubah MIDTRANS_ENV SAJA. Kedua set kunci tinggal permanen di .env;
+    # kode ambil yang cocok otomatis (nol tukar kunci, nol risiko env≠key, nol perubahan kode).
+    env = "PRODUCTION" if _is_production() else "SANDBOX"
+    key = os.getenv(f"MIDTRANS_{env}_SERVER_KEY", "")
     if not key:
-        raise ValueError("MIDTRANS_SERVER_KEY tak diset di env (gitignored) — wajib utk Snap/webhook.")
+        raise ValueError(f"MIDTRANS_{env}_SERVER_KEY tak diset di env (gitignored) — wajib utk Snap/webhook.")
     return key
 
 
