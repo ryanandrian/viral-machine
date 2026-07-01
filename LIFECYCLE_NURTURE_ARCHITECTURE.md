@@ -183,8 +183,8 @@ INFRA  .env / app_config: ADMIN_TELEGRAM_CHAT_ID (🆕)
 ## 11. PLAN vs REALISASI (living tracker) — ⬜ belum · 🟡 sebagian · ✅ selesai+validasi
 | # | Item | Lapisan | Realisasi |
 |---|---|---|---|
-| 1 | Migrasi kolom lifecycle §4.1 (tenant_configs) — no ALTER constraint | DB | ⬜ |
-| 2 | Seed knob `app_config` §3 + CFG_META grup "Pertumbuhan & Siklus-Hidup" | DB+FE admin | ⬜ |
+| 1 | Migrasi kolom lifecycle §4.1 (tenant_configs) — no ALTER constraint | DB | ✅ migr `0113` applied+verified DB live |
+| 2 | Seed knob `app_config` §3 + CFG_META grup "Pertumbuhan & Siklus-Hidup" | DB+FE admin | 🟡 knob seeded (0113, 20 key); CFG_META label FE = Batch 5 |
 | 3 | Hitung `lead_temp` dari production_runs/videos/channels/accounts | BE | ⬜ |
 | 4 | Sekuens nurture trial-lapse (tangga email + varian suhu, anti-dobel) | BE | ⬜ |
 | 5 | 5 template email dwibahasa baru (§6) | BE | ⬜ |
