@@ -4,6 +4,8 @@
 > Dibuat 2026-07-01 setelah implementasi + validasi e2e (sandbox & live). Baca ini sebelum menyentuh apa pun
 > yang berkaitan dengan billing/pembayaran/status langganan. **Prinsip: NO-HARDCODE** (semua angka di `app_config`,
 > admin-editable via **System Configuration** `/admin/app-config`) + **world-class** + **dwibahasa EN/ID**.
+>
+> **🔗 Rantai kanonik:** backlog/status = **`SISA_KERJA_GO_LIVE.md`** (HUB — item [A1] Midtrans prod · [E1] add-on · [B8] /feedback · [B9] siklus-hidup). Dokumen ini meng-cover gate **s/d `suspended`**; **LANJUTAN** (`suspended→blocked→deleted` + nurture + hapus-data) = **`LIFECYCLE_NURTURE_PLAN.md`**.
 
 ---
 
@@ -47,6 +49,10 @@ link bayar) = **config di `app_config`**, bisa diubah admin tanpa sentuh kode.
 
 **Prinsip kunci:** login SELALU boleh (agar tenant lapsed bisa upgrade); yang di-gate = **PRODUKSI**
 (`src/billing/limits.py::can_produce`, `PRODUCING_STATUSES = {active, trial, grace}`).
+
+> **⛳ Batas dokumen ini:** state machine di sini berhenti di **`suspended`**. Lanjutan `suspended → blocked → deleted`
+> (dunning 30h → kunci akun 30h + peringatan H-30/7/1 → hapus data + cabut token YouTube) + mesin **nurture** trial-lapse
+> = **`LIFECYCLE_NURTURE_PLAN.md`** (backlog [B9]). Keduanya **satu mesin** (`renewal.py`), non-redundan.
 
 **Mesin state:** `src/billing/renewal.py` — thread `billing_renewal` di worker, cadence `BILLING_CHECK_INTERVAL_SEC`
 (default 86400s/harian). Tiap sweep: (1) kirim reminder pra-habis (anti-dobel via penanda), (2) transisi status + notif.

@@ -9,7 +9,9 @@
 > 4. Selesai + tervalidasi → **isi kolom REALISASI** (status + commit + bukti) di item ini. Update juga dokumen SPEC terkait bila perlu.
 > 5. Legend status: **⬜ belum · 🟡 sebagian · ✅ selesai+validasi · ⏳ data-gated · 🔒 nunggu keputusan/aksi owner.**
 >
-> **Sumber kebenaran status = FILE INI.** Dokumen lain (REMEDIASI/CHANNEL_LOCK/QC/TREND/MULTI_FORMAT/DEPLOY_RUNBOOK/CUSTOM_NICHE/ONBOARDING_FUNNEL) = **SPEC/ARSIP** (rujuk untuk detail arsitektur; jangan pakai marker `[ ]` mereka sbg daftar kerja).
+> **Sumber kebenaran status = FILE INI.** Dokumen lain (REMEDIASI/CHANNEL_LOCK/QC/TREND/MULTI_FORMAT/DEPLOY_RUNBOOK/CUSTOM_NICHE/ONBOARDING_FUNNEL/**PAYMENT_AND_TENANT_GATE_ARCHITECTURE**/**LIFECYCLE_NURTURE_PLAN**) = **SPEC/ARSIP** (rujuk untuk detail arsitektur; jangan pakai marker `[ ]` mereka sbg daftar kerja).
+>
+> **🔗 RANTAI KANONIK BILLING & SIKLUS-HIDUP (jangan miss-link):** `SISA_KERJA` (backlog/status = **HUB**) → **`PAYMENT_AND_TENANT_GATE_ARCHITECTURE.md`** (arsitektur bayar Midtrans + gate `trial→active→grace→suspended`; **SELESAI + deployed `04cf0a2`**) → **`LIFECYCLE_NURTURE_PLAN.md`** (LANJUTAN: nurture trial-lapse + dunning `suspended→blocked→deleted`+hapus-data; **rencana, belum build**). Pemetaan item: **[A1]/[E1]** (Midtrans) → PAYMENT · **[B8]** (/feedback) + **[B9]** (mesin siklus-hidup) → LIFECYCLE · **[D1]** (funnel) ⟷ LIFECYCLE.
 
 ---
 
@@ -78,8 +80,8 @@
 
 ### [A1] Midtrans PRODUKSI — 🔒⬜ *(PEMBLOKIR UTAMA JUALAN)*
 - **TUJUAN:** tenant bisa BAYAR sewa (subscription) + add-on custom-niche → uang masuk.
-- **KONTEKS:** BE pembayaran (Snap redirect) SUDAH jadi & lulus e2e sandbox — `src/billing/midtrans.py` (`snap_create_transaction` env-driven sandbox/prod · `verify_signature` SHA512 · `handle_notification`→aktivasi), tabel `payments` (migr 0022), webhook route di `mv-webhook`. Yang kurang HANYA kredensial+konfig PRODUKSI.
-- **BUKTI kondisi sekarang (verified DB 2026-07-01):** `payments`=**0 baris**; `.env` `MIDTRANS_ENV`=sandbox. → produksi belum pernah jalan.
+- **KONTEKS:** BE pembayaran (Snap redirect) SUDAH jadi & lulus e2e sandbox — `src/billing/midtrans.py` (`snap_create_transaction` env-driven sandbox/prod · `verify_signature` SHA512 · `handle_notification`→aktivasi), tabel `payments` (migr 0022), webhook route di `mv-webhook`. **Arsitektur lengkap = `PAYMENT_AND_TENANT_GATE_ARCHITECTURE.md`.** ⚠️ **Switch sandbox↔production = ubah `MIDTRANS_ENV` di `.env` + restart** (§3.2 doc; BUKAN tombol admin — tombol itu = [B1], belum ada). **✅ Verified 2026-07-02: kunci PRODUKSI Server+Client SUDAH ADA di `.env` VPS (format `Mid-server-`/`Mid-client-` valid) + merchant dibagi dgn aiwa yang SUDAH LIVE produksi → merchant approved.** Jadi [A1] ≈ **flip `MIDTRANS_ENV=production` + restart + 1 transaksi konfirmasi** — bukan "cari kunci". Pemblokir tersisa = KEPUTUSAN owner KAPAN go-live (idealnya bareng [A2]✓ + [A4] verifikasi Google + [A5] smoke-test).
+- **BUKTI kondisi sekarang (verified DB 2026-07-01):** `payments`=**0 baris**; `.env` `MIDTRANS_ENV`=sandbox. → produksi belum pernah jalan. **Verified 2026-07-02 (VPS `.env`):** `MIDTRANS_PRODUCTION_SERVER_KEY`+`_CLIENT_KEY` **ADA & format valid** → kunci produksi SIAP; tinggal flip+restart+konfirmasi.
 - **PLAN (aksi owner + Claude bantu):**
   - Owner: dapatkan **Server key + Client key PRODUKSI** Midtrans; isi ke `.env` VPS + `MIDTRANS_ENV=production`; daftar **Notification URL** (payment/recurring/pay-account) + Finish/Error URL → `https://mesinviral.com/api/webhooks/midtrans`.
   - Claude: verifikasi route webhook `mv-webhook` menerima notifikasi prod; restart `mv-webhook`+`mv-worker` (baca env baru).
@@ -179,8 +181,16 @@
   - **Notifikasi + admin:** Telegram admin saat masuk + tampil di admin panel (reuse pola **Leads** `/admin`, Phase 10.1) — jangan bikin subsistem duplikat.
   - **Email:** pertahankan `TRIAL_SURVEY_URL` (default kini VALID) → link email otomatis hidup, nol link mati.
 - **DONE-BILA:** klik link di email trial-lapse → halaman `/feedback` hidup (bukan 404); kirim masukan → tersimpan di DB + admin bisa lihat + Telegram masuk; email tetap arahkan ke sini.
-- **DEPENDS:** — (mandiri). **Nyambung:** admin **Leads** (Phase 10.1), email `notify_trial_lapse`.
-- **REALISASI:** ⬜
+- **DEPENDS:** — (mandiri). **Nyambung:** admin **Leads** (Phase 10.1), email `notify_trial_lapse`; halaman ini **di-reuse [B9] LIFECYCLE** utk feedback 1-klik (`?reason=`).
+- **REALISASI:** ⬜ *(catatan koherensi: rute `/feedback` + `feedback_submissions` migr 0110 + `/admin/feedback` kini LIVE — lihat `PAYMENT_AND_TENANT_GATE_ARCHITECTURE.md §5`; verifikasi notif Telegram + atribusi `?ref=` sebelum tandai ✅)*
+
+### [B9] Mesin siklus-hidup & nurture (trial-lapse + suspended→blocked→deleted) — ⬜ *(rencana; sequencing owner)*
+- **TUJUAN:** selamatkan trial-lapse + pelanggan berhenti-bayar (dunning/win-back) + blokir & **hapus data** yang tak kembali (bebaskan storage) — world-class, no-hardcode, patuh UU PDP.
+- **KONTEKS:** SATU mesin (perluas thread `billing_renewal`/`renewal.py`, BUKAN thread baru). Keputusan owner TERKUNCI (nurture 4–5 email/~2–3 mgg; suspended 30h → blocked 30h → deleted; purge S3 video-mentah dini; hot-lead→Telegram admin; ekspor self-service DITUNDA). Reuse `/feedback` [B8] + Leads admin + email lifecycle.
+- **SPEC LENGKAP + Plan-vs-Realisasi (13 item) = `LIFECYCLE_NURTURE_PLAN.md`** (sumber kebenaran fitur ini).
+- **DONE-BILA:** sekuens nurture jalan; `suspended→blocked→deleted` otomatis + peringatan H-30/7/1; purge S3 dini; token YouTube dicabut saat delete; knob tampil di System Config.
+- **DEPENDS:** idealnya SETELAH **[A1]** (butuh aliran tenant nyata). **Nyambung:** [B8] /feedback · [D1] funnel · `PAYMENT_AND_TENANT_GATE_ARCHITECTURE.md` (state machine gate).
+- **REALISASI:** ⬜ *(decisions locked; build belum mulai — nunggu urutan owner)*
 
 ---
 
@@ -209,7 +219,7 @@
 - **BUKTI:** DB nol kolom/tabel credit/free-video; FE galeri/unlock/banner tak ada. Sebagian blocker plan itu sudah RESOLVED (OAuth platform, `voice_catalog` 10 baris, webhook live) → plan perlu diselaraskan dulu.
 - **KEPUTUSAN OWNER DIBUTUHKAN (`ONBOARDING_FUNNEL_PLAN.md §9`):** traktir video gratis atau strict-BYOK (A1/A2)? · kuota gratis 1 atau 3? · watermark ya/tidak? · setuju update DESAIN §3/§5 ke hybrid?
 - **PLAN (setelah keputusan):** ledger kredit-trial (DB) + jalur LLM platform-murah (trial) + FE galeri/unlock-cards/modal-video-pertama/banner. Selaraskan ke model credential-first.
-- **REALISASI:** 🔒 nunggu keputusan owner.
+- **REALISASI:** 🔒 nunggu keputusan owner. **Nyambung:** `LIFECYCLE_NURTURE_PLAN.md` (mesin nurture/dunning melengkapi funnel; sebagian keputusan owner sudah TERKUNCI di sana).
 
 ### [D2] Multi-platform (Reels/TikTok) — 🔒⬜
 - **KONTEKS:** kini YouTube-only (cukup untuk launch, Starter=YouTube). Reels(Pro)/TikTok(Business) = fitur tier. Spec `MULTI_FORMAT_STUDIO.md §7`.
@@ -223,7 +233,7 @@
 # 📌 KELOMPOK E — MENUMPANG GATE
 
 ### [E1] Add-on custom-niche via Midtrans live — ⬜ *(kerjakan BARENG [A1])*
-- **KONTEKS:** lifecycle custom-niche SUDAH jalan (concierge/manual "Tandai lunas"). Pondasi bayar disiapkan (`niche_requests.paid_at`/`order_id`/status `awaiting_payment`). Spec persis = `CUSTOM_NICHE_REQUEST_FLOW.md §7`.
+- **KONTEKS:** lifecycle custom-niche SUDAH jalan (concierge/manual "Tandai lunas"). Pondasi bayar disiapkan (`niche_requests.paid_at`/`order_id`/status `awaiting_payment`). Spec persis = `CUSTOM_NICHE_REQUEST_FLOW.md §7` + arsitektur bayar/settlement = `PAYMENT_AND_TENANT_GATE_ARCHITECTURE.md §3`.
 - **PLAN:** (1) generalisasi `midtrans.snap_create_transaction` dari plan_type → `price_key` add-on (insert `payments` kategori add-on + `order_id`). (2) `niche_requests.order_id` ← order_id Midtrans. (3) `handle_notification`: settlement add-on → set `paid_at` + `awaiting_payment`→`in_progress` **otomatis** (ganti manual). (4) tombol bayar Snap di Pustaka Niche. (5) teruskan/hapus jalur concierge sesuai kebutuhan.
 - **DONE-BILA:** tenant bayar custom-niche via Snap → status auto-maju + niche mulai dibangun.
 - **DEPENDS:** [A1] Midtrans produksi.
@@ -236,7 +246,7 @@
 2. **[B1] system-secrets + [A3] rotasi** — hardening pra-publik.
 3. **[A5] smoke-test** tenant-baru e2e (validasi acceptance).
 4. Sisa **[B2-B8]** — poles pasca fungsi jualan aktif. *(**[B8]** = fix link mati email trial-lapse; bug live customer-facing, layak didahulukan meski bukan pemblokir jualan.)*
-5. **[D1] funnel** setelah owner putuskan; **[C]** matang otomatis; **[B6]/[D2]** prioritas terendah.
+5. **[D1] funnel** + **[B9] siklus-hidup/nurture** (`LIFECYCLE_NURTURE_PLAN.md`) setelah [A1] go-live & ada aliran tenant nyata; **[C]** matang otomatis; **[B6]/[D2]** prioritas terendah.
 
 ## ⛔ PANTANGAN (agar tak muncul "bug"/kerancuan)
 - JANGAN sentuh v1 (pensiun; arsip+DB disimpan). JANGAN drop `niche_pool`/`niche_mode`. JANGAN ngoding di VPS.
@@ -247,3 +257,4 @@
 ### Changelog
 - **2026-07-01** — dibuat dari audit menyeluruh (verified DB/BE/FE/git/VPS). Konsolidasi seluruh sisa-kerja + Plan-vs-Realisasi. Semua dokumen lain di-CLOSE jadi SPEC/arsip + ber-banner ke sini. Memory (`MEMORY.md`) arahkan sesi baru ke file ini.
 - **2026-07-01** — tambah **[B8]** (halaman `/feedback` — perbaiki link MATI di email trial-lapse; keputusan owner Opsi B halaman-sendiri). Bug live customer-facing terverifikasi (`/feedback` → 404; email `email.py:92-101` mengarah ke sana). Urutan rekomendasi + Changelog disesuaikan.
+- **2026-07-02** — **rantai kanonik billing & siklus-hidup dibereskan (anti miss-link)**: daftarkan `PAYMENT_AND_TENANT_GATE_ARCHITECTURE.md` (SELESAI+deployed `04cf0a2`) + `LIFECYCLE_NURTURE_PLAN.md` (rencana) ke peta dokumen; tambah item **[B9]** (mesin siklus-hidup/nurture); cross-link [A1]/[E1]→PAYMENT, [B8]/[B9]/[D1]→LIFECYCLE. Klarifikasi [A1]: switch = `MIDTRANS_ENV` `.env`+restart (bukan tombol admin=[B1]); pemblokir = kunci PRODUKSI approved.
