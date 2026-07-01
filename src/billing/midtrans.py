@@ -163,70 +163,110 @@ def verify_signature(order_id: str, status_code: str, gross_amount: str, signatu
     return hashlib.sha512(raw.encode()).hexdigest() == (signature_key or "")
 
 
-def handle_notification(sb, payload: dict) -> dict:
-    """
-    Proses webhook Midtrans (OTORITATIF). Verifikasi signature → update `payments` →
-    aktifkan langganan tenant bila settlement/capture (fraud accept). Idempotent (status re-set).
-    """
-    order_id    = payload.get("order_id")
-    status_code = str(payload.get("status_code", ""))
-    gross       = str(payload.get("gross_amount", ""))
-    sig         = payload.get("signature_key", "")
-
-    if not verify_signature(order_id, status_code, gross, sig):
-        logger.warning(f"[Midtrans] signature INVALID order={order_id} — TOLAK (anti-spoof)")
-        return {"ok": False, "reason": "invalid_signature"}
-
-    txn   = payload.get("transaction_status")
-    fraud = payload.get("fraud_status")
-
-    res   = sb.table("payments").select("*").eq("order_id", order_id).limit(1).execute()
-    order = (res.data or [None])[0]
-    if not order:
-        logger.warning(f"[Midtrans] order tak ditemukan: {order_id}")
-        return {"ok": False, "reason": "order_not_found"}
-
-    upd = {"status": txn, "payment_type": payload.get("payment_type"),
-           "fraud_status": fraud, "raw_notification": payload,
-           "updated_at": _now().isoformat()}
+def _apply_settlement(sb, order: dict, txn: str | None, fraud, payment_type=None, raw=None) -> bool:
+    """SATU sumber penerapan hasil transaksi — dipakai webhook (push) DAN reconciler (pull). Idempotent.
+    settlement/capture + fraud accept → add-on: RPC settle (buat niche+email) · langganan: aktivasi tenant."""
+    order_id = order["order_id"]
+    prev_status = order.get("status")
+    upd = {"status": txn, "fraud_status": fraud, "updated_at": _now().isoformat()}
+    if payment_type:
+        upd["payment_type"] = payment_type
+    if raw is not None:
+        upd["raw_notification"] = raw
     activated = False
 
     if txn in ("settlement", "capture") and (fraud in (None, "", "accept")):
         if order.get("category") == "addon":
-            # ADD-ON (custom-niche): majukan pesanan awaiting_payment → in_progress via RPC tunggal
-            # (buat niche + email). Idempotent (aman retry webhook). Tenant subscription TAK disentuh.
             try:
                 sb.rpc("settle_niche_request_paid",
                        {"p_request_id": order.get("ref_id"), "p_order_id": order_id}).execute()
                 activated = True
             except Exception as _re:
                 logger.error(f"[Midtrans] settle addon gagal order={order_id} ref={order.get('ref_id')}: {_re}")
-                # jangan raise: tetap catat status pembayaran & balas 200 (Midtrans tak retry-storm)
         else:
-            # LANGGANAN: status otoritatif → tenant aktif + paket + akhir periode.
-            start = _now()
-            end   = start + timedelta(days=_PERIOD_DAYS)
-            upd["period_start"] = start.isoformat()
-            upd["period_end"]   = end.isoformat()
+            start = _now(); end = start + timedelta(days=_PERIOD_DAYS)
+            upd["period_start"] = start.isoformat(); upd["period_end"] = end.isoformat()
             sb.table("tenant_configs").update({
-                "subscription_status": "active",
-                "plan_type":           order["plan_type"],
-                "current_period_end":  end.isoformat(),
+                "subscription_status": "active", "plan_type": order["plan_type"],
+                "current_period_end": end.isoformat(),
             }).eq("tenant_id", order["tenant_id"]).execute()
             activated = True
-    # expire/deny/cancel checkout BARU → biarkan langganan eksisting; suspend = saat renewal gagal
-    # (cek current_period_end periodik — follow-up 8 polish, bukan dari 1 notif checkout gagal).
 
     sb.table("payments").update(upd).eq("order_id", order_id).execute()
 
-    # Receipt email (8c) — HANYA langganan, saat transisi BARU ke aktif (idempotent thd retry webhook).
-    # (Add-on: email "pembayaran diterima" sudah dikirim oleh RPC settle_niche_request_paid.) Fail-soft.
-    if activated and order.get("category") != "addon" and order.get("status") not in ("settlement", "capture"):
+    # Receipt email (langganan, transisi BARU ke aktif; add-on emailnya via RPC). Fail-soft.
+    if activated and order.get("category") != "addon" and prev_status not in ("settlement", "capture"):
         try:
             from src.utils.email import notify_payment_receipt
             notify_payment_receipt(order["tenant_id"], order.get("plan_type"), order.get("gross_amount") or 0, sb)
         except Exception as _ee:
             logger.debug(f"[Midtrans] receipt email skip (non-fatal): {_ee}")
+    logger.info(f"[Midtrans] settle order={order_id} txn={txn} fraud={fraud} activated={activated}")
+    return activated
+
+
+def handle_notification(sb, payload: dict) -> dict:
+    """Webhook Midtrans (PUSH, jalur cepat). Verifikasi signature → _apply_settlement.
+    ⚠️ Di akun Midtrans BERBAGI, notifikasi bisa TAK sampai (dikirim ke URL global app lain) →
+    `reconcile_pending` (PULL via API status) = PENJAMIN. Keduanya pakai _apply_settlement yang SAMA."""
+    order_id    = payload.get("order_id")
+    status_code = str(payload.get("status_code", ""))
+    gross       = str(payload.get("gross_amount", ""))
+    sig         = payload.get("signature_key", "")
+    if not verify_signature(order_id, status_code, gross, sig):
+        logger.warning(f"[Midtrans] signature INVALID order={order_id} — TOLAK (anti-spoof)")
+        return {"ok": False, "reason": "invalid_signature"}
+    order = (sb.table("payments").select("*").eq("order_id", order_id).limit(1).execute().data or [None])[0]
+    if not order:
+        logger.warning(f"[Midtrans] order tak ditemukan: {order_id}")
+        return {"ok": False, "reason": "order_not_found"}
+    activated = _apply_settlement(sb, order, payload.get("transaction_status"), payload.get("fraud_status"),
+                                  payment_type=payload.get("payment_type"), raw=payload)
+    return {"ok": True, "order_id": order_id, "transaction_status": payload.get("transaction_status"),
+            "tenant_id": order["tenant_id"], "activated": activated}
+
+
+def _status_base() -> str:
+    return "https://api.midtrans.com/v2" if _is_production() else "https://api.sandbox.midtrans.com/v2"
+
+
+def get_transaction_status(order_id: str) -> dict:
+    """GET status transaksi dari API Midtrans (terautentikasi server key = tepercaya, tanpa signature)."""
+    auth = base64.b64encode((_server_key() + ":").encode()).decode()
+    req = urllib.request.Request(f"{_status_base()}/{order_id}/status",
+        headers={"Authorization": f"Basic {auth}", "Accept": "application/json"})
+    return json.loads(urllib.request.urlopen(req, timeout=30).read())
+
+
+def reconcile_pending(sb, max_age_hours: int = 48) -> dict:
+    """PENJAMIN pembayaran (PULL) — tak tergantung delivery notifikasi (penting utk akun Midtrans BERBAGI).
+    Tiap payment 'pending' (usia < max_age_hours): tanya API status → terapkan via _apply_settlement (jalur
+    SAMA dgn webhook). expire/cancel/deny → tandai. Idempotent, fail-soft per baris (1 error tak stop loop)."""
+    cutoff = (_now() - timedelta(hours=max_age_hours)).isoformat()
+    rows = (sb.table("payments").select("*").eq("status", "pending")
+            .gte("created_at", cutoff).limit(200).execute().data) or []
+    checked = settled = 0
+    for order in rows:
+        oid = order["order_id"]; checked += 1
+        try:
+            d = get_transaction_status(oid)
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                continue  # belum ada transaksi di Midtrans (user belum bayar) — biarkan pending
+            logger.warning(f"[Midtrans] reconcile status gagal order={oid}: HTTP {e.code}")
+            continue
+        except Exception as e:
+            logger.warning(f"[Midtrans] reconcile order={oid} error: {e}")
+            continue
+        txn = d.get("transaction_status"); fraud = d.get("fraud_status")
+        if txn in ("settlement", "capture") and (fraud in (None, "", "accept")):
+            _apply_settlement(sb, order, txn, fraud, payment_type=d.get("payment_type"), raw=d)
+            settled += 1
+        elif txn in ("expire", "cancel", "deny"):
+            sb.table("payments").update({"status": txn, "updated_at": _now().isoformat()}).eq("order_id", oid).execute()
+    if checked:
+        logger.info(f"[Midtrans] reconcile: checked={checked} settled={settled}")
+    return {"checked": checked, "settled": settled}
 
     logger.info(f"[Midtrans] notif order={order_id} txn={txn} fraud={fraud} activated={activated}")
     return {"ok": True, "order_id": order_id, "transaction_status": txn,
