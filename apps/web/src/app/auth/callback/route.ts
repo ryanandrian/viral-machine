@@ -26,6 +26,10 @@ export async function GET(request: NextRequest) {
   // Akun baru tanpa channel → /onboarding, bukan /dashboard (hanya bila next masih default /dashboard).
   const resolveDest = async (): Promise<string> => {
     if (safeNext !== "/dashboard") return safeNext;
+    // Non-produksi (trial habis/suspend) → /billing (pintu upgrade), bukan terjebak onboarding.
+    const { data: tc } = await supabase.from("tenant_configs").select("subscription_status").maybeSingle();
+    const st = (tc as { subscription_status?: string } | null)?.subscription_status;
+    if (st === "trial_expired" || st === "suspended") return "/billing";
     const { count } = await supabase.from("channels").select("id", { count: "exact", head: true });
     return (count ?? 0) > 0 ? "/dashboard" : "/onboarding";
   };

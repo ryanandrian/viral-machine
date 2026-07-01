@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
   Users, HelpCircle, Activity, List, Target, DollarSign, LogOut, UserCog, FlaskConical, FileText,
-  Menu, Search, Moon, Sun, ChevronRight, SlidersHorizontal, CreditCard,
+  Menu, Search, Moon, Sun, ChevronRight, SlidersHorizontal, CreditCard, MessageSquare,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -22,6 +22,7 @@ const NAV: NavEntry[] = [
   { id: "billing", icon: CreditCard, idL: "Pembayaran", en: "Payments", href: "/admin/billing" },
   { id: "app-config", icon: SlidersHorizontal, idL: "Konfigurasi Sistem", en: "System Configuration", href: "/admin/app-config" },
   { id: "support", icon: HelpCircle, idL: "Dukungan", en: "Support", href: "/admin/support", badge: "4" },
+  { id: "feedback", icon: MessageSquare, idL: "Masukan", en: "Feedback", href: "/admin/feedback" },
   { id: "system", icon: Activity, idL: "Kesehatan Sistem", en: "System Health", href: "/admin/system" },
   { id: "content", icon: FileText, idL: "Konten (CMS)", en: "Content (CMS)", href: "/admin/content" },
   { section: { id: "Katalog", en: "Catalog" } },

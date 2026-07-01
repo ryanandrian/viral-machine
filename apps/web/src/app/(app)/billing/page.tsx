@@ -90,7 +90,19 @@ export default function BillingPage() {
           <div className="plan-card">
             <div className="plan-top">
               <div>
-                <div className="plan-name">{planName} {comp ? <span className="badge badge-success">Comp · Developer</span> : <span className={`badge ${plan?.subscription_status === "active" ? "badge-success" : "badge-warning"}`}>{plan?.subscription_status}</span>}</div>
+                <div className="plan-name">{planName} {comp ? <span className="badge badge-success">Comp · Developer</span> : (() => {
+                  const st = plan?.subscription_status || "active";
+                  const dl = plan?.current_period_end ? Math.max(0, Math.ceil((new Date(plan.current_period_end).getTime() - Date.now()) / 86400000)) : null;
+                  const M: Record<string, { id: string; en: string; cls: string }> = {
+                    active: { id: "Aktif", en: "Active", cls: "badge-success" },
+                    trial: { id: `Trial · sisa ${dl} hari`, en: `Trial · ${dl} days left`, cls: "badge-brand" },
+                    trial_expired: { id: "Trial berakhir", en: "Trial ended", cls: "badge-warning" },
+                    grace: { id: "Menunggu perpanjangan", en: "Renewal pending", cls: "badge-warning" },
+                    suspended: { id: "Ditangguhkan", en: "Suspended", cls: "badge-warning" },
+                  };
+                  const m = M[st] || { id: st, en: st, cls: "badge-default" };
+                  return <span className={`badge ${m.cls}`}><Bi id={m.id} en={m.en} /></span>;
+                })()}</div>
                 {comp
                   ? <div className="muted" style={{ fontSize: "var(--text-sm)", marginTop: "0.5rem" }}><Bi id="Akun komplimen / developer — gratis selamanya, tanpa tagihan." en="Complimentary / developer account — free forever, no billing." /></div>
                   : <>

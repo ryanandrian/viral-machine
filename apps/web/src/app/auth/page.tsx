@@ -86,6 +86,10 @@ export default function AuthPage() {
     // Honor ?next (dari middleware redirect) bila path valid; else onboarded-check.
     const nextParam = new URLSearchParams(window.location.search).get("next");
     if (nextParam && nextParam.startsWith("/")) { window.location.href = nextParam; return; }
+    // Non-produksi (trial habis/suspend) → /billing (pintu upgrade), JANGAN terjebak di onboarding.
+    const { data: tc } = await supabase.from("tenant_configs").select("subscription_status").maybeSingle();
+    const st = (tc as { subscription_status?: string } | null)?.subscription_status;
+    if (st === "trial_expired" || st === "suspended") { window.location.href = "/billing"; return; }
     // Onboarded? punya channel → dashboard; belum → onboarding. (RLS: query ter-scope auth.uid())
     const { count } = await supabase.from("channels").select("id", { count: "exact", head: true });
     window.location.href = (count ?? 0) > 0 ? "/dashboard" : "/onboarding"; // full reload → middleware sinkron

@@ -65,6 +65,7 @@ export function AppShell({
   const [mounted, setMounted] = useState(false);
   const [tenant, setTenant] = useState<{ name: string; plan: string; initials: string }>({ name: "", plan: "", initials: "" });
   const [studioOK, setStudioOK] = useState(false);  // F2-10/F3-03: entitlement Niche Studio (gated nav)
+  const [gate, setGate] = useState<{ status: string; daysLeft: number | null } | null>(null);  // banner billing gate
 
   useEffect(() => {
     setMounted(true);
@@ -73,11 +74,11 @@ export function AppShell({
     document.documentElement.lang = saved;
     (async () => {
       const [{ data: tc }, { count }, { data: pls }] = await Promise.all([
-        supabase.from("tenant_configs").select("display_handle,plan_type").maybeSingle(),
+        supabase.from("tenant_configs").select("display_handle,plan_type,subscription_status,current_period_end,is_developer,discount_pct").maybeSingle(),
         supabase.from("channels").select("id", { count: "exact", head: true }),
         supabase.from("plan_limits").select("plan_type,display_name,niche_studio"),
       ]);
-      const t = tc as { display_handle?: string; plan_type?: string } | null;
+      const t = tc as { display_handle?: string; plan_type?: string; subscription_status?: string; current_period_end?: string; is_developer?: boolean; discount_pct?: number } | null;
       const planType = t?.plan_type ?? "starter";
       const pl = (pls as { plan_type: string; display_name?: string; niche_studio?: boolean }[] | null)?.find((x) => x.plan_type === planType);
       setStudioOK(Boolean(pl?.niche_studio));   // tier-config (owner 2026-06-21): fasilitas per-tier dari plan_limits.niche_studio
@@ -87,6 +88,13 @@ export function AppShell({
       const plan = pl?.display_name || (t?.plan_type ? t.plan_type.charAt(0).toUpperCase() + t.plan_type.slice(1) : "");  // nama tier config-driven
       const nCh = count ?? 0;
       setTenant({ name: h || "Tenant", plan: plan ? `${plan} · ${nCh} kanal` : `${nCh} kanal`, initials });
+      // Banner billing-gate (comp/developer exempt). Trial → sisa hari; lapsed → CTA perbarui.
+      const comp = Boolean(t?.is_developer) || ((t?.discount_pct ?? 0) >= 100);
+      const st = t?.subscription_status, pe = t?.current_period_end;
+      if (comp || !st) setGate(null);
+      else if (st === "trial" && pe) setGate({ status: "trial", daysLeft: Math.max(0, Math.ceil((new Date(pe).getTime() - Date.now()) / 86400000)) });
+      else if (["trial_expired", "grace", "suspended"].includes(st)) setGate({ status: st, daysLeft: null });
+      else setGate(null);
     })();
   }, [supabase]);
 
@@ -163,6 +171,27 @@ export function AppShell({
           </button>
           <span className="avatar" title={tenant.name}>{tenant.initials}</span>
         </header>
+
+        {gate && pathname !== "/billing" && (() => {
+          const bg = gate.status === "suspended" ? "var(--danger, #ef4444)"
+            : gate.status === "trial" ? "var(--brand, #6366F1)" : "var(--warning, #f59e0b)";
+          const dl = gate.daysLeft;
+          const msg = gate.status === "trial"
+            ? <Bi id={`⏳ Trial berakhir ${dl != null && dl <= 1 ? "besok" : `dalam ${dl} hari`} — upgrade agar produksi tak terhenti.`} en={`⏳ Trial ends ${dl != null && dl <= 1 ? "tomorrow" : `in ${dl} days`} — upgrade to keep producing.`} />
+            : gate.status === "trial_expired"
+            ? <Bi id="Masa trial berakhir — produksi dijeda. Upgrade untuk melanjutkan." en="Trial ended — production paused. Upgrade to continue." />
+            : gate.status === "grace"
+            ? <Bi id="Pembayaran tertunggak — perbarui agar produksi tidak berhenti." en="Payment overdue — renew to keep producing." />
+            : <Bi id="Produksi dihentikan — aktifkan kembali langganan Anda." en="Production paused — reactivate your subscription." />;
+          const cta = gate.status === "suspended" ? { id: "Aktifkan", en: "Reactivate" }
+            : gate.status === "grace" ? { id: "Perbarui", en: "Renew" } : { id: "Upgrade", en: "Upgrade" };
+          return (
+            <div style={{ background: bg, color: "#fff", padding: "0.55rem 1.25rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "1rem", fontSize: "var(--text-sm)", flexWrap: "wrap" }}>
+              <span>{msg}</span>
+              <Link href="/billing" className="btn btn-sm" style={{ background: "#fff", color: "#111", fontWeight: 600, whiteSpace: "nowrap" }}><Bi id={cta.id} en={cta.en} /></Link>
+            </div>
+          );
+        })()}
 
         <main className="page"><div className="page-wide">{children}</div></main>
       </div>

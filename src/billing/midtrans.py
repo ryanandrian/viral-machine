@@ -64,13 +64,24 @@ def plan_price_idr(sb, plan_type: str) -> int:
     return price_by_key(sb, f"plan_{plan_type}")
 
 
+def _app_cfg_int(sb, key: str, default: int) -> int:
+    """Angka dari app_config (admin-editable via System Configuration, no-hardcode). Gagal → default."""
+    try:
+        r = sb.table("app_config").select("value").eq("key", key).limit(1).execute()
+        if r.data:
+            return int(r.data[0]["value"])
+    except Exception:
+        pass
+    return default
+
+
 def _order_id(tenant_id: str, plan_type: str, ts: int) -> str:
     """Order id unik & dapat di-audit (≤50 char, alfanumerik+dash)."""
     return f"MV-{plan_type}-{str(tenant_id).replace('-', '')[:12]}-{ts}"
 
 
 def _snap_post(order_id: str, amount: int, item_id: str, item_name: str,
-               customer_email: str | None, finish_url: str | None) -> dict:
+               customer_email: str | None, finish_url: str | None, expiry_hours: int = 24) -> dict:
     """POST ke Snap API → {token, redirect_url}.
     Notification PER-TRANSAKSI via X-Override-Notification: akun Midtrans DIBAGI dgn app lain
     (mis. aiwa, awalan order 'AIWA') di domain berbeda → JANGAN andalkan Notification URL GLOBAL
@@ -80,6 +91,7 @@ def _snap_post(order_id: str, amount: int, item_id: str, item_name: str,
         "item_details": [{"id": item_id, "price": amount, "quantity": 1, "name": item_name[:50]}],
         "callbacks": {"finish": finish_url or os.getenv("MIDTRANS_FINISH_URL",
                                                         "https://mesinviral.com/billing")},
+        "expiry": {"unit": "hours", "duration": expiry_hours},  # masa berlaku link bayar (config-driven)
     }
     if customer_email:
         body["customer_details"] = {"email": customer_email}
@@ -108,7 +120,8 @@ def snap_create_transaction(sb, tenant_id: str, plan_type: str,
         "gross_amount": amount, "status": "pending", "category": "subscription",
     }).execute()
     try:
-        d = _snap_post(order_id, amount, plan_type, f"MesinViral {plan_type} (bulanan)", customer_email, finish_url)
+        d = _snap_post(order_id, amount, plan_type, f"MesinViral {plan_type} (bulanan)", customer_email, finish_url,
+                       _app_cfg_int(sb, "checkout_expiry_hours", 24))
     except urllib.error.HTTPError as e:
         logger.error(f"[Midtrans] Snap subscription gagal order={order_id}: HTTP {e.code} {e.read().decode()[:300]}")
         sb.table("payments").update({"status": "create_failed"}).eq("order_id", order_id).execute()
@@ -146,7 +159,8 @@ def snap_create_niche_addon(sb, tenant_id: str, request_id: str,
     }).execute()
     sb.table("niche_requests").update({"order_id": order_id}).eq("request_id", request_id).execute()
     try:
-        d = _snap_post(order_id, amount, r["price_key"], f"Niche custom: {r['title']}", customer_email, finish_url)
+        d = _snap_post(order_id, amount, r["price_key"], f"Niche custom: {r['title']}", customer_email, finish_url,
+                       _app_cfg_int(sb, "checkout_expiry_hours", 24))
     except urllib.error.HTTPError as e:
         logger.error(f"[Midtrans] Snap addon gagal order={order_id}: HTTP {e.code} {e.read().decode()[:300]}")
         sb.table("payments").update({"status": "create_failed"}).eq("order_id", order_id).execute()
@@ -186,9 +200,11 @@ def _apply_settlement(sb, order: dict, txn: str | None, fraud, payment_type=None
         else:
             start = _now(); end = start + timedelta(days=_PERIOD_DAYS)
             upd["period_start"] = start.isoformat(); upd["period_end"] = end.isoformat()
+            # Aktivasi + RESET penanda reminder/suspend → siklus baru dapat reminder segar (perpanjangan berikut).
             sb.table("tenant_configs").update({
                 "subscription_status": "active", "plan_type": order["plan_type"],
                 "current_period_end": end.isoformat(),
+                "renewal_reminder_sent_at": None, "suspend_notified_at": None,
             }).eq("tenant_id", order["tenant_id"]).execute()
             activated = True
 
