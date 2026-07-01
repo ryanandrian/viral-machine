@@ -262,6 +262,52 @@ def disconnect(tenant_id: str, account_id: str) -> None:
     sb.table("tenant_youtube_accounts").delete().eq("id", account_id).eq("tenant_id", tenant_id).execute()
 
 
+def _revoke_google_token(token: str) -> bool:
+    """Cabut 1 token (refresh/access) di Google (POST oauth2.googleapis.com/revoke). Fail-soft.
+    HTTP 400 = token sudah invalid/dicabut → dianggap sukses (idempotent)."""
+    if not token:
+        return False
+    try:
+        import urllib.request, urllib.parse, urllib.error
+        data = urllib.parse.urlencode({"token": token}).encode()
+        req = urllib.request.Request(
+            "https://oauth2.googleapis.com/revoke", data=data,
+            headers={"Content-Type": "application/x-www-form-urlencoded"}, method="POST")
+        urllib.request.urlopen(req, timeout=15)
+        return True
+    except urllib.error.HTTPError as e:
+        logger.warning(f"[yt-oauth] revoke HTTP {e.code} (token mungkin sudah invalid) — lanjut")
+        return e.code == 400
+    except Exception as e:
+        logger.warning(f"[yt-oauth] revoke gagal (non-fatal): {e}")
+        return False
+
+
+def revoke_tenant_tokens(tenant_id: str) -> int:
+    """UU PDP: cabut SEMUA refresh-token YouTube tenant di Google SEBELUM hapus data (LIFECYCLE hard-delete).
+    Jangan tinggalkan token hidup. Return jumlah token dicabut. Fail-soft (tak pernah raise)."""
+    if not tenant_id:
+        return 0
+    n = 0
+    try:
+        res = (_sb().table("tenant_youtube_accounts")
+               .select("id,google_refresh_token_enc").eq("tenant_id", tenant_id).execute())
+        for r in (res.data or []):
+            enc = r.get("google_refresh_token_enc")
+            if not enc:
+                continue
+            try:
+                tok = decrypt(enc)
+            except Exception:
+                continue
+            if _revoke_google_token(tok):
+                n += 1
+    except Exception as e:
+        logger.warning(f"[yt-oauth] revoke_tenant_tokens gagal (non-fatal): {e}")
+    logger.info(f"[yt-oauth] revoke_tenant_tokens tenant={tenant_id}: {n} token dicabut")
+    return n
+
+
 def list_accounts(tenant_id: str) -> dict:
     """Daftar koneksi YouTube tenant (untuk FE Credential). Tak bocorkan secret."""
     res = (_sb().table("tenant_youtube_accounts")

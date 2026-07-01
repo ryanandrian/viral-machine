@@ -74,6 +74,26 @@ def _app_cfg_int(sb, key: str, default: int) -> int:
     return default
 
 
+def _winback_discount(sb, tenant_id: str) -> int:
+    """% diskon comeback AKTIF (belum kedaluwarsa) utk tenant, dari tenant_configs (LIFECYCLE B9). 0 = tak ada.
+    no-hardcode: nilai di-set worker nurture (winback_offer_pct/_expires_at). Dikonsumsi saat aktivasi (di-reset)."""
+    try:
+        r = (sb.table("tenant_configs").select("winback_offer_pct,winback_offer_expires_at")
+             .eq("tenant_id", tenant_id).limit(1).execute())
+        if r.data:
+            pct = int(r.data[0].get("winback_offer_pct") or 0)
+            exp = r.data[0].get("winback_offer_expires_at")
+            if pct > 0 and exp:
+                e = datetime.fromisoformat(str(exp).replace("Z", "+00:00"))
+                if e.tzinfo is None:
+                    e = e.replace(tzinfo=timezone.utc)
+                if _now() <= e:
+                    return max(0, min(100, pct))
+    except Exception:
+        pass
+    return 0
+
+
 def _order_id(tenant_id: str, plan_type: str, ts: int) -> str:
     """Order id unik & dapat di-audit (≤50 char, alfanumerik+dash)."""
     return f"MV-{plan_type}-{str(tenant_id).replace('-', '')[:12]}-{ts}"
@@ -129,6 +149,10 @@ def snap_create_transaction(sb, tenant_id: str, plan_type: str,
     """LANGGANAN bulanan. Buat order `payments` pending → Snap → {order_id, token, redirect_url, amount}.
     Frontend redirect user ke redirect_url. Status final via webhook."""
     amount   = plan_price_idr(sb, plan_type)
+    _wb = _winback_discount(sb, tenant_id)          # diskon comeback (LIFECYCLE) bila aktif
+    if _wb > 0:
+        amount = max(1000, round(amount * (100 - _wb) / 100))
+        logger.info(f"[Midtrans] winback {_wb}% diterapkan tenant={tenant_id} → amount={amount}")
     ts       = int(time.time())
     order_id = _order_id(tenant_id, plan_type, ts)
     sb.table("payments").insert({
@@ -217,10 +241,15 @@ def _apply_settlement(sb, order: dict, txn: str | None, fraud, payment_type=None
             start = _now(); end = start + timedelta(days=_app_cfg_int(sb, "subscription_period_days", 30))
             upd["period_start"] = start.isoformat(); upd["period_end"] = end.isoformat()
             # Aktivasi + RESET penanda reminder/suspend → siklus baru dapat reminder segar (perpanjangan berikut).
+            # Aktivasi + RESET penanda reminder + SIKLUS-HIDUP (LIFECYCLE B9) → tenant bersih dari jejak lapsed/blokir.
             sb.table("tenant_configs").update({
                 "subscription_status": "active", "plan_type": order["plan_type"],
                 "current_period_end": end.isoformat(),
                 "renewal_reminder_sent_at": None, "suspend_notified_at": None,
+                "suspended_at": None, "blocked_at": None, "deletion_scheduled_at": None,
+                "deletion_warn_sent": 0, "nurture_step": 0, "nurture_last_sent_at": None,
+                "lead_temp": None, "raw_assets_purged_at": None,
+                "winback_offer_pct": None, "winback_offer_expires_at": None,
             }).eq("tenant_id", order["tenant_id"]).execute()
             activated = True
     elif txn in ("refund", "partial_refund", "chargeback") and order.get("category") != "addon":

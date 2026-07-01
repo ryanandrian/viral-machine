@@ -185,15 +185,15 @@ INFRA  .env / app_config: ADMIN_TELEGRAM_CHAT_ID (🆕)
 |---|---|---|---|
 | 1 | Migrasi kolom lifecycle §4.1 (tenant_configs) — no ALTER constraint | DB | ✅ migr `0113` applied+verified DB live |
 | 2 | Seed knob `app_config` §3 + CFG_META grup "Pertumbuhan & Siklus-Hidup" | DB+FE admin | 🟡 knob seeded (0113, 20 key); CFG_META label FE = Batch 5 |
-| 3 | Hitung `lead_temp` dari production_runs/videos/channels/accounts | BE | ⬜ |
-| 4 | Sekuens nurture trial-lapse (tangga email + varian suhu, anti-dobel) | BE | ⬜ |
-| 5 | 5 template email dwibahasa baru (§6) | BE | ⬜ |
-| 6 | `notify_admin` Telegram + `ADMIN_TELEGRAM_CHAT_ID` (hot-lead) | BE+infra | ⬜ |
-| 7 | Transisi suspended→blocked→deleted (renewal.py) + reset penanda saat reaktivasi | BE | ⬜ |
-| 8 | `purge_tenant_assets` (S3: raw dini + total) | BE | ⬜ |
-| 9 | `revoke_token` YouTube (Google revoke) saat delete | BE | ⬜ |
-| 10 | Hard-delete scope §4.2 (purge/sisakan/anonim) — idempotent | BE | ⬜ |
-| 11 | Diskon comeback di `snap_create_transaction` (`winback_offer`) | BE | ⬜ |
+| 3 | Hitung `lead_temp` dari production_runs/videos/channels/accounts | BE | 🟡 kode+py_compile (`renewal._compute_lead_temp`); validasi runtime Batch 6 |
+| 4 | Sekuens nurture trial-lapse (tangga email + varian suhu, anti-dobel) | BE | 🟡 kode+py_compile (`renewal.sweep` §3); validasi Batch 6 |
+| 5 | 5 template email dwibahasa baru (§6) | BE | 🟡 kode+py_compile (`email.py` notify_nurture_step/reactivation_offer/account_blocked/deletion_warning/data_deleted) |
+| 6 | `notify_admin` Telegram + `ADMIN_TELEGRAM_CHAT_ID` (hot-lead) | BE+infra | 🟡 kode+py_compile (`telegram_notifier.notify_admin`); set env di deploy |
+| 7 | Transisi suspended→blocked→deleted (renewal.py) + reset penanda saat reaktivasi | BE | 🟡 kode+py_compile (`renewal.sweep` §4/§5 + `midtrans._apply_settlement` reset); validasi Batch 6 |
+| 8 | Purge S3 (raw dini + total) | BE | 🟡 kode+py_compile (`s3_buffer.delete_prefix` + guard; dipanggil renewal §4a/hard-delete) |
+| 9 | `revoke_token` YouTube (Google revoke) saat delete | BE | 🟡 kode+py_compile (`youtube_oauth.revoke_tenant_tokens`) |
+| 10 | Hard-delete scope §4.2 (purge/sisakan/anonim) — idempotent | BE | 🟡 kode+py_compile (`renewal._hard_delete_tenant`, 17 tabel purge, urut anak→induk) |
+| 11 | Diskon comeback di `snap_create_transaction` (`winback_offer`) | BE | 🟡 kode+py_compile (`midtrans._winback_discount`); validasi Batch 6 |
 | 12 | Endpoint token `/api/lifecycle/reactivate` (+ feedback prefill ?reason) | BE+FE | ⬜ |
 | 13 | FE tenant: banner `blocked` + `/reactivate` + diskon/countdown Billing | FE tenant | ⬜ |
 | 14 | FE admin: `/admin/tenants` suhu/tahap/timestamp/filter/aksi | FE admin | ⬜ |

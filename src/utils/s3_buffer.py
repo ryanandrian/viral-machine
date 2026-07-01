@@ -87,3 +87,26 @@ def list_keys(prefix: str = "") -> list:
         for o in page.get("Contents", []):
             out.append((o["Key"], o.get("Size", 0), o.get("LastModified")))
     return out
+
+
+def delete_prefix(prefix: str) -> int:
+    """Hapus SEMUA objek di bawah prefix (mis. '{tenant_id}/' aset video, atau 'brand-logo/{tenant}/' logo).
+    Untuk purge aset tenant (LIFECYCLE: purge dini saat suspended / purge total saat deleted). Return jumlah
+    objek terhapus. Best-effort/fail-soft — jangan pernah raise (aksi housekeeping, tak boleh stop sweep).
+    Guard: prefix WAJIB non-kosong (cegah hapus SELURUH bucket tak sengaja)."""
+    if not prefix or not str(prefix).strip():
+        logger.warning("[s3_buffer] delete_prefix DITOLAK: prefix kosong (guard anti-hapus-semua).")
+        return 0
+    n = 0
+    try:
+        cl = _client(); bucket = _bucket()
+        paginator = cl.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+            objs = [{"Key": o["Key"]} for o in page.get("Contents", [])]
+            if objs:
+                cl.delete_objects(Bucket=bucket, Delete={"Objects": objs})
+                n += len(objs)
+        logger.info(f"[s3_buffer] delete_prefix {prefix!r}: {n} objek dihapus")
+    except Exception as e:
+        logger.warning(f"[s3_buffer] delete_prefix gagal ({prefix}, non-fatal): {e}")
+    return n

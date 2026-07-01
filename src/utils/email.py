@@ -198,3 +198,121 @@ def notify_suspended(tenant_id: str, sb=None) -> bool:
             f"Halo,\n\nLangganan Anda berakhir dan masa tenggang telah lewat, jadi produksi channel Anda kami "
             f"HENTIKAN sementara.\nAktifkan kembali kapan saja dengan memperbarui langganan:\n{up}\n\n— Tim MesinViral"),
     )
+
+
+# ── LIFECYCLE (B9): nurture trial-lapse + dunning suspended + blokir/hapus. Dwibahasa, fail-soft, config-driven. ──
+def _feedback_url(tenant_id: str, source: str) -> str:
+    """Link feedback + atribusi (?ref tenant, ?source) — 1-klik alasan churn (page prefill ?reason opsional)."""
+    base = _survey_url()
+    sep = "&" if "?" in base else "?"
+    return f"{base}{sep}ref={tenant_id}&source={source}"
+
+
+def notify_nurture_step(tenant_id: str, step: int, lead_temp: str | None = None, sb=None,
+                        offer_pct: int | None = None, offer_days: int | None = None,
+                        reactivate_url: str | None = None) -> bool:
+    """Email tangga NURTURE utk trial LAPSED (LIFECYCLE). Konten per-langkah (value→bukti-sosial→pengingat→
+    peringatan-arsip→final). offer_pct>0 → sisipkan diskon comeback (urgensi offer_days). Fail-soft, dwibahasa."""
+    to = tenant_email(tenant_id, sb)
+    if not to:
+        return False
+    up = reactivate_url or _upgrade_url()
+    sv = _feedback_url(tenant_id, "nurture")
+    steps_en = {
+        1: ("Still want your videos on autopilot?", "Your trial ended, but your channel setup is saved. Come back and keep producing viral-ready Shorts automatically."),
+        2: ("See what creators do with MesinViral", "Creators like you ship 5+ videos a day and let the engine learn from their own channel. Your setup is one click away."),
+        3: ("A quick nudge to pick up where you left off", "Your setup is still ready. Reactivate whenever you like."),
+        4: ("Your account data will be archived soon", "We'll archive your inactive account soon. Reactivate now to keep your setup and history."),
+        5: ("Last call before we close your setup", "This is the final reminder. Your channel setup is still here — for now."),
+    }
+    steps_id = {
+        1: ("Masih mau video jalan otomatis?", "Trial Anda berakhir, tapi setelan channel Anda tersimpan. Kembali dan lanjutkan produksi Shorts siap-viral otomatis."),
+        2: ("Lihat yang dilakukan kreator lain di MesinViral", "Kreator seperti Anda merilis 5+ video/hari dan membiarkan mesin belajar dari channel mereka sendiri. Setelan Anda tinggal satu klik."),
+        3: ("Pengingat singkat untuk lanjut dari tempat Anda berhenti", "Setelan Anda masih siap. Aktifkan kapan pun Anda mau."),
+        4: ("Data akun Anda akan segera diarsipkan", "Akun tidak aktif akan segera kami arsipkan. Aktifkan sekarang untuk menjaga setelan & riwayat Anda."),
+        5: ("Panggilan terakhir sebelum setelan Anda kami tutup", "Ini pengingat terakhir. Setelan channel Anda masih ada — untuk saat ini."),
+    }
+    en_s, en_b = steps_en.get(step, steps_en[1])
+    id_s, id_b = steps_id.get(step, steps_id[1])
+    offer_en = offer_id = ""
+    if offer_pct and offer_pct > 0:
+        vd_en = f" (valid {offer_days} days)" if offer_days else ""
+        vd_id = f" (berlaku {offer_days} hari)" if offer_days else ""
+        offer_en = f"\n\n🎁 Comeback offer: {offer_pct}% off your first month{vd_en}."
+        offer_id = f"\n\n🎁 Penawaran comeback: diskon {offer_pct}% bulan pertama{vd_id}."
+    return send_email(
+        to, f"{en_s} / {id_s} — MesinViral",
+        _bi(f"Hi,\n\n{en_b}{offer_en}\n\nContinue:\n{up}\n\nNot a fit? Tell us why (1 min): {sv}\n\n— The MesinViral Team",
+            f"Halo,\n\n{id_b}{offer_id}\n\nLanjutkan:\n{up}\n\nBelum cocok? Beri tahu alasannya (1 menit): {sv}\n\n— Tim MesinViral"),
+    )
+
+
+def notify_reactivation_offer(tenant_id: str, days_left_to_block: int, sb=None,
+                              offer_pct: int | None = None, offer_days: int | None = None,
+                              reactivate_url: str | None = None) -> bool:
+    """Dunning saat SUSPENDED (pelanggan berbayar berhenti): produksi stop, ajak aktifkan lagi SEBELUM akun dikunci."""
+    to = tenant_email(tenant_id, sb)
+    if not to:
+        return False
+    up = reactivate_url or _upgrade_url()
+    en_when = "soon" if days_left_to_block <= 1 else f"in about {days_left_to_block} days"
+    id_when = "segera" if days_left_to_block <= 1 else f"dalam sekitar {days_left_to_block} hari"
+    offer_en = offer_id = ""
+    if offer_pct and offer_pct > 0:
+        offer_en = f" Reactivate now and get {offer_pct}% off your first month back."
+        offer_id = f" Aktifkan sekarang dan dapat diskon {offer_pct}% bulan pertama."
+    return send_email(
+        to, "Reactivate your account / Aktifkan kembali akun Anda — MesinViral",
+        _bi(f"Hi,\n\nYour production is paused. Your account will be locked {en_when} if not reactivated, and your "
+            f"data scheduled for deletion after that.{offer_en}\nReactivate:\n{up}\n\n— The MesinViral Team",
+            f"Halo,\n\nProduksi Anda dijeda. Akun akan dikunci {id_when} bila tidak diaktifkan, dan data dijadwalkan "
+            f"dihapus setelahnya.{offer_id}\nAktifkan:\n{up}\n\n— Tim MesinViral"),
+    )
+
+
+def notify_account_blocked(tenant_id: str, deletion_date: str, sb=None, reactivate_url: str | None = None) -> bool:
+    """Akun DIKUNCI (blocked): beri tahu tanggal penghapusan data + cara aktifkan-lagi (data masih ada sampai tgl itu)."""
+    to = tenant_email(tenant_id, sb)
+    if not to:
+        return False
+    up = reactivate_url or _upgrade_url()
+    return send_email(
+        to, "Account locked — data deletion scheduled / Akun dikunci — data akan dihapus — MesinViral",
+        _bi(f"Hi,\n\nYour account is now locked due to non-payment. Your data (channels, settings, history) is still "
+            f"kept and scheduled for permanent deletion on {deletion_date}.\nReactivate before then to restore everything:\n{up}\n\n— The MesinViral Team",
+            f"Halo,\n\nAkun Anda kini dikunci karena tidak ada pembayaran. Data Anda (channel, setelan, riwayat) masih "
+            f"kami simpan dan dijadwalkan DIHAPUS permanen pada {deletion_date}.\nAktifkan sebelum tanggal itu untuk memulihkan semuanya:\n{up}\n\n— Tim MesinViral"),
+    )
+
+
+def notify_deletion_warning(tenant_id: str, days_left: int, deletion_date: str, sb=None,
+                            reactivate_url: str | None = None) -> bool:
+    """Peringatan H-x sebelum data DIHAPUS permanen (nol penghapusan diam-diam). Ajak aktifkan-lagi / unduh via admin."""
+    to = tenant_email(tenant_id, sb)
+    if not to:
+        return False
+    up = reactivate_url or _upgrade_url()
+    en_when = "tomorrow" if days_left <= 1 else f"in {days_left} days"
+    id_when = "besok" if days_left <= 1 else f"dalam {days_left} hari"
+    return send_email(
+        to, f"Final notice: your data will be deleted {en_when} / Data Anda akan dihapus {id_when} — MesinViral",
+        _bi(f"Hi,\n\nThis is a reminder that your MesinViral data will be permanently deleted on {deletion_date} ({en_when}).\n"
+            f"Reactivate now to keep everything:\n{up}\n\nNeed a copy of your data first? Reply to this email and we'll help.\n\n— The MesinViral Team",
+            f"Halo,\n\nPengingat bahwa data MesinViral Anda akan DIHAPUS permanen pada {deletion_date} ({id_when}).\n"
+            f"Aktifkan sekarang untuk menjaga semuanya:\n{up}\n\nButuh salinan data lebih dulu? Balas email ini, kami bantu.\n\n— Tim MesinViral"),
+    )
+
+
+def notify_data_deleted(tenant_id: str, sb=None) -> bool:
+    """Konfirmasi data telah dihapus permanen (dikirim saat delete; email masih resolvable dari record minimal)."""
+    to = tenant_email(tenant_id, sb)
+    if not to:
+        return False
+    up = _upgrade_url()
+    return send_email(
+        to, "Your data has been deleted / Data Anda telah dihapus — MesinViral",
+        _bi(f"Hi,\n\nAs scheduled, your MesinViral content data has been permanently deleted. Thank you for trying us.\n"
+            f"You're always welcome back — start fresh anytime:\n{up}\n\n— The MesinViral Team",
+            f"Halo,\n\nSesuai jadwal, data konten MesinViral Anda telah DIHAPUS permanen. Terima kasih telah mencoba kami.\n"
+            f"Anda selalu kami sambut kembali — mulai lagi kapan saja:\n{up}\n\n— Tim MesinViral"),
+    )
