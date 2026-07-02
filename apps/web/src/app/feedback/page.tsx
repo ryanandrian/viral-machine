@@ -27,6 +27,8 @@ export default function FeedbackPage() {
     const q = new URLSearchParams(window.location.search);
     setRef(q.get("ref"));
     if (q.get("source")) setSource(q.get("source")!);
+    const rs = q.get("reason");   // 1-klik dari email: prasetel alasan
+    if (rs && REASONS.some((r) => r.key === rs)) setReason(rs);
     const nav = (navigator.language || "id").toLowerCase();
     if (nav.startsWith("en")) setLang("en");
   }, []);

@@ -53,6 +53,17 @@ def _days_since(ts, now: datetime):
     return None if not d else (now - d).total_seconds() / 86400.0
 
 
+def _reactivate_url(tenant_id: str):
+    """Link reaktivasi 1-klik (token HMAC via sign_state, reuse OAUTH_STATE_SECRET). None → email fallback ke /billing."""
+    try:
+        from src.billing.youtube_oauth import sign_state
+        base = os.getenv("APP_BASE_URL", "https://mesinviral.com").rstrip("/")
+        tok = sign_state(tenant_id, ret="/dashboard", ttl=90 * 86400)
+        return f"{base}/reactivate?token={tok}"
+    except Exception:
+        return None
+
+
 def next_status(row: dict, now: datetime, grace_days: int) -> str | None:
     """Status seharusnya berdasar current_period_end (jalur AKTIF). None = JANGAN ubah di sini.
     Comp/final(blocked/deleted/cancelled/trial_expired)/period-null → None (post-suspended ditangani sweep)."""
@@ -170,6 +181,7 @@ def sweep_subscriptions(sb) -> dict:
         tid = r["tenant_id"]
         cur = r.get("subscription_status") or "active"
         end = _parse_end(r.get("current_period_end"))
+        ract = _reactivate_url(tid)   # link 1-klik utk email lifecycle (None → fallback /billing)
 
         try:
             # ── 1) REMINDER pra-habis (trial/active) — sekali per siklus via penanda ──
@@ -227,7 +239,7 @@ def sweep_subscriptions(sb) -> dict:
                             step_upd["winback_offer_expires_at"] = (now + timedelta(days=disc_days)).isoformat()
                         if not r.get("lead_temp"):
                             step_upd["lead_temp"] = _compute_lead_temp(sb, tid)
-                        mail.notify_nurture_step(tid, due, r.get("lead_temp"), sb, offer_pct=offer_pct, offer_days=offer_days)
+                        mail.notify_nurture_step(tid, due, r.get("lead_temp"), sb, offer_pct=offer_pct, offer_days=offer_days, reactivate_url=ract)
                         # lead PANAS → alert admin utk outreach personal (Telegram)
                         if (step_upd.get("lead_temp") or r.get("lead_temp")) == "hot":
                             try:
@@ -263,7 +275,7 @@ def sweep_subscriptions(sb) -> dict:
                 if due > step_done and due >= 1:
                     left = max(1, math.ceil(susp_window - since))
                     offer_pct = disc_pct if disc_pct > 0 else None
-                    mail.notify_reactivation_offer(tid, left, sb, offer_pct=offer_pct, offer_days=(disc_days if offer_pct else None))
+                    mail.notify_reactivation_offer(tid, left, sb, offer_pct=offer_pct, offer_days=(disc_days if offer_pct else None), reactivate_url=ract)
                     sb.table("tenant_configs").update({"nurture_step": due, "nurture_last_sent_at": now.isoformat()}).eq("tenant_id", tid).execute()
                     nurtured += 1
                 # 4c) transisi → blocked
@@ -273,7 +285,7 @@ def sweep_subscriptions(sb) -> dict:
                         "subscription_status": "blocked", "blocked_at": now.isoformat(),
                         "deletion_scheduled_at": del_at.isoformat(), "nurture_step": 0, "deletion_warn_sent": 0,
                     }).eq("tenant_id", tid).execute()
-                    mail.notify_account_blocked(tid, del_at.date().isoformat(), sb)
+                    mail.notify_account_blocked(tid, del_at.date().isoformat(), sb, reactivate_url=ract)
                     logger.info(f"[Billing] {tid}: suspended → blocked (hapus {del_at.date().isoformat()})")
                     changed += 1
 
@@ -295,7 +307,7 @@ def sweep_subscriptions(sb) -> dict:
                         sent_mask = int(r.get("deletion_warn_sent") or 0)
                         for bit, wd in enumerate(warn_days):   # bit0=warn1(30), bit1=warn2(7), bit2=warn3(1)
                             if days_to_del <= wd and not (sent_mask & (1 << bit)):
-                                mail.notify_deletion_warning(tid, max(1, math.ceil(days_to_del)), del_at.date().isoformat(), sb)
+                                mail.notify_deletion_warning(tid, max(1, math.ceil(days_to_del)), del_at.date().isoformat(), sb, reactivate_url=ract)
                                 sent_mask |= (1 << bit)
                         if sent_mask != int(r.get("deletion_warn_sent") or 0):
                             sb.table("tenant_configs").update({"deletion_warn_sent": sent_mask}).eq("tenant_id", tid).execute()

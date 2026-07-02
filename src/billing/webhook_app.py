@@ -175,6 +175,52 @@ try:
     app.add_api_route("/api/billing/checkout",       _billing_checkout,       methods=["POST"])
     app.add_api_route("/api/billing/niche-checkout", _billing_niche_checkout, methods=["POST"])
 
+    # ── LIFECYCLE (B9): reaktivasi 1-klik dari email (token HMAC, TANPA login). Dipanggil Next via vault.
+    #    trial_expired + tuas extend nyala → perpanjang trial GRATIS (re-engage). Status lain → arahkan bayar. ──
+    async def _lifecycle_reactivate(request: "Request"):
+        if not _internal_ok(request):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        from src.billing.youtube_oauth import verify_state
+        try:
+            b = await request.json()
+            st = verify_state(b.get("token") or "")
+            if not st or not st.get("t"):
+                return JSONResponse({"error": "token tidak valid/kedaluwarsa"}, status_code=400)
+            tid = st["t"]
+            sb = _sb()
+            r = sb.table("tenant_configs").select("subscription_status").eq("tenant_id", tid).limit(1).execute()
+            status = (r.data or [{}])[0].get("subscription_status") if r.data else None
+            if status is None:
+                return JSONResponse({"error": "tenant tak ditemukan"}, status_code=404)
+
+            def _cfg_int(key, default):
+                try:
+                    x = sb.table("app_config").select("value").eq("key", key).limit(1).execute()
+                    return int(x.data[0]["value"]) if x.data else default
+                except Exception:
+                    return default
+
+            extend = _cfg_int("nurture_trial_extend_days", 3)
+            # Trial lapsed + tuas nyala → perpanjangan GRATIS + reset penanda nurture (sekali; klik ulang → status
+            # sudah 'trial' → jatuh ke cabang checkout, tak bisa extend berulang tanpa lapse lagi).
+            if status == "trial_expired" and extend > 0:
+                from datetime import datetime, timezone, timedelta
+                end = (datetime.now(timezone.utc) + timedelta(days=extend)).isoformat()
+                sb.table("tenant_configs").update({
+                    "subscription_status": "trial", "current_period_end": end,
+                    "nurture_step": 0, "nurture_last_sent_at": None, "trial_reminder_sent_at": None,
+                    "winback_offer_pct": None, "winback_offer_expires_at": None,
+                }).eq("tenant_id", tid).execute()
+                logger.info(f"[lifecycle] reactivate: trial diperpanjang {extend} hari tenant={tid}")
+                return {"ok": True, "action": "extended", "days": extend}
+            # suspended/blocked/active/deleted → tak bisa gratis → arahkan ke pembayaran
+            return {"ok": True, "action": "checkout", "status": status}
+        except Exception as e:
+            logger.warning(f"[lifecycle] reactivate gagal: {e}")
+            return JSONResponse({"error": str(e)}, status_code=400)
+
+    app.add_api_route("/api/lifecycle/reactivate", _lifecycle_reactivate, methods=["POST"])
+
 except ImportError:
     # fastapi belum terinstall di env dev — endpoint diaktifkan saat cutover (tambah ke requirements).
     app = None
