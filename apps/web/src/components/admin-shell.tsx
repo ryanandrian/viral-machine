@@ -22,7 +22,7 @@ const NAV: NavEntry[] = [
   { id: "billing", icon: CreditCard, idL: "Pembayaran", en: "Payments", href: "/admin/billing" },
   { id: "app-config", icon: SlidersHorizontal, idL: "Konfigurasi Sistem", en: "System Configuration", href: "/admin/app-config" },
   { id: "company-profile", icon: Building2, idL: "Profil Perusahaan", en: "Company Profile", href: "/admin/company-profile" },
-  { id: "support", icon: HelpCircle, idL: "Dukungan", en: "Support", href: "/admin/support", badge: "4" },
+  { id: "support", icon: HelpCircle, idL: "Dukungan", en: "Support", href: "/admin/support" },
   { id: "feedback", icon: MessageSquare, idL: "Masukan", en: "Feedback", href: "/admin/feedback" },
   { id: "system", icon: Activity, idL: "Kesehatan Sistem", en: "System Health", href: "/admin/system" },
   { id: "content", icon: FileText, idL: "Konten (CMS)", en: "Content (CMS)", href: "/admin/content" },
@@ -43,12 +43,21 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [lang, setLang] = useState<"id" | "en">("id");
   const [mounted, setMounted] = useState(false);
+  const [supportCount, setSupportCount] = useState(0);
 
   useEffect(() => {
     setMounted(true);
     const saved = (localStorage.getItem("mv-lang") as "id" | "en") || "id";
     setLang(saved);
     document.documentElement.lang = saved;
+  }, []);
+
+  // Badge Dukungan = jumlah tiket BELUM selesai (open+pending) dari API — no-hardcode. Gagal → 0 (badge hilang).
+  useEffect(() => {
+    fetch("/api/admin/support")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { const c = j?.counts; if (c) setSupportCount((c.open ?? 0) + (c.pending ?? 0)); })
+      .catch(() => {});
   }, []);
 
   function switchLang(l: "id" | "en") {
@@ -72,11 +81,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             if ("section" in n) return <div key={`s${i}`} className="sb-section-title">{n.section.id}</div>;
             const Icon = n.icon;
             const isActive = pathname === n.href || pathname.startsWith(n.href + "/");
+            const badge = n.id === "support" ? (supportCount > 0 ? String(supportCount) : undefined) : n.badge;
             return (
               <Link key={n.id} className={`sb-item${isActive ? " active" : ""}`} href={n.href} title={n.idL}>
                 <Icon size={18} />
                 <span className="sb-label"><Bi id={n.idL} en={n.en} /></span>
-                {n.badge ? <span className="sb-badge" style={{ background: "var(--warning)", color: "#000" }}>{n.badge}</span> : null}
+                {badge ? <span className="sb-badge" style={{ background: "var(--warning)", color: "#000" }}>{badge}</span> : null}
               </Link>
             );
           })}
