@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Search, X, Bell, Pause, Play, Send } from "lucide-react";
+import { Search, X, Bell, Pause, Send, CalendarPlus, CalendarClock, RotateCcw, Trash2 } from "lucide-react";
+import ConfirmDialog from "@/components/confirm-dialog";
 import "./tenants.css";
 
 // E1 Admin Tenants (Phase 10.1) — DATA NYATA via /api/admin/* (service_role, bypass-RLS, gated super-admin).
@@ -82,6 +83,9 @@ export default function AdminTenantsPage() {
   const [busy, setBusy] = useState(false);
   const [compose, setCompose] = useState<{ subject: string; body: string } | null>(null);
   const [compModal, setCompModal] = useState<{ is_developer: boolean; discount_pct: number } | null>(null);
+  // LIFECYCLE (B9): aksi manual — modal isi hari (extend/undur-hapus) + konfirmasi (aktifkan-bersih/hapus).
+  const [lifeModal, setLifeModal] = useState<{ action: "extend" | "postpone_deletion"; days: string } | null>(null);
+  const [confirm, setConfirm] = useState<null | "reactivate" | "delete">(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -146,6 +150,31 @@ export default function AdminTenantsPage() {
     setBusy(false);
     if (r.ok) { setToast("Comp/diskon disimpan"); setCompModal(null); await load(); }
     else setToast("Gagal simpan comp/diskon");
+  }
+
+  // LIFECYCLE (B9): perpanjang trial / undur jadwal hapus / aktifkan-bersih (reset penanda). days kosong = default sistem.
+  async function doLifecycle(action: "extend" | "postpone_deletion" | "reactivate_clean", days?: string) {
+    if (!cur) return;
+    setBusy(true);
+    const r = await fetch(`/api/admin/tenants/${cur.tenant_id}/lifecycle`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, days: days && days.trim() ? days.trim() : undefined }),
+    });
+    setBusy(false);
+    if (r.ok) {
+      setToast(action === "extend" ? "Trial diperpanjang" : action === "postpone_deletion" ? "Jadwal hapus diundur" : "Akun diaktifkan kembali");
+      setLifeModal(null); setConfirm(null); await load();
+    } else setToast("Gagal memproses");
+  }
+
+  // LIFECYCLE (B9): HAPUS PERMANEN (revoke YouTube + purge S3 + purge data). Irreversible → lewat ConfirmDialog.
+  async function doHardDelete() {
+    if (!cur) return;
+    setBusy(true);
+    const r = await fetch(`/api/admin/tenants/${cur.tenant_id}/hard-delete`, { method: "POST" });
+    setBusy(false);
+    if (r.ok) { setToast("Tenant dihapus permanen"); setConfirm(null); setSel(null); await load(); }
+    else setToast("Gagal menghapus tenant");
   }
 
   return (
@@ -233,10 +262,24 @@ export default function AdminTenantsPage() {
           </div>
           <div className="adm-drawer-foot">
             <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => setCompose({ subject: "", body: "" })}><Bell size={14} /> <Bi id="Kirim email" en="Send email" /></button>
-            <button className="btn btn-secondary btn-sm" disabled={busy} style={{ color: cur.status === "suspended" ? "var(--success)" : "var(--warning)" }} onClick={toggleSuspend}>
-              {cur.status === "suspended" ? <><Play size={14} /> Unsuspend</> : <><Pause size={14} /> Suspend</>}
-            </button>
+            {/* Suspend hanya utk status hidup (active/trial/grace/trial_expired). Utk suspended/blocked → pakai Aktifkan-bersih (footgun fix). */}
+            {(cur.status === "active" || cur.status === "trial" || cur.status === "grace" || cur.status === "trial_expired") && (
+              <button className="btn btn-secondary btn-sm" disabled={busy} style={{ color: "var(--warning)" }} onClick={toggleSuspend}><Pause size={14} /> Suspend</button>
+            )}
+            {/* LIFECYCLE (B9) — aksi manual per-kondisi */}
+            {(cur.status === "trial" || cur.status === "trial_expired") && (
+              <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => setLifeModal({ action: "extend", days: "" })}><CalendarPlus size={14} /> <Bi id="Perpanjang trial" en="Extend trial" /></button>
+            )}
+            {cur.status === "blocked" && (
+              <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => setLifeModal({ action: "postpone_deletion", days: "" })}><CalendarClock size={14} /> <Bi id="Undur hapus" en="Postpone deletion" /></button>
+            )}
+            {(cur.status === "suspended" || cur.status === "blocked") && (
+              <button className="btn btn-secondary btn-sm" disabled={busy} style={{ color: "var(--success)" }} onClick={() => setConfirm("reactivate")}><RotateCcw size={14} /> <Bi id="Aktifkan bersih" en="Reactivate" /></button>
+            )}
             <button className="btn btn-secondary btn-sm" disabled={busy || !detail} onClick={() => setCompModal({ is_developer: !!detail?.tenant?.is_developer, discount_pct: detail?.tenant?.discount_pct ?? 0 })}>{cur.comp ? "Comp ✓" : "Comp/Diskon"}</button>
+            {(cur.status === "suspended" || cur.status === "blocked") && (
+              <button className="btn btn-secondary btn-sm" disabled={busy} style={{ color: "var(--danger)" }} onClick={() => setConfirm("delete")}><Trash2 size={14} /> <Bi id="Hapus sekarang" en="Delete now" /></button>
+            )}
           </div>
         </>)}
       </aside>
@@ -282,6 +325,48 @@ export default function AdminTenantsPage() {
           </div>
         </>
       )}
+
+      {lifeModal && cur && (
+        <>
+          <div className="adm-scrim open" style={{ zIndex: 60 }} onClick={() => setLifeModal(null)} />
+          <div className="card" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(420px,92vw)", zIndex: 61, padding: "1.25rem" }}>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: "0.75rem" }}>
+              <strong>{lifeModal.action === "extend" ? "Perpanjang trial" : "Undur jadwal hapus"} — {cur.handle || cur.email}</strong>
+              <button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} onClick={() => setLifeModal(null)}><X size={16} /></button>
+            </div>
+            <div style={{ display: "grid", gap: "0.625rem" }}>
+              <label className="label"><Bi id="Jumlah hari" en="Number of days" /></label>
+              <input className="input" type="number" min={1} placeholder="Kosongkan = pakai default sistem" value={lifeModal.days} onChange={(e) => setLifeModal({ ...lifeModal, days: e.target.value })} />
+              <div className="muted" style={{ fontSize: "var(--text-xs)" }}>
+                {lifeModal.action === "extend"
+                  ? <Bi id="Trial diberikan/diperpanjang sekian hari dari sekarang. Kosongkan untuk memakai default sistem." en="Grants/extends the trial by this many days from now. Leave blank to use the system default." />
+                  : <Bi id="Tanggal penghapusan dimundurkan sekian hari. Kosongkan untuk memakai default sistem." en="Pushes the deletion date back by this many days. Leave blank to use the system default." />}
+              </div>
+              <button className="btn btn-primary btn-sm" disabled={busy} style={{ justifySelf: "end" }} onClick={() => doLifecycle(lifeModal.action, lifeModal.days)}><Bi id="Terapkan" en="Apply" /></button>
+            </div>
+          </div>
+        </>
+      )}
+
+      <ConfirmDialog
+        open={confirm === "reactivate"}
+        title={<Bi id="Aktifkan kembali (bersih)?" en="Reactivate (clean)?" />}
+        message={<Bi id="Akun dihidupkan sebagai trial baru; semua penanda suspend/hapus dibersihkan. Untuk melanjutkan, tenant harus berlangganan." en="The account is restored to a fresh trial; all suspend/deletion markers are cleared. To continue, the tenant must subscribe." />}
+        confirmLabel={<Bi id="Aktifkan" en="Reactivate" />}
+        busy={busy}
+        onConfirm={() => doLifecycle("reactivate_clean")}
+        onCancel={() => setConfirm(null)}
+      />
+      <ConfirmDialog
+        open={confirm === "delete"}
+        title={<Bi id="Hapus tenant permanen?" en="Delete tenant permanently?" />}
+        message={<Bi id="Semua data tenant dihapus, koneksi YouTube dicabut, file dibersihkan. Bukti pembayaran tetap disimpan (legal). Tindakan ini TIDAK bisa dibatalkan." en="All tenant data is deleted, YouTube is disconnected, and files are purged. Payment records are kept (legal). This action CANNOT be undone." />}
+        confirmLabel={<Bi id="Ya, hapus permanen" en="Yes, delete permanently" />}
+        confirmClass="btn-destructive"
+        busy={busy}
+        onConfirm={doHardDelete}
+        onCancel={() => setConfirm(null)}
+      />
 
       {toast && <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 70, background: "var(--surface-raised, #1f2937)", color: "var(--text-primary)", padding: "0.625rem 1rem", borderRadius: 8, border: "1px solid var(--border)" }}>{toast}</div>}
     </>

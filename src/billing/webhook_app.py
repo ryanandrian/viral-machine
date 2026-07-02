@@ -221,6 +221,27 @@ try:
 
     app.add_api_route("/api/lifecycle/reactivate", _lifecycle_reactivate, methods=["POST"])
 
+    # ── LIFECYCLE (B9): HAPUS PERMANEN tenant (aksi admin). Dipanggil Next (mv-web) via vault SETELAH
+    #    requireSuperAdmin. Logika = _hard_delete_tenant (revoke token YouTube + purge S3 + purge tabel
+    #    konten + anonimkan sisa; KEEP payments). Di sini karena butuh klien Google/S3 (Python). ──
+    async def _admin_hard_delete(request: "Request"):
+        if not _internal_ok(request):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        try:
+            b = await request.json()
+            tid = b.get("tenant_id")
+            if not tid:
+                return JSONResponse({"error": "tenant_id wajib"}, status_code=400)
+            from src.billing.renewal import _hard_delete_tenant
+            _hard_delete_tenant(_sb(), tid)
+            logger.info(f"[lifecycle] admin HARD-DELETE tenant={tid}")
+            return {"ok": True}
+        except Exception as e:
+            logger.warning(f"[lifecycle] admin hard-delete gagal: {e}")
+            return JSONResponse({"error": str(e)}, status_code=400)
+
+    app.add_api_route("/api/admin/lifecycle/hard-delete", _admin_hard_delete, methods=["POST"])
+
 except ImportError:
     # fastapi belum terinstall di env dev — endpoint diaktifkan saat cutover (tambah ke requirements).
     app = None
