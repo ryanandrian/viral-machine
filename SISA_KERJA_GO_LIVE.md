@@ -184,13 +184,13 @@
 - **DEPENDS:** — (mandiri). **Nyambung:** admin **Leads** (Phase 10.1), email `notify_trial_lapse`; halaman ini **di-reuse [B9] LIFECYCLE** utk feedback 1-klik (`?reason=`).
 - **REALISASI:** ⬜ *(catatan koherensi: rute `/feedback` + `feedback_submissions` migr 0110 + `/admin/feedback` kini LIVE — lihat `PAYMENT_AND_TENANT_GATE_ARCHITECTURE.md §5`; verifikasi notif Telegram + atribusi `?ref=` sebelum tandai ✅)*
 
-### [B9] Mesin siklus-hidup & nurture (trial-lapse + suspended→blocked→deleted) — ⬜ *(rencana; sequencing owner)*
+### [B9] Mesin siklus-hidup & nurture (trial-lapse + suspended→blocked→deleted) — ✅ *(DEPLOYED + LIVE 2026-07-02)*
 - **TUJUAN:** selamatkan trial-lapse + pelanggan berhenti-bayar (dunning/win-back) + blokir & **hapus data** yang tak kembali (bebaskan storage) — world-class, no-hardcode, patuh UU PDP.
 - **KONTEKS:** SATU mesin (perluas thread `billing_renewal`/`renewal.py`, BUKAN thread baru). Keputusan owner TERKUNCI (nurture 4–5 email/~2–3 mgg; suspended 30h → blocked 30h → deleted; purge S3 video-mentah dini; hot-lead→Telegram admin; ekspor self-service DITUNDA). Reuse `/feedback` [B8] + Leads admin + email lifecycle.
 - **SPEC LENGKAP + Plan-vs-Realisasi (13 item) = `LIFECYCLE_NURTURE_ARCHITECTURE.md`** (sumber kebenaran fitur ini).
 - **DONE-BILA:** sekuens nurture jalan; `suspended→blocked→deleted` otomatis + peringatan H-30/7/1; purge S3 dini; token YouTube dicabut saat delete; knob tampil di System Config.
 - **DEPENDS:** idealnya SETELAH **[A1]** (butuh aliran tenant nyata). **Nyambung:** [B8] /feedback · [D1] funnel · `PAYMENT_AND_TENANT_GATE_ARCHITECTURE.md` (state machine gate).
-- **REALISASI:** ⬜ *(decisions locked; build belum mulai — nunggu urutan owner)*
+- **REALISASI:** ✅ **DEPLOYED + LIVE 2026-07-02** (commit `db589b1`). Mesin lifecycle PENUH LIVE: nurture trial-lapse (5-email config) + suspended→blocked→deleted (30+30h) + purge S3 dini + revoke token YT (UU PDP) + diskon comeback + reaktivasi 1-klik (`/reactivate`) + banner blocked + admin lead_temp. Sweep terverifikasi bersih (nol hapus mendadak; timing di `app_config`). Detail+tracker = `LIFECYCLE_NURTURE_ARCHITECTURE.md §11`. **Follow-up:** tombol aksi-manual admin (extend/hapus-sekarang) + set `ADMIN_TELEGRAM_CHAT_ID` env.
 
 ---
 
