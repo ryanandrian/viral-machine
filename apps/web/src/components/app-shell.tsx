@@ -74,11 +74,11 @@ export function AppShell({
     document.documentElement.lang = saved;
     (async () => {
       const [{ data: tc }, { count }, { data: pls }] = await Promise.all([
-        supabase.from("tenant_configs").select("display_handle,plan_type,subscription_status,current_period_end,is_developer,discount_pct").maybeSingle(),
+        supabase.from("tenant_configs").select("display_handle,plan_type,subscription_status,current_period_end,is_developer,discount_pct,deletion_scheduled_at").maybeSingle(),
         supabase.from("channels").select("id", { count: "exact", head: true }),
         supabase.from("plan_limits").select("plan_type,display_name,niche_studio"),
       ]);
-      const t = tc as { display_handle?: string; plan_type?: string; subscription_status?: string; current_period_end?: string; is_developer?: boolean; discount_pct?: number } | null;
+      const t = tc as { display_handle?: string; plan_type?: string; subscription_status?: string; current_period_end?: string; is_developer?: boolean; discount_pct?: number; deletion_scheduled_at?: string } | null;
       const planType = t?.plan_type ?? "starter";
       const pl = (pls as { plan_type: string; display_name?: string; niche_studio?: boolean }[] | null)?.find((x) => x.plan_type === planType);
       setStudioOK(Boolean(pl?.niche_studio));   // tier-config (owner 2026-06-21): fasilitas per-tier dari plan_limits.niche_studio
@@ -93,6 +93,7 @@ export function AppShell({
       const st = t?.subscription_status, pe = t?.current_period_end;
       if (comp || !st) setGate(null);
       else if (st === "trial" && pe) setGate({ status: "trial", daysLeft: Math.max(0, Math.ceil((new Date(pe).getTime() - Date.now()) / 86400000)) });
+      else if (st === "blocked") { const dd = t?.deletion_scheduled_at; setGate({ status: "blocked", daysLeft: dd ? Math.max(0, Math.ceil((new Date(dd).getTime() - Date.now()) / 86400000)) : null }); }
       else if (["trial_expired", "grace", "suspended"].includes(st)) setGate({ status: st, daysLeft: null });
       else setGate(null);
     })();
@@ -173,7 +174,7 @@ export function AppShell({
         </header>
 
         {gate && pathname !== "/billing" && (() => {
-          const bg = gate.status === "suspended" ? "var(--danger, #ef4444)"
+          const bg = (gate.status === "suspended" || gate.status === "blocked") ? "var(--danger, #ef4444)"
             : gate.status === "trial" ? "var(--brand, #6366F1)" : "var(--warning, #f59e0b)";
           const dl = gate.daysLeft;
           const msg = gate.status === "trial"
@@ -182,8 +183,10 @@ export function AppShell({
             ? <Bi id="Masa trial berakhir — produksi dijeda. Upgrade untuk melanjutkan." en="Trial ended — production paused. Upgrade to continue." />
             : gate.status === "grace"
             ? <Bi id="Pembayaran tertunggak — perbarui agar produksi tidak berhenti." en="Payment overdue — renew to keep producing." />
+            : gate.status === "blocked"
+            ? <Bi id={`🔒 Akun dikunci — data akan dihapus ${dl != null ? (dl <= 1 ? "besok" : `dalam ${dl} hari`) : "segera"}. Aktifkan untuk memulihkan semuanya.`} en={`🔒 Account locked — data will be deleted ${dl != null ? (dl <= 1 ? "tomorrow" : `in ${dl} days`) : "soon"}. Reactivate to restore everything.`} />
             : <Bi id="Produksi dihentikan — aktifkan kembali langganan Anda." en="Production paused — reactivate your subscription." />;
-          const cta = gate.status === "suspended" ? { id: "Aktifkan", en: "Reactivate" }
+          const cta = (gate.status === "suspended" || gate.status === "blocked") ? { id: "Aktifkan", en: "Reactivate" }
             : gate.status === "grace" ? { id: "Perbarui", en: "Renew" } : { id: "Upgrade", en: "Upgrade" };
           return (
             <div style={{ background: bg, color: "#fff", padding: "0.55rem 1.25rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "1rem", fontSize: "var(--text-sm)", flexWrap: "wrap" }}>

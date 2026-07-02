@@ -14,11 +14,13 @@ type AppCfg = { key: string; value: number; description: string | null };
 
 // Metadata tampilan (label ramah + unit + grup). Keterangan detail = description (DB, bahasa admin).
 const G_BILLING = "Langganan, Trial & Penagihan";
+const G_LIFECYCLE = "Pertumbuhan & Siklus-Hidup";
 const G_TREND = "Bobot Sumber Tren";
 const G_ENGINE = "Performa Mesin Tren";
 const G_OTHER = "Lainnya";
 const CFG_GROUPS: [string, string][] = [
   [G_BILLING, "Subscription, Trial & Billing"],
+  [G_LIFECYCLE, "Growth & Lifecycle"],
   [G_TREND, "Trend Source Weights"],
   [G_ENGINE, "Trend Engine Performance"],
   [G_OTHER, "Others"],   // ← catch-all: SETIAP key app_config tanpa metadata TETAP tampil (anti-hilang selamanya)
@@ -31,6 +33,26 @@ const CFG_META: Record<string, { label: string; group: string; unit: string; hin
   billing_grace_days:           { label: "Masa Tenggang Sebelum Dihentikan", group: G_BILLING, unit: "hari" },
   checkout_expiry_hours:        { label: "Masa Berlaku Link Bayar", group: G_BILLING, unit: "jam" },
   ppn_percent:                  { label: "PPN Invoice", group: G_BILLING, unit: "%", hint: "0 = harga final; 11 = PKP" },
+  nurture_enabled:                 { label: "Nurture Trial-Lapse Aktif", group: G_LIFECYCLE, unit: "", hint: "1=nyala, 0=mati" },
+  nurture_trial_extend_days:       { label: "Perpanjang Trial 1-Klik", group: G_LIFECYCLE, unit: "hari", hint: "0 = matikan tuas" },
+  winback_discount_pct:            { label: "Diskon Comeback", group: G_LIFECYCLE, unit: "%", hint: "0 = matikan" },
+  winback_discount_valid_days:     { label: "Masa Berlaku Diskon Comeback", group: G_LIFECYCLE, unit: "hari" },
+  nurture_step1_days:              { label: "Email Nurture #1", group: G_LIFECYCLE, unit: "hari", hint: "H+x sejak trial habis" },
+  nurture_step2_days:              { label: "Email Nurture #2", group: G_LIFECYCLE, unit: "hari" },
+  nurture_step3_days:              { label: "Email Nurture #3 (diskon)", group: G_LIFECYCLE, unit: "hari" },
+  nurture_step4_days:              { label: "Email Nurture #4", group: G_LIFECYCLE, unit: "hari" },
+  nurture_step5_days:              { label: "Email Nurture #5", group: G_LIFECYCLE, unit: "hari" },
+  suspend_window_days:             { label: "Masa Suspended → Blokir", group: G_LIFECYCLE, unit: "hari" },
+  suspend_dunning1_days:           { label: "Penagihan Suspended #1", group: G_LIFECYCLE, unit: "hari", hint: "H+x sejak suspended" },
+  suspend_dunning2_days:           { label: "Penagihan Suspended #2", group: G_LIFECYCLE, unit: "hari" },
+  suspend_dunning3_days:           { label: "Penagihan Suspended #3", group: G_LIFECYCLE, unit: "hari" },
+  suspend_dunning4_days:           { label: "Penagihan Suspended #4", group: G_LIFECYCLE, unit: "hari" },
+  suspend_dunning5_days:           { label: "Penagihan Suspended #5", group: G_LIFECYCLE, unit: "hari" },
+  block_retention_days:            { label: "Retensi Sebelum Hapus Data", group: G_LIFECYCLE, unit: "hari" },
+  deletion_warn1_days:             { label: "Peringatan Hapus #1", group: G_LIFECYCLE, unit: "hari", hint: "H-x sebelum hapus" },
+  deletion_warn2_days:             { label: "Peringatan Hapus #2", group: G_LIFECYCLE, unit: "hari" },
+  deletion_warn3_days:             { label: "Peringatan Hapus #3", group: G_LIFECYCLE, unit: "hari" },
+  s3_raw_purge_after_suspend_days: { label: "Hapus Video Mentah S3", group: G_LIFECYCLE, unit: "hari", hint: "setelah suspended; 0 = segera" },
   niche_eval_window_days:       { label: "Masa Evaluasi Niche Custom", group: G_OTHER, unit: "hari" },
   trend_weight_youtube:    { label: "YouTube (utama)", group: G_TREND, unit: "%" },
   trend_weight_trends:     { label: "Google Trends", group: G_TREND, unit: "%" },

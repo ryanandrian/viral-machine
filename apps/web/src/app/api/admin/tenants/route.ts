@@ -11,7 +11,7 @@ export async function GET() {
 
   const { data: tenants, error } = await admin
     .from("tenant_configs")
-    .select("tenant_id, display_handle, plan_type, subscription_status, current_period_end, trial_started_at, is_developer, discount_pct, created_at")
+    .select("tenant_id, display_handle, plan_type, subscription_status, current_period_end, trial_started_at, is_developer, discount_pct, created_at, lead_temp, suspended_at, blocked_at, deletion_scheduled_at")
     .order("created_at", { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -55,6 +55,10 @@ export async function GET() {
       last_activity: lastAct.get(t.tenant_id) ?? null,
       current_period_end: t.current_period_end,
       trial_started_at: t.trial_started_at,
+      lead_temp: t.lead_temp ?? null,
+      suspended_at: t.suspended_at ?? null,
+      blocked_at: t.blocked_at ?? null,
+      deletion_scheduled_at: t.deletion_scheduled_at ?? null,
     };
   });
 
@@ -64,6 +68,7 @@ export async function GET() {
     trials: rows.filter((r) => r.status === "trial").length,
     trial_expired: rows.filter((r) => r.status === "trial_expired").length,
     suspended: rows.filter((r) => r.status === "suspended").length,
+    blocked: rows.filter((r) => r.status === "blocked").length,
   };
   return NextResponse.json({ rows, kpi });
 }

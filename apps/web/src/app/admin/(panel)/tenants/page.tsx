@@ -17,8 +17,16 @@ const COLORS = ["#1d4ed8", "#9f1239", "#047857", "#7c3aed", "#b45309", "#0891b2"
 type Row = {
   tenant_id: string; handle: string; email: string; plan: string; status: string; comp: boolean;
   mrr_idr: number; channels: number; joined: string; last_activity: string | null; current_period_end: string | null;
+  lead_temp?: string | null; suspended_at?: string | null; blocked_at?: string | null; deletion_scheduled_at?: string | null;
 };
-type Kpi = { total: number; mrr_idr: number; trials: number; trial_expired: number; suspended: number };
+type Kpi = { total: number; mrr_idr: number; trials: number; trial_expired: number; suspended: number; blocked?: number };
+
+// LIFECYCLE: suhu lead (nurture) — badge ringkas utk concierge (owner outreach lead panas).
+const LEAD_TEMP: Record<string, { emoji: string; id: string; en: string }> = {
+  hot:  { emoji: "🔥", id: "Panas", en: "Hot" },
+  warm: { emoji: "🌤️", id: "Hangat", en: "Warm" },
+  cold: { emoji: "❄️", id: "Dingin", en: "Cold" },
+};
 type Detail = {
   tenant: Row & { timezone?: string; is_developer?: boolean; discount_pct?: number };
   channels: { id: string; channel_name: string; niche: string; platform: string; is_active: boolean; publish_privacy: string }[];
@@ -186,7 +194,7 @@ export default function AdminTenantsPage() {
               <div style={{ flex: 1 }}><div style={{ fontWeight: 600, fontSize: "var(--text-base)" }}>{cur.handle || "—"}</div><div className="muted" style={{ fontSize: "var(--text-xs)" }}>{detail?.tenant.email || cur.email || "…"}</div></div>
               <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setSel(null)}><X size={16} /></button>
             </div>
-            <div style={{ marginTop: "0.75rem" }}><StBadge s={cur.status} /> <span className={`badge ${cur.plan === "pro" || cur.plan === "business" ? "badge-brand" : "badge-default"}`} style={{ marginLeft: "0.375rem" }}>{cur.plan}</span>{cur.comp && <span className="badge badge-default" style={{ marginLeft: "0.375rem" }}>Comp · gratis</span>}</div>
+            <div style={{ marginTop: "0.75rem" }}><StBadge s={cur.status} /> <span className={`badge ${cur.plan === "pro" || cur.plan === "business" ? "badge-brand" : "badge-default"}`} style={{ marginLeft: "0.375rem" }}>{cur.plan}</span>{cur.comp && <span className="badge badge-default" style={{ marginLeft: "0.375rem" }}>Comp · gratis</span>}{cur.lead_temp && LEAD_TEMP[cur.lead_temp] && <span className="badge badge-default" style={{ marginLeft: "0.375rem" }} title="Suhu lead">{LEAD_TEMP[cur.lead_temp].emoji} <Bi id={LEAD_TEMP[cur.lead_temp].id} en={LEAD_TEMP[cur.lead_temp].en} /></span>}</div>
           </div>
           <div className="adm-drawer-body">
             <div>
@@ -196,6 +204,8 @@ export default function AdminTenantsPage() {
               <div className="adm-kv"><span className="k">Channels</span><span className="v">{cur.channels}</span></div>
               <div className="adm-kv"><span className="k"><Bi id="Bergabung" en="Joined" /></span><span className="v">{dateID(cur.joined)}</span></div>
               <div className="adm-kv"><span className="k"><Bi id="Periode s/d" en="Period end" /></span><span className="v">{dateID(cur.current_period_end)}</span></div>
+              {cur.suspended_at && <div className="adm-kv"><span className="k">Suspended</span><span className="v">{dateID(cur.suspended_at)}</span></div>}
+              {cur.deletion_scheduled_at && <div className="adm-kv"><span className="k"><Bi id="Hapus data" en="Data deletion" /></span><span className="v" style={{ color: "var(--danger)" }}>{dateID(cur.deletion_scheduled_at)}</span></div>}
             </div>
             <div>
               <div className="adm-sec-label"><Bi id="Run terbaru" en="Recent runs" /></div>

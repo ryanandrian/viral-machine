@@ -25,7 +25,7 @@ export default function BillingPage() {
   const [paying, setPaying] = useState<string | null>(null);
   const [payErr, setPayErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [plan, setPlan] = useState<{ plan_type: string; subscription_status: string; current_period_end: string | null; is_developer: boolean; discount_pct: number } | null>(null);
+  const [plan, setPlan] = useState<{ plan_type: string; subscription_status: string; current_period_end: string | null; is_developer: boolean; discount_pct: number; winback_offer_pct?: number | null; winback_offer_expires_at?: string | null } | null>(null);
   const [prices, setPrices] = useState<Record<string, Pricing>>({});
   const [maxCh, setMaxCh] = useState<number | null>(null);
   const [maxVid, setMaxVid] = useState<number | null>(null);
@@ -36,7 +36,7 @@ export default function BillingPage() {
   const load = useCallback(async () => {
     const monthStart = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString(); })();
     const [{ data: tc }, { data: pc }, { count: chCount }, { count: vidCount }, { data: pay }] = await Promise.all([
-      supabase.from("tenant_configs").select("plan_type,subscription_status,current_period_end,is_developer,discount_pct").maybeSingle(),
+      supabase.from("tenant_configs").select("plan_type,subscription_status,current_period_end,is_developer,discount_pct,winback_offer_pct,winback_offer_expires_at").maybeSingle(),
       supabase.from("pricing_config").select("key,value_idr,description,category").eq("active", true),
       supabase.from("channels").select("id", { count: "exact", head: true }),
       supabase.from("production_runs").select("id", { count: "exact", head: true }).gte("created_at", monthStart),
@@ -84,6 +84,16 @@ export default function BillingPage() {
 
       {loading ? <div className="muted" style={{ padding: "2rem" }}><Bi id="Memuat…" en="Loading…" /></div> : (
       <div style={{ display: "flex", flexDirection: "column", gap: "1rem", maxWidth: 760 }}>
+          {/* diskon comeback (LIFECYCLE) — tampil bila offer aktif & belum kedaluwarsa */}
+          {!!plan?.winback_offer_pct && plan.winback_offer_pct > 0 && plan.winback_offer_expires_at && new Date(plan.winback_offer_expires_at) > new Date() && (
+            <div className="card card-pad" style={{ borderColor: "var(--brand)", background: "var(--brand-soft, rgba(99,102,241,.08))" }}>
+              <b>🎁 <Bi id={`Diskon comeback ${plan.winback_offer_pct}% untuk bulan pertama`} en={`${plan.winback_offer_pct}% comeback discount on your first month`} /></b>
+              <div className="muted" style={{ fontSize: "var(--text-sm)", marginTop: 4 }}>
+                <Bi id={`Berlaku sampai ${new Date(plan.winback_offer_expires_at).toLocaleDateString("id-ID")} — pilih paket di bawah untuk memakainya.`}
+                    en={`Valid until ${new Date(plan.winback_offer_expires_at).toLocaleDateString("en-US")} — pick a plan below to use it.`} />
+              </div>
+            </div>
+          )}
           {/* current plan */}
           <div className="plan-card">
             <div className="plan-top">
@@ -97,6 +107,7 @@ export default function BillingPage() {
                     trial_expired: { id: "Trial berakhir", en: "Trial ended", cls: "badge-warning" },
                     grace: { id: "Menunggu perpanjangan", en: "Renewal pending", cls: "badge-warning" },
                     suspended: { id: "Ditangguhkan", en: "Suspended", cls: "badge-warning" },
+                    blocked: { id: "Dikunci — akan dihapus", en: "Locked — pending deletion", cls: "badge-error" },
                   };
                   const m = M[st] || { id: st, en: st, cls: "badge-default" };
                   return <span className={`badge ${m.cls}`}><Bi id={m.id} en={m.en} /></span>;
