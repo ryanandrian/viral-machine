@@ -145,12 +145,24 @@ class TelegramNotifier:
 
     def notify_admin(self, text: str) -> bool:
         """Notif ke ADMIN PLATFORM (owner/tim) — mis. LEAD PANAS layak outreach personal (LIFECYCLE nurture).
-        chat_id dari env ADMIN_TELEGRAM_CHAT_ID. BEDA dari notif per-tenant (yg ke chat tenant). Fail-soft:
-        skip diam-diam bila ADMIN_TELEGRAM_CHAT_ID tak diset (tak nyasar ke tenant)."""
-        admin_chat = os.getenv("ADMIN_TELEGRAM_CHAT_ID", "").strip()
+        chat_id dari company_profile.admin_telegram_chat_id (no-hardcode, editable owner di /admin/company-profile);
+        fallback env ADMIN_TELEGRAM_CHAT_ID. BEDA dari notif per-tenant. Fail-soft: skip diam-diam bila kosong."""
+        admin_chat = self._admin_chat_id()
         if not admin_chat:
             return False
         return self._send(admin_chat, text)
+
+    def _admin_chat_id(self) -> str:
+        """chat_id admin dari company_profile (utama, editable) → env ADMIN_TELEGRAM_CHAT_ID (fallback). Kosong → ''."""
+        try:
+            from supabase import create_client
+            sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+            r = sb.table("company_profile").select("admin_telegram_chat_id").limit(1).execute()
+            if r.data and r.data[0].get("admin_telegram_chat_id"):
+                return str(r.data[0]["admin_telegram_chat_id"]).strip()
+        except Exception as e:
+            logger.debug(f"[Telegram] baca admin chat_id (company_profile) gagal: {e}")
+        return os.getenv("ADMIN_TELEGRAM_CHAT_ID", "").strip()
 
     def _chat_id_for_tenant(self, tenant_id: str) -> str:
         """Resolve chat_id tenant dari tenant_configs (hormati toggle telegram_enabled). Tak ada fallback sistem."""
