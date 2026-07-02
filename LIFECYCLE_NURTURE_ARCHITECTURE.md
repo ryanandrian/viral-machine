@@ -1,5 +1,7 @@
 # 🔄 LIFECYCLE & NURTURE ARCHITECTURE — MesinViral
 
+> **🔒 CLOSED — SPEC FINAL (2026-07-03).** Seluruh fitur (termasuk **item 14** tombol aksi-manual admin) **SELESAI + deployed + tervalidasi**; dokumen direkonsiliasi ke realita DB/BE/FE (audit verifikator 2026-07-03). **BEKU sebagai referensi** — status hidup & sisa aksi = **`SISA_KERJA_GO_LIVE.md`** (HUB, item [B9]). Sisa = verifikasi data-nyata otomatis (revoke token / purge S3 / email-hapus saat tenant nyata lewat siklus). Jangan pakai marker doc ini sbg daftar kerja.
+>
 > **Sumber kebenaran TUNGGAL** untuk *tindak-lanjut siklus-hidup tenant* **setelah** gate langganan: (1) selamatkan
 > **trial yang lapsed** (nurture), (2) tagih/selamatkan **pelanggan berbayar yang berhenti** (dunning + win-back),
 > (3) **blokir & hapus data** yang benar-benar tak kembali (bebaskan storage). **SATU mesin** (bukan dua) — segmen beda,
@@ -14,7 +16,7 @@
 > **✅ STATUS: DEPLOYED + LIVE (v2-backend, 2026-07-02).** Mesin lifecycle penuh berjalan di VPS (thread `billing_renewal`,
 > sweep terverifikasi jalan bersih; endpoint `/reactivate` live). Di-*ground* pada deep-dive DB+BE+FE(tenant & admin) nyata.
 > Mode aman: default suspended 30h + retensi 30h → **nol risiko hapus mendadak**; timing semua di `app_config` (admin-editable).
-> **Bukan pemblokir jualan** — pengoptimal konversi/biaya. Sisa poles = §11 (tombol aksi-manual admin = follow-up).
+> **Bukan pemblokir jualan** — pengoptimal konversi/biaya. **Item 14 (tombol aksi-manual admin) = ✅ SELESAI 2026-07-03.** Sisa = verifikasi data-nyata §11 (revoke token / purge S3 / email-hapus — matang saat ada tenant nyata lewat siklus).
 
 ---
 
@@ -100,7 +102,7 @@ Muncul di **`/admin/app-config`** (System Config; catch-all "Lainnya" sudah jami
 ### 4.3 Aset S3 (✅ mekanisme ada — `src/utils/s3_buffer.py`)
 - Video mentah/perantara = MP4 di S3, key di **`content_inventory.s3_key`** (✅). Publisher hapus pasca-publish (`s3_buffer.delete`).
 - Logo brand = `brand-logo/{tenant}/{channel}.png` (✅, dari upload-logo route).
-- **Purge dini (suspended)** & **purge total (deleted)** = iterasi `content_inventory.s3_key` tenant → `s3_buffer.delete(key)` + hapus prefix logo. Helper `list_keys(prefix)`/`delete(key)` ✅ ADA. 🆕 wrapper `purge_tenant_assets(tenant_id, raw_only)`.
+- **Purge dini (suspended)** & **purge total (deleted)** = `s3_buffer.delete_prefix(prefix)` dipanggil **LANGSUNG** di `renewal.py` (prefix `{tenant}/` video mentah + `brand-logo/{tenant}/` logo). Helper `delete_prefix`/`delete`/`list_keys` ✅ ADA. *(Tak ada wrapper `purge_tenant_assets` — dibatalkan; `delete_prefix` dipakai langsung.)*
 
 ### 4.4 Token YouTube (✅ tabel ada — `tenant_youtube_accounts`)
 - ✅ `google_refresh_token_enc`/`google_access_token_enc` (Fernet). `youtube_oauth.disconnect()` ✅ hapus baris DB + lepas channel — **TAPI TIDAK revoke ke Google**.
@@ -123,7 +125,7 @@ Muncul di **`/admin/app-config`** (System Config; catch-all "Lainnya" sudah jami
 ## 6. EMAIL + TELEGRAM (grounded)
 ✅ **ADA** (`src/utils/email.py`, dwibahasa, config-driven, fail-soft): `notify_trial_ending`, `notify_trial_lapse`, `notify_renewal_reminder`, `notify_suspend_warning`, `notify_suspended`, `notify_payment_receipt`.
 🆕 **BANGUN (dwibahasa):** `notify_nurture_step(step, lead_temp, offer?)`, `notify_reactivation_offer`, `notify_account_blocked(deletion_date)`, `notify_deletion_warning(days_left, date)`, `notify_data_deleted`.
-🆕 **Telegram admin — JALUR BARU:** `src/utils/telegram_notifier.py` saat ini **per-tenant saja** (chat_id dari `tenant_configs.telegram_chat_id`, **sengaja tanpa fallback sistem**). Notif hot-lead ke admin perlu channel admin baru: `notify_admin(text)` pakai `ADMIN_TELEGRAM_CHAT_ID` (env/`app_config`).
+✅ **Telegram admin — TERPASANG (2026-07-03):** `notify_admin(text)` (`telegram_notifier.py:146`) kirim hot-lead ke admin. chat_id dari **`company_profile.admin_telegram_chat_id`** (migr 0114, editable owner via `/admin/company-profile`) + fallback env `ADMIN_TELEGRAM_CHAT_ID`. Notif per-tenant tetap dari `tenant_configs.telegram_chat_id` (terpisah, sengaja tanpa fallback sistem).
 - Link email: perpanjang/aktif = `/reactivate?token=`; feedback 1-klik = `/feedback?ref=<tenant>&source=…&reason=<key>` (✅ `?ref`/`?source` sudah didukung; 🆕 prefill `?reason`).
 
 ---
@@ -143,7 +145,7 @@ Muncul di **`/admin/app-config`** (System Config; catch-all "Lainnya" sudah jami
 - ✅ **`/feedback`** `app/feedback/page.tsx` — 🆕 prefill `?reason=` (REASONS sudah ada) untuk feedback 1-klik.
 
 **Admin:**
-- ✅ **`/admin/tenants`** = tempat **"Leads"** (trial_expired) + modal Comp/Diskon + status per-tenant. 🆕 tambah kolom **suhu lead** + tahap sekuens + timestamp lifecycle (`suspended_at`/`blocked_at`/`deletion_scheduled_at`) + filter + aksi manual (perpanjang / undur hapus / hapus-sekarang / ekspor-manual). **Reuse halaman ini — JANGAN board baru.**
+- ✅ **`/admin/tenants`** = tempat **"Leads"** (trial_expired) + modal Comp/Diskon + status per-tenant. 🆕 tambah kolom **suhu lead** + tahap sekuens + timestamp lifecycle (`suspended_at`/`blocked_at`/`deletion_scheduled_at`) + filter + **✅ aksi manual (SELESAI 2026-07-03): Perpanjang trial / Undur hapus / Aktifkan-bersih / Hapus-permanen** (tombol di drawer + ConfirmDialog + reset kanonik + admin_audit); ekspor-manual ditunda. **Reuse halaman ini — JANGAN board baru.**
 - ✅ **Kirim email manual** (tenant detail — `sendEmail` → antrean `email_outbox` → worker): **DIPERTAHANKAN** sebagai alat **concierge personal** (khusus/ad-hoc). **Komplementer, BUKAN diganti** nurture otomatis. Justru dipakai untuk follow-up **lead PANAS** setelah alert Telegram (owner: "email + Telegram admin → outreach personal"). Nurture = otomatis massal per-tahap; manual = personal 1-on-1. Dua tujuan beda → tak redundan.
 - ✅ **System Config** `/admin/app-config` — 🆕 knob §3 (label grup baru via CFG_META).
 - ✅ **`/admin/feedback`** — insight churn (sudah ada).
@@ -164,8 +166,8 @@ Muncul di **`/admin/app-config`** (System Config; catch-all "Lainnya" sudah jami
 DB     migrasi baru: kolom lifecycle §4.1 + seed knob §3 (+ CFG_META label FE)
 BE     src/billing/renewal.py         ✅→🆕 perluas sweep (nurture + suspended→blocked→deleted)
        src/utils/email.py             ✅→🆕 5 template baru (dwibahasa)
-       src/utils/telegram_notifier.py ✅→🆕 notify_admin (ADMIN_TELEGRAM_CHAT_ID)
-       src/utils/s3_buffer.py         ✅ (delete/list_keys) → 🆕 wrapper purge_tenant_assets
+       src/utils/telegram_notifier.py ✅ notify_admin → company_profile.admin_telegram_chat_id (migr 0114, fallback env)
+       src/utils/s3_buffer.py         ✅ delete_prefix/delete/list_keys (dipanggil langsung di renewal.py — tanpa wrapper)
        src/billing/youtube_oauth.py   ✅ (disconnect) → 🆕 revoke_token (Google revoke)
        src/billing/midtrans.py        ✅ _apply_settlement/snap_create → 🆕 diskon comeback + reset penanda lifecycle
        src/billing/limits.py          ✅ can_produce (blocked/deleted otomatis non-producing — TAK diubah)
@@ -176,6 +178,9 @@ FE     apps/web/src/components/app-shell.tsx               ✅→🆕 banner blo
        apps/web/src/app/admin/(panel)/tenants/page.tsx     ✅→🆕 suhu/tahap/timestamp/filter/aksi (Leads)
        apps/web/src/app/admin/(panel)/app-config/page.tsx  ✅→🆕 CFG_META grup lifecycle
        apps/web/src/app/api/lifecycle/reactivate/route.ts  🆕
+       apps/web/src/app/api/admin/tenants/[id]/lifecycle/route.ts    🆕 extend/postpone/reactivate-clean (+admin_audit)
+       apps/web/src/app/api/admin/tenants/[id]/hard-delete/route.ts  🆕 → vault → webhook internal
+       src/billing/webhook_app.py    🆕 /api/admin/lifecycle/hard-delete (internal) → _hard_delete_tenant
 INFRA  .env / app_config: ADMIN_TELEGRAM_CHAT_ID (🆕)
 ```
 
@@ -197,13 +202,17 @@ INFRA  .env / app_config: ADMIN_TELEGRAM_CHAT_ID (🆕)
 | 11 | Diskon comeback di `snap_create_transaction` (`winback_offer`) | BE | ✅ DEPLOYED (`midtrans._winback_discount` + tampil di Billing) |
 | 12 | Endpoint token `/api/lifecycle/reactivate` (+ feedback prefill ?reason) | BE+FE | ✅ DEPLOYED — LIVE: GET 405, POST token-palsu→400 rapi (Next→vault→webhook→verify_state); /feedback ?reason |
 | 13 | FE tenant: banner `blocked` + `/reactivate` + diskon/countdown Billing | FE tenant | ✅ DEPLOYED — LIVE: `/reactivate` 200; banner blocked+countdown; badge status blocked; diskon di Billing |
-| 14 | FE admin: `/admin/tenants` suhu/tahap/timestamp | FE admin | 🟡 DEPLOYED visibilitas (badge suhu lead 🔥/🌤️/❄️ + timestamp suspended/hapus + kpi.blocked). **Tombol aksi-manual (extend/hapus-sekarang/undur) = FOLLOW-UP** (auto-engine + comp/email menutup kebutuhan; hindari tulis-DB manual buru-buru) |
+| 14 | FE admin: `/admin/tenants` suhu/tahap/timestamp + tombol aksi-manual | FE admin | ✅ **DONE 2026-07-03** (`6a5f798`) — visibilitas (badge suhu lead + timestamp + kpi.blocked) + **tombol aksi-manual**: Perpanjang trial / Undur hapus / Aktifkan-bersih / Hapus-permanen (route `/api/admin/tenants/[id]/lifecycle`+`/hard-delete`, ConfirmDialog, reset kanonik, admin_audit). Extend **terbukti live** (klik owner→DB berubah); reaktivasi/undur/hapus terpasang+ter-gate (uji-klik nyata nunggu akun terkunci). Footgun Suspend@blocked diperbaiki |
 | 15 | Validasi (build+py_compile+unit-test) + deploy 1× | — | ✅ DONE — py_compile 6 file · npm build exit 0 · unit-test logika LOLOS · 3 service active · endpoint live |
 
 ### Changelog
+- **2026-07-03** — **Item 14 SELESAI + deployed** (`6a5f798`): tombol aksi-manual admin `/admin/tenants` (Perpanjang trial / Undur hapus / Aktifkan-bersih / Hapus-permanen) + route lifecycle/hard-delete + webhook internal `_hard_delete_tenant` + footgun Suspend@blocked. **Telegram admin di-wire** ke `company_profile.admin_telegram_chat_id` (migr 0114, `603640e`). Dokumen **direkonsiliasi ke realita** via 2 verifikator (§4.3/§6/§8/§10/§11 diperbaiki). **CLOSED → status di `SISA_KERJA_GO_LIVE.md`.**
 - **2026-07-02** — dibuat sebagai **ARCHITECTURE** (rename dari …_PLAN), di-*ground* pada deep-dive DB+BE+FE nyata.
 - **2026-07-02** — **BUILD + DEPLOYED + LIVE** (commit `871986b`→`db589b1`, v2-backend). Migr 0113 applied; BE (`renewal`/`email`/
   `telegram`/`s3_buffer`/`youtube_oauth`/`midtrans`/`webhook_app`) + FE (banner blocked/`/reactivate`/billing diskon/app-config
   label/admin lead_temp) deployed; worker restart → sweep lifecycle live bersih (`8 tenant · nurtured=3 · deleted=0 · comp 2`);
   endpoint reactivate live (405/400 rapi). Validasi: py_compile 6 file + npm build exit 0 + unit-test state-machine/tangga/bitmask LOLOS.
   **Follow-up tercatat:** item 14 tombol aksi-manual admin; set `ADMIN_TELEGRAM_CHAT_ID` env; e2e siklus penuh lintas-waktu (data-gated, pakai config dipercepat).
+- **2026-07-02 — E2E TERVALIDASI (tenant dummy, izin owner; sweep asli VPS + SMTP produksi; data direstore+dibersihkan):**
+  ✅ **Email nurture** step-1 terkirim ke effi (dwibahasa). ✅ **Reaktivasi 1-klik + extend-trial**: effi trial_expired→trial, period_end +3 hari (link ber-token dari email diklik). ✅ **Dunning + suspended→blocked**: kumala terima 2 email ("Reactivate"/"Account locked") + transisi blocked (deletion +30hr). ✅ **Hard-delete** (tenant throwaway ber-seed): PURGE content_inventory/production_runs/email_outbox=0 · KEEP payments · feedback ANONIM (email null) · tenant_configs=deleted+PII stripped · revoke token + purge S3 jalan tanpa error. ✅ **Diskon comeback**: pro 349rb→244.3rb (−30%) diterima Midtrans sandbox.
+  ⚠️ **Belum diuji dgn DATA nyata** (jalur jalan tanpa error tapi set kosong): revoke YouTube token pada akun ber-token nyata; purge S3 pada aset nyata; email deletion_warning H-30/7/1 (throwaway di-set warn=terkirim). Non-blocker.

@@ -203,7 +203,7 @@ INFRA  nginx /etc/nginx/sites-enabled/mesinviral (location /api/webhooks/ → :8
 ---
 
 ## 8. FITUR PERUSAHAAN / INVOICE / PAJAK (batch kelengkapan world-class)
-- **Profil penerbit** = tabel `company_profile` (single-row, admin-editable, migr 0112) — PT. LUMITE AUTOMASI
+- **Profil penerbit** = tabel `company_profile` (single-row, admin-editable **via `/admin/company-profile` — menu LIVE 2026-07-03**, migr 0112) — PT. LUMITE AUTOMASI
   INDONESIA (brand Lumite), NPWP/NIB/SK-Menkum/alamat/telp/email. Dipakai di invoice + kebutuhan sistem ke depan.
   NO-HARDCODE (di DB, bukan di kode).
 - **customer_details Midtrans** = `{first_name: <nama tenant>, email}` (+ item_details) → rekonsiliasi jelas di dashboard.
@@ -227,7 +227,7 @@ INFRA  nginx /etc/nginx/sites-enabled/mesinviral (location /api/webhooks/ → :8
 | 4 | Invoice page `apps/web/src/app/billing/invoice/[id]/page.tsx` (dwibahasa, PPN, print) | ✅ deployed — LIVE: `/billing/invoice/x` → **307 login+next** (privat+fungsional); render visual = saat ada payment |
 | 5 | Invoice link: Billing history + `/admin/billing` + email struk (`email.py::notify_payment_receipt` +order_id/`_site_url`) | ✅ deployed — verified di FE (tenant order_id+"Cetak", admin order_id) + email receipt +order_id |
 | 6 | `ppn_percent` di CFG_META grup Billing (`admin/app-config/page.tsx`) | ✅ deployed — build punya rute; PATCH app-config **nol allowlist** → PPN editable admin (no-hardcode) |
-| 7 | Admin Comp/Diskon: API `/api/admin/tenants/[id]/comp` + FE modal (`admin/tenants/page.tsx`) | ✅ deployed — LIVE: no-auth **401**; renewal.py **EXEMPT** comp (baris 52+84); modal+reload wired |
+| 7 | Admin Comp/Diskon: API `/api/admin/tenants/[id]/comp` + FE modal (`admin/tenants/page.tsx`) | ✅ deployed — LIVE: no-auth **401**; renewal.py **EXEMPT** comp (`is_comp_account` :70 + sweep loop :178); modal+reload wired |
 | 8 | Signup branded: route `/api/auth/signup` + `auth/page.tsx` doSignup/doResend di-rewire | ✅ deployed — LIVE: GET **405** (POST-only); callback `verifyOtp(type=signup)`; FE buang `supabase.auth.signUp/resend` |
 | 9 | Validasi (build+py_compile+e2e) + deploy 1× (worker+FE) | ✅ **DONE** `04cf0a2` — py_compile OK · npm build exit 0 · DB live verified · 3 service active · endpoint LIVE tervalidasi |
 
@@ -241,6 +241,7 @@ Validasi visual yang hanya bisa lewat aksi nyata (server-side & gating semua sud
 4. **Signup** email baru → email konfirmasi **ber-brand** (From: `mesinviral@lumite.biz.id`) → klik → `verifyOtp` → `/auth?view=verified`. (Syarat: Supabase "Confirm email" = ON.)
 
 ### Changelog
+- **2026-07-03** — **direkonsiliasi ke realita** (audit verifikator): ralat rujukan baris comp-exempt (§9 #7 → `renewal.py` :70/:178) + ralat klaim changelog `reconcile_pending` (BUKAN kode-mati — ia PENJAMIN aktif dipanggil `payment_reconciler.py`). Menu **Company Profile** (`/admin/company-profile`) kini LIVE → klaim §8 `company_profile` "admin-editable" kini terpenuhi. Tetap **CLOSED** — status hidup di `SISA_KERJA_GO_LIVE.md`.
 - **2026-07-01** — dibuat setelah implementasi penuh + validasi e2e sandbox (langganan+add-on) & live (reconciler,
   webhook Midtrans terbukti, feedback insert). Commit terkait: `53e272c` (checkout A1+E1), `9d0c8e5` (switch env + admin
   Payments), `d9f0171` (reconciler), `4d861ed` (siklus lengkap: reminder/dunning/banner/routing/feedback, config-driven, dwibahasa).
@@ -249,4 +250,4 @@ Validasi visual yang hanya bisa lewat aksi nyata (server-side & gating semua sud
   `ppn_percent` no-hardcode di System Config, admin Comp/Diskon (renewal EXEMPT), signup ber-brand (token_hash lintas-alat,
   `auth/page.tsx` di-rewire, buang `supabase.auth.signUp/resend`), `company_profile` migr 0112 + seed Lumite. Validasi: py_compile+
   npm build(exit 0)+kolom/keys DB live+customer_details sandbox+endpoint LIVE (invoice 401, comp 401, signup 405, situs 200).
-  Last-mile interaktif (1 bayar sandbox + comp toggle + signup email) = aksi owner. Bersih: hapus kode-mati `reconcile_pending`.
+  Last-mile interaktif (1 bayar sandbox + comp toggle + signup email) = aksi owner. Bersih kode-mati minor. **(Ralat 2026-07-03: `reconcile_pending` BUKAN kode-mati — ia fungsi PENJAMIN aktif, dipanggil `payment_reconciler.py`; klaim "dihapus" keliru.)**
