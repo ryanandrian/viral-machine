@@ -13,8 +13,17 @@ import os
 import smtplib
 import ssl
 from email.message import EmailMessage
+from email.utils import formatdate, make_msgid
 
 from loguru import logger
+
+
+def _from_domain(from_addr: str) -> str:
+    """Ambil domain dari alamat From (utk Message-ID selaras domain → reputasi/DMARC). Default lumite.biz.id."""
+    try:
+        return (from_addr or "").split("@")[-1].strip().rstrip(">").strip() or "lumite.biz.id"
+    except Exception:
+        return "lumite.biz.id"
 
 
 def _cfg() -> dict:
@@ -36,6 +45,9 @@ def send_email(to: str, subject: str, body: str, html: str | None = None) -> boo
     try:
         msg = EmailMessage()
         msg["From"] = c["from"]; msg["To"] = to; msg["Subject"] = subject
+        # WAJIB (RFC 5322): tanpa Date + Message-ID, Gmail buang diam-diam (dianggap malformed/bot) → tak sampai, tak bounce.
+        msg["Date"] = formatdate(localtime=True)
+        msg["Message-ID"] = make_msgid(domain=_from_domain(c["from"]))
         msg.set_content(body)
         if html:
             msg.add_alternative(html, subtype="html")
