@@ -152,6 +152,21 @@ class TelegramNotifier:
             return False
         return self._send(admin_chat, text)
 
+    def notify_admin_feedback(self, reason: str = "", source: str = "", tenant_id: str = "",
+                              email: str = "", message: str = "") -> bool:
+        """Masukan baru dari halaman /feedback (B8) → kabari ADMIN (reuse notify_admin/company_profile).
+        Fail-soft: dipanggil server-to-server pasca-insert, tak boleh menggagalkan submit tenant."""
+        lines = [
+            "📝 <b>Masukan baru</b> (/feedback)",
+            f"• Alasan: <b>{self._escape(str(reason))}</b>" if reason else "",
+            f"• Sumber: {self._escape(str(source))}" if source else "",
+            f"• Tenant: <code>{self._escape(str(tenant_id))}</code>" if tenant_id else "• Tenant: anonim",
+            f"• Email: {self._escape(str(email))}" if email else "",
+            f"💬 {self._escape(str(message)[:500])}" if message else "",
+            "👉 Detail: https://mesinviral.com/admin/feedback",
+        ]
+        return self.notify_admin("\n".join(l for l in lines if l))
+
     def _admin_chat_id(self) -> str:
         """chat_id admin dari company_profile (utama, editable) → env ADMIN_TELEGRAM_CHAT_ID (fallback). Kosong → ''."""
         try:

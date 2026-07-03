@@ -138,7 +138,7 @@ def notify_trial_lapse(tenant_id: str, sb=None) -> bool:
     if not to:
         return False
     days = _cfg_int(sb, "trial_duration_days", 7)  # no-hardcode: durasi dari app_config
-    up, sv = _upgrade_url(), _survey_url()
+    up, sv = _upgrade_url(), _feedback_url(tenant_id, "trial_lapse")
     return send_email(
         to, "Your trial has ended / Trial Anda selesai — MesinViral",
         _bi(f"Hi,\n\nYour {days}-day trial has ended. Upgrade to keep producing content automatically:\n{up}\n\n"
@@ -170,7 +170,7 @@ def notify_trial_ending(tenant_id: str, days_left: int, sb=None) -> bool:
         return False
     en_sisa = "tomorrow" if days_left <= 1 else f"in {days_left} days"
     id_sisa = "besok" if days_left <= 1 else f"dalam {days_left} hari"
-    up, sv = _upgrade_url(), _survey_url()
+    up, sv = _upgrade_url(), _feedback_url(tenant_id, "trial_ending")
     return send_email(
         to, "Your trial ends soon — upgrade / Trial Anda segera berakhir — MesinViral",
         _bi(f"Hi,\n\nYour trial ends {en_sisa}. Upgrade to keep producing content without interruption:\n{up}\n\n"

@@ -242,6 +242,25 @@ try:
 
     app.add_api_route("/api/admin/lifecycle/hard-delete", _admin_hard_delete, methods=["POST"])
 
+    # ── Masukan /feedback (B8): kabari ADMIN via Telegram. Dipanggil Next (mv-web) via vault PASCA-insert
+    #    (token bot + chat_id admin company_profile hanya di sisi Python). Fail-soft: gagal ≠ error submit. ──
+    async def _feedback_notify_admin(request: "Request"):
+        if not _internal_ok(request):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        from src.utils.telegram_notifier import TelegramNotifier
+        try:
+            b = await request.json()
+            ok = TelegramNotifier().notify_admin_feedback(
+                reason=str(b.get("reason") or ""), source=str(b.get("source") or ""),
+                tenant_id=str(b.get("tenant_id") or ""), email=str(b.get("email") or ""),
+                message=str(b.get("message") or ""))
+            return {"ok": bool(ok)}
+        except Exception as e:
+            logger.warning(f"[feedback] notif admin gagal: {e}")
+            return {"ok": False}
+
+    app.add_api_route("/api/feedback/notify-admin", _feedback_notify_admin, methods=["POST"])
+
 except ImportError:
     # fastapi belum terinstall di env dev — endpoint diaktifkan saat cutover (tambah ke requirements).
     app = None

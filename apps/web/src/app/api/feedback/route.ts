@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { vault } from "@/lib/youtube";
 
 export const runtime = "nodejs";
 
@@ -19,5 +20,9 @@ export async function POST(req: Request) {
   const admin = createAdminClient();
   const { error } = await admin.from("feedback_submissions").insert({ tenant_id, reason, message, email, source });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // Kabari admin via Telegram (webhook_app pegang token bot + chat_id) — fail-soft, jangan blokir submit.
+  try {
+    await vault("/api/feedback/notify-admin", { reason, source, tenant_id, email, message });
+  } catch { /* fail-soft */ }
   return NextResponse.json({ ok: true });
 }
