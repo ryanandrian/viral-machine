@@ -10,7 +10,7 @@ import { Moon, Sun, Menu } from "lucide-react";
 const NAV_LINKS = [
   { id: "Fitur", en: "Features", href: "/#features" },
   { id: "Harga", en: "Pricing", href: "/pricing" },
-  { id: "Demo", en: "Demo", href: "/demo" },
+  { id: "Showcase", en: "Showcase", href: "/showcase" },
   { id: "Dokumentasi", en: "Docs", href: "/docs" },
   { id: "Blog", en: "Blog", href: "/blog" },
 ];
@@ -86,7 +86,7 @@ export function MarketingShell({ children, active }: { children: React.ReactNode
               {/* sosial disembunyikan s/d URL channel tersedia (no link mati) */}
             </div>
             <div className="mk-fcols">
-              {fcol("Produk", "Product", [["Fitur", "Features", "/#features"], ["Harga", "Pricing", "/pricing"], ["Demo", "Demo", "/demo"], ["Roadmap", "Roadmap", null]])}
+              {fcol("Produk", "Product", [["Fitur", "Features", "/#features"], ["Harga", "Pricing", "/pricing"], ["Showcase", "Showcase", "/showcase"], ["Roadmap", "Roadmap", null]])}
               {fcol("Resources", "Resources", [["Dokumentasi", "Docs", "/docs"], ["Blog", "Blog", "/blog"], ["Case Studies", "Case Studies", null], ["API", "API", null]])}
               {fcol("Perusahaan", "Company", [["Tentang", "About", "/about"], ["Kontak", "Contact", "/about"], ["Karir", "Careers", null]])}
               {fcol("Legal", "Legal", [["Privacy", "Privacy", "/privacy"], ["Terms", "Terms", "/terms"], ["Refund", "Refund", null]])}

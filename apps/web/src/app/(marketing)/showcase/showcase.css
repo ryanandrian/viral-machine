@@ -1,0 +1,31 @@
+/* Showcase (pengganti /demo) — prefix sc-. Reuse token global (.mk-* dari marketing.css). */
+.sc-h { text-align: center; padding: 4rem 0 2.5rem; }
+.sc-h h1 { font-size: var(--text-5xl); font-weight: 800; letter-spacing: -0.035em; margin: 1rem 0 0.75rem; }
+
+/* Screenshot halaman tenant — bingkai browser (diwarisi dari dm-browser lama, gaya bagus dipertahankan) */
+.sc-screens { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; }
+.sc-shot { border: 1px solid var(--border-strong); border-radius: var(--r-lg); overflow: hidden; background: var(--surface-1); box-shadow: var(--shadow-lg); transition: transform var(--d-fast), border-color var(--d-fast); }
+.sc-shot:hover { transform: translateY(-3px); border-color: color-mix(in srgb, var(--brand) 45%, var(--border-strong)); }
+.sc-shot-bar { display: flex; align-items: center; gap: 0.5rem; padding: 0.625rem 0.875rem; border-bottom: 1px solid var(--border-subtle); background: var(--bg-elevated); }
+.sc-shot-bar .dots { display: flex; gap: 5px; } .sc-shot-bar .dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--surface-3); }
+.sc-shot-bar .url { flex: 1; margin-left: 0.5rem; background: var(--surface-2); border-radius: var(--r-sm); padding: 0.3125rem 0.625rem; font-size: var(--text-xs); color: var(--text-muted); font-family: var(--font-mono); display: flex; align-items: center; gap: 0.4375rem; overflow: hidden; white-space: nowrap; }
+.sc-shot img { width: 100%; display: block; aspect-ratio: 16/10; object-fit: cover; object-position: top; background: var(--bg); }
+.sc-shot .cap { padding: 0.875rem 1rem 1rem; }
+.sc-shot .cap h3 { font-size: var(--text-base); font-weight: 600; margin: 0 0 0.25rem; letter-spacing: -0.01em; }
+.sc-shot .cap p { font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.55; margin: 0; }
+
+/* Galeri contoh konten hasil mesin — bingkai ponsel 9:16, tanpa batas jumlah (auto-fill) */
+.sc-videos { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 1.5rem; }
+.sc-vid { border: 1px solid var(--border); border-radius: var(--r-xl); overflow: hidden; background: var(--surface-1); display: flex; flex-direction: column; transition: border-color var(--d-fast), transform var(--d-fast); }
+.sc-vid:hover { border-color: var(--border-strong); transform: translateY(-3px); }
+.sc-vid .phone { position: relative; aspect-ratio: 9/16; background: #000; }
+.sc-vid .phone video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.sc-vid .phone .niche { position: absolute; top: 12px; left: 12px; z-index: 1; font-size: 0.625rem; font-weight: 600; padding: 3px 9px; border-radius: var(--r-full); background: rgba(0,0,0,0.55); color: #fff; backdrop-filter: blur(4px); pointer-events: none; }
+.sc-vid .vbody { padding: 0.875rem 1rem 1rem; }
+.sc-vid .vbody h3 { font-size: var(--text-base); font-weight: 600; margin: 0 0 0.25rem; letter-spacing: -0.01em; }
+.sc-vid .vbody p { font-size: var(--text-xs); color: var(--text-secondary); line-height: 1.55; margin: 0; }
+
+.sc-cta { text-align: center; padding: 4rem 2rem; border-radius: var(--r-2xl); border: 1px solid color-mix(in srgb, var(--brand) 30%, transparent); background: radial-gradient(600px 300px at 50% 0%, var(--brand-soft), transparent 70%), var(--surface-1); }
+.sc-cta h2 { font-size: var(--text-4xl); font-weight: 800; letter-spacing: -0.03em; margin: 0 0 1rem; }
+
+@media (max-width: 900px) { .sc-screens { grid-template-columns: 1fr; } }

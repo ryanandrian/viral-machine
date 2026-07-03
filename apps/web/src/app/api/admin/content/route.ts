@@ -6,7 +6,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 const T: Record<string, { cols: string[]; order: string }> = {
   blog_posts: { cols: ["slug", "title", "title_en", "excerpt", "excerpt_en", "body", "body_en", "category", "cover", "status", "published_at", "sort_order"], order: "published_at" },
   docs_articles: { cols: ["slug", "grp", "grp_en", "title", "title_en", "body", "body_en", "status", "sort_order"], order: "sort_order" },
-  demo_tours: { cols: ["label", "label_en", "href", "heading", "heading_en", "caption", "caption_en", "bullets", "bullets_en", "is_active", "sort_order"], order: "sort_order" },
+  showcase_screens: { cols: ["title", "title_en", "caption", "caption_en", "image_url", "is_active", "sort_order"], order: "sort_order" },
+  showcase_videos: { cols: ["title", "title_en", "description", "description_en", "niche_label", "video_url", "poster_url", "is_active", "sort_order"], order: "sort_order" },
 };
 
 export async function GET(req: Request) {

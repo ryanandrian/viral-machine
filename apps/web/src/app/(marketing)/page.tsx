@@ -100,7 +100,7 @@ export default function LandingPage() {
             <p className="sub"><Bi id="Hingga 50 video Shorts per hari (multi-channel) dengan kualitas viral-grade. Tools lain bikin video. MesinViral belajar dari analytics channelmu — dan makin pintar tiap hari." en="Up to 50 Shorts per day (multi-channel) at viral-grade quality. Other tools just make videos. MesinViral learns from your channel's analytics — and gets smarter every day." /></p>
             <div className="hero-cta">
               <a href="/auth?view=signup" className="btn btn-default btn-xl"><Bi id="Mulai Gratis 7 Hari" en="Start 7-Day Free Trial" /> <ArrowRight size={18} /></a>
-              <a href="/demo" className="btn btn-outline btn-xl"><Play size={16} /> <Bi id="Tonton Demo" en="Watch Demo" /></a>
+              <a href="/showcase" className="btn btn-outline btn-xl"><Play size={16} /> <Bi id="Lihat Showcase" en="See Showcase" /></a>
             </div>
             <div className="hero-fine"><CheckCircle size={15} style={{ color: "var(--success)" }} /> <Bi id="Tanpa kartu kredit · 5 video gratis · Cancel kapan saja" en="No credit card · 5 free videos · Cancel anytime" /></div>
             <div className="hero-trust">

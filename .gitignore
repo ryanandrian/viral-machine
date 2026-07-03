@@ -27,3 +27,7 @@ S3-CONNECTION.md
 # folder review sementara (artefak validasi lokal)
 _validasi_visual_dna/
 client_secret.json
+
+# jangan pernah commit backup env / artefak WSL
+.env.bak*
+*Zone.Identifier
