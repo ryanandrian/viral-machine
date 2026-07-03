@@ -38,10 +38,26 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const a = createAdminClient();
 
   const { data: job } = await a.from("direct_jobs")
-    .select("id, status, error, run_id, created_at, completed_at")
+    .select("id, status, error, run_id, created_at, started_at, completed_at")
     .eq("tenant_id", ADMIN_TEST_TID).eq("job_type", "admin_test").eq("niche", id)
     .order("created_at", { ascending: false }).limit(1).maybeSingle();
   if (!job) return NextResponse.json({ test: null });
+
+  // Progres NYATA saat berjalan (stepper ala CI, masukan owner 2026-07-04): parse "STEP n/T | label"
+  // dari pipeline_run_logs (denyut mesin sungguhan, sumber sama dgn live-tail Runs) + log terakhir.
+  let progress: { step: number; total: number; label: string; last_log: string; last_log_at: string } | null = null;
+  if (job.run_id && ["pending", "producing"].includes(job.status)) {
+    const [{ data: stepRow }, { data: lastRow }] = await Promise.all([
+      a.from("pipeline_run_logs").select("message").eq("run_id", job.run_id).like("message", "STEP %").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      a.from("pipeline_run_logs").select("message, created_at").eq("run_id", job.run_id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    ]);
+    const m = /^STEP (\d+)(?:\/(\d+))?(?: DONE)? \|\s*(.*)$/.exec((stepRow?.message as string) ?? "");
+    progress = {
+      step: m ? Number(m[1]) : 0, total: m?.[2] ? Number(m[2]) : 7,
+      label: m?.[3] ?? "", last_log: ((lastRow?.message as string) ?? "").slice(0, 120),
+      last_log_at: (lastRow?.created_at as string) ?? "",
+    };
+  }
 
   let run: Record<string, unknown> | null = null;
   let video_url: string | null = null;
@@ -61,5 +77,5 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       }
     }
   }
-  return NextResponse.json({ test: { ...job, run, video_url } });
+  return NextResponse.json({ test: { ...job, run, video_url, progress } });
 }

@@ -44,7 +44,8 @@ export default function AdminNichesPage() {
   // Test niche (2026-07-04): konfirmasi dulu (ConfirmDialog standar), produksi TANPA publish,
   // hasil (status/QC/skor + video presigned) tampil di drawer — poll selama masih berjalan.
   type TestRun = { status: string; qc_passed: boolean | null; viral_score: number | null; topic: string | null; elapsed_seconds: number | null; error_message: string | null };
-  type TestInfo = { id: string; status: string; error: string | null; created_at: string; completed_at: string | null; run: TestRun | null; video_url: string | null };
+  type TestProgress = { step: number; total: number; label: string; last_log: string; last_log_at: string };
+  type TestInfo = { id: string; status: string; error: string | null; created_at: string; started_at: string | null; completed_at: string | null; run: TestRun | null; video_url: string | null; progress: TestProgress | null };
   const [testConfirm, setTestConfirm] = useState(false);
   const [test, setTest] = useState<TestInfo | null>(null);
   const [testLoading, setTestLoading] = useState(false);
@@ -55,9 +56,9 @@ export default function AdminNichesPage() {
     if (r.ok) { const j = await r.json(); setTest(j.test); } else setTest(null);
   }, []);
   useEffect(() => { setTest(null); if (sel) loadTest(sel); }, [sel, loadTest]);
-  useEffect(() => {   // poll saat test masih antre/berjalan
+  useEffect(() => {   // poll saat test masih antre/berjalan (5s — progres stepper terasa hidup)
     if (!sel || !test || !["pending", "producing"].includes(test.status)) return;
-    const t = setInterval(() => loadTest(sel), 10_000);
+    const t = setInterval(() => loadTest(sel), 5_000);
     return () => clearInterval(t);
   }, [sel, test, loadTest]);
   type NReq = { request_id: string; tenant_id: string; tenant_email: string | null; request_type: string; title: string; clues: Record<string, string>; status: string; created_at: string; niche_id: string | null };
@@ -286,7 +287,24 @@ export default function AdminNichesPage() {
                 </>)}
                 <button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} title="Segarkan" disabled={testLoading} onClick={() => cur && loadTest(cur.niche_id)}><RefreshCw size={12} /></button>
               </div>
-              {test?.error && test.status !== "done" && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".35rem", color: "var(--danger)" }}>{test.error}</div>}
+              {test && ["pending", "producing"].includes(test.status) && (
+                <div style={{ marginTop: ".6rem" }}>
+                  {test.progress && test.progress.step > 0 ? (<>
+                    <div style={{ display: "flex", alignItems: "center", gap: ".5rem", fontSize: "var(--text-xs)", marginBottom: ".35rem" }}>
+                      <Loader2 size={11} className="spin" style={{ color: "var(--accent)" }} />
+                      <span style={{ fontWeight: 600 }}><Bi id={`Langkah ${test.progress.step}/${test.progress.total}`} en={`Step ${test.progress.step}/${test.progress.total}`} /></span>
+                      <span className="muted">{test.progress.label}</span>
+                    </div>
+                    <div style={{ height: 5, borderRadius: 3, background: "var(--surface-2)", overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${Math.round((test.progress.step / Math.max(1, test.progress.total)) * 100)}%`, background: "var(--accent)", transition: "width .6s ease" }} />
+                    </div>
+                    {test.progress.last_log && <div className="muted mono" style={{ fontSize: "0.625rem", marginTop: ".35rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{test.progress.last_log}</div>}
+                  </>) : (
+                    <div className="muted" style={{ fontSize: "var(--text-xs)", display: "flex", alignItems: "center", gap: ".4rem" }}><Loader2 size={11} className="spin" /> <Bi id="Menunggu giliran mesin…" en="Waiting for an engine slot…" /></div>
+                  )}
+                </div>
+              )}
+              {test?.error && test.status !== "done" && !["pending", "producing"].includes(test.status) && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".35rem", color: "var(--danger)" }}>{test.error}</div>}
               {test?.status === "done" && !test.run?.qc_passed && test.run?.error_message && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".35rem" }}>Catatan QC: {test.run.error_message}</div>}
               {test?.video_url && (
                 <video controls preload="metadata" src={test.video_url} style={{ marginTop: ".6rem", width: 168, aspectRatio: "9/16", borderRadius: 8, border: "1px solid var(--border)", background: "#000", display: "block" }} />
