@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import { Moon, Sun, Menu } from "lucide-react";
 
@@ -19,7 +20,12 @@ function Bi({ id, en }: { id: string; en: string }) {
   return (<><span data-id>{id}</span><span data-en>{en}</span></>);
 }
 
-export function MarketingShell({ children, active }: { children: React.ReactNode; active?: string }) {
+export function MarketingShell({ children }: { children: React.ReactNode }) {
+  // Highlight menu dari URL AKTUAL (dulu prop `active` hardcode "Fitur" di layout → semua halaman
+  // menyorot Features). Anchor "/#..." = beranda; lainnya cocok prefix (mis. /blog/[slug] → Blog).
+  const pathname = usePathname();
+  const isActive = (href: string) =>
+    href.startsWith("/#") ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [lang, setLang] = useState<"id" | "en">("id");
@@ -56,7 +62,7 @@ export function MarketingShell({ children, active }: { children: React.ReactNode
           <a href="/" className="mk-brand"><img src="/mesinviral_logo512.png" alt="MesinViral" style={{ width: 30, height: 30, objectFit: "contain", flex: "none" }} /> MesinViral</a>
           <nav className={`mk-links${menuOpen ? " open" : ""}`}>
             {NAV_LINKS.map((l) => (
-              <a key={l.id} href={l.href} className={active === l.id ? "active" : ""}><Bi id={l.id} en={l.en} /></a>
+              <a key={l.id} href={l.href} className={isActive(l.href) ? "active" : ""}><Bi id={l.id} en={l.en} /></a>
             ))}
           </nav>
           <div className="mk-actions">
