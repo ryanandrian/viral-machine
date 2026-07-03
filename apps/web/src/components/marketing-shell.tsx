@@ -31,6 +31,14 @@ export function MarketingShell({ children }: { children: React.ReactNode }) {
   const [lang, setLang] = useState<"id" | "en">("id");
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  // Badge status footer = kondisi NYATA (/api/public/status, sumber sama tab Status & admin System
+  // Health). null = belum/gagal dimuat → tampil netral "Status sistem" tanpa klaim (jujur).
+  const [allOk, setAllOk] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fetch("/api/public/status").then((r) => { if (!r.ok) throw new Error(); return r.json(); })
+      .then((j) => setAllOk(Boolean(j.all_ok))).catch(() => setAllOk(null));
+  }, []);
 
   useEffect(() => {
     setMounted(true);
@@ -101,7 +109,7 @@ export function MarketingShell({ children }: { children: React.ReactNode }) {
           <div className="mk-foot-bottom">
             <span>© 2026 MesinViral. Provided By Lumite Automasi Indonesia.</span>
             <div className="mk-foot-meta">
-              <a href="/about"><span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--success)", display: "inline-block", marginRight: 5 }} /><Bi id="Semua sistem normal" en="All systems normal" /></a>
+              <a href="/about"><span style={{ width: 7, height: 7, borderRadius: "50%", background: allOk === null ? "var(--surface-3)" : allOk ? "var(--success)" : "var(--warning)", display: "inline-block", marginRight: 5 }} />{allOk === null ? <Bi id="Status sistem" en="System status" /> : allOk ? <Bi id="Semua sistem normal" en="All systems normal" /> : <Bi id="Sebagian layanan terganggu" en="Some services degraded" />}</a>
             </div>
           </div>
         </div>
