@@ -66,7 +66,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       .select("status, qc_passed, viral_score, topic, elapsed_seconds, error_message, run_metadata")
       .eq("run_id", job.run_id).maybeSingle();
     run = pr ?? null;
-    const s3key = (pr?.run_metadata as { video_s3?: string } | null)?.video_s3;
+    // Fallback: run lama tanpa video_s3 di run_metadata → cari di content_inventory (s3_key memuat run_id).
+    let s3key = (pr?.run_metadata as { video_s3?: string } | null)?.video_s3;
+    if (!s3key) {
+      const { data: inv } = await a.from("content_inventory").select("s3_key")
+        .eq("tenant_id", ADMIN_TEST_TID).like("s3_key", `%${job.run_id}%`).limit(1).maybeSingle();
+      s3key = (inv?.s3_key as string) ?? undefined;
+    }
     if (s3key) {
       const endpoint = process.env.S3_ENDPOINT, accessKeyId = process.env.S3_ACCESS_KEY, secretAccessKey = process.env.S3_SECRET_KEY, bucket = process.env.S3_BUCKET;
       if (endpoint && accessKeyId && secretAccessKey && bucket) {

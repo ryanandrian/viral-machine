@@ -372,6 +372,7 @@ def _run_test_no_publish(sb, job: dict, ch: dict, run_id: str) -> None:
 
     try:
         _script = result.get("script", {}) or {}
+        _qc = result.get("steps", {}).get("qc", {})
         sb.table("production_runs").insert({
             "tenant_id": tenant_id, "run_id": run_id, "channel_id": channel_id,
             "niche": niche, "topic": _script.get("topic", ""), "status": "success" if (status == "done" and qc_ok) else ("qc_failed" if status == "done" else "failed"),
@@ -379,14 +380,24 @@ def _run_test_no_publish(sb, job: dict, ch: dict, run_id: str) -> None:
             "llm_provider": _script.get("llm_provider_used"),
             "elapsed_seconds": result.get("elapsed_seconds"),
             "error_message": err,
-            "run_metadata": {"direct": True, "test": True, "job_type": "admin_test", "inventory_id": inv_id},
+            # video_s3 WAJIB di sini juga (drawer memutar video dari run_metadata — insiden 2026-07-04:
+            # dulu hanya di inventory metadata → panel tak bisa putar video).
+            "run_metadata": {"direct": True, "test": True, "job_type": "admin_test", "inventory_id": inv_id,
+                             "video_s3": (f"{tenant_id}/{channel_id}/{run_id}.mp4" if status == "done" else None),
+                             "duration_secs": _qc.get("duration"), "size_mb": _qc.get("size_mb")},
         }).execute()
     except Exception as e:
         logger.warning(f"[DirectTest] tulis production_runs gagal: {e}")
 
-    sb.table("direct_jobs").update({
-        "status": status, "error": err, "completed_at": _now(),
-    }).eq("id", jid).execute()
+    # WAJIB ter-log bila gagal (insiden 2026-07-04: update tak jalan → job nyangkut 'producing'
+    # selamanya tanpa jejak — exception thread-pool tertelan diam-diam).
+    try:
+        sb.table("direct_jobs").update({
+            "status": status, "error": err, "completed_at": _now(),
+        }).eq("id", jid).execute()
+        logger.info(f"[DirectTest] job {jid} → {status} (run {run_id})")
+    except Exception as e:
+        logger.error(f"[DirectTest] update direct_jobs {jid} → {status} GAGAL: {e}")
 
 
 def drain_direct(sb, pool: ThreadPoolExecutor, sem: threading.Semaphore) -> int:
