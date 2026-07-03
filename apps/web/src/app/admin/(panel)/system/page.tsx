@@ -58,7 +58,8 @@ export default async function AdminSystemPage() {
     a.from("direct_jobs").select("status, job_type, created_at").order("created_at", { ascending: false }).limit(50),
   ]);
   const djRows = direct.data ?? [];
-  const dj = { pending: djRows.filter((d) => d.status === "pending").length, producing: djRows.filter((d) => d.status === "producing").length, published: djRows.filter((d) => d.status === "published").length, failed: djRows.filter((d) => d.status === "failed").length };
+  // 'done' = test niche selesai TANPA publish (2026-07-04) — dihitung "Selesai" bersama 'published'.
+  const dj = { pending: djRows.filter((d) => d.status === "pending").length, producing: djRows.filter((d) => d.status === "producing").length, published: djRows.filter((d) => ["published", "done"].includes(d.status)).length, failed: djRows.filter((d) => d.status === "failed").length };
 
   const now = Date.now();
   const hourly = (rows: { created_at: string }[], pred: (r: never) => boolean = () => true) => {

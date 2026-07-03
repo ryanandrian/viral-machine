@@ -238,6 +238,13 @@ def run_direct(sb, job: dict) -> None:
         return
     sb.table("direct_jobs").update({"run_id": run_id}).eq("id", jid).execute()
 
+    # Test niche ADMIN (keputusan owner 2026-07-04): produksi penuh TANPA YouTube — video → S3/buffer,
+    # ditonton admin di drawer Pustaka Niche; janitor TTL membersihkan otomatis. Jalur terpisah dari
+    # direct tenant (test/retry) yang tetap publish private.
+    if (job.get("job_type") or "") == "admin_test":
+        _run_test_no_publish(sb, job, ch, run_id)
+        return
+
     niche = job.get("niche") or ch.get("niche")
     status, yt_url, err, qc_ok, result = "failed", None, None, False, {}
     try:
@@ -302,6 +309,84 @@ def run_direct(sb, job: dict) -> None:
             ).eq("id", job["channel_id"]).execute()
         except Exception as e:
             logger.warning(f"[Direct] gagal lepas pause ch={job.get('channel_id')}: {e}")
+
+
+def _run_test_no_publish(sb, job: dict, ch: dict, run_id: str) -> None:
+    """Test niche ADMIN: pipeline penuh publish=False → S3 + content_inventory (ready/ready_with_issues;
+    TTL janitor bersihkan otomatis) + production_runs (run_metadata.video_s3 utk ditonton di drawer).
+    direct_jobs → 'done' (video jadi, TANPA YouTube) / 'failed'. Cermin produce_one (jalur teruji §12c)."""
+    from datetime import datetime, timezone
+    from src.intelligence.config import tenant_config_from_channel
+    from src.orchestrator.pipeline import Pipeline
+
+    jid = job["id"]
+    tenant_id = job["tenant_id"]
+    channel_id = str(job["channel_id"])
+    niche = job.get("niche") or ch.get("niche")
+    _now = lambda: datetime.now(timezone.utc).isoformat()
+
+    status, err, qc_ok, result = "failed", None, False, {}
+    inv_id = inventory.record_producing(tenant_id, channel_id, niche,
+                                        {"channel": ch.get("channel_name"), "test": True})
+    try:
+        tc = tenant_config_from_channel(ch, niche=niche)
+        try:
+            tc.run_kind = "admin_test"
+        except Exception:
+            pass
+        with logger.contextualize(tenant_id=tenant_id, channel_id=channel_id, run_id=run_id):
+            result = Pipeline().run(tc, publish=False, run_id=run_id)
+
+        qc = result.get("steps", {}).get("qc", {})
+        qc_ok = bool(qc.get("passed"))
+        video = result.get("video_path")
+        vkey = None
+        if result.get("status") == "success" and video and os.path.exists(video):
+            vkey = f"{tenant_id}/{channel_id}/{run_id}.mp4"
+            s3_buffer.upload(video, vkey)
+            _meta = {"run_id": run_id, "video_s3": vkey, "niche": niche, "test": True,
+                     "viral_score": (result.get("script") or {}).get("viral_score"),
+                     "duration_secs": qc.get("duration"), "size_mb": qc.get("size_mb")}
+            if qc_ok:
+                inventory.mark_ready(inv_id, vkey, metadata=_meta)
+            else:
+                inventory.mark_ready_with_issues(inv_id, vkey, reason=qc.get("reason", ""),
+                                                 recommendation=qc.get("recommendation", ""), metadata=_meta)
+            try:
+                if os.path.exists(video):
+                    os.remove(video)
+            except Exception:
+                pass
+            status = "done"   # video jadi (QC pass/fail sama-sama bisa ditonton) — TANPA publish
+            err = None if qc_ok else (qc.get("reason") or "QC tak lolos — tonton & nilai di drawer")
+        else:
+            inventory.mark_failed(inv_id, result.get("error") or "produksi gagal (tanpa video)")
+            err = result.get("error") or qc.get("reason") or "produksi gagal (tanpa video)"
+    except Exception as e:
+        err = str(e)
+        try:
+            inventory.mark_failed(inv_id, err)
+        except Exception:
+            pass
+        logger.error(f"[DirectTest] job {jid} gagal: {e}")
+
+    try:
+        _script = result.get("script", {}) or {}
+        sb.table("production_runs").insert({
+            "tenant_id": tenant_id, "run_id": run_id, "channel_id": channel_id,
+            "niche": niche, "topic": _script.get("topic", ""), "status": "success" if (status == "done" and qc_ok) else ("qc_failed" if status == "done" else "failed"),
+            "qc_passed": qc_ok, "viral_score": _script.get("viral_score"),
+            "llm_provider": _script.get("llm_provider_used"),
+            "elapsed_seconds": result.get("elapsed_seconds"),
+            "error_message": err,
+            "run_metadata": {"direct": True, "test": True, "job_type": "admin_test", "inventory_id": inv_id},
+        }).execute()
+    except Exception as e:
+        logger.warning(f"[DirectTest] tulis production_runs gagal: {e}")
+
+    sb.table("direct_jobs").update({
+        "status": status, "error": err, "completed_at": _now(),
+    }).eq("id", jid).execute()
 
 
 def drain_direct(sb, pool: ThreadPoolExecutor, sem: threading.Semaphore) -> int:

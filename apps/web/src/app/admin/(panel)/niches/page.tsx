@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Plus, X, Clock, Sparkles, Check } from "lucide-react";
+import { Plus, X, Clock, Sparkles, Check, FlaskConical, Loader2, RefreshCw } from "lucide-react";
+import ConfirmDialog from "@/components/confirm-dialog";
 import { YT_CATEGORIES } from "@/lib/youtube-categories";
 import "./niches.css";
 
@@ -40,6 +41,25 @@ export default function AdminNichesPage() {
   const [edit, setEdit] = useState<Record<string, unknown>>({});
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  // Test niche (2026-07-04): konfirmasi dulu (ConfirmDialog standar), produksi TANPA publish,
+  // hasil (status/QC/skor + video presigned) tampil di drawer — poll selama masih berjalan.
+  type TestRun = { status: string; qc_passed: boolean | null; viral_score: number | null; topic: string | null; elapsed_seconds: number | null; error_message: string | null };
+  type TestInfo = { id: string; status: string; error: string | null; created_at: string; completed_at: string | null; run: TestRun | null; video_url: string | null };
+  const [testConfirm, setTestConfirm] = useState(false);
+  const [test, setTest] = useState<TestInfo | null>(null);
+  const [testLoading, setTestLoading] = useState(false);
+  const loadTest = useCallback(async (nicheId: string) => {
+    setTestLoading(true);
+    const r = await fetch(`/api/admin/niches/${nicheId}/test`);
+    setTestLoading(false);
+    if (r.ok) { const j = await r.json(); setTest(j.test); } else setTest(null);
+  }, []);
+  useEffect(() => { setTest(null); if (sel) loadTest(sel); }, [sel, loadTest]);
+  useEffect(() => {   // poll saat test masih antre/berjalan
+    if (!sel || !test || !["pending", "producing"].includes(test.status)) return;
+    const t = setInterval(() => loadTest(sel), 10_000);
+    return () => clearInterval(t);
+  }, [sel, test, loadTest]);
   type NReq = { request_id: string; tenant_id: string; tenant_email: string | null; request_type: string; title: string; clues: Record<string, string>; status: string; created_at: string; niche_id: string | null };
   const [reqs, setReqs] = useState<NReq[]>([]);
   const [actModal, setActModal] = useState<{ req: NReq; action: "mark_paid" | "deliver"; note: string } | null>(null);
@@ -118,9 +138,10 @@ export default function AdminNichesPage() {
   async function testNiche(id: string) {
     setBusy(true);
     const r = await fetch(`/api/admin/niches/${id}/test`, { method: "POST" });
-    setBusy(false);
+    setBusy(false); setTestConfirm(false);
     const j = await r.json().catch(() => ({}));
-    setToast(r.ok ? "Test niche diantre (channel admin-test, private) — pantau di Runs/System Health" : `Gagal: ${j.error ?? r.status}`);
+    setToast(r.ok ? "Test diantre — video diproduksi TANPA publish; hasil muncul di panel ini" : `Gagal: ${j.error ?? r.status}`);
+    if (r.ok) await loadTest(id);
   }
   async function transition(id: string) {
     setBusy(true);
@@ -250,6 +271,29 @@ export default function AdminNichesPage() {
             <div style={{ flex: 1 }}><div style={{ fontWeight: 600 }}>{cur.name}</div><div className="muted mono" style={{ fontSize: "var(--text-xs)" }}>{cur.niche_id}</div></div>
             <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setSel(null)}><X size={16} /></button>
           </div>
+          {(test || testLoading) && (
+            <div style={{ padding: "0.75rem 1.25rem", borderBottom: "1px solid var(--border-subtle)", background: "var(--bg)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: ".5rem", fontSize: "var(--text-xs)" }}>
+                <FlaskConical size={13} style={{ color: "var(--accent)" }} />
+                <strong style={{ fontSize: "var(--text-xs)" }}><Bi id="Test terakhir" en="Last test" /></strong>
+                {testLoading && !test ? <Loader2 size={12} className="spin" /> : test && (<>
+                  <span className={`badge ${test.status === "done" && test.run?.qc_passed ? "badge-success" : test.status === "done" ? "badge-warning" : test.status === "failed" ? "badge-error" : "badge-info"}`} style={{ fontSize: "0.5625rem" }}>
+                    {test.status === "done" ? (test.run?.qc_passed ? "QC lolos" : "QC ada catatan") : test.status === "failed" ? "gagal" : test.status === "producing" ? "berjalan…" : "antre"}
+                  </span>
+                  {test.run?.viral_score != null && <span className="muted">skor {test.run.viral_score}</span>}
+                  {test.run?.elapsed_seconds != null && <span className="muted">{Math.round(test.run.elapsed_seconds / 60)}m</span>}
+                  <span className="muted">{dateID(test.created_at)}</span>
+                </>)}
+                <button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} title="Segarkan" disabled={testLoading} onClick={() => cur && loadTest(cur.niche_id)}><RefreshCw size={12} /></button>
+              </div>
+              {test?.error && test.status !== "done" && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".35rem", color: "var(--danger)" }}>{test.error}</div>}
+              {test?.status === "done" && !test.run?.qc_passed && test.run?.error_message && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".35rem" }}>Catatan QC: {test.run.error_message}</div>}
+              {test?.video_url && (
+                <video controls preload="metadata" src={test.video_url} style={{ marginTop: ".6rem", width: 168, aspectRatio: "9/16", borderRadius: 8, border: "1px solid var(--border)", background: "#000", display: "block" }} />
+              )}
+              {test?.status === "done" && !test.video_url && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".35rem" }}><Bi id="Video sudah dibersihkan dari penyimpanan (masa simpan uji ±3 hari)." en="Video already cleaned from storage (test retention ±3 days)." /></div>}
+            </div>
+          )}
           <div className="nl-drawer-tabs">{DTABS.map((l, i) => <button key={l} className={`nl-dtab${dtab === i ? " active" : ""}`} onClick={() => setDtab(i)}>{l}</button>)}</div>
           <div className="nl-dpanel">
             {dtab === 0 && <>
@@ -299,11 +343,21 @@ export default function AdminNichesPage() {
           </div>
           <div style={{ padding: "1rem 1.25rem", borderTop: "1px solid var(--border-subtle)", display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
             <button className="btn btn-ghost" onClick={() => setSel(null)}><Bi id="Batal" en="Cancel" /></button>
-            <button className="btn btn-secondary" disabled={busy} onClick={() => testNiche(cur.niche_id)} title="Produksi 1 video uji di channel admin-test (private)"><Bi id="Test niche" en="Test niche" /></button>
+            <button className="btn btn-secondary" disabled={busy} onClick={() => setTestConfirm(true)} title="Produksi 1 video uji (tanpa publish)"><FlaskConical size={14} /> <Bi id="Test niche" en="Test niche" /></button>
             {dtab !== 4 && <button className="btn btn-default" disabled={busy} onClick={save}><Bi id="Simpan" en="Save" /></button>}
           </div>
         </>)}
       </aside>
+
+      <ConfirmDialog
+        open={testConfirm}
+        title={<Bi id="Test produksi niche?" en="Test-produce this niche?" />}
+        message={<Bi id="Mesin akan memproduksi 1 video uji NYATA memakai kredensial AI admin (ada biaya provider). TIDAK dipublish ke YouTube — hasil bisa ditonton di panel ini dan otomatis terhapus dari penyimpanan setelah ±3 hari." en="The engine will produce 1 REAL test video using the admin AI credentials (real provider cost). It is NOT published to YouTube — watch the result in this panel; storage is auto-cleaned after ~3 days." />}
+        confirmLabel={<Bi id="Jalankan test" en="Run test" />}
+        busy={busy}
+        onConfirm={() => cur && testNiche(cur.niche_id)}
+        onCancel={() => setTestConfirm(false)}
+      />
 
       {toast && <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 70, background: "#1f2937", color: "#fff", padding: "0.625rem 1rem", borderRadius: 8, border: "1px solid rgba(255,255,255,0.12)", boxShadow: "0 6px 20px rgba(0,0,0,0.35)", fontSize: "var(--text-sm)" }}>{toast}</div>}
     </>
