@@ -65,12 +65,15 @@ export default function TestLabPage() {
     setBusy(false);
     if (r.ok) { setMsg("Kunci dihapus"); await load(); } else setMsg("Gagal hapus");
   }
-  async function saveCfg() {
+  // AUTO-SAVE per perubahan (fix 2026-07-04: dulu tombol Simpan terpisah → owner pilih lalu langsung
+  // "Cek kesiapan" yang membaca DB → pilihan belum tersimpan dianggap kosong. Jebakan dihapus.)
+  async function saveFields(part: Record<string, string>) {
+    setCfg((c) => ({ ...c, ...part }));
     setBusy(true);
-    const r = await fetch("/api/admin/test-lab", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cfg) });
+    const r = await fetch("/api/admin/test-lab", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(part) });
     const j = await r.json().catch(() => ({}));
     setBusy(false);
-    if (r.ok) { setMsg("Konfigurasi channel test tersimpan"); await load(); } else setMsg(`Gagal: ${j.error ?? r.status}`);
+    if (r.ok) setMsg("✓ Tersimpan otomatis"); else { setMsg(`Gagal simpan: ${j.error ?? r.status}`); await load(); }
   }
   async function checkReadiness() {
     setChecking(true); setResult(null); setReady(null);
@@ -79,7 +82,6 @@ export default function TestLabPage() {
     if (r.ok) { const j = await r.json(); setResult(j.result); setReady(j.ready); } else setMsg("Gagal cek kesiapan");
   }
 
-  const upd = (k: string, v: string) => setCfg((c) => ({ ...c, [k]: v }));
   const modelsFor = (component: string, provider: string) => models.filter((m) => m.component === component && m.provider_key === provider);
   const providersFor = (component: string) => [...new Set(models.filter((m) => m.component === component).map((m) => m.provider_key))];
   const visualModels = models.filter((m) => m.component === "image" || m.component === "video");
@@ -131,23 +133,22 @@ export default function TestLabPage() {
         <div style={{ display: "grid", gap: ".75rem" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: ".75rem" }}>
             <div><label className="label"><Bi id="Penulis Naskah (LLM) — penyedia" en="Script writer (LLM) — provider" /></label>
-              <select className="input" value={cfg.llm_library ?? ""} onChange={(e) => { upd("llm_library", e.target.value); upd("llm_model", ""); }}><option value="">— pilih —</option>{providersFor("llm").map((p) => <option key={p} value={p}>{p}</option>)}</select></div>
+              <select className="input" value={cfg.llm_library ?? ""} onChange={(e) => saveFields({ llm_library: e.target.value, llm_model: "" })}><option value="">— pilih —</option>{providersFor("llm").map((p) => <option key={p} value={p}>{p}</option>)}</select></div>
             <div><label className="label">Model</label>
-              <select className="input" value={cfg.llm_model ?? ""} onChange={(e) => upd("llm_model", e.target.value)}><option value="">— pilih —</option>{modelsFor("llm", cfg.llm_library ?? "").map((m) => <option key={m.model_key} value={m.model_key}>{m.display_name || m.model_key}</option>)}</select></div>
+              <select className="input" value={cfg.llm_model ?? ""} onChange={(e) => saveFields({ llm_model: e.target.value })}><option value="">— pilih —</option>{modelsFor("llm", cfg.llm_library ?? "").map((m) => <option key={m.model_key} value={m.model_key}>{m.display_name || m.model_key}</option>)}</select></div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: ".75rem" }}>
             <div><label className="label"><Bi id="Pengisi Suara (TTS) — penyedia" en="Voice (TTS) — provider" /></label>
-              <select className="input" value={cfg.tts_provider ?? ""} onChange={(e) => { upd("tts_provider", e.target.value); upd("tts_model", ""); upd("voice_key", ""); }}><option value="">— pilih —</option>{providersFor("tts").map((p) => <option key={p} value={p}>{p}</option>)}</select></div>
+              <select className="input" value={cfg.tts_provider ?? ""} onChange={(e) => saveFields({ tts_provider: e.target.value, tts_model: "", voice_key: "" })}><option value="">— pilih —</option>{providersFor("tts").map((p) => <option key={p} value={p}>{p}</option>)}</select></div>
             <div><label className="label">Model</label>
-              <select className="input" value={cfg.tts_model ?? ""} onChange={(e) => upd("tts_model", e.target.value)}><option value="">— pilih —</option>{modelsFor("tts", cfg.tts_provider ?? "").map((m) => <option key={m.model_key} value={m.model_key}>{m.display_name || m.model_key}</option>)}</select></div>
+              <select className="input" value={cfg.tts_model ?? ""} onChange={(e) => saveFields({ tts_model: e.target.value })}><option value="">— pilih —</option>{modelsFor("tts", cfg.tts_provider ?? "").map((m) => <option key={m.model_key} value={m.model_key}>{m.display_name || m.model_key}</option>)}</select></div>
             <div><label className="label">Voice</label>
-              <select className="input" value={cfg.voice_key ?? ""} onChange={(e) => upd("voice_key", e.target.value)}><option value="">— pilih —</option>{voices.filter((v) => !cfg.tts_provider || v.provider_key === cfg.tts_provider).map((v) => <option key={v.voice_key} value={v.voice_key}>{v.display_name || v.voice_key}</option>)}</select></div>
+              <select className="input" value={cfg.voice_key ?? ""} onChange={(e) => saveFields({ voice_key: e.target.value })}><option value="">— pilih —</option>{voices.filter((v) => !cfg.tts_provider || v.provider_key === cfg.tts_provider).map((v) => <option key={v.voice_key} value={v.voice_key}>{v.display_name || v.voice_key}</option>)}</select></div>
           </div>
           <div><label className="label"><Bi id="Pembuat Visual — model (gambar/video)" en="Visual generator — model (image/video)" /></label>
-            <select className="input" value={cfg.visual_mode ?? ""} onChange={(e) => upd("visual_mode", e.target.value)}><option value="">— pilih —</option>{visualModels.map((m) => { const vm = `${m.component === "video" ? "ai_video" : "ai_image"}:${m.model_key}`; return <option key={vm} value={vm}>{(m.display_name || m.model_key)} ({m.provider_key})</option>; })}</select></div>
-          <div style={{ display: "flex", alignItems: "center", gap: ".75rem" }}>
-            <button className="btn btn-default btn-sm" disabled={busy} onClick={saveCfg}>{busy ? "Menyimpan…" : <Bi id="Simpan konfigurasi" en="Save config" />}</button>
-            {msg && <span className="muted" style={{ fontSize: "var(--text-xs)" }}>{msg}</span>}
+            <select className="input" value={cfg.visual_mode ?? ""} onChange={(e) => saveFields({ visual_mode: e.target.value })}><option value="">— pilih —</option>{visualModels.map((m) => { const vm = `${m.component === "video" ? "ai_video" : "ai_image"}:${m.model_key}`; return <option key={vm} value={vm}>{(m.display_name || m.model_key)} ({m.provider_key})</option>; })}</select></div>
+          <div className="muted" style={{ fontSize: "var(--text-xs)", display: "flex", alignItems: "center", gap: ".5rem" }}>
+            {busy ? <><Loader2 size={12} className="spin" /> <Bi id="Menyimpan…" en="Saving…" /></> : (msg ?? <Bi id="Pilihan tersimpan OTOMATIS saat dipilih." en="Selections save AUTOMATICALLY on change." />)}
           </div>
         </div>
       </div>
