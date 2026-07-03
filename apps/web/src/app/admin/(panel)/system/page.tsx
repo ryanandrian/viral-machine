@@ -3,8 +3,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import "./system.css";
 
 // E3 System Health (Phase 10.8) — SERVER COMPONENT, data NYATA via service_role (gated (panel)/layout).
-// Queue/error dari pipeline_queue + production_runs; workers dari worker_heartbeats (kosong di dev=jujur).
+// Stok buffer dari content_inventory (arsitektur v2: producer jaga stok, BUKAN queue — pipeline_queue=fosil v1,
+// jangan tampilkan); error dari production_runs (24h via filter query + count exact → tahan >1000 baris);
+// workers dari worker_heartbeats (kosong di dev=jujur).
 export const dynamic = "force-dynamic";
+
+// Status content_inventory yang DIHITUNG producer sbg stok (producer.py plan_and_submit):
+// ready + ready_with_issues + producing (rem alami anti-runaway); publishing = sedang diambil publisher.
+const STOCK_STATUSES = ["ready", "ready_with_issues", "producing", "publishing"];
 
 function LineChart({ data, color, gid }: { data: number[]; color: string; gid: string }) {
   const W = 480, H = 160, pad = 10, max = Math.max(1, ...data);
@@ -27,16 +33,25 @@ function categorize(msg: string | null): string {
   if (/429|rate.?limit/.test(m)) return "Rate limit (429)";
   if (/render|ffmpeg/.test(m)) return "Render error";
   if (/upload|youtube/.test(m)) return "Upload fail";
+  if (/visual|clip|image/.test(m)) return "Visual/gambar";
+  if (/topic|topik|niche/.test(m)) return "Topik/niche";
+  if (/durasi|duration|qc/.test(m)) return "Durasi/QC";
   return "Lainnya";
 }
-const FAIL_COLOR: Record<string, string> = { "TTS/timeout": "#ef4444", "Rate limit (429)": "#f59e0b", "Render error": "#6366F1", "Upload fail": "#71717a", "Lainnya": "#a1a1aa" };
+const FAIL_COLOR: Record<string, string> = { "TTS/timeout": "#ef4444", "Rate limit (429)": "#f59e0b", "Render error": "#6366F1", "Upload fail": "#71717a", "Visual/gambar": "#8b5cf6", "Topik/niche": "#0ea5e9", "Durasi/QC": "#10b981", "Lainnya": "#a1a1aa" };
 
 export default async function AdminSystemPage() {
   const a = createAdminClient();
-  const [hb, queue, runs, vids, analytics, channels, direct] = await Promise.all([
+  const since24h = new Date(Date.now() - 24 * 3.6e6).toISOString();
+  const [hb, inv, chRows, runs24, failedRows, runsTotal, runsFailed, runsSuccess, vids, analytics, channels, direct] = await Promise.all([
     a.from("worker_heartbeats").select("*").order("worker_name"),
-    a.from("pipeline_queue").select("created_at, status"),
-    a.from("production_runs").select("created_at, status, error_message"),
+    a.from("content_inventory").select("channel_id, status").in("status", STOCK_STATUSES),
+    a.from("channels").select("id, channel_name, buffer_depth").eq("is_active", true).order("channel_name").limit(24),
+    a.from("production_runs").select("created_at, status").gte("created_at", since24h),
+    a.from("production_runs").select("error_message").eq("status", "failed").order("created_at", { ascending: false }).limit(500),
+    a.from("production_runs").select("id", { count: "exact", head: true }),
+    a.from("production_runs").select("id", { count: "exact", head: true }).eq("status", "failed"),
+    a.from("production_runs").select("id", { count: "exact", head: true }).eq("status", "success"),
     a.from("videos").select("id", { count: "exact", head: true }),
     a.from("video_analytics").select("id", { count: "exact", head: true }),
     a.from("channels").select("id", { count: "exact", head: true }),
@@ -55,17 +70,24 @@ export default async function AdminSystemPage() {
     });
     return buckets;
   };
-  const queueRows = queue.data ?? [];
-  const runRows = runs.data ?? [];
-  const queueDepth = hourly(queueRows as { created_at: string }[]);
-  const errorSeries = hourly(runRows as { created_at: string }[], (r: { status: string }) => r.status === "failed");
+  const run24Rows = runs24.data ?? [];
+  const errorSeries = hourly(run24Rows as { created_at: string }[], (r: { status: string }) => r.status === "failed");
+  const failed24 = run24Rows.filter((r) => r.status === "failed").length;
 
-  const qStatus = queueRows.reduce((m: Record<string, number>, r) => { m[r.status] = (m[r.status] ?? 0) + 1; return m; }, {});
-  const failed = runRows.filter((r) => r.status === "failed");
-  const failByType = failed.reduce((m: Record<string, number>, r) => { const c = categorize(r.error_message); m[c] = (m[c] ?? 0) + 1; return m; }, {});
-  const failTotal = failed.length || 1;
-  const completed = runRows.filter((r) => r.status === "success").length;
-  const errRate = runRows.length ? Math.round((failed.length / runRows.length) * 100) : 0;
+  // Stok buffer per channel aktif (angka yang SAMA dgn yang dipakai producer utk defisit).
+  const invRows = inv.data ?? [];
+  const stockByChannel = invRows.reduce((m: Record<string, Record<string, number>>, r) => {
+    (m[r.channel_id] ??= {})[r.status] = (m[r.channel_id][r.status] ?? 0) + 1; return m;
+  }, {});
+  const activeChannels = chRows.data ?? [];
+  const readyTotal = invRows.filter((r) => r.status === "ready").length;
+
+  const failedAll = runsFailed.count ?? 0;
+  const totalAll = runsTotal.count ?? 0;
+  const failRows = failedRows.data ?? [];
+  const failByType = failRows.reduce((m: Record<string, number>, r) => { const c = categorize(r.error_message); m[c] = (m[c] ?? 0) + 1; return m; }, {});
+  const failTotal = failRows.length || 1;
+  const errRate = totalAll ? Math.round((failedAll / totalAll) * 100) : 0;
 
   const workers = hb.data ?? [];
   const STALE_MS = 60_000;
@@ -73,9 +95,9 @@ export default async function AdminSystemPage() {
   const allOk = workers.length > 0 && liveWorkers.length === workers.length;
 
   const DB: [string, string][] = [
-    ["Videos", String(vids.count ?? 0)], ["Production runs", String(runRows.length)],
+    ["Videos", String(vids.count ?? 0)], ["Production runs", String(totalAll)],
     ["Analytics rows", String(analytics.count ?? 0)], ["Channels", String(channels.count ?? 0)],
-    ["Queue (total)", String(queueRows.length)],
+    ["Stok siap tayang (ready)", String(readyTotal)],
   ];
 
   return (
@@ -101,16 +123,31 @@ export default async function AdminSystemPage() {
       )}
 
       <div className="sys-grid2">
-        <div className="card"><div className="card-head"><h3 className="card-title"><Activity size={16} /> Queue depth (24h) · pending {qStatus["pending"] ?? 0}</h3></div><div className="card-body"><LineChart data={queueDepth} color="#6366F1" gid="sys-q" /></div></div>
-        <div className="card"><div className="card-head"><h3 className="card-title"><AlertTriangle size={16} /> Error rate (24h) · {errRate}% all-time</h3></div><div className="card-body"><LineChart data={errorSeries} color="#EF4444" gid="sys-e" /></div></div>
+        <div className="card card-pad"><h3 className="card-title" style={{ marginBottom: "1rem" }}><Activity size={16} /> Stok buffer per channel · {readyTotal} ready</h3>
+          {activeChannels.length === 0 ? <div className="muted" style={{ fontSize: "var(--text-sm)" }}>Belum ada channel aktif.</div> :
+            activeChannels.map((ch) => {
+              const s = stockByChannel[ch.id] ?? {};
+              const stok = (s["ready"] ?? 0) + (s["ready_with_issues"] ?? 0) + (s["producing"] ?? 0);
+              const target = ch.buffer_depth ?? null;
+              const pct = target ? Math.min(100, Math.round((stok / target) * 100)) : (stok > 0 ? 100 : 0);
+              const detail = [s["ready"] ? `${s["ready"]} ready` : "", s["ready_with_issues"] ? `${s["ready_with_issues"]} perlu tinjau` : "", s["producing"] ? `${s["producing"]} produksi` : "", s["publishing"] ? `${s["publishing"]} publish` : ""].filter(Boolean).join(" · ") || "kosong";
+              return (
+                <div key={ch.id} style={{ marginBottom: "0.75rem" }}>
+                  <div className="sys-bar-row"><span className="lab">{ch.channel_name}</span><div className="track"><span style={{ width: `${pct}%`, background: pct >= 100 ? "var(--success)" : pct > 0 ? "#f59e0b" : "#ef4444" }} /></div><span className="val">{stok}{target ? `/${target}` : ""}</span></div>
+                  <div className="muted" style={{ fontSize: "var(--text-xs)", paddingLeft: 2 }}>{detail}</div>
+                </div>
+              );
+            })}
+        </div>
+        <div className="card"><div className="card-head"><h3 className="card-title"><AlertTriangle size={16} /> Run gagal per jam (24h) · {failed24} dlm 24h · {errRate}% all-time ({failedAll}/{totalAll})</h3></div><div className="card-body"><LineChart data={errorSeries} color="#EF4444" gid="sys-e" /></div></div>
       </div>
 
       <div className="sys-grid2" style={{ marginTop: "1rem" }}>
-        <div className="card card-pad"><h3 className="card-title" style={{ marginBottom: "1rem" }}><XCircle size={16} /> Pipeline failures by type ({failed.length} total)</h3>
-          {failed.length === 0 ? <div className="muted" style={{ fontSize: "var(--text-sm)" }}>Tidak ada kegagalan tercatat.</div> :
+        <div className="card card-pad"><h3 className="card-title" style={{ marginBottom: "1rem" }}><XCircle size={16} /> Pipeline failures by type ({failedAll} total)</h3>
+          {failRows.length === 0 ? <div className="muted" style={{ fontSize: "var(--text-sm)" }}>Tidak ada kegagalan tercatat.</div> :
             Object.entries(failByType).sort((x, y) => y[1] - x[1]).map(([n, v]) => { const pct = Math.round((v / failTotal) * 100); return (<div className="sys-bar-row" key={n}><span className="lab">{n}</span><div className="track"><span style={{ width: `${pct}%`, background: FAIL_COLOR[n] ?? "#a1a1aa" }} /></div><span className="val">{pct}%</span></div>); })}
         </div>
-        <div className="card card-pad"><h3 className="card-title" style={{ marginBottom: "1rem" }}><Command size={16} /> Database (skala data) · {completed} runs sukses</h3>
+        <div className="card card-pad"><h3 className="card-title" style={{ marginBottom: "1rem" }}><Command size={16} /> Database (skala data) · {runsSuccess.count ?? 0} runs sukses</h3>
           {DB.map(([k, v]) => (<div className="sys-db-stat" key={k}><span className="muted">{k}</span><span>{v}</span></div>))}
         </div>
       </div>
