@@ -8,11 +8,12 @@ import { Markdown } from "@/lib/md";
 
 function Bi({ id, en }: { id: string; en: string }) { return (<><span data-id>{id}</span><span data-en>{en}</span></>); }
 
-type Field = { k: string; label: string; type: "text" | "area" | "md" | "select" | "switch" | "number"; opts?: string[] };
+type Field = { k: string; label: string; type: "text" | "area" | "md" | "select" | "switch" | "number" | "image"; opts?: string[] };
 const TABS: { key: string; table: string; label: string; fields: Field[]; title: (r: Row) => string }[] = [
   { key: "blog", table: "blog_posts", label: "Blog", title: (r) => (r.title as string) || "(baru)", fields: [
     { k: "title", label: "Judul (ID)", type: "text" }, { k: "title_en", label: "Judul (EN)", type: "text" },
     { k: "slug", label: "Slug", type: "text" }, { k: "category", label: "Kategori", type: "text" },
+    { k: "cover", label: "Feature image (cover kartu blog)", type: "image" },
     { k: "excerpt", label: "Ringkasan (ID)", type: "area" }, { k: "excerpt_en", label: "Ringkasan (EN)", type: "area" },
     { k: "body", label: "Isi (markdown, ID)", type: "md" }, { k: "status", label: "Status", type: "select", opts: ["draft", "published"] },
   ] },
@@ -65,6 +66,18 @@ export default function AdminContentPage() {
   }
   const upd = (k: string, v: unknown) => setSel((s) => ({ ...(s as Row), [k]: v }));
 
+  async function uploadCover(k: string, file: File) {
+    setBusy(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("slug", (sel?.slug as string) ?? "");
+    const r = await fetch("/api/admin/content/upload-cover", { method: "POST", body: fd });
+    const j = await r.json().catch(() => ({}));
+    setBusy(false);
+    if (r.ok) { upd(k, j.public_url); setToast(`Gambar terunggah (${j.width}×${j.height}px) — jangan lupa Simpan`); }
+    else setToast(`Gagal: ${j.error ?? r.status}`);
+  }
+
   return (
     <div>
       <h1 style={{ fontSize: "1.375rem", marginBottom: ".25rem", display: "flex", alignItems: "center", gap: ".5rem" }}><FileText size={20} /> Content (CMS)</h1>
@@ -96,6 +109,19 @@ export default function AdminContentPage() {
                   {f.type === "area" && <textarea className="input" rows={2} value={(sel[f.k] as string) ?? ""} onChange={(e) => upd(f.k, e.target.value)} />}
                   {f.type === "select" && <div className="radio-row">{f.opts!.map((o) => <span key={o} className={`radio-pill${sel[f.k] === o ? " sel" : ""}`} onClick={() => upd(f.k, o)}>{o}</span>)}</div>}
                   {f.type === "switch" && <label className="switch"><input type="checkbox" checked={!!sel[f.k]} onChange={(e) => upd(f.k, e.target.checked)} /><span className="track" /><span className="thumb" /></label>}
+                  {f.type === "image" && (
+                    <div style={{ display: "grid", gap: ".5rem" }}>
+                      {(sel[f.k] as string) ? (
+                        <div style={{ position: "relative", width: 363, maxWidth: "100%" }}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={sel[f.k] as string} alt="cover" style={{ width: "100%", height: 168, objectFit: "cover", borderRadius: 8, border: "1px solid var(--border)", display: "block" }} />
+                          <button className="btn btn-ghost btn-sm" style={{ position: "absolute", top: 6, right: 6, color: "var(--danger)", background: "rgba(0,0,0,0.55)" }} onClick={() => upd(f.k, null)}><Trash2 size={12} /></button>
+                        </div>
+                      ) : <div className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Belum ada gambar — kartu blog memakai gradasi warna." en="No image yet — blog card falls back to a gradient." /></div>}
+                      <input className="input" type="file" accept="image/png,image/jpeg" disabled={busy} onChange={(e) => { const fl = e.target.files?.[0]; if (fl) uploadCover(f.k, fl); e.target.value = ""; }} />
+                      <div className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="PNG/JPG, maks 5MB, lebar min 720px — disarankan ±760×352 (rasio ~2,2:1, sesuai kartu di landing). Tersimpan di S3 folder blog-cover/." en="PNG/JPG, max 5MB, min width 720px — recommended ±760×352 (~2.2:1, matches landing card). Stored in S3 under blog-cover/." /></div>
+                    </div>
+                  )}
                   {f.type === "md" && (preview
                     ? <div className="card card-pad" style={{ background: "var(--bg)", maxHeight: 360, overflow: "auto" }}><Markdown source={(sel[f.k] as string) ?? ""} /></div>
                     : <textarea className="input input-mono" rows={12} value={(sel[f.k] as string) ?? ""} onChange={(e) => upd(f.k, e.target.value)} placeholder="# Judul&#10;&#10;**tebal** · *miring* · `kode` · - list · [link](https://...)" />)}

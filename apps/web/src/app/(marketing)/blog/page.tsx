@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Tv } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import "./blog.css";
-type Post = { slug: string; title: string; title_en: string | null; excerpt: string | null; excerpt_en: string | null; category: string | null; published_at: string | null };
+type Post = { slug: string; title: string; title_en: string | null; excerpt: string | null; excerpt_en: string | null; category: string | null; published_at: string | null; cover: string | null };
 
 // A5 Blog + Case Studies — port dari design-source/Blog.html (Hybrid). /blog. Toggle blog/cases + filter kategori.
 
@@ -25,7 +25,7 @@ export default function BlogPage() {
   const [view, setView] = useState<"blog" | "cases">("blog");
   const [cat, setCat] = useState(0);
   const [posts, setPosts] = useState<Post[]>([]);
-  useEffect(() => { createClient().from("blog_posts").select("slug,title,title_en,excerpt,excerpt_en,category,published_at").eq("status", "published").order("published_at", { ascending: false }).then(({ data }) => setPosts((data as Post[]) ?? [])); }, []);
+  useEffect(() => { createClient().from("blog_posts").select("slug,title,title_en,excerpt,excerpt_en,category,published_at,cover").eq("status", "published").order("published_at", { ascending: false }).then(({ data }) => setPosts((data as Post[]) ?? [])); }, []);
   const CATS = ["Semua", ...Array.from(new Set(posts.map((p) => p.category).filter(Boolean)))] as string[];
   const cases = view === "cases";
   const shown = cat === 0 ? posts : posts.filter((p) => p.category === CATS[cat]);
@@ -44,7 +44,7 @@ export default function BlogPage() {
         {shown.length === 0 ? <div className="mk-center muted" style={{ padding: "2rem" }}>Belum ada artikel.</div> : (
         <div className="blg-grid">{shown.map((p, i) => (
           <Link href={`/blog/${p.slug}`} className="blg-post" key={p.slug}>
-            <div className="cover" style={{ background: GRAD[i % GRAD.length] }}>{p.category && <span className="cat">{p.category}</span>}</div>
+            <div className="cover" style={p.cover ? { background: `url(${JSON.stringify(p.cover)}) center/cover no-repeat` } : { background: GRAD[i % GRAD.length] }}>{p.category && <span className="cat">{p.category}</span>}</div>
             <div className="pbody"><h3><Bi id={p.title} en={p.title_en ?? p.title} /></h3><p><Bi id={p.excerpt ?? ""} en={p.excerpt_en ?? p.excerpt ?? ""} /></p>
               <div className="pmeta"><span>{p.published_at ? new Date(p.published_at).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : ""}</span></div>
             </div>

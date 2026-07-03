@@ -56,7 +56,8 @@ export async function POST(req: Request) {
   const object_key = `brand-logo/${user.id}/${channelId}.png`;   // 1 objek per channel (timpa); URL ber-cache-bust di bawah
   const s3 = new S3Client({ endpoint, region: process.env.S3_REGION || "idn", credentials: { accessKeyId, secretAccessKey }, forcePathStyle: true });
   try {
-    await s3.send(new PutObjectCommand({ Bucket: bucket, Key: object_key, Body: body, ContentType: "image/png" }));
+    // ACL public-read WAJIB: bucket privat; tanpa ini renderer download logo = 403 (bug laten, ketahuan saat uji blog-cover 2026-07-03).
+    await s3.send(new PutObjectCommand({ Bucket: bucket, Key: object_key, Body: body, ContentType: "image/png", ACL: "public-read" }));
   } catch (e) {
     return NextResponse.json({ error: `upload S3 gagal: ${(e as Error).message}` }, { status: 500 });
   }
