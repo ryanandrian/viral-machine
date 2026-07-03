@@ -343,7 +343,11 @@ export default function AdminNichesPage() {
           </div>
           <div style={{ padding: "1rem 1.25rem", borderTop: "1px solid var(--border-subtle)", display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
             <button className="btn btn-ghost" onClick={() => setSel(null)}><Bi id="Batal" en="Cancel" /></button>
-            <button className="btn btn-secondary" disabled={busy} onClick={() => setTestConfirm(true)} title="Produksi 1 video uji (tanpa publish)"><FlaskConical size={14} /> <Bi id="Test niche" en="Test niche" /></button>
+            {(() => { const running = ["pending", "producing"].includes(test?.status ?? ""); return (
+              <button className="btn btn-secondary" disabled={busy || testLoading || running} onClick={() => setTestConfirm(true)} title="Produksi 1 video uji (tanpa publish)">
+                {running ? <><Loader2 size={14} className="spin" /> <Bi id="Test berjalan…" en="Test running…" /></> : <><FlaskConical size={14} /> <Bi id="Test niche" en="Test niche" /></>}
+              </button>
+            ); })()}
             {dtab !== 4 && <button className="btn btn-default" disabled={busy} onClick={save}><Bi id="Simpan" en="Save" /></button>}
           </div>
         </>)}
