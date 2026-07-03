@@ -2,18 +2,12 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { pngDimensions } from "@/lib/media-sig";
 
 // Upload logo brand channel → S3 (mesinviral-assets/brand-logo/{tenant}/{channel}.png) → URL ke channels.brand_logo.
 // Pipeline (video_renderer._overlay_logo) ambil dari URL itu (sudah jalan). Aturan UKURAN platform (branding_config,
 // admin DB): TOLAK bila dimensi > maks (default 220x220). Reuse pola route upload musik (@aws-sdk PutObject).
 export const dynamic = "force-dynamic";
-
-// Dimensi PNG dari header IHDR (sig 8B + len 4B + "IHDR" 4B → width@16, height@20, big-endian). null bila bukan PNG.
-function pngDimensions(buf: Buffer): { w: number; h: number } | null {
-  if (buf.length < 24) return null;
-  if (buf.readUInt32BE(0) !== 0x89504e47) return null; // \x89 P N G
-  return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
-}
 
 export async function POST(req: Request) {
   const supabase = await createClient();
