@@ -99,7 +99,7 @@ export default function LandingPage() {
             </h1>
             <p className="sub"><Bi id="Hingga 50 video Shorts per hari (multi-channel) dengan kualitas viral-grade. Tools lain bikin video. MesinViral belajar dari analytics channelmu — dan makin pintar tiap hari." en="Up to 50 Shorts per day (multi-channel) at viral-grade quality. Other tools just make videos. MesinViral learns from your channel's analytics — and gets smarter every day." /></p>
             <div className="hero-cta">
-              <a href="/auth?view=signup" className="btn btn-default btn-xl"><Bi id="Mulai Gratis 7 Hari" en="Start 7-Day Free Trial" /> <ArrowRight size={18} /></a>
+              <a href="/auth?view=signup" className="btn btn-default btn-xl"><Bi id={`Mulai Gratis ${trialDays} Hari`} en={`Start ${trialDays}-Day Free Trial`} /> <ArrowRight size={18} /></a>
               <a href="/showcase" className="btn btn-outline btn-xl"><Play size={16} /> <Bi id="Lihat Showcase" en="See Showcase" /></a>
             </div>
             <div className="hero-fine"><CheckCircle size={15} style={{ color: "var(--success)" }} /> <Bi id="Tanpa kartu kredit · 5 video gratis · Cancel kapan saja" en="No credit card · 5 free videos · Cancel anytime" /></div>
@@ -310,7 +310,7 @@ export default function LandingPage() {
         <div className="cta-strip reveal">
           <h2><Bi id="Siap scale channelmu ke 5+ video per hari?" en="Ready to scale to 5+ videos per day?" /></h2>
           <p className="mk-lead mk-center" style={{ marginBottom: "2rem" }}><Bi id="Mulai gratis hari ini. Mesinnya yang kerja, kamu yang menikmati hasilnya." en="Start free today. Let the machine work while you enjoy the results." /></p>
-          <a href="/auth?view=signup" className="btn btn-ai btn-xl"><Bi id="Mulai Gratis 7 Hari" en="Start 7-Day Free Trial" /> <ArrowRight size={18} /></a>
+          <a href="/auth?view=signup" className="btn btn-ai btn-xl"><Bi id={`Mulai Gratis ${trialDays} Hari`} en={`Start ${trialDays}-Day Free Trial`} /> <ArrowRight size={18} /></a>
           <div className="hero-fine mk-center" style={{ justifyContent: "center", marginTop: "1rem" }}><Bi id="Tanpa kartu kredit" en="No credit card required" /></div>
         </div>
       </div></section>

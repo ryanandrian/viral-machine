@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { Moon, Sun, Eye, EyeOff, Command, CheckCircle, Bell, ArrowLeft, ArrowRight, Star } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { fetchTrialDays } from "@/lib/plans";
 import "./auth.css";
 
 // B1-B4 Auth (PoC) — port dari design-source/Auth.html. Multi-view (signup/login/forgot/verify),
@@ -64,6 +65,8 @@ export default function AuthPage() {
   const [pw2, setPw2] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [trialDays, setTrialDays] = useState(7);
+  useEffect(() => { fetchTrialDays().then(setTrialDays); }, []);
   const supabase = createClient();
   const origin = () => (typeof window !== "undefined" ? window.location.origin : "");
 
@@ -178,7 +181,7 @@ export default function AuthPage() {
           {/* SIGN UP */}
           {view === "signup" && (
             <div className="auth-card">
-              <h1><Bi id="Mulai gratis 7 hari" en="Start your 7-day trial" /></h1>
+              <h1><Bi id={`Mulai gratis ${trialDays} hari`} en={`Start your ${trialDays}-day trial`} /></h1>
               <p className="lead"><Bi id="5 video gratis, tanpa kartu kredit." en="5 free videos, no credit card." /></p>
               <button className="oauth-btn" onClick={doGoogle}><GoogleLogo /><Bi id="Daftar dengan Google" en="Sign up with Google" /></button>
               <div className="divider"><Bi id="atau pakai email" en="or use email" /></div>

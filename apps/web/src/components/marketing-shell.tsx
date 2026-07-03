@@ -99,7 +99,7 @@ export function MarketingShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
           <div className="mk-foot-bottom">
-            <span>© 2026 MesinViral. <span data-id>Dibuat di Indonesia 🇮🇩</span><span data-en>Made in Indonesia 🇮🇩</span></span>
+            <span>© 2026 MesinViral. Provided By Lumite Automasi Indonesia.</span>
             <div className="mk-foot-meta">
               <a href="/about"><span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--success)", display: "inline-block", marginRight: 5 }} /><Bi id="Semua sistem normal" en="All systems normal" /></a>
             </div>

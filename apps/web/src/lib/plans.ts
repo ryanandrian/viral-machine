@@ -37,6 +37,13 @@ export async function fetchPlans(): Promise<{ plans: Plan[]; trialDays: number }
   return { plans, trialDays };
 }
 
+// Masa trial SAJA (ringan, 1 query) — utk halaman yang cuma butuh angka hari (showcase/auth CTA).
+// Sumber = app_config.trial_duration_days (admin-editable "Masa Trial Gratis" di System Config). No-hardcode.
+export async function fetchTrialDays(): Promise<number> {
+  const { data } = await createClient().from("app_config").select("value").eq("key", "trial_duration_days").maybeSingle();
+  return Number((data as { value?: number } | null)?.value ?? 7);
+}
+
 // Tier berbayar (punya harga) urut — untuk kartu Landing/Pricing (trial gratis dikecualikan).
 export function paidPlans(plans: Plan[]): Plan[] {
   return plans.filter((p) => p.price_idr != null).sort((a, b) => a.sort_order - b.sort_order);

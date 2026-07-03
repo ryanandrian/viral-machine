@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { fetchPricing, idrK } from "@/lib/pricing";
 import { fetchPlans, paidPlans, type Plan } from "@/lib/plans";
 import {
-  Users, Check, X, ChevronDown, Info, DollarSign,
+  Users, Check, X, ChevronDown, DollarSign,
   Wand2, type LucideIcon,
 } from "lucide-react";
 import "./pricing.css";
@@ -70,14 +70,13 @@ const ADDONS: [LucideIcon, string, string, string, string, string][] = [
 const makeFaq = (d: number): [string, string][] => [
   ["Bisa upgrade / downgrade kapan saja?", "Bisa. Perubahan paket berlaku langsung dan biaya di-prorate otomatis di tagihan berikutnya."],
   ["Bagaimana refund policy-nya?", `Trial ${d} hari gratis penuh. Setelah berlangganan, kami menawarkan refund 7 hari untuk pembayaran pertama jika belum cocok.`],
-  ["Bagaimana biaya AI dihitung?", "Biaya AI mengikuti pemakaian aktual API milikmu (BYOK) dan dibayar langsung ke Anthropic/OpenAI/ElevenLabs. Dashboard menampilkan biaya real-time per video."],
-  ["Apakah harga sudah termasuk biaya AI?", "Belum. Harga langganan terpisah dari biaya AI (BYOK). Gunakan kalkulator di atas untuk estimasi total."],
+  ["Bagaimana biaya AI dihitung?", "Biaya AI mengikuti pemakaian aktual API milikmu (BYOK) dan dibayar langsung ke provider yang kamu pilih — bukan ke MesinViral. Besarnya sangat bervariasi tergantung provider & model: bisa mulai dari Rp 0 bila memakai tier/model gratis."],
+  ["Apakah harga sudah termasuk biaya AI?", "Harga langganan terpisah dari biaya AI (BYOK) — dan biaya AI itu kamu yang kendalikan penuh, mulai dari Rp 0 dengan provider/model gratis."],
   ["Pembayaran pakai apa?", "Kami pakai Midtrans — mendukung transfer bank, e-wallet (GoPay, ShopeePay), QRIS, kartu kredit, dan Virtual Account."],
 ];
 
 export default function PricingPage() {
   const [annual, setAnnual] = useState(false);
-  const [vids, setVids] = useState(5);
   const [faqOpen, setFaqOpen] = useState(0);
   const [pricing, setPricing] = useState<Record<string, number>>({});
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -88,9 +87,6 @@ export default function PricingPage() {
   }, []);
   const pm: Record<string, Plan | undefined> = Object.fromEntries(plans.map((p) => [p.plan_type, p]));
   const fcmp = makeFcmp(pm);
-
-  const month = vids * 30 * 0.34;
-  const ant = month * 0.21, el = month * 0.53, oai = month * 0.26;
 
   return (
     <>
@@ -152,30 +148,18 @@ export default function PricingPage() {
         </div>
       </div></section>
 
-      {/* CALCULATOR */}
+      {/* BYOK — biaya AI di tangan tenant (ganti kalkulator ber-angka hardcode; keputusan owner 2026-07-04:
+          harga AI sangat variatif — bisa Rp 0 dgn provider/model gratis; angka palsu = boomerang) */}
       <section className="mk-section" style={{ background: "var(--bg-elevated)", borderBlock: "1px solid var(--border-subtle)" }}><div className="mk-container">
         <div className="mk-center" style={{ marginBottom: "2rem" }}>
-          <span className="mk-kicker"><DollarSign size={13} /> BYOK Calculator</span>
-          <h2 className="mk-h2"><Bi id="Hitung estimasi biaya AI-mu" en="Estimate your AI cost" /></h2>
+          <span className="mk-kicker"><DollarSign size={13} /> BYOK — Bring Your Own Key</span>
+          <h2 className="mk-h2"><Bi id="Biaya AI di tanganmu — mulai dari Rp 0" en="Your AI costs, your control — starting at Rp 0" /></h2>
+          <p className="mk-lead mk-center"><Bi id="Tidak seperti tools lain yang menjual kredit dengan markup, MesinViral memakai kunci API milikmu sendiri. Kamu bebas memilih provider dan model — dan membayar hanya ke mereka, sesuai pemakaian nyata." en="Unlike tools that resell credits with a markup, MesinViral runs on your own API keys. You choose the providers and models — and pay only them, for what you actually use." /></p>
         </div>
-        <div className="calc">
-          <div className="calc-slider">
-            <label className="label"><Bi id="Berapa video per hari?" en="How many videos per day?" /></label>
-            <div style={{ display: "flex", alignItems: "baseline", gap: "0.5rem", marginBottom: "1rem" }}><span className="calc-big">{vids}</span><span className="muted"><Bi id="video / hari" en="videos / day" /></span></div>
-            <input type="range" min={1} max={24} value={vids} onChange={(e) => setVids(+e.target.value)} />
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--text-xs)", color: "var(--text-muted)", marginTop: 6 }}><span>1</span><span>24</span></div>
-            <div style={{ marginTop: "1.25rem", padding: "0.875rem 1rem", background: "var(--accent-soft)", border: "1px solid color-mix(in srgb,var(--accent) 22%,transparent)", borderRadius: "var(--r-md)", fontSize: "var(--text-xs)", color: "var(--text-secondary)", display: "flex", gap: "0.5rem" }}>
-              <span style={{ color: "var(--accent)", flex: "none" }}><Info size={14} /></span><Bi id="Biaya AI dibayar langsung ke provider sesuai BYOK — bukan ke MesinViral." en="AI cost is paid directly to providers via BYOK — not to MesinViral." /></div>
-          </div>
-          <div>
-            <div className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Estimasi biaya AI / bulan" en="Estimated AI cost / month" /></div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: "0.625rem", margin: "0.25rem 0" }}><span className="calc-big">${Math.round(month)}</span><span className="muted">≈ Rp {Math.round(month * 16)}K</span></div>
-            <div className="calc-bar"><span style={{ background: "var(--anthropic)", flex: 21 }} /><span style={{ background: "var(--elevenlabs)", flex: 53 }} /><span style={{ background: "var(--openai)", flex: 26 }} /></div>
-            <div className="calc-row"><span className="sw" style={{ background: "var(--anthropic)" }} />Claude <span className="amt">${ant.toFixed(0)}</span></div>
-            <div className="calc-row"><span className="sw" style={{ background: "var(--elevenlabs)" }} />ElevenLabs <span className="amt">${el.toFixed(0)}</span></div>
-            <div className="calc-row"><span className="sw" style={{ background: "var(--openai)" }} />OpenAI <span className="amt">${oai.toFixed(0)}</span></div>
-            <div className="calc-row" style={{ borderTop: "1px solid var(--border-subtle)", marginTop: "0.5rem", paddingTop: "0.75rem", fontWeight: 600, color: "var(--text-primary)" }}><Bi id="Per video" en="Per video" /> <span className="amt">≈ $0.34</span></div>
-          </div>
+        <div className="addons">
+          <div className="addon"><span className="ai"><Wand2 size={20} /></span><h4><Bi id="Mulai dari Rp 0" en="Start at Rp 0" /></h4><p><Bi id="Pilih provider dengan tier atau model gratis — mesin tetap memproduksi video penuh tanpa biaya AI sepeser pun." en="Pick a provider with a free tier or free models — the engine still produces complete videos with zero AI cost." /></p></div>
+          <div className="addon"><span className="ai"><DollarSign size={20} /></span><h4><Bi id="Tanpa markup, tanpa perantara" en="No markup, no middleman" /></h4><p><Bi id="Kunci API milikmu, tagihan langsung dari provider. Kami tidak mengambil sepeser pun dari biaya AI-mu." en="Your keys, billed directly by the provider. We never take a cut of your AI spend." /></p></div>
+          <div className="addon"><span className="ai"><Users size={20} /></span><h4><Bi id="Kamu yang pegang kendali" en="You stay in control" /></h4><p><Bi id="Naikkan kualitas dengan model premium, atau tekan biaya dengan model hemat — ganti kapan saja per channel, tanpa terkunci vendor." en="Scale up with premium models or keep costs lean — switch anytime per channel, with zero vendor lock-in." /></p></div>
         </div>
       </div></section>
 

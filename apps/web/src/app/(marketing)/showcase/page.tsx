@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Play, Command, MonitorSmartphone, Clapperboard, ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { fetchTrialDays } from "@/lib/plans";
 import "./showcase.css";
 
 // Showcase (pengganti /demo, keputusan owner 2026-07-03): (1) screenshot halaman tenant (admin-managed,
@@ -17,7 +18,9 @@ type Video = { id: string; title: string | null; title_en: string | null; descri
 export default function ShowcasePage() {
   const [screens, setScreens] = useState<Screen[]>([]);
   const [videos, setVideos] = useState<Video[]>([]);
+  const [trialDays, setTrialDays] = useState(7);
   useEffect(() => {
+    fetchTrialDays().then(setTrialDays);
     const sb = createClient();
     sb.from("showcase_screens").select("id,title,title_en,caption,caption_en,image_url").eq("is_active", true).order("sort_order").then(({ data }) => setScreens((data as Screen[]) ?? []));
     sb.from("showcase_videos").select("id,title,title_en,description,description_en,niche_label,video_url,poster_url").eq("is_active", true).order("sort_order").then(({ data }) => setVideos((data as Video[]) ?? []));
@@ -78,7 +81,7 @@ export default function ShowcasePage() {
       <section className="mk-section-sm"><div className="mk-container">
         <div className="sc-cta">
           <h2><Bi id="Coba sekarang, gratis" en="Try it now, free" /></h2>
-          <p className="mk-lead mk-center" style={{ marginBottom: "1.75rem" }}><Bi id="Trial 7 hari. Tanpa kartu kredit." en="7-day trial. No credit card." /></p>
+          <p className="mk-lead mk-center" style={{ marginBottom: "1.75rem" }}><Bi id={`Trial ${trialDays} hari. Tanpa kartu kredit.`} en={`${trialDays}-day trial. No credit card.`} /></p>
           <Link href="/auth?view=signup" className="btn btn-ai btn-xl"><Bi id="Mulai Gratis" en="Start Free" /> <ArrowRight size={18} /></Link>
         </div>
       </div></section>
