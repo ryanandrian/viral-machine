@@ -28,6 +28,3 @@
 .nl-swrow span { width: 30px; height: 30px; border-radius: var(--r-sm); border: 1px solid var(--border); }
 
 .nl-section-title { font-size: var(--text-lg); font-weight: 600; margin: 2rem 0 1rem; display: flex; align-items: center; gap: 0.5rem; }
-.nl-rel-grid { display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 0.5rem; }
-.nl-rel-card { flex: 0 0 220px; border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; background: var(--surface-1); }
-.nl-rel-card .mood { height: 56px; display: flex; } .nl-rel-card .mood span { flex: 1; }

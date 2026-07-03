@@ -2,17 +2,17 @@ import { NextResponse } from "next/server";
 import { requireSuperAdmin } from "@/lib/admin/guard";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-// E2.3 Niches list (PHASE10 §2) — niches (semua) + derive video/tenant count + avg viral_score + releases.
+// E2.3 Niches list (PHASE10 §2) — niches (semua) + derive video/tenant count + avg viral_score.
+// (releases/niche_releases DIHAPUS 2026-07-04 — penjadwal rilis tanpa eksekutor, lihat page niches.)
 export async function GET() {
   const g = await requireSuperAdmin();
   if (g.error) return g.error;
   const admin = createAdminClient();
 
-  const [{ data: niches, error }, { data: vids }, { data: tenants }, { data: releases }] = await Promise.all([
+  const [{ data: niches, error }, { data: vids }, { data: tenants }] = await Promise.all([
     admin.from("niches").select("*").order("niche_id"),
     admin.from("videos").select("niche, viral_score"),
     admin.from("tenant_configs").select("niche, niche_pool"),
-    admin.from("niche_releases").select("*").order("scheduled_at", { ascending: false }),
   ]);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -37,7 +37,7 @@ export async function GET() {
       avg_viral: scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null,
     };
   });
-  return NextResponse.json({ niches: rows, releases: releases ?? [] });
+  return NextResponse.json({ niches: rows });
 }
 
 // New Niche — minimal (id+name+is_base+access_type); detail diedit via PATCH.

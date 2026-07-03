@@ -7,7 +7,7 @@ const EDITABLE = [
   "is_active", "is_base", "visual_style", "visual_fallbacks", "mood_priority", "narration_persona",
   "emotion_scoring_criteria", "section_timing", "image_quality_tags", "image_negative_prompt",
   "music_config", "youtube_category_id",
-  "access_type", "exclusive_to", "exclusive_until", "released_at", "release_scheduled_at",
+  "access_type", "exclusive_to", "exclusive_until", "released_at",
 ];
 
 // PATCH niches[niche_id] (PHASE10 §2). Whitelist (jangan ubah niche_id PK). + admin_audit.

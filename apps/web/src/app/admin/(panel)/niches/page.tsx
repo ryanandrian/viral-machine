@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Calendar, Plus, X, Clock, Sparkles, Check } from "lucide-react";
+import { Plus, X, Clock, Sparkles, Check } from "lucide-react";
 import { YT_CATEGORIES } from "@/lib/youtube-categories";
 import "./niches.css";
 
 // E2.3 Admin Niche Library (Phase 10.3) — DATA NYATA via /api/admin/niches (service_role).
-// Identity + Access/Exclusivity editable; Voice/Visual/Music DNA = edit JSON; monthly-release + pipeline real.
+// Identity + Access/Exclusivity editable; Voice/Visual/Music DNA = edit JSON; pipeline eksklusivitas real.
+// "Jadwal Rilis Bulanan" DIHAPUS TUNTAS 2026-07-04 (owner): penjadwal tanpa eksekutor (tak ada worker/cron
+// yang merilis pada tanggalnya) → niche 'pending' tersembunyi selamanya = jebakan; tabel niche_releases 0 baris.
 // TAG POOL = placeholder jujur (epik pipeline Layer-2, belum dibangun — MULTI_FORMAT §0). Prefix nl-.
 
 function Bi({ id, en }: { id: string; en: string }) {
@@ -20,12 +22,9 @@ type Niche = {
   image_quality_tags: unknown; image_negative_prompt: string | null; visual_fallbacks: unknown; section_timing: unknown; music_config: unknown;
   video_count: number; tenant_count: number; avg_viral: number | null;
 };
-type Release = { id: string; niche_id: string; scheduled_at: string; status: string };
-
 const DTABS = ["Identity", "Voice DNA", "Visual DNA", "Music + Scoring", "Tag Pool", "Access & Exclusivity"];
 function AccessBadge({ a }: { a: string }) {
   if (a === "public") return <span className="badge badge-success"><span className="dot" />🌍 Public</span>;
-  if (a === "pending") return <span className="badge badge-warning"><span className="dot" />📅 Pending</span>;
   return <span className="badge badge-brand">🔒 Private</span>;
 }
 const asArr = (v: unknown): string[] => Array.isArray(v) ? v as string[] : [];
@@ -34,7 +33,6 @@ const dateID = (iso: string | null) => iso ? new Date(iso).toLocaleDateString("i
 
 export default function AdminNichesPage() {
   const [niches, setNiches] = useState<Niche[]>([]);
-  const [releases, setReleases] = useState<Release[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
   const [sel, setSel] = useState<string | null>(null);
@@ -42,7 +40,6 @@ export default function AdminNichesPage() {
   const [edit, setEdit] = useState<Record<string, unknown>>({});
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [sched, setSched] = useState<{ niche_id: string; date: string }>({ niche_id: "", date: "" });
   type NReq = { request_id: string; tenant_id: string; tenant_email: string | null; request_type: string; title: string; clues: Record<string, string>; status: string; created_at: string; niche_id: string | null };
   const [reqs, setReqs] = useState<NReq[]>([]);
   const [actModal, setActModal] = useState<{ req: NReq; action: "mark_paid" | "deliver"; note: string } | null>(null);
@@ -61,7 +58,7 @@ export default function AdminNichesPage() {
   const load = useCallback(async () => {
     setLoading(true);
     const [r, rq] = await Promise.all([fetch("/api/admin/niches"), fetch("/api/admin/niche-requests")]);
-    if (r.ok) { const j = await r.json(); setNiches(j.niches); setReleases(j.releases); }
+    if (r.ok) { const j = await r.json(); setNiches(j.niches); }
     if (rq.ok) { const j = await rq.json(); setReqs(j.requests ?? []); }
     setLoading(false);
   }, []);
@@ -131,14 +128,6 @@ export default function AdminNichesPage() {
     setBusy(false);
     if (r.ok) { setToast("Niche → public"); await load(); } else setToast("Gagal");
   }
-  async function scheduleRelease() {
-    if (!sched.niche_id || !sched.date) return;
-    setBusy(true);
-    const r = await fetch("/api/admin/niche-releases", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ niche_id: sched.niche_id, scheduled_at: sched.date }) });
-    setBusy(false);
-    if (r.ok) { setToast("Rilis dijadwalkan"); setSched({ niche_id: "", date: "" }); await load(); } else setToast("Gagal menjadwalkan");
-  }
-
   return (
     <>
       <div className="nl-head">
@@ -146,7 +135,6 @@ export default function AdminNichesPage() {
           <h1><Bi id="Niche Library" en="Niche Library" /></h1>
           <div className="nl-stat-line">
             <span><b>{niches.filter((n) => n.is_active).length}</b> Active</span>
-            <span><b>{niches.filter((n) => n.access_type === "pending").length}</b> Pending</span>
             <span><b>{niches.filter((n) => n.access_type === "private").length}</b> Private</span>
             <span><b>{niches.filter((n) => n.is_base).length}</b> Base</span>
           </div>
@@ -155,7 +143,7 @@ export default function AdminNichesPage() {
       </div>
 
       <div className="nl-filters"><div className="segmented">
-        {[["all", "All"], ["active", "Active"], ["pending", "Pending"], ["private", "Private"]].map(([k, l]) => <button key={k} aria-selected={filter === k} onClick={() => setFilter(k)}>{l}</button>)}
+        {[["all", "All"], ["active", "Active"], ["private", "Private"]].map(([k, l]) => <button key={k} aria-selected={filter === k} onClick={() => setFilter(k)}>{l}</button>)}
       </div></div>
 
       <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl nl-tbl">
@@ -233,7 +221,7 @@ export default function AdminNichesPage() {
             <h3 className="card-title" style={{ marginBottom: ".75rem" }}><Bi id="Niche baru" en="New niche" /></h3>
             <div className="nl-fld"><label className="label">niche_id (slug a-z0-9_)</label><input className="input input-mono" value={newN.niche_id} onChange={(e) => setNewN({ ...newN, niche_id: e.target.value })} placeholder="mis. dark_history" /></div>
             <div className="nl-fld"><label className="label"><Bi id="Nama tampilan" en="Display name" /></label><input className="input" value={newN.name} onChange={(e) => setNewN({ ...newN, name: e.target.value })} /></div>
-            <div className="nl-fld"><label className="label">access_type</label><select className="input" value={newN.access_type} onChange={(e) => setNewN({ ...newN, access_type: e.target.value })}><option value="public">🌍 Public</option><option value="pending">📅 Pending</option><option value="private">🔒 Private</option></select></div>
+            <div className="nl-fld"><label className="label">access_type</label><select className="input" value={newN.access_type} onChange={(e) => setNewN({ ...newN, access_type: e.target.value })}><option value="public">🌍 Public</option><option value="private">🔒 Private</option></select></div>
             <label style={{ display: "flex", alignItems: "center", gap: ".5rem", fontSize: "var(--text-sm)", margin: ".4rem 0" }}><input type="checkbox" checked={newN.is_base} onChange={(e) => setNewN({ ...newN, is_base: e.target.checked })} /> is_base (trial/starter)</label>
             <div className="muted" style={{ fontSize: "var(--text-xs)", margin: ".25rem 0 .5rem" }}><Bi id="Detail DNA (voice/visual/timing) diedit di drawer setelah dibuat." en="DNA detail (voice/visual/timing) edited in the drawer after creation." /></div>
             <div style={{ display: "flex", gap: ".5rem", justifyContent: "flex-end", marginTop: "0.5rem" }}>
@@ -243,21 +231,6 @@ export default function AdminNichesPage() {
           </div>
         </div>
       )}
-
-      <div className="nl-section-title"><Calendar size={18} style={{ color: "var(--accent)" }} /> <Bi id="Jadwal Rilis Bulanan" en="Monthly Release Scheduler" /></div>
-      <div className="card card-pad">
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "end", marginBottom: "1rem" }}>
-          <div><label className="label">Niche</label><select className="input" value={sched.niche_id} onChange={(e) => setSched({ ...sched, niche_id: e.target.value })}><option value="">— pilih —</option>{niches.map((n) => <option key={n.niche_id} value={n.niche_id}>{n.name}</option>)}</select></div>
-          <div><label className="label">Tanggal rilis</label><input className="input" type="date" value={sched.date} onChange={(e) => setSched({ ...sched, date: e.target.value })} /></div>
-          <button className="btn btn-default btn-sm" disabled={busy || !sched.niche_id || !sched.date} onClick={scheduleRelease}><Plus size={14} /> Jadwalkan</button>
-        </div>
-        {releases.length === 0 ? <div className="muted" style={{ fontSize: "var(--text-sm)" }}>Belum ada rilis terjadwal.</div> : (
-          <div className="nl-rel-grid">{releases.map((r) => {
-            const n = niches.find((x) => x.niche_id === r.niche_id);
-            return <div className="nl-rel-card" key={r.id}><div style={{ padding: "0.875rem" }}><div style={{ fontWeight: 600, fontSize: "var(--text-sm)" }}>{n?.name ?? r.niche_id}</div><div className="muted" style={{ fontSize: "var(--text-xs)", margin: "0.25rem 0 0.5rem", display: "flex", alignItems: "center", gap: ".3rem" }}><Calendar size={11} /> {dateID(r.scheduled_at)}</div><span className={`badge ${r.status === "scheduled" ? "badge-info" : "badge-default"}`}>{r.status}</span></div></div>;
-          })}</div>
-        )}
-      </div>
 
       <div className="nl-section-title"><Clock size={18} style={{ color: "var(--accent)" }} /> <Bi id="Pipeline Eksklusivitas" en="Exclusivity Pipeline" /></div>
       <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl">
@@ -313,7 +286,7 @@ export default function AdminNichesPage() {
             )}
             {dtab === 5 && <>
               <div className="nl-fld"><label className="label">access_type</label>
-                {[["public", "🌍 Public"], ["pending", "📅 Pending rilis"], ["private", "🔒 Private Exclusive"]].map(([v, l]) => (
+                {[["public", "🌍 Public"], ["private", "🔒 Private Exclusive"]].map(([v, l]) => (
                   <div key={v} className={`nl-radio-card${edit.access_type === v ? " sel" : ""}`} style={{ cursor: "pointer" }} onClick={() => setEdit({ ...edit, access_type: v })}>{l}</div>
                 ))}
               </div>
