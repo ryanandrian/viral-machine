@@ -16,9 +16,10 @@ function Bi({ id, en }: { id: string; en: string }) {
 type Cat = {
   ai_models: Record<string, unknown>[]; ai_providers: Record<string, unknown>[]; music_library: Record<string, unknown>[];
   content_languages: Record<string, unknown>[]; voice_catalog: Record<string, unknown>[]; tts_profiles: Record<string, unknown>[];
+  moods: Record<string, unknown>[];
 };
 
-const TABS: [string, string][] = [["models", "AI Models"], ["providers", "Providers"], ["music", "Music"], ["voice", "Voice"], ["languages", "Languages"], ["durations", "Durasi"], ["niche", "Niche"]];
+const TABS: [string, string][] = [["models", "AI Models"], ["providers", "Providers"], ["music", "Music"], ["moods", "Moods"], ["voice", "Voice"], ["languages", "Languages"], ["durations", "Durasi"], ["niche", "Niche"]];
 
 // field minimal untuk "Add" per tabel (PK + wajib)
 const ADD_FIELDS: Record<string, { table: string; fields: [string, string][] }> = {
@@ -26,6 +27,7 @@ const ADD_FIELDS: Record<string, { table: string; fields: [string, string][] }> 
   providers: { table: "ai_providers", fields: [["provider_key", "provider_key (PK)"], ["display_name", "display_name"], ["adapter", "adapter (mis. openai_chat)"], ["base_url", "base_url (opsional)"]] },
   voice: { table: "voice_catalog", fields: [["voice_key", "voice_key (PK — voice_id provider)"], ["provider_key", "provider_key (mis. elevenlabs)"], ["display_name", "display_name"], ["locale", "locale (mis. id-ID)"], ["language", "language (mis. Indonesian)"], ["gender", "gender (male/female)"], ["age", "age (mis. young/middle-aged)"], ["accent", "accent (opsional)"], ["use_case", "use_case (mis. narration)"], ["description", "description (opsional)"], ["default_settings", "default_settings JSON {stability,style,speed}"], ["niche_default", "niche_default (opsional)"], ["preview_url", "preview_url (URL contoh suara .mp3, opsional)"], ["delivery_wps", "delivery_wps (pace voice 1.0–4.0; kosong = ikut engine)"]] },
   languages: { table: "content_languages", fields: [["locale", "locale (PK)"], ["display_name", "display_name"], ["quality_tier", "tier (official/experimental)"], ["caption_font", "caption_font"]] },
+  moods: { table: "moods", fields: [["mood_id", "mood_id (PK, huruf kecil)"], ["keywords", 'keywords JSON — kata pemicu deteksi dari NASKAH, campur ID+EN, mis. ["misterius","mysterious"]']] },
 };
 
 export default function AdminCatalogPage() {
@@ -98,6 +100,16 @@ export default function AdminCatalogPage() {
     if (r.ok) { setToast("Dihapus"); await load(); } else { const j = await r.json().catch(() => ({})); setToast(`Gagal: ${j.error ?? ""}`); }
   }
   function playUrl(url?: string | null) { if (url) new Audio(url).play().catch(() => setToast("Gagal memutar")); }
+
+  // NICHE_DNA F4: edit keyword deteksi mood (dipakai music_selector mendeteksi mood dari NASKAH —
+  // wajib campur ID+EN agar naskah Indonesia terdeteksi; audit 2026-07-04: dulu EN-only = deteksi mati).
+  const [kwEdit, setKwEdit] = useState<{ mood_id: string; text: string } | null>(null);
+  async function saveKeywords() {
+    if (!kwEdit) return;
+    const keywords = kwEdit.text.split(",").map((s) => s.trim()).filter(Boolean);
+    const r = await fetch("/api/admin/catalog", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table: "moods", key: kwEdit.mood_id, patch: { keywords } }) });
+    if (r.ok) { setToast("Keywords disimpan"); setKwEdit(null); await load(); } else { const j = await r.json().catch(() => ({})); setToast(`Gagal: ${j.error ?? ""}`); }
+  }
 
   async function createRow() {
     if (!add) return;
@@ -249,6 +261,37 @@ export default function AdminCatalogPage() {
                 <td><Switch table="content_languages" k={l.locale as string} on={l.is_active as boolean} /></td>
               </tr>
             ))}</tbody>
+          </table></div></div>
+        </>)}
+
+        {tab === "moods" && data && (<>
+          <div className="cat-toolbar"><span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Mood musik + kata pemicu deteksi dari naskah (campur ID+EN). Dipakai pemilih musik & paket mood niche." en="Music moods + script detection trigger words (mix ID+EN)." /></span><div className="right"><button className="btn btn-default btn-sm" onClick={() => setAdd({})}><Plus size={14} /> <Bi id="Tambah mood" en="Add mood" /></button></div></div>
+          <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl cat-tbl">
+            <thead><tr><th>mood</th><th><Bi id="Track di library" en="Library tracks" /></th><th><Bi id="Kata pemicu (deteksi dari naskah)" en="Trigger words" /></th><th>Active</th><th></th></tr></thead>
+            <tbody>{data.moods.map((m) => {
+              const mid = m.mood_id as string;
+              const kws = Array.isArray(m.keywords) ? (m.keywords as string[]) : [];
+              const nTracks = data.music_library.filter((t) => t.mood === mid && t.is_active).length;
+              return (
+                <tr key={mid}>
+                  <td className="mono" style={{ color: "var(--text-primary)" }}>{mid}</td>
+                  <td>{nTracks > 0 ? <span className="badge badge-success">{nTracks}</span> : <span className="badge badge-warning">0</span>}</td>
+                  <td style={{ maxWidth: 480 }}>
+                    {kwEdit?.mood_id === mid ? (
+                      <div style={{ display: "flex", gap: ".4rem" }}>
+                        <textarea className="textarea" rows={2} style={{ flex: 1 }} value={kwEdit.text} onChange={(e) => setKwEdit({ mood_id: mid, text: e.target.value })} />
+                        <button className="btn btn-default btn-sm" onClick={saveKeywords}>OK</button>
+                        <button className="btn btn-ghost btn-sm" onClick={() => setKwEdit(null)}>Batal</button>
+                      </div>
+                    ) : (
+                      <span className="muted" style={{ fontSize: "var(--text-xs)", cursor: "pointer" }} title="Klik untuk edit" onClick={() => setKwEdit({ mood_id: mid, text: kws.join(", ") })}>{kws.join(", ") || "(kosong — klik utk isi)"}</span>
+                    )}
+                  </td>
+                  <td><Switch table="moods" k={mid} on={m.is_active as boolean} /></td>
+                  <td></td>
+                </tr>
+              );
+            })}</tbody>
           </table></div></div>
         </>)}
 

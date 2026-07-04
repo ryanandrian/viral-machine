@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Plus, X, Clock, Sparkles, Check, FlaskConical, Loader2, RefreshCw } from "lucide-react";
 import ConfirmDialog from "@/components/confirm-dialog";
-import { YT_CATEGORIES } from "@/lib/youtube-categories";
+import NicheDnaEditor, { type NicheRow } from "@/components/niche-dna-editor";
 import "./niches.css";
 
 // E2.3 Admin Niche Library (Phase 10.3) — DATA NYATA via /api/admin/niches (service_role).
@@ -23,13 +23,13 @@ type Niche = {
   image_quality_tags: unknown; image_negative_prompt: string | null; visual_fallbacks: unknown; section_timing: unknown; music_config: unknown;
   video_count: number; tenant_count: number; avg_viral: number | null;
 };
-const DTABS = ["Identity", "Voice DNA", "Visual DNA", "Music + Scoring", "Tag Pool", "Access & Exclusivity"];
+// Drawer 2 tab (2026-07-04): DNA = editor bersama admin+tenant (NicheDnaEditor, nol JSON mentah);
+// Access = kontrol admin (is_active/is_base/access/exclusive). Tag Pool = epik terpisah (deferred).
+const DTABS = ["DNA", "Access & Exclusivity"];
 function AccessBadge({ a }: { a: string }) {
   if (a === "public") return <span className="badge badge-success"><span className="dot" />🌍 Public</span>;
   return <span className="badge badge-brand">🔒 Private</span>;
 }
-const asArr = (v: unknown): string[] => Array.isArray(v) ? v as string[] : [];
-const jstr = (v: unknown) => JSON.stringify(v ?? {}, null, 2);
 const dateID = (iso: string | null) => iso ? new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "—";
 
 export default function AdminNichesPage() {
@@ -65,7 +65,7 @@ export default function AdminNichesPage() {
   const [reqs, setReqs] = useState<NReq[]>([]);
   const [actModal, setActModal] = useState<{ req: NReq; action: "mark_paid" | "deliver"; note: string } | null>(null);
   // F3-01: buat niche baru dari nol (POST /api/admin/niches; detail diedit via drawer/PATCH).
-  const [newN, setNewN] = useState<{ niche_id: string; name: string; is_base: boolean; access_type: string } | null>(null);
+  const [newN, setNewN] = useState<{ niche_id: string; name: string; is_base: boolean; access_type: string; template_niche_id?: string } | null>(null);
   async function createNiche() {
     if (!newN) return;
     setBusy(true);
@@ -102,39 +102,35 @@ export default function AdminNichesPage() {
 
   function openRow(id: string) {
     const n = niches.find((x) => x.niche_id === id); setSel(id); setDtab(0);
+    // edit = HANYA field Access & status (DNA ditangani NicheDnaEditor — editor bersama admin+tenant).
     setEdit(n ? {
-      name: n.name, keywords: asArr(n.keywords).join(", "), default_hashtags: asArr(n.default_hashtags).join(", "),
-      youtube_category_id: n.youtube_category_id ?? "",
       is_active: n.is_active, is_base: n.is_base, access_type: n.access_type, exclusive_to: n.exclusive_to ?? "",
       exclusive_until: n.exclusive_until ?? "", released_at: n.released_at ?? "",
-      narration_persona: jstr(n.narration_persona), music_config: jstr(n.music_config), visual_style: jstr(n.visual_style), mood_priority: jstr(n.mood_priority),
-      emotion_scoring_criteria: n.emotion_scoring_criteria ?? "",
-      image_quality_tags: asArr(n.image_quality_tags).join(", "), image_negative_prompt: n.image_negative_prompt ?? "",
-      visual_fallbacks: asArr(n.visual_fallbacks).join(", "), section_timing: jstr(n.section_timing),
     } : {});
   }
 
-  async function save() {
+  async function saveDna(patch: Record<string, unknown>) {
+    if (!cur) return { ok: false };
+    setBusy(true);
+    const r = await fetch(`/api/admin/niches/${cur.niche_id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
+    const j = await r.json().catch(() => ({}));
+    setBusy(false);
+    if (r.ok) { setToast("DNA tersimpan"); setSel(null); await load(); return { ok: true }; }
+    setToast(j.error === "dna_invalid" ? "Ada isian tidak valid" : (j.error || "Gagal menyimpan"));
+    return { ok: false, fields: j.fields };
+  }
+
+  async function saveAccess() {
     if (!cur) return;
     setBusy(true);
     const patch: Record<string, unknown> = {
-      name: edit.name, is_active: edit.is_active, is_base: edit.is_base,
+      is_active: edit.is_active, is_base: edit.is_base,
       access_type: edit.access_type, exclusive_to: (edit.exclusive_to as string) || null,
       exclusive_until: (edit.exclusive_until as string) || null, released_at: (edit.released_at as string) || null,
-      emotion_scoring_criteria: edit.emotion_scoring_criteria,
-      image_negative_prompt: (edit.image_negative_prompt as string) || null,
-      keywords: String(edit.keywords || "").split(",").map((s) => s.trim()).filter(Boolean),
-      default_hashtags: String(edit.default_hashtags || "").split(",").map((s) => s.trim()).filter(Boolean),
-      image_quality_tags: String(edit.image_quality_tags || "").split(",").map((s) => s.trim()).filter(Boolean),
-      visual_fallbacks: String(edit.visual_fallbacks || "").split(",").map((s) => s.trim()).filter(Boolean),
-      youtube_category_id: (edit.youtube_category_id as string) || null,
     };
-    for (const [k, v] of [["narration_persona", edit.narration_persona], ["music_config", edit.music_config], ["visual_style", edit.visual_style], ["mood_priority", edit.mood_priority], ["section_timing", edit.section_timing]] as const) {
-      try { patch[k] = JSON.parse(v as string); } catch { /* skip invalid JSON */ }
-    }
     const r = await fetch(`/api/admin/niches/${cur.niche_id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
     setBusy(false);
-    if (r.ok) { setToast("Tersimpan"); setSel(null); await load(); } else setToast("Gagal menyimpan");
+    if (r.ok) { setToast("Akses tersimpan"); setSel(null); await load(); } else setToast("Gagal menyimpan");
   }
   async function testNiche(id: string) {
     setBusy(true);
@@ -245,7 +241,14 @@ export default function AdminNichesPage() {
             <div className="nl-fld"><label className="label"><Bi id="Nama tampilan" en="Display name" /></label><input className="input" value={newN.name} onChange={(e) => setNewN({ ...newN, name: e.target.value })} /></div>
             <div className="nl-fld"><label className="label">access_type</label><select className="input" value={newN.access_type} onChange={(e) => setNewN({ ...newN, access_type: e.target.value })}><option value="public">🌍 Public</option><option value="private">🔒 Private</option></select></div>
             <label style={{ display: "flex", alignItems: "center", gap: ".5rem", fontSize: "var(--text-sm)", margin: ".4rem 0" }}><input type="checkbox" checked={newN.is_base} onChange={(e) => setNewN({ ...newN, is_base: e.target.checked })} /> is_base (trial/starter)</label>
-            <div className="muted" style={{ fontSize: "var(--text-xs)", margin: ".25rem 0 .5rem" }}><Bi id="Detail DNA (voice/visual/timing) diedit di drawer setelah dibuat." en="DNA detail (voice/visual/timing) edited in the drawer after creation." /></div>
+            <div className="nl-fld"><label className="label"><Bi id="Mulai dari template" en="Start from template" /></label>
+              <select className="input" value={newN.template_niche_id ?? ""} onChange={(e) => setNewN({ ...newN, template_niche_id: e.target.value })}>
+                <option value="">— kosong / blank —</option>
+                {niches.filter((n) => n.is_base).map((n) => <option key={n.niche_id} value={n.niche_id}>{n.name}</option>)}
+              </select>
+              <div className="muted" style={{ fontSize: "0.6875rem", marginTop: ".25rem" }}><Bi id="Gaya narasi/visual/musik/struktur di-copy sebagai titik awal (keywords TIDAK — spesifik topik)." en="Narration/visual/music/structure copied as a start (keywords NOT — topic-specific)." /></div>
+            </div>
+            <div className="muted" style={{ fontSize: "var(--text-xs)", margin: ".25rem 0 .5rem" }}><Bi id="Detail DNA disempurnakan di drawer setelah dibuat." en="DNA detail refined in the drawer after creation." /></div>
             <div style={{ display: "flex", gap: ".5rem", justifyContent: "flex-end", marginTop: "0.5rem" }}>
               <button className="btn btn-ghost" onClick={() => setNewN(null)}>Batal</button>
               <button className="btn btn-default" disabled={busy || !/^[a-z0-9_]+$/.test(newN.niche_id)} onClick={createNiche}><Check size={14} /> <Bi id="Buat niche" en="Create niche" /></button>
@@ -314,39 +317,10 @@ export default function AdminNichesPage() {
           )}
           <div className="nl-drawer-tabs">{DTABS.map((l, i) => <button key={l} className={`nl-dtab${dtab === i ? " active" : ""}`} onClick={() => setDtab(i)}>{l}</button>)}</div>
           <div className="nl-dpanel">
-            {dtab === 0 && <>
-              <div className="nl-fld"><label className="label">Niche key</label><input className="input input-mono" value={cur.niche_id} disabled /></div>
-              <div className="nl-fld"><label className="label">Display name</label><input className="input" value={edit.name as string} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></div>
-              <div className="nl-fld"><label className="label">Keywords (pisah koma)</label><textarea className="textarea" rows={2} value={edit.keywords as string} onChange={(e) => setEdit({ ...edit, keywords: e.target.value })} /></div>
-              <div className="nl-fld"><label className="label">Default hashtags (pisah koma)</label><textarea className="textarea" rows={2} value={edit.default_hashtags as string} onChange={(e) => setEdit({ ...edit, default_hashtags: e.target.value })} /></div>
-              <div className="nl-fld"><label className="label">Kategori YouTube <span className="muted" style={{ fontWeight: 400, fontSize: "var(--text-xs)" }}>(categoryId saat publish)</span></label><select className="input" value={(edit.youtube_category_id as string) ?? ""} onChange={(e) => setEdit({ ...edit, youtube_category_id: e.target.value })}><option value="">— pilih (default Education) —</option>{YT_CATEGORIES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
+            {dtab === 0 && <NicheDnaEditor key={cur.niche_id} niche={cur as unknown as NicheRow} onSave={saveDna} busy={busy} />}
+            {dtab === 1 && <>
               <div className="nl-fld" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}><span style={{ fontSize: "var(--text-sm)" }}>is_active</span><label className="switch"><input type="checkbox" checked={!!edit.is_active} onChange={(e) => setEdit({ ...edit, is_active: e.target.checked })} /><span className="track" /><span className="thumb" /></label></div>
               <div className="nl-fld" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}><span style={{ fontSize: "var(--text-sm)" }}>is_base <span className="muted">(trial/starter only)</span></span><label className="switch"><input type="checkbox" checked={!!edit.is_base} onChange={(e) => setEdit({ ...edit, is_base: e.target.checked })} /><span className="track" /><span className="thumb" /></label></div>
-            </>}
-            {dtab === 1 && <>
-              <div className="nl-fld"><label className="label">narration_persona JSON <span className="muted" style={{ fontWeight: 400, fontSize: "var(--text-xs)" }}>gaya/tone narasi (membentuk TEKS via LLM — BUKAN pemilih suara; voice = channel)</span></label><textarea className="textarea input-mono" rows={6} value={edit.narration_persona as string} onChange={(e) => setEdit({ ...edit, narration_persona: e.target.value })} /></div>
-              <div className="nl-fld"><label className="label">music_config JSON <span className="muted" style={{ fontWeight: 400, fontSize: "var(--text-xs)" }}>{'{"mode":"auto|random|fixed","mood":"…","track_id":"…"}'} — §3#24/§10.G (auto=ikut naskah · random=acak di mood · fixed=1 track)</span></label><textarea className="textarea input-mono" rows={3} value={edit.music_config as string} onChange={(e) => setEdit({ ...edit, music_config: e.target.value })} placeholder={'{"mode":"auto"}'} /></div>
-            </>}
-            {dtab === 2 && <>
-              <div className="nl-fld"><label className="label">visual_style JSON</label><textarea className="textarea input-mono" rows={5} value={edit.visual_style as string} onChange={(e) => setEdit({ ...edit, visual_style: e.target.value })} /></div>
-              <div className="nl-fld"><label className="label">image_quality_tags <span className="muted" style={{ fontWeight: 400, fontSize: "var(--text-xs)" }}>(pisah koma)</span></label><textarea className="textarea" rows={2} value={edit.image_quality_tags as string} onChange={(e) => setEdit({ ...edit, image_quality_tags: e.target.value })} /></div>
-              <div className="nl-fld"><label className="label">image_negative_prompt</label><textarea className="textarea" rows={2} value={edit.image_negative_prompt as string} onChange={(e) => setEdit({ ...edit, image_negative_prompt: e.target.value })} /></div>
-              <div className="nl-fld"><label className="label">visual_fallbacks <span className="muted" style={{ fontWeight: 400, fontSize: "var(--text-xs)" }}>(pisah koma)</span></label><textarea className="textarea" rows={2} value={edit.visual_fallbacks as string} onChange={(e) => setEdit({ ...edit, visual_fallbacks: e.target.value })} /></div>
-            </>}
-            {dtab === 3 && <>
-              <div className="nl-fld"><label className="label">mood_priority JSON</label><textarea className="textarea input-mono" rows={4} value={edit.mood_priority as string} onChange={(e) => setEdit({ ...edit, mood_priority: e.target.value })} /></div>
-              <div className="nl-fld"><label className="label">section_timing JSON <span className="muted" style={{ fontWeight: 400, fontSize: "var(--text-xs)" }}>(durasi per-section, detik)</span></label><textarea className="textarea input-mono" rows={4} value={edit.section_timing as string} onChange={(e) => setEdit({ ...edit, section_timing: e.target.value })} /></div>
-              <div className="nl-fld"><label className="label">emotion_scoring_criteria</label><textarea className="textarea" rows={3} value={edit.emotion_scoring_criteria as string} onChange={(e) => setEdit({ ...edit, emotion_scoring_criteria: e.target.value })} /></div>
-            </>}
-            {dtab === 4 && (
-              <div className="card card-pad" style={{ background: "var(--bg)" }}>
-                <div style={{ fontWeight: 600, marginBottom: "0.5rem" }}>Tag Pool — belum tersedia</div>
-                <div className="muted" style={{ fontSize: "var(--text-xs)", lineHeight: 1.6 }}>
-                  Sistem tag (Layer-2) menyentuh <b>mesin produksi</b> (perlu <span className="mono">videos.topic_tags</span> + assignment di pipeline + insight per-tag) → dibangun sebagai <b>epik terpisah</b> (MULTI_FORMAT §0 / Phase 6.4 deferred), bukan bagian wiring admin ini.
-                </div>
-              </div>
-            )}
-            {dtab === 5 && <>
               <div className="nl-fld"><label className="label">access_type</label>
                 {[["public", "🌍 Public"], ["private", "🔒 Private Exclusive"]].map(([v, l]) => (
                   <div key={v} className={`nl-radio-card${edit.access_type === v ? " sel" : ""}`} style={{ cursor: "pointer" }} onClick={() => setEdit({ ...edit, access_type: v })}>{l}</div>
@@ -366,7 +340,7 @@ export default function AdminNichesPage() {
                 {running ? <><Loader2 size={14} className="spin" /> <Bi id="Test berjalan…" en="Test running…" /></> : <><FlaskConical size={14} /> <Bi id="Test niche" en="Test niche" /></>}
               </button>
             ); })()}
-            {dtab !== 4 && <button className="btn btn-default" disabled={busy} onClick={save}><Bi id="Simpan" en="Save" /></button>}
+            {dtab === 1 && <button className="btn btn-default" disabled={busy} onClick={saveAccess}><Bi id="Simpan akses" en="Save access" /></button>}
           </div>
         </>)}
       </aside>

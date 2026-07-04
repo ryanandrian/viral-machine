@@ -219,7 +219,11 @@ def _query_tracks(niche: str, mood: str, fallback_moods: list) -> list[dict]:
             .execute()
         )
         if res4.data:
-            logger.warning("[MusicSelector] Last resort: track random dari library")
+            logger.warning(
+                f"[MusicSelector] ⚠️ LAST RESORT: track ACAK lintas-niche utk niche='{niche}' "
+                f"(mood '{mood}' + fallback {fallback_moods} tak ada di library) — kurasi mood_priority "
+                f"niche ini / tag track di Catalog agar musik by-design, bukan kebetulan"
+            )
             return res4.data
 
         return []

@@ -136,7 +136,6 @@ def _load_from_supabase() -> dict:
             "keywords":         row.get("keywords") or [],
             "style":            row.get("style") or "",
             "target_emotion":   row.get("target_emotion") or "",
-            "hook_templates":   row.get("hook_templates") or [],
             "is_active":        row.get("is_active", True),
             "narration_persona": row.get("narration_persona") or row.get("voice_profile") or {},
             "visual_style":     row.get("visual_style") or {},
@@ -146,6 +145,11 @@ def _load_from_supabase() -> dict:
             "section_timing":        row.get("section_timing") or {},
             "image_quality_tags":    row.get("image_quality_tags") or "",
             "image_negative_prompt": row.get("image_negative_prompt") or "",
+            # BUG FIX 2026-07-04 (audit NICHE_DNA): kolom ini TIDAK pernah disalin → kriteria scoring
+            # admin tak pernah sampai ke prompt QUALITY BAR (script_engine:497) & analyzer prioritas-1
+            # (script_analyzer:74) — selalu jatuh ke derive/default. (hook_templates di-drop: fosil,
+            # nol konsumen — hook via HOOK_FORMULAS + persona.hook_style.)
+            "emotion_scoring_criteria": row.get("emotion_scoring_criteria") or "",
             # Voice = PER-CHANNEL (§10.B FINAL, owner 2026-06-23): niche provider-AGNOSTIK,
             # TIDAK menyimpan voice. narration_persona = gaya/persona narasi (membentuk TEKS naskah
             # via LLM, BUKAN pemilih suara). voice_key/voice_defaults niche = fosil (di-drop migr 0083).

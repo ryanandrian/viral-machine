@@ -440,7 +440,7 @@ class TrendRadar:
         niche_data = niches.get(tenant_config.niche) or next(
             (v for v in niches.values() if v.get("is_active", True)), {}
         )
-        base_keywords = niche_data["keywords"]
+        base_keywords = niche_data.get("keywords") or []   # guard: niche custom bisa tanpa keywords / niche tak dikenal → {}
 
         # s84: focus keyword jadi prioritas #1, niche keywords pelengkap
         if focus and focus.strip():

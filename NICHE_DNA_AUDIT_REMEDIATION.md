@@ -1,6 +1,7 @@
 # 🧬 NICHE DNA — Audit A-to-Z + Arsitektur Perbaikan (Plan vs Realisasi)
 
-> **Status: MENUNGGU KESEPAKATAN OWNER (2026-07-04).** Audit selesai (verified DB live + kode BE `file:baris` + FE admin/tenant, klaim kritis diverifikasi langsung). JANGAN eksekusi sebelum owner setuju arsitektur §3.
+> **Status: DISEPAKATI owner 2026-07-04 (semua §4 = YA; + keputusan tambahan: editor per-field = FE-only/DB tetap JSONB · preset per-properti dua-tingkat "pilih dulu, sunting kalau mau" · pantangan = free text ditegakkan mesin · preset karakter=pilih-satu, preset daftar=merge).**
+> **REALISASI: F1 ✅ · F2 ✅ · F3 ✅ · F4 ✅ · F6 ✅(backfill; test produksi validasi menyusul) · F5 ⬜ (batch berikut).** Detail per-fase di §3 (status inline).
 > Hub backlog = `SISA_KERJA_GO_LIVE.md`. Terkait: Test Lab Fase 1 (SELESAI, alat validasi audit ini) · Fase 3 test-niche tenant (disepakati, menumpang §3.5).
 
 ---
@@ -60,14 +61,16 @@ Matriks kelengkapan (verified DB): 4 niche base admin = ✓ semua. **`imunitas_t
 
 # §3. PLAN (fase eksekusi — setelah disepakati)
 
-### F1 — Perbaikan mesin (BE, kecil tapi berdampak) — ⬜
+### F1 — Perbaikan mesin (BE, kecil tapi berdampak) — ✅ *(2026-07-04)*
+> Realisasi: loader `config.py` salin `emotion_scoring_criteria` ✓ · guard trend_radar ✓ · `hook_templates` DI-DROP (migr 0118 + 2 allowlist + loader) ✓ · WARNING keras music last-resort ✓ · niche `test` dihapus ✓.
 1. `config.py` loader: **salin `emotion_scoring_criteria`** (bug 1 baris; kriteria scoring admin langsung hidup).
 2. Guard `trend_radar.py:443` (`.get("keywords") or []`).
 3. `hook_templates`: **DROP** kolom + dari 2 allowlist + loader (fosil; hook sudah dilayani formula+persona). *(butuh restu: hapus vs wire — rekomendasi hapus)*
 4. Log WARNING keras di music_selector langkah-4 (track acak) + sebut niche.
 - **DONE-BILA**: test produksi niche ber-criteria menunjukkan QUALITY BAR muncul di prompt (log) & skor mengikuti; grep fosil nihil.
 
-### F2 — `NicheDnaEditor` bersama (FE inti) — ⬜
+### F2 — `NicheDnaEditor` bersama (FE inti) — ✅ *(2026-07-04)*
+> Realisasi: `components/niche-dna-editor.tsx` (per-field + preset 2 tingkat + chip + validasi) dipakai admin (`/admin/niches` drawer tab DNA) & tenant (`/niche-studio`) · `lib/niche-dna.ts` = skema+validasi BERSAMA klien+server (kedua API PATCH tolak+pesan per-field, silent-skip DIHAPUS) · tabel `niche_property_presets` (migr 0118, 30 preset seed dwibahasa, RLS publik-baca) · field hantu `style`/`target_emotion` dihidupkan di editor.
 Section (semua per-field, dwibahasa, panduan+contoh, validasi):
 - **Identitas**: nama (wajib) · keywords (chip) · hashtag (chip) · kategori (select) · **style & target_emotion (text + contoh — field hantu dihidupkan)**.
 - **Kepribadian Narasi**: 5 kotak (`tone`/`style`/`avoid`/`hook_style`/`emotion_arc`) + contoh dari niche base.
@@ -77,11 +80,13 @@ Section (semua per-field, dwibahasa, panduan+contoh, validasi):
 - Server: validasi skema di kedua API (tolak + pesan; hapus silent-skip).
 - **DONE-BILA**: admin & tenant memakai komponen sama; JSON mentah nihil; salah isi → pesan jelas, nol data-loss.
 
-### F3 — Wizard niche baru ber-template — ⬜
+### F3 — Wizard niche baru ber-template — ✅ *(2026-07-04)*
+> Realisasi: POST admin & tenant terima `template_niche_id` → copy `TEMPLATE_COPY_COLUMNS` (gaya; keywords TIDAK) · modal create kedua sisi ada pemilih "Mulai dari template" (base publik) · GET mine kirim `templates`.
 Buat-niche (admin `niches`, tenant `niche-studio`, dan alur deliver `request`): langkah pilih template (4 base + "kosong") → copy DNA → langsung buka editor. Kolom DB nihil perubahan.
 - **DONE-BILA**: niche baru apa pun punya DNA terisi dari template; matriks kelengkapan tak pernah ✗ semua lagi.
 
-### F4 — Musik & moods rapi — ⬜
+### F4 — Musik & moods rapi — ✅ *(2026-07-04)*
+> Realisasi: tab **Moods** di Catalog (keywords editable + indikator jumlah track + add) · keywords 15 mood di-seed DWIBAHASA (migr 0118 — deteksi naskah ID hidup) · editor musik per-field (mode radio + pemilih mood/track dari DB + indikator ketersediaan + warning 0-track) · `niche_property_presets`+`moods` masuk registry catalog API (kelola tanpa SQL).
 1. Tab **Moods** di Catalog (mood_id, keywords **ID+EN**, aktif) — tabel `moods` akhirnya ter-manage.
 2. Keyword moods di-seed dwibahasa (deteksi jalan utk naskah Indonesia).
 3. (Bersama F2) editor musik seperti di atas.
@@ -91,8 +96,8 @@ Buat-niche (admin `niches`, tenant `niche-studio`, dan alur deliver `request`): 
 Panel SATU card di Niche Studio (aturan `feedback_uiux_design_for_lay_tenants`): tombol test + ConfirmDialog + stepper progres + hasil video — memakai kredensial & channel tenant sendiri, TANPA publish (jalur `_run_test_no_publish` yang sama, job_type `test_nopub` tenant).
 - **DONE-BILA**: tenant Business menguji niche studio-nya end-to-end tanpa menyentuh YouTube/kuota.
 
-### F6 — Validasi & data lama — ⬜
-Backfill 3 niche non-base via wizard template (imunitas_tubuh, misteri_perang_dunia; `test` dihapus?) + test produksi per niche + dengar musiknya benar + `DB_SCHEMA_V2.md` regenerate bila ada DDL.
+### F6 — Validasi & data lama — ✅ backfill / ⏳ test produksi
+> Realisasi 2026-07-04: `misteri_perang_dunia` ← template dark_history + keywords perang · `imunitas_tubuh` ← komposisi preset kesehatan (persona hangat, visual cerah, mood tenang, scoring inspirasi) + keywords imunitas · matriks kelengkapan kedua niche = ✓ semua. **Menyusul pasca-deploy:** test produksi via Test Lab per niche (dengar musik benar + QUALITY BAR muncul di log) + regenerate `DB_SCHEMA_V2.md`.
 
 ---
 

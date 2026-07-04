@@ -22,12 +22,16 @@ const CATALOG: Record<string, { pk: string; cols: string[] }> = {
   voice_catalog: { pk: "voice_key", cols: ["provider_key", "display_name", "locale", "language", "gender", "age", "accent", "use_case", "description", "default_settings", "niche_default", "preview_url", "delivery_wps", "pace_locked", "is_active", "sort_order"] },
   music_library: { pk: "id", cols: ["is_active", "is_default", "name", "mood", "niche", "bpm", "duration_s"] },
   tts_profiles: { pk: "provider_key", cols: ["is_active", "delivery_wps", "tts_class", "speed_param", "param_schema"] },
+  moods: { pk: "mood_id", cols: ["keywords", "is_active"] },   // NICHE_DNA F4: kelola mood + keyword deteksi (dwibahasa)
+  niche_property_presets: { pk: "id", cols: ["property", "preset_key", "label", "label_en", "description", "description_en", "value", "apply_mode", "sort_order", "is_active"] },
 };
 
 // Kolom jsonb: nilai string dari form di-JSON.parse agar tersimpan sbg objek (bukan string mentah).
 const JSONB_COLS: Record<string, string[]> = {
   voice_catalog: ["default_settings"],
   tts_profiles: ["param_schema"],
+  moods: ["keywords"],
+  niche_property_presets: ["value"],
 };
 // Kolom numerik dengan RESET-ke-NULL + guard rentang (F5-01: voice_catalog.delivery_wps pace per-voice).
 const NUMERIC_COLS: Record<string, Record<string, [number, number]>> = {
@@ -58,13 +62,14 @@ export async function GET() {
   const g = await requireSuperAdmin();
   if (g.error) return g.error;
   const a = createAdminClient();
-  const [ai_models, ai_providers, music_library, content_languages, voice_catalog, tts_profiles] = await Promise.all([
+  const [ai_models, ai_providers, music_library, content_languages, voice_catalog, tts_profiles, moods] = await Promise.all([
     a.from("ai_models").select("*").order("component").order("sort_order"),
     a.from("ai_providers").select("*").order("provider_key"),
     a.from("music_library").select("id, name, niche, mood, duration_s, bpm, object_key, is_active, is_default, source").order("niche").order("name"),
     a.from("content_languages").select("*").order("sort_order"),
     a.from("voice_catalog").select("*").order("sort_order"),
     a.from("tts_profiles").select("*").order("provider_key"),
+    a.from("moods").select("*").order("mood_id"),
   ]);
   // public_url musik (S3) untuk tombol Play di catalog. voice_catalog sudah simpan preview_url.
   const music = (music_library.data ?? []).map((m) => ({
@@ -74,6 +79,7 @@ export async function GET() {
     ai_models: ai_models.data ?? [], ai_providers: ai_providers.data ?? [],
     music_library: music, content_languages: content_languages.data ?? [],
     voice_catalog: voice_catalog.data ?? [], tts_profiles: tts_profiles.data ?? [],
+    moods: moods.data ?? [],
   });
 }
 

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireSuperAdmin } from "@/lib/admin/guard";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { validateDnaPatch } from "@/lib/niche-dna";
 
 const EDITABLE = [
-  "name", "keywords", "style", "target_emotion", "hook_templates", "default_hashtags",
+  "name", "keywords", "style", "target_emotion", "default_hashtags",
   "is_active", "is_base", "visual_style", "visual_fallbacks", "mood_priority", "narration_persona",
   "emotion_scoring_criteria", "section_timing", "image_quality_tags", "image_negative_prompt",
   "music_config", "youtube_category_id",
@@ -19,6 +20,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const patch: Record<string, unknown> = {};
   for (const k of EDITABLE) if (k in body) patch[k] = body[k];
   if (Object.keys(patch).length === 0) return NextResponse.json({ error: "no_editable_fields" }, { status: 400 });
+  // Validasi skema DNA (bersama tenant — lib/niche-dna): tolak + pesan per-field, nol silent-drop.
+  const errs = validateDnaPatch(patch);
+  if (Object.keys(errs).length) return NextResponse.json({ error: "dna_invalid", fields: errs }, { status: 400 });
 
   const admin = createAdminClient();
   const { data, error } = await admin.from("niches").update(patch).eq("niche_id", id).select("*").single();

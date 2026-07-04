@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSuperAdmin } from "@/lib/admin/guard";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { TEMPLATE_COPY_COLUMNS } from "@/lib/niche-dna";
 
 // E2.3 Niches list (PHASE10 §2) — niches (semua) + derive video/tenant count + avg viral_score.
 // (releases/niche_releases DIHAPUS 2026-07-04 — penjadwal rilis tanpa eksekutor, lihat page niches.)
@@ -40,7 +41,8 @@ export async function GET() {
   return NextResponse.json({ niches: rows });
 }
 
-// New Niche — minimal (id+name+is_base+access_type); detail diedit via PATCH.
+// New Niche — id+name+akses + WIZARD TEMPLATE (owner 2026-07-04): copy DNA "gaya" dari niche base
+// pilihan (keywords/hashtags/contoh-shot TIDAK di-copy — spesifik topik niche baru).
 export async function POST(req: Request) {
   const g = await requireSuperAdmin();
   if (g.error) return g.error;
@@ -48,7 +50,15 @@ export async function POST(req: Request) {
   const niche_id = String(b.niche_id ?? "").trim();
   if (!/^[a-z0-9_]+$/.test(niche_id)) return NextResponse.json({ error: "niche_id invalid (a-z0-9_)" }, { status: 400 });
   const admin = createAdminClient();
+  const seed: Record<string, unknown> = {};
+  const tpl = String(b.template_niche_id ?? "").trim();
+  if (tpl) {
+    const { data: base } = await admin.from("niches").select("*").eq("niche_id", tpl).eq("is_base", true).maybeSingle();
+    if (!base) return NextResponse.json({ error: "template tidak ditemukan / bukan niche dasar" }, { status: 400 });
+    for (const c of TEMPLATE_COPY_COLUMNS) seed[c] = (base as Record<string, unknown>)[c];
+  }
   const { data, error } = await admin.from("niches").insert({
+    ...seed,
     niche_id, name: b.name ?? niche_id, is_base: !!b.is_base, is_active: b.is_active ?? true,
     access_type: b.access_type ?? "public", exclusive_to: b.exclusive_to ?? null, exclusive_until: b.exclusive_until ?? null,
     origin: "admin",
