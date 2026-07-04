@@ -9,7 +9,11 @@ Price Sync (B2 + ketahanan, owner 2026-07-04) — sinkron OTOMATIS harga satuan 
   `pricing_pending` + Telegram admin — admin Terapkan/Abaikan di Catalog (kasus nyata: feed EL $180 vs resmi $100).
 - ALARM BASI: sinkron macet > AI_PRICE_STALE_DAYS (default 7) → Telegram admin (1×/hari) — matinya
   sumber KETAHUAN, bukan senyap. Feed mati ≠ rusak: harga terakhir tetap dipakai (beku + ber-cap tanggal).
-- Berjalan harian via buffer_janitor.run_once (guard app_config 'ai_price_synced_at' epoch).
+- Berjalan harian via buffer_janitor.run_once (guard `system_state` 'ai_price_synced_at' epoch).
+- STATUS MESIN (kapan terakhir sinkron, alarm) = tabel `system_state` (0126) — BUKAN app_config
+  (temuan owner 2026-07-05: status nyasar di layar konfigurasi admin = salah tempat).
+- + `sync_fx_rate`: kurs USD→IDR (`app_config.usd_idr_rate`, tampilan biaya BYOK) disinkron harian
+  dari kurs pasar publik; `usd_idr_rate_locked`=1 → mesin tak menimpa (admin kelola sendiri).
 """
 
 import os
@@ -29,9 +33,31 @@ SANITY_FACTOR = float(os.getenv("AI_PRICE_SANITY_FACTOR", "3"))
 STALE_DAYS = float(os.getenv("AI_PRICE_STALE_DAYS", "7"))
 
 
+FX_URL = os.getenv("FX_RATE_URL", "https://open.er-api.com/v6/latest/USD")  # kurs pasar publik, tanpa key
+FX_SANITY_MIN = float(os.getenv("FX_IDR_SANITY_MIN", "5000"))    # band waras USD→IDR — di luar ini = feed rusak, skip
+FX_SANITY_MAX = float(os.getenv("FX_IDR_SANITY_MAX", "60000"))
+
+
 def _sb():
     from supabase import create_client
     return create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+
+
+# ── system_state (0126): penanda status mesin — BUKAN config admin ─────────────
+def _state_get_epoch(sb, key: str) -> int:
+    try:
+        r = sb.table("system_state").select("value").eq("key", key).limit(1).execute()
+        return int(r.data[0]["value"]) if r.data else 0
+    except Exception:
+        return 0
+
+
+def _state_set_epoch(sb, key: str) -> None:
+    try:
+        sb.table("system_state").upsert({"key": key, "value": str(int(_time.time())),
+                                         "updated_at": datetime.now(timezone.utc).isoformat()}).execute()
+    except Exception as e:
+        logger.debug(f"[price_sync] tulis system_state {key} gagal: {e}")
 
 
 def _feed_entry(feed: dict, model_id: str) -> dict | None:
@@ -113,14 +139,12 @@ def _check_staleness(sb, rows: list) -> None:
                 stale.append(m["model_key"])
         if not stale:
             return
-        r = sb.table("app_config").select("value").eq("key", "ai_price_stale_alerted_at").limit(1).execute()
-        last = int(r.data[0]["value"]) if r.data else 0
+        last = _state_get_epoch(sb, "ai_price_stale_alerted_at")
         if _time.time() - last < 86400:
             return
         _notify_admin(f"⚠️ <b>Harga model AI BASI</b> (&gt;{int(STALE_DAYS)} hari tanpa sinkron): "
                       f"<code>{', '.join(stale)}</code>\nSumber feed kemungkinan bermasalah — cek Catalog → AI Models.")
-        sb.table("app_config").upsert({"key": "ai_price_stale_alerted_at", "value": int(_time.time()),
-                                       "description": "epoch alarm harga-basi terakhir (price_sync)"}).execute()
+        _state_set_epoch(sb, "ai_price_stale_alerted_at")
     except Exception as e:
         logger.debug(f"[price_sync] cek staleness gagal: {e}")
 
@@ -131,13 +155,9 @@ def sync_prices(sb=None, force: bool = False) -> dict:
     sb = sb or _sb()
 
     if not force:
-        try:
-            r = sb.table("app_config").select("value").eq("key", "ai_price_synced_at").limit(1).execute()
-            last = int(r.data[0]["value"]) if r.data else 0
-            if last and (_time.time() - last) < SYNC_INTERVAL_HOURS * 3600:
-                return {"skipped": True}
-        except Exception:
-            pass
+        last = _state_get_epoch(sb, "ai_price_synced_at")
+        if last and (_time.time() - last) < SYNC_INTERVAL_HOURS * 3600:
+            return {"skipped": True}
 
     rows = sb.table("ai_models").select("model_key, model_id, component, pricing, pricing_locked, pricing_pending").execute().data or []
 
@@ -180,11 +200,7 @@ def sync_prices(sb=None, force: bool = False) -> dict:
         updated += 1
 
     if feed is not None or updated:
-        try:
-            sb.table("app_config").upsert({"key": "ai_price_synced_at", "value": int(_time.time()),
-                                           "description": "epoch detik sinkron harga model AI terakhir (price_sync)"}).execute()
-        except Exception:
-            pass
+        _state_set_epoch(sb, "ai_price_synced_at")
 
     if held:
         _notify_admin("⚠️ <b>Usulan harga model DITAHAN</b> (berubah drastis — konfirmasi di Catalog → AI Models):\n"
@@ -196,3 +212,34 @@ def sync_prices(sb=None, force: bool = False) -> dict:
 
     _check_staleness(sb, rows)
     return {"updated": updated, "held": held, "missing": missing}
+
+
+def sync_fx_rate(sb=None, force: bool = False) -> dict:
+    """Kurs USD→IDR (`app_config.usd_idr_rate`, TAMPILAN biaya BYOK) — sinkron harian dari kurs pasar
+    publik. `usd_idr_rate_locked`=1 (diset otomatis saat admin edit manual) → HORMATI, jangan timpa.
+    Sanity band FX_SANITY_MIN..MAX: feed gila → skip + log (kurs lama tetap dipakai). Fail-soft total."""
+    sb = sb or _sb()
+    try:
+        r = sb.table("app_config").select("value").eq("key", "usd_idr_rate_locked").limit(1).execute()
+        if r.data and int(r.data[0]["value"] or 0) == 1:
+            return {"skipped": "locked"}
+    except Exception:
+        pass
+    if not force:
+        last = _state_get_epoch(sb, "fx_synced_at")
+        if last and (_time.time() - last) < SYNC_INTERVAL_HOURS * 3600:
+            return {"skipped": "fresh"}
+    try:
+        d = requests.get(FX_URL, timeout=20).json()
+        idr = float((d.get("rates") or {}).get("IDR") or 0)
+    except Exception as e:
+        logger.warning(f"[price_sync] sumber kurs gagal ({e}) — kurs lama tetap dipakai")
+        return {"error": str(e)}
+    if not (FX_SANITY_MIN <= idr <= FX_SANITY_MAX):
+        logger.warning(f"[price_sync] kurs di luar band waras ({idr}) — DITOLAK, kurs lama tetap dipakai")
+        return {"rejected": idr}
+    sb.table("app_config").update({"value": int(round(idr)),
+                                   "updated_at": datetime.now(timezone.utc).isoformat()}).eq("key", "usd_idr_rate").execute()
+    _state_set_epoch(sb, "fx_synced_at")
+    logger.info(f"[price_sync] kurs USD→IDR tersinkron: {int(round(idr))}")
+    return {"rate": int(round(idr))}

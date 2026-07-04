@@ -118,6 +118,12 @@ def run_once(sb=None) -> dict:
         sync_prices(sb)
     except Exception as e:
         logger.warning(f"[janitor] price_sync gagal (non-fatal): {e}")
+    # Kurs USD→IDR harian (tampilan biaya BYOK; hormati usd_idr_rate_locked). Fail-soft.
+    try:
+        from src.billing.price_sync import sync_fx_rate
+        sync_fx_rate(sb)
+    except Exception as e:
+        logger.warning(f"[janitor] sync kurs gagal (non-fatal): {e}")
     return {**sweep_stale(sb), **reconcile_orphans(sb), **prune_logs(sb)}
 
 

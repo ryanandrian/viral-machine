@@ -25,49 +25,64 @@ const CFG_GROUPS: [string, string][] = [
   [G_ENGINE, "Trend Engine Performance"],
   [G_OTHER, "Others"],   // ← catch-all: SETIAP key app_config tanpa metadata TETAP tampil (anti-hilang selamanya)
 ];
-const CFG_META: Record<string, { label: string; group: string; unit: string; hint?: string }> = {
-  trial_duration_days:          { label: "Masa Trial Gratis", group: G_BILLING, unit: "hari" },
-  trial_reminder_days_before:   { label: "Pengingat Sebelum Trial Habis", group: G_BILLING, unit: "hari", hint: "H-x; 0 = matikan" },
-  renewal_reminder_days_before: { label: "Pengingat Sebelum Langganan Habis", group: G_BILLING, unit: "hari", hint: "H-x; 0 = matikan" },
-  subscription_period_days:     { label: "Durasi Periode Langganan", group: G_BILLING, unit: "hari", hint: "default 30 (bulanan)" },
-  billing_grace_days:           { label: "Masa Tenggang Sebelum Dihentikan", group: G_BILLING, unit: "hari" },
-  checkout_expiry_hours:        { label: "Masa Berlaku Link Bayar", group: G_BILLING, unit: "jam" },
-  ppn_percent:                  { label: "PPN Invoice", group: G_BILLING, unit: "%", hint: "0 = harga final; 11 = PKP" },
-  nurture_enabled:                 { label: "Nurture Trial-Lapse Aktif", group: G_LIFECYCLE, unit: "", hint: "1=nyala, 0=mati" },
-  nurture_trial_extend_days:       { label: "Perpanjang Trial 1-Klik", group: G_LIFECYCLE, unit: "hari", hint: "0 = matikan tuas" },
-  winback_discount_pct:            { label: "Diskon Comeback", group: G_LIFECYCLE, unit: "%", hint: "0 = matikan" },
-  winback_discount_valid_days:     { label: "Masa Berlaku Diskon Comeback", group: G_LIFECYCLE, unit: "hari" },
-  nurture_step1_days:              { label: "Email Nurture #1", group: G_LIFECYCLE, unit: "hari", hint: "H+x sejak trial habis" },
-  nurture_step2_days:              { label: "Email Nurture #2", group: G_LIFECYCLE, unit: "hari" },
-  nurture_step3_days:              { label: "Email Nurture #3 (diskon)", group: G_LIFECYCLE, unit: "hari" },
-  nurture_step4_days:              { label: "Email Nurture #4", group: G_LIFECYCLE, unit: "hari" },
-  nurture_step5_days:              { label: "Email Nurture #5", group: G_LIFECYCLE, unit: "hari" },
-  suspend_window_days:             { label: "Masa Suspended → Blokir", group: G_LIFECYCLE, unit: "hari" },
-  suspend_dunning1_days:           { label: "Penagihan Suspended #1", group: G_LIFECYCLE, unit: "hari", hint: "H+x sejak suspended" },
-  suspend_dunning2_days:           { label: "Penagihan Suspended #2", group: G_LIFECYCLE, unit: "hari" },
-  suspend_dunning3_days:           { label: "Penagihan Suspended #3", group: G_LIFECYCLE, unit: "hari" },
-  suspend_dunning4_days:           { label: "Penagihan Suspended #4", group: G_LIFECYCLE, unit: "hari" },
-  suspend_dunning5_days:           { label: "Penagihan Suspended #5", group: G_LIFECYCLE, unit: "hari" },
-  block_retention_days:            { label: "Retensi Sebelum Hapus Data", group: G_LIFECYCLE, unit: "hari" },
-  deletion_warn1_days:             { label: "Peringatan Hapus #1", group: G_LIFECYCLE, unit: "hari", hint: "H-x sebelum hapus" },
-  deletion_warn2_days:             { label: "Peringatan Hapus #2", group: G_LIFECYCLE, unit: "hari" },
-  deletion_warn3_days:             { label: "Peringatan Hapus #3", group: G_LIFECYCLE, unit: "hari" },
-  s3_raw_purge_after_suspend_days: { label: "Hapus Video Mentah S3", group: G_LIFECYCLE, unit: "hari", hint: "setelah suspended; 0 = segera" },
-  niche_eval_window_days:       { label: "Masa Evaluasi Niche Custom", group: G_OTHER, unit: "hari" },
-  default_publish_slots:        { label: "Jam Publish Awal Channel Baru", group: G_OTHER, unit: "", hint: 'JSON ["HH:MM",...], zona waktu tenant' },
-  trend_weight_youtube:    { label: "YouTube (utama)", group: G_TREND, unit: "%" },
-  trend_weight_trends:     { label: "Google Trends", group: G_TREND, unit: "%" },
-  trend_weight_news:       { label: "Google News", group: G_TREND, unit: "%" },
-  trend_weight_wikipedia:  { label: "Wikipedia", group: G_TREND, unit: "%" },
-  trend_weight_hackernews: { label: "HackerNews", group: G_TREND, unit: "%" },
-  trend_cache_ttl_sec:     { label: "Penyegaran Data Tren", group: G_ENGINE, unit: "detik", hint: "43200 = 12 jam" },
-  trend_refresh_pacing_ms: { label: "Jeda Ambil Data", group: G_ENGINE, unit: "ms", hint: "3000 = 3 detik" },
+// DWIBAHASA WAJIB ([[feedback_bilingual_mandatory]], owner 2026-07-05): label/desc/hint/unit = {id,en};
+// desc FE ini = sumber tampilan (DB description = fallback teknis). Key baru TANPA meta = CACAT — lengkapi di sini.
+type BiTxt = { id: string; en: string };
+const U_HARI: BiTxt = { id: "hari", en: "days" }; const U_JAM: BiTxt = { id: "jam", en: "hours" };
+const U_PCT: BiTxt = { id: "%", en: "%" }; const U_DETIK: BiTxt = { id: "detik", en: "sec" };
+const U_MS: BiTxt = { id: "ms", en: "ms" }; const U_NONE: BiTxt = { id: "", en: "" };
+const CFG_META: Record<string, { label: BiTxt; group: string; unit: BiTxt; desc?: BiTxt; hint?: BiTxt }> = {
+  trial_duration_days:          { label: { id: "Masa Trial Gratis", en: "Free Trial Length" }, group: G_BILLING, unit: U_HARI, desc: { id: "Berapa hari calon pelanggan bisa mencoba gratis sebelum harus berlangganan.", en: "How many days a prospect can try for free before subscribing." } },
+  trial_reminder_days_before:   { label: { id: "Pengingat Sebelum Trial Habis", en: "Reminder Before Trial Ends" }, group: G_BILLING, unit: U_HARI, desc: { id: "Kirim email pengingat upgrade H-x sebelum trial berakhir (0 = matikan).", en: "Send an upgrade reminder x days before the trial ends (0 = off)." } },
+  renewal_reminder_days_before: { label: { id: "Pengingat Sebelum Langganan Habis", en: "Renewal Reminder" }, group: G_BILLING, unit: U_HARI, desc: { id: "Kirim email pengingat perpanjangan H-x sebelum langganan berakhir (0 = matikan).", en: "Send a renewal reminder x days before the subscription ends (0 = off)." } },
+  subscription_period_days:     { label: { id: "Durasi Periode Langganan", en: "Subscription Period" }, group: G_BILLING, unit: U_HARI, desc: { id: "Durasi satu periode langganan berbayar. Default 30 = bulanan.", en: "Length of one paid subscription period. Default 30 = monthly." } },
+  billing_grace_days:           { label: { id: "Masa Tenggang Sebelum Dihentikan", en: "Grace Period Before Stop" }, group: G_BILLING, unit: U_HARI, desc: { id: "Setelah langganan berakhir, mesin MASIH jalan selama masa tenggang ini sambil menunggu pembayaran.", en: "After expiry, production keeps running during this grace period while awaiting payment." } },
+  checkout_expiry_hours:        { label: { id: "Masa Berlaku Link Bayar", en: "Payment Link Validity" }, group: G_BILLING, unit: U_JAM, desc: { id: "Berapa jam link pembayaran Midtrans berlaku sebelum kedaluwarsa.", en: "How many hours a Midtrans payment link stays valid." } },
+  ppn_percent:                  { label: { id: "PPN Invoice", en: "Invoice VAT" }, group: G_BILLING, unit: U_PCT, desc: { id: "PPN pada invoice. 0 = harga final tanpa PPN; isi 11 bila perusahaan PKP.", en: "VAT on invoices. 0 = final price, no VAT; set 11 if VAT-registered." } },
+  usd_idr_rate:                 { label: { id: "Kurs USD → IDR", en: "USD → IDR Rate" }, group: G_BILLING, unit: U_NONE, desc: { id: "Kurs untuk TAMPILAN biaya AI BYOK dalam Rupiah (biaya asli disimpan USD). Disinkron OTOMATIS harian dari kurs pasar; mengedit manual = otomatis terkunci.", en: "Rate used to DISPLAY BYOK AI costs in Rupiah (costs are stored in USD). Auto-synced daily from market data; editing manually locks it." } },
+  usd_idr_rate_locked:          { label: { id: "Kunci Kurs Manual", en: "Manual Rate Lock" }, group: G_BILLING, unit: U_NONE, desc: { id: "1 = mesin TIDAK menimpa kurs (Anda kelola sendiri); 0 = kurs disinkron otomatis harian.", en: "1 = the engine never overwrites the rate (you manage it); 0 = auto-synced daily." }, hint: { id: "otomatis jadi 1 saat kurs diedit", en: "auto-set to 1 when rate is edited" } },
+  nurture_enabled:                 { label: { id: "Nurture Trial-Lapse Aktif", en: "Trial-Lapse Nurture On" }, group: G_LIFECYCLE, unit: U_NONE, desc: { id: "Master ON/OFF mesin tindak-lanjut (nurture) trial yang lewat. 1 = nyala, 0 = mati.", en: "Master ON/OFF for the lapsed-trial nurture engine. 1 = on, 0 = off." } },
+  nurture_trial_extend_days:       { label: { id: "Perpanjang Trial 1-Klik", en: "1-Click Trial Extension" }, group: G_LIFECYCLE, unit: U_HARI, desc: { id: "Perpanjangan trial 1-klik dari email nurture. 0 = matikan tuas ini.", en: "1-click trial extension offered in nurture emails. 0 = disable." } },
+  winback_discount_pct:            { label: { id: "Diskon Comeback", en: "Winback Discount" }, group: G_LIFECYCLE, unit: U_PCT, desc: { id: "Diskon bulan pertama untuk lead yang kembali. 0 = matikan (harga normal).", en: "First-month discount for returning leads. 0 = off (normal price)." } },
+  winback_discount_valid_days:     { label: { id: "Masa Berlaku Diskon Comeback", en: "Winback Discount Validity" }, group: G_LIFECYCLE, unit: U_HARI, desc: { id: "Masa berlaku diskon comeback sejak ditawarkan — menciptakan urgensi.", en: "How long the winback discount stays valid once offered — creates urgency." } },
+  nurture_step1_days:              { label: { id: "Email Nurture #1", en: "Nurture Email #1" }, group: G_LIFECYCLE, unit: U_HARI, desc: { id: "Dikirim H+x hari setelah trial habis.", en: "Sent x days after the trial lapses." } },
+  nurture_step2_days:              { label: { id: "Email Nurture #2", en: "Nurture Email #2" }, group: G_LIFECYCLE, unit: U_HARI, desc: { id: "Dikirim H+x hari setelah trial habis.", en: "Sent x days after the trial lapses." } },
+  nurture_step3_days:              { label: { id: "Email Nurture #3 (diskon)", en: "Nurture Email #3 (discount)" }, group: G_LIFECYCLE, unit: U_HARI, desc: { id: "Dikirim H+x hari setelah trial habis.", en: "Sent x days after the trial lapses." } },
+  nurture_step4_days:              { label: { id: "Email Nurture #4", en: "Nurture Email #4" }, group: G_LIFECYCLE, unit: U_HARI, desc: { id: "Dikirim H+x hari setelah trial habis.", en: "Sent x days after the trial lapses." } },
+  nurture_step5_days:              { label: { id: "Email Nurture #5", en: "Nurture Email #5" }, group: G_LIFECYCLE, unit: U_HARI, desc: { id: "Dikirim H+x hari setelah trial habis (terakhir).", en: "Sent x days after the trial lapses (final)." } },
+  suspend_window_days:             { label: { id: "Masa Suspended → Blokir", en: "Suspended → Blocked Window" }, group: G_LIFECYCLE, unit: U_HARI, desc: { id: "Lama status suspended (produksi stop, data utuh, bisa aktif lagi) sebelum akun dikunci.", en: "How long an account stays suspended (production stopped, data intact) before being blocked." } },
+  suspend_dunning1_days:           { label: { id: "Penagihan Suspended #1", en: "Suspended Dunning #1" }, group: G_LIFECYCLE, unit: U_HARI, desc: { id: "Email penagihan H+x hari setelah masuk suspended.", en: "Dunning email x days after suspension." } },
+  suspend_dunning2_days:           { label: { id: "Penagihan Suspended #2", en: "Suspended Dunning #2" }, group: G_LIFECYCLE, unit: U_HARI, desc: { id: "Email penagihan H+x hari setelah masuk suspended.", en: "Dunning email x days after suspension." } },
+  suspend_dunning3_days:           { label: { id: "Penagihan Suspended #3", en: "Suspended Dunning #3" }, group: G_LIFECYCLE, unit: U_HARI, desc: { id: "Email penagihan H+x hari setelah masuk suspended.", en: "Dunning email x days after suspension." } },
+  suspend_dunning4_days:           { label: { id: "Penagihan Suspended #4", en: "Suspended Dunning #4" }, group: G_LIFECYCLE, unit: U_HARI, desc: { id: "Email penagihan H+x hari setelah masuk suspended.", en: "Dunning email x days after suspension." } },
+  suspend_dunning5_days:           { label: { id: "Penagihan Suspended #5", en: "Suspended Dunning #5" }, group: G_LIFECYCLE, unit: U_HARI, desc: { id: "Email penagihan H+x hari setelah masuk suspended.", en: "Dunning email x days after suspension." } },
+  block_retention_days:            { label: { id: "Retensi Sebelum Hapus Data", en: "Retention Before Deletion" }, group: G_LIFECYCLE, unit: U_HARI, desc: { id: "Lama data disimpan setelah akun dikunci (blocked) sebelum DIHAPUS permanen.", en: "How long data is kept after an account is blocked before PERMANENT deletion." } },
+  deletion_warn1_days:             { label: { id: "Peringatan Hapus #1", en: "Deletion Warning #1" }, group: G_LIFECYCLE, unit: U_HARI, desc: { id: "Peringatan H-x hari sebelum penghapusan data.", en: "Warning x days before data deletion." } },
+  deletion_warn2_days:             { label: { id: "Peringatan Hapus #2", en: "Deletion Warning #2" }, group: G_LIFECYCLE, unit: U_HARI, desc: { id: "Peringatan H-x hari sebelum penghapusan data.", en: "Warning x days before data deletion." } },
+  deletion_warn3_days:             { label: { id: "Peringatan Hapus #3", en: "Deletion Warning #3" }, group: G_LIFECYCLE, unit: U_HARI, desc: { id: "Peringatan terakhir H-x hari sebelum penghapusan data.", en: "Final warning x days before data deletion." } },
+  s3_raw_purge_after_suspend_days: { label: { id: "Hapus Video Mentah S3", en: "Purge Raw Videos (S3)" }, group: G_LIFECYCLE, unit: U_HARI, desc: { id: "Hapus file video mentah di storage setelah suspended. 0 = segera (video sudah aman di YouTube).", en: "Delete raw video files from storage after suspension. 0 = immediately (videos already live on YouTube)." } },
+  niche_eval_window_days:       { label: { id: "Masa Evaluasi Niche Custom", en: "Custom Niche Review Window" }, group: G_OTHER, unit: U_HARI, desc: { id: "Berapa hari tenant bisa mengevaluasi niche custom yang diserahkan sebelum pesanan otomatis ditutup.", en: "How many days a tenant can review a delivered custom niche before the order auto-closes." } },
+  default_publish_slots:        { label: { id: "Jam Publish Awal Channel Baru", en: "Default Publish Times (New Channel)" }, group: G_OTHER, unit: U_NONE, desc: { id: "Jam publish awal untuk channel yang baru dibuat (zona waktu tenant). Tenant bebas mengubahnya di halaman Jadwal.", en: "Initial publish times for newly created channels (tenant timezone). Tenants can change them on the Schedule page." }, hint: { id: 'JSON ["HH:MM",...]', en: 'JSON ["HH:MM",...]' } },
+  trend_weight_youtube:    { label: { id: "YouTube (utama)", en: "YouTube (primary)" }, group: G_TREND, unit: U_PCT, desc: { id: "Seberapa besar tren YouTube menentukan pemilihan topik. Sumber utama.", en: "How much YouTube trends drive topic selection. Primary source." } },
+  trend_weight_trends:     { label: { id: "Google Trends", en: "Google Trends" }, group: G_TREND, unit: U_PCT, desc: { id: "Bobot tren pencarian Google pada pemilihan topik.", en: "Weight of Google search trends in topic selection." } },
+  trend_weight_news:       { label: { id: "Google News", en: "Google News" }, group: G_TREND, unit: U_PCT, desc: { id: "Bobot berita terkini pada pemilihan topik.", en: "Weight of current news in topic selection." } },
+  trend_weight_wikipedia:  { label: { id: "Wikipedia", en: "Wikipedia" }, group: G_TREND, unit: U_PCT, desc: { id: "Bobot halaman populer Wikipedia (pengaruh kecil).", en: "Weight of popular Wikipedia pages (minor influence)." } },
+  trend_weight_hackernews: { label: { id: "HackerNews", en: "HackerNews" }, group: G_TREND, unit: U_PCT, desc: { id: "Bobot tren teknologi — hanya untuk niche teknologi.", en: "Weight of tech trends — tech niches only." } },
+  trend_cache_ttl_sec:     { label: { id: "Penyegaran Data Tren", en: "Trend Data Refresh" }, group: G_ENGINE, unit: U_DETIK, desc: { id: "Berapa lama data tren disimpan sebelum diambil ulang. Makin lama = makin hemat kuota.", en: "How long trend data is cached before re-fetching. Longer = less quota." }, hint: { id: "43200 = 12 jam", en: "43200 = 12 hours" } },
+  trend_refresh_pacing_ms: { label: { id: "Jeda Ambil Data", en: "Fetch Pacing" }, group: G_ENGINE, unit: U_MS, desc: { id: "Jeda antar-pengambilan data tren agar tidak diblokir sumbernya.", en: "Delay between trend fetches to avoid being rate-limited." }, hint: { id: "3000 = 3 detik", en: "3000 = 3 seconds" } },
+};
+
+// Pesan error API (kode → dwibahasa) — server kirim kode, FE menerjemahkan.
+const ERR_TXT: Record<string, BiTxt> = {
+  empty_value:     { id: "Nilai kosong", en: "Empty value" },
+  invalid_json:    { id: "JSON tidak valid", en: "Invalid JSON" },
+  invalid_integer: { id: "Harus bilangan bulat", en: "Must be an integer" },
 };
 
 export default function AppConfigPage() {
   const [cfg, setCfg] = useState<AppCfg[]>([]);
   const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<React.ReactNode | null>(null);
 
   const load = useCallback(async () => {
     const r = await fetch("/api/admin/app-config");
@@ -82,8 +97,13 @@ export default function AppConfigPage() {
       method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
     const j = await r.json().catch(() => ({}));
-    setToast(r.ok ? "✓ Tersimpan" : `Gagal menyimpan${j.error ? `: ${j.error}` : ""}`);
-    if (r.ok) await load();
+    if (r.ok) {
+      setToast(<Bi id="✓ Tersimpan" en="✓ Saved" />);
+      await load();
+    } else {
+      const e = ERR_TXT[j.error as string];
+      setToast(<><Bi id="Gagal menyimpan" en="Save failed" />{e ? <>: <Bi id={e.id} en={e.en} /></> : j.error ? `: ${j.error}` : null}</>);
+    }
     setTimeout(() => setToast(null), 2600);
   }
 
@@ -122,8 +142,11 @@ export default function AppConfigPage() {
                     return (
                       <div key={a.key} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "1rem", alignItems: "center", padding: ".7rem 0", borderBottom: "1px solid var(--border-subtle)" }}>
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ fontWeight: 500, fontSize: "var(--text-sm)" }}>{m?.label ?? a.key}</div>
-                          <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "3px", lineHeight: 1.45 }}>{a.description}{m?.hint && <span style={{ marginLeft: ".375rem", opacity: .75 }}>({m.hint})</span>}</div>
+                          <div style={{ fontWeight: 500, fontSize: "var(--text-sm)" }}>{m ? <Bi id={m.label.id} en={m.label.en} /> : a.key}</div>
+                          <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "3px", lineHeight: 1.45 }}>
+                            {m?.desc ? <Bi id={m.desc.id} en={m.desc.en} /> : a.description}
+                            {m?.hint && <span style={{ marginLeft: ".375rem", opacity: .75 }}>(<Bi id={m.hint.id} en={m.hint.en} />)</span>}
+                          </div>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: ".4rem", flex: "none" }}>
                           {a.value_text != null ? (
@@ -132,7 +155,7 @@ export default function AppConfigPage() {
                           ) : (
                             <input className="input" type="number" min={0} style={{ width: "5.5rem", height: "2rem", textAlign: "right" }} defaultValue={a.value} onBlur={(e) => { const n = parseInt(e.target.value, 10); if (Number.isInteger(n) && n !== a.value) patch(a.key, { value: n }); }} />
                           )}
-                          <span className="muted" style={{ fontSize: "var(--text-xs)", width: "2.75rem" }}>{m?.unit ?? ""}</span>
+                          <span className="muted" style={{ fontSize: "var(--text-xs)", width: "2.75rem" }}>{m ? <Bi id={m.unit.id} en={m.unit.en} /> : ""}</span>
                         </div>
                       </div>
                     );

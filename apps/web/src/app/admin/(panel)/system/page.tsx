@@ -43,7 +43,7 @@ const FAIL_COLOR: Record<string, string> = { "TTS/timeout": "#ef4444", "Rate lim
 export default async function AdminSystemPage() {
   const a = createAdminClient();
   const since24h = new Date(Date.now() - 24 * 3.6e6).toISOString();
-  const [hb, inv, chRows, runs24, failedRows, runsTotal, runsFailed, runsSuccess, vids, analytics, channels, direct] = await Promise.all([
+  const [hb, inv, chRows, runs24, failedRows, runsTotal, runsFailed, runsSuccess, vids, analytics, channels, direct, sysState] = await Promise.all([
     a.from("worker_heartbeats").select("*").order("worker_name"),
     a.from("content_inventory").select("channel_id, status").in("status", STOCK_STATUSES),
     a.from("channels").select("id, channel_name, buffer_depth").eq("is_active", true).order("channel_name").limit(24),
@@ -56,7 +56,22 @@ export default async function AdminSystemPage() {
     a.from("video_analytics").select("id", { count: "exact", head: true }),
     a.from("channels").select("id", { count: "exact", head: true }),
     a.from("direct_jobs").select("status, job_type, created_at").order("created_at", { ascending: false }).limit(50),
+    a.from("system_state").select("key, value").in("key", ["ai_price_synced_at", "fx_synced_at"]),
   ]);
+  // Status sinkronisasi mesin (system_state, 0126) — INFORMASI read-only berbahasa manusia
+  // (temuan owner 2026-07-05: epoch mentah nyasar di System Configuration = salah tempat).
+  const stateMap = Object.fromEntries((sysState.data ?? []).map((r: { key: string; value: string | null }) => [r.key, r.value]));
+  const humanEpoch = (v: string | null | undefined, locale: string, tz: string, suffix: string) => {
+    const n = Number(v || 0);
+    if (!n) return null;
+    return new Date(n * 1000).toLocaleString(locale, { timeZone: tz, day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) + suffix;
+  };
+  const syncRows: { key: string; id: string; en: string; vid: string | null; ven: string | null }[] = [
+    { key: "ai_price_synced_at", id: "Harga model AI terakhir disinkron", en: "AI model prices last synced",
+      vid: humanEpoch(stateMap["ai_price_synced_at"], "id-ID", "Asia/Jakarta", " WIB"), ven: humanEpoch(stateMap["ai_price_synced_at"], "en-US", "UTC", " UTC") },
+    { key: "fx_synced_at", id: "Kurs USD→IDR terakhir disinkron", en: "USD→IDR rate last synced",
+      vid: humanEpoch(stateMap["fx_synced_at"], "id-ID", "Asia/Jakarta", " WIB"), ven: humanEpoch(stateMap["fx_synced_at"], "en-US", "UTC", " UTC") },
+  ];
   const djRows = direct.data ?? [];
   // 'done' = test niche selesai TANPA publish (2026-07-04) — dihitung "Selesai" bersama 'published'.
   const dj = { pending: djRows.filter((d) => d.status === "pending").length, producing: djRows.filter((d) => d.status === "producing").length, published: djRows.filter((d) => ["published", "done"].includes(d.status)).length, failed: djRows.filter((d) => d.status === "failed").length };
@@ -150,6 +165,17 @@ export default async function AdminSystemPage() {
         </div>
         <div className="card card-pad"><h3 className="card-title" style={{ marginBottom: "1rem" }}><Command size={16} /> Database (skala data) · {runsSuccess.count ?? 0} runs sukses</h3>
           {DB.map(([k, v]) => (<div className="sys-db-stat" key={k}><span className="muted">{k}</span><span>{v}</span></div>))}
+          <div className="label" style={{ textTransform: "uppercase", letterSpacing: ".04em", margin: "1rem 0 .375rem" }}>
+            <span data-id>Sinkronisasi otomatis</span><span data-en>Auto-sync status</span>
+          </div>
+          {syncRows.map((r) => (
+            <div className="sys-db-stat" key={r.key}>
+              <span className="muted"><span data-id>{r.id}</span><span data-en>{r.en}</span></span>
+              <span>{r.vid
+                ? <><span data-id>{r.vid}</span><span data-en>{r.ven}</span></>
+                : <span className="muted"><span data-id>belum pernah</span><span data-en>never</span></span>}</span>
+            </div>
+          ))}
         </div>
       </div>
 

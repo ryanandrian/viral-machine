@@ -79,12 +79,14 @@ export function AppShell({
         supabase.from("channels").select("id", { count: "exact", head: true }),
         supabase.from("plan_limits").select("plan_type,display_name,niche_studio"),
       ]);
-      // Zona waktu OTOMATIS dari browser (0125, owner 2026-07-05): slot publish dibanding di zona tenant,
-      // tapi tenant baru terjebak UTC (tak ada tempat set). Auto-set HANYA bila belum pernah diset manual di Settings.
+      // Zona waktu dari browser = INISIALISASI SEKALI (0125 + koreksi owner 2026-07-05): hanya saat zona
+      // masih default UTC & belum pernah diset manual. Setelah terisi, zona TERKUNCI ke tempat kerja tenant —
+      // bepergian (mis. Jakarta→Bali) TIDAK menggeser jadwal publish. Ubah zona = sadar, via Settings.
       try {
         const tzRow = tc as { timezone?: string; timezone_set_by_user?: boolean } | null;
         const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        if (browserTz && tzRow && !tzRow.timezone_set_by_user && tzRow.timezone !== browserTz) {
+        if (browserTz && tzRow && !tzRow.timezone_set_by_user
+            && (!tzRow.timezone || tzRow.timezone === "UTC") && tzRow.timezone !== browserTz) {
           supabase.rpc("set_tenant_timezone", { p_timezone: browserTz, p_manual: false }).then(() => {});
         }
       } catch { /* non-fatal */ }
