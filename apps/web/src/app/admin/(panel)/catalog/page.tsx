@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { Plus, Target, ArrowRight, X, Trash2 } from "lucide-react";
 import PresetTables from "@/components/preset-tables";
@@ -19,19 +19,20 @@ type Cat = {
   moods: Record<string, unknown>[];
 };
 
-const TABS: [string, string][] = [["models", "AI Models"], ["providers", "Providers"], ["music", "Music"], ["moods", "Moods"], ["voice", "Voice"], ["languages", "Languages"], ["durations", "Durasi"], ["niche", "Niche"]];
+// Urutan hierarki (owner 2026-07-04): PROVIDER dulu → AI Models (model = DETAIL dari provider).
+const TABS: [string, string][] = [["providers", "Providers"], ["models", "AI Models"], ["music", "Music"], ["moods", "Moods"], ["voice", "Voice"], ["languages", "Languages"], ["durations", "Durasi"], ["niche", "Niche"]];
 
 // field minimal untuk "Add" per tabel (PK + wajib)
 const ADD_FIELDS: Record<string, { table: string; fields: [string, string][] }> = {
-  models: { table: "ai_models", fields: [["model_key", "model_key (PK)"], ["provider_key", "provider_key"], ["component", "component (llm/image/tts/video)"], ["model_id", "model_id"], ["display_name", "display_name"]] },
-  providers: { table: "ai_providers", fields: [["provider_key", "provider_key (PK)"], ["display_name", "display_name"], ["adapter", "adapter (mis. openai_chat)"], ["base_url", "base_url (opsional)"]] },
+  models: { table: "ai_models", fields: [["provider_key", "Provider (induk model ini)"], ["component", "component"], ["model_key", "model_key (PK)"], ["model_id", "model_id (ID resmi di provider)"], ["display_name", "display_name"]] },
+  providers: { table: "ai_providers", fields: [["provider_key", "provider_key (PK)"], ["display_name", "display_name"], ["adapter", "adapter (mis. openai_chat)"], ["auth_type", "auth_type (api_key/none)"], ["key_group", "key_group (vendor kunci — mis. openai_tts→openai)"], ["base_url", "base_url (opsional)"]] },
   voice: { table: "voice_catalog", fields: [["voice_key", "voice_key (PK — voice_id provider)"], ["provider_key", "provider_key (mis. elevenlabs)"], ["display_name", "display_name"], ["locale", "locale (mis. id-ID)"], ["language", "language (mis. Indonesian)"], ["gender", "gender (male/female)"], ["age", "age (mis. young/middle-aged)"], ["accent", "accent (opsional)"], ["use_case", "use_case (mis. narration)"], ["description", "description (opsional)"], ["default_settings", "default_settings JSON {stability,style,speed}"], ["niche_default", "niche_default (opsional)"], ["preview_url", "preview_url (URL contoh suara .mp3, opsional)"], ["delivery_wps", "delivery_wps (pace voice 1.0–4.0; kosong = ikut engine)"]] },
   languages: { table: "content_languages", fields: [["locale", "locale (PK)"], ["display_name", "display_name"], ["quality_tier", "tier (official/experimental)"], ["caption_font", "caption_font"]] },
   moods: { table: "moods", fields: [["mood_id", "mood_id (PK, huruf kecil)"], ["keywords", 'keywords JSON — kata pemicu deteksi dari NASKAH, campur ID+EN, mis. ["misterius","mysterious"]']] },
 };
 
 export default function AdminCatalogPage() {
-  const [tab, setTab] = useState("models");
+  const [tab, setTab] = useState("providers");
   const [data, setData] = useState<Cat | null>(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
@@ -99,7 +100,32 @@ export default function AdminCatalogPage() {
     const r = await fetch("/api/admin/catalog", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table, key }) });
     if (r.ok) { setToast("Dihapus"); await load(); } else { const j = await r.json().catch(() => ({})); setToast(`Gagal: ${j.error ?? ""}`); }
   }
-  function playUrl(url?: string | null) { if (url) new Audio(url).play().catch(() => setToast("Gagal memutar")); }
+  // PEMUTAR TUNGGAL (owner 2026-07-04, world-class): satu audio aktif; play record lain otomatis
+  // stop yang sedang bunyi; klik ulang = stop; pindah tab/keluar halaman = stop.
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [playingKey, setPlayingKey] = useState<string | null>(null);
+  const stopAudio = useCallback(() => {
+    audioRef.current?.pause();
+    audioRef.current = null;
+    setPlayingKey(null);
+  }, []);
+  useEffect(() => { stopAudio(); }, [tab, stopAudio]);
+  useEffect(() => () => { audioRef.current?.pause(); }, []);
+  function togglePlay(key: string, url?: string | null) {
+    if (!url) return;
+    if (playingKey === key) { stopAudio(); return; }
+    audioRef.current?.pause();
+    const audio = new Audio(url);
+    audio.addEventListener("ended", () => { if (audioRef.current === audio) { audioRef.current = null; setPlayingKey(null); } });
+    audio.play().catch(() => { setToast("Gagal memutar"); if (audioRef.current === audio) { audioRef.current = null; setPlayingKey(null); } });
+    audioRef.current = audio;
+    setPlayingKey(key);
+  }
+  const PlayBtn = ({ k, url, emptyLabel = "—" }: { k: string; url?: string | null; emptyLabel?: string }) => (
+    url
+      ? <button className="btn btn-ghost btn-sm" title={playingKey === k ? "Stop" : "Putar"} onClick={() => togglePlay(k, url)}>{playingKey === k ? "⏹" : "▶"}</button>
+      : <span className="muted" style={{ fontSize: "0.7rem" }}>{emptyLabel}</span>
+  );
 
   // NICHE_DNA F4: edit keyword deteksi mood (dipakai music_selector mendeteksi mood dari NASKAH —
   // wajib campur ID+EN agar naskah Indonesia terdeteksi; audit 2026-07-04: dulu EN-only = deteksi mati).
@@ -138,31 +164,38 @@ export default function AdminCatalogPage() {
 
       {loading && tab !== "durations" && <div className="card card-pad muted">Memuat…</div>}
       {!loading && data && (<>
-        {tab === "models" && (<>
-          <div className="cat-toolbar"><div className="right"><button className="btn btn-default btn-sm" onClick={() => setAdd({})}><Plus size={14} /> <Bi id="Tambah model" en="Add model" /></button></div></div>
+        {tab === "providers" && (<>
+          <div className="cat-toolbar"><span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Provider AI = INDUK. Model adalah detailnya — tambah model langsung dari baris provider (＋ Model)." en="AI providers = PARENT. Models are their details — add a model straight from the provider row." /></span><div className="right"><button className="btn btn-default btn-sm" onClick={() => setAdd({})}><Plus size={14} /> <Bi id="Tambah provider" en="Add provider" /></button></div></div>
           <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl cat-tbl">
-            <thead><tr><th>model_key</th><th>provider</th><th>component</th><th>model_id</th><th>tier</th><th>active</th></tr></thead>
-            <tbody>{data.ai_models.map((m) => (
-              <tr key={m.model_key as string}>
-                <td className="mono" style={{ color: "var(--text-primary)" }}>{m.model_key as string}</td>
-                <td>{m.provider_key as string}</td><td><span className="badge badge-default">{m.component as string}</span></td>
-                <td className="mono" style={{ fontSize: "var(--text-xs)" }}>{m.model_id as string}</td><td className="muted">{m.quality_tier as string}</td>
-                <td><Switch table="ai_models" k={m.model_key as string} on={m.is_active as boolean} /></td>
-              </tr>
-            ))}</tbody>
+            <thead><tr><th>provider_key</th><th>display</th><th>adapter</th><th>auth</th><th>key_group</th><th><Bi id="model" en="models" /></th><th>active</th><th></th></tr></thead>
+            <tbody>{data.ai_providers.map((p) => {
+              const pk = p.provider_key as string;
+              const nModels = data.ai_models.filter((m) => m.provider_key === pk).length;
+              return (
+                <tr key={pk}>
+                  <td className="mono" style={{ color: "var(--text-primary)" }}>{pk}</td>
+                  <td>{p.display_name as string}</td><td className="mono" style={{ fontSize: "var(--text-xs)" }}>{p.adapter as string}</td>
+                  <td className="muted">{p.auth_type as string}</td>
+                  <td className="mono" style={{ fontSize: "var(--text-xs)" }}>{(p.key_group as string) || pk}</td>
+                  <td><span className={`badge ${nModels > 0 ? "badge-default" : "badge-warning"}`}>{nModels}</span></td>
+                  <td><Switch table="ai_providers" k={pk} on={p.is_active as boolean} /></td>
+                  <td><button className="btn btn-secondary btn-sm" title="Tambah model utk provider ini" onClick={() => { setTab("models"); setAdd({ provider_key: pk }); }}><Plus size={12} /> Model</button></td>
+                </tr>
+              );
+            })}</tbody>
           </table></div></div>
         </>)}
 
-        {tab === "providers" && (<>
-          <div className="cat-toolbar"><span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Provider AI (adapter protokol). Tambah vendor sejenis = 1 baris." en="AI providers (protocol adapters)." /></span><div className="right"><button className="btn btn-default btn-sm" onClick={() => setAdd({})}><Plus size={14} /> <Bi id="Tambah provider" en="Add provider" /></button></div></div>
+        {tab === "models" && (<>
+          <div className="cat-toolbar"><span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Model = DETAIL dari provider (dikelompokkan per provider)." en="Models = details of a provider (grouped by provider)." /></span><div className="right"><button className="btn btn-default btn-sm" onClick={() => setAdd({})}><Plus size={14} /> <Bi id="Tambah model" en="Add model" /></button></div></div>
           <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl cat-tbl">
-            <thead><tr><th>provider_key</th><th>display</th><th>adapter</th><th>base_url</th><th>auth</th><th>active</th></tr></thead>
-            <tbody>{data.ai_providers.map((p) => (
-              <tr key={p.provider_key as string}>
-                <td className="mono" style={{ color: "var(--text-primary)" }}>{p.provider_key as string}</td>
-                <td>{p.display_name as string}</td><td className="mono" style={{ fontSize: "var(--text-xs)" }}>{p.adapter as string}</td>
-                <td className="muted" style={{ fontSize: "var(--text-xs)" }}>{(p.base_url as string) || "—"}</td><td className="muted">{p.auth_type as string}</td>
-                <td><Switch table="ai_providers" k={p.provider_key as string} on={p.is_active as boolean} /></td>
+            <thead><tr><th>provider</th><th>model_key</th><th>component</th><th>model_id</th><th>tier</th><th>active</th></tr></thead>
+            <tbody>{[...data.ai_models].sort((a, b) => String(a.provider_key).localeCompare(String(b.provider_key)) || String(a.component).localeCompare(String(b.component))).map((m, i, arr) => (
+              <tr key={m.model_key as string}>
+                <td className="mono" style={{ color: "var(--text-primary)" }}>{i === 0 || arr[i - 1].provider_key !== m.provider_key ? (m.provider_key as string) : <span className="muted" style={{ opacity: .35 }}>·</span>}</td>
+                <td className="mono">{m.model_key as string}</td><td><span className="badge badge-default">{m.component as string}</span></td>
+                <td className="mono" style={{ fontSize: "var(--text-xs)" }}>{m.model_id as string}</td><td className="muted">{m.quality_tier as string}</td>
+                <td><Switch table="ai_models" k={m.model_key as string} on={m.is_active as boolean} /></td>
               </tr>
             ))}</tbody>
           </table></div></div>
@@ -189,7 +222,7 @@ export default function AdminCatalogPage() {
                   <td><span className="badge badge-default">{t.mood as string}</span></td>
                   <td className="num muted">{t.duration_s ? `${t.duration_s}s` : "—"}</td>
                   <td className="num muted">{(t.bpm as number) || "—"}</td>
-                  <td>{t.public_url ? <button className="btn btn-ghost btn-sm" title="Putar" onClick={() => playUrl(t.public_url as string)}>▶</button> : <span className="muted" style={{ fontSize: "0.7rem" }}>—</span>}</td>
+                  <td><PlayBtn k={`music:${t.id}`} url={t.public_url as string | null} /></td>
                   <td><Switch table="music_library" k={t.id as string} on={t.is_active as boolean} /></td>
                   <td style={{ whiteSpace: "nowrap" }}>
                     <button className="btn btn-ghost btn-sm" title="Edit" onClick={() => setMEdit({ id: t.id as string, name: (t.name as string) || "", niche: (t.niche as string) || "", mood: (t.mood as string) || "", bpm: t.bpm != null ? String(t.bpm) : "" })}>✎</button>
@@ -228,7 +261,7 @@ export default function AdminCatalogPage() {
                   </td>
                   <td>
                     <span style={{ display: "inline-flex", gap: "0.3rem", alignItems: "center" }}>
-                      {v.preview_url ? <button className="btn btn-ghost btn-sm" title="Putar contoh" onClick={() => { new Audio(v.preview_url as string).play().catch(() => setToast("Gagal memutar")); }}>▶</button> : <span className="muted" style={{ fontSize: "0.7rem" }}>kosong</span>}
+                      <PlayBtn k={`voice:${v.voice_key}`} url={v.preview_url as string | null} emptyLabel="kosong" />
                       {prevEdit && prevEdit.key === v.voice_key
                         ? <><input className="input" style={{ height: 26, fontSize: "0.7rem", width: 150 }} value={prevEdit.url} onChange={(e) => setPrevEdit({ key: v.voice_key as string, url: e.target.value })} placeholder="https://… .mp3" /><button className="btn btn-default btn-sm" onClick={() => savePreview(v.voice_key as string, prevEdit.url)}>✓</button><button className="btn btn-ghost btn-sm" onClick={() => setPrevEdit(null)}>✕</button></>
                         : <button className="btn btn-ghost btn-sm" title="Set contoh" onClick={() => setPrevEdit({ key: v.voice_key as string, url: (v.preview_url as string) || "" })}>✎</button>}
@@ -311,7 +344,21 @@ export default function AdminCatalogPage() {
             <div style={{ display: "flex", alignItems: "center", marginBottom: "0.75rem" }}><strong>Tambah {ADD_FIELDS[tab].table}</strong><button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} onClick={() => setAdd(null)}><X size={16} /></button></div>
             <div style={{ display: "grid", gap: "0.5rem" }}>
               {ADD_FIELDS[tab].fields.map(([k, label]) => (
-                <div key={k}><label className="label">{label}</label><input className="input" value={add[k] ?? ""} onChange={(e) => setAdd({ ...add, [k]: e.target.value })} /></div>
+                <div key={k}><label className="label">{label}</label>
+                  {tab === "models" && k === "provider_key" ? (
+                    <select className="input" value={add[k] ?? ""} onChange={(e) => setAdd({ ...add, [k]: e.target.value })}>
+                      <option value="">— pilih provider —</option>
+                      {(data?.ai_providers ?? []).map((p) => <option key={p.provider_key as string} value={p.provider_key as string}>{(p.display_name as string) || (p.provider_key as string)}</option>)}
+                    </select>
+                  ) : tab === "models" && k === "component" ? (
+                    <select className="input" value={add[k] ?? ""} onChange={(e) => setAdd({ ...add, [k]: e.target.value })}>
+                      <option value="">— pilih —</option>
+                      {["llm", "image", "video", "tts"].map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  ) : (
+                    <input className="input" value={add[k] ?? ""} onChange={(e) => setAdd({ ...add, [k]: e.target.value })} />
+                  )}
+                </div>
               ))}
               <button className="btn btn-primary btn-sm" style={{ justifySelf: "end", marginTop: "0.25rem" }} onClick={createRow}>Simpan</button>
             </div>
