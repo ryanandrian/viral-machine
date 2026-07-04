@@ -127,6 +127,30 @@ export default function AdminCatalogPage() {
       : <span className="muted" style={{ fontSize: "0.7rem" }}>{emptyLabel}</span>
   );
 
+  // B2 cost-tracking: edit manual harga model (USD per satuan). Simpan manual → pricing_locked=true
+  // (sinkron feed harian TIDAK menimpa). Utk model di luar feed (ElevenLabs = tergantung paket langganan).
+  const [priceEdit, setPriceEdit] = useState<{ key: string; in1m: string; out1m: string; img: string; chars1m: string } | null>(null);
+  async function savePricing() {
+    if (!priceEdit) return;
+    const num = (s: string) => (s.trim() === "" ? null : Number(s));
+    const pricing = { in_per_1m: num(priceEdit.in1m), out_per_1m: num(priceEdit.out1m), per_image: num(priceEdit.img), per_1m_chars: num(priceEdit.chars1m), source: "manual", synced_at: new Date().toISOString() };
+    const r = await fetch("/api/admin/catalog", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table: "ai_models", key: priceEdit.key, patch: { pricing, pricing_locked: true } }) });
+    if (r.ok) { setToast("Harga disimpan (terkunci dari sinkron otomatis)"); setPriceEdit(null); await load(); } else { const j = await r.json().catch(() => ({})); setToast(`Gagal: ${j.error ?? ""}`); }
+  }
+  async function toggleLock(key: string, locked: boolean) {
+    const r = await fetch("/api/admin/catalog", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table: "ai_models", key, patch: { pricing_locked: locked } }) });
+    if (r.ok) { setToast(locked ? "Harga dikunci (sinkron tak menimpa)" : "Harga dibuka (ikut sinkron harian)"); await load(); } else setToast("Gagal");
+  }
+  const fmtPricing = (p: Record<string, unknown> | null | undefined): string => {
+    if (!p) return "";
+    const parts: string[] = [];
+    if (p.in_per_1m != null) parts.push(`in $${p.in_per_1m}/1M`);
+    if (p.out_per_1m != null) parts.push(`out $${p.out_per_1m}/1M`);
+    if (p.per_image != null) parts.push(`$${p.per_image}/img`);
+    if (p.per_1m_chars != null) parts.push(`$${p.per_1m_chars}/1M chr`);
+    return parts.join(" · ");
+  };
+
   // NICHE_DNA F4: edit keyword deteksi mood (dipakai music_selector mendeteksi mood dari NASKAH —
   // wajib campur ID+EN agar naskah Indonesia terdeteksi; audit 2026-07-04: dulu EN-only = deteksi mati).
   const [kwEdit, setKwEdit] = useState<{ mood_id: string; text: string } | null>(null);
@@ -189,15 +213,39 @@ export default function AdminCatalogPage() {
         {tab === "models" && (<>
           <div className="cat-toolbar"><span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Model = DETAIL dari provider (dikelompokkan per provider)." en="Models = details of a provider (grouped by provider)." /></span><div className="right"><button className="btn btn-default btn-sm" onClick={() => setAdd({})}><Plus size={14} /> <Bi id="Tambah model" en="Add model" /></button></div></div>
           <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl cat-tbl">
-            <thead><tr><th>provider</th><th>model_key</th><th>component</th><th>model_id</th><th>tier</th><th>active</th></tr></thead>
-            <tbody>{[...data.ai_models].sort((a, b) => String(a.provider_key).localeCompare(String(b.provider_key)) || String(a.component).localeCompare(String(b.component))).map((m, i, arr) => (
-              <tr key={m.model_key as string}>
-                <td className="mono" style={{ color: "var(--text-primary)" }}>{i === 0 || arr[i - 1].provider_key !== m.provider_key ? (m.provider_key as string) : <span className="muted" style={{ opacity: .35 }}>·</span>}</td>
-                <td className="mono">{m.model_key as string}</td><td><span className="badge badge-default">{m.component as string}</span></td>
-                <td className="mono" style={{ fontSize: "var(--text-xs)" }}>{m.model_id as string}</td><td className="muted">{m.quality_tier as string}</td>
-                <td><Switch table="ai_models" k={m.model_key as string} on={m.is_active as boolean} /></td>
-              </tr>
-            ))}</tbody>
+            <thead><tr><th>provider</th><th>model_key</th><th>component</th><th><Bi id="harga (USD, auto-sync harian)" en="pricing (USD, auto-synced daily)" /></th><th>tier</th><th>active</th></tr></thead>
+            <tbody>{[...data.ai_models].sort((a, b) => String(a.provider_key).localeCompare(String(b.provider_key)) || String(a.component).localeCompare(String(b.component))).map((m, i, arr) => {
+              const mk = m.model_key as string;
+              const pr = m.pricing as Record<string, unknown> | null;
+              return (
+                <tr key={mk}>
+                  <td className="mono" style={{ color: "var(--text-primary)" }}>{i === 0 || arr[i - 1].provider_key !== m.provider_key ? (m.provider_key as string) : <span className="muted" style={{ opacity: .35 }}>·</span>}</td>
+                  <td className="mono">{mk}</td><td><span className="badge badge-default">{m.component as string}</span></td>
+                  <td style={{ maxWidth: 300 }}>
+                    {priceEdit?.key === mk ? (
+                      <span style={{ display: "inline-flex", gap: ".3rem", alignItems: "center", flexWrap: "wrap" }}>
+                        <input className="input" style={{ height: 26, width: 70 }} placeholder="in/1M" value={priceEdit.in1m} onChange={(e) => setPriceEdit({ ...priceEdit, in1m: e.target.value })} />
+                        <input className="input" style={{ height: 26, width: 70 }} placeholder="out/1M" value={priceEdit.out1m} onChange={(e) => setPriceEdit({ ...priceEdit, out1m: e.target.value })} />
+                        <input className="input" style={{ height: 26, width: 70 }} placeholder="/img" value={priceEdit.img} onChange={(e) => setPriceEdit({ ...priceEdit, img: e.target.value })} />
+                        <input className="input" style={{ height: 26, width: 76 }} placeholder="/1M chr" value={priceEdit.chars1m} onChange={(e) => setPriceEdit({ ...priceEdit, chars1m: e.target.value })} />
+                        <button className="btn btn-default btn-sm" onClick={savePricing}>✓</button>
+                        <button className="btn btn-ghost btn-sm" onClick={() => setPriceEdit(null)}>✕</button>
+                      </span>
+                    ) : (
+                      <span style={{ display: "inline-flex", gap: ".4rem", alignItems: "center" }}>
+                        {pr ? <span className="muted" style={{ fontSize: "var(--text-xs)" }}>{fmtPricing(pr)}</span>
+                          : (m.is_active ? <span className="badge badge-warning" title="Model aktif tanpa harga → biaya video tampil 'belum lengkap'">⚠️ kosong</span> : <span className="muted" style={{ fontSize: "0.7rem" }}>—</span>)}
+                        {m.pricing_locked ? <span title="Terkunci — sinkron otomatis tak menimpa (klik utk buka)" style={{ cursor: "pointer" }} onClick={() => toggleLock(mk, false)}>🔒</span>
+                          : pr ? <span title="Ikut sinkron harian (klik utk kunci)" style={{ cursor: "pointer", opacity: .45 }} onClick={() => toggleLock(mk, true)}>🔓</span> : null}
+                        <button className="btn btn-ghost btn-sm" title="Edit harga manual" onClick={() => setPriceEdit({ key: mk, in1m: String(pr?.in_per_1m ?? ""), out1m: String(pr?.out_per_1m ?? ""), img: String(pr?.per_image ?? ""), chars1m: String(pr?.per_1m_chars ?? "") })}>✎</button>
+                      </span>
+                    )}
+                  </td>
+                  <td className="muted">{m.quality_tier as string}</td>
+                  <td><Switch table="ai_models" k={mk} on={m.is_active as boolean} /></td>
+                </tr>
+              );
+            })}</tbody>
           </table></div></div>
         </>)}
 

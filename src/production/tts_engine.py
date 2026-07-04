@@ -197,6 +197,13 @@ class TTSEngine:
                     )
                 # F4-01 observability: catat delivery NYATA (best-effort) → kalibrasi pace F5-01 + verifikasi P §10.D.
                 _log_delivery_sample(tenant_config, config, primary, word_count, audio_path)
+                # B2 cost-tracking: TTS ditagih per KARAKTER teks (fakta billing ElevenLabs/OpenAI;
+                # edge gratis → harga 0 di katalog). Dicatat per model TTS channel. Fail-soft.
+                try:
+                    from src.utils import cost_meter
+                    cost_meter.add_tts(config.get("tts_model") or primary, len(text))
+                except Exception:
+                    pass
                 return audio_path, word_timestamps
 
             logger.error(f"[TTSEngine] {primary}: audio kosong/tak terbentuk — gagal jujur (no-fallback)")

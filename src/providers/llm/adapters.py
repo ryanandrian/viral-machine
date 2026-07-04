@@ -60,6 +60,12 @@ class AnthropicMessagesAdapter(_BaseAdapter):
                 system=system_prompt,
                 messages=[{"role": "user", "content": user}],
             )
+            # B2 cost-tracking: usage menumpang di respons yg sama (nol overhead). Fail-soft.
+            try:
+                from src.utils import cost_meter
+                cost_meter.add_llm(model, getattr(resp.usage, "input_tokens", 0), getattr(resp.usage, "output_tokens", 0))
+            except Exception:
+                pass
             return resp.content[0].text.strip()
         except LLMError:
             raise
@@ -100,6 +106,13 @@ class OpenAIChatAdapter(_BaseAdapter):
         try:
             client = OpenAI(**kwargs)
             resp = client.chat.completions.create(**body)
+            # B2 cost-tracking: usage menumpang di respons yg sama (nol overhead). Fail-soft.
+            try:
+                from src.utils import cost_meter
+                u = getattr(resp, "usage", None)
+                cost_meter.add_llm(model, getattr(u, "prompt_tokens", 0), getattr(u, "completion_tokens", 0))
+            except Exception:
+                pass
             return (resp.choices[0].message.content or "").strip()
         except LLMError:
             raise

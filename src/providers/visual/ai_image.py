@@ -338,6 +338,12 @@ class AIImageProvider(VisualProvider):
                 f"Tambah adaptor _generate_<platform> + entri _TRANSPORTS (model didaftar via ai_models)."
             )
         await getattr(self, method)(prompt, negative_prompt, output_path)
+        # B2 cost-tracking: 1 gambar SUKSES ter-generate (retry gagal tak dihitung — hanya yg jadi). Fail-soft.
+        try:
+            from src.utils import cost_meter
+            cost_meter.add_image(self.model_config.get("model_id") or "")
+        except Exception:
+            pass
 
     async def _generate_replicate(self, prompt: str, negative_prompt: str, output_path: Path) -> None:
         try:
@@ -383,6 +389,15 @@ class AIImageProvider(VisualProvider):
                 quality=self.image_quality,
                 n=1,
             )
+            # B2 cost-tracking: keluarga gpt-image-1 ditagih PER-TOKEN dan respons menyertakan usage —
+            # tangkap token NYATA (dicatat sbg llm-bucket model image; harga in/out dari feed). Fail-soft.
+            try:
+                from src.utils import cost_meter
+                u = getattr(response, "usage", None)
+                if u and (getattr(u, "input_tokens", 0) or getattr(u, "output_tokens", 0)):
+                    cost_meter.add_llm(self.model_config["model_id"], getattr(u, "input_tokens", 0), getattr(u, "output_tokens", 0))
+            except Exception:
+                pass
             item = response.data[0]
             if item.b64_json:
                 import base64

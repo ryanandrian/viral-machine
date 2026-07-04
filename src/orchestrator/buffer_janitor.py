@@ -112,6 +112,12 @@ def prune_logs(sb) -> dict:
 
 def run_once(sb=None) -> dict:
     sb = sb or _sb()
+    # B2: sinkron harian harga model AI (feed komunitas → ai_models.pricing; guard internal 24h). Fail-soft.
+    try:
+        from src.billing.price_sync import sync_prices
+        sync_prices(sb)
+    except Exception as e:
+        logger.warning(f"[janitor] price_sync gagal (non-fatal): {e}")
     return {**sweep_stale(sb), **reconcile_orphans(sb), **prune_logs(sb)}
 
 

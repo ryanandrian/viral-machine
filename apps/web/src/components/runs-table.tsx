@@ -33,6 +33,7 @@ type RunRow = {
   id: string; run_id: string | null; channel_id: string | null; niche: string | null; topic: string | null;
   status: string | null; elapsed_seconds: string | null; youtube_url: string | null;
   youtube_video_id: string | null; viral_score: number | null; created_at: string;
+  run_metadata?: { cost?: { usd?: number; unpriced?: string[] } } | null;   // B2 biaya AI BYOK
 };
 const fmtK = (n: number) => n >= 1_000_000 ? `${(n / 1e6).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
 
@@ -78,6 +79,7 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
   const [confirmCfg, setConfirmCfg] = useState<null | { title: ReactNode; message: ReactNode; confirmLabel: ReactNode; onConfirm: () => void }>(null);
   const [chMap, setChMap] = useState<Record<string, string>>({});
   const [views, setViews] = useState<Record<string, number>>({});
+  const [usdRate, setUsdRate] = useState(16500);   // kurs tampilan (app_config usd_idr_rate; fallback = default migrasi)
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<StKey | "all" | "queued">("all");
   const [selected, setSelected] = useState<RunRow | null>(null);
@@ -91,20 +93,23 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
 
   const load = useCallback(async () => {
     // scope channel (tab channel): .eq HARUS sebelum .order (builder supabase). channelId kosong = semua channel.
-    let prSel = supabase.from("production_runs").select("id,run_id,channel_id,niche,topic,status,elapsed_seconds,youtube_url,youtube_video_id,viral_score,created_at");
+    let prSel = supabase.from("production_runs").select("id,run_id,channel_id,niche,topic,status,elapsed_seconds,youtube_url,youtube_video_id,viral_score,created_at,run_metadata");
     if (channelId) prSel = prSel.eq("channel_id", channelId);
     let ciSel = supabase.from("content_inventory").select("id,niche,channel_id,metadata,created_at").eq("status", "ready");
     if (channelId) ciSel = ciSel.eq("channel_id", channelId);
     // Banner "Produksi langsung" — WAJIB scope channel juga (cegah job channel lain bocor ke tab channel ini).
     let djSel = supabase.from("direct_jobs").select("id,status,job_type,niche").in("status", ["pending", "producing"]);
     if (channelId) djSel = djSel.eq("channel_id", channelId);
-    const [{ data: runs }, { data: chs }, { data: dj }, vw, { data: ci }] = await Promise.all([
+    const [{ data: runs }, { data: chs }, { data: dj }, vw, { data: ci }, { data: rateRow }] = await Promise.all([
       prSel.order("created_at", { ascending: false }).limit(2000),
       supabase.from("channels").select("id,channel_name"),
       djSel.order("created_at", { ascending: false }),
       supabase.rpc("get_tenant_video_views"),
       ciSel.order("created_at", { ascending: true }),
+      supabase.from("app_config").select("value").eq("key", "usd_idr_rate").maybeSingle(),
     ]);
+    const _rate = Number((rateRow as { value?: number } | null)?.value);
+    if (_rate > 0) setUsdRate(_rate);
     setDirect(dj ?? []);
     setData((runs as RunRow[]) ?? []);
     setQueue(((ci as { id: number; niche: string | null; channel_id: string | null; metadata: { run_id?: string; script?: { title?: string; topic?: string }; duration_secs?: number; viral_score?: number; insights_grade?: string } | null; created_at: string }[]) ?? []).map((q) => ({
@@ -304,13 +309,15 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
           <table className="tbl">
             <thead><tr>
               <th>ID</th><th>Channel</th><th>Niche</th><th>Topic</th><th>Status</th>
-              <th className="num" title="Waktu proses produksi">Proses</th><th className="num">Views</th><th>Started</th><th></th>
+              <th className="num" title="Waktu proses produksi">Proses</th>
+              <th className="num" title="Biaya AI BYOK nyata (konsumsi terukur × harga resmi provider) — dibayar kunci Anda sendiri">Biaya AI</th>
+              <th className="num">Views</th><th>Started</th><th></th>
             </tr></thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={9} className="muted" style={{ textAlign: "center", padding: "2rem" }}><span data-id>Memuat runs…</span><span data-en>Loading runs…</span></td></tr>
+                <tr><td colSpan={10} className="muted" style={{ textAlign: "center", padding: "2rem" }}><span data-id>Memuat runs…</span><span data-en>Loading runs…</span></td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={9} className="muted" style={{ textAlign: "center", padding: "2rem" }}><span data-id>Tidak ada run cocok filter.</span><span data-en>No runs match filters.</span></td></tr>
+                <tr><td colSpan={10} className="muted" style={{ textAlign: "center", padding: "2rem" }}><span data-id>Tidak ada run cocok filter.</span><span data-en>No runs match filters.</span></td></tr>
               ) : paged.map((d) => {
                 const st = statusKey(d.status);
                 return (
@@ -321,6 +328,11 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
                     <td><div className="topic-cell">{d.topic || <span className="muted">—</span>}</div></td>
                     <td><Badge st={st} /></td>
                     <td className="num mono" style={{ fontSize: "var(--text-xs)" }}>{fmtDur(d.elapsed_seconds)}</td>
+                    <td className="num mono" style={{ fontSize: "var(--text-xs)" }}>{(() => {
+                      const c = (d.run_metadata as { cost?: { usd?: number; unpriced?: string[] } } | null)?.cost;
+                      if (!c || typeof c.usd !== "number") return <span className="muted">—</span>;
+                      return <span title={c.unpriced?.length ? `belum lengkap — model tanpa harga: ${c.unpriced.join(", ")}` : "konsumsi terukur × harga resmi provider"}>Rp {Math.round(c.usd * usdRate).toLocaleString("id-ID")}{c.unpriced?.length ? "⚠️" : ""}</span>;
+                    })()}</td>
                     <td className="num">{d.youtube_video_id && views[d.youtube_video_id] != null ? <b style={{ color: "var(--text-primary)", fontWeight: 600 }}>{fmtK(views[d.youtube_video_id])}</b> : <span className="muted">—</span>}</td>
                     <td><span className="muted" style={{ fontSize: "var(--text-xs)", whiteSpace: "nowrap" }}>{fmtWhen(d.created_at)}</span></td>
                     <td><a href={`/runs/${d.id}`} className="btn btn-ghost btn-icon btn-sm" onClick={(e) => e.stopPropagation()} title="Lihat detail"><Eye size={14} /></a></td>

@@ -145,12 +145,12 @@
 - **DONE-BILA:** admin set/rotate secret Kategori A dari panel → worker pakai nilai baru tanpa edit file; Kategori B ditolak edit.
 - **REALISASI:** ⬜
 
-### [B2] Cost-tracking REAL per-konten (BYOK) — ⬜
+### [B2] Cost-tracking REAL per-konten (BYOK) — ✅ *(2026-07-04 — desain disepakati owner: usage on-the-fly + harga auto-sync feed)*
 - **TUJUAN:** tampilkan biaya produksi VALID per-video (REAL dari pemakaian), label "biaya provider AI/BYOK — bukan biaya kami". Spec = REMEDIASI **F5-03**.
 - **BUKTI kondisi sekarang:** tak ada cost-tracking. Satu-satunya harga = `ai_models.cost_hint` (admin-editable). GAP: (a) adapter LLM `complete()` tak kembalikan token usage; (b) `tts_profiles` tanpa cost_hint; (c) `production_runs` tanpa kolom cost (cuma `run_metadata` jsonb). FE = "Biaya AI coming-soon".
 - **PLAN:** (1) adapter LLM (anthropic+openai) kembalikan `usage{input,output tokens}`; pipeline kumpulkan per run. (2) tangkap jumlah gambar (=visual_beats) + karakter TTS. (3) DB: `tts_profiles +cost_hint` (per-char); simpan biaya aktual `production_runs.run_metadata.cost` (breakdown llm/image/tts). (4) hitung Σ. (5) FE kartu "Biaya AI" (dashboard) + kolom Runs — REAL pasca-produksi (ganti coming-soon), label BYOK.
 - **DONE-BILA:** tiap run baru tulis biaya breakdown nyata; FE tampil per-konten.
-- **REALISASI:** ⬜
+- **REALISASI:** ✅ **2026-07-04.** (1) **Konsumsi on-the-fly, NOL overhead**: `cost_meter` (thread-local per-run) — adapter LLM tangkap `resp.usage` (Anthropic+OpenAI), gpt-image-1 tangkap token usage respons Images API, TTS catat karakter (edge=Rp0), pipeline reset/summary (run GAGAL pun dicatat — uang terpakai). (2) **Harga TANPA beban manual**: `price_sync` tarik feed komunitas LiteLLM harian (via janitor, guard `app_config.ai_price_synced_at`) → `ai_models.pricing` jsonb (migr 0120); `pricing_locked` = override admin (wajib utk ElevenLabs — harga tergantung paket langganan; edge di-set Rp0+locked); verified sync nyata: 7 model terisi otomatis, harga cocok list resmi (gpt-4o-mini $0.15/$0.60 dst). (3) `ai_cost.compute_cost_usd` → `run_metadata.{ai_usage,cost}` (USD beku saat produksi + breakdown llm/image/tts + `unpriced` jujur) di 3 penulis run (scheduled/direct/test). (4) FE: Catalog kolom harga+🔒lock+edit manual+⚠️model-aktif-tanpa-harga · dashboard kartu "Biaya AI (30 hari)" REAL (Σ×kurs `app_config.usd_idr_rate` admin-editable) · kolom "Biaya AI" di Runs (+⚠️ bila ada model unpriced). Uji: skenario 60s ≈ $0.108/video; thread-isolation meter terbukti. **Aksi owner 1×: isi harga ElevenLabs di Catalog (sesuai paket langganan) + lock.**
 
 ### [B3] Sapu hardcode sisa — ⬜  (REMEDIASI **F5-02**)
 - **TUJUAN:** nol hardcode kritis; semua config-driven.

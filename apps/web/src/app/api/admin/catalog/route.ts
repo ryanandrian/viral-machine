@@ -16,7 +16,7 @@ async function s3DeleteObject(key: string): Promise<void> {
 
 // Whitelist tabel katalog → kolom yang boleh diubah + PK. Mencegah tulis sembarang kolom/tabel.
 const CATALOG: Record<string, { pk: string; cols: string[] }> = {
-  ai_models: { pk: "model_key", cols: ["provider_key", "component", "model_id", "display_name", "quality_tier", "is_active", "sort_order", "cost_hint", "default_params"] },
+  ai_models: { pk: "model_key", cols: ["provider_key", "component", "model_id", "display_name", "quality_tier", "is_active", "sort_order", "cost_hint", "default_params", "pricing", "pricing_locked"] },
   ai_providers: { pk: "provider_key", cols: ["display_name", "adapter", "base_url", "auth_type", "key_group", "is_active", "request_param_schema"] },
   content_languages: { pk: "locale", cols: ["display_name", "quality_tier", "caption_font", "is_active", "sort_order", "tts_providers_supported"] },
   voice_catalog: { pk: "voice_key", cols: ["provider_key", "display_name", "locale", "language", "gender", "age", "accent", "use_case", "description", "default_settings", "niche_default", "preview_url", "delivery_wps", "pace_locked", "is_active", "sort_order"] },
@@ -32,6 +32,7 @@ const JSONB_COLS: Record<string, string[]> = {
   tts_profiles: ["param_schema"],
   moods: ["keywords"],
   niche_property_presets: ["value"],
+  ai_models: ["pricing"],
 };
 // Kolom numerik dengan RESET-ke-NULL + guard rentang (F5-01: voice_catalog.delivery_wps pace per-voice).
 const NUMERIC_COLS: Record<string, Record<string, [number, number]>> = {

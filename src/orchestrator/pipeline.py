@@ -106,6 +106,13 @@ class Pipeline:
         resolved_content_type = "short"
         logger.info(f"[Pipeline] Niche (resolved upstream): '{tenant_config.niche}'")
         # ────────────────────────────────────────────────────────────
+        # B2 cost-tracking: mulai meter konsumsi AI run ini (thread-local; adapter/provider mencatat
+        # on-the-fly dari respons yang sama — NOL panggilan ekstra). Ringkasan dilampirkan di akhir.
+        try:
+            from src.utils import cost_meter
+            cost_meter.reset()
+        except Exception:
+            pass
 
         result = {
             "run_id":       run_id,
@@ -496,6 +503,11 @@ class Pipeline:
             result["status"]        = "success"
             result["completed_at"]  = datetime.now().isoformat()
             result["elapsed_seconds"] = elapsed
+            try:
+                from src.utils import cost_meter
+                result["ai_usage"] = cost_meter.summary()   # B2: konsumsi AI run ini (token/gambar/karakter)
+            except Exception:
+                pass
 
             logger.info(f"{'='*60}")
             logger.info(f"PIPELINE COMPLETE | {elapsed}s | Status: SUCCESS")
@@ -515,6 +527,11 @@ class Pipeline:
             result["error_category"] = getattr(e, "category", "interrupt" if is_interrupt else "unknown")
             result["error_step"]     = getattr(e, "step", None)
             result["elapsed_seconds"] = elapsed
+            try:
+                from src.utils import cost_meter
+                result["ai_usage"] = cost_meter.summary()   # B2: run gagal pun uang TERPAKAI — tetap dicatat
+            except Exception:
+                pass
             logger.exception(
                 f"PIPELINE FAILED | {elapsed}s | [{result['error_category']}"
                 f"{('/' + result['error_step']) if result['error_step'] else ''}] Error: {e}"

@@ -65,11 +65,14 @@ export default function DashboardPage() {
   const [yt, setYt] = useState<Yt | null>(null);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [loading, setLoading] = useState(true);
+  // B2 BYOK cost-tracking: total biaya AI 30 hari (Σ run_metadata.cost.usd × kurs app_config) — REAL.
+  const [aiCost, setAiCost] = useState<{ idr: number; usd: number; videos: number; rate: number } | null>(null);
 
   const load = useCallback(async () => {
+    const since30 = new Date(Date.now() - 30 * 864e5).toISOString();
     const [
       { data: r }, { data: tc }, ins, totals, { data: chs },
-      made, success, failed, review,
+      made, success, failed, review, { data: costRows }, { data: rateRow },
     ] = await Promise.all([
       supabase.from("production_runs").select("id,topic,niche,status,elapsed_seconds,youtube_url,created_at").order("created_at", { ascending: false }).limit(50),
       supabase.from("tenant_configs").select("display_handle,timezone").maybeSingle(),
@@ -80,6 +83,8 @@ export default function DashboardPage() {
       supabase.from("production_runs").select("id", { count: "exact", head: true }).in("status", ["success", "completed", "published"]),
       supabase.from("production_runs").select("id", { count: "exact", head: true }).in("status", ["failed", "error"]),
       supabase.from("production_runs").select("id", { count: "exact", head: true }).in("status", ["qc_failed", "ready_with_issues"]),
+      supabase.from("production_runs").select("run_metadata").gte("created_at", since30).limit(1000),
+      supabase.from("app_config").select("value").eq("key", "usd_idr_rate").maybeSingle(),
     ]);
     setRuns((r as RunRow[]) ?? []);
     const t = tc as { display_handle?: string; timezone?: string } | null;
@@ -96,6 +101,14 @@ export default function DashboardPage() {
     const channels = (chs as { channel_name: string; publish_slots: string[] | null; is_active: boolean }[] | null) ?? [];
     setSlots(channels.filter((c) => c.is_active && c.publish_slots && c.publish_slots.length)
       .map((c) => ({ name: c.channel_name, times: [...(c.publish_slots || [])].sort() })));
+    // Biaya AI 30 hari: hanya run yg PUNYA cost (produksi pasca-fitur); label jujur di kartu.
+    const rate = Number((rateRow as { value?: number } | null)?.value) || 16500;
+    let usd = 0, nCost = 0;
+    ((costRows as { run_metadata?: { cost?: { usd?: number } } }[] | null) ?? []).forEach((row) => {
+      const u = row.run_metadata?.cost?.usd;
+      if (typeof u === "number" && u > 0) { usd += u; nCost += 1; }
+    });
+    setAiCost(nCost > 0 ? { idr: usd * rate, usd, videos: nCost, rate } : null);
     setLoading(false);
   }, [supabase]);
 
@@ -211,10 +224,18 @@ export default function DashboardPage() {
 
           <div className="card card-pad">
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <h3 className="card-title"><DollarSign size={16} /> <Bi id="Biaya AI" en="AI Cost" /></h3>
+              <h3 className="card-title"><DollarSign size={16} /> <Bi id="Biaya AI (30 hari)" en="AI Cost (30 days)" /></h3>
               <span className="badge badge-outline">BYOK</span>
             </div>
-            <p className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.75rem" }}><Bi id="Segera hadir — pelacakan biaya BYOK per produksi." en="Coming soon — per-production BYOK cost tracking." /></p>
+            {aiCost ? (<>
+              <div style={{ fontSize: "var(--text-2xl)", fontWeight: 700, marginTop: "0.5rem" }}>Rp {Math.round(aiCost.idr).toLocaleString("id-ID")}</div>
+              <p className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.25rem" }}>
+                <Bi id={`${aiCost.videos} produksi · rata-rata Rp ${Math.round(aiCost.idr / aiCost.videos).toLocaleString("id-ID")}/video — dibayar ke provider via kunci AI-mu (bukan ke kami); konsumsi terukur nyata × harga resmi provider (kurs ${aiCost.rate.toLocaleString("id-ID")}).`}
+                    en={`${aiCost.videos} productions · avg Rp ${Math.round(aiCost.idr / aiCost.videos).toLocaleString("id-ID")}/video — paid to providers via your own keys; measured usage × official provider prices.`} />
+              </p>
+            </>) : (
+              <p className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.75rem" }}><Bi id="Belum ada data — biaya nyata per video tercatat otomatis mulai produksi berikutnya." en="No data yet — real per-video cost is recorded automatically from the next production." /></p>
+            )}
           </div>
 
           <div className="card card-pad">

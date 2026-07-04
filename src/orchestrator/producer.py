@@ -116,10 +116,27 @@ def _record_production_run(channel_row: dict, result: dict, status: str,
             "llm_provider":    script.get("llm_provider_used"),
             "elapsed_seconds": result.get("elapsed_seconds"),
             "error_message":   error,
-            "run_metadata":    {"scheduled": True, "mode": "buffer"},
+            "run_metadata":    {"scheduled": True, "mode": "buffer", **_cost_fields(result)},
         }).execute()
     except Exception as e:
         logger.warning(f"[Producer] tulis production_runs (scheduled) gagal — non-fatal: {e}")
+
+
+def _cost_fields(result: dict) -> dict:
+    """B2 cost-tracking: {ai_usage, cost} utk run_metadata — konsumsi dari pipeline (cost_meter) +
+    konversi USD via katalog harga (ai_cost). Fail-soft: gagal hitung → usage tetap tercatat."""
+    usage = result.get("ai_usage") or {}
+    if not usage:
+        return {}
+    out = {"ai_usage": usage}
+    try:
+        from src.billing.ai_cost import compute_cost_usd
+        cost = compute_cost_usd(usage)
+        if cost:
+            out["cost"] = cost
+    except Exception as e:
+        logger.warning(f"[Producer] hitung biaya AI gagal (usage tetap dicatat): {e}")
+    return out
 
 
 def produce_one(channel_row: dict) -> int | None:
@@ -297,7 +314,7 @@ def run_direct(sb, job: dict) -> None:
             "llm_provider": _script.get("llm_provider_used"),
             "elapsed_seconds": result.get("elapsed_seconds"),
             "error_message": err,
-            "run_metadata": {"direct": True, "job_type": job.get("job_type")},
+            "run_metadata": {"direct": True, "job_type": job.get("job_type"), **_cost_fields(result)},
         }).execute()
     except Exception as e:
         logger.warning(f"[Direct] tulis production_runs gagal: {e}")
@@ -389,9 +406,10 @@ def _run_test_no_publish(sb, job: dict, ch: dict, run_id: str) -> None:
             "error_message": err,
             # video_s3 WAJIB di sini juga (drawer memutar video dari run_metadata — insiden 2026-07-04:
             # dulu hanya di inventory metadata → panel tak bisa putar video).
-            "run_metadata": {"direct": True, "test": True, "job_type": "admin_test", "inventory_id": inv_id,
+            "run_metadata": {"direct": True, "test": True, "job_type": job.get("job_type") or "admin_test", "inventory_id": inv_id,
                              "video_s3": (f"{tenant_id}/{channel_id}/{run_id}.mp4" if status == "done" else None),
-                             "duration_secs": _qc.get("duration"), "size_mb": _qc.get("size_mb")},
+                             "duration_secs": _qc.get("duration"), "size_mb": _qc.get("size_mb"),
+                             **_cost_fields(result)},
         }).execute()
     except Exception as e:
         logger.warning(f"[DirectTest] tulis production_runs gagal: {e}")
