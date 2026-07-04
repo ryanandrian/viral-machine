@@ -104,12 +104,12 @@
 - **DEPENDS:** paling akhir sebelum publik (agar tak rotate 2×). Terkait [B1] (system-secrets bisa jadi tempat kelola).
 - **REALISASI:** ⬜
 
-### [A4] Verifikasi Google app + kumala reconnect — 🔒⬜
+### [A4] Verifikasi Google app + kumala reconnect — 🟡 SUBMITTED 2026-07-05 (menunggu review Google)
 - **TUJUAN:** pelanggan asing lihat brand MesinViral (bukan warning "unverified"); refresh-token permanen (bukan kedaluwarsa 7 hari mode Testing).
 - **KONTEKS:** materi SIAP di `GOOGLE_OAUTH_PLATFORM_MIGRATION.md` — justifikasi scope (§8a, 3 scope: youtube.upload/readonly/yt-analytics.readonly), shot-list demo video (§8b), `/privacy`+`/terms` sudah LIVE & patuh. Scope SENSITIVE (bukan Restricted → tanpa CASA berbayar).
 - **PLAN (aksi owner):** Google Auth Platform (akun `lumite.biz.id@gmail.com`, project `mesin-viral`) → Publish app (Testing→Production) → Verification Center → submit (justifikasi §8a + demo video §8b). Timeline ~10 hari. ~~+ kumala reconnect~~ → **kumala reconnect YouTube = ✅ SELESAI (owner konfirmasi 2026-07-01)**. Sisa A4 = HANYA Langkah 9 (publish + submit verifikasi).
 - **DONE-BILA:** app verified (warning hilang, token permanen).
-- **REALISASI:** ⬜ *(gate owner; Claude bisa bantu rekam demo/teks)*
+- **REALISASI:** 🟡 **SUBMITTED owner 2026-07-05** — seluruh prasyarat tuntas & terverifikasi: domain `mesinviral.com` verified Search Console (TXT, akun lumite) · Branding+privacy/terms live · 3 scope sensitive declared + justifikasi gabungan + Additional info · demo video Unlisted (`youtu.be/xeTCF73pWkg`, channel mesinviral milik lumite; adegan consent+upload+analytics+revoke nyata) · kuesioner (4×No + 2 acknowledge; TANPA CASA — bukan restricted scope). **Konfirmasi Google:** kontak pertama T&S 3-5 hari, total review **s/d 4-6 MINGGU** (lebih lama dari estimasi 10 hari di doc lama); consent screen lama tetap berlaku selama review. ⚠️ JANGAN ubah publish status/user type selama review. Email T&S masuk ke `lumite.biz.id@gmail.com` → teruskan ke Claude utk draft jawaban. Sisa: tunggu verdict Google.
 
 ### [A5] Smoke-test live end-to-end (tenant baru dari nol) — 🔒⬜
 - **TUJUAN:** bukti acceptance utama CHANNEL_LOCK — tenant BARU (bukan ryan) bisa jalan penuh.

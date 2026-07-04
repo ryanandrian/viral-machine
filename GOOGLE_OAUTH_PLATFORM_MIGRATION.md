@@ -162,7 +162,7 @@ auto-comment, atau rekayasa engagement. Mesin naskah bahkan **melarang** menyuru
    - Pastikan Branding (§3) lengkap & URL live.
    - **Scope justification** — tempel teks dari §8 dokumen ini.
    - **Demo video** (unlisted di YouTube) — ikuti shot-list §8.
-3. Submit. **Timeline resmi Google: hingga ~10 hari** setelah materi lengkap. Status dipantau di Verification Center.
+3. Submit. ~~Timeline ~10 hari~~ **REALITA (konfirmasi layar submit 2026-07-05): kontak pertama Trust & Safety 3-5 hari, total review s/d 4-6 MINGGU.** Status dipantau di Verification Center. **✅ SUBMITTED 2026-07-05** (domain verified + justifikasi + video demo `youtu.be/xeTCF73pWkg` + kuesioner). Consent screen lama tetap berlaku selama review; JANGAN ubah publish status/user type di tengah review.
 
 ---
 
