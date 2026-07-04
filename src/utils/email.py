@@ -132,6 +132,29 @@ def notify_payment_receipt(tenant_id: str, plan_type: str, amount, sb=None, orde
     )
 
 
+def notify_payment_link(tenant_id: str, order_id: str, amount, redirect_url: str | None,
+                        expiry_hours: int = 24, sb=None) -> bool:
+    """Order Snap dibuat → email ber-brand 'Selesaikan pembayaran' + LINK Snap aktif (owner 2026-07-04:
+    email resmi Midtrans TIDAK memuat link). Fail-soft; berlaku langganan & add-on niche."""
+    to = tenant_email(tenant_id, sb)
+    if not to or not redirect_url:
+        return False
+    try:
+        amt = f"Rp {int(amount):,}".replace(",", ".")
+    except Exception:
+        amt = str(amount)
+    return send_email(
+        to, "Complete your payment / Selesaikan pembayaran Anda — MesinViral",
+        _bi(f"Hi,\n\nYour MesinViral invoice ({amt}, order {order_id}) is waiting.\n"
+            f"Complete it here (valid ~{expiry_hours}h):\n{redirect_url}\n\n"
+            f"Changed your mind on the payment method? Just start again from the Billing page — "
+            f"the old invoice is cancelled automatically.\n\n— The MesinViral Team",
+            f"Halo,\n\nTagihan MesinViral Anda ({amt}, order {order_id}) menunggu diselesaikan.\n"
+            f"Lanjutkan pembayaran di sini (berlaku ±{expiry_hours} jam):\n{redirect_url}\n\n"
+            f"Ingin ganti metode pembayaran? Ulangi saja dari halaman Billing — tagihan lama otomatis dibatalkan.\n\n— Tim MesinViral"),
+    )
+
+
 def notify_trial_lapse(tenant_id: str, sb=None) -> bool:
     """Trial habis tanpa upgrade → ajak upgrade + minta feedback (lead marketing, DESAIN §3)."""
     to = tenant_email(tenant_id, sb)

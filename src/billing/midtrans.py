@@ -143,11 +143,33 @@ def _snap_post(order_id: str, amount: int, item_id: str, item_name: str,
     return json.loads(resp.read())
 
 
+def _cancel_pending_orders(sb, tenant_id: str, category: str) -> None:
+    """ANTI DOBEL-BAYAR (owner 2026-07-04): sebelum buat order baru, BATALKAN order pending lama
+    tenant utk kategori sama — 1 tenant = maks 1 tagihan hidup. VA/link lama di SMS/email Midtrans
+    mati (tak bisa dibayar); tenant bebas pilih ulang metode. 404 dari Midtrans = order belum pernah
+    di-charge (token saja) → cukup tandai canceled di ledger. Fail-soft per-order."""
+    rows = (sb.table("payments").select("order_id").eq("tenant_id", tenant_id)
+            .eq("category", category).eq("status", "pending").execute().data) or []
+    for r in rows:
+        oid = r["order_id"]
+        try:
+            auth = base64.b64encode((_server_key() + ":").encode()).decode()
+            req = urllib.request.Request(f"{_status_base()}/{oid}/cancel",
+                                         headers={"Authorization": f"Basic {auth}", "Accept": "application/json"},
+                                         method="POST")
+            urllib.request.urlopen(req, timeout=15)
+        except Exception as e:
+            logger.info(f"[Midtrans] cancel order lama {oid}: {e} (404=belum di-charge, aman)")
+        sb.table("payments").update({"status": "canceled", "updated_at": _now().isoformat()}).eq("order_id", oid).execute()
+        logger.info(f"[Midtrans] order pending lama DIBATALKAN: {oid} (anti dobel-bayar)")
+
+
 def snap_create_transaction(sb, tenant_id: str, plan_type: str,
                             customer_email: str | None = None,
                             finish_url: str | None = None) -> dict:
     """LANGGANAN bulanan. Buat order `payments` pending → Snap → {order_id, token, redirect_url, amount}.
     Frontend redirect user ke redirect_url. Status final via webhook."""
+    _cancel_pending_orders(sb, tenant_id, "subscription")   # anti dobel-bayar (owner 2026-07-04)
     amount   = plan_price_idr(sb, plan_type)
     _wb = _winback_discount(sb, tenant_id)          # diskon comeback (LIFECYCLE) bila aktif
     if _wb > 0:
@@ -166,8 +188,15 @@ def snap_create_transaction(sb, tenant_id: str, plan_type: str,
         logger.error(f"[Midtrans] Snap subscription gagal order={order_id}: HTTP {e.code} {e.read().decode()[:300]}")
         sb.table("payments").update({"status": "create_failed"}).eq("order_id", order_id).execute()
         raise
-    sb.table("payments").update({"snap_token": d.get("token")}).eq("order_id", order_id).execute()
+    sb.table("payments").update({"snap_token": d.get("token"), "redirect_url": d.get("redirect_url")}).eq("order_id", order_id).execute()
     logger.info(f"[Midtrans] Snap subscription order={order_id} amount={amount} ({'prod' if _is_production() else 'sandbox'})")
+    # Email ber-brand "Selesaikan pembayaran" (fail-soft) — email Midtrans TAK memuat link Snap (owner 2026-07-04).
+    try:
+        from src.utils.email import notify_payment_link
+        notify_payment_link(tenant_id, order_id, amount, d.get("redirect_url"),
+                            _app_cfg_int(sb, "checkout_expiry_hours", 24), sb)
+    except Exception as _pe:
+        logger.debug(f"[Midtrans] email link bayar skip (non-fatal): {_pe}")
     return {"order_id": order_id, "token": d.get("token"),
             "redirect_url": d.get("redirect_url"), "amount": amount}
 
@@ -190,6 +219,7 @@ def snap_create_niche_addon(sb, tenant_id: str, request_id: str,
         raise ValueError(f"status '{r['status']}' bukan awaiting_payment")
     if not r.get("price_key"):
         raise ValueError("price_key pesanan kosong")
+    _cancel_pending_orders(sb, tenant_id, "addon")   # anti dobel-bayar (owner 2026-07-04)
     amount   = price_by_key(sb, r["price_key"])
     ts       = int(time.time())
     order_id = f"MV-niche-{str(request_id).replace('-', '')[:12]}-{ts}"
@@ -205,8 +235,14 @@ def snap_create_niche_addon(sb, tenant_id: str, request_id: str,
         logger.error(f"[Midtrans] Snap addon gagal order={order_id}: HTTP {e.code} {e.read().decode()[:300]}")
         sb.table("payments").update({"status": "create_failed"}).eq("order_id", order_id).execute()
         raise
-    sb.table("payments").update({"snap_token": d.get("token")}).eq("order_id", order_id).execute()
+    sb.table("payments").update({"snap_token": d.get("token"), "redirect_url": d.get("redirect_url")}).eq("order_id", order_id).execute()
     logger.info(f"[Midtrans] Snap addon(niche) order={order_id} req={request_id} amount={amount}")
+    try:
+        from src.utils.email import notify_payment_link
+        notify_payment_link(tenant_id, order_id, amount, d.get("redirect_url"),
+                            _app_cfg_int(sb, "checkout_expiry_hours", 24), sb)
+    except Exception as _pe:
+        logger.debug(f"[Midtrans] email link bayar addon skip (non-fatal): {_pe}")
     return {"order_id": order_id, "token": d.get("token"),
             "redirect_url": d.get("redirect_url"), "amount": amount}
 

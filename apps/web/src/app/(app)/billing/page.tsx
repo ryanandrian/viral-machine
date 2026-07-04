@@ -17,7 +17,7 @@ function fmtIDR(n: number | null | undefined) { return n == null ? "—" : `Rp $
 const PLAN_LABEL: Record<string, string> = { trial: "Trial", starter: "Starter", pro: "Pro", business: "Business" };
 
 type Pricing = { key: string; value_idr: number; description: string; category: string };
-type Payment = { order_id: string; plan_type: string | null; gross_amount: number | null; currency: string | null; status: string | null; created_at: string };
+type Payment = { order_id: string; plan_type: string | null; gross_amount: number | null; currency: string | null; status: string | null; created_at: string; redirect_url?: string | null };
 
 export default function BillingPage() {
   const [supabase] = useState(() => createClient());
@@ -40,7 +40,7 @@ export default function BillingPage() {
       supabase.from("pricing_config").select("key,value_idr,description,category").eq("active", true),
       supabase.from("channels").select("id", { count: "exact", head: true }),
       supabase.from("production_runs").select("id", { count: "exact", head: true }).gte("created_at", monthStart),
-      supabase.from("payments").select("order_id,plan_type,gross_amount,currency,status,created_at").order("created_at", { ascending: false }).limit(12),
+      supabase.from("payments").select("order_id,plan_type,gross_amount,currency,status,created_at,redirect_url").order("created_at", { ascending: false }).limit(12),
     ]);
     const t = tc as typeof plan; setPlan(t);
     const pmap: Record<string, Pricing> = {};
@@ -73,6 +73,11 @@ export default function BillingPage() {
     } catch { setPayErr("Gagal terhubung. Coba lagi."); setPaying(null); }
   }
 
+  // Tagihan PENDING terbaru (masih hidup <24 jam) — banner "Lanjutkan pembayaran" (owner 2026-07-04:
+  // email Midtrans tanpa link Snap; kanal kita yang menyediakannya). Order lama auto-batal saat checkout baru.
+  const pendingInvoice = invoices.find((i) => i.status === "pending" && i.redirect_url
+    && Date.now() - new Date(i.created_at).getTime() < 24 * 3600 * 1000) ?? null;
+
   const comp = !!plan && (plan.is_developer || (plan.discount_pct ?? 0) >= 100);
   const planName = plan ? (PLAN_LABEL[plan.plan_type] ?? plan.plan_type) : "—";
   const planPrice = plan ? prices[`plan_${plan.plan_type}`]?.value_idr : null;
@@ -91,6 +96,20 @@ export default function BillingPage() {
               <div className="muted" style={{ fontSize: "var(--text-sm)", marginTop: 4 }}>
                 <Bi id={`Berlaku sampai ${new Date(plan.winback_offer_expires_at).toLocaleDateString("id-ID")} — pilih paket di bawah untuk memakainya.`}
                     en={`Valid until ${new Date(plan.winback_offer_expires_at).toLocaleDateString("en-US")} — pick a plan below to use it.`} />
+              </div>
+            </div>
+          )}
+          {/* tagihan menunggu — lanjutkan bayar (link Snap tersimpan di ledger) */}
+          {pendingInvoice && (
+            <div className="card card-pad" style={{ borderColor: "var(--warning)", background: "var(--warning-soft, rgba(245,158,11,.08))" }}>
+              <b>🧾 <Bi id="Ada tagihan menunggu pembayaran" en="You have a pending invoice" /></b>
+              <div className="muted" style={{ fontSize: "var(--text-sm)", marginTop: 4 }}>
+                <Bi id={`${pendingInvoice.plan_type ? `Paket ${pendingInvoice.plan_type} · ` : ""}Rp ${Number(pendingInvoice.gross_amount ?? 0).toLocaleString("id-ID")} · order ${pendingInvoice.order_id}`}
+                    en={`${pendingInvoice.plan_type ? `${pendingInvoice.plan_type} plan · ` : ""}Rp ${Number(pendingInvoice.gross_amount ?? 0).toLocaleString("id-ID")} · order ${pendingInvoice.order_id}`} />
+              </div>
+              <div style={{ display: "flex", gap: ".5rem", marginTop: ".65rem", alignItems: "center", flexWrap: "wrap" }}>
+                <a className="btn btn-default btn-sm" href={pendingInvoice.redirect_url!} target="_blank" rel="noopener"><Bi id="Lanjutkan pembayaran" en="Continue payment" /></a>
+                <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Ingin ganti metode? Pilih paket di bawah — tagihan ini otomatis dibatalkan." en="Want a different method? Pick a plan below — this invoice is cancelled automatically." /></span>
               </div>
             </div>
           )}
