@@ -143,9 +143,12 @@ export default function AdminPricingPage() {
 
         <aside className="pr-api-panel">
           <div className="card card-pad">
-            <h3 className="card-title" style={{ marginBottom: "0.75rem" }}><Command size={15} /> API</h3>
-            <div className="pr-api-doc">{`pricing_config\n→ landing (A2)\n→ onboarding (C4)\n→ billing (D13)`}</div>
-            <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.75rem", lineHeight: 1.6 }}><Clock size={12} style={{ verticalAlign: -2 }} /> <Bi id="Edit langsung berlaku (public-read)" en="Edits apply immediately (public-read)" /></div>
+            <h3 className="card-title" style={{ marginBottom: "0.75rem" }}><Command size={15} /> <Bi id="Dipakai di mana" en="Where it's used" /></h3>
+            <div className="muted" style={{ fontSize: "var(--text-xs)", lineHeight: 1.8 }}>
+              <div><span className="mono">plan_*</span> → <Bi id="harga paket di Landing & halaman Harga publik, Billing tenant, dan checkout Midtrans" en="plan prices on the public Landing & Pricing pages, tenant Billing, and Midtrans checkout" /></div>
+              <div style={{ marginTop: ".4rem" }}><span className="mono">custom_niche_*</span> → <Bi id="harga add-on niche di Pustaka Niche tenant + tagihan pesanan" en="niche add-on price in the tenant Niche picker + order invoices" /></div>
+            </div>
+            <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.75rem", lineHeight: 1.6 }}><Clock size={12} style={{ verticalAlign: -2 }} /> <Bi id="Perubahan langsung berlaku ke semua halaman itu — tanpa deploy." en="Changes apply to all those pages instantly — no deploy." /></div>
           </div>
           <div className="card card-pad" style={{ marginTop: "1rem" }}>
             <h3 className="card-title" style={{ marginBottom: "0.5rem" }}><Shield size={15} /> RBAC</h3>

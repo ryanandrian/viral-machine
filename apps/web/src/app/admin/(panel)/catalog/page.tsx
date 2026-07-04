@@ -137,6 +137,14 @@ export default function AdminCatalogPage() {
     const r = await fetch("/api/admin/catalog", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table: "ai_models", key: priceEdit.key, patch: { pricing, pricing_locked: true } }) });
     if (r.ok) { setToast("Harga disimpan (terkunci dari sinkron otomatis)"); setPriceEdit(null); await load(); } else { const j = await r.json().catch(() => ({})); setToast(`Gagal: ${j.error ?? ""}`); }
   }
+  // Sanity-guard: usulan harga DITAHAN (berubah drastis dari sinkron) → admin Terapkan / Abaikan.
+  async function resolvePending(key: string, pending: Record<string, unknown>, apply: boolean) {
+    const patch = apply
+      ? { pricing: Object.fromEntries(Object.entries(pending).filter(([k]) => k !== "reason")), pricing_pending: null }
+      : { pricing_pending: null };
+    const r = await fetch("/api/admin/catalog", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table: "ai_models", key, patch }) });
+    if (r.ok) { setToast(apply ? "Usulan harga diterapkan" : "Usulan diabaikan (harga lama dipertahankan)"); await load(); } else setToast("Gagal");
+  }
   async function toggleLock(key: string, locked: boolean) {
     const r = await fetch("/api/admin/catalog", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table: "ai_models", key, patch: { pricing_locked: locked } }) });
     if (r.ok) { setToast(locked ? "Harga dikunci (sinkron tak menimpa)" : "Harga dibuka (ikut sinkron harian)"); await load(); } else setToast("Gagal");
@@ -232,12 +240,19 @@ export default function AdminCatalogPage() {
                         <button className="btn btn-ghost btn-sm" onClick={() => setPriceEdit(null)}>✕</button>
                       </span>
                     ) : (
-                      <span style={{ display: "inline-flex", gap: ".4rem", alignItems: "center" }}>
+                      <span style={{ display: "inline-flex", gap: ".4rem", alignItems: "center", flexWrap: "wrap" }}>
                         {pr ? <span className="muted" style={{ fontSize: "var(--text-xs)" }}>{fmtPricing(pr)}</span>
                           : (m.is_active ? <span className="badge badge-warning" title="Model aktif tanpa harga → biaya video tampil 'belum lengkap'">⚠️ kosong</span> : <span className="muted" style={{ fontSize: "0.7rem" }}>—</span>)}
                         {m.pricing_locked ? <span title="Terkunci — sinkron otomatis tak menimpa (klik utk buka)" style={{ cursor: "pointer" }} onClick={() => toggleLock(mk, false)}>🔒</span>
                           : pr ? <span title="Ikut sinkron harian (klik utk kunci)" style={{ cursor: "pointer", opacity: .45 }} onClick={() => toggleLock(mk, true)}>🔓</span> : null}
                         <button className="btn btn-ghost btn-sm" title="Edit harga manual" onClick={() => setPriceEdit({ key: mk, in1m: String(pr?.in_per_1m ?? ""), out1m: String(pr?.out_per_1m ?? ""), img: String(pr?.per_image ?? ""), chars1m: String(pr?.per_1m_chars ?? "") })}>✎</button>
+                        {(m.pricing_pending as Record<string, unknown> | null) && (
+                          <span style={{ display: "inline-flex", gap: ".3rem", alignItems: "center", padding: ".15rem .4rem", borderRadius: 6, background: "var(--warning-soft)", fontSize: "0.6875rem" }} title={String((m.pricing_pending as Record<string, unknown>).reason ?? "")}>
+                            ⚠️ <Bi id="usulan baru:" en="new proposal:" /> {fmtPricing(m.pricing_pending as Record<string, unknown>)}
+                            <button className="btn btn-default btn-sm" style={{ height: 20, padding: "0 .4rem", fontSize: "0.625rem" }} onClick={() => resolvePending(mk, m.pricing_pending as Record<string, unknown>, true)}><Bi id="Terapkan" en="Apply" /></button>
+                            <button className="btn btn-ghost btn-sm" style={{ height: 20, padding: "0 .4rem", fontSize: "0.625rem" }} onClick={() => resolvePending(mk, m.pricing_pending as Record<string, unknown>, false)}><Bi id="Abaikan" en="Dismiss" /></button>
+                          </span>
+                        )}
                       </span>
                     )}
                   </td>
