@@ -158,11 +158,17 @@
 - **DONE-BILA:** tiap run baru tulis biaya breakdown nyata; FE tampil per-konten.
 - **REALISASI:** ✅ **2026-07-04.** (1) **Konsumsi on-the-fly, NOL overhead**: `cost_meter` (thread-local per-run) — adapter LLM tangkap `resp.usage` (Anthropic+OpenAI), gpt-image-1 tangkap token usage respons Images API, TTS catat karakter (edge=Rp0), pipeline reset/summary (run GAGAL pun dicatat — uang terpakai). (2) **Harga TANPA beban manual**: `price_sync` tarik feed komunitas LiteLLM harian (via janitor, guard `app_config.ai_price_synced_at`) → `ai_models.pricing` jsonb (migr 0120); `pricing_locked` = override admin (wajib utk ElevenLabs — harga tergantung paket langganan; edge di-set Rp0+locked); verified sync nyata: 7 model terisi otomatis, harga cocok list resmi (gpt-4o-mini $0.15/$0.60 dst). (3) `ai_cost.compute_cost_usd` → `run_metadata.{ai_usage,cost}` (USD beku saat produksi + breakdown llm/image/tts + `unpriced` jujur) di 3 penulis run (scheduled/direct/test). (4) FE: Catalog kolom harga+🔒lock+edit manual+⚠️model-aktif-tanpa-harga · dashboard kartu "Biaya AI (30 hari)" REAL (Σ×kurs `app_config.usd_idr_rate` admin-editable) · kolom "Biaya AI" di Runs (+⚠️ bila ada model unpriced). Uji: skenario 60s ≈ $0.108/video; thread-isolation meter terbukti. **Aksi owner 1×: isi harga ElevenLabs di Catalog (sesuai paket langganan) + lock.**
 
-### [B3] Sapu hardcode sisa — ⬜  (REMEDIASI **F5-02**)
+### [B3] Sapu hardcode sisa — 🟡 2 dari 3 anchor TUNTAS (2026-07-05, deployed `6147918`)  (REMEDIASI **F5-02**)
 - **TUJUAN:** nol hardcode kritis; semua config-driven.
 - **PLAN + anchor [cek-baris] (grep dulu):** Ken-Burns motion per-role/zoom `ai_image.py:~417-463` → `niches.motion_profiles` (kolom baru) · `BASE_NICHE_TIERS` `billing/limits.py:~59` → `app_config` · `OPTIMAL_PUBLISH_SLOTS` `tenant_config.py:~82-88` → `app_config`.
 - **DONE-BILA:** grep hardcode kritis bersih; perilaku produksi identik (uji ryan).
-- **REALISASI:** ⬜
+- **REALISASI (proposal→approval owner→eksekusi, 2026-07-05):**
+  - ✅ `BASE_NICHE_TIERS` — tuntas 2026-07-04 via **0124** `plan_limits.full_niche_catalog` (lebih tepat dari rencana app_config).
+  - ✅ `OPTIMAL_PUBLISH_SLOTS` — deep-dive membalik solusi: **FOSIL** (nol pemakai; jadwal nyata = `channels.publish_slots` per-channel, dibaca publisher) → DIHAPUS tuntas (+field dataclass `publish_slots`/`auto_schedule`); verified load config ryan mulus.
+  - ✅ **BONUS gap timezone (temuan deep-dive):** tenant tak bisa set zona waktu → semua tenant baru terjebak UTC (slot "20:00" = 03:00 WIB!). Fix **0125**: auto-detect zona browser saat load app (hanya bila belum manual) + field "Zona waktu" di Settings (dropdown IANA + pratinjau jam) + RPC `set_tenant_timezone` (SECURITY DEFINER, tervalidasi `pg_timezone_names` — tz asing DITOLAK, diuji live) + flag `timezone_set_by_user`.
+  - ✅ **Default slot channel baru** `["13:00"]` FE → `app_config.default_publish_slots` (kolom baru `value_text` utk config teks/JSON + editor admin render baris teks + PATCH validasi JSON).
+  - ⏳ **Ken-Burns motion** — DITARIK owner utk DIMATANGKAN ("harus dimatangkan kembali") — ajukan ulang desain terpisah. JANGAN eksekusi rencana lama (niches.motion_profiles) tanpa proposal baru.
+  - ⏳ **Temuan kualitas owner (proposal terkirim, tunggu approval):** (1) `ai_price_synced_at` = STATE mesin nyasar di app_config (epoch mentah, editable — salah tempat) → pindah + tampil manusiawi di Kesehatan Sistem; (2) `usd_idr_rate` → auto-sync kurs harian + lock manual; (3) SEMUA key app_config WAJIB berlabel manusia (jangan nama field mentah di UI).
 
 ### [B4] Pivot Analytics FE → kinerja-mesin — ⬜  (REMEDIASI **F5-05**)
 - **TUJUAN:** `/analytics` jangan duplikat YouTube Studio; fokus KINERJA MESIN (success-rate/QC/durasi trend, self-learning niche/hook, biaya per-konten) + link YT Studio.
