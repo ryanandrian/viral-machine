@@ -59,6 +59,15 @@ def _resolve_niche(channel_row: dict) -> str | None:
         channel_id = str(channel_row.get("id") or channel_row.get("channel_id") or channel_row.get("tenant_id"))
         # POOL = pilihan tenant (niche_pool); fallback ke channels.niche bila pool kosong/absen.
         pool = [n for n in (channel_row.get("niche_pool") or []) if n]
+        # NICHE_DNA (owner 2026-07-04): hormati niches.is_active — niche yang dinonaktifkan
+        # (tenant di Studio / admin) TIDAK ikut rotasi. (Mode 'fixed' = binding eksplisit channel,
+        # tak disaring di sini.) Fail-soft: registry tak terbaca → pool apa adanya.
+        try:
+            from src.intelligence.config import get_niches
+            _reg = get_niches()
+            pool = [n for n in pool if (_reg.get(n) or {}).get("is_active", True)]
+        except Exception:
+            pass
         if not pool:
             return base
         if len(pool) == 1:

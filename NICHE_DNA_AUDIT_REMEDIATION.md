@@ -3,7 +3,8 @@
 > **Status: DISEPAKATI owner 2026-07-04 (semua §4 = YA; + keputusan tambahan: editor per-field = FE-only/DB tetap JSONB · preset per-properti dua-tingkat "pilih dulu, sunting kalau mau" · pantangan = free text ditegakkan mesin · preset karakter=pilih-satu, preset daftar=merge).**
 > **REALISASI: F1 ✅ · F2 ✅ · F3 ✅ · F4 ✅ · F6 ✅(backfill; test produksi validasi menyusul) · F5 🔨 SEDANG DIKERJAKAN (2026-07-04: migr 0119 job_type test_nopub + inventory status 'test' + janitor ✓; API tenant + panel Studio + preview musik menyusul di batch ini).**
 > **Tambahan terealisasi (2026-07-04, commit `22ac613`): Catalog wiring selaras arsitektur** — tab Providers di depan (induk; +key_group tampil/editable +jumlah model +tombol "＋ Model" per baris), AI Models dikelompokkan per provider + Add ber-dropdown, pemutar audio TUNGGAL play/stop utk Music & Voice.
-> **Temuan baru (belum dieksekusi, keputusan owner):** `niches.is_active` SETENGAH-FUNGSI utk produksi — `producer._resolve_niche` memilih dari `channels.niche_pool` TANPA cek is_active → niche dinonaktifkan tenant TETAP diproduksi bila masih di pool channel. Rekomendasi: hormati is_active di _resolve_niche (filter pool; fallback channels.niche).
+> **✅ is_active kini DIHORMATI produksi (2026-07-04, disetujui owner):** `_resolve_niche` menyaring pool rotasi dari niche nonaktif (fallback `channels.niche`; mode 'fixed' = binding eksplisit, tak disaring). Toggle Aktif di Studio kini berfungsi nyata.
+> **✅ `DB_SCHEMA_V2.md` DIHAPUS (keputusan owner 2026-07-04):** dokumen skema basi menyesatkan — sumber kebenaran struktur = INTROSPEKSI LANGSUNG DB live (psycopg2) tiap kali menyentuh DB.
 > Hub backlog = `SISA_KERJA_GO_LIVE.md`. Terkait: Test Lab Fase 1 (SELESAI, alat validasi audit ini) · Fase 3 test-niche tenant (disepakati, menumpang §3.5).
 
 ---
@@ -100,7 +101,7 @@ Panel SATU card di Niche Studio (aturan `feedback_uiux_design_for_lay_tenants`):
 - **DONE-BILA**: tenant Business menguji niche studio-nya end-to-end tanpa menyentuh YouTube/kuota.
 
 ### F6 — Validasi & data lama — ✅ backfill / ⏳ test produksi
-> Realisasi 2026-07-04: `misteri_perang_dunia` ← template dark_history + keywords perang · `imunitas_tubuh` ← komposisi preset kesehatan (persona hangat, visual cerah, mood tenang, scoring inspirasi) + keywords imunitas · matriks kelengkapan kedua niche = ✓ semua. **Menyusul pasca-deploy:** test produksi via Test Lab per niche (dengar musik benar + QUALITY BAR muncul di log) + regenerate `DB_SCHEMA_V2.md`.
+> Realisasi 2026-07-04: `misteri_perang_dunia` ← template dark_history + keywords perang · `imunitas_tubuh` ← komposisi preset kesehatan (persona hangat, visual cerah, mood tenang, scoring inspirasi) + keywords imunitas · matriks kelengkapan kedua niche = ✓ semua. **Menyusul pasca-deploy:** test produksi via Test Lab per niche (dengar musik benar + QUALITY BAR muncul di log) (`DB_SCHEMA_V2.md` DIHAPUS — keputusan owner 2026-07-04: sumber kebenaran = introspeksi DB live).
 
 ---
 

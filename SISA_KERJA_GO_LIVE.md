@@ -138,7 +138,7 @@
 - **TUJUAN:** secret operasional (Midtrans/SMTP/S3/YouTube-platform-key) editable + rotatable dari admin panel, bukan hanya file `.env`.
 - **KONTEKS/BUKTI (verified DB 2026-07-01):** tabel **`system_secrets` TIDAK ADA**; semua secret operasional dari `.env` (interim sah). Spec lengkap = `PROGRESS.md §ADMIN SYSTEM SECRETS`.
 - **PLAN:**
-  - **S1 (DB):** migr `system_secrets` (`key` PK, `value_enc` Fernet, `category`, `updated_by`, `updated_at`) — RLS **service-role only** (pola `tenant_ai_accounts`). Update `DB_SCHEMA_V2.md`.
+  - **S1 (DB):** migr `system_secrets` (`key` PK, `value_enc` Fernet, `category`, `updated_by`, `updated_at`) — RLS **service-role only** (pola `tenant_ai_accounts`). 
   - **S2 (BE):** `src/config/system_secrets.py` — baca DB (Fernet decrypt) → **fallback env** (transisi mulus). Worker/webhook pakai untuk **Kategori A** (Midtrans/SMTP/S3/`YOUTUBE_PLATFORM_API_KEY`/opsional `OAUTH_STATE_SECRET`).
   - **S3 (FE admin):** `/admin/integrations` (service-role, `requireSuperAdmin`) — status set/kosong (masked) + set/rotate + **"Test koneksi"** (reuse pola Test Lab) + audit→`admin_audit`. **Kategori B read-only** (env-managed: `ENCRYPTION_KEY`/service_role+DB-pw/`MV_INTERNAL_SECRET` — chicken-egg, TAK bisa di-DB).
   - **S4:** seed nilai env→DB + validasi (worker baca DB; rotate dari panel berlaku; restart-safe).
@@ -178,8 +178,8 @@
 - **REALISASI:** ⬜ *(prioritas rendah; 8s bukan preset utama)*
 
 ### [B7] Go-live checklist teknis — ⬜  (REMEDIASI **F5-04**)
-- **PLAN:** regression e2e semua preset × beberapa niche × multi-channel; **regenerate `DB_SCHEMA_V2.md`** (stale berhenti ~0043; live ~0107 — jauh beda) via psycopg2 introspeksi; pastikan ryan stabil.
-- **DONE-BILA:** semua hijau; `DB_SCHEMA_V2.md` cocok DB live.
+- **PLAN:** regression e2e semua preset × beberapa niche × multi-channel; pastikan ryan stabil. (`DB_SCHEMA_V2.md` DIHAPUS 2026-07-04, keputusan owner: dokumen skema basi lebih menyesatkan daripada tidak ada — sumber kebenaran struktur = INTROSPEKSI LANGSUNG DB live via psycopg2 tiap butuh.)
+- **DONE-BILA:** semua hijau.
 - **REALISASI:** ⬜
 
 ### [B8] Halaman `/feedback` (masukan trial-lapse) — perbaiki link MATI di email — ✅ *(SELESAI + LIVE-validated 2026-07-03)*
@@ -189,7 +189,7 @@
 - **PLAN (world-class; propose rincian sebelum koding — [[feedback_workflow]] + [[feedback_world_class_quality]]):**
   - **FE:** halaman **publik** `/feedback` (marketing group — penerima email mungkin belum login) — form ber-brand: alasan belum upgrade (pilihan terkurasi + isian bebas) + pesan + email (prefill bila token/login) + i18n ID/EN (pola Bi seperti halaman lain). Sukses → state terima-kasih (bukan reload). Reuse komponen/kelas UI yang ada (jangan bikin versi lebih jelek).
   - **Atribusi:** email sisipkan token/ref tenant (mis. `?ref=<token>`) agar masukan terhubung ke lead/tenant tanpa tenant mengetik ulang.
-  - **DB (no-hardcode, RLS service-role):** simpan submission — putuskan saat propose: perluas `leads` (trial-expired sudah lead) ATAU tabel `feedback_submissions` dedicated. Update `DB_SCHEMA_V2.md`.
+  - **DB (no-hardcode, RLS service-role):** simpan submission — putuskan saat propose: perluas `leads` (trial-expired sudah lead) ATAU tabel `feedback_submissions` dedicated. 
   - **Notifikasi + admin:** Telegram admin saat masuk + tampil di admin panel (reuse pola **Leads** `/admin`, Phase 10.1) — jangan bikin subsistem duplikat.
   - **Email:** pertahankan `TRIAL_SURVEY_URL` (default kini VALID) → link email otomatis hidup, nol link mati.
 - **DONE-BILA:** klik link di email trial-lapse → halaman `/feedback` hidup (bukan 404); kirim masukan → tersimpan di DB + admin bisa lihat + Telegram masuk; email tetap arahkan ke sini.
