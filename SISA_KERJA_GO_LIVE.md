@@ -78,7 +78,7 @@
 # 🔑 KELOMPOK A — GATE EKSTERNAL / OWNER *(SATU-SATUNYA pemblokir MULAI JUALAN)*
 > Hanya owner yang bisa eksekusi (butuh dashboard/akun/browser); Claude siapkan materi + pandu. Spec: `PROGRESS.md §GATE CUTOVER` + `DEPLOY_RUNBOOK.md` + `GOOGLE_OAUTH_PLATFORM_MIGRATION.md`.
 
-### [A1] Midtrans PRODUKSI — 🔒⬜ *(PEMBLOKIR UTAMA JUALAN)*
+### [A1] Midtrans PRODUKSI — 🟡 FLIP SELESAI (2026-07-04) — sisa 2 langkah mikro owner
 - **TUJUAN:** tenant bisa BAYAR sewa (subscription) + add-on custom-niche → uang masuk.
 - **KONTEKS:** BE pembayaran (Snap redirect) SUDAH jadi & lulus e2e sandbox — `src/billing/midtrans.py` (`snap_create_transaction` env-driven sandbox/prod · `verify_signature` SHA512 · `handle_notification`→aktivasi), tabel `payments` (migr 0022), webhook route di `mv-webhook`. **Arsitektur lengkap = `PAYMENT_AND_TENANT_GATE_ARCHITECTURE.md`.** ⚠️ **Switch sandbox↔production = ubah `MIDTRANS_ENV` di `.env` + restart** (§3.2 doc; BUKAN tombol admin — tombol itu = [B1], belum ada). **✅ Verified 2026-07-02: kunci PRODUKSI Server+Client SUDAH ADA di `.env` VPS (format `Mid-server-`/`Mid-client-` valid) + merchant dibagi dgn aiwa yang SUDAH LIVE produksi → merchant approved.** Jadi [A1] ≈ **flip `MIDTRANS_ENV=production` + restart + 1 transaksi konfirmasi** — bukan "cari kunci". Pemblokir tersisa = KEPUTUSAN owner KAPAN go-live (idealnya bareng [A2]✓ + [A4] verifikasi Google + [A5] smoke-test).
 - **BUKTI kondisi sekarang (verified DB 2026-07-01):** `payments`=**0 baris**; `.env` `MIDTRANS_ENV`=sandbox. → produksi belum pernah jalan. **Verified 2026-07-02 (VPS `.env`):** `MIDTRANS_PRODUCTION_SERVER_KEY`+`_CLIENT_KEY` **ADA & format valid** → kunci produksi SIAP; tinggal flip+restart+konfirmasi.
@@ -87,7 +87,7 @@
   - Claude: verifikasi route webhook `mv-webhook` menerima notifikasi prod; restart `mv-webhook`+`mv-worker` (baca env baru).
 - **DONE-BILA:** 1 transaksi nyata (sandbox→prod) → webhook masuk → `payments` terisi + `tenant_configs.subscription_status`→active. FE Billing tombol Snap enabled (kini disabled+note gate).
 - **DEPENDS:** — (BE siap). **Nyambung:** [E1] add-on custom-niche.
-- **REALISASI:** ⬜ *(belum; gate owner)*
+- **REALISASI:** 🟡 **2026-07-04: `MIDTRANS_ENV=production` DI-FLIP Claude** (instruksi owner) + `mv-webhook`/`mv-worker` restart + **kunci produksi TERVERIFIKASI diterima API Midtrans produksi** (auth-check: 404 "Transaction doesn't exist" ter-autentikasi, bukan 401) + tombol bayar Billing FE sudah hidup (catatan "disabled gate" lama = basi). **SISA (owner, ±5 menit):** (1) cek dashboard Midtrans PRODUKSI → Settings → Configuration → **Payment Notification URL** = `https://mesinviral.com/api/webhooks/midtrans`; (2) **1 pembayaran kecil nyata** (login tenant → Billing → bayar via QRIS) → verifikasi `payments` terisi + status→active. Setelah itu A1 = ✅ dan JUALAN TERBUKA.
 
 ### [A2] Supabase Auth — SMTP + Google provider — ✅ *(validated 2026-07-01)*
 - **TUJUAN:** email auth (verify/reset) ber-brand + terkirim andal; "Daftar dengan Google" jalan untuk tenant publik.
@@ -244,12 +244,12 @@
 
 # 📌 KELOMPOK E — MENUMPANG GATE
 
-### [E1] Add-on custom-niche via Midtrans live — ⬜ *(kerjakan BARENG [A1])*
+### [E1] Add-on custom-niche via Midtrans live — ✅ *(TERNYATA SUDAH TERBANGUN — audit 2026-07-04)*
 - **KONTEKS:** lifecycle custom-niche SUDAH jalan (concierge/manual "Tandai lunas"). Pondasi bayar disiapkan (`niche_requests.paid_at`/`order_id`/status `awaiting_payment`). Spec persis = `CUSTOM_NICHE_REQUEST_FLOW.md §7` + arsitektur bayar/settlement = `PAYMENT_AND_TENANT_GATE_ARCHITECTURE.md §3`.
 - **PLAN:** (1) generalisasi `midtrans.snap_create_transaction` dari plan_type → `price_key` add-on (insert `payments` kategori add-on + `order_id`). (2) `niche_requests.order_id` ← order_id Midtrans. (3) `handle_notification`: settlement add-on → set `paid_at` + `awaiting_payment`→`in_progress` **otomatis** (ganti manual). (4) tombol bayar Snap di Pustaka Niche. (5) teruskan/hapus jalur concierge sesuai kebutuhan.
 - **DONE-BILA:** tenant bayar custom-niche via Snap → status auto-maju + niche mulai dibangun.
 - **DEPENDS:** [A1] Midtrans produksi.
-- **REALISASI:** ⬜
+- **REALISASI:** ✅ **Sudah terbangun penuh sejak epic PAYMENT (`53e272c`)** — verified 2026-07-04: `snap_create_niche_addon` (midtrans.py:175, validasi kepemilikan+awaiting_payment → order category=addon → tautkan `niche_requests.order_id`) + settlement webhook → RPC `settle_niche_request_paid` (auto-maju `in_progress`) + FE route `/api/niche-requests/[id]/pay`. Backlog ini basi. Hidup otomatis begitu A1 tuntas (env kini production).
 
 ---
 
