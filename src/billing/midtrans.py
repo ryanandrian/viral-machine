@@ -263,9 +263,14 @@ def _apply_settlement(sb, order: dict, txn: str | None, fraud, payment_type=None
         upd["payment_type"] = payment_type
     if raw is not None:
         upd["raw_notification"] = raw
+        if raw.get("transaction_id"):
+            upd["transaction_id"] = raw["transaction_id"]
     activated = False
 
     if txn in ("settlement", "capture") and (fraud in (None, "", "accept")):
+        # paid_at dari waktu Midtrans (settlement_time > transaction_time, zona WIB) — fallback jam server.
+        _t = (raw or {}).get("settlement_time") or (raw or {}).get("transaction_time")
+        upd["paid_at"] = f"{_t}+07:00" if _t else _now().isoformat()
         if order.get("category") == "addon":
             try:
                 sb.rpc("settle_niche_request_paid",

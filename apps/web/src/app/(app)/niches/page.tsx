@@ -127,13 +127,16 @@ export default function NichesPage() {
     const uid = user?.id ?? ""; setMe(uid);
     const { data: cfg } = await supabase.from("tenant_configs").select("plan_type").maybeSingle();
     const tier = (cfg as { plan_type?: string } | null)?.plan_type ?? "starter";
+    // Entitlement katalog publik per-tier: CONFIG-DRIVEN dari plan_limits.full_niche_catalog (0124) — no-hardcode.
+    const { data: pl } = await supabase.from("plan_limits").select("full_niche_catalog").eq("plan_type", tier).maybeSingle();
+    const fullCatalog = Boolean((pl as { full_niche_catalog?: boolean } | null)?.full_niche_catalog);
     const selCols = "niche_id,name,is_active,is_base,access_type,exclusive_to,keywords,default_hashtags,youtube_category_id,style,target_emotion,narration_persona,visual_style,mood_priority,section_timing";
     // Ambil niche aktif (publik) + niche MILIK tenant walau belum aktif (transparansi: "sedang disiapkan").
     const qN = supabase.from("niches").select(selCols);
     const { data: nrows } = await (uid ? qN.or(`is_active.eq.true,exclusive_to.eq.${uid}`) : qN.eq("is_active", true));
-    // Entitlement: niche khusus MILIK tenant (aktif/belum) + niche publik AKTIF (pro/business ATAU base). Identik Channel Detail utk yang publik.
+    // Entitlement: niche khusus MILIK tenant (aktif/belum) + niche publik AKTIF (katalog penuh ATAU base). Identik Channel Detail utk yang publik.
     const entitled = ((nrows ?? []) as NicheRow[]).filter((n) =>
-      n.exclusive_to === uid || (n.is_active && n.access_type === "public" && (["pro", "business"].includes(tier) || n.is_base)));
+      n.exclusive_to === uid || (n.is_active && n.access_type === "public" && (fullCatalog || n.is_base)));
     entitled.sort((a, b) => a.name.localeCompare(b.name));
     setNiches(entitled);
     // Status "dipakai": kumpulkan dari channels (niche fixed + niche_pool).

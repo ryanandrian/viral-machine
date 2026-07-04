@@ -55,16 +55,26 @@ def channel_quota(tenant_row: dict, plan_limits: dict) -> int:
     return int((plan_limits.get(plan) or {}).get("max_channels", 1) or 1)
 
 
-# ── Akses niche per-tier ("niche dasar", DESAIN §6) — admin set niches.is_base ──────
-BASE_NICHE_TIERS = {"trial", "starter"}  # tier ini → HANYA niche is_base (niche dasar)
+# ── Akses niche per-tier ("niche dasar", DESAIN §6) — CONFIG-DRIVEN (0124, owner 2026-07-04 A+C):
+#    plan_limits.full_niche_catalog per tier (admin-tunable). Seed: tier berbayar = katalog penuh,
+#    trial = niche is_base saja. Gerbang server sesungguhnya = RPC set_channel_niche (query identik).
 
 
-def is_base_tier(plan_type) -> bool:
-    return (plan_type or "starter") in BASE_NICHE_TIERS
+def has_full_niche_catalog(sb, plan_type) -> bool:
+    """True bila tier berhak SEMUA niche publik aktif; False → hanya is_base. Fail-CLOSED (aman)."""
+    if not sb:
+        return False
+    try:
+        res = (sb.table("plan_limits").select("full_niche_catalog")
+               .eq("plan_type", plan_type or "starter").limit(1).execute())
+        return bool((res.data or [{}])[0].get("full_niche_catalog"))
+    except Exception as e:
+        logger.debug(f"[Limits] full_niche_catalog {plan_type} gagal: {e}")
+        return False
 
 
 def base_niches(sb) -> list:
-    """niche_id `is_base=true` & aktif (admin-editable via panel niches). Niche dasar utk trial/starter."""
+    """niche_id `is_base=true` & aktif (admin-editable via panel niches). Niche dasar utk tier non-full."""
     if not sb:
         return []
     try:
@@ -76,13 +86,13 @@ def base_niches(sb) -> list:
 
 
 def available_niches(sb, plan_type: str) -> list:
-    """Niche INCLUDED per tier: trial/starter → is_base saja; pro/business → semua aktif (katalog).
+    """Niche INCLUDED per tier: full_niche_catalog (plan_limits) → semua aktif; else is_base saja.
     NB: ini niche katalog-included; pengajuan CUSTOM niche terpisah → can_request_custom_niche()."""
     if not sb:
         return []
     try:
         q = sb.table("niches").select("niche_id").eq("is_active", True)
-        if is_base_tier(plan_type):
+        if not has_full_niche_catalog(sb, plan_type):
             q = q.eq("is_base", True)
         return [r["niche_id"] for r in (q.execute().data or [])]
     except Exception as e:

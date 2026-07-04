@@ -38,12 +38,12 @@ export default function NewChannelPage() {
       supabase.from("tenant_configs").select("plan_type").maybeSingle(),
     ]);
     const tier = cfg?.plan_type ?? "starter";
-    // Entitlement (SAMA dgn channel-detail): niche custom milik sendiri ATAU publik (pro/business=semua, else hanya is_base).
+    const { data: pl } = await supabase.from("plan_limits").select("max_channels, full_niche_catalog").eq("plan_type", tier).maybeSingle();
+    // Entitlement (SAMA dgn channel-detail): niche custom milik sendiri ATAU publik (full_niche_catalog dari plan_limits — 0124, else hanya is_base).
     const entitled = (nq ?? []).filter((n: { access_type: string; is_base: boolean; exclusive_to: string | null }) =>
-      n.exclusive_to === me || (n.access_type === "public" && (["pro", "business"].includes(tier) || n.is_base)));
+      n.exclusive_to === me || (n.access_type === "public" && (Boolean(pl?.full_niche_catalog) || n.is_base)));
     setNiches(entitled.map((n: { niche_id: string; name: string }) => ({ niche_id: n.niche_id, name: n.name })));
     setLangs(lq ?? []); setCount(c ?? 0);
-    const { data: pl } = await supabase.from("plan_limits").select("max_channels").eq("plan_type", tier).maybeSingle();
     setMaxCh(pl?.max_channels ?? null);
     if (lq?.[0]) setClang(lq[0].locale);
     setLoading(false);

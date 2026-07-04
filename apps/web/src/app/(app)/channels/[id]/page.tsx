@@ -411,10 +411,13 @@ export default function ChannelDetailPage() {
     const [rTot, rOk, rFail, rRev] = await Promise.all([cntRun(), cntRun(["success"]), cntRun(["failed"]), cntRun(["qc_failed", "ready_with_issues"])]);
     setChRunStats({ total: rTot, success: rOk, failed: rFail, review: rRev });
     const tier = (cfg as { plan_type?: string } | null)?.plan_type ?? "starter";
+    // Entitlement katalog publik per-tier: CONFIG-DRIVEN dari plan_limits.full_niche_catalog (0124) — no-hardcode.
+    const { data: plRow } = await supabase.from("plan_limits").select("full_niche_catalog").eq("plan_type", tier).maybeSingle();
+    const fullCatalog = Boolean((plRow as { full_niche_catalog?: boolean } | null)?.full_niche_catalog);
     const { data: nrows } = await supabase.from("niches").select("niche_id,name,is_base,access_type,exclusive_to,default_hashtags").eq("is_active", true);
     const me = user?.id ?? "";
     const entitledN = (nrows ?? []).filter((n: { access_type: string; is_base: boolean; exclusive_to: string | null }) =>
-      n.exclusive_to === me || (n.access_type === "public" && (["pro", "business"].includes(tier) || n.is_base)));
+      n.exclusive_to === me || (n.access_type === "public" && (fullCatalog || n.is_base)));
     setNicheOpts(entitledN.map((n: { niche_id: string; name: string }) => ({ id: n.niche_id, name: n.name })));
     setNicheDefaults(Object.fromEntries(entitledN.map((n: { niche_id: string; default_hashtags: string[] | null }) => [n.niche_id, Array.isArray(n.default_hashtags) ? n.default_hashtags : []])));
     setLoading(false);
