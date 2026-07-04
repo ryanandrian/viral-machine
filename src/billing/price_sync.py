@@ -29,10 +29,11 @@ def _sb():
 
 
 def _feed_entry(feed: dict, model_id: str) -> dict | None:
-    """Cari entri feed: kunci persis → varian umum berprefix provider (mis. 'anthropic/<id>')."""
+    """Cari entri feed: kunci persis → varian umum berprefix provider (mis. 'elevenlabs/<id>').
+    (Insiden 2026-07-04: prefix 'elevenlabs/' terlewat → EL dikira tak ada di feed — koreksi owner.)"""
     if model_id in feed:
         return feed[model_id]
-    for pref in ("openai/", "anthropic/", "replicate/", "azure/"):
+    for pref in ("openai/", "anthropic/", "elevenlabs/", "replicate/", "azure/"):
         if pref + model_id in feed:
             return feed[pref + model_id]
     return None
