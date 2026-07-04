@@ -222,7 +222,12 @@ export default function AdminCatalogPage() {
                   <td><span className="badge badge-default">{t.mood as string}</span></td>
                   <td className="num muted">{t.duration_s ? `${t.duration_s}s` : "—"}</td>
                   <td className="num muted">{(t.bpm as number) || "—"}</td>
-                  <td><PlayBtn k={`music:${t.id}`} url={t.public_url as string | null} /></td>
+                  <td><button className="btn btn-ghost btn-sm" title={playingKey === `music:${t.id}` ? "Stop" : "Putar"} onClick={async () => {
+                    if (playingKey === `music:${t.id}`) { stopAudio(); return; }
+                    // bucket aset PRIVAT → URL publik 403; putar via presigned URL (route auth)
+                    const j = await fetch(`/api/music/preview?id=${t.id}`).then((r) => r.json()).catch(() => ({}));
+                    if (j.url) togglePlay(`music:${t.id}`, j.url); else setToast("Gagal memutar");
+                  }}>{playingKey === `music:${t.id}` ? "⏹" : "▶"}</button></td>
                   <td><Switch table="music_library" k={t.id as string} on={t.is_active as boolean} /></td>
                   <td style={{ whiteSpace: "nowrap" }}>
                     <button className="btn btn-ghost btn-sm" title="Edit" onClick={() => setMEdit({ id: t.id as string, name: (t.name as string) || "", niche: (t.niche as string) || "", mood: (t.mood as string) || "", bpm: t.bpm != null ? String(t.bpm) : "" })}>✎</button>

@@ -87,6 +87,24 @@ def mark_published(inv_id: int, metadata: dict | None = None) -> None:
     _sb().table("content_inventory").update(upd).eq("id", inv_id).execute()
 
 
+def mark_test(inv_id: int, s3_key: str, qc_passed: bool = True, reason: str = "",
+              metadata: dict | None = None) -> None:
+    """Video TEST tanpa-publish (NICHE_DNA F5, owner 2026-07-04): status='test' — TIDAK PERNAH diklaim
+    publisher (claim hanya 'ready') dan TIDAK mengotori antrean /review. TTL default buffer → janitor
+    menyapu baris + aset S3 (±3 hari). Ditonton dari drawer niche (admin/Studio) via presigned URL."""
+    md = dict(metadata or {})
+    md["test"] = True
+    md["qc_passed"] = qc_passed
+    if reason:
+        md["qc_reason"] = reason
+    _sb().table("content_inventory").update({
+        "status": "test", "s3_key": s3_key,
+        "produced_at": datetime.now(timezone.utc).isoformat(),
+        "expires_at": _default_expiry_iso(),
+        "metadata": md,
+    }).eq("id", inv_id).execute()
+
+
 def mark_failed(inv_id: int, reason: str = "") -> None:
     """Hard-fail (crash, TANPA video) → status failed. Set expires_at (TTL) agar janitor menyapu
     (fix bug lama: failed ber-expires_at NULL tak pernah disapu = baris menumpuk). Config FAILED_TTL_HOURS."""

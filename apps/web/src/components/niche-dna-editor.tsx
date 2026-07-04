@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Sparkles, Music, Image as ImageIcon, Clock3, Gauge, User, Plus, X, AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { validateDnaPatch, PERSONA_KEYS, VISUAL_CORE_KEYS, SECTION_KEYS, SECTION_LABELS, type DnaErrors } from "@/lib/niche-dna";
@@ -107,7 +107,7 @@ const STYLE_SUGGESTIONS = ["mysterious and awe-inspiring", "fun and energetic", 
 const EMOTION_SUGGESTIONS = ["wonder and curiosity", "chills and dread", "surprise and delight", "calm and motivation", "excitement"];
 const HOOK_FORMULAS = ["question", "impossible_claim", "you_dont_know", "number_shock", "story_open"];
 
-export default function NicheDnaEditor({ niche, onSave, busy }: { niche: NicheRow; onSave: (patch: Record<string, unknown>) => Promise<{ ok: boolean; fields?: DnaErrors }>; busy: boolean }) {
+export default function NicheDnaEditor({ niche, onSave, busy, onCancel }: { niche: NicheRow; onSave: (patch: Record<string, unknown>) => Promise<{ ok: boolean; fields?: DnaErrors }>; busy: boolean; onCancel?: () => void }) {
   // draft terstruktur (bukan JSON string)
   const [name, setName] = useState(asStr(niche.name));
   const [keywords, setKeywords] = useState(asArr(niche.keywords));
@@ -141,6 +141,23 @@ export default function NicheDnaEditor({ niche, onSave, busy }: { niche: NicheRo
     sb.from("music_library").select("id,name,mood,niche,is_active").eq("is_active", true).order("name").then(({ data }) => setTracks((data as Track[]) ?? []));
   }, []);
   const presetsFor = useCallback((prop: string) => presets.filter((p) => p.property === prop), [presets]);
+
+  // Preview musik play/stop (owner 2026-07-04): PEMUTAR TUNGGAL; URL via presign (bucket aset privat).
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  useEffect(() => () => { audioRef.current?.pause(); }, []);
+  async function toggleTrack(id: string) {
+    if (playingId === id) { audioRef.current?.pause(); audioRef.current = null; setPlayingId(null); return; }
+    audioRef.current?.pause();
+    const r = await fetch(`/api/music/preview?id=${id}`).catch(() => null);
+    const j = await r?.json().catch(() => ({}));
+    if (!j?.url) { setPlayingId(null); return; }
+    const audio = new Audio(j.url);
+    audio.addEventListener("ended", () => { if (audioRef.current === audio) { audioRef.current = null; setPlayingId(null); } });
+    audio.play().catch(() => { if (audioRef.current === audio) { audioRef.current = null; setPlayingId(null); } });
+    audioRef.current = audio;
+    setPlayingId(id);
+  }
   const trackCountByMood = useMemo(() => {
     const m = new Map<string, number>();
     tracks.forEach((t) => m.set(t.mood, (m.get(t.mood) ?? 0) + 1));
@@ -283,6 +300,27 @@ export default function NicheDnaEditor({ niche, onSave, busy }: { niche: NicheRo
             ? <><Music size={11} /> <Bi id={`${nicheTrackCount} track cocok tersedia di library untuk pilihan ini.`} en={`${nicheTrackCount} matching tracks available in the library.`} /></>
             : <><AlertTriangle size={11} style={{ color: "var(--warning)" }} /> <Bi id="Belum ada track yang cocok — mesin akan memakai track acak (kualitas musik tak terjaga)." en="No matching tracks yet — the engine will fall back to random tracks." /></>}
         </div>
+        {(() => {
+          // Dengarkan library (owner 2026-07-04): daftar track relevan dgn pilihan — ▶/⏹ pemutar tunggal.
+          const relevant = tracks.filter((t) =>
+            musicMode === "fixed" ? true
+            : musicMode === "random" && musicMood ? t.mood === musicMood
+            : (t.niche === niche.niche_id || moodPriority.includes(t.mood))).slice(0, 10);
+          if (!relevant.length) return null;
+          return (
+            <div style={{ border: "1px solid var(--border-subtle)", borderRadius: "var(--r-md)", padding: ".4rem .6rem" }}>
+              <div className="muted" style={{ fontSize: "0.6875rem", marginBottom: ".25rem" }}><Bi id="Dengarkan dulu dari library:" en="Preview from the library:" /></div>
+              {relevant.map((t) => (
+                <div key={t.id} style={{ display: "flex", alignItems: "center", gap: ".5rem", padding: ".15rem 0", fontSize: "var(--text-xs)" }}>
+                  <button type="button" className="btn btn-ghost btn-sm" style={{ padding: "0 .4rem", height: 22 }} title={playingId === t.id ? "Stop" : "Putar"} onClick={() => toggleTrack(t.id)}>{playingId === t.id ? "⏹" : "▶"}</button>
+                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</span>
+                  <span className="badge badge-default" style={{ fontSize: "0.5625rem" }}>{t.mood}</span>
+                  {musicMode === "fixed" && <button type="button" className="btn btn-secondary btn-sm" style={{ padding: "0 .5rem", height: 22, fontSize: "0.625rem" }} onClick={() => setMusicTrack(t.id)}>{musicTrack === t.id ? "✓ dipakai" : "pakai"}</button>}
+                </div>
+              ))}
+            </div>
+          );
+        })()}
         {moodPriority.length > 0 && moodPriority.length < 2 && <div style={{ fontSize: "0.6875rem", color: "var(--warning)" }}><Bi id="Disarankan minimal 2 mood agar cadangan hidup." en="At least 2 moods recommended so fallback works." /></div>}
       </Sec>
 
@@ -359,6 +397,7 @@ export default function NicheDnaEditor({ niche, onSave, busy }: { niche: NicheRo
       </Sec>
 
       <div style={{ display: "flex", alignItems: "center", gap: ".75rem", position: "sticky", bottom: 0, background: "var(--surface-1)", padding: ".75rem 0", borderTop: "1px solid var(--border-subtle)" }}>
+        {onCancel && <button className="btn btn-ghost" disabled={busy} onClick={onCancel}><Bi id="Batal" en="Cancel" /></button>}
         <button className="btn btn-default" disabled={busy || !valid} onClick={() => onSave(patch)}>
           {busy ? <Bi id="Menyimpan…" en="Saving…" /> : <Bi id="Simpan DNA" en="Save DNA" />}
         </button>

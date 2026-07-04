@@ -1,7 +1,9 @@
 # 🧬 NICHE DNA — Audit A-to-Z + Arsitektur Perbaikan (Plan vs Realisasi)
 
 > **Status: DISEPAKATI owner 2026-07-04 (semua §4 = YA; + keputusan tambahan: editor per-field = FE-only/DB tetap JSONB · preset per-properti dua-tingkat "pilih dulu, sunting kalau mau" · pantangan = free text ditegakkan mesin · preset karakter=pilih-satu, preset daftar=merge).**
-> **REALISASI: F1 ✅ · F2 ✅ · F3 ✅ · F4 ✅ · F6 ✅(backfill; test produksi validasi menyusul) · F5 ⬜ (batch berikut).** Detail per-fase di §3 (status inline).
+> **REALISASI: F1 ✅ · F2 ✅ · F3 ✅ · F4 ✅ · F6 ✅(backfill; test produksi validasi menyusul) · F5 🔨 SEDANG DIKERJAKAN (2026-07-04: migr 0119 job_type test_nopub + inventory status 'test' + janitor ✓; API tenant + panel Studio + preview musik menyusul di batch ini).**
+> **Tambahan terealisasi (2026-07-04, commit `22ac613`): Catalog wiring selaras arsitektur** — tab Providers di depan (induk; +key_group tampil/editable +jumlah model +tombol "＋ Model" per baris), AI Models dikelompokkan per provider + Add ber-dropdown, pemutar audio TUNGGAL play/stop utk Music & Voice.
+> **Temuan baru (belum dieksekusi, keputusan owner):** `niches.is_active` SETENGAH-FUNGSI utk produksi — `producer._resolve_niche` memilih dari `channels.niche_pool` TANPA cek is_active → niche dinonaktifkan tenant TETAP diproduksi bila masih di pool channel. Rekomendasi: hormati is_active di _resolve_niche (filter pool; fallback channels.niche).
 > Hub backlog = `SISA_KERJA_GO_LIVE.md`. Terkait: Test Lab Fase 1 (SELESAI, alat validasi audit ini) · Fase 3 test-niche tenant (disepakati, menumpang §3.5).
 
 ---
@@ -92,7 +94,8 @@ Buat-niche (admin `niches`, tenant `niche-studio`, dan alur deliver `request`): 
 3. (Bersama F2) editor musik seperti di atas.
 - **DONE-BILA**: deteksi mood match utk naskah ID; admin bisa kurasi moods tanpa SQL.
 
-### F5 — Test niche utk TENANT (Fase 3 yang sudah disepakati) — ⬜
+### F5 — Test niche utk TENANT (Fase 3 yang sudah disepakati) — 🔨 *(in-progress 2026-07-04)*
+> Realisasi sejauh ini: migr 0119 (`job_type` +'test_nopub') · worker `_run_test_no_publish` melayani admin_test & test_nopub · **inventory status BARU `'test'`** (`mark_test`) — tak pernah diklaim publisher (KRITIS: channel tenant AKTIF; kalau 'ready' video test bakal TER-PUBLISH) + tak mengotori `/review` + TTL janitor (sweep & orphan-protect di-update). Menyusul: API `/api/niches/mine/test` (POST/GET presign) + panel satu-card di Studio (tombol+Confirm+stepper+video) + tombol Batal + **preview musik play/stop di editor** (permintaan owner; track S3 privat → route presign `/api/music/preview`).
 Panel SATU card di Niche Studio (aturan `feedback_uiux_design_for_lay_tenants`): tombol test + ConfirmDialog + stepper progres + hasil video — memakai kredensial & channel tenant sendiri, TANPA publish (jalur `_run_test_no_publish` yang sama, job_type `test_nopub` tenant).
 - **DONE-BILA**: tenant Business menguji niche studio-nya end-to-end tanpa menyentuh YouTube/kuota.
 

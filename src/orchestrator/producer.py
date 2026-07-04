@@ -238,10 +238,10 @@ def run_direct(sb, job: dict) -> None:
         return
     sb.table("direct_jobs").update({"run_id": run_id}).eq("id", jid).execute()
 
-    # Test niche ADMIN (keputusan owner 2026-07-04): produksi penuh TANPA YouTube — video → S3/buffer,
-    # ditonton admin di drawer Pustaka Niche; janitor TTL membersihkan otomatis. Jalur terpisah dari
-    # direct tenant (test/retry) yang tetap publish private.
-    if (job.get("job_type") or "") == "admin_test":
+    # Test niche TANPA publish (keputusan owner 2026-07-04): admin_test (channel internal admin) &
+    # test_nopub (F5 — channel+kredensial TENANT sendiri, dari Niche Studio). Video → S3 status='test'
+    # (tak pernah diklaim publisher; TTL janitor). Beda dari direct tenant test/retry (publish private).
+    if (job.get("job_type") or "") in ("admin_test", "test_nopub"):
         _run_test_no_publish(sb, job, ch, run_id)
         return
 
@@ -344,14 +344,12 @@ def _run_test_no_publish(sb, job: dict, ch: dict, run_id: str) -> None:
         if result.get("status") == "success" and video and os.path.exists(video):
             vkey = f"{tenant_id}/{channel_id}/{run_id}.mp4"
             s3_buffer.upload(video, vkey)
-            _meta = {"run_id": run_id, "video_s3": vkey, "niche": niche, "test": True,
+            _meta = {"run_id": run_id, "video_s3": vkey, "niche": niche,
                      "viral_score": (result.get("script") or {}).get("viral_score"),
                      "duration_secs": qc.get("duration"), "size_mb": qc.get("size_mb")}
-            if qc_ok:
-                inventory.mark_ready(inv_id, vkey, metadata=_meta)
-            else:
-                inventory.mark_ready_with_issues(inv_id, vkey, reason=qc.get("reason", ""),
-                                                 recommendation=qc.get("recommendation", ""), metadata=_meta)
+            # status='test' (bukan ready/ready_with_issues): tak diklaim publisher — KRITIS utk
+            # test_nopub di channel tenant AKTIF (kalau 'ready', publisher akan mem-publish-nya!).
+            inventory.mark_test(inv_id, vkey, qc_passed=qc_ok, reason=qc.get("reason", ""), metadata=_meta)
             try:
                 if os.path.exists(video):
                     os.remove(video)

@@ -12,14 +12,18 @@ export type TestReadiness = {
   ready: boolean;
 };
 
-export async function testChannelReadiness(): Promise<TestReadiness> {
+// Kesiapan channel utk TEST tanpa-publish. Default = channel internal admin_test; utk TENANT (F5)
+// panggil dgn tenant_id mereka → dipilih channel AKTIF pertama (fallback channel pertama).
+// Hanya butuh elemen PRODUKSI (LLM/TTS/Visual) — YouTube/Telegram TIDAK dicek (test tak publish).
+export async function testChannelReadiness(tenantId: string = ADMIN_TEST_TID): Promise<TestReadiness> {
   const a = createAdminClient();
-  const [{ data: ch }, { data: providers }, { data: models }, { data: accounts }] = await Promise.all([
-    a.from("channels").select("id, llm_library, llm_model, tts_provider, tts_model, voice_key, visual_mode").eq("tenant_id", ADMIN_TEST_TID).maybeSingle(),
+  const [{ data: chans }, { data: providers }, { data: models }, { data: accounts }] = await Promise.all([
+    a.from("channels").select("id, is_active, created_at, llm_library, llm_model, tts_provider, tts_model, voice_key, visual_mode").eq("tenant_id", tenantId).order("created_at"),
     a.from("ai_providers").select("provider_key, key_group, auth_type"),
     a.from("ai_models").select("model_key, provider_key, component").eq("is_active", true),
-    a.from("tenant_ai_accounts").select("key_group, status").eq("tenant_id", ADMIN_TEST_TID),
+    a.from("tenant_ai_accounts").select("key_group, status").eq("tenant_id", tenantId),
   ]);
+  const ch = (chans ?? []).find((c) => c.is_active) ?? (chans ?? [])[0] ?? null;
   const prov = new Map((providers ?? []).map((p) => [p.provider_key as string, p]));
   const needsKey = (p: string) => (prov.get(p)?.auth_type ?? "api_key") !== "none";
   const keyValid = (p: string) => {

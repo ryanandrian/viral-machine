@@ -52,7 +52,7 @@ def sweep_stale(sb=None) -> dict:
     producing_cutoff = now - timedelta(hours=float(os.getenv("PRODUCING_TTL_HOURS", "3")))
 
     rows = sb.table("content_inventory").select("*").in_(
-        "status", ["ready", "ready_with_issues", "failed"]).execute().data or []
+        "status", ["ready", "ready_with_issues", "failed", "test"]).execute().data or []   # 'test' = video uji (TTL ±3 hari)
     stale = [r for r in rows if (_parse(r.get("expires_at")) or now + timedelta(days=3650)) < now]
 
     prod = sb.table("content_inventory").select("*").eq("status", "producing").execute().data or []
@@ -75,7 +75,7 @@ def reconcile_orphans(sb=None, grace_minutes=None) -> dict:
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=grace)
 
     rows = sb.table("content_inventory").select("s3_key,metadata,status").in_(
-        "status", ["ready", "ready_with_issues", "producing", "publishing"]).execute().data or []
+        "status", ["ready", "ready_with_issues", "producing", "publishing", "test"]).execute().data or []   # 'test' dilindungi s/d TTL
     referenced = set()
     for r in rows:
         referenced.update(_keys_of(r))

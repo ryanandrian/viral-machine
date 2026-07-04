@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Palette, Plus, X, Check } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import NicheDnaEditor, { type NicheRow } from "@/components/niche-dna-editor";
+import TestNichePanel from "@/components/test-niche-panel";
 
 // F3-03 / F2-10 — Niche Studio (tenant Business+, GATED) — DIROMBAK 2026-07-04 (kesepakatan owner):
 // editor DNA per-field BERSAMA dgn admin (components/niche-dna-editor) — NOL JSON mentah, preset
@@ -101,7 +102,12 @@ export default function NicheStudioPage() {
               </label>
               <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setSel(null)}><X size={16} /></button>
             </div>
-            <NicheDnaEditor niche={sel} onSave={saveDna} busy={busy} />
+            <TestNichePanel key={sel.niche_id}
+              getUrl={`/api/niches/mine/test?niche_id=${sel.niche_id}`}
+              postUrl="/api/niches/mine/test"
+              postBody={{ niche_id: sel.niche_id }}
+              confirmMessage={<Bi id="Mesin akan memproduksi 1 video uji NYATA memakai kredensial AI & channel ANDA sendiri (biaya provider ditanggung kunci Anda/BYOK). TIDAK dipublish ke YouTube & TIDAK memakai kuota — hasil ditonton di panel ini, otomatis terhapus setelah ±3 hari." en="The engine will produce 1 REAL test video using YOUR OWN AI credentials & channel (provider cost on your keys/BYOK). NOT published to YouTube & no quota used — watch here; auto-cleaned after ~3 days." />} />
+            <NicheDnaEditor niche={sel} onSave={saveDna} busy={busy} onCancel={() => setSel(null)} />
           </aside>
         </div>
       )}
