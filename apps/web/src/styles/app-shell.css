@@ -58,6 +58,15 @@
 @media (max-width: 1024px) {
   .app, .app.collapsed { grid-template-columns: 1fr; }
   .sidebar { display: none; }
+  /* Drawer mobile: tombol ☰ membuka sidebar sebagai panel geser di atas konten (+scrim).
+     Tanpa ini menu HILANG total di HP (insiden owner 2026-07-04 saat mau buka Billing). */
+  .app.nav-open .sidebar {
+    display: flex; position: fixed; top: 0; left: 0; bottom: 0; width: 264px; z-index: 60;
+    border-right: 1px solid var(--border); box-shadow: 0 0 48px rgba(0, 0, 0, 0.4);
+    animation: nav-slide-in 0.18s ease-out;
+  }
+  .nav-scrim { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.45); }
+  @keyframes nav-slide-in { from { transform: translateX(-100%); } to { transform: translateX(0); } }
   .page { padding: 1.25rem 1rem 5rem; }
   .tb-search { min-width: 0; }
 }

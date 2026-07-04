@@ -61,6 +61,7 @@ export function AppShell({
   const { theme, setTheme } = useTheme();
   const [supabase] = useState(() => createClient());
   const [collapsed, setCollapsed] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);  // drawer mobile (≤1024px) — sidebar desktop di-display:none oleh CSS
   const [lang, setLang] = useState<"id" | "en">("id");
   const [mounted, setMounted] = useState(false);
   const [tenant, setTenant] = useState<{ name: string; plan: string; initials: string }>({ name: "", plan: "", initials: "" });
@@ -99,6 +100,9 @@ export function AppShell({
     })();
   }, [supabase]);
 
+  // Tutup drawer mobile tiap pindah halaman
+  useEffect(() => { setNavOpen(false); }, [pathname]);
+
   function switchLang(l: "id" | "en") {
     setLang(l);
     document.documentElement.lang = l;
@@ -106,7 +110,8 @@ export function AppShell({
   }
 
   return (
-    <div className={`app${collapsed ? " collapsed" : ""}`}>
+    <div className={`app${collapsed && !navOpen ? " collapsed" : ""}${navOpen ? " nav-open" : ""}`}>
+      {navOpen && <div className="nav-scrim" onClick={() => setNavOpen(false)} />}
       <aside className="sidebar">
         <div className="sb-top">
           <img src="/mesinviral_logo512.png" alt="MesinViral" style={{ width: 30, height: 30, objectFit: "contain", flex: "none" }} />
@@ -150,7 +155,10 @@ export function AppShell({
       <div className="main">
         <header className="topbar">
           <button className="btn btn-ghost btn-icon tb-toggle" aria-label="Toggle sidebar"
-            onClick={() => setCollapsed((c) => !c)}><Menu size={18} /></button>
+            onClick={() => {
+              if (window.matchMedia("(max-width: 1024px)").matches) setNavOpen((o) => !o);
+              else setCollapsed((c) => !c);
+            }}><Menu size={18} /></button>
           <div className="breadcrumb">
             {breadcrumb.map((c, i) => {
               const last = i === breadcrumb.length - 1;

@@ -41,6 +41,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);  // drawer mobile (≤1024px) — sama dgn AppShell
   const [lang, setLang] = useState<"id" | "en">("id");
   const [mounted, setMounted] = useState(false);
   const [supportCount, setSupportCount] = useState(0);
@@ -60,6 +61,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       .catch(() => {});
   }, []);
 
+  // Tutup drawer mobile tiap pindah halaman
+  useEffect(() => { setNavOpen(false); }, [pathname]);
+
   function switchLang(l: "id" | "en") {
     setLang(l);
     document.documentElement.lang = l;
@@ -69,7 +73,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const active = NAV.find((n) => "id" in n && (pathname === n.href || pathname.startsWith(n.href + "/"))) as Extract<NavEntry, { id: string }> | undefined;
 
   return (
-    <div className={`app${collapsed ? " collapsed" : ""}`}>
+    <div className={`app${collapsed && !navOpen ? " collapsed" : ""}${navOpen ? " nav-open" : ""}`}>
+      {navOpen && <div className="nav-scrim" onClick={() => setNavOpen(false)} />}
       <aside className="sidebar">
         <div className="sb-top">
           <img src="/mesinviral_logo512.png" alt="MesinViral" style={{ width: 30, height: 30, objectFit: "contain", flex: "none" }} />
@@ -107,7 +112,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
       <div className="main">
         <header className="topbar">
-          <button className="btn btn-ghost btn-icon tb-toggle" aria-label="Toggle sidebar" onClick={() => setCollapsed((c) => !c)}><Menu size={18} /></button>
+          <button className="btn btn-ghost btn-icon tb-toggle" aria-label="Toggle sidebar" onClick={() => {
+            if (window.matchMedia("(max-width: 1024px)").matches) setNavOpen((o) => !o);
+            else setCollapsed((c) => !c);
+          }}><Menu size={18} /></button>
           <div className="breadcrumb">
             <span style={{ display: "inline-flex", alignItems: "center", gap: "0.4375rem" }}><a href="/admin/tenants">Admin</a><ChevronRight size={14} /></span>
             <span className="cur">{active ? <Bi id={active.idL} en={active.en} /> : null}</span>
