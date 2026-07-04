@@ -63,14 +63,9 @@ def _get_plan_limits() -> dict:
     _plan_limits_cache = _PLAN_LIMITS_FALLBACK
     return _plan_limits_cache
 
-# Publish slots optimal per jumlah video (UTC)
-OPTIMAL_PUBLISH_SLOTS = {
-    1: ["13:00"],
-    2: ["13:00", "00:00"],
-    3: ["09:00", "13:00", "00:00"],
-    4: ["07:00", "11:00", "15:00", "00:00"],
-    5: ["07:00", "10:00", "13:00", "17:00", "00:00"],
-}
+# FOSIL DIHAPUS ([B3] 2026-07-05, approval owner): OPTIMAL_PUBLISH_SLOTS + auto-slot per-tenant.
+# Jadwal publish NYATA = per-CHANNEL `channels.publish_slots` (zona tenant) — dibaca publisher.py;
+# jalur per-tenant ini terbukti NOL pemakai (grep: tak ada konsumen TenantRunConfig.publish_slots).
 
 
 @dataclass
@@ -90,7 +85,7 @@ class TenantRunConfig:
     videos_per_day:     int   = 1
     max_videos_per_day: int   = 1
     publish_platforms:  list  = field(default_factory=lambda: ["youtube"])
-    publish_slots:      list  = field(default_factory=lambda: ["13:00"])
+    # publish_slots + auto_schedule DIHAPUS ([B3] 2026-07-05) — fosil per-tenant; jadwal nyata = channels.publish_slots
     timezone:           str   = "UTC"
     production_cron:    str   = "0 13 * * *"
     analytics_cron:     str   = "0 13 * * *"
@@ -126,7 +121,6 @@ class TenantRunConfig:
     # Developer tenant
     is_developer:       bool  = False
     discount_pct:       int   = 0
-    auto_schedule:      bool  = True
     peak_region:        str   = "us"
 
     # Notifikasi Telegram (s81)
@@ -521,11 +515,6 @@ class TenantConfigManager:
                 limits["max_videos_per_day"]
             )
 
-            # Publish slots: dari DB atau otomatis berdasarkan videos_per_day
-            publish_slots = row.get("publish_slots") or []
-            if not publish_slots and row.get("auto_schedule", True):
-                publish_slots = OPTIMAL_PUBLISH_SLOTS.get(videos_per_day, ["13:00"])
-
             return TenantRunConfig(
                 tenant_id=tenant_id,
                 plan_type=plan_type,
@@ -534,11 +523,9 @@ class TenantConfigManager:
                 videos_per_day=videos_per_day,
                 max_videos_per_day=limits["max_videos_per_day"],
                 publish_platforms=row.get("publish_platforms") or ["youtube"],
-                publish_slots=publish_slots,
                 timezone=row.get("timezone", "UTC") or "UTC",
                 production_cron=row.get("production_cron", "0 13 * * *"),
                 analytics_cron=row.get("analytics_cron", "0 13 * * *"),
-                auto_schedule=row.get("auto_schedule", True),
                 peak_region=row.get("peak_region", "us"),
                 tts_provider=row.get("tts_provider", "edge_tts"),
                 tts_voice=row.get("tts_voice", "en-US-GuyNeural"),
@@ -599,7 +586,6 @@ class TenantConfigManager:
             videos_per_day=1,
             max_videos_per_day=1,
             publish_platforms=["youtube"],
-            publish_slots=["13:00"],
             timezone="UTC",
             production_cron="0 13 * * *",
             analytics_cron="0 13 * * *",
@@ -665,7 +651,6 @@ if __name__ == "__main__":
     print(f"Niche         : {config.niche}")
     print(f"Language      : {config.language}")
     print(f"Videos/day    : {config.videos_per_day} (max: {config.max_videos_per_day})")
-    print(f"Publish slots : {config.publish_slots}")
     print(f"Platforms     : {config.publish_platforms}")
     print(f"Peak region   : {config.peak_region}")
     print(f"TTS Provider  : {config.tts_provider} ({config.tts_voice})")

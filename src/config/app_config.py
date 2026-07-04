@@ -20,8 +20,10 @@ def _load() -> None:
     try:
         from supabase import create_client
         sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
-        rows = sb.table("app_config").select("key,value").execute().data or []
-        _CACHE.update(data={r["key"]: r["value"] for r in rows}, ts=time.time())
+        rows = sb.table("app_config").select("key,value,value_text").execute().data or []
+        # value_text (0125) menang bila terisi — baris teks/JSON; else value (integer).
+        _CACHE.update(data={r["key"]: (r.get("value_text") if r.get("value_text") is not None else r["value"])
+                            for r in rows}, ts=time.time())
     except Exception as e:
         logger.warning(f"[app_config] load gagal ({e}) — pakai default")
         if _CACHE["data"] is None:
@@ -36,3 +38,17 @@ def get_int(key: str, default: int) -> int:
         return int(v) if v is not None else int(default)
     except Exception:
         return int(default)
+
+
+def get_json(key: str, default=None):
+    """Nilai JSON business-config (dari value_text, 0125). Tak ada/tak-valid → default (fail-safe)."""
+    import json
+    _load()
+    v = (_CACHE["data"] or {}).get(key)
+    if not isinstance(v, str) or not v.strip():
+        return default
+    try:
+        return json.loads(v)
+    except Exception:
+        logger.warning(f"[app_config] {key} bukan JSON valid — pakai default")
+        return default

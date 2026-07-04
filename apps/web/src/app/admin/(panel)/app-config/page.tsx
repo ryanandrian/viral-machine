@@ -10,7 +10,7 @@ function Bi({ id, en }: { id: string; en: string }) {
   return (<><span data-id>{id}</span><span data-en>{en}</span></>);
 }
 
-type AppCfg = { key: string; value: number; description: string | null };
+type AppCfg = { key: string; value: number; value_text: string | null; description: string | null };
 
 // Metadata tampilan (label ramah + unit + grup). Keterangan detail = description (DB, bahasa admin).
 const G_BILLING = "Langganan, Trial & Penagihan";
@@ -54,6 +54,7 @@ const CFG_META: Record<string, { label: string; group: string; unit: string; hin
   deletion_warn3_days:             { label: "Peringatan Hapus #3", group: G_LIFECYCLE, unit: "hari" },
   s3_raw_purge_after_suspend_days: { label: "Hapus Video Mentah S3", group: G_LIFECYCLE, unit: "hari", hint: "setelah suspended; 0 = segera" },
   niche_eval_window_days:       { label: "Masa Evaluasi Niche Custom", group: G_OTHER, unit: "hari" },
+  default_publish_slots:        { label: "Jam Publish Awal Channel Baru", group: G_OTHER, unit: "", hint: 'JSON ["HH:MM",...], zona waktu tenant' },
   trend_weight_youtube:    { label: "YouTube (utama)", group: G_TREND, unit: "%" },
   trend_weight_trends:     { label: "Google Trends", group: G_TREND, unit: "%" },
   trend_weight_news:       { label: "Google News", group: G_TREND, unit: "%" },
@@ -76,13 +77,14 @@ export default function AppConfigPage() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  async function patch(key: string, value: number) {
+  async function patch(key: string, body: { value: number } | { value_text: string }) {
     const r = await fetch(`/api/admin/app-config/${key}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ value }),
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
-    setToast(r.ok ? "✓ Tersimpan" : "Gagal menyimpan");
+    const j = await r.json().catch(() => ({}));
+    setToast(r.ok ? "✓ Tersimpan" : `Gagal menyimpan${j.error ? `: ${j.error}` : ""}`);
     if (r.ok) await load();
-    setTimeout(() => setToast(null), 2200);
+    setTimeout(() => setToast(null), 2600);
   }
 
   return (
@@ -124,7 +126,12 @@ export default function AppConfigPage() {
                           <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "3px", lineHeight: 1.45 }}>{a.description}{m?.hint && <span style={{ marginLeft: ".375rem", opacity: .75 }}>({m.hint})</span>}</div>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: ".4rem", flex: "none" }}>
-                          <input className="input" type="number" min={0} style={{ width: "5.5rem", height: "2rem", textAlign: "right" }} defaultValue={a.value} onBlur={(e) => { const n = parseInt(e.target.value, 10); if (Number.isInteger(n) && n !== a.value) patch(a.key, n); }} />
+                          {a.value_text != null ? (
+                            /* Baris TEKS/JSON (0125, value_text) — mis. default_publish_slots */
+                            <input className="input" type="text" style={{ width: "13rem", height: "2rem", fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)" }} defaultValue={a.value_text} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== a.value_text) patch(a.key, { value_text: v }); }} />
+                          ) : (
+                            <input className="input" type="number" min={0} style={{ width: "5.5rem", height: "2rem", textAlign: "right" }} defaultValue={a.value} onBlur={(e) => { const n = parseInt(e.target.value, 10); if (Number.isInteger(n) && n !== a.value) patch(a.key, { value: n }); }} />
+                          )}
                           <span className="muted" style={{ fontSize: "var(--text-xs)", width: "2.75rem" }}>{m?.unit ?? ""}</span>
                         </div>
                       </div>

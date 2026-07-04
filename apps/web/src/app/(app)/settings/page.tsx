@@ -32,6 +32,8 @@ export default function SettingsPage() {
 
   const [email, setEmail] = useState("");
   const [handle, setHandle] = useState("");
+  const [tz, setTz] = useState("");            // zona waktu tenant (dipakai publisher utk jam slot publish)
+  const [tzSaved, setTzSaved] = useState("");  // nilai tersimpan — deteksi perubahan
   const [pw, setPw] = useState(""); const [pw2, setPw2] = useState("");
   const [busy, setBusy] = useState(""); // which action busy
   const [saved, setSaved] = useState(""); // which saved
@@ -42,9 +44,10 @@ export default function SettingsPage() {
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     setEmail(user?.email ?? "");
-    const { data } = await supabase.from("tenant_configs").select("display_handle").maybeSingle();
-    const t = data as { display_handle?: string } | null;
+    const { data } = await supabase.from("tenant_configs").select("display_handle,timezone").maybeSingle();
+    const t = data as { display_handle?: string; timezone?: string } | null;
     setHandle(t?.display_handle ?? "");
+    setTz(t?.timezone || "UTC"); setTzSaved(t?.timezone || "UTC");
   }, [supabase]);
   useEffect(() => {
     load();
@@ -57,8 +60,17 @@ export default function SettingsPage() {
   async function saveProfile() {
     setErr(null); setBusy("profile");
     const { error } = await supabase.rpc("set_tenant_config", { p_display_handle: handle.trim() });
+    if (!error && tz && tz !== tzSaved) {
+      // Zona waktu diubah MANUAL → set_tenant_timezone p_manual=true (mengunci; auto-detect login tak menimpa lagi)
+      const { error: e2 } = await supabase.rpc("set_tenant_timezone", { p_timezone: tz, p_manual: true });
+      if (e2) { setBusy(""); return setErr({ k: "profile", m: e2.message }); }
+      setTzSaved(tz);
+    }
     setBusy(""); if (error) return setErr({ k: "profile", m: error.message }); flash("profile");
   }
+  // Daftar zona waktu resmi dari browser + pratinjau jam lokal (tenant awam langsung tahu zonanya benar)
+  const tzList = (() => { try { return Intl.supportedValuesOf("timeZone"); } catch { return [tz || "UTC"]; } })();
+  const tzNow = (() => { try { return new Intl.DateTimeFormat(lang === "id" ? "id-ID" : "en-US", { timeZone: tz || "UTC", hour: "2-digit", minute: "2-digit", timeZoneName: "short" }).format(new Date()); } catch { return ""; } })();
   async function updatePassword() {
     setErr(null);
     if (pw.length < 8) return setErr({ k: "security", m: "Password minimal 8 karakter." });
@@ -87,6 +99,16 @@ export default function SettingsPage() {
                 <div className="fld-2">
                   <div className="fld"><label className="label"><Bi id="Nama tampilan" en="Display name" /></label><input className="input" value={handle} onChange={(e) => setHandle(e.target.value)} placeholder="display_handle" /></div>
                   <div className="fld"><label className="label">Email</label><input className="input" value={email} readOnly style={{ opacity: 0.7 }} /><div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.375rem" }}><Bi id="Email tak bisa diubah di sini." en="Email can't be changed here." /></div></div>
+                </div>
+                <div className="fld" style={{ marginTop: "0.75rem" }}>
+                  <label className="label"><Bi id="Zona waktu" en="Timezone" /></label>
+                  <select className="input" value={tz} onChange={(e) => setTz(e.target.value)}>
+                    {tzList.map((z) => <option key={z} value={z}>{z}</option>)}
+                  </select>
+                  <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.375rem" }}>
+                    <Bi id={`Jam publish di halaman Jadwal mengikuti zona ini.${tzNow ? ` Waktu sekarang di zona ini: ${tzNow}.` : ""} Terdeteksi otomatis dari perangkat Anda — ubah bila perlu.`}
+                        en={`Publish times on the Schedule page follow this zone.${tzNow ? ` Current time in this zone: ${tzNow}.` : ""} Auto-detected from your device — change if needed.`} />
+                  </div>
                 </div>
               </div>
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", alignItems: "center" }}>

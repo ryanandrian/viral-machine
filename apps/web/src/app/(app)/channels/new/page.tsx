@@ -67,10 +67,17 @@ export default function NewChannelPage() {
     setBusy(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setBusy(false); return setErr("Sesi tak valid."); }
+    // Jam publish awal: app_config.default_publish_slots (0125, admin-editable — no-hardcode); fallback aman.
+    let slots: string[] = ["13:00"];
+    try {
+      const { data: dc } = await supabase.from("app_config").select("value_text").eq("key", "default_publish_slots").maybeSingle();
+      const parsed = JSON.parse((dc as { value_text?: string } | null)?.value_text || "");
+      if (Array.isArray(parsed) && parsed.length > 0) slots = parsed.map(String);
+    } catch { /* fallback ["13:00"] */ }
     const { data, error } = await supabase.from("channels").insert({
       tenant_id: user.id, channel_group: "default", channel_name: name.trim(), platform,
       niche: sel[0], niche_pool: sel, niche_mode: nicheMode,
-      content_language: clang, publish_privacy: privacy, publish_slots: ["13:00"],
+      content_language: clang, publish_privacy: privacy, publish_slots: slots,
       is_active: false,   // F2-01/§10.E.7: channel default NON-AKTIF (draft) → aktif setelah readiness lengkap di Manage.
     }).select("id").single();
     setBusy(false);

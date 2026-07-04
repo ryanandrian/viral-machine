@@ -75,10 +75,19 @@ export function AppShell({
     document.documentElement.lang = saved;
     (async () => {
       const [{ data: tc }, { count }, { data: pls }] = await Promise.all([
-        supabase.from("tenant_configs").select("display_handle,plan_type,subscription_status,current_period_end,is_developer,discount_pct,deletion_scheduled_at").maybeSingle(),
+        supabase.from("tenant_configs").select("display_handle,plan_type,subscription_status,current_period_end,is_developer,discount_pct,deletion_scheduled_at,timezone,timezone_set_by_user").maybeSingle(),
         supabase.from("channels").select("id", { count: "exact", head: true }),
         supabase.from("plan_limits").select("plan_type,display_name,niche_studio"),
       ]);
+      // Zona waktu OTOMATIS dari browser (0125, owner 2026-07-05): slot publish dibanding di zona tenant,
+      // tapi tenant baru terjebak UTC (tak ada tempat set). Auto-set HANYA bila belum pernah diset manual di Settings.
+      try {
+        const tzRow = tc as { timezone?: string; timezone_set_by_user?: boolean } | null;
+        const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (browserTz && tzRow && !tzRow.timezone_set_by_user && tzRow.timezone !== browserTz) {
+          supabase.rpc("set_tenant_timezone", { p_timezone: browserTz, p_manual: false }).then(() => {});
+        }
+      } catch { /* non-fatal */ }
       const t = tc as { display_handle?: string; plan_type?: string; subscription_status?: string; current_period_end?: string; is_developer?: boolean; discount_pct?: number; deletion_scheduled_at?: string } | null;
       const planType = t?.plan_type ?? "starter";
       const pl = (pls as { plan_type: string; display_name?: string; niche_studio?: boolean }[] | null)?.find((x) => x.plan_type === planType);
