@@ -1,6 +1,6 @@
 # 💳🔐 PAYMENT & TENANT GATE ARCHITECTURE — MesinViral
 
-> **🔒 CLOSED — SPEC FINAL (2026-07-02).** Arsitektur payment + gate tenant (s/d `suspended`) **SELESAI + deployed `04cf0a2` + tervalidasi server-side** (build/DB/endpoint/customer_details sandbox). Dokumen ini **BEKU sebagai referensi** — **status hidup & sisa aksi = `SISA_KERJA_GO_LIVE.md`** (HUB): [A1] flip produksi + last-mile 1 bayar sandbox = **aksi owner, BUKAN celah doc**. Lanjutan pasca-`suspended` (nurture/dunning/blokir/hapus-data) = `LIFECYCLE_NURTURE_ARCHITECTURE.md`. Jangan pakai isi doc ini sbg daftar kerja.
+> **🔒 CLOSED — SPEC FINAL, LIVE PRODUKSI (update 2026-07-04).** Arsitektur payment + gate tenant (s/d `suspended`) **SELESAI + LIVE PRODUKSI TERBUKTI**: `MIDTRANS_ENV=production` + **pembayaran NYATA pertama sukses A-Z 2026-07-04** (GoPay Rp 149rb, effi trial→active, webhook settlement dari IP Midtrans, kuitansi terkirim — [A1] ✅ TUTUP di `SISA_KERJA_GO_LIVE.md`). Dokumen ini **BEKU sebagai referensi** — status hidup = `SISA_KERJA_GO_LIVE.md` (HUB). Lanjutan pasca-`suspended` (nurture/dunning/blokir/hapus-data) = `LIFECYCLE_NURTURE_ARCHITECTURE.md`. Jangan pakai isi doc ini sbg daftar kerja.
 
 > **Sumber kebenaran TUNGGAL** untuk arsitektur *gate tenant* (siklus akun trial→berbayar) + *pembayaran Midtrans*.
 > Dibuat 2026-07-01 setelah implementasi + validasi e2e (sandbox & live). Baca ini sebelum menyentuh apa pun
@@ -113,7 +113,17 @@ dipakai (mode redirect, bukan Snap.js). **Tak ada perubahan di dashboard Midtran
 
 Alur: FE (mv-web, verifikasi sesi Supabase) → panggil mv-webhook (`vault()`, header `X-Internal-Secret`) → BE buat
 order `payments` (status `pending`, `category` subscription|addon, `ref_id` = request_id utk add-on) + Snap token →
-kembalikan `redirect_url` → FE redirect user ke halaman bayar Midtrans. `payments` = ledger (migr 0022 + 0108).
+kembalikan `redirect_url` → FE redirect user ke halaman bayar Midtrans. `payments` = ledger (migr 0022 + 0108 + 0122/0123).
+
+**Tambahan 2026-07-04 (terbukti bekerja di produksi nyata):**
+- **Anti dobel-bayar** — `_cancel_pending_orders(sb, tenant_id, category)` dipanggil di awal KEDUA fungsi checkout:
+  order `pending` lama tenant (kategori sama) DIBATALKAN via API Midtrans dulu (404 = belum di-charge → cukup tandai
+  `canceled` di ledger). 1 tenant = maks 1 tagihan hidup per kategori. Terbukti 2× saat pembayaran nyata pertama.
+- **Lanjutkan pembayaran** — `payments.redirect_url` (migr 0122) disimpan saat order dibuat → halaman Billing tampilkan
+  banner "🧾 Ada tagihan menunggu" + tombol **"Lanjutkan pembayaran"** (order pending usia <24j). Email Midtrans sendiri
+  TAK memuat link Snap — kanal kita (banner + email payment-link) yang menyediakannya.
+- **Email payment-link** — `notify_payment_link` (email.py) terkirim tiap order dibuat ("Selesaikan pembayaran Anda",
+  ber-brand, dwibahasa, berisi link Snap). Fail-soft.
 
 ### 3.4 Settlement — DUA jalur, SATU logika (anti-redundan)
 - **Webhook (PUSH, cepat):** Midtrans POST → nginx `location /api/webhooks/midtrans` → mv-webhook `:8088`
@@ -125,6 +135,8 @@ kembalikan `redirect_url` → FE redirect user ke halaman bayar Midtrans. `payme
   - **addon** → RPC `settle_niche_request_paid` (buat niche `is_active=false` + status `in_progress` + email). Idempotent.
   - **subscription** → `subscription_status=active` + `plan_type` + `current_period_end=+30hr` + reset penanda reminder + email struk.
   - `expire`/`cancel`/`deny` → tandai status (reconciler).
+  - **Audit (migr 0123, 2026-07-04):** selalu isi `payments.transaction_id` (referensi Midtrans dari payload) +
+    `payments.paid_at` (settlement_time/transaction_time WIB) saat settlement — ledger query-able tanpa bongkar `raw_notification`.
 
 > ⚠️ **nginx WAJIB** punya `location /api/webhooks/midtrans { proxy_pass 127.0.0.1:8088; }` (di
 > `/etc/nginx/sites-enabled/mesinviral`) — kalau tidak, notifikasi Midtrans → 404 (mv-web) → pembayaran tak ter-catat.
@@ -149,6 +161,7 @@ Reset password & konfirmasi = dikirim mv-web sendiri (branded, token_hash lintas
 | `notify_suspend_warning` | → grace | dunning (akan stop dlm ~grace hari) |
 | `notify_suspended` | → suspended | produksi stop, aktifkan lagi |
 | `notify_payment_receipt` | settlement langganan | struk |
+| `notify_payment_link` | order dibuat (checkout) | link Snap "Selesaikan pembayaran" (email Midtrans tak memuat link) |
 
 Link upgrade = `UPGRADE_URL` (default `/billing`); link feedback = `TRIAL_SURVEY_URL` (default `/feedback`).
 
@@ -161,7 +174,8 @@ Link upgrade = `UPGRADE_URL` (default `/billing`); link feedback = `TRIAL_SURVEY
 - **Routing status-aware** (`auth/page.tsx doLogin` + `auth/callback/route.ts`) — non-produksi (trial_expired/suspended)
   → `/billing` (BUKAN terjebak `/onboarding`).
 - **Billing** (`(app)/billing/page.tsx`) — paket/status (label jelas + sisa hari)/pemakaian + riwayat invoice (`payments`,
-  RLS) + drawer 2-mode "Ubah paket" (Starter/Pro/Business) & katalog add-on (→ Pustaka Niche).
+  RLS) + drawer 2-mode "Ubah paket" (Starter/Pro/Business) & katalog add-on (→ Pustaka Niche) + **banner tagihan pending
+  "Lanjutkan pembayaran"** (redirect_url, <24j; checkout baru = auto-cancel tagihan lama).
 - **/feedback** (`app/feedback/page.tsx`, PUBLIK, bilingual) — alasan churn terstruktur + saran → `POST /api/feedback`.
 
 **Admin:**
@@ -176,6 +190,7 @@ Link upgrade = `UPGRADE_URL` (default `/billing`); link feedback = `TRIAL_SURVEY
 ## 6. PETA FILE (rujukan cepat)
 ```
 DB     migrations/0022 (payments) · 0108 (payments.category/ref_id + RPC settle) · 0109 (knob+penanda) · 0110 (feedback)
+       0122 (payments.redirect_url — lanjutkan-pembayaran) · 0123 (payments.transaction_id + paid_at + backfill)
 BE     src/billing/midtrans.py     — snap_create_transaction / snap_create_niche_addon / _snap_post (override+expiry)
                                      handle_notification / _apply_settlement / get_transaction_status / reconcile_pending
        src/billing/renewal.py      — sweep_subscriptions (reminder+transisi, config-driven) [thread billing_renewal]
@@ -196,9 +211,17 @@ INFRA  nginx /etc/nginx/sites-enabled/mesinviral (location /api/webhooks/ → :8
 - **Ganti timing** (trial/grace/reminder/expiry): `/admin/app-config` — berlaku tanpa deploy.
 - **Sandbox e2e** (gratis): `MIDTRANS_ENV=sandbox` + restart → checkout → bayar kartu tes `4811 1111 1111 1114` (CVV
   `123`, OTP `112233`) → webhook/reconciler settle. Kartu tes hanya jalan di sandbox.
-- **Go-live**: `MIDTRANS_ENV=production` + restart mv-webhook & mv-worker. (Dashboard Midtrans tak perlu diubah.)
+- **Go-live**: ✅ **SUDAH — `MIDTRANS_ENV=production` LIVE sejak 2026-07-04** (flip + restart; dashboard Midtrans tak diubah).
 - **Rekonsiliasi manual**: `reconcile_pending(sb)` — tarik status semua `payments` pending.
 - **Refund**: via dashboard Midtrans (ledger admin read-only).
+
+### Metode pembayaran merchant (temuan produksi 2026-07-04 — verified via API Snap)
+- Aktif: **gopay (mode `deeplink` SAJA)** + 5 VA (bni/bri/cimb/permata/other) + echannel (Mandiri Bill). **QRIS TIDAK aktif.**
+- Konsekuensi: **GoPay hanya muncul di HP** (deeplink ke app Gojek); di desktop Snap menyembunyikannya. Agar tampil di
+  desktop → owner aktifkan **GoPay QRIS** di dashboard (persetujuan GoTo, tak instan; menambah kanal utk aiwa juga — tak merusak).
+- Daftar metode dievaluasi Midtrans DINAMIS tiap halaman Snap dibuka (bukan terkunci saat order dibuat) & TIDAK dibatasi
+  kode kita (tak kirim `enabled_payments`).
+- Preferensi merchant (dibagi aiwa): display_name = "SD Islamia Islamic School" + logo Lumite — ganti = keputusan owner (Snap Preferences).
 
 ---
 
@@ -231,16 +254,25 @@ INFRA  nginx /etc/nginx/sites-enabled/mesinviral (location /api/webhooks/ → :8
 | 8 | Signup branded: route `/api/auth/signup` + `auth/page.tsx` doSignup/doResend di-rewire | ✅ deployed — LIVE: GET **405** (POST-only); callback `verifyOtp(type=signup)`; FE buang `supabase.auth.signUp/resend` |
 | 9 | Validasi (build+py_compile+e2e) + deploy 1× (worker+FE) | ✅ **DONE** `04cf0a2` — py_compile OK · npm build exit 0 · DB live verified · 3 service active · endpoint LIVE tervalidasi |
 
-**STATUS: DEPLOYED `04cf0a2` (2026-07-01), mode `MIDTRANS_ENV=sandbox`.** 3 service active (mv-worker/mv-webhook/mv-web). Go-live pembayaran nyata = set `MIDTRANS_ENV=production` + restart (gate [A1] owner di `SISA_KERJA_GO_LIVE.md`).
+**STATUS: 🟢 LIVE PRODUKSI (`MIDTRANS_ENV=production`, 2026-07-04).** 3 service active (mv-worker/mv-webhook/mv-web).
+**Pembayaran NYATA pertama TERBUKTI A-Z** (order `MV-starter-eb5e3f0d1eda-1783160261`, GoPay Rp 149rb): webhook settlement
+masuk dari IP Midtrans → `payments` settlement + transaction_id/paid_at terisi → effi trial→active (period_end +30hr) →
+kuitansi terkirim. Anti dobel-bayar terbukti 2× (2 order lama auto-cancel). [A1] ✅ di `SISA_KERJA_GO_LIVE.md`.
 
-### 🧪 LAST-MILE INTERAKTIF (perlu browser/sesi owner — server-side sudah tervalidasi)
-Validasi visual yang hanya bisa lewat aksi nyata (server-side & gating semua sudah lolos):
-1. **1 pembayaran sandbox** (Billing → Ubah paket → bayar kartu tes `4811 1111 1111 1114`, CVV `123`, OTP `112233`) → cek: (a) di dashboard Midtrans **customer_details** (nama+email) tampil, (b) status → active, (c) **email struk** masuk berisi link invoice.
-2. Buka link invoice → halaman **LUNAS** ber-kop Lumite, PPN muncul hanya bila `ppn_percent>0`, tombol **Cetak/PDF**.
-3. Admin `/admin/tenants` → tenant → **Comp/Diskon** → set is_developer → simpan → badge "Comp" muncul, tenant EXEMPT sweep.
-4. **Signup** email baru → email konfirmasi **ber-brand** (From: `mesinviral@lumite.biz.id`) → klik → `verifyOtp` → `/auth?view=verified`. (Syarat: Supabase "Confirm email" = ON.)
+### 🧪 LAST-MILE INTERAKTIF — status per 2026-07-04
+1. ~~1 pembayaran sandbox~~ → **✅ SUPERSEDED oleh pembayaran PRODUKSI nyata 2026-07-04** (status→active ✓, email struk ✓; visual customer_details di dashboard Midtrans = opsional owner).
+2. Buka link invoice → halaman **LUNAS** ber-kop Lumite, PPN muncul hanya bila `ppn_percent>0`, tombol **Cetak/PDF**. *(⬜ visual owner — kini ADA payment nyata utk dicek)*
+3. Admin `/admin/tenants` → tenant → **Comp/Diskon** → set is_developer → simpan → badge "Comp" muncul, tenant EXEMPT sweep. *(⬜ visual owner)*
+4. **Signup** email baru → email konfirmasi **ber-brand** (From: `mesinviral@lumite.biz.id`) → klik → `verifyOtp` → `/auth?view=verified`. (Syarat: Supabase "Confirm email" = ON.) *(⬜ — tercakup [A5] smoke-test tenant baru)*
 
 ### Changelog
+- **2026-07-04** — **🟢 GO-LIVE PRODUKSI + rekonsiliasi doc ke realita** (instruksi owner): (1) [A1] TUTUP — flip
+  `MIDTRANS_ENV=production` + **pembayaran nyata pertama sukses A-Z** (GoPay effi; webhook+aktivasi+kuitansi terbukti; §9).
+  (2) Fitur baru tercatat: **anti dobel-bayar** `_cancel_pending_orders` + **redirect_url/lanjutkan-pembayaran** (migr 0122,
+  banner Billing) + **email payment-link** `notify_payment_link` (§3.3) + **transaction_id/paid_at** (migr 0123, §3.4).
+  (3) §7: metode merchant nyata (gopay deeplink-only → HP saja; QRIS tidak aktif; jangan sarankan QRIS s/d owner aktifkan).
+  (4) Last-mile sandbox superseded oleh pembayaran produksi. Commit terkait: `227f2f8` (mobile-nav utk jalur bayar HP),
+  `3a753d4` (0123+0124), `025f6dd` (anti-dobel + resume-payment).
 - **2026-07-03** — **direkonsiliasi ke realita** (audit verifikator): ralat rujukan baris comp-exempt (§9 #7 → `renewal.py` :70/:178) + ralat klaim changelog `reconcile_pending` (BUKAN kode-mati — ia PENJAMIN aktif dipanggil `payment_reconciler.py`). Menu **Company Profile** (`/admin/company-profile`) kini LIVE → klaim §8 `company_profile` "admin-editable" kini terpenuhi. Tetap **CLOSED** — status hidup di `SISA_KERJA_GO_LIVE.md`.
 - **2026-07-01** — dibuat setelah implementasi penuh + validasi e2e sandbox (langganan+add-on) & live (reconciler,
   webhook Midtrans terbukti, feedback insert). Commit terkait: `53e272c` (checkout A1+E1), `9d0c8e5` (switch env + admin
