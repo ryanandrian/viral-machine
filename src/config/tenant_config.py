@@ -81,7 +81,7 @@ class TenantRunConfig:
     # Pipeline settings
     niche:              str   = ""   # diset dari DB; '' → fail-loud (no global default)
     niche_fallback:     Optional[str] = None  # Phase 1.2: fallback PILIHAN tenant (bukan global mystery)
-    language:           str   = "en"
+    language:           str   = "en-US"  # bahasa KONTEN (locale BCP-47) — overlay dari channels.content_language
     videos_per_day:     int   = 1
     max_videos_per_day: int   = 1
     publish_platforms:  list  = field(default_factory=lambda: ["youtube"])
@@ -360,6 +360,10 @@ class TenantConfigManager:
             v = ch.get(f)
             if v is not None:
                 setattr(config, f, v)
+        # Bahasa KONTEN per-channel → field `language` (nama kolom channel ≠ nama field, jadi di luar
+        # loop overlay). NULL (channel lama) → biarkan default en-US = perilaku lama.
+        if ch.get("content_language"):
+            config.language = ch["content_language"]
         # POINT 1 (no-hardcode model TTS): bila channel set tts_provider tapi tts_model kosong →
         # pakai DEFAULT katalog (ai_models component='tts', provider channel, sort_order terkecil aktif).
         # Adapter (elevenlabs/openai) jadi nol-hardcode model; channel baru tetap jalan tanpa paksa-isi.
@@ -519,7 +523,9 @@ class TenantConfigManager:
                 tenant_id=tenant_id,
                 plan_type=plan_type,
                 niche=niche,
-                language=row.get("language", "en"),
+                # Bahasa KONTEN = per-CHANNEL (channels.content_language via _apply_channel_overlay).
+                # (Fosil row.get("language") DIBUANG 2026-07-05 — tenant_configs tak pernah punya kolom itu.)
+                language="en-US",
                 videos_per_day=videos_per_day,
                 max_videos_per_day=limits["max_videos_per_day"],
                 publish_platforms=row.get("publish_platforms") or ["youtube"],
@@ -582,7 +588,7 @@ class TenantConfigManager:
             tenant_id=tenant_id,
             plan_type="starter",
             niche="",
-            language="en",
+            language="en-US",
             videos_per_day=1,
             max_videos_per_day=1,
             publish_platforms=["youtube"],

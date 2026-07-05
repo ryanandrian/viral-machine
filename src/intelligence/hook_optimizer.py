@@ -59,6 +59,20 @@ class HookOptimizer:
         historical_block = self._build_historical_block(top_hooks or [])
         hooks_count    = 6 if historical_block else 5
         historical_section = f"\n{historical_block}\n" if historical_block else ""
+        # Bahasa KONTEN channel (tenant_config.language). en* → blok kosong = prompt lama PERSIS.
+        lang_section = ""
+        try:
+            from src.intelligence.config import is_english_locale, content_language_name
+            _loc = getattr(tenant_config, "language", None)
+            if not is_english_locale(_loc):
+                _ln = content_language_name(_loc)
+                lang_section = (
+                    f"\n🌐 LANGUAGE — NON-NEGOTIABLE: write EVERY hook in {_ln} ({_loc}), native and idiomatic "
+                    f"(a top local storyteller, NOT a translation). Address the viewer directly in natural "
+                    f"second person for {_ln}. JSON keys stay in English.\n"
+                )
+        except Exception:
+            lang_section = ""
 
         return f"""You are an expert at writing viral hooks for short-form video.
 
@@ -66,7 +80,7 @@ TOPIC: {script['topic']}
 CURRENT HOOK: {script['hook']}
 NICHE: {niche_data['name']}
 TARGET EMOTION: {niche_data['target_emotion']}
-{historical_section}
+{lang_section}{historical_section}
 Generate {hooks_count} alternative hooks using these formulas:
 {formulas_text}{"" if not historical_block else chr(10) + "- historical_variant: Inspired by the highest-CTR hook pattern shown above"}
 

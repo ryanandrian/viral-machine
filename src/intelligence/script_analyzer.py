@@ -100,7 +100,7 @@ def _derive_emotion_criteria(niche_profile: dict | None) -> str:
 
 
 def _build_prompt(script: dict, niche: str, niche_profile: dict | None = None,
-                  active_beats: list | None = None) -> str:
+                  active_beats: list | None = None, content_language: str | None = None) -> str:
     sections = "\n".join([
         f"[HOOK]: {script.get('hook', '')}",
         f"[MYSTERY DROP]: {script.get('mystery_drop', '')}",
@@ -148,11 +148,26 @@ def _build_prompt(script: dict, niche: str, niche_profile: dict | None = None,
                 f"a great {present} script must be able to reach 80+.\n"
             )
 
+    # Bahasa konten non-English → nilai DALAM bahasa naskah (standar sama; en → blok kosong = prompt lama).
+    lang_note = ""
+    try:
+        from src.intelligence.config import is_english_locale, content_language_name
+        if not is_english_locale(content_language):
+            _ln = content_language_name(content_language)
+            lang_note = (
+                f"\nLANGUAGE NOTICE — the script is written in {_ln} ({content_language}), by design. "
+                f"Judge it IN {_ln} with the exact same standards: idiomatic power, specificity, and emotional "
+                f"impact FOR a native {_ln}-speaking audience. Do NOT penalize it for not being English; "
+                f"DO penalize stiff 'translated-from-English' phrasing that no native speaker would say.\n"
+            )
+    except Exception:
+        lang_note = ""
+
     return f"""You are a strict viral content analyst. Analyze this {niche} video script.
 
 SCRIPT:
 {sections}
-{beats_note}
+{beats_note}{lang_note}
 Score each dimension 0-100. Calibrate against real viral short-form — be FAIR, not perfectionist:
 - 90-100: EXCEPTIONAL — best-in-class, rare. Reserve the gap above 88 for the truly outstanding.
 - 80-89: STRONG & viral-ready — does its job well and SPECIFICALLY for THIS topic. **This is the target band for genuinely good content — award it freely when earned. Do NOT withhold 80 from solid work just because it isn't perfect.**
@@ -199,12 +214,14 @@ class ScriptAnalyzer:
         self.model    = model
 
     def analyze(self, script: dict, niche: str, niche_profile: dict | None = None,
-                active_beats: list | None = None) -> dict:
+                active_beats: list | None = None, content_language: str | None = None) -> dict:
         """
         Score script terhadap 6 dimensi viral via LLMProvider tenant (config-driven).
         niche_profile: data niche dari Supabase (narration_persona, target_emotion, dll).
                        Dipakai untuk emotional_peak criteria yang niche-aware.
                        Jika None → fallback ke DEFAULT_EMOTION_CRITERIA.
+        content_language: bahasa KONTEN channel (locale). Non-English → analyzer diberi tahu agar
+                          menilai DALAM bahasa itu (standar sama, tanpa hukuman non-English).
         Returns dict dengan viral_score, weak_areas, strengths.
         Tidak pernah crash — fallback ke local estimate jika LLM gagal/absen.
         """
@@ -217,7 +234,8 @@ class ScriptAnalyzer:
                     "You are a strict viral content analyst. "
                     "Score honestly. Only respond with valid JSON."
                 ),
-                user=_build_prompt(script, niche, niche_profile, active_beats),
+                user=_build_prompt(script, niche, niche_profile, active_beats,
+                                   content_language=content_language),
                 model=self.model,
                 temperature=0.3,
                 max_tokens=500,

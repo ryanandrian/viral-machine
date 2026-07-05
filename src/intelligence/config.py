@@ -12,7 +12,10 @@ class TenantConfig:
     """Konfigurasi per tenant — setiap user punya instance ini"""
     tenant_id: str
     niche: str = ""  # diset eksplisit; '' → fail-loud (no global default niche)
-    language: str = "en"
+    # BAHASA KONTEN (per-CHANNEL, locale BCP-47 dari channels.content_language — katalog content_languages).
+    # Menentukan bahasa OUTPUT video: narasi/judul/deskripsi/hashtag (script engine, hook optimizer,
+    # analyzer, publisher metadata). Prompt IMAGE tetap English by-design. Default en-US = perilaku lama.
+    language: str = "en-US"
     target_audience: str = "global"
     videos_per_day: int = 1
     platforms: list = field(default_factory=lambda: ["youtube"])
@@ -51,6 +54,8 @@ def tenant_config_from_channel(channel_row: dict, niche=None) -> "TenantConfig":
     return TenantConfig(
         tenant_id       = channel_row["tenant_id"],
         niche           = niche if niche is not None else (channel_row.get("niche") or ""),
+        # Bahasa KONTEN per-channel (channels.content_language). NULL (channel lama pra-migrasi) → en-US.
+        language        = channel_row.get("content_language") or "en-US",
         duration_preset = channel_row.get("duration_preset"),
         format_profile  = channel_row.get("format_profile"),
         landing_link    = channel_row.get("landing_link"),
@@ -224,6 +229,32 @@ def get_niches() -> dict:
         "Supabase unreachable DAN local cache (data/niches_cache.json) tidak ada.\n"
         "Hubungi admin: periksa koneksi DB atau restore file data/niches_cache.json."
     )
+
+
+# ── Bahasa konten — nama tampilan dari katalog content_languages (DB-driven, no hardcode) ──
+_CONTENT_LANG_CACHE: dict | None = None
+
+def content_language_name(locale: str) -> str:
+    """Nama bahasa utk prompt LLM (mis. 'id-ID' → 'Bahasa Indonesia') dari tabel content_languages.
+    Cache per-proses; fail-soft → locale apa adanya (LLM paham kode BCP-47)."""
+    global _CONTENT_LANG_CACHE
+    loc = (locale or "").strip()
+    if not loc:
+        return "English"
+    if _CONTENT_LANG_CACHE is None:
+        try:
+            from supabase import create_client
+            sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+            r = sb.table("content_languages").select("locale, display_name").execute()
+            _CONTENT_LANG_CACHE = {row["locale"]: (row.get("display_name") or row["locale"]) for row in (r.data or [])}
+        except Exception:
+            _CONTENT_LANG_CACHE = {}   # fail-soft; jangan retry tiap panggilan dalam proses ini
+    return _CONTENT_LANG_CACHE.get(loc, loc)
+
+
+def is_english_locale(locale: str) -> bool:
+    """True utk en/en-US/en-GB/… — jalur en = perilaku lama PERSIS (blok bahasa tidak di-inject)."""
+    return (locale or "").strip().lower().startswith("en") or not (locale or "").strip()
 
 
 def invalidate_niches_cache() -> None:

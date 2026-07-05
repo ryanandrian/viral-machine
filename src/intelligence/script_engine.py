@@ -327,10 +327,30 @@ def compute_beat_durations(script: dict, word_timestamps: list | None, audio_dur
     return durs
 
 
+def _content_language_block(locale: str | None) -> str:
+    """Mandat bahasa KONTEN utk prompt LLM. English/locale kosong → '' (prompt byte-identik dgn
+    perilaku lama = NOL regresi channel live). Non-English → blok wajib di posisi atas prompt."""
+    from src.intelligence.config import is_english_locale, content_language_name
+    if is_english_locale(locale):
+        return ""
+    name = content_language_name(locale)
+    return f"""
+🌐 CONTENT LANGUAGE — ABSOLUTE, NON-NEGOTIABLE:
+Write EVERY output value in {name} ({locale}): all narration beats, "title", "full_script", and "hashtags".
+- Native, idiomatic {name} as written by a top local storyteller — NOT a translation from English.
+  No English words except unavoidable proper nouns, brand names, or terms with no natural equivalent.
+- Address the viewer directly in natural second person for {name} (the spirit of the "you" rules below).
+- Numbers, analogies, and cultural references must feel natural to a {name}-speaking audience.
+- JSON KEYS stay in English exactly as specified — only the VALUES are in {name}.
+- EXCEPTION: "background_music_mood" stays in English (internal production metadata, never shown to viewers).
+"""
+
+
 def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, insights_block=None,
                        preset_seconds=None, format_wps=None, render_overhead_sec=0.0,
                        cta_mode="implicit", brand_name=None, brand_cta_text=None,
-                       delivery_p=None, voice_name=None, tts_provider=None, base_speed=None):
+                       delivery_p=None, voice_name=None, tts_provider=None, base_speed=None,
+                       content_language=None):
     """
     Build prompt. Jika feedback ada (dari retry), sisipkan sebagai instruksi perbaikan.
     niche_visual_style: dict dari tabel niches (base_style, color_palette, atmosphere).
@@ -473,7 +493,7 @@ TOPIC: {topic.get('topic', '')}
 ANGLE: {topic.get('angle', topic.get('topic', ''))}
 NICHE: {niche_data.get('name', niche)}
 TARGET DURATION: {target_duration} seconds of spoken narration.
-
+{_content_language_block(content_language)}
 {length_block}
 
 TONE: {profile['tone']}
@@ -642,7 +662,8 @@ class ScriptEngine:
                       niche_visual_style=None, feedback=None, insights_block=None,
                       preset_seconds=None, format_wps=None, render_overhead_sec=0.0,
                       cta_mode="implicit", brand_name=None, brand_cta_text=None,
-                      delivery_p=None, voice_name=None, tts_provider=None, base_speed=None):
+                      delivery_p=None, voice_name=None, tts_provider=None, base_speed=None,
+                      content_language=None):
         """Satu attempt generate script via LLMProvider (config-driven).
 
         Provider memegang SDK client + format API spesifik vendor — di sini tak
@@ -666,6 +687,7 @@ class ScriptEngine:
                     render_overhead_sec=render_overhead_sec,
                     cta_mode=cta_mode, brand_name=brand_name, brand_cta_text=brand_cta_text,
                     delivery_p=delivery_p, voice_name=voice_name, tts_provider=tts_provider, base_speed=base_speed,
+                    content_language=content_language,
                 ),
                 model=model,
                 temperature=1.0,
@@ -772,6 +794,7 @@ RULES (every prompt — non-negotiable for a VIRAL, breathtaking result):
 - Photorealistic, vertical 9:16, ONE commanding focal point with depth.
 - Keep ONE consistent visual through-line across all scenes (a recurring subject/setting/palette that evolves), but VARY composition, scale, and camera angle so no two scenes look alike.
 - Write a concrete, richly cinematic DESCRIPTION (2-3 sentences) that explicitly names the lighting + camera + mood. NEVER write instructions. NEVER output "N/A".
+- The narration may be in a non-English language — but write EVERY image prompt in ENGLISH (image models follow English best). Translate the beat's concrete visual element into English for the prompt.
 - ABSOLUTELY NO text, words, letters, numbers, signs, logos, or watermarks inside the image.
 
 THUMBNAIL = the opening HOOK frame. HOOK text: "{(script.get(beats[0]) or '').strip()[:300]}"
@@ -885,6 +908,9 @@ Return ONLY valid JSON:
         _cta_mode  = getattr(tenant_config, "cta_mode", "implicit") or "implicit"
         _brand     = getattr(tenant_config, "brand_name", None)
         _brand_cta = getattr(tenant_config, "brand_cta_text", None)
+        # Bahasa KONTEN per-channel (channels.content_language via tenant_config.language).
+        # en* → blok bahasa TIDAK di-inject (prompt identik perilaku lama); non-en → mandat bahasa.
+        _clang = getattr(tenant_config, "language", None) or "en-US"
 
         # S1-B: load channel insights — inject ke semua attempt jika grade cukup
         insights       = self._load_insights(tenant_config.tenant_id, getattr(tenant_config, "channel_id", None))
@@ -942,6 +968,7 @@ Return ONLY valid JSON:
                 render_overhead_sec=render_overhead_sec,
                 cta_mode=_cta_mode, brand_name=_brand, brand_cta_text=_brand_cta,
                 delivery_p=_base_p, voice_name=_voice_name, tts_provider=_tts_provider, base_speed=_base_speed,
+                content_language=_clang,
             )
 
             if not script:
@@ -953,7 +980,8 @@ Return ONLY valid JSON:
                 # active_beats (segmentasi DB preset) → analyzer renormalisasi bobot atas dimensi
                 # relevan; preset pendek (tanpa climax/cta) tak dihukum bagian absen.
                 analysis = analyzer.analyze(script, tenant_config.niche,
-                                            niche_profile=niche_profile, active_beats=active_beats)
+                                            niche_profile=niche_profile, active_beats=active_beats,
+                                            content_language=_clang)
                 score    = analysis.get("viral_score", 0)
                 script["viral_analysis"] = analysis
 

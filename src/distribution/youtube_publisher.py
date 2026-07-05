@@ -172,6 +172,9 @@ class YouTubePublisher:
             else:
                 room = max(0, MAX_DESC - len(link) - 2)
                 description = f"{description[:room]}\n\n{link}"
+        # Bahasa konten channel → metadata YouTube. Subtag UTAMA BCP-47 ('id-ID'→'id'; 'en-US'→'en'
+        # = byte-identik nilai lama utk channel English → nol regresi). Fosil hardcode "en" dibuang 2026-07-05.
+        content_lang = ((getattr(tenant_config, "language", None) or "en-US").strip() or "en-US").split("-")[0].lower()
         tags = list(_niche_video_tags(niche))   # 5A: dari niches.keywords (DB), bukan hardcode
         for tag in hashtags:
             clean = tag.replace("#", "").strip().lower()
@@ -189,8 +192,8 @@ class YouTubePublisher:
                 "description":          description,
                 "tags":                 tags[:500],
                 "categoryId":           _niche_category(niche),
-                "defaultLanguage":      "en",
-                "defaultAudioLanguage": "en"
+                "defaultLanguage":      content_lang,
+                "defaultAudioLanguage": content_lang,
             },
             "status": {
                 # Config-driven (no-hardcode): default 'public'; override utk test/staging.

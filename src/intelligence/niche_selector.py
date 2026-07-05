@@ -16,6 +16,18 @@ load_dotenv()
 # Penilai relevansi UTAMA tetap LLM. Tunable (bisa pindah app_config bila perlu).
 _OFFNICHE_TOPIC_KW = ("game", "music", "sport", "football", "basketball", "athlet")
 
+def _language_directive(locale: str | None) -> str:
+    """Arahan bahasa KONTEN utk pemilihan topik. en* → '' (prompt nyaris identik lama — hanya nilai
+    LANGUAGE yang kini locale nyata channel). Non-en → topik/angle/hook ditulis dalam bahasa itu."""
+    from src.intelligence.config import is_english_locale, content_language_name
+    if is_english_locale(locale):
+        return ""
+    _ln = content_language_name(locale)
+    return (f"\n🌐 OUTPUT LANGUAGE: write every \"topic\", \"angle\", \"hook\", and \"why_viral\" value in "
+            f"{_ln} — native and idiomatic for a {_ln}-speaking audience (NOT translated English). "
+            f"JSON keys stay in English.")
+
+
 def _offniche_topic(topics) -> bool:
     """True bila SEMUA kategori topik video jelas off-domain (game/musik/olahraga) → aman dibuang.
     Kosong/knowledge/entertainment → False (jangan buang; biar LLM yang nilai)."""
@@ -410,7 +422,7 @@ Analyze the following trending signals and select the TOP 5 video topics with th
 CONTENT STYLE: {niche_data['style']}
 TARGET EMOTION: {niche_data['target_emotion']}
 TARGET AUDIENCE: {audience}
-LANGUAGE: {tenant_config.language}
+LANGUAGE: {tenant_config.language}{_language_directive(tenant_config.language)}
 PLATFORM: YouTube Shorts, TikTok, Instagram Reels
 {focus_block}{insights_block}{avoid_block}
 IMPORTANT: Prioritize topics that are trending RIGHT NOW in the target region.
