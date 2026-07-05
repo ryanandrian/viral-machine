@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { fetchPricing, idrK } from "@/lib/pricing";
 import { PageHeader } from "@/components/page-header";
 import { YT_CATEGORIES } from "@/lib/youtube-categories";
-import { Target, Search, X, Wand2, Clock, ChevronRight, Tv, Check, Loader2, CreditCard } from "lucide-react";
+import { Target, Search, X, Wand2, Clock, ChevronRight, Tv, Check, Loader2, CreditCard, Lock } from "lucide-react";
 import "./niches.css";
 
 // Pustaka Niche (tenant) — daftar SEMUA niche yang jadi hak tenant (dasar/umum/khusus miliknya),
@@ -81,6 +81,9 @@ export default function NichesPage() {
   const supabase = createClient();
   const [me, setMe] = useState("");
   const [niches, setNiches] = useState<NicheRow[]>([]);
+  const [fullCatalog, setFullCatalog] = useState(true);   // hak pakai niche publik non-dasar (plan_limits.full_niche_catalog)
+  const [canReq, setCanReq] = useState(true);             // hak pesan niche custom (plan_limits.can_request_custom_niche, 0130)
+  const [upModal, setUpModal] = useState(false);          // ajakan upgrade saat fitur pesan terkunci
   const [usage, setUsage] = useState<Record<string, string[]>>({});   // niche_id → [nama channel yang memakai]
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
@@ -127,18 +130,22 @@ export default function NichesPage() {
     const uid = user?.id ?? ""; setMe(uid);
     const { data: cfg } = await supabase.from("tenant_configs").select("plan_type").maybeSingle();
     const tier = (cfg as { plan_type?: string } | null)?.plan_type ?? "starter";
-    // Entitlement katalog publik per-tier: CONFIG-DRIVEN dari plan_limits.full_niche_catalog (0124) — no-hardcode.
-    const { data: pl } = await supabase.from("plan_limits").select("full_niche_catalog").eq("plan_type", tier).maybeSingle();
-    const fullCatalog = Boolean((pl as { full_niche_catalog?: boolean } | null)?.full_niche_catalog);
+    // Entitlement per-tier: CONFIG-DRIVEN dari plan_limits (0124 katalog + 0130 pesan custom) — no-hardcode.
+    const { data: pl } = await supabase.from("plan_limits").select("full_niche_catalog,can_request_custom_niche").eq("plan_type", tier).maybeSingle();
+    const plr = pl as { full_niche_catalog?: boolean; can_request_custom_niche?: boolean } | null;
+    setFullCatalog(Boolean(plr?.full_niche_catalog));
+    setCanReq(Boolean(plr?.can_request_custom_niche));
     const selCols = "niche_id,name,is_active,is_base,access_type,exclusive_to,keywords,default_hashtags,youtube_category_id,style,target_emotion,narration_persona,visual_style,mood_priority,section_timing";
     // Ambil niche aktif (publik) + niche MILIK tenant walau belum aktif (transparansi: "sedang disiapkan").
     const qN = supabase.from("niches").select(selCols);
     const { data: nrows } = await (uid ? qN.or(`is_active.eq.true,exclusive_to.eq.${uid}`) : qN.eq("is_active", true));
-    // Entitlement: niche khusus MILIK tenant (aktif/belum) + niche publik AKTIF (katalog penuh ATAU base). Identik Channel Detail utk yang publik.
-    const entitled = ((nrows ?? []) as NicheRow[]).filter((n) =>
-      n.exclusive_to === uid || (n.is_active && n.access_type === "public" && (fullCatalog || n.is_base)));
-    entitled.sort((a, b) => a.name.localeCompare(b.name));
-    setNiches(entitled);
+    // ETALASE TERBUKA (keputusan owner 2026-07-05): SEMUA niche publik aktif TAMPIL utk semua tier
+    // (yang di luar hak diberi tanda 🔒 Upgrade — gerbang pakai tetap di server: RPC set_channel_niche).
+    // Niche khusus milik tenant lain TIDAK ikut tampil.
+    const visible = ((nrows ?? []) as NicheRow[]).filter((n) =>
+      n.exclusive_to === uid || (!n.exclusive_to && n.is_active && n.access_type === "public"));
+    visible.sort((a, b) => a.name.localeCompare(b.name));
+    setNiches(visible);
     // Status "dipakai": kumpulkan dari channels (niche fixed + niche_pool).
     const { data: chs } = await supabase.from("channels").select("channel_name,niche,niche_pool");
     const map: Record<string, string[]> = {};
@@ -204,11 +211,15 @@ export default function NichesPage() {
 
   const cur = sel ? niches.find((n) => n.niche_id === sel) ?? null : null;
 
+  // Hak PAKAI per niche (cermin gerbang server RPC set_channel_niche): milik sendiri ATAU publik (katalog penuh / dasar).
+  const isEntitled = useCallback((n: NicheRow) =>
+    n.exclusive_to === me || (n.access_type === "public" && (fullCatalog || n.is_base)), [me, fullCatalog]);
+
   return (
     <>
       <PageHeader icon={Target} title={<Bi id="Pustaka Niche" en="Niche Library" />}
         subtitle={<Bi id="Semua niche yang bisa kamu pakai. Pasang niche ke channel di halaman Channel." en="All niches you can use. Assign a niche to a channel on the Channels page." />}
-        action={<button className="btn btn-default btn-sm" onClick={() => openReq("public_90d")}><Wand2 size={14} /> <Bi id="Pesan niche custom" en="Request custom niche" /></button>} />
+        action={<button className="btn btn-default btn-sm" onClick={() => (canReq ? openReq("public_90d") : setUpModal(true))}>{canReq ? <Wand2 size={14} /> : <Lock size={14} />} <Bi id="Pesan niche custom" en="Request custom niche" /></button>} />
 
       {/* Toolbar: cari + filter tipe + filter kategori */}
       <div className="nlib-toolbar">
@@ -247,9 +258,11 @@ export default function NichesPage() {
                 <td><span className={`badge ${k.cls}`}>{k.label}</span></td>
                 <td>{!n.is_active
                   ? <span className="badge badge-warning"><span className="dot" /><Bi id="Belum aktif" en="Not active" /></span>
-                  : used.length > 0
-                    ? <span className="badge badge-success"><span className="dot" />{`Dipakai (${used.length})`}</span>
-                    : <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Belum dipakai" en="Not used" /></span>}</td>
+                  : !isEntitled(n)
+                    ? <span className="badge badge-brand"><Lock size={11} /> <Bi id="Perlu upgrade" en="Upgrade needed" /></span>
+                    : used.length > 0
+                      ? <span className="badge badge-success"><span className="dot" />{`Dipakai (${used.length})`}</span>
+                      : <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Belum dipakai" en="Not used" /></span>}</td>
               </tr>
             );
           })}
@@ -346,13 +359,31 @@ export default function NichesPage() {
               <Row k="Sedang dipakai di">{used.length ? used.join(", ") : <span className="muted"><Bi id="belum dipakai di channel mana pun" en="not used in any channel" /></span>}</Row>
             </div>
             <div className="nlib-drawer-foot">
-              {cur.is_active
-                ? <Link href="/channels" className="btn btn-default btn-sm"><Tv size={14} /> <Bi id="Pakai di channel" en="Use in a channel" /> <ChevronRight size={14} /></Link>
-                : <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Belum bisa dipakai (niche belum aktif)." en="Not usable yet (niche not active)." /></span>}
+              {!isEntitled(cur)
+                ? <Link href="/billing" className="btn btn-default btn-sm"><Lock size={14} /> <Bi id="Upgrade paket untuk memakai niche ini" en="Upgrade your plan to use this niche" /> <ChevronRight size={14} /></Link>
+                : cur.is_active
+                  ? <Link href="/channels" className="btn btn-default btn-sm"><Tv size={14} /> <Bi id="Pakai di channel" en="Use in a channel" /> <ChevronRight size={14} /></Link>
+                  : <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Belum bisa dipakai (niche belum aktif)." en="Not usable yet (niche not active)." /></span>}
             </div>
           </>);
         })()}
       </aside>
+
+      {/* Modal: ajakan upgrade — fitur pesan niche custom untuk paket berbayar (gerbang server: RLS 0130) */}
+      {upModal && (
+        <div onClick={(e) => { if (e.target === e.currentTarget) setUpModal(false); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem" }}>
+          <div className="card" style={{ maxWidth: 440, width: "100%" }}>
+            <div className="card-head"><h3 className="card-title"><Lock size={15} /> <Bi id="Fitur paket berbayar" en="Paid plan feature" /></h3><button className="btn btn-ghost btn-icon btn-sm" onClick={() => setUpModal(false)}><X size={16} /></button></div>
+            <div className="card-body">
+              <div className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Pesan niche custom (dibuat khusus untuk channelmu oleh tim kami) tersedia untuk paket berbayar. Upgrade untuk mulai memesan." en="Custom niche requests (built for your channel by our team) are available on paid plans. Upgrade to start ordering." /></div>
+            </div>
+            <div className="card-foot" style={{ display: "flex", gap: ".5rem", justifyContent: "flex-end" }}>
+              <button className="btn btn-ghost" onClick={() => setUpModal(false)}><Bi id="Nanti dulu" en="Not now" /></button>
+              <Link href="/billing" className="btn btn-default"><Bi id="Lihat paket & upgrade" en="See plans & upgrade" /> <ChevronRight size={14} /></Link>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal: Pesan niche custom — DUAL (public-90d / private), harga live pricing_config */}
       {modal && (
