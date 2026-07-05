@@ -79,18 +79,42 @@ const ERR_TXT: Record<string, BiTxt> = {
   invalid_integer: { id: "Harus bilangan bulat", en: "Must be an integer" },
 };
 
+// Fase 2: Gerakan Kamera per Adegan (content_beats). Arah = dwibahasa.
+type BeatRow = { beat_key: string; sort_order: number; label_id: string; label_en: string; motion_mode: string; motion_dir: string };
+const MOTION_DIRS: [string, string, string][] = [
+  ["zoom_in", "Zoom masuk", "Zoom in"], ["zoom_out", "Zoom keluar", "Zoom out"],
+  ["pan_lr", "Geser kiri→kanan", "Pan left→right"], ["pan_rl", "Geser kanan→kiri", "Pan right→left"],
+  ["pan_ud", "Geser atas→bawah", "Pan top→bottom"], ["pan_du", "Geser bawah→atas", "Pan bottom→top"],
+  ["pan_diag", "Geser diagonal", "Pan diagonal"], ["pan_diag_rev", "Geser diagonal balik", "Pan diagonal reverse"],
+  ["still", "Diam", "Still"],
+];
+
 export default function AppConfigPage() {
   const [cfg, setCfg] = useState<AppCfg[]>([]);
+  const [beats, setBeats] = useState<BeatRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<React.ReactNode | null>(null);
+  const [lang, setLang] = useState<"id" | "en">("id");   // utk <option> (tak bisa pakai <Bi> span)
+  useEffect(() => { setLang((localStorage.getItem("mv-lang") as "id" | "en") || "id"); }, []);
 
   const load = useCallback(async () => {
-    const r = await fetch("/api/admin/app-config");
+    const [r, rb] = await Promise.all([fetch("/api/admin/app-config"), fetch("/api/admin/beats")]);
     const j = await r.json().catch(() => ({ app_config: [] }));
+    const jb = await rb.json().catch(() => ({ beats: [] }));
     setCfg(j.app_config ?? []);
+    setBeats(jb.beats ?? []);
     setLoading(false);
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  async function patchBeat(beat_key: string, body: { motion_mode?: string; motion_dir?: string }) {
+    const r = await fetch("/api/admin/beats", {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ beat_key, ...body }),
+    });
+    setToast(r.ok ? <Bi id="✓ Tersimpan" en="✓ Saved" /> : <Bi id="Gagal menyimpan" en="Save failed" />);
+    if (r.ok) await load();
+    setTimeout(() => setToast(null), 2200);
+  }
 
   async function patch(key: string, body: { value: number } | { value_text: string }) {
     const r = await fetch(`/api/admin/app-config/${key}`, {
@@ -164,6 +188,37 @@ export default function AppConfigPage() {
               );
             })}
             {cfg.length === 0 && <div className="muted" style={{ fontSize: "var(--text-xs)" }}>—</div>}
+          </div>
+        </div>
+      )}
+
+      {/* Fase 2: Gerakan Kamera per Adegan (level system, berlaku semua konten) */}
+      {!loading && beats.length > 0 && (
+        <div className="card" style={{ maxWidth: 720, marginTop: "1.5rem" }}>
+          <div className="card-head">
+            <h3 className="card-title"><SlidersHorizontal size={15} /> <Bi id="Gerakan Kamera per Adegan" en="Camera Motion per Scene" /></h3>
+            <span className="card-sub" style={{ color: "var(--success)", fontWeight: 500 }}><Bi id="✓ Tersimpan otomatis" en="✓ Auto-saved" /></span>
+          </div>
+          <div className="card-body">
+            <p className="muted" style={{ fontSize: "var(--text-xs)", margin: "0 0 1rem", maxWidth: "65ch" }}>
+              <Bi id="Arah gerak kamera per adegan, berlaku ke SEMUA konten. Fix = arah tetap pilihan Anda; Cerdas = mesin variasikan otomatis (tak pernah dua adegan searah berturut). Intensitas (halus–cepat) diatur per-niche. Durasi video tidak berubah."
+                  en="Camera motion direction per scene, applies to ALL content. Fix = your fixed direction; Smart = engine auto-varies (never two adjacent scenes same way). Intensity (subtle–fast) is set per-niche. Video duration is unchanged." />
+            </p>
+            {beats.map((b) => (
+              <div key={b.beat_key} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: ".75rem", alignItems: "center", padding: ".6rem 0", borderBottom: "1px solid var(--border-subtle)" }}>
+                <div style={{ fontWeight: 500, fontSize: "var(--text-sm)" }}><Bi id={b.label_id} en={b.label_en} /></div>
+                <select className="input" style={{ height: "2rem", width: "8rem" }} value={b.motion_mode}
+                  onChange={(e) => patchBeat(b.beat_key, { motion_mode: e.target.value })}>
+                  <option value="fix">{lang === "en" ? "Fix" : "Fix"}</option>
+                  <option value="cerdas">{lang === "en" ? "Smart" : "Cerdas"}</option>
+                </select>
+                <select className="input" style={{ height: "2rem", width: "12rem", opacity: b.motion_mode === "fix" ? 1 : 0.4 }}
+                  value={b.motion_dir} disabled={b.motion_mode !== "fix"}
+                  onChange={(e) => patchBeat(b.beat_key, { motion_dir: e.target.value })}>
+                  {MOTION_DIRS.map(([v, idL, enL]) => <option key={v} value={v}>{lang === "en" ? enL : idL}</option>)}
+                </select>
+              </div>
+            ))}
           </div>
         </div>
       )}

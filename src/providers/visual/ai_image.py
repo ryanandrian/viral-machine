@@ -126,6 +126,9 @@ class AIImageProvider(VisualProvider):
         # Intensitas gerak Ken Burns per-niche (visual_style.camera_motion.intensity). Nilai tak valid → normal.
         _cm = (self.niche_visual_style or {}).get("camera_motion") or {}
         motion_intensity = _cm.get("intensity") if _cm.get("intensity") in self._MOTION_INTENSITY else "normal"
+        # ARAH per-adegan (Fase 2, level system): resolve dari content_beats (fix/cerdas). Sejajar beat_roles.
+        from src.content import beats as _beats
+        motion_seq = _beats.resolve_motion_sequence(beat_roles or [])
 
         def _dur(i: int) -> float:
             """Durasi per clip dari section_durations (s6c2); fallback 5.0s."""
@@ -186,7 +189,9 @@ class AIImageProvider(VisualProvider):
             role      = beat_roles[i] if (beat_roles and i < len(beat_roles)) else ""
             clip_path = output_dir / f"clip_{i+1:02d}_ai.mp4"
             try:
-                self._image_to_video(img_path, clip_path, duration=duration, clip_index=i, role=role, intensity=motion_intensity)
+                _mv = motion_seq[i] if i < len(motion_seq) else {"dir": "zoom_in", "rate": 0.05}
+                self._image_to_video(img_path, clip_path, duration=duration, clip_index=i, role=role,
+                                     intensity=motion_intensity, direction=_mv["dir"], rate=_mv["rate"])
                 size_mb = clip_path.stat().st_size / (1024 * 1024)
                 clips.append(VideoClip(
                     path=clip_path, duration=duration, width=1080, height=1920,
@@ -425,42 +430,45 @@ class AIImageProvider(VisualProvider):
     # Intensitas per-niche (halus/normal/dinamis) menskala laju. Sumber: niches.visual_style.camera_motion.
     # ⚠️ Durasi klip TAK tersentuh (dipaku `-t {duration}`); ini HANYA cara gambar bergerak di dalam durasi.
     _MOTION_INTENSITY = {"halus": 0.6, "normal": 1.0, "dinamis": 1.5, "cepat": 2.2}
-    # (jenis, base_rate zoom/detik @normal, pan_zoom @normal). zin/zout=zoom; pand/panh=pan (geser full-span).
-    _BASE_MOTIONS = {
-        0: ("zin",  0.050, None),   # hook          — zoom in menarik perhatian
-        1: ("zout", 0.035, None),   # mystery_drop  — zoom out reveal perlahan
-        2: ("pand", None,  0.18),   # build_up      — pan diagonal (eksplorasi)
-        3: ("zin",  0.030, None),   # core_facts    — zoom in presisi tenang
-        4: ("panh", None,  0.18),   # (slot pan horizontal — dipakai via fallback/Fase 2, bukan peran tetap)
-        5: ("zout", 0.050, None),   # climax        — zoom out dramatis
-    }
     _TRAVEL_MIN, _TRAVEL_MAX = 0.10, 0.30   # batas travel BENTUK-DURASI (sebelum intensitas) — kecepatan-konstan
+    _PANZOOM = 0.18                          # level zoom yang ditahan saat pan (@normal), di-skala intensitas
+    # Arah gerak (Fase 2, dari content_beats.motion_dir via resolve_motion_sequence). zoom=pusat; pan=geser full-span.
+    _PAN_DIRS = {"pan_lr", "pan_rl", "pan_ud", "pan_du", "pan_diag", "pan_diag_rev"}
 
     @staticmethod
-    def _build_motion_vf(idx: int, frames: int, intensity: str = "normal") -> str:
-        """Filter ffmpeg Ken Burns 1 klip: kecepatan-konstan + full-span + intensitas per-niche.
-        TAK memengaruhi durasi (durasi dipaku `-t` di pemanggil). Nilai intensitas tak dikenal → normal."""
+    def _build_motion_vf(direction: str, frames: int, intensity: str = "normal", rate: float = 0.04) -> str:
+        """Filter ffmpeg Ken Burns 1 klip: kecepatan-konstan + full-span + intensitas per-niche + ARAH (Fase 2).
+        TAK memengaruhi durasi (dipaku `-t` di pemanggil). Arah/intensitas tak dikenal → default aman."""
         factor = AIImageProvider._MOTION_INTENSITY.get(intensity, 1.0)
-        kind, rate, panzoom = AIImageProvider._BASE_MOTIONS.get(idx, AIImageProvider._BASE_MOTIONS[0])
         dur = frames / 30.0
         S   = "s=1080x1920,setsar=1"
-        CTR = "x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
-        if kind in ("zin", "zout"):
-            # travel BENTUK-DURASI (kecepatan-konstan, di-clamp) → LALU di-skala intensitas → halus<normal<dinamis
-            # SELALU terpisah di semua durasi (perbaikan: clamp bersama dulu bikin normal==dinamis di klip panjang).
-            base_travel = min(AIImageProvider._TRAVEL_MAX, max(AIImageProvider._TRAVEL_MIN, rate * dur))
-            travel = round(min(0.60, max(0.05, base_travel * factor)), 4)   # batas mutlak keamanan (Cepat capai ~0.60)
-            inc = round(travel / frames, 6)          # full-span: capai target tepat di frame terakhir
-            if kind == "zin":
-                ztgt = round(1.0 + travel, 4)
-                return f"scale=8000:-1,zoompan=z='min(zoom+{inc:.6f},{ztgt})':d={frames}:{CTR}:{S}"
-            zst = round(1.0 + travel, 4)
-            return f"scale=8000:-1,zoompan=z='if(eq(on,1),{zst},max(zoom-{inc:.6f},1.0))':d={frames}:{CTR}:{S}"
-        # pan (diagonal/horizontal): zoom ditahan; geser 0→penuh sepanjang klip (sudah full-span).
-        z = round(1.0 + panzoom * factor, 4)
-        if kind == "pand":
-            return f"scale=8000:-1,zoompan=z='{z}':d={frames}:x='(iw-iw/zoom)*on/{frames}':y='(ih-ih/zoom)*on/{frames}':{S}"
-        return f"scale=8000:-1,zoompan=z='{z}':d={frames}:x='(iw-iw/zoom)*on/{frames}':y='ih/2-(ih/zoom/2)':{S}"
+        CX, CY = "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"      # titik tengah
+        XMAX, YMAX = "(iw-iw/zoom)", "(ih-ih/zoom)"
+        if direction in ("zoom_in", "zoom_out"):
+            # travel BENTUK-DURASI (kecepatan-konstan, clamp) → ×intensitas → halus<normal<dinamis<cepat selalu terpisah.
+            base_travel = min(AIImageProvider._TRAVEL_MAX, max(AIImageProvider._TRAVEL_MIN, float(rate) * dur))
+            travel = round(min(0.60, max(0.05, base_travel * factor)), 4)
+            inc = round(travel / frames, 6)                  # full-span: capai target di frame terakhir
+            z = round(1.0 + travel, 4)
+            if direction == "zoom_in":
+                return f"scale=8000:-1,zoompan=z='min(zoom+{inc:.6f},{z})':d={frames}:x='{CX}':y='{CY}':{S}"
+            return f"scale=8000:-1,zoompan=z='if(eq(on,1),{z},max(zoom-{inc:.6f},1.0))':d={frames}:x='{CX}':y='{CY}':{S}"
+        # pan family — zoom ditahan; geser 0→penuh sepanjang klip (full-span, arah sesuai direction).
+        z = round(1.0 + AIImageProvider._PANZOOM * factor, 4)
+        fwd = f"on/{frames}"; rev = f"(1-on/{frames})"
+        DIRS = {
+            "pan_lr":       (f"{XMAX}*{fwd}", CY),
+            "pan_rl":       (f"{XMAX}*{rev}", CY),
+            "pan_ud":       (CX, f"{YMAX}*{fwd}"),
+            "pan_du":       (CX, f"{YMAX}*{rev}"),
+            "pan_diag":     (f"{XMAX}*{fwd}", f"{YMAX}*{fwd}"),
+            "pan_diag_rev": (f"{XMAX}*{rev}", f"{YMAX}*{rev}"),
+            "still":        (CX, CY),
+        }
+        x, y = DIRS.get(direction, (CX, CY))                 # arah tak dikenal → tahan-tengah (aman)
+        if direction == "still":
+            z = round(1.0 + 0.04 * factor, 4)
+        return f"scale=8000:-1,zoompan=z='{z}':d={frames}:x='{x}':y='{y}':{S}"
 
     @staticmethod
     def _image_to_video(
@@ -470,19 +478,18 @@ class AIImageProvider(VisualProvider):
         clip_index: int = 0,
         role: str = "",
         intensity: str = "normal",
+        direction: str = "zoom_in",
+        rate: float = 0.05,
     ) -> None:
         """
         Konversi gambar → video 9:16 dengan Ken Burns effect.
-        A6 (Opsi A): motion BEAT-ROLE-aware — gerakan dipilih dari PERAN beat (hook/climax/…),
-        bukan posisi idx%6, agar cocok narasi di semua preset (3-9 beat). Unknown/kosong → idx%6.
-        intensity (per-niche camera_motion): skala rasa gerak (halus/normal/dinamis). Durasi TAK berubah.
+        direction/rate = arah & laju hasil resolve_motion_sequence (Fase 2, per-adegan fix/cerdas).
+        intensity (per-niche camera_motion): skala rasa gerak. Durasi TAK berubah (dipaku `-t`).
+        Default direction=zoom_in/rate=0.05 = perilaku hook (dipakai jalur hook-frame yg tak kirim arah).
         """
         fps    = 30
         frames = int(duration * fps)
-        # role → indeks gerak: SATU SUMBER kosakata (0128, content_beats.motion_index); fallback idx%6.
-        from src.content import beats as _beats
-        idx = _beats.motion_map().get(role, clip_index % 6)
-        vf  = AIImageProvider._build_motion_vf(idx, frames, intensity)
+        vf  = AIImageProvider._build_motion_vf(direction, frames, intensity, rate)
 
         cmd = [
             "ffmpeg", "-y",
