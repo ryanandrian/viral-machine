@@ -57,6 +57,13 @@ export async function POST(req: Request) {
     if (!base) return NextResponse.json({ error: "template tidak ditemukan / bukan niche dasar" }, { status: 400 });
     for (const c of TEMPLATE_COPY_COLUMNS) seed[c] = (base as Record<string, unknown>)[c];
   }
+  // Default gerakan kamera WAJIB ada di tiap niche baru (owner 2026-07-05): dari template = warisi karakter base;
+  // tanpa template = "normal" (netral, aman). Kunci visual_style lain dipertahankan.
+  {
+    const vs = (seed.visual_style && typeof seed.visual_style === "object") ? { ...(seed.visual_style as Record<string, unknown>) } : {};
+    if (!vs.camera_motion) vs.camera_motion = { intensity: "normal" };
+    seed.visual_style = vs;
+  }
   const { data, error } = await admin.from("niches").insert({
     ...seed,
     niche_id, name: b.name ?? niche_id, is_base: !!b.is_base, is_active: b.is_active ?? true,

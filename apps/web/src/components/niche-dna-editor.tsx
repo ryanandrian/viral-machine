@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { Sparkles, Music, Image as ImageIcon, Clock3, Gauge, User, Plus, X, AlertTriangle } from "lucide-react";
+import { Sparkles, Music, Image as ImageIcon, Clock3, Gauge, User, Plus, X, AlertTriangle, Video } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { validateDnaPatch, PERSONA_KEYS, VISUAL_CORE_KEYS, SECTION_KEYS, SECTION_LABELS, type DnaErrors } from "@/lib/niche-dna";
 import { YT_CATEGORIES } from "@/lib/youtube-categories";
@@ -116,7 +116,12 @@ export default function NicheDnaEditor({ niche, onSave, busy, onCancel }: { nich
   const [style, setStyle] = useState(asStr(niche.style));
   const [emotion, setEmotion] = useState(asStr(niche.target_emotion));
   const [persona, setPersona] = useState<Record<string, string>>({ ...Object.fromEntries(PERSONA_KEYS.map((k) => [k, ""])), ...asDict(niche.narration_persona) });
-  const [visual, setVisual] = useState<Record<string, string>>({ ...Object.fromEntries(VISUAL_CORE_KEYS.map((k) => [k, ""])), ...asDict(niche.visual_style) });
+  // camera_motion = objek bersarang (Ken Burns), DIKELUARKAN dari dict visual datar → dikelola state terpisah.
+  const _vs0 = asDict(niche.visual_style);
+  const { camera_motion: _cm0, ..._vsFlat } = _vs0 as Record<string, unknown>;
+  const [visual, setVisual] = useState<Record<string, string>>({ ...Object.fromEntries(VISUAL_CORE_KEYS.map((k) => [k, ""])), ...(_vsFlat as Record<string, string>) });
+  const _cmIntensity0 = (asDict(_cm0).intensity as string) || "normal";
+  const [cameraMotion, setCameraMotion] = useState<string>(["halus", "normal", "dinamis", "cepat"].includes(_cmIntensity0) ? _cmIntensity0 : "normal");
   const [newVisKey, setNewVisKey] = useState("");
   const [qualityTags, setQualityTags] = useState(asStr(niche.image_quality_tags));
   const [negPrompt, setNegPrompt] = useState(asStr(niche.image_negative_prompt));
@@ -168,7 +173,9 @@ export default function NicheDnaEditor({ niche, onSave, busy, onCancel }: { nich
   // rakit patch (bentuk PERSIS konsumen pipeline)
   const patch = useMemo(() => {
     const personaClean = Object.fromEntries(Object.entries(persona).filter(([, v]) => v.trim() !== ""));
-    const visualClean = Object.fromEntries(Object.entries(visual).filter(([, v]) => v.trim() !== ""));
+    // visual_style datar + suntikkan kembali camera_motion (Ken Burns, per-karakter niche).
+    const visualClean: Record<string, unknown> = Object.fromEntries(Object.entries(visual).filter(([, v]) => v.trim() !== ""));
+    visualClean.camera_motion = { intensity: cameraMotion };
     const music: Record<string, string> = { mode: musicMode };
     if (musicMode === "random" && musicMood) music.mood = musicMood;
     if (musicMode === "fixed" && musicTrack) music.track_id = musicTrack;
@@ -184,7 +191,7 @@ export default function NicheDnaEditor({ niche, onSave, busy, onCancel }: { nich
       music_config: music, mood_priority: moodPriority,
       section_timing: timingVals, emotion_scoring_criteria: scoring,
     };
-  }, [name, keywords, hashtags, ytCat, style, emotion, persona, visual, qualityTags, negPrompt, fallbacks, musicMode, musicMood, musicTrack, moodPriority, timing, scoring]);
+  }, [name, keywords, hashtags, ytCat, style, emotion, persona, visual, cameraMotion, qualityTags, negPrompt, fallbacks, musicMode, musicMood, musicTrack, moodPriority, timing, scoring]);
 
   const errors = useMemo(() => {
     const e = validateDnaPatch(patch);
@@ -364,6 +371,27 @@ export default function NicheDnaEditor({ niche, onSave, busy, onCancel }: { nich
         <Fld label={<Bi id="Contoh shot khas niche (1 baris = 1 shot)" en="Signature example shots (1 line = 1 shot)" />} error={errors.visual_fallbacks}
           hint={<Bi id="Contoh adegan visual khas niche ini — jadi acuan kualitas mesin (mis. 'teleskop berputar di bawah langit berbintang')." en="Signature scenes of this niche — used as the engine's quality reference." />}>
           <textarea className="textarea input-mono" rows={4} value={fallbacks} onChange={(e) => setFallbacks(e.target.value)} placeholder={"A single star sharpening into focus against black void\nRadio telescope rotating under star-dense night sky"} />
+        </Fld>
+      </Sec>
+
+      <Sec icon={<Video size={16} />} titleId="Gerakan Kamera" titleEn="Camera Motion"
+        subId="Seberapa 'hidup' gerakan zoom/geser pada video niche ini. Durasi & struktur video tidak berubah." subEn="How 'alive' the zoom/pan movement feels for this niche. Video duration & structure are unchanged.">
+        <Fld label={<Bi id="Intensitas gerak" en="Motion intensity" />}
+          hint={<Bi id="Berlaku untuk video 15–90 detik. Video 8 detik memakai video-AI (gerakan terpisah)." en="Applies to 15–90s videos. 8s videos use AI-video (separate motion)." />}>
+          <div className="radio-row" style={{ display: "flex", gap: ".5rem", flexWrap: "wrap" }}>
+            {([["halus", "Halus", "Subtle", "pelan & tenang — niche kalem", "slow & calm — calm niches"],
+               ["normal", "Normal", "Normal", "gerakan sedang — kebanyakan niche", "medium — most niches"],
+               ["dinamis", "Dinamis", "Dynamic", "energik & terasa — niche seru", "energetic — lively niches"],
+               ["cepat", "Cepat", "Fast", "paling enerjik — niche hype/cepat", "most energetic — hype/fast niches"]] as [string, string, string, string, string][])
+              .map(([v, idL, enL, idH, enH]) => (
+                <button type="button" key={v} className={`radio-pill${cameraMotion === v ? " sel" : ""}`}
+                  style={{ flexDirection: "column", alignItems: "flex-start", gap: 2, padding: ".5rem .75rem", textAlign: "left" }}
+                  onClick={() => setCameraMotion(v)}>
+                  <span style={{ fontWeight: 600 }}><Bi id={idL} en={enL} /></span>
+                  <span className="muted" style={{ fontSize: "0.625rem" }}><Bi id={idH} en={enH} /></span>
+                </button>
+              ))}
+          </div>
         </Fld>
       </Sec>
 

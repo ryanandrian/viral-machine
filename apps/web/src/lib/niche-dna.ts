@@ -14,6 +14,7 @@ export const PERSONA_KEYS = ["tone", "style", "avoid", "hook_style", "emotion_ar
 export const VISUAL_CORE_KEYS = ["base_style", "color_palette", "atmosphere"] as const;
 export const SECTION_KEYS = ["hook", "mystery_drop", "build_up", "pattern_interrupt", "core_facts", "curiosity_bridge", "climax", "cta"] as const;
 export const MUSIC_MODES = ["auto", "random", "fixed"] as const;
+export const MOTION_INTENSITIES = ["halus", "normal", "dinamis", "cepat"] as const;  // Ken Burns per-niche (visual_style.camera_motion)
 
 // Label & penjelasan awam per bagian naskah (dipakai editor; ID/EN)
 export const SECTION_LABELS: Record<string, [string, string, string, string]> = {
@@ -48,7 +49,20 @@ export function validateDnaPatch(patch: Record<string, unknown>): DnaErrors {
     if (has(k) && !isStrArr(patch[k])) e[k] = "Harus berupa daftar teks.";
   }
   if (has("narration_persona") && !isStrDict(patch.narration_persona)) e.narration_persona = "Setiap isian persona harus teks.";
-  if (has("visual_style") && !isStrDict(patch.visual_style)) e.visual_style = "Setiap isian gaya visual harus teks.";
+  if (has("visual_style")) {
+    const vs = patch.visual_style as Record<string, unknown>;
+    if (!vs || typeof vs !== "object" || Array.isArray(vs)) e.visual_style = "Gaya visual tidak valid.";
+    else {
+      // camera_motion = objek bersarang (Ken Burns); sisanya WAJIB teks.
+      const { camera_motion: cm, ...flat } = vs;
+      if (!isStrDict(flat)) e.visual_style = "Setiap isian gaya visual harus teks.";
+      else if (cm !== undefined) {
+        const inten = (cm as Record<string, unknown> | null)?.intensity;
+        if (!cm || typeof cm !== "object" || Array.isArray(cm) || !MOTION_INTENSITIES.includes(inten as typeof MOTION_INTENSITIES[number]))
+          e.visual_style = `Intensitas gerak kamera harus salah satu: ${MOTION_INTENSITIES.join("/")}.`;
+      }
+    }
+  }
 
   if (has("music_config")) {
     const mc = patch.music_config as Record<string, unknown>;

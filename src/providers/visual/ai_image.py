@@ -123,6 +123,10 @@ class AIImageProvider(VisualProvider):
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
+        # Intensitas gerak Ken Burns per-niche (visual_style.camera_motion.intensity). Nilai tak valid → normal.
+        _cm = (self.niche_visual_style or {}).get("camera_motion") or {}
+        motion_intensity = _cm.get("intensity") if _cm.get("intensity") in self._MOTION_INTENSITY else "normal"
+
         def _dur(i: int) -> float:
             """Durasi per clip dari section_durations (s6c2); fallback 5.0s."""
             return clip_durations[i] if (clip_durations and i < len(clip_durations)) else 5.0
@@ -182,7 +186,7 @@ class AIImageProvider(VisualProvider):
             role      = beat_roles[i] if (beat_roles and i < len(beat_roles)) else ""
             clip_path = output_dir / f"clip_{i+1:02d}_ai.mp4"
             try:
-                self._image_to_video(img_path, clip_path, duration=duration, clip_index=i, role=role)
+                self._image_to_video(img_path, clip_path, duration=duration, clip_index=i, role=role, intensity=motion_intensity)
                 size_mb = clip_path.stat().st_size / (1024 * 1024)
                 clips.append(VideoClip(
                     path=clip_path, duration=duration, width=1080, height=1920,
@@ -413,6 +417,51 @@ class AIImageProvider(VisualProvider):
     # Internal: image → video dengan Ken Burns effect
     # ──────────────────────────────────────────────
 
+    # ── Ken Burns WORLD-CLASS ([B3]/F5-02, owner 2026-07-05) ─────────────────────────────
+    # Perbaikan atas kode lama (yg CAPAI target di ~50% klip lalu DIAM = "ekor statis" pd klip panjang):
+    #   1) KECEPATAN-KONSTAN dipersepsi: laju zoom/detik seragam (rate×faktor), tak lagi 1/durasi tak-menentu.
+    #   2) FULL-SPAN: gerak menyapu SELURUH durasi (capai target di frame TERAKHIR) → tak ada ekor statis.
+    #   3) travel di-CLAMP [min,max]: klip sangat pendek tetap terlihat gerak; klip panjang tak over-zoom.
+    # Intensitas per-niche (halus/normal/dinamis) menskala laju. Sumber: niches.visual_style.camera_motion.
+    # ⚠️ Durasi klip TAK tersentuh (dipaku `-t {duration}`); ini HANYA cara gambar bergerak di dalam durasi.
+    _MOTION_INTENSITY = {"halus": 0.6, "normal": 1.0, "dinamis": 1.5, "cepat": 2.2}
+    # (jenis, base_rate zoom/detik @normal, pan_zoom @normal). zin/zout=zoom; pand/panh=pan (geser full-span).
+    _BASE_MOTIONS = {
+        0: ("zin",  0.050, None),   # hook          — zoom in menarik perhatian
+        1: ("zout", 0.035, None),   # mystery_drop  — zoom out reveal perlahan
+        2: ("pand", None,  0.18),   # build_up      — pan diagonal (eksplorasi)
+        3: ("zin",  0.030, None),   # core_facts    — zoom in presisi tenang
+        4: ("panh", None,  0.18),   # core_facts_2  — pan horizontal (konteks)
+        5: ("zout", 0.050, None),   # climax        — zoom out dramatis
+    }
+    _TRAVEL_MIN, _TRAVEL_MAX = 0.10, 0.30   # batas travel BENTUK-DURASI (sebelum intensitas) — kecepatan-konstan
+
+    @staticmethod
+    def _build_motion_vf(idx: int, frames: int, intensity: str = "normal") -> str:
+        """Filter ffmpeg Ken Burns 1 klip: kecepatan-konstan + full-span + intensitas per-niche.
+        TAK memengaruhi durasi (durasi dipaku `-t` di pemanggil). Nilai intensitas tak dikenal → normal."""
+        factor = AIImageProvider._MOTION_INTENSITY.get(intensity, 1.0)
+        kind, rate, panzoom = AIImageProvider._BASE_MOTIONS.get(idx, AIImageProvider._BASE_MOTIONS[0])
+        dur = frames / 30.0
+        S   = "s=1080x1920,setsar=1"
+        CTR = "x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+        if kind in ("zin", "zout"):
+            # travel BENTUK-DURASI (kecepatan-konstan, di-clamp) → LALU di-skala intensitas → halus<normal<dinamis
+            # SELALU terpisah di semua durasi (perbaikan: clamp bersama dulu bikin normal==dinamis di klip panjang).
+            base_travel = min(AIImageProvider._TRAVEL_MAX, max(AIImageProvider._TRAVEL_MIN, rate * dur))
+            travel = round(min(0.60, max(0.05, base_travel * factor)), 4)   # batas mutlak keamanan (Cepat capai ~0.60)
+            inc = round(travel / frames, 6)          # full-span: capai target tepat di frame terakhir
+            if kind == "zin":
+                ztgt = round(1.0 + travel, 4)
+                return f"scale=8000:-1,zoompan=z='min(zoom+{inc:.6f},{ztgt})':d={frames}:{CTR}:{S}"
+            zst = round(1.0 + travel, 4)
+            return f"scale=8000:-1,zoompan=z='if(eq(on,1),{zst},max(zoom-{inc:.6f},1.0))':d={frames}:{CTR}:{S}"
+        # pan (diagonal/horizontal): zoom ditahan; geser 0→penuh sepanjang klip (sudah full-span).
+        z = round(1.0 + panzoom * factor, 4)
+        if kind == "pand":
+            return f"scale=8000:-1,zoompan=z='{z}':d={frames}:x='(iw-iw/zoom)*on/{frames}':y='(ih-ih/zoom)*on/{frames}':{S}"
+        return f"scale=8000:-1,zoompan=z='{z}':d={frames}:x='(iw-iw/zoom)*on/{frames}':y='ih/2-(ih/zoom/2)':{S}"
+
     @staticmethod
     def _image_to_video(
         img_path: Path,
@@ -420,64 +469,21 @@ class AIImageProvider(VisualProvider):
         duration: float = 5.0,
         clip_index: int = 0,
         role: str = "",
+        intensity: str = "normal",
     ) -> None:
         """
         Konversi gambar → video 9:16 dengan Ken Burns effect.
         A6 (Opsi A): motion BEAT-ROLE-aware — gerakan dipilih dari PERAN beat (hook/climax/…),
         bukan posisi idx%6, agar cocok narasi di semua preset (3-9 beat). Unknown/kosong → idx%6.
+        intensity (per-niche camera_motion): skala rasa gerak (halus/normal/dinamis). Durasi TAK berubah.
         """
         fps    = 30
         frames = int(duration * fps)
-        # role → indeks SECTION_MOTIONS (reuse ekspresi zoompan terbukti); fallback idx%6 non-breaking.
+        # role → indeks gerak (fallback idx%6 non-breaking).
         _ROLE_MOTION = {"hook": 0, "mystery_drop": 1, "build_up": 2, "pattern_interrupt": 1,
                         "core_facts": 3, "core_facts_2": 4, "curiosity_bridge": 2, "climax": 5, "cta": 5}
-        idx    = _ROLE_MOTION.get(role, clip_index % 6)
-
-        # Section-aware Ken Burns motions
-        # Kecepatan disesuaikan dengan durasi — clip pendek lebih agresif
-        speed_zoom_in  = round(0.5 / frames, 6)   # zoom in speed
-        speed_zoom_out = round(0.5 / frames, 6)   # zoom out speed
-
-        SECTION_MOTIONS = {
-            0: (  # Hook — zoom in agresif, langsung grab attention
-                f"scale=8000:-1,"
-                f"zoompan=z='min(zoom+{speed_zoom_in*2:.6f},1.5)':d={frames}"
-                f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920,"
-                f"setsar=1"
-            ),
-            1: (  # Mystery Drop — zoom out perlahan, reveal skala misteri
-                f"scale=8000:-1,"
-                f"zoompan=z='if(eq(on,1),1.5,max(zoom-{speed_zoom_out:.6f},1.0))':d={frames}"
-                f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920,"
-                f"setsar=1"
-            ),
-            2: (  # Build Up — diagonal pan, kesan perjalanan dan eksplorasi
-                f"scale=8000:-1,"
-                f"zoompan=z='1.3':d={frames}"
-                f":x='(iw-iw/zoom)*on/{frames}':y='(ih-ih/zoom)*on/{frames}':s=1080x1920,"
-                f"setsar=1"
-            ),
-            3: (  # Core Facts — zoom in presisi ke detail
-                f"scale=8000:-1,"
-                f"zoompan=z='min(zoom+{speed_zoom_in:.6f},1.4)':d={frames}"
-                f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920,"
-                f"setsar=1"
-            ),
-            4: (  # Core Facts 2 — pan horizontal, menjelajahi konteks
-                f"scale=8000:-1,"
-                f"zoompan=z='1.3':d={frames}"
-                f":x='(iw-iw/zoom)*on/{frames}':y='ih/2-(ih/zoom/2)':s=1080x1920,"
-                f"setsar=1"
-            ),
-            5: (  # Climax — zoom out dramatis dari dekat ke jauh
-                f"scale=8000:-1,"
-                f"zoompan=z='if(eq(on,1),1.8,max(zoom-{speed_zoom_out*1.5:.6f},1.0))':d={frames}"
-                f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920,"
-                f"setsar=1"
-            ),
-        }
-
-        vf = SECTION_MOTIONS[idx]
+        idx = _ROLE_MOTION.get(role, clip_index % 6)
+        vf  = AIImageProvider._build_motion_vf(idx, frames, intensity)
 
         cmd = [
             "ffmpeg", "-y",
