@@ -204,21 +204,26 @@ export default function AppConfigPage() {
               <Bi id="Arah gerak kamera per adegan, berlaku ke SEMUA konten. Fix = arah tetap pilihan Anda; Cerdas = mesin variasikan otomatis (tak pernah dua adegan searah berturut). Intensitas (halus–cepat) diatur per-niche. Durasi video tidak berubah."
                   en="Camera motion direction per scene, applies to ALL content. Fix = your fixed direction; Smart = engine auto-varies (never two adjacent scenes same way). Intensity (subtle–fast) is set per-niche. Video duration is unchanged." />
             </p>
-            {beats.map((b) => (
+            {beats.map((b) => {
+              const locked = b.beat_key === "hook";   // hook = pembuka utama, terkunci fix zoom (owner)
+              return (
               <div key={b.beat_key} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: ".75rem", alignItems: "center", padding: ".6rem 0", borderBottom: "1px solid var(--border-subtle)" }}>
-                <div style={{ fontWeight: 500, fontSize: "var(--text-sm)" }}><Bi id={b.label_id} en={b.label_en} /></div>
-                <select className="input" style={{ height: "2rem", width: "8rem" }} value={b.motion_mode}
+                <div style={{ fontWeight: 500, fontSize: "var(--text-sm)" }}>
+                  <Bi id={b.label_id} en={b.label_en} />
+                  {locked && <span className="muted" style={{ fontSize: "0.625rem", marginLeft: ".4rem" }}>🔒 <Bi id="wajib zoom (pembuka)" en="always zoom (opener)" /></span>}
+                </div>
+                <select className="input" style={{ height: "2rem", width: "8rem", opacity: locked ? 0.5 : 1 }} value={b.motion_mode} disabled={locked}
                   onChange={(e) => patchBeat(b.beat_key, { motion_mode: e.target.value })}>
-                  <option value="fix">{lang === "en" ? "Fix" : "Fix"}</option>
+                  <option value="fix">Fix</option>
                   <option value="cerdas">{lang === "en" ? "Smart" : "Cerdas"}</option>
                 </select>
-                <select className="input" style={{ height: "2rem", width: "12rem", opacity: b.motion_mode === "fix" ? 1 : 0.4 }}
-                  value={b.motion_dir} disabled={b.motion_mode !== "fix"}
+                <select className="input" style={{ height: "2rem", width: "12rem", opacity: (b.motion_mode === "fix" && !locked) ? 1 : 0.4 }}
+                  value={b.motion_dir} disabled={b.motion_mode !== "fix" || locked}
                   onChange={(e) => patchBeat(b.beat_key, { motion_dir: e.target.value })}>
                   {MOTION_DIRS.map(([v, idL, enL]) => <option key={v} value={v}>{lang === "en" ? enL : idL}</option>)}
                 </select>
               </div>
-            ))}
+            );})}
           </div>
         </div>
       )}

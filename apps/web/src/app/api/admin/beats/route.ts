@@ -24,6 +24,8 @@ export async function PATCH(req: Request) {
   if (g.error) return g.error;
   const { beat_key, motion_mode, motion_dir } = await req.json().catch(() => ({}));
   if (!beat_key || typeof beat_key !== "string") return NextResponse.json({ error: "beat_key wajib" }, { status: 400 });
+  // HOOK = adegan pembuka utama: terkunci fix zoom_in, tak boleh diubah (owner 2026-07-05).
+  if (beat_key === "hook") return NextResponse.json({ error: "hook_locked" }, { status: 400 });
   const upd: Record<string, string> = {};
   if (motion_mode !== undefined) {
     if (!MODES.includes(motion_mode)) return NextResponse.json({ error: "invalid_mode" }, { status: 400 });

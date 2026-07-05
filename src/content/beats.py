@@ -128,7 +128,10 @@ def resolve_motion_sequence(roles: list) -> list:
     for i, role in enumerate(roles or []):
         c = cfg.get(role) or {"mode": "fix", "dir": "zoom_in", "rate": 0.04}
         rate = c["rate"]
-        if c["mode"] == "cerdas":
+        if role == "hook":
+            # HOOK (adegan pembuka UTAMA, owner 2026-07-05): SELALU fix zoom_in — tak pernah ikut cerdas/pan.
+            d = "zoom_in"
+        elif c["mode"] == "cerdas":
             pool = _CERDAS_CANDIDATES.get(c["dir"], ["zoom_in", "zoom_out", "pan_lr"])
             rot = pool[i % len(pool):] + pool[:i % len(pool)]          # rotasi by posisi → variasi antar-adegan
             d = next((x for x in rot if x != prev), rot[0])            # anti dua-adegan-searah-berturut
