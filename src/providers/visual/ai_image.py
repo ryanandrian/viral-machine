@@ -431,7 +431,7 @@ class AIImageProvider(VisualProvider):
         1: ("zout", 0.035, None),   # mystery_drop  — zoom out reveal perlahan
         2: ("pand", None,  0.18),   # build_up      — pan diagonal (eksplorasi)
         3: ("zin",  0.030, None),   # core_facts    — zoom in presisi tenang
-        4: ("panh", None,  0.18),   # core_facts_2  — pan horizontal (konteks)
+        4: ("panh", None,  0.18),   # (slot pan horizontal — dipakai via fallback/Fase 2, bukan peran tetap)
         5: ("zout", 0.050, None),   # climax        — zoom out dramatis
     }
     _TRAVEL_MIN, _TRAVEL_MAX = 0.10, 0.30   # batas travel BENTUK-DURASI (sebelum intensitas) — kecepatan-konstan
