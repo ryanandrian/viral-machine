@@ -110,6 +110,8 @@ const HOOK_FORMULAS = ["question", "impossible_claim", "you_dont_know", "number_
 export default function NicheDnaEditor({ niche, onSave, busy, onCancel }: { niche: NicheRow; onSave: (patch: Record<string, unknown>) => Promise<{ ok: boolean; fields?: DnaErrors }>; busy: boolean; onCancel?: () => void }) {
   // draft terstruktur (bukan JSON string)
   const [name, setName] = useState(asStr(niche.name));
+  const [descId, setDescId] = useState(asStr(niche.description));       // 0135: deskripsi etalase (ID)
+  const [descEn, setDescEn] = useState(asStr(niche.description_en));    // 0135: deskripsi etalase (EN)
   const [keywords, setKeywords] = useState(asArr(niche.keywords));
   const [hashtags, setHashtags] = useState(asArr(niche.default_hashtags));
   const [ytCat, setYtCat] = useState(asStr(niche.youtube_category_id));
@@ -183,7 +185,8 @@ export default function NicheDnaEditor({ niche, onSave, busy, onCancel }: { nich
       ? Object.fromEntries(SECTION_KEYS.map((k) => [k, Number(timing[k])]))
       : {};
     return {
-      name: name.trim(), keywords, default_hashtags: hashtags, youtube_category_id: ytCat || null,
+      name: name.trim(), description: descId.trim() || null, description_en: descEn.trim() || null,
+      keywords, default_hashtags: hashtags, youtube_category_id: ytCat || null,
       style, target_emotion: emotion,
       narration_persona: personaClean, visual_style: visualClean,
       image_quality_tags: qualityTags, image_negative_prompt: negPrompt,
@@ -191,7 +194,7 @@ export default function NicheDnaEditor({ niche, onSave, busy, onCancel }: { nich
       music_config: music, mood_priority: moodPriority,
       section_timing: timingVals, emotion_scoring_criteria: scoring,
     };
-  }, [name, keywords, hashtags, ytCat, style, emotion, persona, visual, cameraMotion, qualityTags, negPrompt, fallbacks, musicMode, musicMood, musicTrack, moodPriority, timing, scoring]);
+  }, [name, descId, descEn, keywords, hashtags, ytCat, style, emotion, persona, visual, cameraMotion, qualityTags, negPrompt, fallbacks, musicMode, musicMood, musicTrack, moodPriority, timing, scoring]);
 
   const errors = useMemo(() => {
     const e = validateDnaPatch(patch);
@@ -218,6 +221,13 @@ export default function NicheDnaEditor({ niche, onSave, busy, onCancel }: { nich
         subId="Siapa niche ini & topik apa yang dicari mesin tren." subEn="What this niche is & what topics the engine hunts.">
         <Fld label={<Bi id="Nama tampilan" en="Display name" />} error={errors.name}>
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
+        </Fld>
+        <Fld label={<Bi id="Deskripsi etalase (Indonesia)" en="Showcase description (Indonesian)" />}
+          hint={<Bi id="1-2 kalimat menjual utk tenant: channel berisi video apa & rasanya seperti apa. Tampil di tabel & drawer Pustaka Niche. Tidak dipakai mesin produksi." en="1-2 selling sentences for tenants: what the channel contains & how it feels. Shown in the Niche Library table & drawer. Not used by the production engine." />}>
+          <textarea className="textarea" rows={2} value={descId} onChange={(e) => setDescId(e.target.value)} placeholder="mis. Kisah kasus kriminal nyata dan misteri yang belum terpecahkan — dibawakan seperti detektif membaca berkas tengah malam." />
+        </Fld>
+        <Fld label={<Bi id="Deskripsi etalase (English)" en="Showcase description (English)" />}>
+          <textarea className="textarea" rows={2} value={descEn} onChange={(e) => setDescEn(e.target.value)} placeholder="e.g. Real crime cases and unsolved mysteries — told like a detective reading the file at midnight." />
         </Fld>
         <Fld label={<Bi id="Kata kunci topik" en="Topic keywords" />} error={errors.keywords}
           hint={<Bi id="Dipakai mesin mencari tren & tag video. Isi kata khas topik niche ini (mis. imunitas, vitamin, kesehatan)." en="Used for trend hunting & video tags. Use words specific to this niche's topic." />}>

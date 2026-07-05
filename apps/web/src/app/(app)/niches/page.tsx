@@ -24,7 +24,7 @@ type NicheRow = {
   keywords: unknown; default_hashtags: unknown; youtube_category_id: string | null;
   style: string | null; target_emotion: string | null;
   narration_persona: unknown; visual_style: unknown; mood_priority: unknown; section_timing: unknown;
-  created_at: string | null;
+  created_at: string | null; description: string | null; description_en: string | null;
 };
 
 // ── Config UI Pustaka Niche — SUMBER: app_config (migr 0134, admin-editable, no-hardcode).
@@ -166,7 +166,7 @@ export default function NichesPage() {
     const plr = pl as { full_niche_catalog?: boolean; can_request_custom_niche?: boolean } | null;
     setFullCatalog(Boolean(plr?.full_niche_catalog));
     setCanReq(Boolean(plr?.can_request_custom_niche));
-    const selCols = "niche_id,name,is_active,is_base,access_type,exclusive_to,keywords,default_hashtags,youtube_category_id,style,target_emotion,narration_persona,visual_style,mood_priority,section_timing,created_at";
+    const selCols = "niche_id,name,is_active,is_base,access_type,exclusive_to,keywords,default_hashtags,youtube_category_id,style,target_emotion,narration_persona,visual_style,mood_priority,section_timing,created_at,description,description_en";
     // Ambil niche aktif (publik) + niche MILIK tenant walau belum aktif (transparansi: "sedang disiapkan").
     const qN = supabase.from("niches").select(selCols);
     const { data: nrows } = await (uid ? qN.or(`is_active.eq.true,exclusive_to.eq.${uid}`) : qN.eq("is_active", true));
@@ -251,8 +251,8 @@ export default function NichesPage() {
       if (kind !== "all" && nicheKind(n, me).key !== kind) return false;
       if (cat !== "all" && n.youtube_category_id !== cat) return false;
       if (tokens.length) {
-        // Cakupan diperluas: nama + id + keywords + style + emosi (lintas ID↔EN via sinonim query).
-        const hay = `${n.name} ${n.niche_id} ${arr(n.keywords).join(" ")} ${n.style ?? ""} ${n.target_emotion ?? ""}`.toLowerCase();
+        // Cakupan diperluas: nama + id + keywords + style + emosi + deskripsi ID/EN (lintas bahasa natural).
+        const hay = `${n.name} ${n.niche_id} ${arr(n.keywords).join(" ")} ${n.style ?? ""} ${n.target_emotion ?? ""} ${n.description ?? ""} ${n.description_en ?? ""}`.toLowerCase();
         if (!tokens.some((t) => hay.includes(t))) return false;
       }
       return true;
@@ -319,13 +319,15 @@ export default function NichesPage() {
           {view.map((n) => {
             const k = nicheKind(n, me); const used = usage[n.niche_id] || [];
             const tone = toneOf(n.mood_priority, toneCfg);
-            const teaser = [n.style, n.target_emotion].filter(Boolean).join(" · ");
+            // Teaser = deskripsi manusiawi (0135); fallback DNA teknis bila deskripsi kosong (niche custom lama).
+            const teaser = n.description || [n.style, n.target_emotion].filter(Boolean).join(" · ");
             return (
               <tr key={n.niche_id} onClick={() => setSel(n.niche_id)} style={{ cursor: "pointer" }}>
                 <td>
                   <span style={{ color: "var(--text-primary)", fontWeight: 500 }}>{n.name}</span>
                   {isNewNiche(n.created_at) && <span className="badge badge-brand" style={{ marginLeft: 6, fontSize: ".625rem", verticalAlign: "1px" }}><Bi id="Baru" en="New" /></span>}
-                  {teaser && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: 2, maxWidth: 340, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{teaser}</div>}
+                  {teaser && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: 2, maxWidth: 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {n.description ? <Bi id={n.description} en={n.description_en || n.description} /> : teaser}</div>}
                 </td>
                 <td className="muted">{catLabel(n.youtube_category_id)}</td>
                 <td><span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: "var(--text-xs)", color: "var(--text-secondary)" }}>
@@ -422,7 +424,9 @@ export default function NichesPage() {
             </div>
             <div className="nlib-dpanel">
               {!cur.is_active && <div style={{ background: "var(--warning-soft)", border: "1px solid color-mix(in srgb,var(--warning) 30%,transparent)", borderRadius: "var(--r-md)", padding: "0.625rem 0.75rem", marginBottom: "1rem", fontSize: "var(--text-xs)", color: "var(--warning)" }}><Bi id="Niche ini milikmu tapi BELUM AKTIF — sedang disiapkan, belum bisa dipakai di channel." en="This niche is yours but NOT ACTIVE yet — being prepared, not usable in a channel." /></div>}
-              {desc && <Row k="Deskripsi">{desc}</Row>}
+              {cur.description
+                ? <Row k="Deskripsi"><Bi id={cur.description} en={cur.description_en || cur.description} /></Row>
+                : (desc && <Row k="Deskripsi">{desc}</Row>)}
               {topics.length > 0 && <Row k="Contoh topik / tema">
                 <div style={{ display: "flex", gap: ".375rem", flexWrap: "wrap" }}>{topics.map((t) => <span key={t} className="chip">{t}</span>)}</div>
               </Row>}

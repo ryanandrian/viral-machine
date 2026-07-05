@@ -11,6 +11,7 @@ import { validateDnaPatch, TEMPLATE_COPY_COLUMNS } from "@/lib/niche-dna";
 // Field DNA yang boleh tenant edit pada niche PRIVATE miliknya (BUKAN access_type/exclusive_to/is_base).
 const EDITABLE = [
   "name", "keywords", "style", "target_emotion", "default_hashtags", "is_active",
+  "description", "description_en",
   "visual_style", "visual_fallbacks", "mood_priority", "narration_persona", "emotion_scoring_criteria",
   "section_timing", "image_quality_tags", "image_negative_prompt", "music_config", "youtube_category_id",
 ];
