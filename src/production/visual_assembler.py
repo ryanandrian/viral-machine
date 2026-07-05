@@ -292,7 +292,13 @@ class VisualAssembler:
             # (quality tags + negative) konsisten dgn flow normal ai_image.
             positive, negative = provider._build_image_prompt(prompt)
             asyncio.run(provider._generate_image(positive, negative, img_path))
-            provider._image_to_video(img_path, clip_path, duration=hook_duration)
+            # Hook-frame ikut config arah (Fase 2) + intensitas niche (Fase 1) — konsisten dgn scene lain.
+            from src.content import beats as _beats
+            _hm = (_beats.resolve_motion_sequence(["hook"]) or [{"dir": "zoom_in", "rate": 0.05}])[0]
+            _cm = (getattr(provider, "niche_visual_style", {}) or {}).get("camera_motion") or {}
+            _int = _cm.get("intensity") if _cm.get("intensity") in provider._MOTION_INTENSITY else "normal"
+            provider._image_to_video(img_path, clip_path, duration=hook_duration,
+                                     direction=_hm["dir"], rate=_hm["rate"], intensity=_int)
 
             from src.providers.visual.base import VideoClip
             size_mb = clip_path.stat().st_size / (1024 * 1024)

@@ -54,7 +54,9 @@ def _load() -> list:
                       "motion_index": int(r["motion_index"]),
                       "motion_mode": r.get("motion_mode") or "fix",
                       "motion_dir": r.get("motion_dir") or "zoom_in",
-                      "motion_rate": float(r.get("motion_rate") or 0.04)} for r in rows]
+                      # JANGAN pakai `or` — motion_rate 0.0 sah (peran pan) & 0.0 falsy → bug. Cek None eksplisit.
+                      "motion_rate": float(r["motion_rate"]) if r.get("motion_rate") is not None else 0.04}
+                     for r in rows]
     except Exception as e:
         logger.debug(f"[beats] load DB gagal ({e}) — pakai fallback konstanta")
     if not vocab:

@@ -446,7 +446,10 @@ class AIImageProvider(VisualProvider):
         XMAX, YMAX = "(iw-iw/zoom)", "(ih-ih/zoom)"
         if direction in ("zoom_in", "zoom_out"):
             # travel BENTUK-DURASI (kecepatan-konstan, clamp) → ×intensitas → halus<normal<dinamis<cepat selalu terpisah.
-            base_travel = min(AIImageProvider._TRAVEL_MAX, max(AIImageProvider._TRAVEL_MIN, float(rate) * dur))
+            r = float(rate)
+            if r <= 0:                       # arah zoom butuh laju>0 (mis. peran pan yg diubah admin ke zoom) → default aman
+                r = 0.04
+            base_travel = min(AIImageProvider._TRAVEL_MAX, max(AIImageProvider._TRAVEL_MIN, r * dur))
             travel = round(min(0.60, max(0.05, base_travel * factor)), 4)
             inc = round(travel / frames, 6)                  # full-span: capai target di frame terakhir
             z = round(1.0 + travel, 4)
