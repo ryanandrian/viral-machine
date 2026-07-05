@@ -28,11 +28,9 @@ def _build_full_script(script: dict) -> str:
     if full:
         return full
 
-    # Fallback: gabung semua 8 section
-    sections = [
-        "hook", "mystery_drop", "build_up", "pattern_interrupt",
-        "core_facts", "curiosity_bridge", "climax", "cta"
-    ]
+    # Fallback: gabung semua section — SATU SUMBER kosakata (0128)
+    from src.content import beats as _beats
+    sections = _beats.all_beats()
     parts = [script.get(s, "").strip() for s in sections if script.get(s)]
     return " ".join(parts)
 

@@ -14,6 +14,7 @@ from datetime import datetime
 from loguru import logger
 from dotenv import load_dotenv
 from src.intelligence.config import TenantConfig, get_niches, system_config
+from src.content import beats as _beats   # SATU SUMBER kosakata beat (0128)
 
 # Teknik perbaikan konkret per dimensi — dikirim ke LLM saat retry.
 # Harus actionable dan spesifik, bukan saran generik.
@@ -87,11 +88,7 @@ def _build_emotional_peak_guidance(niche_profile: dict) -> str:
 
 load_dotenv()
 
-_DEFAULT_SECTION_TIMING = {
-    "hook": 3, "mystery_drop": 5, "build_up": 12,
-    "pattern_interrupt": 2, "core_facts": 15,
-    "curiosity_bridge": 3, "climax": 8, "cta": 3,
-}
+_DEFAULT_SECTION_TIMING = _beats.timing_defaults()   # SATU SUMBER (0128) — identik nilai lama
 
 def _get_section_timing(niche: str) -> dict:
     """Load section timing dari tabel niches (Supabase). Fallback ke default jika tidak ada."""
@@ -207,25 +204,15 @@ def _build_insights_block(insights: dict) -> str:
 
 # ── Compression-mapping (MULTI_FORMAT §3): N beat per preset = visual_beats = jumlah scene = QC clip.
 # 8s=1 (ai_video, di luar image-sequence). Image-sequence: 3..9 beat. Tiap beat = 1 seksi narasi + 1 scene.
-_BEAT_WEIGHT = {"hook": 3, "mystery_drop": 5, "build_up": 12, "pattern_interrupt": 2,
-                "core_facts": 15, "core_facts_2": 10, "curiosity_bridge": 3, "climax": 8, "cta": 3}
-_BEATS_FOR_N = {
-    3: ["hook", "core_facts", "cta"],
-    4: ["hook", "build_up", "core_facts", "cta"],
-    5: ["hook", "build_up", "core_facts", "climax", "cta"],
-    6: ["hook", "mystery_drop", "build_up", "core_facts", "climax", "cta"],
-    7: ["hook", "mystery_drop", "build_up", "core_facts", "curiosity_bridge", "climax", "cta"],
-    8: ["hook", "mystery_drop", "build_up", "pattern_interrupt", "core_facts", "curiosity_bridge", "climax", "cta"],
-    9: ["hook", "mystery_drop", "build_up", "pattern_interrupt", "core_facts", "core_facts_2", "curiosity_bridge", "climax", "cta"],
-}
-_ROLE_LABEL = {"hook": "HOOK", "mystery_drop": "MYSTERY DROP", "build_up": "BUILD-UP",
-               "pattern_interrupt": "PATTERN INTERRUPT", "core_facts": "CORE FACT", "core_facts_2": "CORE FACT 2",
-               "curiosity_bridge": "CURIOSITY BRIDGE", "climax": "CLIMAX", "cta": "CTA"}
-_ALL_SECTIONS = ["hook", "mystery_drop", "build_up", "pattern_interrupt", "core_facts", "curiosity_bridge", "climax", "cta"]
+# SATU SUMBER (0128): kosakata beat dari src.content.beats (DB content_beats + fallback konstanta identik).
+# Dulu 5 dict tersebar di sini + core_facts_2 mati. Nilai turunan IDENTIK (bukti derive==current).
+_BEAT_WEIGHT   = _beats.weights()
+_ROLE_LABEL    = _beats.labels_upper()
+_ALL_SECTIONS  = _beats.all_beats()
 
 
 def _active_beats(n_beats: int) -> list:
-    return _BEATS_FOR_N[max(3, min(9, int(n_beats)))]
+    return _beats.beats_for_n(n_beats)
 
 
 def _beats_for_preset(preset_seconds) -> list:
@@ -647,9 +634,7 @@ class ScriptEngine:
                 return None
         script.setdefault("section_durations", section_timing or _DEFAULT_SECTION_TIMING)
         if not script.get("full_script"):
-            parts = [script.get(s, "") for s in
-                     ["hook","mystery_drop","build_up","pattern_interrupt",
-                      "core_facts","core_facts_2","curiosity_bridge","climax","cta"]]
+            parts = [script.get(s, "") for s in _beats.all_beats()]
             script["full_script"] = " ".join(p for p in parts if p)
         return script
 

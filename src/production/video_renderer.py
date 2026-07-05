@@ -452,10 +452,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         # Cover 8 section — fix dari versi lama yang hanya 5 section
         full_script = script.get("full_script", "")
         if not full_script:
-            sections = [
-                "hook", "mystery_drop", "build_up", "pattern_interrupt",
-                "core_facts", "curiosity_bridge", "climax", "cta"
-            ]
+            from src.content import beats as _beats   # SATU SUMBER kosakata (0128)
+            sections = _beats.all_beats()
             parts = [script.get(s, "").strip() for s in sections if script.get(s)]
             full_script = " ".join(parts)
 

@@ -479,10 +479,9 @@ class AIImageProvider(VisualProvider):
         """
         fps    = 30
         frames = int(duration * fps)
-        # role → indeks gerak (fallback idx%6 non-breaking).
-        _ROLE_MOTION = {"hook": 0, "mystery_drop": 1, "build_up": 2, "pattern_interrupt": 1,
-                        "core_facts": 3, "core_facts_2": 4, "curiosity_bridge": 2, "climax": 5, "cta": 5}
-        idx = _ROLE_MOTION.get(role, clip_index % 6)
+        # role → indeks gerak: SATU SUMBER kosakata (0128, content_beats.motion_index); fallback idx%6.
+        from src.content import beats as _beats
+        idx = _beats.motion_map().get(role, clip_index % 6)
         vf  = AIImageProvider._build_motion_vf(idx, frames, intensity)
 
         cmd = [
