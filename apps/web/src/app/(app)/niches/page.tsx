@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { fetchPricing, idrK } from "@/lib/pricing";
 import { PageHeader } from "@/components/page-header";
 import { YT_CATEGORIES } from "@/lib/youtube-categories";
-import { Target, Search, X, Wand2, Clock, ChevronRight, Tv, Check, Loader2, CreditCard, Lock } from "lucide-react";
+import { Target, Search, X, Wand2, Clock, ChevronRight, Tv, Check, Loader2, CreditCard, Lock, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import "./niches.css";
 
 // Pustaka Niche (tenant) — daftar SEMUA niche yang jadi hak tenant (dasar/umum/khusus miliknya),
@@ -24,7 +24,28 @@ type NicheRow = {
   keywords: unknown; default_hashtags: unknown; youtube_category_id: string | null;
   style: string | null; target_emotion: string | null;
   narration_persona: unknown; visual_style: unknown; mood_priority: unknown; section_timing: unknown;
+  created_at: string | null;
 };
+
+// ── Config UI Pustaka Niche — SUMBER: app_config (migr 0134, admin-editable, no-hardcode).
+// Nilai di bawah = FALLBACK fail-soft bila app_config tak terbaca (pola sama niche_eval_window_days).
+type ToneCfg = { dark: string[]; bright: string[] };
+const FALLBACK_TONE: ToneCfg = { dark: ["dark", "eerie", "ominous", "suspense", "tense", "mysterious"],
+                                 bright: ["upbeat", "happy", "energetic", "inspirational", "calm", "playful"] };
+const FALLBACK_NEW_DAYS = 14;
+function toneOf(mood: unknown, cfg: ToneCfg): { key: "dark" | "bright" | "neutral"; id: string; en: string; color: string } {
+  const top = (Array.isArray(mood) ? (mood as string[]) : []).slice(0, 3);
+  const d = top.filter((m) => cfg.dark.includes(m)).length, b = top.filter((m) => cfg.bright.includes(m)).length;
+  if (d > b) return { key: "dark", id: "Gelap", en: "Dark", color: "var(--accent)" };
+  if (b > d) return { key: "bright", id: "Cerah", en: "Bright", color: "var(--warning)" };
+  return { key: "neutral", id: "Netral", en: "Neutral", color: "var(--text-muted)" };
+}
+function expandQuery(q: string, syn: Record<string, string>): string {
+  const base = q.toLowerCase().trim();
+  let extra = "";
+  for (const [id, en] of Object.entries(syn)) if (base.includes(id)) extra += " " + en;
+  return (base + extra).trim();
+}
 
 const CAT_LABEL: Record<string, string> = Object.fromEntries(YT_CATEGORIES as [string, string][]);
 const catLabel = (id: string | null) => (id && CAT_LABEL[id]) || (id ? `Kategori ${id}` : "—");
@@ -90,6 +111,16 @@ export default function NichesPage() {
   const [kind, setKind] = useState<"all" | "base" | "public" | "private">("all");
   const [cat, setCat] = useState("all");
   const [sel, setSel] = useState<string | null>(null);
+  // Sorting kolom (world-class table): klik header = asc → desc → reset. Default = Baru dulu, lalu nama.
+  const [sort, setSort] = useState<{ key: "name" | "cat" | "tone" | "status"; dir: 1 | -1 } | null>(null);
+  const cycleSort = (key: "name" | "cat" | "tone" | "status") =>
+    setSort((s) => (!s || s.key !== key) ? { key, dir: 1 } : s.dir === 1 ? { key, dir: -1 } : null);
+  // Config UI dari app_config (0134) — fail-soft ke fallback kode.
+  const [toneCfg, setToneCfg] = useState<ToneCfg>(FALLBACK_TONE);
+  const [syn, setSyn] = useState<Record<string, string>>({});
+  const [newDays, setNewDays] = useState(FALLBACK_NEW_DAYS);
+  const isNewNiche = useCallback((iso: string | null) =>
+    !!iso && (Date.now() - new Date(iso).getTime()) < newDays * 864e5, [newDays]);
 
   // ── Riwayat pengajuan + masa evaluasi ──
   const [requests, setRequests] = useState<NReq[]>([]);
@@ -135,7 +166,7 @@ export default function NichesPage() {
     const plr = pl as { full_niche_catalog?: boolean; can_request_custom_niche?: boolean } | null;
     setFullCatalog(Boolean(plr?.full_niche_catalog));
     setCanReq(Boolean(plr?.can_request_custom_niche));
-    const selCols = "niche_id,name,is_active,is_base,access_type,exclusive_to,keywords,default_hashtags,youtube_category_id,style,target_emotion,narration_persona,visual_style,mood_priority,section_timing";
+    const selCols = "niche_id,name,is_active,is_base,access_type,exclusive_to,keywords,default_hashtags,youtube_category_id,style,target_emotion,narration_persona,visual_style,mood_priority,section_timing,created_at";
     // Ambil niche aktif (publik) + niche MILIK tenant walau belum aktif (transparansi: "sedang disiapkan").
     const qN = supabase.from("niches").select(selCols);
     const { data: nrows } = await (uid ? qN.or(`is_active.eq.true,exclusive_to.eq.${uid}`) : qN.eq("is_active", true));
@@ -159,8 +190,17 @@ export default function NichesPage() {
       .select("request_id,request_type,title,status,created_at,delivered_at,delivery_note,revision_note,niche_id")
       .order("created_at", { ascending: false });
     setRequests((rq ?? []) as NReq[]);
-    const { data: ec } = await supabase.from("app_config").select("value").eq("key", "niche_eval_window_days").maybeSingle();
-    if (ec && (ec as { value?: number }).value != null) setEvalDays(Number((ec as { value: number }).value));
+    // Config UI (satu query): masa evaluasi + badge Baru + nuansa mood + sinonim pencarian (0134).
+    const { data: cfgs } = await supabase.from("app_config").select("key,value,value_text")
+      .in("key", ["niche_eval_window_days", "niche_new_badge_days", "niche_tone_moods", "niche_search_synonyms"]);
+    for (const c of (cfgs ?? []) as { key: string; value: number | null; value_text: string | null }[]) {
+      try {
+        if (c.key === "niche_eval_window_days" && c.value != null) setEvalDays(Number(c.value));
+        if (c.key === "niche_new_badge_days" && c.value != null) setNewDays(Number(c.value));
+        if (c.key === "niche_tone_moods" && c.value_text) setToneCfg(JSON.parse(c.value_text));
+        if (c.key === "niche_search_synonyms" && c.value_text) setSyn(JSON.parse(c.value_text));
+      } catch { /* fail-soft: fallback kode tetap berlaku */ }
+    }
     setLoading(false);
   }, [supabase]);
 
@@ -199,21 +239,42 @@ export default function NichesPage() {
     return [...s].sort((a, b) => catLabel(a).localeCompare(catLabel(b)));
   }, [niches]);
 
-  const view = useMemo(() => niches.filter((n) => {
-    if (kind !== "all" && nicheKind(n, me).key !== kind) return false;
-    if (cat !== "all" && n.youtube_category_id !== cat) return false;
-    if (q.trim()) {
-      const hay = `${n.name} ${n.niche_id} ${arr(n.keywords).join(" ")}`.toLowerCase();
-      if (!hay.includes(q.trim().toLowerCase())) return false;
-    }
-    return true;
-  }), [niches, kind, cat, q, me]);
-
-  const cur = sel ? niches.find((n) => n.niche_id === sel) ?? null : null;
-
   // Hak PAKAI per niche (cermin gerbang server RPC set_channel_niche): milik sendiri ATAU publik (katalog penuh / dasar).
+  // (Dideklarasikan SEBELUM `view` — dipakai bobot status sorting.)
   const isEntitled = useCallback((n: NicheRow) =>
     n.exclusive_to === me || (n.access_type === "public" && (fullCatalog || n.is_base)), [me, fullCatalog]);
+
+  const view = useMemo(() => {
+    const qx = expandQuery(q, syn);
+    const tokens = qx ? qx.split(/\s+/) : [];
+    const out = niches.filter((n) => {
+      if (kind !== "all" && nicheKind(n, me).key !== kind) return false;
+      if (cat !== "all" && n.youtube_category_id !== cat) return false;
+      if (tokens.length) {
+        // Cakupan diperluas: nama + id + keywords + style + emosi (lintas ID↔EN via sinonim query).
+        const hay = `${n.name} ${n.niche_id} ${arr(n.keywords).join(" ")} ${n.style ?? ""} ${n.target_emotion ?? ""}`.toLowerCase();
+        if (!tokens.some((t) => hay.includes(t))) return false;
+      }
+      return true;
+    });
+    // Bobot status utk sorting: dipakai > siap dipakai > perlu upgrade > belum aktif.
+    const statusW = (n: NicheRow) => !n.is_active ? 0 : !isEntitled(n) ? 1 : (usage[n.niche_id]?.length ? 3 : 2);
+    if (sort) {
+      const dir = sort.dir;
+      out.sort((a, b) => {
+        if (sort.key === "name") return dir * a.name.localeCompare(b.name);
+        if (sort.key === "cat") return dir * catLabel(a.youtube_category_id).localeCompare(catLabel(b.youtube_category_id));
+        if (sort.key === "tone") return dir * toneOf(a.mood_priority, toneCfg).id.localeCompare(toneOf(b.mood_priority, toneCfg).id);
+        return dir * (statusW(b) - statusW(a));
+      });
+    } else {
+      // Default: yang BARU dulu (etalase menonjolkan kedatangan), lalu abjad.
+      out.sort((a, b) => (Number(isNewNiche(b.created_at)) - Number(isNewNiche(a.created_at))) || a.name.localeCompare(b.name));
+    }
+    return out;
+  }, [niches, kind, cat, q, me, sort, usage, isEntitled, syn, toneCfg, isNewNiche]);
+
+  const cur = sel ? niches.find((n) => n.niche_id === sel) ?? null : null;
 
   return (
     <>
@@ -241,21 +302,35 @@ export default function NichesPage() {
 
       <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl nlib-tbl">
         <thead><tr>
-          <th><Bi id="Niche" en="Niche" /></th>
-          <th><Bi id="Kategori YouTube" en="YouTube category" /></th>
+          {([["name", <Bi key="h" id="Niche" en="Niche" />], ["cat", <Bi key="h" id="Kategori YouTube" en="YouTube category" />],
+             ["tone", <Bi key="h" id="Nuansa" en="Tone" />], ["status", <Bi key="h" id="Status" en="Status" />]] as ["name" | "cat" | "tone" | "status", React.ReactNode][]).map(([k, label]) => (
+            <th key={k} onClick={() => cycleSort(k)} aria-sort={sort?.key === k ? (sort.dir === 1 ? "ascending" : "descending") : "none"}
+                style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
+                title="Klik untuk mengurutkan">
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>{label}
+                {sort?.key === k ? (sort.dir === 1 ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={12} style={{ opacity: .35 }} />}
+              </span>
+            </th>))}
           <th><Bi id="Tipe" en="Type" /></th>
-          <th><Bi id="Status" en="Status" /></th>
         </tr></thead>
         <tbody>
-          {loading && <tr><td colSpan={4} className="muted" style={{ padding: "1.5rem", textAlign: "center" }}>Memuat…</td></tr>}
-          {!loading && view.length === 0 && <tr><td colSpan={4} className="muted" style={{ padding: "1.5rem", textAlign: "center" }}><Bi id="Tidak ada niche yang cocok." en="No matching niche." /></td></tr>}
+          {loading && <tr><td colSpan={5} className="muted" style={{ padding: "1.5rem", textAlign: "center" }}>Memuat…</td></tr>}
+          {!loading && view.length === 0 && <tr><td colSpan={5} className="muted" style={{ padding: "1.5rem", textAlign: "center" }}><Bi id="Tidak ada niche yang cocok." en="No matching niche." /></td></tr>}
           {view.map((n) => {
             const k = nicheKind(n, me); const used = usage[n.niche_id] || [];
+            const tone = toneOf(n.mood_priority, toneCfg);
+            const teaser = [n.style, n.target_emotion].filter(Boolean).join(" · ");
             return (
               <tr key={n.niche_id} onClick={() => setSel(n.niche_id)} style={{ cursor: "pointer" }}>
-                <td><span style={{ color: "var(--text-primary)", fontWeight: 500 }}>{n.name}</span></td>
+                <td>
+                  <span style={{ color: "var(--text-primary)", fontWeight: 500 }}>{n.name}</span>
+                  {isNewNiche(n.created_at) && <span className="badge badge-brand" style={{ marginLeft: 6, fontSize: ".625rem", verticalAlign: "1px" }}><Bi id="Baru" en="New" /></span>}
+                  {teaser && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: 2, maxWidth: 340, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{teaser}</div>}
+                </td>
                 <td className="muted">{catLabel(n.youtube_category_id)}</td>
-                <td><span className={`badge ${k.cls}`}>{k.label}</span></td>
+                <td><span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: "var(--text-xs)", color: "var(--text-secondary)" }}>
+                  <span aria-hidden style={{ width: 8, height: 8, borderRadius: "50%", background: tone.color, display: "inline-block" }} />
+                  <Bi id={tone.id} en={tone.en} /></span></td>
                 <td>{!n.is_active
                   ? <span className="badge badge-warning"><span className="dot" /><Bi id="Belum aktif" en="Not active" /></span>
                   : !isEntitled(n)
@@ -263,6 +338,7 @@ export default function NichesPage() {
                     : used.length > 0
                       ? <span className="badge badge-success"><span className="dot" />{`Dipakai (${used.length})`}</span>
                       : <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Belum dipakai" en="Not used" /></span>}</td>
+                <td><span className={`badge ${k.cls}`}>{k.label}</span></td>
               </tr>
             );
           })}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Plus, X, Clock, Sparkles, Check } from "lucide-react";
+import { Plus, X, Clock, Sparkles, Check, Search, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import NicheDnaEditor, { type NicheRow } from "@/components/niche-dna-editor";
 import TestNichePanel from "@/components/test-niche-panel";
 import "./niches.css";
@@ -36,6 +36,11 @@ export default function AdminNichesPage() {
   const [niches, setNiches] = useState<Niche[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
+  const [q, setQ] = useState("");
+  // Sorting kolom: klik header = asc → desc → reset (default: nama abjad).
+  const [sort, setSort] = useState<{ key: "name" | "tenant" | "video" | "score"; dir: 1 | -1 } | null>(null);
+  const cycleSort = (key: "name" | "tenant" | "video" | "score") =>
+    setSort((s) => (!s || s.key !== key) ? { key, dir: 1 } : s.dir === 1 ? { key, dir: -1 } : null);
   const [sel, setSel] = useState<string | null>(null);
   const [dtab, setDtab] = useState(0);
   const [edit, setEdit] = useState<Record<string, unknown>>({});
@@ -76,7 +81,21 @@ export default function AdminNichesPage() {
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2400); return () => clearTimeout(t); }, [toast]);
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") setSel(null); }; document.addEventListener("keydown", k); return () => document.removeEventListener("keydown", k); }, []);
 
-  const view = niches.filter((n) => filter === "all" || (filter === "active" && n.access_type === "public" && n.is_active) || n.access_type === filter);
+  const view = (() => {
+    const ql = q.trim().toLowerCase();
+    const out = niches.filter((n) =>
+      (filter === "all" || (filter === "active" && n.access_type === "public" && n.is_active) || n.access_type === filter)
+      && (!ql || n.name.toLowerCase().includes(ql) || n.niche_id.toLowerCase().includes(ql)));
+    if (sort) {
+      const d = sort.dir;
+      out.sort((a, b) =>
+        sort.key === "name" ? d * a.name.localeCompare(b.name)
+        : sort.key === "tenant" ? d * (a.tenant_count - b.tenant_count)
+        : sort.key === "video" ? d * (a.video_count - b.video_count)
+        : d * ((a.avg_viral ?? -1) - (b.avg_viral ?? -1)));
+    }
+    return out;
+  })();
   const cur = sel ? niches.find((n) => n.niche_id === sel) ?? null : null;
   const pipeline = niches.filter((n) => n.exclusive_to);
 
@@ -132,17 +151,34 @@ export default function AdminNichesPage() {
         <button className="btn btn-default" onClick={() => setNewN({ niche_id: "", name: "", is_base: false, access_type: "public" })}><Plus size={15} /> <Bi id="Niche baru" en="New niche" /></button>
       </div>
 
-      <div className="nl-filters"><div className="segmented">
+      <div className="nl-filters" style={{ display: "flex", gap: ".625rem", alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ position: "relative", minWidth: 240 }}>
+          <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", pointerEvents: "none" }} />
+          <input className="input" style={{ paddingLeft: 32 }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari niche / niche_id…" />
+        </div>
+        <div className="segmented">
         {[["all", "All"], ["active", "Active"], ["private", "Private"]].map(([k, l]) => <button key={k} aria-selected={filter === k} onClick={() => setFilter(k)}>{l}</button>)}
       </div></div>
 
       <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl nl-tbl">
-        <thead><tr><th><Bi id="Niche" en="Niche" /></th><th>Access</th><th className="num">Tenant</th><th className="num">Video</th><th className="num">Avg score</th><th>Base</th><th><Bi id="Exclusive s/d" en="Exclusive until" /></th></tr></thead>
+        <thead><tr>
+          <th onClick={() => cycleSort("name")} style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }} aria-sort={sort?.key === "name" ? (sort.dir === 1 ? "ascending" : "descending") : "none"}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Bi id="Niche" en="Niche" />{sort?.key === "name" ? (sort.dir === 1 ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={12} style={{ opacity: .35 }} />}</span></th>
+          <th>Status</th><th>Access</th>
+          {([["tenant", "Tenant"], ["video", "Video"], ["score", "Avg score"]] as ["tenant" | "video" | "score", string][]).map(([k, l]) => (
+            <th key={k} className="num" onClick={() => cycleSort(k)} style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }} aria-sort={sort?.key === k ? (sort.dir === 1 ? "ascending" : "descending") : "none"}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>{l}{sort?.key === k ? (sort.dir === 1 ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={12} style={{ opacity: .35 }} />}</span></th>))}
+          <th>Base</th><th><Bi id="Exclusive s/d" en="Exclusive until" /></th>
+        </tr></thead>
         <tbody>
-          {loading && <tr><td colSpan={7} className="muted" style={{ padding: "1.5rem", textAlign: "center" }}>Memuat…</td></tr>}
+          {loading && <tr><td colSpan={8} className="muted" style={{ padding: "1.5rem", textAlign: "center" }}>Memuat…</td></tr>}
+          {!loading && view.length === 0 && <tr><td colSpan={8} className="muted" style={{ padding: "1.5rem", textAlign: "center" }}><Bi id="Tidak ada niche yang cocok." en="No matching niche." /></td></tr>}
           {view.map((n) => (
             <tr key={n.niche_id} onClick={() => openRow(n.niche_id)} style={{ cursor: "pointer" }}>
               <td><span style={{ color: "var(--text-primary)", fontWeight: 500 }}>{n.name}</span> <span className="muted mono" style={{ fontSize: "0.6875rem" }}>{n.niche_id}</span></td>
+              <td>{n.is_active
+                ? <span className="badge badge-success"><span className="dot" />Aktif</span>
+                : <span className="badge badge-warning"><span className="dot" />Nonaktif</span>}</td>
               <td><AccessBadge a={n.access_type} /></td>
               <td className="num">{n.tenant_count}</td><td className="num">{n.video_count}</td><td className="num">{n.avg_viral ?? "—"}</td>
               <td>{n.is_base ? <span className="badge badge-default">base</span> : "—"}</td>
@@ -151,6 +187,7 @@ export default function AdminNichesPage() {
           ))}
         </tbody>
       </table></div></div>
+      {!loading && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".5rem" }}>{view.length} niche</div>}
 
       <div className="nl-section-title"><Sparkles size={18} style={{ color: "var(--accent)" }} /> <Bi id="Pengajuan Custom Niche" en="Custom Niche Requests" /> {reqs.filter((r) => r.status === "pending").length > 0 && <span className="badge badge-info">{reqs.filter((r) => r.status === "pending").length} pending</span>}</div>
       <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "0.75rem", lineHeight: 1.6 }}>
