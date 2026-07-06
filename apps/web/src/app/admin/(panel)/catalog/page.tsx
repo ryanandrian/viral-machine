@@ -25,12 +25,16 @@ const TABS: [string, string][] = [["providers", "Providers"], ["models", "AI Mod
 
 // field minimal untuk "Add" per tabel (PK + wajib)
 const ADD_FIELDS: Record<string, { table: string; fields: [string, string][] }> = {
-  models: { table: "ai_models", fields: [["provider_key", "Provider (induk model ini)"], ["component", "component"], ["model_key", "model_key (PK)"], ["model_id", "model_id (ID resmi di provider)"], ["display_name", "display_name"]] },
-  providers: { table: "ai_providers", fields: [["provider_key", "provider_key (PK)"], ["display_name", "display_name"], ["adapter", "adapter (mis. openai_chat)"], ["auth_type", "auth_type (api_key/none)"], ["key_group", "key_group (vendor kunci — mis. openai_tts→openai)"], ["base_url", "base_url (opsional)"]] },
+  models: { table: "ai_models", fields: [["provider_key", "Provider (induk model ini)"], ["component", "component"], ["model_key", "model_key (PK)"], ["model_id", "model_id (ID resmi di provider — SERTAKAN versi, mis. FLUX.1-schnell)"], ["display_name", "display_name (jelas versinya utk manusia)"], ["quality_tier", "tier (basic/standard/premium/fast)"], ["sort_order", "sort_order (urutan tampil)"]] },
+  providers: { table: "ai_providers", fields: [["provider_key", "provider_key (PK)"], ["display_name", "display_name"], ["adapter", "adapter (mis. openai_chat)"], ["auth_type", "auth_type (api_key/none)"], ["key_group", "key_group (vendor kunci — mis. openai_tts→openai)"], ["base_url", "base_url (opsional)"], ["price_feed_prefix", "price_feed_prefix (prefix feed harga; kosong = provider_key)"], ["free_tier_note", "free_tier_note (keterangan gratis-harian; tampil ke tenant)"]] },
   voice: { table: "voice_catalog", fields: [["voice_key", "voice_key (PK — voice_id provider)"], ["provider_key", "provider_key (mis. elevenlabs)"], ["display_name", "display_name"], ["locale", "locale (mis. id-ID)"], ["language", "language (mis. Indonesian)"], ["gender", "gender (male/female)"], ["age", "age (mis. young/middle-aged)"], ["accent", "accent (opsional)"], ["use_case", "use_case (mis. narration)"], ["description", "description (opsional)"], ["default_settings", "default_settings JSON {stability,style,speed}"], ["niche_default", "niche_default (opsional)"], ["preview_url", "preview_url (URL contoh suara .mp3, opsional)"], ["delivery_wps", "delivery_wps (pace voice 1.0–4.0; kosong = ikut engine)"]] },
   languages: { table: "content_languages", fields: [["locale", "locale (PK)"], ["display_name", "display_name"], ["quality_tier", "tier (official/experimental)"], ["caption_font", "caption_font"]] },
   moods: { table: "moods", fields: [["mood_id", "mood_id (PK, huruf kecil)"], ["keywords", 'keywords JSON — kata pemicu deteksi dari NASKAH, campur ID+EN, mis. ["misterius","mysterious"]']] },
+  // entri EDIT-only (tanpa tombol Tambah): kesetaraan sunting semua tab (owner 2026-07-06)
+  ttsprof: { table: "tts_profiles", fields: [["provider_key", "provider_key (PK)"], ["display_name", "display_name"], ["adapter", "adapter (elevenlabs/openai_speech/edge/gemini_speech)"], ["tts_class", "tts_class (timed/fast_fallback)"], ["delivery_wps", "delivery_wps (pace dasar engine)"], ["speed_param", "speed_param (speed/rate; kosong bila tak ada)"], ["param_schema", "param_schema JSON"]] },
+  durations: { table: "duration_presets", fields: [["seconds", "seconds (PK)"], ["use_case", "Kegunaan (ID)"], ["use_case_en", "Use case (EN)"], ["notes", "notes (catatan admin)"]] },
 };
+const PK_OF: Record<string, string> = { models: "model_key", providers: "provider_key", voice: "voice_key", languages: "locale", moods: "mood_id", ttsprof: "provider_key", durations: "seconds" };
 
 export default function AdminCatalogPage() {
   const [tab, setTab] = useState("providers");
@@ -100,6 +104,28 @@ export default function AdminCatalogPage() {
     if (typeof window !== "undefined" && !window.confirm(`Hapus "${label}"? Berkas di S3 ikut dihapus.`)) return;
     const r = await fetch("/api/admin/catalog", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table, key }) });
     if (r.ok) { setToast("Dihapus"); await load(); } else { const j = await r.json().catch(() => ({})); setToast(`Gagal: ${j.error ?? ""}`); }
+  }
+
+  // ── Editor baris GENERIK (kesetaraan ✎ semua tab; owner 2026-07-06) — reuse peta ADD_FIELDS ──
+  const [rowEdit, setRowEdit] = useState<{ mapKey: string; values: Record<string, string> } | null>(null);
+  const openRowEdit = (mapKey: string, row: Record<string, unknown>) => {
+    const def = ADD_FIELDS[mapKey]; if (!def) return;
+    const values: Record<string, string> = {};
+    for (const [k] of def.fields) {
+      const v = row[k];
+      values[k] = v == null ? "" : (typeof v === "object" ? JSON.stringify(v) : String(v));
+    }
+    setRowEdit({ mapKey, values });
+  };
+  async function saveRowEdit() {
+    if (!rowEdit) return;
+    const def = ADD_FIELDS[rowEdit.mapKey]; const pk = PK_OF[rowEdit.mapKey];
+    const patch: Record<string, unknown> = {};
+    for (const [k] of def.fields) if (k !== pk) patch[k] = rowEdit.values[k] === "" ? null : rowEdit.values[k];
+    const r = await fetch("/api/admin/catalog", { method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ table: def.table, key: rowEdit.values[pk], patch }) });
+    if (r.ok) { setToast("Tersimpan"); setRowEdit(null); await load(); }
+    else { const j = await r.json().catch(() => ({})); setToast(`Gagal: ${j.error ?? ""}`); }
   }
   // PEMUTAR TUNGGAL (owner 2026-07-04, world-class): satu audio aktif; play record lain otomatis
   // stop yang sedang bunyi; klik ulang = stop; pindah tab/keluar halaman = stop.
@@ -200,7 +226,7 @@ export default function AdminCatalogPage() {
                 <td className="mono" style={{ fontSize: "var(--text-xs)" }}>{String(d.render_mode)}{d.render_mode === "ai_video" && <span className="muted" style={{ marginLeft: 6 }}><Bi id="(video-gen belum tersedia)" en="(video-gen not available yet)" /></span>}</td>
                 <td className="muted" style={{ fontSize: "var(--text-xs)", maxWidth: 260 }}>{String(d.use_case ?? "")}</td>
                 <td>{d.is_default ? <span className="badge badge-default">default</span> : "—"}</td>
-                <td><Switch table="duration_presets" k={String(d.seconds)} on={d.is_active as boolean} /></td>
+                <td><Switch table="duration_presets" k={String(d.seconds)} on={d.is_active as boolean} /> <button className="btn btn-ghost btn-sm" title="Edit kegunaan/catatan" onClick={() => openRowEdit("durations", d)}>✎</button></td>
               </tr>))}</tbody>
           </table></div></div>}
           <PresetTables />
@@ -224,7 +250,7 @@ export default function AdminCatalogPage() {
                   <td className="mono" style={{ fontSize: "var(--text-xs)" }}>{(p.key_group as string) || pk}</td>
                   <td><span className={`badge ${nModels > 0 ? "badge-default" : "badge-warning"}`}>{nModels}</span></td>
                   <td><Switch table="ai_providers" k={pk} on={p.is_active as boolean} /></td>
-                  <td><button className="btn btn-secondary btn-sm" title="Tambah model utk provider ini" onClick={() => { setTab("models"); setAdd({ provider_key: pk }); }}><Plus size={12} /> Model</button></td>
+                  <td style={{ whiteSpace: "nowrap" }}><button className="btn btn-secondary btn-sm" title="Tambah model utk provider ini" onClick={() => { setTab("models"); setAdd({ provider_key: pk }); }}><Plus size={12} /> Model</button> <button className="btn btn-ghost btn-sm" title="Edit provider" onClick={() => openRowEdit("providers", p)}>✎</button><button className="btn btn-ghost btn-sm" title="Hapus provider (ditolak bila masih dirujuk)" onClick={() => delAsset("ai_providers", pk, (p.display_name as string) || pk)}><Trash2 size={13} /></button></td>
                 </tr>
               );
             })}</tbody>
@@ -234,7 +260,7 @@ export default function AdminCatalogPage() {
         {tab === "models" && (<>
           <div className="cat-toolbar"><span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Model = DETAIL dari provider (dikelompokkan per provider)." en="Models = details of a provider (grouped by provider)." /></span><div className="right"><button className="btn btn-default btn-sm" onClick={() => setAdd({})}><Plus size={14} /> <Bi id="Tambah model" en="Add model" /></button></div></div>
           <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl cat-tbl">
-            <thead><tr><th>provider</th><th>model_key</th><th>component</th><th><Bi id="harga (USD, auto-sync harian)" en="pricing (USD, auto-synced daily)" /></th><th>tier</th><th>active</th></tr></thead>
+            <thead><tr><th>provider</th><th>model_key</th><th>component</th><th><Bi id="harga (USD, auto-sync harian)" en="pricing (USD, auto-synced daily)" /></th><th>tier</th><th>active</th><th></th></tr></thead>
             <tbody>{[...data.ai_models].sort((a, b) => String(a.provider_key).localeCompare(String(b.provider_key)) || String(a.component).localeCompare(String(b.component))).map((m, i, arr) => {
               const mk = m.model_key as string;
               const pr = m.pricing as Record<string, unknown> | null;
@@ -271,6 +297,7 @@ export default function AdminCatalogPage() {
                   </td>
                   <td className="muted">{m.quality_tier as string}</td>
                   <td><Switch table="ai_models" k={mk} on={m.is_active as boolean} /></td>
+                  <td style={{ whiteSpace: "nowrap" }}><button className="btn btn-ghost btn-sm" title="Edit model" onClick={() => openRowEdit("models", m)}>✎</button><button className="btn btn-ghost btn-sm" title="Hapus model (ditolak bila dipakai channel)" onClick={() => delAsset("ai_models", mk, (m.display_name as string) || mk)}><Trash2 size={13} /></button></td>
                 </tr>
               );
             })}</tbody>
@@ -358,7 +385,7 @@ export default function AdminCatalogPage() {
           <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl cat-tbl">
             <thead><tr><th>provider_key</th><th title="timed = punya timestamp per-kata (caption presisi); fast_fallback = tanpa timestamp (murah/gratis)">class</th><th className="num" title="Pace DASAR engine (kata/dtk) — fallback semua voice di engine ini">delivery_wps (engine)</th><th>active</th></tr></thead>
             <tbody>{data.tts_profiles.map((p) => (
-              <tr key={p.provider_key as string}><td className="mono">{p.provider_key as string}</td><td>{p.tts_class as string}</td><td className="num">{String(p.delivery_wps)}</td><td><Switch table="tts_profiles" k={p.provider_key as string} on={p.is_active as boolean} /></td></tr>
+              <tr key={p.provider_key as string}><td className="mono">{p.provider_key as string}</td><td>{p.tts_class as string}</td><td className="num">{String(p.delivery_wps)}</td><td><Switch table="tts_profiles" k={p.provider_key as string} on={p.is_active as boolean} /> <button className="btn btn-ghost btn-sm" title="Edit profil engine" onClick={() => openRowEdit("ttsprof", p)}>✎</button></td></tr>
             ))}</tbody>
           </table></div></div>
         </>)}
@@ -373,6 +400,7 @@ export default function AdminCatalogPage() {
                 <td>{l.quality_tier === "official" ? <span className="badge badge-success"><span className="dot" />Official</span> : <span className="badge badge-warning"><span className="dot" />Experimental</span>}</td>
                 <td className="muted" style={{ fontSize: "var(--text-xs)" }}>{(l.caption_font as string) || "—"}</td>
                 <td><Switch table="content_languages" k={l.locale as string} on={l.is_active as boolean} /></td>
+                <td style={{ whiteSpace: "nowrap" }}><button className="btn btn-ghost btn-sm" title="Edit bahasa" onClick={() => openRowEdit("languages", l)}>✎</button><button className="btn btn-ghost btn-sm" title="Hapus bahasa (ditolak bila dipakai channel)" onClick={() => delAsset("content_languages", l.locale as string, l.display_name as string)}><Trash2 size={13} /></button></td>
               </tr>
             ))}</tbody>
           </table></div></div>
@@ -442,6 +470,23 @@ export default function AdminCatalogPage() {
                 </div>
               ))}
               <button className="btn btn-primary btn-sm" style={{ justifySelf: "end", marginTop: "0.25rem" }} onClick={createRow}>Simpan</button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {rowEdit && ADD_FIELDS[rowEdit.mapKey] && (
+        <>
+          <div className="cat-scrim open" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 60 }} onClick={() => setRowEdit(null)} />
+          <div className="card" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(440px,92vw)", maxHeight: "85vh", overflowY: "auto", zIndex: 61, padding: "1.25rem" }}>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: "0.75rem" }}><strong>Edit {ADD_FIELDS[rowEdit.mapKey].table}</strong><button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} onClick={() => setRowEdit(null)}><X size={16} /></button></div>
+            <div style={{ display: "grid", gap: "0.5rem" }}>
+              {ADD_FIELDS[rowEdit.mapKey].fields.map(([k, label]) => (
+                <div key={k}><label className="label">{label}{k === PK_OF[rowEdit.mapKey] && <span className="muted"> — PK, terkunci</span>}</label>
+                  <input className="input" disabled={k === PK_OF[rowEdit.mapKey]} value={rowEdit.values[k] ?? ""} onChange={(e) => setRowEdit({ ...rowEdit, values: { ...rowEdit.values, [k]: e.target.value } })} />
+                </div>
+              ))}
+              <button className="btn btn-primary btn-sm" style={{ justifySelf: "end", marginTop: "0.25rem" }} onClick={saveRowEdit}>Simpan</button>
             </div>
           </div>
         </>
