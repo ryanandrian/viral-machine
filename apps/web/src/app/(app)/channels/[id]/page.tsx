@@ -722,9 +722,10 @@ export default function ChannelDetailPage() {
             const list = voiceAll.filter((v) => v.provider_key === ttsProv).slice().sort((a, b) => Number(fits(b)) - Number(fits(a)));
             return (
               <div className="fld-row"><div className="k"><Bi id="Karakter suara" en="Voice character" /><div className="sub"><Bi id="urut: cocok bahasa konten dulu" en="sorted: content-language match first" /></div></div>
-                <div className="radio-row">{list.map((v) => <span key={v.voice_key} className={`radio-pill${(voiceKey || "") === v.voice_key ? " sel" : ""}`} title={fits(v) ? undefined : `Bahasa voice: ${v.language || v.locale || "?"} — beda dari bahasa konten channel`} onClick={() => setVoiceKey(v.voice_key)}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4, opacity: fits(v) ? 1 : 0.55 }}><Mic size={13} />{v.display_name}{v.gender ? ` · ${v.gender}` : ""}{fits(v) ? "" : ` · ⚠ ${v.language || v.locale}`}</span>
-                  {v.preview_url ? <span role="button" aria-label={playingVoice === v.voice_key ? "Stop" : "Dengar contoh"} title={playingVoice === v.voice_key ? "Stop" : "Dengar contoh"} style={{ cursor: "pointer", marginLeft: 5, opacity: 1, fontWeight: 600 }} onClick={(e) => { e.stopPropagation(); toggleVoice(v.voice_key, v.preview_url as string); }}>{playingVoice === v.voice_key ? "⏹" : "▶"}</span> : null}
+                <div className="radio-row">{list.map((v) => <span key={v.voice_key} className={`radio-pill${(voiceKey || "") === v.voice_key ? " sel" : ""}`} title={fits(v) ? undefined : `Bahasa voice: ${v.language || v.locale || "?"} — beda dari bahasa konten channel ini`} onClick={() => setVoiceKey(v.voice_key)}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Mic size={13} />{v.display_name}{v.gender ? ` · ${v.gender}` : ""}
+                    {!fits(v) && <span className="muted" style={{ fontSize: ".625rem" }}>· {v.language || v.locale}</span>}</span>
+                  {v.preview_url ? <span role="button" aria-label={playingVoice === v.voice_key ? "Stop" : "Dengar contoh"} title={playingVoice === v.voice_key ? "Stop" : "Dengar contoh"} style={{ cursor: "pointer", marginLeft: 5, fontWeight: 600 }} onClick={(e) => { e.stopPropagation(); toggleVoice(v.voice_key, v.preview_url as string); }}>{playingVoice === v.voice_key ? "⏹" : "▶"}</span> : null}
                 </span>)}</div></div>
             );
           })()}
