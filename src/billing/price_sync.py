@@ -158,17 +158,21 @@ def _check_staleness(sb, rows: list) -> None:
         logger.debug(f"[price_sync] cek staleness gagal: {e}")
 
 
-def sync_prices(sb=None, force: bool = False) -> dict:
+def sync_prices(sb=None, force: bool = False, only_model_key: str | None = None) -> dict:
     """Tarik feed (LiteLLM → fallback OpenRouter utk LLM) → update ai_models.pricing.
-    Skip pricing_locked; perubahan drastis → pricing_pending (keputusan admin). Return ringkasan."""
+    Skip pricing_locked; perubahan drastis → pricing_pending (keputusan admin). Return ringkasan.
+    only_model_key: probe/sinkron SATU model saja (dipakai admin saat simpan model → deteksi
+    model_id/prefix salah seketika); tak mengubah stempel sinkron global."""
     sb = sb or _sb()
 
-    if not force:
+    if not force and not only_model_key:
         last = _state_get_epoch(sb, "ai_price_synced_at")
         if last and (_time.time() - last) < SYNC_INTERVAL_HOURS * 3600:
             return {"skipped": True}
 
     rows = sb.table("ai_models").select("model_key, model_id, component, provider_key, pricing, pricing_locked, pricing_pending").execute().data or []
+    if only_model_key:
+        rows = [r for r in rows if r.get("model_key") == only_model_key]
     # Prefix feed per-provider = DATA (ai_providers.price_feed_prefix, fallback provider_key).
     try:
         _provs = sb.table("ai_providers").select("provider_key, price_feed_prefix").execute().data or []
@@ -216,7 +220,7 @@ def sync_prices(sb=None, force: bool = False) -> dict:
         sb.table("ai_models").update({"pricing": pricing, "pricing_pending": None}).eq("model_key", m["model_key"]).execute()
         updated += 1
 
-    if feed is not None or updated:
+    if (feed is not None or updated) and not only_model_key:
         _state_set_epoch(sb, "ai_price_synced_at")
 
     if held:

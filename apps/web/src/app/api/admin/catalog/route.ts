@@ -61,12 +61,43 @@ function coerceValue(table: string, col: string, val: unknown): unknown {
   return val;
 }
 
+// Kolom ENUM: nilai WAJIB ∈ catalog_valid_values (cermin registry KODE; anti-typo → anti machine-error).
+// ai_providers.adapter dibaca jalur LLM (openai_chat/anthropic_messages); providernon-LLM simpan
+// identitas TTS/visual → terima union agar tak-menolak data sah + tetap tolak typo. auth_type/component
+// & tts_profiles.adapter tervalidasi ketat. Sumber tunggal = tabel cermin (di-sync mesin saat startup).
+const ENUM_COLS: Record<string, Record<string, string[]>> = {
+  ai_providers: { adapter: ["llm_adapter", "tts_adapter", "visual_transport"], auth_type: ["auth_type"] },
+  ai_models:    { component: ["component"] },
+  tts_profiles: { adapter: ["tts_adapter"] },
+};
+
+// Validasi nilai enum di `clean` terhadap cermin. Throw Error (pesan jelas) bila di luar daftar sah.
+async function assertEnums(a: ReturnType<typeof createAdminClient>, table: string, clean: Record<string, unknown>): Promise<void> {
+  const spec = ENUM_COLS[table];
+  if (!spec) return;
+  const cols = Object.keys(spec).filter((c) => c in clean && clean[c] != null && clean[c] !== "");
+  if (cols.length === 0) return;
+  const { data } = await a.from("catalog_valid_values").select("field,value");
+  const byField = new Map<string, Set<string>>();
+  for (const r of (data ?? []) as { field: string; value: string }[]) {
+    if (!byField.has(r.field)) byField.set(r.field, new Set());
+    byField.get(r.field)!.add(r.value);
+  }
+  for (const c of cols) {
+    const allowed = new Set<string>();
+    for (const f of spec[c]) for (const v of byField.get(f) ?? []) allowed.add(v);
+    if (!allowed.has(String(clean[c]))) {
+      throw new Error(`${c}: '${clean[c]}' bukan nilai yang didukung mesin (pilih: ${[...allowed].sort().join(", ")})`);
+    }
+  }
+}
+
 // GET semua data katalog (E2 — Phase 10.4-10.7). service_role bypass-RLS.
 export async function GET() {
   const g = await requireSuperAdmin();
   if (g.error) return g.error;
   const a = createAdminClient();
-  const [ai_models, ai_providers, music_library, content_languages, voice_catalog, tts_profiles, moods, duration_presets] = await Promise.all([
+  const [ai_models, ai_providers, music_library, content_languages, voice_catalog, tts_profiles, moods, duration_presets, valid_values] = await Promise.all([
     a.from("ai_models").select("*").order("component").order("sort_order"),
     a.from("ai_providers").select("*").order("provider_key"),
     a.from("music_library").select("id, name, niche, mood, duration_s, bpm, object_key, is_active, is_default, source").order("niche").order("name"),
@@ -75,6 +106,7 @@ export async function GET() {
     a.from("tts_profiles").select("*").order("provider_key"),
     a.from("moods").select("*").order("mood_id"),
     a.from("duration_presets").select("*").order("seconds"),
+    a.from("catalog_valid_values").select("field,value,label").order("field").order("value"),
   ]);
   // public_url musik (S3) untuk tombol Play di catalog. voice_catalog sudah simpan preview_url.
   const music = (music_library.data ?? []).map((m) => ({
@@ -85,6 +117,7 @@ export async function GET() {
     music_library: music, content_languages: content_languages.data ?? [],
     voice_catalog: voice_catalog.data ?? [], tts_profiles: tts_profiles.data ?? [],
     moods: moods.data ?? [], duration_presets: duration_presets.data ?? [],
+    catalog_valid_values: valid_values.data ?? [],
   });
 }
 
@@ -101,6 +134,7 @@ export async function PATCH(req: Request) {
   } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 400 }); }
   if (Object.keys(clean).length === 0) return NextResponse.json({ error: "no_editable_fields" }, { status: 400 });
   const a = createAdminClient();
+  try { await assertEnums(a, table, clean); } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 400 }); }
   const { data, error } = await a.from(table).update(clean).eq(def.pk, key).select("*").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   await a.from("admin_audit").insert({ admin_uid: g.user.id, action: `catalog.update.${table}`, detail: { key, fields: Object.keys(clean) } });
@@ -120,6 +154,7 @@ export async function POST(req: Request) {
     for (const c of def.cols) if (c in row) { const v = coerceValue(table, c, row[c]); if (v !== undefined) clean[c] = v; }
   } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 400 }); }
   const a = createAdminClient();
+  try { await assertEnums(a, table, clean); } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 400 }); }
   const { data, error } = await a.from(table).insert(clean).select("*").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   await a.from("admin_audit").insert({ admin_uid: g.user.id, action: `catalog.create.${table}`, detail: { key: row[def.pk] } });

@@ -49,6 +49,13 @@ def main() -> None:
     logger.info(f"[WorkerV2] MAX_CONCURRENT_RENDER={producer.max_concurrent_render()} (core)")
     logger.info("[WorkerV2] ══════════════════════════════════════════")
 
+    # Cermin nilai-sah katalog (adapter/enum) dari registry KODE → DB (self-heal, anti-drift).
+    try:
+        from src.config.catalog_sync import sync_catalog_valid_values
+        sync_catalog_valid_values()
+    except Exception as e:
+        logger.warning(f"[catalog_sync] startup sync gagal (non-fatal): {e}")
+
     threads = [
         threading.Thread(target=producer.run_forever, name="producer", daemon=True),
         threading.Thread(target=publisher.run_forever, name="publisher", daemon=True),

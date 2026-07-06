@@ -18,6 +18,15 @@ type Cat = {
   content_languages: Record<string, unknown>[]; voice_catalog: Record<string, unknown>[]; tts_profiles: Record<string, unknown>[];
   duration_presets: Record<string, unknown>[];
   moods: Record<string, unknown>[];
+  catalog_valid_values?: { field: string; value: string; label: string }[];
+};
+
+// Kolom yang WAJIB dropdown (nilai-sah dari registry KODE via catalog_valid_values) — anti-typo.
+// Sinkron dgn ENUM_COLS di api/admin/catalog/route.ts (validasi server sbg backstop).
+const ENUM_FIELD_SRC: Record<string, Record<string, string[]>> = {
+  providers: { adapter: ["llm_adapter", "tts_adapter", "visual_transport"], auth_type: ["auth_type"] },
+  models: { component: ["component"] },
+  ttsprof: { adapter: ["tts_adapter"] },
 };
 
 // Urutan hierarki (owner 2026-07-04): PROVIDER dulu → AI Models (model = DETAIL dari provider).
@@ -42,6 +51,11 @@ export default function AdminCatalogPage() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
   const [add, setAdd] = useState<Record<string, string> | null>(null);
+  // Uji model (butir-1): dialog kunci uji + jalankan nyata.
+  const [tm, setTm] = useState<{ mk: string; name: string; needsKey: boolean } | null>(null);
+  const [tmKey, setTmKey] = useState("");
+  const [tmBusy, setTmBusy] = useState(false);
+  const [tmMsg, setTmMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -51,6 +65,53 @@ export default function AdminCatalogPage() {
   }, []);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2200); return () => clearTimeout(t); }, [toast]);
+
+  // Opsi dropdown: provider_key (dari daftar provider) + kolom enum (nilai-sah registry KODE).
+  const fieldOptions = useCallback((mapKey: string, col: string): { value: string; label: string }[] | null => {
+    if (col === "provider_key") {
+      const ps = (data?.ai_providers ?? []).map((p) => ({ value: String(p.provider_key), label: String(p.display_name || p.provider_key) }));
+      return ps.length ? ps : null;
+    }
+    const src = ENUM_FIELD_SRC[mapKey]?.[col];
+    if (!src) return null;
+    const opts = (data?.catalog_valid_values ?? []).filter((r) => src.includes(r.field)).map((r) => ({ value: r.value, label: `${r.value} — ${r.label}` }));
+    return opts.length ? opts : null;
+  }, [data]);
+
+  async function runTest() {
+    if (!tm) return;
+    setTmBusy(true); setTmMsg(null);
+    try {
+      const r = await fetch("/api/admin/catalog/test-model", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model_key: tm.mk, key: tmKey.trim() }) });
+      const j = await r.json().catch(() => ({ ok: false, error: "respons tidak valid" }));
+      setTmMsg({ ok: !!j.ok, text: j.ok ? (j.result || "LULUS") : (j.error || "GAGAL") });
+      await load();  // refresh: audit ter-stamp
+    } catch (e) {
+      setTmMsg({ ok: false, text: (e as Error).message });
+    } finally { setTmBusy(false); }
+  }
+
+  // Butir-4: probe harga 1 model saat simpan → peringatan seketika bila model_id/prefix salah.
+  async function probePrice(modelKey: string) {
+    try {
+      const r = await fetch("/api/admin/catalog/price-probe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model_key: modelKey }) });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok && j.ok && j.priced === false) setToast("⚠️ Harga tak ditemukan di feed — cek model_id/prefix, atau isi harga manual di baris ini.");
+      await load();
+    } catch { /* non-fatal */ }
+  }
+
+  // Renderer field TERPADU (Add + Edit sama) — dropdown bila kolom enum/FK, else teks. disabled utk PK saat edit.
+  const renderField = (mapKey: string, k: string, value: string, onChange: (v: string) => void, disabled: boolean) => {
+    const opts = disabled ? null : fieldOptions(mapKey, k);
+    if (opts) return (
+      <select className="input" value={value ?? ""} onChange={(e) => onChange(e.target.value)}>
+        <option value="">— pilih —</option>
+        {opts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    );
+    return <input className="input" disabled={disabled} value={value ?? ""} onChange={(e) => onChange(e.target.value)} />;
+  };
 
   async function toggle(table: string, key: string, value: boolean) {
     const r = await fetch("/api/admin/catalog", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table, key, patch: { is_active: value } }) });
@@ -124,7 +185,7 @@ export default function AdminCatalogPage() {
     for (const [k] of def.fields) if (k !== pk) patch[k] = rowEdit.values[k] === "" ? null : rowEdit.values[k];
     const r = await fetch("/api/admin/catalog", { method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ table: def.table, key: rowEdit.values[pk], patch }) });
-    if (r.ok) { setToast("Tersimpan"); setRowEdit(null); await load(); }
+    if (r.ok) { const wasModel = def.table === "ai_models"; const mk = rowEdit.values[pk]; setToast("Tersimpan"); setRowEdit(null); await load(); if (wasModel && mk) await probePrice(String(mk)); }
     else { const j = await r.json().catch(() => ({})); setToast(`Gagal: ${j.error ?? ""}`); }
   }
   // PEMUTAR TUNGGAL (owner 2026-07-04, world-class): satu audio aktif; play record lain otomatis
@@ -200,7 +261,8 @@ export default function AdminCatalogPage() {
     if (!add) return;
     const def = ADD_FIELDS[tab];
     const r = await fetch("/api/admin/catalog", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table: def.table, row: add }) });
-    if (r.ok) { setToast("Ditambah"); setAdd(null); await load(); } else { const j = await r.json().catch(() => ({})); setToast(`Gagal: ${j.error ?? r.status}`); }
+    if (r.ok) { const mk = add.model_key; setToast("Ditambah"); setAdd(null); await load(); if (def.table === "ai_models" && mk) await probePrice(String(mk)); }
+    else { const j = await r.json().catch(() => ({})); setToast(`Gagal: ${j.error ?? r.status}`); }
   }
 
   const Switch = ({ table, k, on }: { table: string; k: string; on: boolean }) => (
@@ -297,7 +359,7 @@ export default function AdminCatalogPage() {
                   </td>
                   <td className="muted">{m.quality_tier as string}</td>
                   <td><Switch table="ai_models" k={mk} on={m.is_active as boolean} /></td>
-                  <td style={{ whiteSpace: "nowrap" }}><button className="btn btn-ghost btn-sm" title="Edit model" onClick={() => openRowEdit("models", m)}>✎</button><button className="btn btn-ghost btn-sm" title="Hapus model (ditolak bila dipakai channel)" onClick={() => delAsset("ai_models", mk, (m.display_name as string) || mk)}><Trash2 size={13} /></button></td>
+                  <td style={{ whiteSpace: "nowrap" }}><button className="btn btn-ghost btn-sm" title="Uji model — jalankan nyata ke vendor (butir-1: aktif = terbukti jalan)" onClick={() => { setTmMsg(null); setTmKey(""); setTm({ mk, name: (m.display_name as string) || mk, needsKey: (data.ai_providers.find((p) => String(p.provider_key) === String(m.provider_key))?.auth_type) === "api_key" }); }}>Uji</button><button className="btn btn-ghost btn-sm" title="Edit model" onClick={() => openRowEdit("models", m)}>✎</button><button className="btn btn-ghost btn-sm" title="Hapus model (ditolak bila dipakai channel)" onClick={() => delAsset("ai_models", mk, (m.display_name as string) || mk)}><Trash2 size={13} /></button></td>
                 </tr>
               );
             })}</tbody>
@@ -454,19 +516,7 @@ export default function AdminCatalogPage() {
             <div style={{ display: "grid", gap: "0.5rem" }}>
               {ADD_FIELDS[tab].fields.map(([k, label]) => (
                 <div key={k}><label className="label">{label}</label>
-                  {tab === "models" && k === "provider_key" ? (
-                    <select className="input" value={add[k] ?? ""} onChange={(e) => setAdd({ ...add, [k]: e.target.value })}>
-                      <option value="">— pilih provider —</option>
-                      {(data?.ai_providers ?? []).map((p) => <option key={p.provider_key as string} value={p.provider_key as string}>{(p.display_name as string) || (p.provider_key as string)}</option>)}
-                    </select>
-                  ) : tab === "models" && k === "component" ? (
-                    <select className="input" value={add[k] ?? ""} onChange={(e) => setAdd({ ...add, [k]: e.target.value })}>
-                      <option value="">— pilih —</option>
-                      {["llm", "image", "video", "tts"].map((c) => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  ) : (
-                    <input className="input" value={add[k] ?? ""} onChange={(e) => setAdd({ ...add, [k]: e.target.value })} />
-                  )}
+                  {renderField(tab, k, add[k] ?? "", (v) => setAdd({ ...add, [k]: v }), false)}
                 </div>
               ))}
               <button className="btn btn-primary btn-sm" style={{ justifySelf: "end", marginTop: "0.25rem" }} onClick={createRow}>Simpan</button>
@@ -483,10 +533,26 @@ export default function AdminCatalogPage() {
             <div style={{ display: "grid", gap: "0.5rem" }}>
               {ADD_FIELDS[rowEdit.mapKey].fields.map(([k, label]) => (
                 <div key={k}><label className="label">{label}{k === PK_OF[rowEdit.mapKey] && <span className="muted"> — PK, terkunci</span>}</label>
-                  <input className="input" disabled={k === PK_OF[rowEdit.mapKey]} value={rowEdit.values[k] ?? ""} onChange={(e) => setRowEdit({ ...rowEdit, values: { ...rowEdit.values, [k]: e.target.value } })} />
+                  {renderField(rowEdit.mapKey, k, rowEdit.values[k] ?? "", (v) => setRowEdit({ ...rowEdit, values: { ...rowEdit.values, [k]: v } }), k === PK_OF[rowEdit.mapKey])}
                 </div>
               ))}
               <button className="btn btn-primary btn-sm" style={{ justifySelf: "end", marginTop: "0.25rem" }} onClick={saveRowEdit}>Simpan</button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {tm && (
+        <>
+          <div className="cat-scrim open" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 60 }} onClick={() => { if (!tmBusy) setTm(null); }} />
+          <div className="card" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(460px,92vw)", zIndex: 61, padding: "1.25rem" }}>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: "0.5rem" }}><strong>Uji model: {tm.name}</strong><button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} disabled={tmBusy} onClick={() => setTm(null)}><X size={16} /></button></div>
+            <p className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "0.6rem" }}>Menjalankan panggilan NYATA sekali ke vendor untuk membuktikan model ini benar jalan di pipeline. {tm.needsKey ? "Tempel token uji (TIDAK disimpan)." : "Provider gratis — tanpa kunci."} Hasil disimpan sebagai jejak audit.</p>
+            {tm.needsKey && <input className="input" type="password" placeholder="API token uji (tidak disimpan)" value={tmKey} onChange={(e) => setTmKey(e.target.value)} style={{ marginBottom: "0.6rem" }} />}
+            {tmMsg && <div style={{ padding: "0.5rem 0.7rem", borderRadius: 8, marginBottom: "0.6rem", background: tmMsg.ok ? "var(--success-soft, #e6f7ec)" : "var(--warning-soft, #fde7e7)", color: "var(--text-primary)", fontSize: "var(--text-sm)" }}>{tmMsg.ok ? "✅ " : "⚠️ "}{tmMsg.text}</div>}
+            <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+              <button className="btn btn-ghost btn-sm" disabled={tmBusy} onClick={() => setTm(null)}>Tutup</button>
+              <button className="btn btn-primary btn-sm" disabled={tmBusy || (tm.needsKey && !tmKey.trim())} onClick={runTest}>{tmBusy ? "Menguji…" : "Jalankan uji"}</button>
             </div>
           </div>
         </>

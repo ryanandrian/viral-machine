@@ -261,6 +261,47 @@ try:
 
     app.add_api_route("/api/feedback/notify-admin", _feedback_notify_admin, methods=["POST"])
 
+    # Uji-NYATA satu model katalog (butir-1). Next sudah verifikasi super-admin sebelum memanggil.
+    async def _admin_test_model(request: "Request"):
+        if not _internal_ok(request):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        from starlette.concurrency import run_in_threadpool
+        from src.config.model_tester import test_model
+        try:
+            b = await request.json()
+            return await run_in_threadpool(test_model, str(b.get("model_key") or ""), str(b.get("key") or ""))
+        except Exception as e:
+            logger.warning(f"[model_tester] endpoint gagal: {e}")
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+    app.add_api_route("/api/admin/catalog/test-model", _admin_test_model, methods=["POST"])
+
+    # Probe harga 1 model (butir-4): deteksi model_id/prefix salah SEKETIKA saat admin simpan model.
+    async def _admin_price_probe(request: "Request"):
+        if not _internal_ok(request):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        from starlette.concurrency import run_in_threadpool
+        from src.billing.price_sync import sync_prices
+        try:
+            b = await request.json()
+            mk = str(b.get("model_key") or "")
+            res = await run_in_threadpool(sync_prices, None, True, mk)
+            return {"ok": True, "priced": mk not in (res.get("missing") or []), **res}
+        except Exception as e:
+            logger.warning(f"[price_probe] gagal: {e}")
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+    app.add_api_route("/api/admin/catalog/price-probe", _admin_price_probe, methods=["POST"])
+
+    # Startup: cermin nilai-sah katalog (adapter/enum) dari registry KODE → DB (self-heal, anti-drift).
+    @app.on_event("startup")
+    async def _sync_catalog_enums():
+        try:
+            from src.config.catalog_sync import sync_catalog_valid_values
+            sync_catalog_valid_values()
+        except Exception as e:
+            logger.warning(f"[catalog_sync] startup sync gagal (non-fatal): {e}")
+
 except ImportError:
     # fastapi belum terinstall di env dev — endpoint diaktifkan saat cutover (tambah ke requirements).
     app = None
