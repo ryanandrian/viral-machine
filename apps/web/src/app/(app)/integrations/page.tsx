@@ -58,8 +58,12 @@ export default function IntegrationsPage() {
     const { data } = await supabase.from("tenant_configs").select("plan_type,telegram_chat_id,telegram_enabled").maybeSingle();
     const t = data as { plan_type?: string; telegram_chat_id?: string; telegram_enabled?: boolean } | null;
     setPlan(t?.plan_type ?? "starter"); setTgChat(t?.telegram_chat_id ?? ""); setTgEnabled(!!t?.telegram_enabled);
-    // Penyedia AI dari katalog (punya model aktif) + VENDOR (key_group) untuk pemetaan per-elemen.
-    const { data: am } = await supabase.from("ai_models").select("provider_key,component").eq("is_active", true);
+    // Penyedia AI dari katalog + VENDOR (key_group) utk pemetaan per-elemen. SEMUA model (aktif+nonaktif):
+    // halaman kredensial = level VENDOR — tenant harus BISA memasukkan kunci walau modelnya belum
+    // diaktifkan (temuan owner 2026-07-06: model nonaktif → provider tersembunyi → kunci tak pernah
+    // bisa masuk → uji aktivasi tak pernah terjadi = lingkaran mati). Pemilih MODEL di channel tetap
+    // menyaring is_active (di sana barulah "bisa dipakai").
+    const { data: am } = await supabase.from("ai_models").select("provider_key,component");
     const { data: ap } = await supabase.from("ai_providers").select("provider_key,display_name,auth_type,key_group,free_tier_note").eq("is_active", true);
     const byProv: Record<string, Set<string>> = {};
     ((am ?? []) as { provider_key: string; component: string }[]).forEach((m) => { (byProv[m.provider_key] ??= new Set()).add(m.component); });
