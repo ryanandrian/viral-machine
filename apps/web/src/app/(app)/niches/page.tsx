@@ -25,6 +25,7 @@ type NicheRow = {
   style: string | null; target_emotion: string | null;
   narration_persona: unknown; visual_style: unknown; mood_priority: unknown; section_timing: unknown;
   created_at: string | null; description: string | null; description_en: string | null;
+  visual_fallbacks: unknown;
 };
 
 // ── Config UI Pustaka Niche — SUMBER: app_config (migr 0134, admin-editable, no-hardcode).
@@ -166,7 +167,7 @@ export default function NichesPage() {
     const plr = pl as { full_niche_catalog?: boolean; can_request_custom_niche?: boolean } | null;
     setFullCatalog(Boolean(plr?.full_niche_catalog));
     setCanReq(Boolean(plr?.can_request_custom_niche));
-    const selCols = "niche_id,name,is_active,is_base,access_type,exclusive_to,keywords,default_hashtags,youtube_category_id,style,target_emotion,narration_persona,visual_style,mood_priority,section_timing,created_at,description,description_en";
+    const selCols = "niche_id,name,is_active,is_base,access_type,exclusive_to,keywords,default_hashtags,youtube_category_id,style,target_emotion,narration_persona,visual_style,mood_priority,section_timing,created_at,description,description_en,visual_fallbacks";
     // Ambil niche aktif (publik) + niche MILIK tenant walau belum aktif (transparansi: "sedang disiapkan").
     const qN = supabase.from("niches").select(selCols);
     const { data: nrows } = await (uid ? qN.or(`is_active.eq.true,exclusive_to.eq.${uid}`) : qN.eq("is_active", true));
@@ -402,41 +403,71 @@ export default function NichesPage() {
       <aside className={`nlib-drawer${cur ? " open" : ""}`}>
         {cur && (() => {
           const k = nicheKind(cur, me); const used = usage[cur.niche_id] || [];
-          const desc = [cur.style, cur.target_emotion].filter(Boolean).join(" · ");
-          const persona = joinVals(cur.narration_persona, ["tone", "style", "mood", "hook_style"]);
-          const visual = joinVals(cur.visual_style, ["mood", "atmosphere", "lighting", "color_palette", "color_grading", "camera"]);
-          const music = arr(cur.mood_priority).join(", ");
+          const tone = toneOf(cur.mood_priority, toneCfg);
+          const pers = (cur.narration_persona && typeof cur.narration_persona === "object") ? cur.narration_persona as Record<string, string> : {};
+          const vs0 = (cur.visual_style && typeof cur.visual_style === "object") ? cur.visual_style as Record<string, unknown> : {};
+          const vs = { atmosphere: typeof vs0.atmosphere === "string" ? vs0.atmosphere : "",
+                       color_palette: typeof vs0.color_palette === "string" ? vs0.color_palette : "" };
+          const arc = (pers.emotion_arc || "").split("→").map((s) => s.trim()).filter(Boolean);
+          const scenes = arr(cur.visual_fallbacks).slice(0, 3);
+          const moods = arr(cur.mood_priority);
           const timing = timingText(cur.section_timing);
           const topics = arr(cur.keywords).slice(0, 8);
           const tags = arr(cur.default_hashtags);
-          const Row = ({ k: kk, children }: { k: string; children: React.ReactNode }) =>
-            <div className="nlib-def"><div className="k">{kk}</div><div className="v">{children}</div></div>;
+          const Sec = ({ icon, id, en, children }: { icon: React.ReactNode; id: string; en: string; children: React.ReactNode }) =>
+            <div className="nlib-sec"><div className="nlib-sec-title">{icon}<Bi id={id} en={en} /></div>{children}</div>;
           return (<>
             <div className="nlib-drawer-head">
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 600, fontSize: "var(--text-base)" }}>{cur.name}</div>
-                <div style={{ display: "flex", gap: ".375rem", marginTop: ".3rem" }}>
+                <div style={{ display: "flex", gap: ".375rem", marginTop: ".3rem", alignItems: "center" }}>
                   <span className={`badge ${k.cls}`}>{k.label}</span>
                   <span className="badge badge-outline">{catLabel(cur.youtube_category_id)}</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: "var(--text-xs)", color: "var(--text-secondary)" }}>
+                    <span aria-hidden style={{ width: 8, height: 8, borderRadius: "50%", background: tone.color, display: "inline-block" }} />
+                    <Bi id={tone.id} en={tone.en} /></span>
+                  {isNewNiche(cur.created_at) && <span className="badge badge-brand" style={{ fontSize: ".625rem" }}><Bi id="Baru" en="New" /></span>}
                 </div>
               </div>
               <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setSel(null)}><X size={16} /></button>
             </div>
             <div className="nlib-dpanel">
               {!cur.is_active && <div style={{ background: "var(--warning-soft)", border: "1px solid color-mix(in srgb,var(--warning) 30%,transparent)", borderRadius: "var(--r-md)", padding: "0.625rem 0.75rem", marginBottom: "1rem", fontSize: "var(--text-xs)", color: "var(--warning)" }}><Bi id="Niche ini milikmu tapi BELUM AKTIF — sedang disiapkan, belum bisa dipakai di channel." en="This niche is yours but NOT ACTIVE yet — being prepared, not usable in a channel." /></div>}
-              {cur.description
-                ? <Row k="Deskripsi"><Bi id={cur.description} en={cur.description_en || cur.description} /></Row>
-                : (desc && <Row k="Deskripsi">{desc}</Row>)}
-              {topics.length > 0 && <Row k="Contoh topik / tema">
-                <div style={{ display: "flex", gap: ".375rem", flexWrap: "wrap" }}>{topics.map((t) => <span key={t} className="chip">{t}</span>)}</div>
-              </Row>}
-              {tags.length > 0 && <Row k="Hashtag default">{tags.map((t) => (t.startsWith("#") ? t : `#${t}`)).join(" ")}</Row>}
-              {persona && <Row k="Gaya bahasa">{persona}</Row>}
-              {music && <Row k="Musik">{music}</Row>}
-              {visual && <Row k="Tampilan visual">{visual}</Row>}
-              {timing && <Row k="Alur video">{timing}</Row>}
-              <Row k="Kata kunci (SEO)">{arr(cur.keywords).length ? arr(cur.keywords).join(", ") : "—"}</Row>
-              <Row k="Sedang dipakai di">{used.length ? used.join(", ") : <span className="muted"><Bi id="belum dipakai di channel mana pun" en="not used in any channel" /></span>}</Row>
+
+              {(cur.description || cur.style) && <div className="nlib-hero">
+                {cur.description ? <Bi id={cur.description} en={cur.description_en || cur.description} /> : [cur.style, cur.target_emotion].filter(Boolean).join(" · ")}
+              </div>}
+
+              {(arc.length > 0 || cur.target_emotion) && <Sec icon={<Wand2 size={13} />} id="Perjalanan emosi penonton" en="Viewer's emotional journey">
+                {arc.length > 1
+                  ? <div className="nlib-arc">{arc.map((a, i) => (<span key={i} style={{ display: "contents" }}><span className="step">{a}</span>{i < arc.length - 1 && <span className="sep">→</span>}</span>))}</div>
+                  : <div className="nlib-kv">{cur.target_emotion}</div>}
+              </Sec>}
+
+              {(pers.tone || pers.style) && <Sec icon={<Tv size={13} />} id="Suara narator" en="Narrator's voice">
+                {pers.tone && <div className="nlib-kv">{pers.tone}</div>}
+                {pers.style && <div className="nlib-kv muted" style={{ fontSize: "var(--text-xs)" }}>{pers.style}</div>}
+              </Sec>}
+
+              {(scenes.length > 0 || vs.atmosphere) && <Sec icon={<Search size={13} />} id="Seperti apa videonya terlihat" en="How the videos look">
+                {vs.atmosphere !== "" && <div className="nlib-kv" style={{ marginBottom: ".55rem" }}>{vs.atmosphere}</div>}
+                {scenes.map((s, i) => <div key={i} className="nlib-scene">“{s}”</div>)}
+                {vs.color_palette !== "" && <div className="nlib-kv muted" style={{ fontSize: "var(--text-xs)" }}><b><Bi id="Palet warna" en="Palette" />:</b> {vs.color_palette}</div>}
+              </Sec>}
+
+              {moods.length > 0 && <Sec icon={<Clock size={13} />} id="Musik & alur" en="Music & flow">
+                <div className="nlib-chiprow" style={{ marginBottom: timing ? ".5rem" : 0 }}>{moods.map((m) => <span key={m} className="chip">{m}</span>)}</div>
+                {timing && <div className="nlib-kv muted" style={{ fontSize: "var(--text-xs)" }}>{timing}</div>}
+              </Sec>}
+
+              {(topics.length > 0 || tags.length > 0) && <Sec icon={<Target size={13} />} id="Topik & jangkauan" en="Topics & reach">
+                {topics.length > 0 && <div className="nlib-chiprow" style={{ marginBottom: tags.length ? ".5rem" : 0 }}>{topics.map((t) => <span key={t} className="chip">{t}</span>)}</div>}
+                {tags.length > 0 && <div className="nlib-kv muted" style={{ fontSize: "var(--text-xs)" }}>{tags.map((t) => (t.startsWith("#") ? t : `#${t}`)).join(" ")}</div>}
+              </Sec>}
+
+              <Sec icon={<Tv size={13} />} id="Sedang dipakai di" en="Currently used in">
+                <div className="nlib-kv">{used.length ? used.join(", ") : <span className="muted"><Bi id="belum dipakai di channel mana pun — jadilah yang pertama" en="not used in any channel yet — be the first" /></span>}</div>
+              </Sec>
             </div>
             <div className="nlib-drawer-foot">
               {!isEntitled(cur)
