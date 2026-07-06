@@ -56,6 +56,14 @@ class OpenAITTSProvider(TTSProvider):
                 "OpenAI TTS: voice belum ter-resolve. Set voice di Channel (channels.voice_key, §10.B FINAL)."
             )
         self.model = config.get("tts_model") or "tts-1"  # standard default
+        # base_url dari ai_providers → vendor TTS ber-protokol OpenAI audio.speech (mis. Groq PlayAI)
+        # cukup baris DB + adapter ini (menepati janji komentar registry). None (OpenAI asli) → default SDK.
+        self.base_url = None
+        try:
+            from src.providers.llm.catalog import get_providers
+            self.base_url = (get_providers().get(config.get("tts_provider") or "") or {}).get("base_url")
+        except Exception:
+            self.base_url = None
 
     async def generate(self, text: str, output_path: Path) -> Path:
         """Generate audio via OpenAI TTS API."""
@@ -80,7 +88,7 @@ class OpenAITTSProvider(TTSProvider):
         logger.info(f"[OpenAI TTS] voice={self.voice} model={self.model} speed={speed} chars={len(text)}")
 
         try:
-            client   = AsyncOpenAI(api_key=self.api_key)
+            client   = AsyncOpenAI(api_key=self.api_key, **({"base_url": self.base_url} if self.base_url else {}))
             response = await client.audio.speech.create(
                 model=self.model,
                 voice=self.voice,
