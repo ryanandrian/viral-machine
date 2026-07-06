@@ -74,6 +74,8 @@ const FILTERS: [string, string, string][] = [
 
 export default function AdminTenantsPage() {
   const [filter, setFilter] = useState("all");
+  const [q, setQ] = useState("");
+  useEffect(() => { const v = new URLSearchParams(window.location.search).get("q"); if (v) setQ(v); }, []);
   const [rows, setRows] = useState<Row[]>([]);
   const [kpi, setKpi] = useState<Kpi | null>(null);
   const [loading, setLoading] = useState(true);
@@ -115,7 +117,8 @@ export default function AdminTenantsPage() {
     fetch(`/api/admin/tenants/${sel}`).then((r) => r.ok ? r.json() : null).then(setDetail);
   }, [sel]);
 
-  const view = rows.filter((t) => filter === "all" || t.status === filter);
+  const view = rows.filter((t) => (filter === "all" || t.status === filter)
+    && (!q.trim() || `${t.handle} ${t.email} ${t.tenant_id}`.toLowerCase().includes(q.trim().toLowerCase())));
   const cur = rows.find((t) => t.tenant_id === sel) ?? null;
 
   async function toggleSuspend() {
@@ -190,7 +193,8 @@ export default function AdminTenantsPage() {
         <div className="adm-kpic"><div className="l"><Bi id="Leads (trial lapse)" en="Leads (trial lapse)" /></div><div className="v">{kpi?.trial_expired ?? "—"}</div></div>
       </div>
 
-      <div className="adm-filters">
+      <div className="adm-filters" style={{ display: "flex", gap: ".625rem", alignItems: "center", flexWrap: "wrap" }}>
+        <input className="input" style={{ minWidth: 220 }} placeholder="Cari tenant (email / id)…" value={q} onChange={(e) => setQ(e.target.value)} />
         <div className="segmented">{FILTERS.map(([k, id, en]) => <button key={k} aria-selected={filter === k} onClick={() => setFilter(k)}><Bi id={id} en={en} /></button>)}</div>
         <div className="adm-selbox"><Search size={14} /> {view.length} <Bi id="tenant" en="tenants" /></div>
       </div>

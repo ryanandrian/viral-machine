@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
   Users, HelpCircle, Activity, List, Target, DollarSign, LogOut, UserCog, FlaskConical, FileText,
@@ -45,6 +45,40 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const [lang, setLang] = useState<"id" | "en">("id");
   const [mounted, setMounted] = useState(false);
   const [supportCount, setSupportCount] = useState(0);
+  // ── Palet pencarian global (⌘K) — dulu elemen dekoratif mati (temuan owner 2026-07-06) ──
+  const router = useRouter();
+  const [palOpen, setPalOpen] = useState(false);
+  const [palQ, setPalQ] = useState("");
+  const [palData, setPalData] = useState<{ tenants: { id: string; handle: string }[]; niches: { id: string; name: string }[] } | null>(null);
+  const openPal = () => { setPalOpen(true); setPalQ(""); if (!palData) {
+    Promise.all([fetch("/api/admin/tenants").then((r) => r.ok ? r.json() : null), fetch("/api/admin/niches").then((r) => r.ok ? r.json() : null)])
+      .then(([t, n]) => setPalData({
+        tenants: ((t?.tenants ?? []) as { tenant_id: string; handle?: string | null; email?: string | null; display_handle?: string | null }[]).map((x) => ({ id: x.tenant_id, handle: x.handle || x.email || x.display_handle || x.tenant_id.slice(0, 8) })),
+        niches: ((n?.niches ?? []) as { niche_id: string; name: string }[]).map((x) => ({ id: x.niche_id, name: x.name })),
+      })).catch(() => setPalData({ tenants: [], niches: [] }));
+  } };
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openPal(); }
+      if (e.key === "Escape") setPalOpen(false);
+    };
+    document.addEventListener("keydown", k); return () => document.removeEventListener("keydown", k);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [palData]);
+  const palGo = (href: string) => { setPalOpen(false); router.push(href); };
+  const palResults = (() => {
+    if (!palOpen) return [] as { group: string; label: string; href: string }[];
+    const ql = palQ.trim().toLowerCase();
+    const menu = NAV.filter((e): e is NavItem => !("section" in e))
+      .filter((m) => !ql || m.idL.toLowerCase().includes(ql) || m.en.toLowerCase().includes(ql))
+      .map((m) => ({ group: "Menu", label: m.idL, href: m.href }));
+    if (!ql) return menu.slice(0, 8);
+    const tenants = (palData?.tenants ?? []).filter((t) => t.handle.toLowerCase().includes(ql) || t.id.toLowerCase().includes(ql))
+      .slice(0, 5).map((t) => ({ group: "Tenant", label: t.handle, href: `/admin/tenants?q=${encodeURIComponent(t.handle)}` }));
+    const niches = (palData?.niches ?? []).filter((n) => n.name.toLowerCase().includes(ql) || n.id.toLowerCase().includes(ql))
+      .slice(0, 5).map((n) => ({ group: "Niche", label: n.name, href: `/admin/niches?q=${encodeURIComponent(n.name)}` }));
+    return [...menu.slice(0, 4), ...tenants, ...niches];
+  })();
 
   useEffect(() => {
     setMounted(true);
@@ -120,9 +154,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             <span style={{ display: "inline-flex", alignItems: "center", gap: "0.4375rem" }}><a href="/admin/tenants">Admin</a><ChevronRight size={14} /></span>
             <span className="cur">{active ? <Bi id={active.idL} en={active.en} /> : null}</span>
           </div>
-          <div className="tb-search">
+          <div className="tb-search" role="button" tabIndex={0} style={{ cursor: "pointer" }} onClick={openPal}
+               onKeyDown={(e) => { if (e.key === "Enter") openPal(); }}>
             <Search size={15} />
-            <span><Bi id="Cari tenant, tiket…" en="Search tenants, tickets…" /></span>
+            <span><Bi id="Cari tenant, niche, menu…" en="Search tenants, niches, menu…" /></span>
             <kbd>⌘K</kbd>
           </div>
           <div className="segmented">
@@ -135,6 +170,32 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <span className="avatar" style={{ background: "var(--warning-soft)", color: "var(--warning)" }} title="Admin">AD</span>
         </header>
 
+        {palOpen && (
+          <div onClick={(e) => { if (e.target === e.currentTarget) setPalOpen(false); }}
+               style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 90, display: "flex", justifyContent: "center", paddingTop: "12vh" }}>
+            <div className="card" style={{ width: "min(520px, 92vw)", height: "fit-content", maxHeight: "60vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0.75rem 1rem", borderBottom: "1px solid var(--border-subtle)" }}>
+                <Search size={16} style={{ color: "var(--text-muted)" }} />
+                <input autoFocus className="input" style={{ border: "none", boxShadow: "none", background: "transparent", flex: 1 }}
+                       placeholder="Cari tenant, niche, atau menu…" value={palQ} onChange={(e) => setPalQ(e.target.value)}
+                       onKeyDown={(e) => { if (e.key === "Enter" && palResults[0]) palGo(palResults[0].href); }} />
+                <kbd style={{ fontSize: ".625rem", color: "var(--text-muted)" }}>Esc</kbd>
+              </div>
+              <div style={{ overflowY: "auto", padding: ".4rem" }}>
+                {palResults.length === 0 && <div className="muted" style={{ padding: "1rem", fontSize: "var(--text-sm)", textAlign: "center" }}>Tidak ada hasil.</div>}
+                {palResults.map((r, i) => (
+                  <button key={r.group + r.href + i} onClick={() => palGo(r.href)}
+                          style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", padding: ".55rem .75rem",
+                                   background: "none", border: "none", borderRadius: "var(--r-md)", cursor: "pointer", color: "var(--text-primary)", fontSize: "var(--text-sm)" }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = "none")}>
+                    <span className="badge badge-default" style={{ fontSize: ".575rem", minWidth: 46, justifyContent: "center" }}>{r.group}</span>
+                    {r.label}
+                  </button>))}
+              </div>
+            </div>
+          </div>
+        )}
         <main className="page"><div className="page-wide">{children}</div></main>
       </div>
     </div>

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Plus, Tv, Zap, ArrowRight, Pause, Play, Shuffle } from "lucide-react";
+import { Plus, Tv, Zap, ArrowRight, Pause, Play, Shuffle, AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { effectiveStatus, ChannelStatusBadge, type Eff } from "@/lib/channel-status";
 import ConfirmDialog from "@/components/confirm-dialog";
@@ -74,7 +74,11 @@ function ChannelCard({ ch, eff, vid, ana, busy, onToggle }: { ch: ChannelRow; ef
       <div className="niche-row">{niches.length
         ? (niches.length > 4 ? [...niches.slice(0, 4), `+${niches.length - 4}`] : niches).map((n) => <span key={n} className="badge badge-default">{n}</span>)
         : <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Belum ada niche" en="No niche set" /></span>}</div>
-      {eff.reason && <div className="muted" style={{ fontSize: "var(--text-xs)", padding: "0 0 0.25rem" }}>{eff.reason}</div>}
+      {eff.reason && <div style={{ display: "flex", gap: 8, alignItems: "flex-start", background: "var(--warning-soft)",
+        border: "1px solid color-mix(in srgb,var(--warning) 35%,transparent)", borderRadius: "var(--r-md)",
+        padding: "0.5rem 0.625rem", margin: "0.125rem 0 0.625rem", fontSize: "var(--text-xs)",
+        color: "var(--warning)", lineHeight: 1.55, fontWeight: 500 }}>
+        <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} /><span>{eff.reason}</span></div>}
       <div className="ch-stats">
         <div className="ch-stat"><div className="v">{vid.toLocaleString("id-ID")}</div><div className="l"><Bi id="Video terbit" en="Published" /></div></div>
         <div className="ch-stat"><div className="v">{ch.subscriber_count != null ? fmtK(ch.subscriber_count) : "—"}</div><div className="l">Subscribers</div></div>

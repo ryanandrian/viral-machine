@@ -37,6 +37,7 @@ export default function AdminNichesPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
   const [q, setQ] = useState("");
+  useEffect(() => { const v = new URLSearchParams(window.location.search).get("q"); if (v) setQ(v); }, []);
   // Sorting kolom: klik header = asc → desc → reset (default: nama abjad).
   const [sort, setSort] = useState<{ key: "name" | "tenant" | "video" | "score"; dir: 1 | -1 } | null>(null);
   const cycleSort = (key: "name" | "tenant" | "video" | "score") =>
