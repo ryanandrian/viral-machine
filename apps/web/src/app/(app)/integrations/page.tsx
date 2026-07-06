@@ -43,7 +43,7 @@ export default function IntegrationsPage() {
   const [tgChat, setTgChat] = useState(""); const [tgEnabled, setTgEnabled] = useState(false);
 
   // Kunci AI model VENDOR (§0.4): per-elemen, boleh >1 kunci/vendor, nilai TAMPIL APA ADANYA.
-  type Prov = { key: string; name: string; auth: string; key_group: string; comps: string[] };
+  type Prov = { key: string; name: string; auth: string; key_group: string; comps: string[]; free_note: string | null };
   type AiAcct = { id: string; provider_key: string; key_group: string; label: string; status: string; key: string };
   const [provs, setProvs] = useState<Prov[]>([]);
   const [aiAccts, setAiAccts] = useState<AiAcct[]>([]);
@@ -60,12 +60,12 @@ export default function IntegrationsPage() {
     setPlan(t?.plan_type ?? "starter"); setTgChat(t?.telegram_chat_id ?? ""); setTgEnabled(!!t?.telegram_enabled);
     // Penyedia AI dari katalog (punya model aktif) + VENDOR (key_group) untuk pemetaan per-elemen.
     const { data: am } = await supabase.from("ai_models").select("provider_key,component").eq("is_active", true);
-    const { data: ap } = await supabase.from("ai_providers").select("provider_key,display_name,auth_type,key_group").eq("is_active", true);
+    const { data: ap } = await supabase.from("ai_providers").select("provider_key,display_name,auth_type,key_group,free_tier_note").eq("is_active", true);
     const byProv: Record<string, Set<string>> = {};
     ((am ?? []) as { provider_key: string; component: string }[]).forEach((m) => { (byProv[m.provider_key] ??= new Set()).add(m.component); });
-    setProvs(((ap ?? []) as { provider_key: string; display_name: string; auth_type: string; key_group: string | null }[])
+    setProvs(((ap ?? []) as { provider_key: string; display_name: string; auth_type: string; key_group: string | null; free_tier_note: string | null }[])
       .filter((p) => byProv[p.provider_key])
-      .map((p) => ({ key: p.provider_key, name: p.display_name, auth: p.auth_type, key_group: p.key_group || p.provider_key, comps: [...byProv[p.provider_key]] })));
+      .map((p) => ({ key: p.provider_key, name: p.display_name, auth: p.auth_type, key_group: p.key_group || p.provider_key, comps: [...byProv[p.provider_key]], free_note: p.free_tier_note || null })));
     try {
       const r = await fetch("/api/credentials/ai");
       if (r.ok) {
@@ -182,8 +182,13 @@ export default function IntegrationsPage() {
                 <div style={{ flex: 1 }}><div style={titleS}><Bi id={el.id} en={el.en} /></div><div style={muted}><Bi id={el.desc_id} en={el.desc_en} /></div></div>
               </div>
               <div style={{ ...muted, fontSize: "var(--text-xs)", marginBottom: "0.25rem" }}>
-                <Bi id="Penyedia tersedia: " en="Available providers: " />{[...eProvs, ...freeProvs].map((p) => p.name).join(" · ") || "—"}
-                {freeProvs.length > 0 && <Bi id=" (gratis tanpa kunci)" en=" (free, no key)" />}
+                <Bi id="Penyedia tersedia: " en="Available providers: " />
+                {[...eProvs, ...freeProvs].map((p, i) => (
+                  <span key={p.key}>{i > 0 && " · "}{p.name}
+                    {p.free_note && <span className="badge badge-success" style={{ fontSize: ".575rem", marginLeft: 4, verticalAlign: "1px" }}><Bi id="Gratis harian" en="Free daily" /></span>}
+                    {p.auth === "none" && <span className="badge badge-success" style={{ fontSize: ".575rem", marginLeft: 4, verticalAlign: "1px" }}><Bi id="Gratis tanpa kunci" en="Free, no key" /></span>}
+                  </span>))}
+                {[...eProvs, ...freeProvs].length === 0 && "—"}
               </div>
               {accts.length === 0 && <div style={{ ...muted, fontSize: "var(--text-xs)", padding: "0.4rem 0" }}><Bi id="Belum ada kunci untuk elemen ini." en="No key for this element yet." /></div>}
               {accts.map((a) => (
@@ -205,8 +210,10 @@ export default function IntegrationsPage() {
                 <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: "0.6rem", marginTop: "0.6rem", display: "grid", gap: "0.4rem" }}>
                   <select className="input" value={f.provider} onChange={(e) => setF({ provider: e.target.value })}>
                     <option value="">— pilih penyedia —</option>
-                    {eProvs.map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}
+                    {eProvs.map((p) => <option key={p.key} value={p.key}>{p.name}{p.free_note ? " — GRATIS harian" : ""}</option>)}
                   </select>
+                  {(() => { const sp = eProvs.find((p) => p.key === f.provider); return sp?.free_note
+                    ? <div style={{ fontSize: "var(--text-xs)", color: "var(--success)", lineHeight: 1.5 }}>✓ {sp.free_note}</div> : null; })()}
                   <input className="input" placeholder="Label (mis. Utama / Cadangan)" value={f.label} onChange={(e) => setF({ label: e.target.value })} />
                   <input className="input input-mono" type="text" placeholder="Tempel API key penyedia" value={f.key} onChange={(e) => setF({ key: e.target.value })} />
                   <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
