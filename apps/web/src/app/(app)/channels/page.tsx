@@ -76,7 +76,7 @@ function ChannelCard({ ch, eff, vid, ana, busy, onToggle }: { ch: ChannelRow; ef
         : <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Belum ada niche" en="No niche set" /></span>}</div>
       {eff.reason && <div style={{ display: "flex", gap: 8, alignItems: "flex-start", background: "var(--warning-soft)",
         border: "1px solid color-mix(in srgb,var(--warning) 35%,transparent)", borderRadius: "var(--r-md)",
-        padding: "0.5rem 0.625rem", margin: "0.125rem 0 0.625rem", fontSize: "var(--text-xs)",
+        padding: "0.5rem 0.625rem", margin: "0.125rem 1.25rem 0.625rem", fontSize: "var(--text-xs)",
         color: "var(--warning)", lineHeight: 1.55, fontWeight: 500 }}>
         <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} /><span>{eff.reason}</span></div>}
       <div className="ch-stats">
