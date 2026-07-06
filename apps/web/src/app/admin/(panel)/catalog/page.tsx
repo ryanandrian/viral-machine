@@ -74,7 +74,8 @@ export default function AdminCatalogPage() {
     }
     const src = ENUM_FIELD_SRC[mapKey]?.[col];
     if (!src) return null;
-    const opts = (data?.catalog_valid_values ?? []).filter((r) => src.includes(r.field)).map((r) => ({ value: r.value, label: `${r.value} — ${r.label}` }));
+    // Opsi = nilai kunci NETRAL-bahasa (openai_chat/api_key/llm) — dwi-bahasa-aman (<option> tak bisa <Bi>).
+    const opts = (data?.catalog_valid_values ?? []).filter((r) => src.includes(r.field)).map((r) => ({ value: r.value, label: r.value }));
     return opts.length ? opts : null;
   }, [data]);
 
@@ -359,7 +360,12 @@ export default function AdminCatalogPage() {
                   </td>
                   <td className="muted">{m.quality_tier as string}</td>
                   <td><Switch table="ai_models" k={mk} on={m.is_active as boolean} /></td>
-                  <td style={{ whiteSpace: "nowrap" }}><button className="btn btn-ghost btn-sm" title="Uji model — jalankan nyata ke vendor (butir-1: aktif = terbukti jalan)" onClick={() => { setTmMsg(null); setTmKey(""); setTm({ mk, name: (m.display_name as string) || mk, needsKey: (data.ai_providers.find((p) => String(p.provider_key) === String(m.provider_key))?.auth_type) === "api_key" }); }}>Uji</button><button className="btn btn-ghost btn-sm" title="Edit model" onClick={() => openRowEdit("models", m)}>✎</button><button className="btn btn-ghost btn-sm" title="Hapus model (ditolak bila dipakai channel)" onClick={() => delAsset("ai_models", mk, (m.display_name as string) || mk)}><Trash2 size={13} /></button></td>
+                  <td style={{ whiteSpace: "nowrap" }}>{(() => {
+                    const au = String((m.cost_hint as { audit?: string } | null)?.audit || "");
+                    if (au.startsWith("LULUS")) return <span className="badge badge-success" title={au} style={{ fontSize: "0.65rem", marginRight: ".3rem" }}>✓ <Bi id="Teruji" en="Tested" /></span>;
+                    if (au) return <span className="badge badge-warning" title={au} style={{ fontSize: "0.65rem", marginRight: ".3rem" }}>✗ <Bi id="belum lolos" en="not passed" /></span>;
+                    return <span className="muted" title="Belum pernah diuji — klik Uji" style={{ fontSize: "0.65rem", marginRight: ".3rem" }}><Bi id="belum diuji" en="not tested" /></span>;
+                  })()}<button className="btn btn-ghost btn-sm" title="Uji model — jalankan nyata ke vendor (butir-1: aktif = terbukti jalan)" onClick={() => { setTmMsg(null); setTmKey(""); setTm({ mk, name: (m.display_name as string) || mk, needsKey: (data.ai_providers.find((p) => String(p.provider_key) === String(m.provider_key))?.auth_type) === "api_key" }); }}><Bi id="Uji" en="Test" /></button><button className="btn btn-ghost btn-sm" title="Edit model" onClick={() => openRowEdit("models", m)}>✎</button><button className="btn btn-ghost btn-sm" title="Hapus model (ditolak bila dipakai channel)" onClick={() => delAsset("ai_models", mk, (m.display_name as string) || mk)}><Trash2 size={13} /></button></td>
                 </tr>
               );
             })}</tbody>
@@ -546,13 +552,17 @@ export default function AdminCatalogPage() {
         <>
           <div className="cat-scrim open" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 60 }} onClick={() => { if (!tmBusy) setTm(null); }} />
           <div className="card" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(460px,92vw)", zIndex: 61, padding: "1.25rem" }}>
-            <div style={{ display: "flex", alignItems: "center", marginBottom: "0.5rem" }}><strong>Uji model: {tm.name}</strong><button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} disabled={tmBusy} onClick={() => setTm(null)}><X size={16} /></button></div>
-            <p className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "0.6rem" }}>Menjalankan panggilan NYATA sekali ke vendor untuk membuktikan model ini benar jalan di pipeline. {tm.needsKey ? "Tempel token uji (TIDAK disimpan)." : "Provider gratis — tanpa kunci."} Hasil disimpan sebagai jejak audit.</p>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: "0.5rem" }}><strong><Bi id="Uji model:" en="Test model:" /> {tm.name}</strong><button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} disabled={tmBusy} onClick={() => setTm(null)}><X size={16} /></button></div>
+            <p className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "0.6rem" }}>
+              <Bi id="Menjalankan panggilan NYATA sekali ke vendor untuk membuktikan model ini benar jalan di pipeline." en="Runs one REAL call to the vendor to prove this model actually works in the pipeline." />{" "}
+              {tm.needsKey ? <Bi id="Tempel token uji (TIDAK disimpan)." en="Paste a test token (NOT stored)." /> : <Bi id="Provider gratis — tanpa kunci." en="Free provider — no key needed." />}{" "}
+              <Bi id="Hasil disimpan sebagai jejak audit." en="Result is saved as an audit trail." />
+            </p>
             {tm.needsKey && <input className="input" type="password" placeholder="API token uji (tidak disimpan)" value={tmKey} onChange={(e) => setTmKey(e.target.value)} style={{ marginBottom: "0.6rem" }} />}
             {tmMsg && <div style={{ padding: "0.5rem 0.7rem", borderRadius: 8, marginBottom: "0.6rem", background: tmMsg.ok ? "var(--success-soft, #e6f7ec)" : "var(--warning-soft, #fde7e7)", color: "var(--text-primary)", fontSize: "var(--text-sm)" }}>{tmMsg.ok ? "✅ " : "⚠️ "}{tmMsg.text}</div>}
             <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
-              <button className="btn btn-ghost btn-sm" disabled={tmBusy} onClick={() => setTm(null)}>Tutup</button>
-              <button className="btn btn-primary btn-sm" disabled={tmBusy || (tm.needsKey && !tmKey.trim())} onClick={runTest}>{tmBusy ? "Menguji…" : "Jalankan uji"}</button>
+              <button className="btn btn-ghost btn-sm" disabled={tmBusy} onClick={() => setTm(null)}><Bi id="Tutup" en="Close" /></button>
+              <button className="btn btn-primary btn-sm" disabled={tmBusy || (tm.needsKey && !tmKey.trim())} onClick={runTest}>{tmBusy ? <Bi id="Menguji…" en="Testing…" /> : <Bi id="Jalankan uji" en="Run test" />}</button>
             </div>
           </div>
         </>
