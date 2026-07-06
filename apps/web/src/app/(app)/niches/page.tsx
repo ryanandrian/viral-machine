@@ -432,7 +432,7 @@ export default function NichesPage() {
               <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setSel(null)}><X size={16} /></button>
             </div>
             <div className="nlib-dpanel">
-              {!cur.is_active && <div style={{ background: "var(--warning-soft)", border: "1px solid color-mix(in srgb,var(--warning) 30%,transparent)", borderRadius: "var(--r-md)", padding: "0.625rem 0.75rem", marginBottom: "1rem", fontSize: "var(--text-xs)", color: "var(--warning)" }}><Bi id="Niche ini milikmu tapi BELUM AKTIF — sedang disiapkan, belum bisa dipakai di channel." en="This niche is yours but NOT ACTIVE yet — being prepared, not usable in a channel." /></div>}
+              {!cur.is_active && <div style={{ background: "var(--warning-soft)", border: "1px solid color-mix(in srgb,var(--warning) 30%,transparent)", borderRadius: "var(--r-md)", padding: "0.625rem 0.75rem", marginBottom: "1rem", fontSize: "var(--text-xs)", color: "var(--text-primary)" }}><Bi id="Niche ini milikmu tapi BELUM AKTIF — sedang disiapkan, belum bisa dipakai di channel." en="This niche is yours but NOT ACTIVE yet — being prepared, not usable in a channel." /></div>}
 
               {(cur.description || cur.style) && <div className="nlib-hero">
                 {cur.description ? <Bi id={cur.description} en={cur.description_en || cur.description} /> : [cur.style, cur.target_emotion].filter(Boolean).join(" · ")}
