@@ -60,16 +60,21 @@ def _state_set_epoch(sb, key: str) -> None:
         logger.debug(f"[price_sync] tulis system_state {key} gagal: {e}")
 
 
-def _feed_entry(feed: dict, model_id: str) -> dict | None:
-    """Cari entri feed LiteLLM: kunci persis → varian berprefix provider (mis. 'elevenlabs/<id>').
-    (Insiden 2026-07-04: prefix 'elevenlabs/' terlewat → EL dikira tak ada di feed — koreksi owner.)"""
+def _feed_entry(feed: dict, model_id: str, provider_prefix: str | None = None) -> dict | None:
+    """Cari entri feed LiteLLM: kunci persis → prefix SPESIFIK provider (DATA: ai_providers.
+    price_feed_prefix, fallback provider_key) → daftar prefix legacy (jaring pengaman regresi).
+    NO-HARDCODE (owner 2026-07-06): provider BARU tak lagi butuh bongkar skrip ini — cukup baris
+    ai_providers (+isi price_feed_prefix bila nama prefix feed ≠ provider_key, mis. together→together_ai).
+    (Riwayat insiden prefix tertanam: 'elevenlabs/' 2026-07-04; gemini/groq 2026-07-06.)"""
     if model_id in feed:
         return feed[model_id]
-    # Prefix per-vendor feed LiteLLM. gemini/groq/together_ai/vertex_ai ditambah 2026-07-06 saat
-    # katalog Gemini/Groq/FLUX masuk (kelas insiden 'elevenlabs/' 2026-07-04: prefix terlewat =
-    # model diam-diam tak berharga di sinkron).
-    for pref in ("openai/", "anthropic/", "elevenlabs/", "replicate/", "azure/",
-                 "gemini/", "groq/", "together_ai/", "vertex_ai/"):
+    seen = set()
+    prefs = ([provider_prefix.rstrip("/") + "/"] if provider_prefix else []) +             ["openai/", "anthropic/", "elevenlabs/", "replicate/", "azure/",
+             "gemini/", "groq/", "together_ai/", "vertex_ai/"]
+    for pref in prefs:
+        if pref in seen:
+            continue
+        seen.add(pref)
         if pref + model_id in feed:
             return feed[pref + model_id]
     return None
@@ -163,7 +168,14 @@ def sync_prices(sb=None, force: bool = False) -> dict:
         if last and (_time.time() - last) < SYNC_INTERVAL_HOURS * 3600:
             return {"skipped": True}
 
-    rows = sb.table("ai_models").select("model_key, model_id, component, pricing, pricing_locked, pricing_pending").execute().data or []
+    rows = sb.table("ai_models").select("model_key, model_id, component, provider_key, pricing, pricing_locked, pricing_pending").execute().data or []
+    # Prefix feed per-provider = DATA (ai_providers.price_feed_prefix, fallback provider_key).
+    try:
+        _provs = sb.table("ai_providers").select("provider_key, price_feed_prefix").execute().data or []
+        prefix_map = {r["provider_key"]: (r.get("price_feed_prefix") or r["provider_key"]) for r in _provs}
+    except Exception as e:
+        logger.warning(f"[price_sync] baca price_feed_prefix gagal ({e}) — pakai fallback legacy")
+        prefix_map = {}
 
     feed = None
     try:
@@ -179,7 +191,8 @@ def sync_prices(sb=None, force: bool = False) -> dict:
         if m.get("pricing_locked"):
             continue
         pricing = None
-        e = _feed_entry(feed, m.get("model_id") or m["model_key"]) if feed else None
+        e = _feed_entry(feed, m.get("model_id") or m["model_key"],
+                        provider_prefix=prefix_map.get(m.get("provider_key") or "")) if feed else None
         if e:
             pricing = _to_pricing(e, now)
             if all(v is None for k, v in pricing.items() if k not in ("source", "synced_at")):
