@@ -67,6 +67,13 @@ class AIImageProvider(VisualProvider):
             "model_id": _row["model_id"],
             "size":     (_row.get("default_params") or {}).get("size", "1024x1536"),
         }
+        # base_url provider (ai_providers) — provider image OpenAI-compatible non-OpenAI (mis. Together
+        # FLUX free-tier) cukup baris DB + transport openai. None (OpenAI asli) → SDK default = perilaku lama.
+        try:
+            from src.providers.llm.catalog import get_providers
+            self.model_config["base_url"] = (get_providers().get(_row["provider_key"]) or {}).get("base_url")
+        except Exception:
+            self.model_config["base_url"] = None
         self.image_quality      = config.get("image_quality") or "low"  # tenant setting (DB default 'low')
         self.visual_seed        = config.get("visual_seed")  # Diversity §9.1 — fingerprint; None=acak provider
         self.niche              = config.get("niche") or ""
@@ -336,7 +343,9 @@ class AIImageProvider(VisualProvider):
 
     # F5-06: registry transport image per-PLATFORM (mirror LLM ADAPTERS). Tambah platform baru
     # (mis. stability/fireworks) = +1 method `_generate_<x>` + 1 entri di sini; model-nya via ai_models (DB).
-    _TRANSPORTS = {"replicate": "_generate_replicate", "openai": "_generate_dalle"}
+    _TRANSPORTS = {"replicate": "_generate_replicate", "openai": "_generate_dalle",
+                   # Together = protokol images OpenAI-compatible (base_url dari ai_providers) — FLUX free-tier.
+                   "together": "_generate_dalle"}
 
     async def _generate_image(self, prompt: str, negative_prompt: str, output_path: Path) -> None:
         platform = self.model_config["platform"]
@@ -390,14 +399,18 @@ class AIImageProvider(VisualProvider):
 
         size = self.model_config.get("size", "1024x1536")
 
-        async with AsyncOpenAI(api_key=self.api_key) as client:
-            response = await client.images.generate(
-                model=self.model_config["model_id"],
-                prompt=full_prompt,
-                size=size,
-                quality=self.image_quality,
-                n=1,
-            )
+        # base_url dari ai_providers → provider images OpenAI-compatible non-OpenAI (mis. Together FLUX
+        # free-tier) jalan lewat transport ini. `quality` = parameter khusus keluarga OpenAI — hanya
+        # dikirim ke platform openai (provider lain bisa menolak parameter tak dikenal).
+        _client_kw = {"api_key": self.api_key}
+        if self.model_config.get("base_url"):
+            _client_kw["base_url"] = self.model_config["base_url"]
+        _gen_kw = dict(model=self.model_config["model_id"], prompt=full_prompt, size=size, n=1)
+        if self.model_config.get("platform") == "openai":
+            _gen_kw["quality"] = self.image_quality
+
+        async with AsyncOpenAI(**_client_kw) as client:
+            response = await client.images.generate(**_gen_kw)
             # B2 cost-tracking: keluarga gpt-image-1 ditagih PER-TOKEN dan respons menyertakan usage —
             # tangkap token NYATA (dicatat sbg llm-bucket model image; harga in/out dari feed). Fail-soft.
             try:
