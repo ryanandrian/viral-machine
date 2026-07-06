@@ -16,6 +16,7 @@ function Bi({ id, en }: { id: string; en: string }) {
 type Cat = {
   ai_models: Record<string, unknown>[]; ai_providers: Record<string, unknown>[]; music_library: Record<string, unknown>[];
   content_languages: Record<string, unknown>[]; voice_catalog: Record<string, unknown>[]; tts_profiles: Record<string, unknown>[];
+  duration_presets: Record<string, unknown>[];
   moods: Record<string, unknown>[];
 };
 
@@ -189,7 +190,19 @@ export default function AdminCatalogPage() {
       {tab === "durations" && (
         <div className="card card-pad">
           <h3 className="card-title" style={{ marginBottom: "0.35rem" }}><Bi id="Durasi & segmentasi konten" en="Duration & content segmentation" /></h3>
-          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}><Bi id="Acuan segmentasi per preset (single-source: duration_presets + beat_glossary). Identik dengan yang dilihat tenant." en="Per-preset segmentation reference (single-source: duration_presets + beat_glossary). Identical to what tenants see." /></p>
+          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}><Bi id="Kendali preset (semua, termasuk nonaktif): matikan/hidupkan durasi yang ditawarkan ke tenant. Di bawahnya = acuan segmentasi persis seperti yang dilihat tenant (hanya yang aktif)." en="Preset control (all, incl. inactive): toggle which durations are offered to tenants. Below it = the segmentation reference exactly as tenants see it (active only)." /></p>
+          {data && <div className="card" style={{ marginBottom: "1.25rem" }}><div style={{ overflowX: "auto" }}><table className="tbl cat-tbl">
+            <thead><tr><th><Bi id="Detik" en="Seconds" /></th><th>Beats</th><th>render_mode</th><th><Bi id="Kegunaan" en="Use case" /></th><th>default</th><th>active</th></tr></thead>
+            <tbody>{data.duration_presets.map((d) => (
+              <tr key={String(d.seconds)} style={{ opacity: d.is_active ? 1 : .55 }}>
+                <td className="num" style={{ fontWeight: 600 }}>{String(d.seconds)}s</td>
+                <td className="num">{String(d.visual_beats)}</td>
+                <td className="mono" style={{ fontSize: "var(--text-xs)" }}>{String(d.render_mode)}{d.render_mode === "ai_video" && <span className="muted" style={{ marginLeft: 6 }}><Bi id="(video-gen belum tersedia)" en="(video-gen not available yet)" /></span>}</td>
+                <td className="muted" style={{ fontSize: "var(--text-xs)", maxWidth: 260 }}>{String(d.use_case ?? "")}</td>
+                <td>{d.is_default ? <span className="badge badge-default">default</span> : "—"}</td>
+                <td><Switch table="duration_presets" k={String(d.seconds)} on={d.is_active as boolean} /></td>
+              </tr>))}</tbody>
+          </table></div></div>}
           <PresetTables />
         </div>
       )}

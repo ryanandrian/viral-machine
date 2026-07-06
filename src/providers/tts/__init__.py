@@ -21,10 +21,12 @@ def _adapter_registry() -> dict:
     from src.providers.tts.elevenlabs import ElevenLabsProvider
     from src.providers.tts.openai_tts import OpenAITTSProvider
     from src.providers.tts.edge_tts   import EdgeTTSProvider
+    from src.providers.tts.gemini_tts import GeminiTTSProvider
     return {
         "elevenlabs":    ElevenLabsProvider,   # protokol ElevenLabs convert_with_timestamps
         "openai_speech": OpenAITTSProvider,    # protokol OpenAI audio.speech (kompatibel vendor lain via base_url)
         "edge":          EdgeTTSProvider,      # protokol Microsoft Edge Communicate (gratis)
+        "gemini_speech": GeminiTTSProvider,    # protokol Google generateContent AUDIO (kunci sama dgn LLM Gemini)
     }
 
 

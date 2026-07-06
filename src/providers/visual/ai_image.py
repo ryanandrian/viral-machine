@@ -345,7 +345,9 @@ class AIImageProvider(VisualProvider):
     # (mis. stability/fireworks) = +1 method `_generate_<x>` + 1 entri di sini; model-nya via ai_models (DB).
     _TRANSPORTS = {"replicate": "_generate_replicate", "openai": "_generate_dalle",
                    # Together = protokol images OpenAI-compatible (base_url dari ai_providers) — FLUX free-tier.
-                   "together": "_generate_dalle"}
+                   "together": "_generate_dalle",
+                   # Gemini = protokol Google generateContent modalitas IMAGE (kunci sama dgn LLM Gemini).
+                   "gemini": "_generate_gemini"}
 
     async def _generate_image(self, prompt: str, negative_prompt: str, output_path: Path) -> None:
         platform = self.model_config["platform"]
@@ -430,6 +432,47 @@ class AIImageProvider(VisualProvider):
                     output_path.write_bytes(r.content)
             else:
                 raise VisualError("Response tidak mengandung b64_json maupun url")
+
+    async def _generate_gemini(self, prompt: str, negative_prompt: str, output_path: Path) -> None:
+        """Transport Google generateContent (responseModalities IMAGE) — mis. gemini-2.5-flash-image.
+        Root NATIF diturunkan dari ai_providers.base_url ('.../v1beta/openai/' → '.../v1beta';
+        satu sumber URL). Negative prompt digabung ke prompt (pola sama _generate_dalle).
+        Aspek 9:16 via generationConfig.imageConfig (vertikal Shorts)."""
+        base = (self.model_config.get("base_url") or "").rstrip("/")
+        base = base[:-len("/openai")] if base.endswith("/openai") else (base or "https://generativelanguage.googleapis.com/v1beta")
+        url = f"{base}/models/{self.model_config['model_id']}:generateContent"
+        full_prompt = f"{prompt}\n\nStrictly avoid: {negative_prompt}"
+        body = {
+            "contents": [{"parts": [{"text": full_prompt}]}],
+            "generationConfig": {"responseModalities": ["IMAGE"], "imageConfig": {"aspectRatio": "9:16"}},
+        }
+        async with httpx.AsyncClient(timeout=180) as client:
+            r = await client.post(url, json=body, headers={"x-goog-api-key": self.api_key})
+        if r.status_code != 200:
+            raise VisualError(f"Gemini image HTTP {r.status_code}: {r.text[:300]}")
+        data = r.json()
+        img_b64 = None
+        for c in data.get("candidates", []):
+            for p in (c.get("content") or {}).get("parts", []):
+                if p.get("inlineData", {}).get("data"):
+                    img_b64 = p["inlineData"]["data"]
+                    break
+            if img_b64:
+                break
+        if not img_b64:
+            # Penolakan content-policy Google datang sbg finishReason/promptFeedback — angkat sbg error
+            # agar jalur rejection-rewrite 3-percobaan yang ADA menangani (pola sama provider lain).
+            raise VisualError(f"Gemini image: respons tanpa gambar (feedback: {str(data)[:250]})")
+        import base64 as _b64
+        output_path.write_bytes(_b64.b64decode(img_b64))
+        # B2 cost-tracking: usageMetadata token NYATA bila ada (gemini image ditagih per-token output). Fail-soft.
+        try:
+            from src.utils import cost_meter
+            u = data.get("usageMetadata") or {}
+            if u.get("promptTokenCount") or u.get("candidatesTokenCount"):
+                cost_meter.add_llm(self.model_config["model_id"], u.get("promptTokenCount", 0), u.get("candidatesTokenCount", 0))
+        except Exception:
+            pass
 
     # ──────────────────────────────────────────────
     # Internal: image → video dengan Ken Burns effect

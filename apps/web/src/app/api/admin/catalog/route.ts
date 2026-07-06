@@ -24,6 +24,9 @@ const CATALOG: Record<string, { pk: string; cols: string[] }> = {
   tts_profiles: { pk: "provider_key", cols: ["is_active", "delivery_wps", "tts_class", "speed_param", "param_schema"] },
   moods: { pk: "mood_id", cols: ["keywords", "is_active"] },   // NICHE_DNA F4: kelola mood + keyword deteksi (dwibahasa)
   niche_property_presets: { pk: "id", cols: ["property", "preset_key", "label", "label_en", "description", "description_en", "value", "apply_mode", "sort_order", "is_active"] },
+  // Kendali preset durasi (owner 2026-07-06): kolom engine-critical (beats/visual_beats/render_mode)
+  // SENGAJA di luar allowlist — hanya status & teks tampilan yang boleh disunting dari UI.
+  duration_presets: { pk: "seconds", cols: ["is_active", "is_default", "use_case", "use_case_en", "notes"] },
 };
 
 // Kolom jsonb: nilai string dari form di-JSON.parse agar tersimpan sbg objek (bukan string mentah).
@@ -63,7 +66,7 @@ export async function GET() {
   const g = await requireSuperAdmin();
   if (g.error) return g.error;
   const a = createAdminClient();
-  const [ai_models, ai_providers, music_library, content_languages, voice_catalog, tts_profiles, moods] = await Promise.all([
+  const [ai_models, ai_providers, music_library, content_languages, voice_catalog, tts_profiles, moods, duration_presets] = await Promise.all([
     a.from("ai_models").select("*").order("component").order("sort_order"),
     a.from("ai_providers").select("*").order("provider_key"),
     a.from("music_library").select("id, name, niche, mood, duration_s, bpm, object_key, is_active, is_default, source").order("niche").order("name"),
@@ -71,6 +74,7 @@ export async function GET() {
     a.from("voice_catalog").select("*").order("sort_order"),
     a.from("tts_profiles").select("*").order("provider_key"),
     a.from("moods").select("*").order("mood_id"),
+    a.from("duration_presets").select("*").order("seconds"),
   ]);
   // public_url musik (S3) untuk tombol Play di catalog. voice_catalog sudah simpan preview_url.
   const music = (music_library.data ?? []).map((m) => ({
@@ -80,7 +84,7 @@ export async function GET() {
     ai_models: ai_models.data ?? [], ai_providers: ai_providers.data ?? [],
     music_library: music, content_languages: content_languages.data ?? [],
     voice_catalog: voice_catalog.data ?? [], tts_profiles: tts_profiles.data ?? [],
-    moods: moods.data ?? [],
+    moods: moods.data ?? [], duration_presets: duration_presets.data ?? [],
   });
 }
 
