@@ -65,7 +65,11 @@ def _feed_entry(feed: dict, model_id: str) -> dict | None:
     (Insiden 2026-07-04: prefix 'elevenlabs/' terlewat → EL dikira tak ada di feed — koreksi owner.)"""
     if model_id in feed:
         return feed[model_id]
-    for pref in ("openai/", "anthropic/", "elevenlabs/", "replicate/", "azure/"):
+    # Prefix per-vendor feed LiteLLM. gemini/groq/together_ai/vertex_ai ditambah 2026-07-06 saat
+    # katalog Gemini/Groq/FLUX masuk (kelas insiden 'elevenlabs/' 2026-07-04: prefix terlewat =
+    # model diam-diam tak berharga di sinkron).
+    for pref in ("openai/", "anthropic/", "elevenlabs/", "replicate/", "azure/",
+                 "gemini/", "groq/", "together_ai/", "vertex_ai/"):
         if pref + model_id in feed:
             return feed[pref + model_id]
     return None
