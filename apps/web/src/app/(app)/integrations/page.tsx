@@ -43,7 +43,7 @@ export default function IntegrationsPage() {
   const [tgChat, setTgChat] = useState(""); const [tgEnabled, setTgEnabled] = useState(false);
 
   // Kunci AI model VENDOR (§0.4): per-elemen, boleh >1 kunci/vendor, nilai TAMPIL APA ADANYA.
-  type Prov = { key: string; name: string; auth: string; key_group: string; comps: string[]; free_note: string | null };
+  type Prov = { key: string; name: string; auth: string; key_group: string; comps: string[]; activeComps: string[]; free_note: string | null };
   type AiAcct = { id: string; provider_key: string; key_group: string; label: string; status: string; key: string };
   const [provs, setProvs] = useState<Prov[]>([]);
   const [aiAccts, setAiAccts] = useState<AiAcct[]>([]);
@@ -63,13 +63,17 @@ export default function IntegrationsPage() {
     // diaktifkan (temuan owner 2026-07-06: model nonaktif → provider tersembunyi → kunci tak pernah
     // bisa masuk → uji aktivasi tak pernah terjadi = lingkaran mati). Pemilih MODEL di channel tetap
     // menyaring is_active (di sana barulah "bisa dipakai").
-    const { data: am } = await supabase.from("ai_models").select("provider_key,component");
+    const { data: am } = await supabase.from("ai_models").select("provider_key,component,is_active");
     const { data: ap } = await supabase.from("ai_providers").select("provider_key,display_name,auth_type,key_group,free_tier_note").eq("is_active", true);
     const byProv: Record<string, Set<string>> = {};
-    ((am ?? []) as { provider_key: string; component: string }[]).forEach((m) => { (byProv[m.provider_key] ??= new Set()).add(m.component); });
+    const byProvActive: Record<string, Set<string>> = {};
+    ((am ?? []) as { provider_key: string; component: string; is_active: boolean }[]).forEach((m) => {
+      (byProv[m.provider_key] ??= new Set()).add(m.component);
+      if (m.is_active) (byProvActive[m.provider_key] ??= new Set()).add(m.component);
+    });
     setProvs(((ap ?? []) as { provider_key: string; display_name: string; auth_type: string; key_group: string | null; free_tier_note: string | null }[])
       .filter((p) => byProv[p.provider_key])
-      .map((p) => ({ key: p.provider_key, name: p.display_name, auth: p.auth_type, key_group: p.key_group || p.provider_key, comps: [...byProv[p.provider_key]], free_note: p.free_tier_note || null })));
+      .map((p) => ({ key: p.provider_key, name: p.display_name, auth: p.auth_type, key_group: p.key_group || p.provider_key, comps: [...byProv[p.provider_key]], activeComps: [...(byProvActive[p.provider_key] ?? [])], free_note: p.free_tier_note || null })));
     try {
       const r = await fetch("/api/credentials/ai");
       if (r.ok) {
@@ -191,6 +195,7 @@ export default function IntegrationsPage() {
                   <span key={p.key}>{i > 0 && " · "}{p.name}
                     {p.free_note && <span className="badge badge-success" style={{ fontSize: ".575rem", marginLeft: 4, verticalAlign: "1px" }}><Bi id="Gratis harian" en="Free daily" /></span>}
                     {p.auth === "none" && <span className="badge badge-success" style={{ fontSize: ".575rem", marginLeft: 4, verticalAlign: "1px" }}><Bi id="Gratis tanpa kunci" en="Free, no key" /></span>}
+                    {!p.activeComps.some((c) => el.comps.includes(c)) && <span className="badge badge-warning" style={{ fontSize: ".575rem", marginLeft: 4, verticalAlign: "1px" }} title="Kunci bisa disimpan sekarang (berlaku level vendor); model utk elemen ini sedang disiapkan/menunggu uji — belum tampil di Pengaturan Channel."><Bi id="model segera hadir" en="model coming soon" /></span>}
                   </span>))}
                 {[...eProvs, ...freeProvs].length === 0 && "—"}
               </div>
@@ -214,7 +219,7 @@ export default function IntegrationsPage() {
                 <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: "0.6rem", marginTop: "0.6rem", display: "grid", gap: "0.4rem" }}>
                   <select className="input" value={f.provider} onChange={(e) => setF({ provider: e.target.value })}>
                     <option value="">— pilih penyedia —</option>
-                    {eProvs.map((p) => <option key={p.key} value={p.key}>{p.name}{p.free_note ? " — GRATIS harian" : ""}</option>)}
+                    {eProvs.map((p) => <option key={p.key} value={p.key}>{p.name}{p.free_note ? " — GRATIS harian" : ""}{!p.activeComps.some((c) => el.comps.includes(c)) ? " (model segera hadir)" : ""}</option>)}
                   </select>
                   {(() => { const sp = eProvs.find((p) => p.key === f.provider); return sp?.free_note
                     ? <div style={{ fontSize: "var(--text-xs)", color: "var(--success)", lineHeight: 1.5 }}>✓ {sp.free_note}</div> : null; })()}
