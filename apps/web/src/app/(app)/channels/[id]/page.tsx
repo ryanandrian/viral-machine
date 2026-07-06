@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ExternalLink, Settings, Zap, ArrowRight, BarChart3, Calendar, Activity, Loader2, Check, Pause, Play, RotateCw, AlertTriangle, Mic, ShieldCheck, Sparkles, Clock, Trash2, Plus, PenLine, Image as ImageIcon, Info, Search, X, Shuffle, Upload } from "lucide-react";
@@ -107,6 +107,17 @@ export default function ChannelDetailPage() {
   const [ttsProv, setTtsProv] = useState("");
   const [ttsModel, setTtsModel] = useState("");  // model TTS dipilih tenant (eleven_turbo/multilingual/flash; tts-1/hd)
   const [voiceKey, setVoiceKey] = useState("");
+  // Pemutar contoh suara — kelas SAMA dgn admin PlayBtn: ▶/⏹ toggle, satu audio, auto-stop (owner 2026-07-06)
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [playingVoice, setPlayingVoice] = useState<string | null>(null);
+  const toggleVoice = (k: string, url: string) => {
+    if (playingVoice === k) { audioRef.current?.pause(); audioRef.current = null; setPlayingVoice(null); return; }
+    audioRef.current?.pause();
+    const a = new Audio(url); a.onended = () => setPlayingVoice(null);
+    a.play().catch(() => setPlayingVoice(null));
+    audioRef.current = a; setPlayingVoice(k);
+  };
+  useEffect(() => () => { audioRef.current?.pause(); }, []);
   const [savingAi, setSavingAi] = useState("");  // elemen yg sedang disimpan ("llm"/"tts"/"visual")
   const [aiMsg, setAiMsg] = useState<{ el: string; text: string; ok: boolean } | null>(null);
   // Kunci AI = tenant-wide POOL di Page Credential (/integrations). Channel pilih penyedia→model→voice→AKUN.
@@ -711,7 +722,10 @@ export default function ChannelDetailPage() {
             const list = voiceAll.filter((v) => v.provider_key === ttsProv).slice().sort((a, b) => Number(fits(b)) - Number(fits(a)));
             return (
               <div className="fld-row"><div className="k"><Bi id="Karakter suara" en="Voice character" /><div className="sub"><Bi id="urut: cocok bahasa konten dulu" en="sorted: content-language match first" /></div></div>
-                <div className="radio-row">{list.map((v) => <span key={v.voice_key} className={`radio-pill${(voiceKey || "") === v.voice_key ? " sel" : ""}`} style={fits(v) ? undefined : { opacity: 0.55 }} title={fits(v) ? undefined : `Bahasa voice: ${v.language || v.locale || "?"} — beda dari bahasa konten channel`} onClick={() => setVoiceKey(v.voice_key)}><Mic size={13} />{v.display_name}{v.gender ? ` · ${v.gender}` : ""}{fits(v) ? "" : ` · ⚠ ${v.language || v.locale}`}{v.preview_url ? <span title="Dengar contoh" style={{ cursor: "pointer", marginLeft: 4 }} onClick={(e) => { e.stopPropagation(); new Audio(v.preview_url as string).play().catch(() => {}); }}>▶</span> : null}</span>)}</div></div>
+                <div className="radio-row">{list.map((v) => <span key={v.voice_key} className={`radio-pill${(voiceKey || "") === v.voice_key ? " sel" : ""}`} title={fits(v) ? undefined : `Bahasa voice: ${v.language || v.locale || "?"} — beda dari bahasa konten channel`} onClick={() => setVoiceKey(v.voice_key)}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4, opacity: fits(v) ? 1 : 0.55 }}><Mic size={13} />{v.display_name}{v.gender ? ` · ${v.gender}` : ""}{fits(v) ? "" : ` · ⚠ ${v.language || v.locale}`}</span>
+                  {v.preview_url ? <span role="button" aria-label={playingVoice === v.voice_key ? "Stop" : "Dengar contoh"} title={playingVoice === v.voice_key ? "Stop" : "Dengar contoh"} style={{ cursor: "pointer", marginLeft: 5, opacity: 1, fontWeight: 600 }} onClick={(e) => { e.stopPropagation(); toggleVoice(v.voice_key, v.preview_url as string); }}>{playingVoice === v.voice_key ? "⏹" : "▶"}</span> : null}
+                </span>)}</div></div>
             );
           })()}
           {acctPicker(ttsProv, ttsAcct, setTtsAcct)}
