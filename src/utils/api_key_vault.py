@@ -37,7 +37,19 @@ def _ai_test(provider_key: str, key: str):
         "elevenlabs": ("GET", "https://api.elevenlabs.io/v1/user",     {"xi-api-key": key}),
         "replicate":  ("GET", "https://api.replicate.com/v1/account",  {"Authorization": f"Token {key}"}),
     }.get(provider_key)
-    return spec
+    if spec:
+        return spec
+    # NO-HARDCODE (owner 2026-07-06, temuan status 'Tersimpan'): provider OpenAI-compatible ber-base_url
+    # (Gemini/Groq/Together/dst) diuji GENERIK via GET {base_url}/models Bearer — dari katalog, bukan peta.
+    try:
+        from src.providers.llm.catalog import get_providers
+        row = get_providers().get(provider_key) or {}
+        base = (row.get("base_url") or "").rstrip("/")
+        if base and (row.get("auth_type") == "api_key"):
+            return ("GET", f"{base}/models", {"Authorization": f"Bearer {key}"})
+    except Exception as e:
+        logger.warning(f"[vault] resep uji generik {provider_key} gagal dibangun: {e}")
+    return None
 
 
 def validate_ai_key(provider_key: str, key: str) -> str:
