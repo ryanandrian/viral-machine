@@ -372,7 +372,12 @@ export default function ChannelDetailPage() {
       setLandingLink(c.landing_link ?? ""); setLinkPos(c.link_position ?? "bottom");
     }
     // F2-03: katalog (ai_models/tts_profiles/voice_catalog — RLS read). Voice = CHANNEL (§10.B FINAL); tanpa pre-fill niche.
-    const { data: am } = await supabase.from("ai_models").select("model_key,provider_key,component,display_name").eq("is_active", true).order("display_name");
+    // Penyedia AKTIF dimuat DULU: opsi model/TTS wajib disaring per vendor aktif (mesin get_providers() hanya
+    // kenal penyedia aktif — model dari vendor yang admin matikan TIDAK BOLEH bisa dipilih; mandat butir-3 2026-07-06).
+    const { data: aps } = await supabase.from("ai_providers").select("provider_key,display_name,auth_type,key_group").eq("is_active", true);
+    const activeProv = new Set(((aps ?? []) as { provider_key: string }[]).map((p) => p.provider_key));
+    const { data: amRaw } = await supabase.from("ai_models").select("model_key,provider_key,component,display_name").eq("is_active", true).order("display_name");
+    const am = ((amRaw ?? []) as (ModelOpt & { component: string })[]).filter((m) => activeProv.has(m.provider_key));
     setLlmOpts(((am ?? []) as (ModelOpt & {component:string})[]).filter((m) => m.component === "llm"));
     const imgList = ((am ?? []) as (ModelOpt & {component:string})[]).filter((m) => m.component === "image" || m.component === "video");
     setImgOpts(imgList);
@@ -382,11 +387,10 @@ export default function ChannelDetailPage() {
     setVisualProv(imgList.find((m) => m.model_key === curImgModel)?.provider_key ?? "");
     setTtsModelOpts(((am ?? []) as { model_key: string; display_name: string; provider_key: string; component: string }[]).filter((m) => m.component === "tts"));
     const { data: tp } = await supabase.from("tts_profiles").select("provider_key,display_name").eq("is_active", true);
-    setTtsOpts((tp ?? []) as { provider_key: string; display_name: string }[]);
+    setTtsOpts(((tp ?? []) as { provider_key: string; display_name: string }[]).filter((p) => activeProv.has(p.provider_key)));
     const { data: vc } = await supabase.from("voice_catalog").select("voice_key,provider_key,display_name,gender,preview_url,locale,language").eq("is_active", true).order("sort_order");
     setVoiceAll((vc ?? []) as VoiceOpt[]);
     // penyedia: display_name (label pill) + auth_type (gratis 'none' → tak butuh kunci, mis. edge_tts).
-    const { data: aps } = await supabase.from("ai_providers").select("provider_key,display_name,auth_type,key_group").eq("is_active", true);
     setProvMap(Object.fromEntries(((aps ?? []) as { provider_key: string; display_name: string; auth_type: string; key_group: string | null }[]).map((p) => [p.provider_key, { name: p.display_name, auth: p.auth_type, kg: p.key_group || p.provider_key }])));
     // Akun AI tenant (untuk pemilih akun per-elemen; baca-balik tak perlu di sini — cukup id/status/vendor).
     try { const ra = await fetch("/api/credentials/ai"); if (ra.ok) { const ja = await ra.json(); setAiAccts((ja.accounts || []).map((a: { id: string; provider_key: string; key_group: string; label: string; status: string }) => ({ id: a.id, provider_key: a.provider_key, key_group: a.key_group, label: a.label, status: a.status }))); } } catch { /* non-fatal */ }

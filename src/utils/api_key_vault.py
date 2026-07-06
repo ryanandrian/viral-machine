@@ -63,7 +63,13 @@ def validate_ai_key(provider_key: str, key: str) -> str:
     try:
         with httpx.Client(timeout=12) as cl:
             r = cl.request(method, url, headers=headers)
-        return "valid" if r.status_code == 200 else "invalid"
+        if r.status_code == 200:
+            return "valid"
+        # ElevenLabs SCOPED key (terverifikasi 2026-07-06): kunci hidup & bisa TTS, tapi tak punya izin
+        # user_read/voices_read → endpoint uji balas 401 "missing_permission". Itu = kunci TERDAFTAR & usable.
+        if provider_key == "elevenlabs" and r.status_code == 401 and "missing_permission" in (r.text or ""):
+            return "valid"
+        return "invalid"
     except Exception as e:
         logger.warning(f"[vault] validate_ai_key {provider_key} gagal: {e}")
         return "invalid"
