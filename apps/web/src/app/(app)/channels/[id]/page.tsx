@@ -81,6 +81,13 @@ export default function ChannelDetailPage() {
   const [err, setErr] = useState<string | null>(null);
   const [testMsg, setTestMsg] = useState<string | null>(null);
   const wasHaltedRef = useRef(false);  // latch: channel pernah halted saat sesi ini → pesan hasil pakai "aktif kembali".
+  // Siklus hidup kartu hasil uji (owner 2026-07-08: "sampai kapan muncul?") — hilang bila:
+  // (1) tenant klik Tutup (localStorage per-test.id, persisten), (2) usang > test_result_ttl_hours
+  // (app_config, admin-editable, fallback 24), (3) test baru menggantikan (test.id berubah).
+  const [dismissedTestId, setDismissedTestId] = useState<string | null>(null);
+  const [testTtlHours, setTestTtlHours] = useState(24);
+  useEffect(() => { try { setDismissedTestId(localStorage.getItem(`mv:test-dismissed:${id}`)); } catch { /* non-fatal */ } }, [id]);
+  const dismissTest = (testId: string) => { try { localStorage.setItem(`mv:test-dismissed:${id}`, testId); } catch { /* non-fatal */ } setDismissedTestId(testId); };
   const [confirmCfg, setConfirmCfg] = useState<null | { title: React.ReactNode; message: React.ReactNode; confirmLabel: React.ReactNode; confirmClass: string; onConfirm: () => void }>(null);
   // F2-07/F1-09: status efektif
   const [sub, setSub] = useState<string | null>(null);
@@ -335,12 +342,22 @@ export default function ChannelDetailPage() {
   }
   function channelTestResult(test: TestInfo) {
     const s: React.CSSProperties = { fontSize: "var(--text-sm)", marginTop: ".5rem", lineHeight: 1.55 };
+    const terminal = ["done", "published", "failed"].includes(test.status);
+    if (terminal) {
+      // Siklus hidup kartu hasil: ditutup tenant ATAU usang > TTL → panel kembali tenang (hanya tombol uji).
+      if (dismissedTestId === test.id) return null;
+      const endAt = new Date(test.completed_at || test.created_at).getTime();
+      if (Number.isFinite(endAt) && Date.now() - endAt > testTtlHours * 3_600_000) return null;
+    }
+    const closeBtn = (
+      <button className="btn btn-ghost btn-sm" style={{ marginLeft: "auto", flexShrink: 0 }} onClick={() => dismissTest(test.id)} title="Tutup pesan ini"><X size={13} /> <Bi id="Tutup" en="Close" /></button>
+    );
     if (["done", "published"].includes(test.status)) {
       const vid = test.run?.youtube_video_id as string | undefined;
       const studio = vid ? `https://studio.youtube.com/video/${vid}/edit` : (test.run?.youtube_url as string | undefined);
       return (
         <div style={{ ...s, padding: ".6rem .75rem", borderRadius: "var(--r-md)", background: "var(--success-soft, #e6f7ec)", color: "var(--text-primary)" }}>
-          <div style={{ fontWeight: 600 }}>✓ <Bi id="Uji berhasil." en="Test succeeded." />{wasHaltedRef.current && <> <Bi id="Channel Anda telah aktif kembali." en="Your channel is active again." /></>}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}><span style={{ fontWeight: 600 }}>✓ <Bi id="Uji berhasil." en="Test succeeded." />{wasHaltedRef.current && <> <Bi id="Channel Anda telah aktif kembali." en="Your channel is active again." /></>}</span>{closeBtn}</div>
           {!test.run?.qc_passed && test.run?.error_message && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".25rem" }}><Bi id="Catatan QC:" en="QC note:" /> {test.run.error_message as string}</div>}
           <div style={{ marginTop: ".4rem" }}><Bi id="Silakan evaluasi hasil uji ini di YouTube Studio Anda:" en="Please review this test in your YouTube Studio:" /></div>
           {studio && <a className="btn btn-secondary btn-sm" href={studio} target="_blank" rel="noopener noreferrer" style={{ marginTop: ".4rem", textDecoration: "none" }}><ExternalLink size={13} /> <Bi id="Buka di YouTube Studio" en="Open in YouTube Studio" /></a>}
@@ -351,7 +368,7 @@ export default function ChannelDetailPage() {
       const f = failStageInfo(test);
       return (
         <div style={{ ...s, padding: ".6rem .75rem", borderRadius: "var(--r-md)", background: "var(--warning-soft, #fdf0e3)", color: "var(--text-primary)" }}>
-          <div style={{ fontWeight: 600 }}>⚠ <Bi id={`Mohon maaf, uji belum berhasil pada tahap: ${f.stage}.`} en={`Sorry, the test did not succeed at stage: ${f.stage}.`} /></div>
+          <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}><span style={{ fontWeight: 600 }}>⚠ <Bi id={`Mohon maaf, uji belum berhasil pada tahap: ${f.stage}.`} en={`Sorry, the test did not succeed at stage: ${f.stage}.`} /></span>{closeBtn}</div>
           <div style={{ marginTop: ".35rem" }}>
             {f.model
               ? <Bi id={`Mohon periksa kembali kredensial atau kredit AI untuk ${f.model}, lalu silakan lakukan uji kembali.`} en={`Please re-check the AI credential or credit for ${f.model}, then kindly run the test again.`} />
@@ -445,6 +462,12 @@ export default function ChannelDetailPage() {
     // F2-07: status efektif → subscription + readiness (RPC tenant-scoped F2-fondasi).
     const { data: cfg } = await supabase.from("tenant_configs").select("plan_type,subscription_status,viral_score_weights,usd_idr_rate").maybeSingle();
     setUsdIdr(Number((cfg as { usd_idr_rate?: number } | null)?.usd_idr_rate) || 0);
+    // Batas usang kartu hasil uji — app_config (admin-editable, fail-soft ke 24 jam).
+    try {
+      const { data: ttl } = await supabase.from("app_config").select("value").eq("key", "test_result_ttl_hours").maybeSingle();
+      const h = Number((ttl as { value?: number } | null)?.value);
+      if (Number.isFinite(h) && h > 0) setTestTtlHours(h);
+    } catch { /* fail-soft */ }
     setSub((cfg as { subscription_status?: string } | null)?.subscription_status ?? null);
     { const w = (cfg as { viral_score_weights?: LearnedWeights } | null)?.viral_score_weights; setChLearned(w && w.weights ? w : null); }
     try { const { data: rdd } = await supabase.rpc("channel_readiness", { p_channel_id: id }); if (rdd) setRd(rdd as { ready: boolean; missing: string[] }); } catch { /* non-fatal */ }
