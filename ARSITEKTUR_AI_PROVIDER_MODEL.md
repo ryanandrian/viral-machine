@@ -125,9 +125,13 @@ Per channel, per elemen (LLM/TTS/Visual): pilih **Provider → Model → Akun**.
 **File:**
 | File | Fungsi/proses |
 |---|---|
-| `apps/web/src/app/(app)/channels/[id]/page.tsx` | Setting AI channel: muat katalog (disaring provider aktif), pemilih Provider/Model/Akun per elemen (`saveLlm`/`saveTts`/`saveVisual`), pemutar sampel voice, readiness. |
+| `apps/web/src/app/(app)/channels/[id]/page.tsx` | Setting AI channel: muat katalog (disaring provider aktif), pemilih Provider/Model/Akun per elemen — **budget-aware** (badge tier + tag Gratis + tooltip harga Rp, urut `sort_order`); panel **uji produksi/recover** (konfirmasi + progres + hasil sopan + tautan YT Studio + siklus hidup Tutup/TTL); readiness. |
 | `apps/web/src/app/(app)/channels/page.tsx` | Daftar channel + status pause. |
+| `apps/web/src/app/api/channels/[id]/test/route.ts` | Endpoint uji channel: GET hasil test terakhir (per-channel) + POST enqueue `direct_jobs` (job_type `test` = upload privat YouTube; gate `channel_readiness`). |
+| `apps/web/src/components/test-niche-panel.tsx` | Panel uji bersama (niche + channel): konfirmasi, stepper progres nyata, hasil, polling 5 dtk; props opsional konteks. |
+| `apps/web/src/lib/test-run.ts` | `latestTestResult()` — status + progres (parse `pipeline_run_logs`) + `youtube_video_id` + presign video; key per-niche ATAU per-channel. |
 | DB fn `channel_missing()` / RPC `channel_readiness` | Satu sumber kesiapan (identik FE & worker). |
+| `app_config.test_result_ttl_hours` (migr 0145) | Batas usang kartu hasil uji (admin-editable, fail-soft 24 jam). |
 
 ---
 
@@ -147,7 +151,8 @@ kunci: channels.*_account_id → tenant_ai_accounts (decrypt Fernet)
 | File | Fungsi/proses |
 |---|---|
 | `scripts/worker_decoupled.py` | Entrypoint worker. Start thread: producer, publisher, janitor, self_learning, dll + startup `sync_catalog_valid_values()`. |
-| `src/orchestrator/producer.py` | `produce_one()` (produksi→buffer), `_cost_fields(result)` (→ `compute_cost_usd`, simpan `ai_usage`+`cost` ke `run_metadata`). |
+| `src/orchestrator/producer.py` | `produce_one()` (produksi→buffer), direct-jobs (test/recover; sukses → auto-unpause channel), `_cost_fields(result)` (→ `compute_cost_usd`, simpan `ai_usage`+`cost` ke `run_metadata`). |
+| `src/orchestrator/buffer_janitor.py` | Janitor: sweep stale/orphan S3, prune logs, pemicu `sync_prices`/`sync_fx_rate`, **`reap_stuck_direct_jobs()`** (job uji macet > `DIRECT_JOB_TTL_MINUTES` → failed + pesan). |
 | `src/orchestrator/pipeline.py` | `Pipeline.run()` — orkestrasi 1 video A-Z; `_load_tenant_run_config()`; reset & `cost_meter.summary()` masuk `result["ai_usage"]`. |
 | `src/orchestrator/publisher.py` | Publikasi video buffer → YouTube. |
 | `src/config/tenant_config.py` | `load_tenant_config()` (gabung channels + tenant_configs), `_set_key_from_pool()` (ambil kunci elemen dari `tenant_ai_accounts` sesuai `*_account_id`), `llm_model_for(task)`. |
@@ -192,4 +197,4 @@ biaya_video_IDR = biaya_video_USD × app_config.usd_idr_rate  (tampilan)
 
 ---
 
-*Dokumen ini mencerminkan kode pada commit `0b7a989` (v2-backend). Bila menambah adapter baru: daftarkan di registry kode (`src/providers/*`) — cermin `catalog_valid_values` akan memuatnya otomatis pada restart service berikutnya.*
+*Dokumen ini mencerminkan kode s/d commit `390b406`+ (v2-backend, 2026-07-08 — termasuk alur uji/recover channel + reaper + siklus hidup kartu hasil). Bila menambah adapter baru: daftarkan di registry kode (`src/providers/*`) — cermin `catalog_valid_values` memuatnya otomatis pada restart service berikutnya. Bila arsitektur berubah, UPDATE dokumen ini di commit yang sama.*

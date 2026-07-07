@@ -340,15 +340,17 @@ export default function ChannelDetailPage() {
       return { stage: "Membuat naskah (LLM)", model: `${provMap[llmProv]?.name ?? llmProv}${llmModel ? ` — ${llmModel}` : ""}` };
     return { stage: "produksi", model: null };
   }
+  // Siklus hidup hasil uji (SATU predikat utk kartu + ringkasan badge/skor/tanggal — Tutup = SEMUA hilang):
+  // ditutup tenant (per-test.id) ATAU usang > TTL → panel kembali tenang (hanya tombol uji).
+  function isResultHidden(test: TestInfo): boolean {
+    if (!["done", "published", "failed"].includes(test.status)) return false;
+    if (dismissedTestId === test.id) return true;
+    const endAt = new Date(test.completed_at || test.created_at).getTime();
+    return Number.isFinite(endAt) && Date.now() - endAt > testTtlHours * 3_600_000;
+  }
   function channelTestResult(test: TestInfo) {
     const s: React.CSSProperties = { fontSize: "var(--text-sm)", marginTop: ".5rem", lineHeight: 1.55 };
-    const terminal = ["done", "published", "failed"].includes(test.status);
-    if (terminal) {
-      // Siklus hidup kartu hasil: ditutup tenant ATAU usang > TTL → panel kembali tenang (hanya tombol uji).
-      if (dismissedTestId === test.id) return null;
-      const endAt = new Date(test.completed_at || test.created_at).getTime();
-      if (Number.isFinite(endAt) && Date.now() - endAt > testTtlHours * 3_600_000) return null;
-    }
+    if (isResultHidden(test)) return null;
     const closeBtn = (
       <button className="btn btn-ghost btn-sm" style={{ marginLeft: "auto", flexShrink: 0 }} onClick={() => dismissTest(test.id)} title="Tutup pesan ini"><X size={13} /> <Bi id="Tutup" en="Close" /></button>
     );
@@ -587,6 +589,7 @@ export default function ChannelDetailPage() {
           renderResult={channelTestResult}
           onComplete={() => load()}
           hideRefresh
+          hideSummary={isResultHidden}
         />
       </div>
 

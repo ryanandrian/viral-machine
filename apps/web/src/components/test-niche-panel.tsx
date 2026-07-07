@@ -16,7 +16,7 @@ export type TestInfo = { id: string; status: string; error: string | null; creat
 
 const dateID = (iso: string | null) => iso ? new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "—";
 
-export default function TestNichePanel({ getUrl, postUrl, postBody, confirmMessage, title, runLabel, renderResult, onComplete, hideRefresh }: {
+export default function TestNichePanel({ getUrl, postUrl, postBody, confirmMessage, title, runLabel, renderResult, onComplete, hideRefresh, hideSummary }: {
   getUrl: string;                       // GET → { test }
   postUrl: string;                      // POST → enqueue
   postBody?: Record<string, unknown>;   // body POST (tenant kirim niche_id)
@@ -26,6 +26,7 @@ export default function TestNichePanel({ getUrl, postUrl, postBody, confirmMessa
   renderResult?: (test: TestInfo) => ReactNode;  // slot hasil khusus konteks (channel: tautan YT Studio + status recover). Default: preview buffer.
   onComplete?: (test: TestInfo) => void;         // dipanggil sekali saat test selesai (done/failed) → mis. segarkan banner channel.
   hideRefresh?: boolean;                          // konteks channel: sembunyikan tombol segarkan (panel sudah auto-update).
+  hideSummary?: (test: TestInfo) => boolean;      // konteks channel: true → ringkasan hasil terminal (badge/skor/tanggal) ikut hilang (Tutup = SEMUA info hasil hilang). Status berjalan tak terpengaruh.
 }) {
   const [test, setTest] = useState<TestInfo | null>(null);
   const [loading, setLoading] = useState(false);
@@ -68,13 +69,15 @@ export default function TestNichePanel({ getUrl, postUrl, postBody, confirmMessa
   const running = !!test && ["pending", "producing"].includes(test.status);
   // Status SUKSES = done (test_nopub) ATAU published (test channel = upload privat YouTube). Keduanya terminal-sukses.
   const succeeded = !!test && ["done", "published"].includes(test.status);
+  // Ringkasan hasil terminal disembunyikan bila konteks memintanya (ditutup tenant / usang) — BUKAN saat berjalan.
+  const summaryQuiet = !!test && !running && !!hideSummary?.(test);
 
   return (
     <div style={{ padding: "0.75rem 1rem", border: "1px solid var(--border-subtle)", borderRadius: "var(--r-md)", background: "var(--bg)", marginBottom: "1rem" }}>
       <div style={{ display: "flex", alignItems: "center", gap: ".5rem", fontSize: "var(--text-xs)" }}>
         <FlaskConical size={13} style={{ color: "var(--accent)" }} />
         <strong style={{ fontSize: "var(--text-xs)" }}>{title ?? <Bi id="Test niche (tanpa publish)" en="Niche test (no publish)" />}</strong>
-        {test && (<>
+        {test && !summaryQuiet && (<>
           <span className={`badge ${succeeded && test.run?.qc_passed ? "badge-success" : succeeded ? "badge-warning" : test.status === "failed" ? "badge-error" : "badge-info"}`} style={{ fontSize: "0.5625rem" }}>
             {succeeded ? (test.run?.qc_passed ? "QC lolos" : "QC ada catatan") : test.status === "failed" ? "gagal" : test.status === "producing" ? "berjalan…" : "antre"}
           </span>
