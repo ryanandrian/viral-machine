@@ -219,6 +219,12 @@
 - **DEPENDS:** idealnya SETELAH **[A1]** (butuh aliran tenant nyata). **Nyambung:** [B8] /feedback · [D1] funnel · `PAYMENT_AND_TENANT_GATE_ARCHITECTURE.md` (state machine gate).
 - **REALISASI:** ✅ **DEPLOYED + LIVE 2026-07-02** (commit `db589b1`). Mesin lifecycle PENUH LIVE: nurture trial-lapse (5-email config) + suspended→blocked→deleted (30+30h) + purge S3 dini + revoke token YT (UU PDP) + diskon comeback + reaktivasi 1-klik (`/reactivate`) + banner blocked + admin lead_temp. Sweep terverifikasi bersih (nol hapus mendadak; timing di `app_config`). Detail+tracker = `LIFECYCLE_NURTURE_ARCHITECTURE.md §11`. **Follow-up SELESAI 2026-07-03:** ✅ tombol aksi-manual admin (`6a5f798`: Perpanjang trial / Undur hapus / Aktifkan-bersih / Hapus-permanen + ConfirmDialog + footgun Suspend@blocked) · ✅ Telegram admin di-wire ke `company_profile.admin_telegram_chat_id` (`603640e`, migr 0114, editable via `/admin/company-profile` — **bukan env**). **LIFECYCLE = 100% & dokumen di-CLOSE (direkonsiliasi vs realita via 2 verifikator 2026-07-03).**
 
+### [B10] UX AI-Catalog & Channel — audit terpadu (AUDIT_UX_AI_CATALOG.md) — 🟡 Fase 1 ✅ · Fase 2-4 ⬜ disetujui owner
+- **TUJUAN:** UI/UX area AI provider/model world-class utk tenant awam + admin (visi budget-aware + anti-bingung).
+- **SPEC + status detail = `AUDIT_UX_AI_CATALOG.md`** (temuan ber-bukti file:baris + fase + realisasi). Arsitektur rantai AI = `ARSITEKTUR_AI_PROVIDER_MODEL.md` (referensi, wajib sync per-commit).
+- **REALISASI:** ✅ **Fase 1 (2026-07-08)** — test/recover channel jelas (reuse TestNichePanel: konfirmasi+progres+hasil sopan+tautan YT Studio+lifecycle Tutup/TTL migr 0145) + picker model budget-aware (tier/Gratis/harga, sort_order) + reaper direct_jobs macet; commits `f2defec`→`c9aea19`, disegel verifikasi 10-butir. **⬜ Fase 2** (form Katalog admin: label manusiawi dwibahasa+help+contoh, duplikat-PK 409 kode→Bi, error inline) · **⬜ Fase 3** (cari/saring model) · **⬜ Fase 4** (tooltip Tersimpan, uji pakai kunci Test Lab, key_group datalist) — disetujui owner 2026-07-08, dikerjakan patuh penuh aturan (kode-error dwibahasa, gerbang localhost:3000, deploy per-batch SETELAH konfirmasi owner).
+- **DONE-BILA:** Fase 2-4 tervalidasi nyata + dikonfirmasi owner; kolom ini di-update.
+
 ---
 
 # ⏳ KELOMPOK C — DATA-GATED *(mekanisme SIAP; matang seiring data pasca-cutover — bukan "koding besar")*
