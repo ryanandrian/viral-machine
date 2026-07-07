@@ -110,6 +110,26 @@ def prune_logs(sb) -> dict:
         return {"logs_pruned": 0}
 
 
+def reap_stuck_direct_jobs(sb=None) -> dict:
+    """Job direct 'producing' yang melewati batas-waktu (worker mati/hang saat run) → tandai 'failed'
+    + alasan, supaya FE (TestNichePanel) lapor gagal bukan menggantung, dan tenant bisa uji ulang.
+    TTL via env DIRECT_JOB_TTL_MINUTES (default 30; uji normal ~2-5 mnt). Konsisten pola janitor lain."""
+    sb = sb or _sb()
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(minutes=float(os.getenv("DIRECT_JOB_TTL_MINUTES", "30")))
+    rows = sb.table("direct_jobs").select("id, started_at, created_at").eq("status", "producing").execute().data or []
+    stuck = [r for r in rows if (_parse(r.get("started_at")) or _parse(r.get("created_at")) or now) < cutoff]
+    for r in stuck:
+        sb.table("direct_jobs").update({
+            "status": "failed",
+            "error": "Uji melewati batas waktu (proses macet). Silakan coba lagi.",
+            "completed_at": now.isoformat(),
+        }).eq("id", r["id"]).execute()
+    if stuck:
+        logger.info(f"[janitor] reap_stuck_direct_jobs: {len(stuck)} job direct macet → failed")
+    return {"direct_reaped": len(stuck)}
+
+
 def run_once(sb=None) -> dict:
     sb = sb or _sb()
     # B2: sinkron harian harga model AI (feed komunitas → ai_models.pricing; guard internal 24h). Fail-soft.
@@ -124,7 +144,7 @@ def run_once(sb=None) -> dict:
         sync_fx_rate(sb)
     except Exception as e:
         logger.warning(f"[janitor] sync kurs gagal (non-fatal): {e}")
-    return {**sweep_stale(sb), **reconcile_orphans(sb), **prune_logs(sb)}
+    return {**sweep_stale(sb), **reconcile_orphans(sb), **reap_stuck_direct_jobs(sb), **prune_logs(sb)}
 
 
 def run_forever(interval_seconds=None) -> None:

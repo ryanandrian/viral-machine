@@ -33,12 +33,14 @@ export async function presignAssetKey(key: string): Promise<string | null> {
   } catch { return null; }
 }
 
-export async function latestTestResult(tenantId: string, nicheId: string, jobType: string): Promise<TestResult> {
+// key by niche (Niche Studio/admin) ATAU channel (Channel Setting) — channelId truthy → key channel.
+export async function latestTestResult(tenantId: string, nicheId: string, jobType: string, channelId?: string | null): Promise<TestResult> {
   const a = createAdminClient();
-  const { data: job } = await a.from("direct_jobs")
+  let q = a.from("direct_jobs")
     .select("id, status, error, run_id, created_at, started_at, completed_at")
-    .eq("tenant_id", tenantId).eq("job_type", jobType).eq("niche", nicheId)
-    .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    .eq("tenant_id", tenantId).eq("job_type", jobType);
+  q = channelId ? q.eq("channel_id", channelId) : q.eq("niche", nicheId);
+  const { data: job } = await q.order("created_at", { ascending: false }).limit(1).maybeSingle();
   if (!job) return null;
 
   let progress: TestProgress | null = null;
@@ -59,7 +61,7 @@ export async function latestTestResult(tenantId: string, nicheId: string, jobTyp
   let video_url: string | null = null;
   if (job.run_id) {
     const { data: pr } = await a.from("production_runs")
-      .select("status, qc_passed, viral_score, topic, elapsed_seconds, error_message, run_metadata")
+      .select("status, qc_passed, viral_score, topic, elapsed_seconds, error_message, run_metadata, youtube_video_id, youtube_url")
       .eq("run_id", job.run_id).maybeSingle();
     run = pr ?? null;
     let s3key = (pr?.run_metadata as { video_s3?: string } | null)?.video_s3;

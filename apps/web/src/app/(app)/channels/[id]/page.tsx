@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ExternalLink, Settings, Zap, ArrowRight, BarChart3, Calendar, Activity, Loader2, Check, Pause, Play, RotateCw, AlertTriangle, Mic, ShieldCheck, Sparkles, Clock, Trash2, Plus, PenLine, Image as ImageIcon, Info, Search, X, Shuffle, Upload } from "lucide-react";
+import { ExternalLink, Settings, ArrowRight, BarChart3, Calendar, Activity, Loader2, Check, Pause, Play, AlertTriangle, Mic, ShieldCheck, Sparkles, Clock, Trash2, Plus, PenLine, Image as ImageIcon, Info, Search, X, Shuffle, Upload } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { effectiveStatus, TONE } from "@/lib/channel-status";
 import PresetTables from "@/components/preset-tables";
@@ -11,6 +11,7 @@ import ConfirmDialog from "@/components/confirm-dialog";
 import { ComplianceView, type Compliance } from "@/components/compliance-view";
 import { InsightsView, type Insights, type LearnedWeights } from "@/components/insights-view";
 import RunsTable from "@/components/runs-table";
+import TestNichePanel, { type TestInfo } from "@/components/test-niche-panel";
 import "./channel-detail.css";
 
 // D3 Channel Detail — Phase 9.3 (wired Supabase v2, anon + RLS).
@@ -39,7 +40,7 @@ type ChannelRow = {
 };
 // Default caption_style — match BE DEFAULT_CAPTION_STYLE (video_renderer). Partial-override OK.
 const CAP_DEFAULT = { font_name: "Anton", font_size: 68, bold: true, active_word_color: "#FFD700", inactive_word_color: "#FFFFFF", outline_color: "#000000", outline: 4, position_y_pct: 83, max_words_per_line: 3 };
-type ModelOpt = { model_key: string; provider_key: string; display_name: string };
+type ModelOpt = { model_key: string; provider_key: string; display_name: string; quality_tier?: string | null; pricing?: Record<string, unknown> | null; component?: string };
 type VoiceOpt = { voice_key: string; provider_key: string; display_name: string; gender: string | null; preview_url: string | null; locale: string | null; language: string | null };
 
 // F2-07/F1-09: status efektif terpadu = komponen bersama `lib/channel-status` (satu sumber, anti-drift).
@@ -79,6 +80,7 @@ export default function ChannelDetailPage() {
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [testMsg, setTestMsg] = useState<string | null>(null);
+  const wasHaltedRef = useRef(false);  // latch: channel pernah halted saat sesi ini → pesan hasil pakai "aktif kembali".
   const [confirmCfg, setConfirmCfg] = useState<null | { title: React.ReactNode; message: React.ReactNode; confirmLabel: React.ReactNode; confirmClass: string; onConfirm: () => void }>(null);
   // F2-07/F1-09: status efektif
   const [sub, setSub] = useState<string | null>(null);
@@ -98,7 +100,8 @@ export default function ChannelDetailPage() {
   const [llmOpts, setLlmOpts] = useState<ModelOpt[]>([]);
   const [imgOpts, setImgOpts] = useState<(ModelOpt & { component: string })[]>([]);  // generator visual: image + video (BUKAN library/footage)
   const [ttsOpts, setTtsOpts] = useState<{ provider_key: string; display_name: string }[]>([]);
-  const [ttsModelOpts, setTtsModelOpts] = useState<{ model_key: string; display_name: string; provider_key: string }[]>([]);  // ai_models component='tts' (migr 0087)
+  const [ttsModelOpts, setTtsModelOpts] = useState<ModelOpt[]>([]);  // ai_models component='tts' (migr 0087)
+  const [usdIdr, setUsdIdr] = useState<number>(0);  // kurs tampilan biaya model (0 = belum tersedia)
   const [voiceAll, setVoiceAll] = useState<VoiceOpt[]>([]);
   const [llmProv, setLlmProv] = useState("");     // penyedia LLM (= llm_library); pilih DULU, lalu model
   const [llmModel, setLlmModel] = useState("");
@@ -297,18 +300,68 @@ export default function ChannelDetailPage() {
     if (!error) load();
   }
 
-  // Test sekarang (private) — direct_job: produksi 1 dgn config channel ini, publish private (preview).
-  // Konfirmasi WAJIB — Test now memakai kredit AI (BYOK) tenant untuk 1 video.
-  function askTestNow() {
-    setConfirmCfg({
-      title: <Bi id="Produksi video uji sekarang?" en="Produce a test video now?" />,
-      message: <Bi
-        id="Ini memproduksi 1 video uji (PRIVATE) untuk pratinjau konfigurasi — di-upload privat di YouTube, BUKAN publikasi publik. Proses ini MEMAKAI kredit AI (BYOK) Anda untuk 1 video."
-        en="This produces 1 test video (PRIVATE) to preview your config — uploaded privately to YouTube, NOT a public post. It USES your AI (BYOK) credit for 1 video." />,
-      confirmLabel: <Bi id="Ya, produksi uji" en="Yes, run test" />,
-      confirmClass: "btn-ai",
-      onConfirm: () => { setConfirmCfg(null); testNow(); },
-    });
+  // Hasil uji KHUSUS channel (renderResult TestNichePanel) — sopan (target tenant Indonesia), sebut model
+  // bermasalah saat gagal, tautan YouTube Studio saat sukses. Status channel (recover) via banner yg disegarkan.
+  // 1a/1c: petunjuk budget di pill model — badge tier + tag Gratis + tooltip harga (Rp via usdIdr).
+  const TIER_LABEL: Record<string, { id: string; en: string }> = {
+    basic: { id: "Basic", en: "Basic" }, standard: { id: "Standard", en: "Standard" },
+    premium: { id: "Premium", en: "Premium" }, fast: { id: "Cepat", en: "Fast" },
+  };
+  const isFreeModel = (m: ModelOpt) => provMap[m.provider_key]?.auth === "none";
+  function priceTitle(m: ModelOpt, comp: string): string {
+    if (isFreeModel(m)) return "Gratis — tanpa biaya";
+    const p = m.pricing as Record<string, number | null> | null;
+    if (!p) return "Harga belum tersedia";
+    const rp = (usd?: number | null) => usd != null && usdIdr ? `Rp${Math.round(usd * usdIdr).toLocaleString("id-ID")}` : (usd != null ? `$${usd}` : "—");
+    if (comp === "llm") return `≈ ${rp(p.in_per_1m)}/1jt token masuk · ${rp(p.out_per_1m)}/1jt keluar`;
+    if (comp === "tts") return `≈ ${rp(p.per_1m_chars)}/1jt karakter`;
+    return `≈ ${rp(p.per_image)}/gambar`;
+  }
+  function ModelBadges({ m }: { m: ModelOpt }) {
+    const t = m.quality_tier ? TIER_LABEL[m.quality_tier] : null;
+    if (isFreeModel(m)) return <span className="badge badge-success" style={{ fontSize: ".55rem", marginLeft: 5 }}><Bi id="Gratis" en="Free" /></span>;
+    return t ? <span className="badge badge-default" style={{ fontSize: ".55rem", marginLeft: 5 }}><Bi id={t.id} en={t.en} /></span> : null;
+  }
+
+  function failStageInfo(test: TestInfo): { stage: string; model: string | null } {
+    const msg = ((test.run?.error_message as string) || test.error || "").toLowerCase();
+    if (/tts|suara|voice|eleven|audio/.test(msg))
+      return { stage: "Membuat suara (TTS)", model: `${provMap[ttsProv]?.name ?? ttsProv}${ttsModel ? ` — ${ttsModel}` : ""}` };
+    if (/image|visual|gambar|render|clip/.test(msg))
+      return { stage: "Membuat visual", model: imgModel ? `${provMap[visualProv]?.name ?? visualProv} — ${imgModel}` : null };
+    if (/script|llm|naskah|hook|prompt/.test(msg))
+      return { stage: "Membuat naskah (LLM)", model: `${provMap[llmProv]?.name ?? llmProv}${llmModel ? ` — ${llmModel}` : ""}` };
+    return { stage: "produksi", model: null };
+  }
+  function channelTestResult(test: TestInfo) {
+    const s: React.CSSProperties = { fontSize: "var(--text-sm)", marginTop: ".5rem", lineHeight: 1.55 };
+    if (test.status === "done") {
+      const vid = test.run?.youtube_video_id as string | undefined;
+      const studio = vid ? `https://studio.youtube.com/video/${vid}/edit` : (test.run?.youtube_url as string | undefined);
+      return (
+        <div style={{ ...s, padding: ".6rem .75rem", borderRadius: "var(--r-md)", background: "var(--success-soft, #e6f7ec)", color: "var(--text-primary)" }}>
+          <div style={{ fontWeight: 600 }}>✓ <Bi id="Uji berhasil." en="Test succeeded." />{wasHaltedRef.current && <> <Bi id="Channel Anda telah aktif kembali." en="Your channel is active again." /></>}</div>
+          {!test.run?.qc_passed && test.run?.error_message && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".25rem" }}><Bi id="Catatan QC:" en="QC note:" /> {test.run.error_message as string}</div>}
+          <div style={{ marginTop: ".4rem" }}><Bi id="Silakan evaluasi hasil uji ini di YouTube Studio Anda:" en="Please review this test in your YouTube Studio:" /></div>
+          {studio && <a className="btn btn-secondary btn-sm" href={studio} target="_blank" rel="noopener noreferrer" style={{ marginTop: ".4rem", textDecoration: "none" }}><ExternalLink size={13} /> <Bi id="Buka di YouTube Studio" en="Open in YouTube Studio" /></a>}
+        </div>
+      );
+    }
+    if (test.status === "failed") {
+      const f = failStageInfo(test);
+      return (
+        <div style={{ ...s, padding: ".6rem .75rem", borderRadius: "var(--r-md)", background: "var(--warning-soft, #fdf0e3)", color: "var(--text-primary)" }}>
+          <div style={{ fontWeight: 600 }}>⚠ <Bi id={`Mohon maaf, uji belum berhasil pada tahap: ${f.stage}.`} en={`Sorry, the test did not succeed at stage: ${f.stage}.`} /></div>
+          <div style={{ marginTop: ".35rem" }}>
+            {f.model
+              ? <Bi id={`Mohon periksa kembali kredensial atau kredit AI untuk ${f.model}, lalu silakan lakukan uji kembali.`} en={`Please re-check the AI credential or credit for ${f.model}, then kindly run the test again.`} />
+              : <Bi id="Mohon periksa kembali kredensial atau kredit AI Anda, lalu silakan lakukan uji kembali." en="Please re-check your AI credential or credit, then kindly run the test again." />}
+          </div>
+          {wasHaltedRef.current && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".35rem" }}><Bi id="Channel akan aktif kembali setelah satu uji berhasil." en="The channel will be active again once one test succeeds." /></div>}
+        </div>
+      );
+    }
+    return null;
   }
   // Konfirmasi ringan — Pause menghentikan produksi baru channel ini.
   function askPause() {
@@ -321,16 +374,6 @@ export default function ChannelDetailPage() {
     });
   }
 
-  async function testNow() {
-    setTestMsg(null); setBusy(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setBusy(false); return setTestMsg("Sesi tak valid"); }
-    const { error } = await supabase.from("direct_jobs").insert({
-      tenant_id: user.id, channel_id: id, job_type: "test", publish_privacy: "private", requested_by: user.id,
-    });
-    setBusy(false);
-    setTestMsg(error ? `Gagal: ${error.message}` : "Diantre — produksi 1 video (private). Pantau di Runs (Antre→Berjalan).");
-  }
 
   // F2-07: pause/play (toggle is_active). Play hanya bila readiness lengkap (gerbang aktivasi).
   async function pausePlay(toActive: boolean) {
@@ -350,6 +393,7 @@ export default function ChannelDetailPage() {
       .eq("id", id).maybeSingle();
     const c = data as ChannelRow | null;
     setCh(c);
+    if (c?.production_paused) wasHaltedRef.current = true;
     if (c) {
       setName(c.channel_name ?? ""); setClang(c.content_language ?? "id-ID");
       setPrivacy(c.publish_privacy ?? "private");
@@ -376,16 +420,17 @@ export default function ChannelDetailPage() {
     // kenal penyedia aktif — model dari vendor yang admin matikan TIDAK BOLEH bisa dipilih; mandat butir-3 2026-07-06).
     const { data: aps } = await supabase.from("ai_providers").select("provider_key,display_name,auth_type,key_group").eq("is_active", true);
     const activeProv = new Set(((aps ?? []) as { provider_key: string }[]).map((p) => p.provider_key));
-    const { data: amRaw } = await supabase.from("ai_models").select("model_key,provider_key,component,display_name").eq("is_active", true).order("display_name");
+    // 1a/1b: sertakan tier + harga (petunjuk budget di pill) & urutkan sort_order (kurasi admin) lalu nama.
+    const { data: amRaw } = await supabase.from("ai_models").select("model_key,provider_key,component,display_name,quality_tier,pricing,sort_order").eq("is_active", true).order("sort_order").order("display_name");
     const am = ((amRaw ?? []) as (ModelOpt & { component: string })[]).filter((m) => activeProv.has(m.provider_key));
-    setLlmOpts(((am ?? []) as (ModelOpt & {component:string})[]).filter((m) => m.component === "llm"));
-    const imgList = ((am ?? []) as (ModelOpt & {component:string})[]).filter((m) => m.component === "image" || m.component === "video");
+    setLlmOpts(am.filter((m) => m.component === "llm"));
+    const imgList = am.filter((m) => m.component === "image" || m.component === "video");
     setImgOpts(imgList);
     // visualProv = penyedia dari model visual tersimpan (visual_mode = ai_image:/ai_video:<model>)
     const curVm = c?.visual_mode ?? "";
     const curImgModel = curVm.startsWith("ai_image:") || curVm.startsWith("ai_video:") ? curVm.slice(9) : "";
     setVisualProv(imgList.find((m) => m.model_key === curImgModel)?.provider_key ?? "");
-    setTtsModelOpts(((am ?? []) as { model_key: string; display_name: string; provider_key: string; component: string }[]).filter((m) => m.component === "tts"));
+    setTtsModelOpts(am.filter((m) => m.component === "tts"));
     const { data: tp } = await supabase.from("tts_profiles").select("provider_key,display_name").eq("is_active", true);
     setTtsOpts(((tp ?? []) as { provider_key: string; display_name: string }[]).filter((p) => activeProv.has(p.provider_key)));
     const { data: vc } = await supabase.from("voice_catalog").select("voice_key,provider_key,display_name,gender,preview_url,locale,language").eq("is_active", true).order("sort_order");
@@ -398,7 +443,8 @@ export default function ChannelDetailPage() {
     // Koneksi YouTube (pool) untuk pemilih di kartu identitas.
     try { const ry = await fetch("/api/youtube/status"); if (ry.ok) { const jy = await ry.json(); setYtAccounts(jy.accounts || []); } } catch { /* non-fatal */ }
     // F2-07: status efektif → subscription + readiness (RPC tenant-scoped F2-fondasi).
-    const { data: cfg } = await supabase.from("tenant_configs").select("plan_type,subscription_status,viral_score_weights").maybeSingle();
+    const { data: cfg } = await supabase.from("tenant_configs").select("plan_type,subscription_status,viral_score_weights,usd_idr_rate").maybeSingle();
+    setUsdIdr(Number((cfg as { usd_idr_rate?: number } | null)?.usd_idr_rate) || 0);
     setSub((cfg as { subscription_status?: string } | null)?.subscription_status ?? null);
     { const w = (cfg as { viral_score_weights?: LearnedWeights } | null)?.viral_score_weights; setChLearned(w && w.weights ? w : null); }
     try { const { data: rdd } = await supabase.rpc("channel_readiness", { p_channel_id: id }); if (rdd) setRd(rdd as { ready: boolean; missing: string[] }); } catch { /* non-fatal */ }
@@ -484,7 +530,6 @@ export default function ChannelDetailPage() {
               ? <button className="btn btn-secondary" disabled={busy} onClick={askPause}><Pause size={15} /> <Bi id="Jeda" en="Pause" /></button>
               : <button className="btn btn-secondary" disabled={busy} onClick={() => pausePlay(true)}><Play size={15} /> <Bi id="Aktifkan" en="Activate" /></button>
           )}
-          <button className="btn btn-ai" disabled={busy} onClick={askTestNow} title="Produksi 1 video private untuk preview config"><Zap size={15} /> <Bi id="Test sekarang (private)" en="Test now (private)" /></button>
         </div>
         {testMsg && <div style={{ flexBasis: "100%", fontSize: "var(--text-xs)", color: "var(--text-secondary)", marginTop: ".5rem" }}>{testMsg}</div>}
       </div>
@@ -499,7 +544,6 @@ export default function ChannelDetailPage() {
               {eff.reason && <div style={{ fontSize: "var(--text-sm)", color: "var(--text-secondary)", marginTop: "0.25rem" }}>{eff.reason}</div>}
               {eff.reco_id && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.35rem" }}><Bi id={eff.reco_id} en={eff.reco_en!} /></div>}
               <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.625rem", flexWrap: "wrap" }}>
-                {eff.key === "halted" && <button className="btn btn-ai btn-sm" disabled={busy} onClick={askTestNow}><RotateCw size={14} /> <Bi id="Jalankan ulang & pulihkan" en="Run & recover" /></button>}
                 {eff.key === "incomplete" && <button className="btn btn-default btn-sm" onClick={() => setTab("settings")}><Settings size={14} /> <Bi id="Lengkapi konfigurasi" en="Complete config" /></button>}
                 {eff.key === "paused" && <button className="btn btn-default btn-sm" disabled={busy} onClick={() => pausePlay(true)}><Play size={14} /> <Bi id="Aktifkan" en="Activate" /></button>}
               </div>
@@ -507,6 +551,20 @@ export default function ChannelDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Uji produksi channel (reuse TestNichePanel): konfirmasi + progres live + hasil sopan + tautan YT Studio.
+          runLabel & pesan hasil adaptif konteks (halted=pulihkan / aktif=pratinjau). onComplete → segarkan banner. */}
+      <div style={{ marginBottom: "1rem" }}>
+        <TestNichePanel
+          getUrl={`/api/channels/${id}/test`}
+          postUrl={`/api/channels/${id}/test`}
+          title={<Bi id="Uji produksi channel" en="Channel production test" />}
+          runLabel={eff.key === "halted" ? <Bi id="Jalankan uji & pulihkan" en="Run & recover" /> : <Bi id="Uji sekarang (privat)" en="Test now (private)" />}
+          confirmMessage={<Bi id="Tindakan ini memproduksi 1 video uji (privat di YouTube) untuk memeriksa konfigurasi channel Anda. Lanjutkan?" en="This produces 1 test video (private on YouTube) to check your channel configuration. Continue?" />}
+          renderResult={channelTestResult}
+          onComplete={() => load()}
+        />
+      </div>
 
       <div className="cd-tabs">
         {TABS.map(([k, idT, en]) => <button key={k} className={`cd-tab${tab === k ? " active" : ""}`} onClick={() => setTab(k)}><Bi id={idT} en={en} /></button>)}
@@ -701,7 +759,7 @@ export default function ChannelDetailPage() {
             <div className="radio-row">{[...new Set(llmOpts.map((m) => m.provider_key))].map((pk) => <span key={pk} className={`radio-pill${llmProv === pk ? " sel" : ""}`} onClick={() => { setLlmProv(pk); setLlmModel(""); }}>{provMap[pk]?.name ?? pk}</span>)}</div></div>
           {llmProv && (
             <div className="fld-row"><div className="k"><Bi id="Model" en="Model" /></div>
-              <div className="radio-row">{llmOpts.filter((m) => m.provider_key === llmProv).map((m) => <span key={m.model_key} className={`radio-pill${llmModel === m.model_key ? " sel" : ""}`} onClick={() => setLlmModel(m.model_key)}>{m.display_name}</span>)}</div></div>
+              <div className="radio-row">{llmOpts.filter((m) => m.provider_key === llmProv).map((m) => <span key={m.model_key} title={priceTitle(m, "llm")} className={`radio-pill${llmModel === m.model_key ? " sel" : ""}`} onClick={() => setLlmModel(m.model_key)}>{m.display_name}<ModelBadges m={m} /></span>)}</div></div>
           )}
           {acctPicker(llmProv, llmAcct, setLlmAcct)}
           <div className="save-bar">{aiMsg?.el === "llm" && <span style={{ color: aiMsg.ok ? "var(--success)" : "var(--danger,#ef4444)" }}>{aiMsg.text}</span>}<button className="btn btn-default btn-sm" disabled={savingAi === "llm"} onClick={saveLlm}>{savingAi === "llm" ? <Loader2 size={14} className="spin" /> : <Bi id="Simpan" en="Save" />}</button></div>
@@ -715,7 +773,7 @@ export default function ChannelDetailPage() {
             <div className="radio-row">{ttsOpts.map((p) => <span key={p.provider_key} className={`radio-pill${ttsProv === p.provider_key ? " sel" : ""}`} onClick={() => { setTtsProv(p.provider_key); setTtsModel(""); setVoiceKey(""); }}>{p.display_name}</span>)}</div></div>
           {ttsProv && ttsModelOpts.filter((m) => m.provider_key === ttsProv).length > 0 && (
             <div className="fld-row"><div className="k"><Bi id="Model suara" en="Voice model" /><div className="sub"><Bi id="kualitas vs kecepatan" en="quality vs speed" /></div></div>
-              <div className="radio-row">{ttsModelOpts.filter((m) => m.provider_key === ttsProv).map((m) => <span key={m.model_key} className={`radio-pill${ttsModel === m.model_key ? " sel" : ""}`} onClick={() => setTtsModel(m.model_key)}>{m.display_name}</span>)}</div></div>
+              <div className="radio-row">{ttsModelOpts.filter((m) => m.provider_key === ttsProv).map((m) => <span key={m.model_key} title={priceTitle(m, "tts")} className={`radio-pill${ttsModel === m.model_key ? " sel" : ""}`} onClick={() => setTtsModel(m.model_key)}>{m.display_name}<ModelBadges m={m} /></span>)}</div></div>
           )}
           {ttsProv && (() => {
             // Kecocokan bahasa konten channel (0131): cocok = locale voice se-bahasa ATAU voice Multilingual.
@@ -745,7 +803,7 @@ export default function ChannelDetailPage() {
             <div className="radio-row">{[...new Set(imgOpts.map((m) => m.provider_key))].map((pk) => <span key={pk} className={`radio-pill${visualProv === pk ? " sel" : ""}`} onClick={() => { setVisualProv(pk); setImgModel(""); }}>{provMap[pk]?.name ?? pk}</span>)}</div></div>
           {visualProv && (
             <div className="fld-row"><div className="k"><Bi id="Model" en="Model" /><div className="sub"><Bi id="gambar atau video" en="image or video" /></div></div>
-              <div className="radio-row">{imgOpts.filter((m) => m.provider_key === visualProv).map((m) => <span key={m.model_key} className={`radio-pill${imgModel === m.model_key ? " sel" : ""}`} onClick={() => setImgModel(m.model_key)}>{m.display_name}</span>)}</div></div>
+              <div className="radio-row">{imgOpts.filter((m) => m.provider_key === visualProv).map((m) => <span key={m.model_key} title={priceTitle(m, m.component || "image")} className={`radio-pill${imgModel === m.model_key ? " sel" : ""}`} onClick={() => setImgModel(m.model_key)}>{m.display_name}<ModelBadges m={m} /></span>)}</div></div>
           )}
           <div className="fld-row"><div className="k"><Bi id="Kualitas gambar" en="Image quality" /><div className="sub"><Bi id="makin tinggi makin bagus & makin mahal" en="higher = nicer & pricier" /></div></div>
             <div className="radio-row">{([["low", "Hemat", "Saver"], ["medium", "Seimbang", "Balanced"], ["high", "Terbaik", "Best"]] as [string, string, string][]).map(([q, idL, enL]) => <span key={q} className={`radio-pill${imgQuality === q ? " sel" : ""}`} onClick={() => setImgQuality(q)}><Bi id={idL} en={enL} /></span>)}</div></div>
