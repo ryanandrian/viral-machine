@@ -335,7 +335,7 @@ export default function ChannelDetailPage() {
   }
   function channelTestResult(test: TestInfo) {
     const s: React.CSSProperties = { fontSize: "var(--text-sm)", marginTop: ".5rem", lineHeight: 1.55 };
-    if (test.status === "done") {
+    if (["done", "published"].includes(test.status)) {
       const vid = test.run?.youtube_video_id as string | undefined;
       const studio = vid ? `https://studio.youtube.com/video/${vid}/edit` : (test.run?.youtube_url as string | undefined);
       return (
@@ -563,6 +563,7 @@ export default function ChannelDetailPage() {
           confirmMessage={<Bi id="Tindakan ini memproduksi 1 video uji (privat di YouTube) untuk memeriksa konfigurasi channel Anda. Lanjutkan?" en="This produces 1 test video (private on YouTube) to check your channel configuration. Continue?" />}
           renderResult={channelTestResult}
           onComplete={() => load()}
+          hideRefresh
         />
       </div>
 

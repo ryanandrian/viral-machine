@@ -16,7 +16,7 @@ export type TestInfo = { id: string; status: string; error: string | null; creat
 
 const dateID = (iso: string | null) => iso ? new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "—";
 
-export default function TestNichePanel({ getUrl, postUrl, postBody, confirmMessage, title, runLabel, renderResult, onComplete }: {
+export default function TestNichePanel({ getUrl, postUrl, postBody, confirmMessage, title, runLabel, renderResult, onComplete, hideRefresh }: {
   getUrl: string;                       // GET → { test }
   postUrl: string;                      // POST → enqueue
   postBody?: Record<string, unknown>;   // body POST (tenant kirim niche_id)
@@ -25,6 +25,7 @@ export default function TestNichePanel({ getUrl, postUrl, postBody, confirmMessa
   runLabel?: ReactNode;                 // label tombol jalankan (default: Jalankan test).
   renderResult?: (test: TestInfo) => ReactNode;  // slot hasil khusus konteks (channel: tautan YT Studio + status recover). Default: preview buffer.
   onComplete?: (test: TestInfo) => void;         // dipanggil sekali saat test selesai (done/failed) → mis. segarkan banner channel.
+  hideRefresh?: boolean;                          // konteks channel: sembunyikan tombol segarkan (panel sudah auto-update).
 }) {
   const [test, setTest] = useState<TestInfo | null>(null);
   const [loading, setLoading] = useState(false);
@@ -48,7 +49,7 @@ export default function TestNichePanel({ getUrl, postUrl, postBody, confirmMessa
   // memakainya untuk menyegarkan banner status (recover). Tak fire bila load pertama sudah terminal.
   const prevStatus = useRef<string | null>(null);
   useEffect(() => {
-    if (test && ["done", "failed"].includes(test.status) &&
+    if (test && ["done", "published", "qc_failed", "failed"].includes(test.status) &&
         prevStatus.current && ["pending", "producing"].includes(prevStatus.current)) {
       onComplete?.(test);
     }
@@ -65,6 +66,8 @@ export default function TestNichePanel({ getUrl, postUrl, postBody, confirmMessa
   }
 
   const running = !!test && ["pending", "producing"].includes(test.status);
+  // Status SUKSES = done (test_nopub) ATAU published (test channel = upload privat YouTube). Keduanya terminal-sukses.
+  const succeeded = !!test && ["done", "published"].includes(test.status);
 
   return (
     <div style={{ padding: "0.75rem 1rem", border: "1px solid var(--border-subtle)", borderRadius: "var(--r-md)", background: "var(--bg)", marginBottom: "1rem" }}>
@@ -72,14 +75,14 @@ export default function TestNichePanel({ getUrl, postUrl, postBody, confirmMessa
         <FlaskConical size={13} style={{ color: "var(--accent)" }} />
         <strong style={{ fontSize: "var(--text-xs)" }}>{title ?? <Bi id="Test niche (tanpa publish)" en="Niche test (no publish)" />}</strong>
         {test && (<>
-          <span className={`badge ${test.status === "done" && test.run?.qc_passed ? "badge-success" : test.status === "done" ? "badge-warning" : test.status === "failed" ? "badge-error" : "badge-info"}`} style={{ fontSize: "0.5625rem" }}>
-            {test.status === "done" ? (test.run?.qc_passed ? "QC lolos" : "QC ada catatan") : test.status === "failed" ? "gagal" : test.status === "producing" ? "berjalan…" : "antre"}
+          <span className={`badge ${succeeded && test.run?.qc_passed ? "badge-success" : succeeded ? "badge-warning" : test.status === "failed" ? "badge-error" : "badge-info"}`} style={{ fontSize: "0.5625rem" }}>
+            {succeeded ? (test.run?.qc_passed ? "QC lolos" : "QC ada catatan") : test.status === "failed" ? "gagal" : test.status === "producing" ? "berjalan…" : "antre"}
           </span>
           {test.run?.viral_score != null && <span className="muted">skor {test.run.viral_score}</span>}
           <span className="muted">{dateID(test.created_at)}</span>
         </>)}
         <span style={{ marginLeft: "auto", display: "inline-flex", gap: ".35rem" }}>
-          <button className="btn btn-ghost btn-icon btn-sm" title="Segarkan" disabled={loading} onClick={load}><RefreshCw size={12} /></button>
+          {!hideRefresh && <button className="btn btn-ghost btn-icon btn-sm" title="Segarkan" disabled={loading} onClick={load}><RefreshCw size={12} /></button>}
           <button className="btn btn-secondary btn-sm" disabled={busy || loading || running} onClick={() => setConfirm(true)}>
             {running ? <><Loader2 size={13} className="spin" /> <Bi id="Berjalan…" en="Running…" /></> : <><FlaskConical size={13} /> {runLabel ?? <Bi id="Jalankan test" en="Run test" />}</>}
           </button>
