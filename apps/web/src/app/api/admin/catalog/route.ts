@@ -39,7 +39,11 @@ const JSONB_COLS: Record<string, string[]> = {
 };
 // Kolom numerik dengan RESET-ke-NULL + guard rentang (F5-01: voice_catalog.delivery_wps pace per-voice).
 const NUMERIC_COLS: Record<string, Record<string, [number, number]>> = {
-  voice_catalog: { delivery_wps: [1.0, 4.0] },
+  voice_catalog: { delivery_wps: [1.0, 4.0], sort_order: [0, 99999] },
+  ai_models: { sort_order: [0, 99999] },
+  content_languages: { sort_order: [0, 99999] },
+  niche_property_presets: { sort_order: [0, 99999] },
+  tts_profiles: { delivery_wps: [1.0, 4.0] },
 };
 function coerceValue(table: string, col: string, val: unknown): unknown {
   // jsonb: string → objek; kosong → undefined (jangan tulis, pakai default DB)
@@ -66,9 +70,11 @@ function coerceValue(table: string, col: string, val: unknown): unknown {
 // identitas TTS/visual → terima union agar tak-menolak data sah + tetap tolak typo. auth_type/component
 // & tts_profiles.adapter tervalidasi ketat. Sumber tunggal = tabel cermin (di-sync mesin saat startup).
 const ENUM_COLS: Record<string, Record<string, string[]>> = {
-  ai_providers: { adapter: ["llm_adapter", "tts_adapter", "visual_transport"], auth_type: ["auth_type"] },
-  ai_models:    { component: ["component"] },
-  tts_profiles: { adapter: ["tts_adapter"] },
+  ai_providers:      { adapter: ["llm_adapter", "tts_adapter", "visual_transport"], auth_type: ["auth_type"] },
+  ai_models:         { component: ["component"], quality_tier: ["model_tier"] },
+  content_languages: { quality_tier: ["language_tier"] },
+  voice_catalog:     { gender: ["gender"] },
+  tts_profiles:      { adapter: ["tts_adapter"], tts_class: ["tts_class"] },
 };
 
 // Validasi nilai enum di `clean` terhadap cermin. Throw Error (pesan jelas) bila di luar daftar sah.

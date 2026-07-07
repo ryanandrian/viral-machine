@@ -35,6 +35,16 @@ COMPONENTS: List[Tuple[str, str]] = [
     ("image", "Gambar (text-to-image)"),
     ("video", "Video (text-to-video)"),
 ]
+# Tingkat kualitas model (produk) — set terhingga per tabel; single-source di kode → mirror.
+MODEL_TIERS: List[Tuple[str, str]] = [
+    ("basic", "Basic"), ("standard", "Standard"), ("premium", "Premium"), ("fast", "Fast"),
+]
+LANGUAGE_TIERS: List[Tuple[str, str]] = [
+    ("official", "Official"), ("experimental", "Experimental"),
+]
+GENDERS: List[Tuple[str, str]] = [("male", "Male"), ("female", "Female")]
+# Kelas TTS (format_catalog.tts_class): 'timed' (word-timeframe) | 'fast_fallback' (edge).
+TTS_CLASSES: List[Tuple[str, str]] = [("timed", "Timed"), ("fast_fallback", "Fast fallback")]
 
 
 def collect_valid_values() -> List[Dict[str, str]]:
@@ -72,6 +82,14 @@ def collect_valid_values() -> List[Dict[str, str]]:
         rows.append({"field": "auth_type", "value": v, "label": lbl})
     for v, lbl in COMPONENTS:
         rows.append({"field": "component", "value": v, "label": lbl})
+    for v, lbl in MODEL_TIERS:
+        rows.append({"field": "model_tier", "value": v, "label": lbl})
+    for v, lbl in LANGUAGE_TIERS:
+        rows.append({"field": "language_tier", "value": v, "label": lbl})
+    for v, lbl in GENDERS:
+        rows.append({"field": "gender", "value": v, "label": lbl})
+    for v, lbl in TTS_CLASSES:
+        rows.append({"field": "tts_class", "value": v, "label": lbl})
     return rows
 
 

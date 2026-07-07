@@ -25,8 +25,10 @@ type Cat = {
 // Sinkron dgn ENUM_COLS di api/admin/catalog/route.ts (validasi server sbg backstop).
 const ENUM_FIELD_SRC: Record<string, Record<string, string[]>> = {
   providers: { adapter: ["llm_adapter", "tts_adapter", "visual_transport"], auth_type: ["auth_type"] },
-  models: { component: ["component"] },
-  ttsprof: { adapter: ["tts_adapter"] },
+  models: { component: ["component"], quality_tier: ["model_tier"] },
+  languages: { quality_tier: ["language_tier"] },
+  voice: { gender: ["gender"] },
+  ttsprof: { adapter: ["tts_adapter"], tts_class: ["tts_class"] },
 };
 
 // Urutan hierarki (owner 2026-07-04): PROVIDER dulu → AI Models (model = DETAIL dari provider).
