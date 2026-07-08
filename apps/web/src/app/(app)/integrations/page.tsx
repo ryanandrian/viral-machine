@@ -50,6 +50,9 @@ export default function IntegrationsPage() {
   const [aiAccts, setAiAccts] = useState<AiAcct[]>([]);
   const [editKey, setEditKey] = useState<Record<string, string>>({});  // account id → nilai kunci (edit)
   const [addF, setAddF] = useState<Record<string, { provider: string; label: string; key: string }>>({});  // element key → form tambah
+  // Cloudflare = DUA kredensial (Account ID + API Token) → dua kolom terpisah, sistem yang menggabung
+  // 'ACCT:TOKEN' (anti-human-error di titik input; insiden 2026-07-08: token-saja tersimpan → invalid).
+  const [cfAcct, setCfAcct] = useState<Record<string, string>>({});   // formKey → Account ID
   const [openAdd, setOpenAdd] = useState<string>("");  // element key yg form-tambahnya terbuka
 
   const loadYt = useCallback(async () => {
@@ -191,6 +194,17 @@ export default function IntegrationsPage() {
             : <span className="badge badge-default" title="Kunci tersimpan namun belum terverifikasi — klik Simpan & Uji untuk memastikan" style={{ fontSize: "0.625rem" }}><span className="dot" /> <Bi id="Tersimpan (belum diuji)" en="Saved (untested)" /></span>;
           const f = addF[el.key] || { provider: "", label: "", key: "" };
           const setF = (patch: Partial<{ provider: string; label: string; key: string }>) => setAddF((s) => ({ ...s, [el.key]: { ...f, ...patch } }));
+          // Gabung + validasi kredensial Cloudflare DI TITIK INPUT (bukan gagal-belakangan).
+          const cfCombine = (formKey: string, token: string): string | null => {
+            const acct = (cfAcct[formKey] || "").trim().toLowerCase();
+            if (!/^[0-9a-f]{32}$/.test(acct)) { setErr({ k: formKey, m: "__cf_acct__" }); return null; }
+            if (!token.trim()) { setErr({ k: formKey, m: "__cf_token__" }); return null; }
+            return `${acct}:${token.trim()}`;
+          };
+          const errView = (m: string) =>
+            m === "__cf_acct__" ? <Bi id="Account ID Cloudflare harus 32 karakter huruf/angka — lihat sisi kanan halaman utama dash.cloudflare.com." en="Cloudflare Account ID must be 32 hex characters — see the right side of your dash.cloudflare.com homepage." />
+            : m === "__cf_token__" ? <Bi id="API Token belum diisi (My Profile → API Tokens, izin Workers AI)." en="API Token is empty (My Profile → API Tokens, Workers AI permission)." />
+            : <>{m}</>;
           return (
             <div key={el.key} className="card card-pad">
               <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.25rem" }}>
@@ -215,12 +229,16 @@ export default function IntegrationsPage() {
                     <span style={{ ...muted, fontSize: "var(--text-xs)" }}>· {(provs.find((p) => p.key === a.provider_key)?.name) || a.provider_key}</span>
                     <span style={{ marginLeft: "auto" }}>{badge(a.status)}</span>
                   </div>
-                  <div style={{ display: "flex", gap: "0.5rem" }}>
-                    <input className="input input-mono" type="text" value={editKey[a.id] ?? ""} onChange={(e) => setEditKey((s) => ({ ...s, [a.id]: e.target.value }))} />
-                    <button className="btn btn-default btn-sm" disabled={busy === "acct:" + a.id} onClick={() => saveAccount(a.provider_key, editKey[a.id] || "", a.label, a.id, a.id)}>{busy === "acct:" + a.id ? <Loader2 size={14} className="spin" /> : <Bi id="Simpan & Uji" en="Save & Test" />}</button>
+                  <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                    {a.provider_key === "cloudflare" && <input className="input input-mono" type="text" placeholder="Account ID (32 karakter / 32 chars)" value={cfAcct[a.id] ?? ""} onChange={(e) => setCfAcct((s) => ({ ...s, [a.id]: e.target.value }))} />}
+                    <input className="input input-mono" type="text" placeholder={a.provider_key === "cloudflare" ? "API Token" : undefined} value={editKey[a.id] ?? ""} onChange={(e) => setEditKey((s) => ({ ...s, [a.id]: e.target.value }))} />
+                    <button className="btn btn-default btn-sm" disabled={busy === "acct:" + a.id} onClick={() => {
+                      if (a.provider_key === "cloudflare") { const c = cfCombine(a.id, editKey[a.id] || ""); if (!c) return; saveAccount(a.provider_key, c, a.label, a.id, a.id); }
+                      else saveAccount(a.provider_key, editKey[a.id] || "", a.label, a.id, a.id);
+                    }}>{busy === "acct:" + a.id ? <Loader2 size={14} className="spin" /> : <Bi id="Simpan & Uji" en="Save & Test" />}</button>
                     <button className="btn btn-outline btn-sm" disabled={busy === "del:" + a.id} onClick={() => deleteAccount(a.id)}>{busy === "del:" + a.id ? <Loader2 size={14} className="spin" /> : <Bi id="Hapus" en="Remove" />}</button>
                   </div>
-                  {err?.k === a.id && <span style={{ color: "var(--danger,#ef4444)", fontSize: "var(--text-xs)" }}>{err.m}</span>}
+                  {err?.k === a.id && <span style={{ color: "var(--danger,#ef4444)", fontSize: "var(--text-xs)" }}>{errView(err.m)}</span>}
                 </div>
               ))}
               {eProvs.length > 0 && (openAdd === el.key ? (
@@ -232,11 +250,19 @@ export default function IntegrationsPage() {
                   {(() => { const sp = eProvs.find((p) => p.key === f.provider); return sp?.free_note
                     ? <div style={{ fontSize: "var(--text-xs)", color: "var(--success)", lineHeight: 1.5 }}>✓ {sp.free_note}</div> : null; })()}
                   <input className="input" placeholder="Label (mis. Utama / Cadangan)" value={f.label} onChange={(e) => setF({ label: e.target.value })} />
-                  <input className="input input-mono" type="text" placeholder="Tempel API key penyedia" value={f.key} onChange={(e) => setF({ key: e.target.value })} />
+                  {f.provider === "cloudflare" ? (<>
+                    <input className="input input-mono" type="text" placeholder="Account ID — sisi kanan halaman utama dash.cloudflare.com" value={cfAcct["add:" + el.key] ?? ""} onChange={(e) => setCfAcct((s) => ({ ...s, ["add:" + el.key]: e.target.value }))} />
+                    <input className="input input-mono" type="text" placeholder="API Token — My Profile → API Tokens (izin Workers AI)" value={f.key} onChange={(e) => setF({ key: e.target.value })} />
+                  </>) : (
+                    <input className="input input-mono" type="text" placeholder="Tempel API key penyedia" value={f.key} onChange={(e) => setF({ key: e.target.value })} />
+                  )}
                   <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                    <button className="btn btn-default btn-sm" disabled={busy === "acct:add:" + el.key} onClick={() => saveAccount(f.provider, f.key, f.label, undefined, "add:" + el.key)}>{busy === "acct:add:" + el.key ? <Loader2 size={14} className="spin" /> : <Bi id="Simpan & Uji" en="Save & Test" />}</button>
+                    <button className="btn btn-default btn-sm" disabled={busy === "acct:add:" + el.key} onClick={() => {
+                      if (f.provider === "cloudflare") { const c = cfCombine("add:" + el.key, f.key); if (!c) return; saveAccount(f.provider, c, f.label, undefined, "add:" + el.key); }
+                      else saveAccount(f.provider, f.key, f.label, undefined, "add:" + el.key);
+                    }}>{busy === "acct:add:" + el.key ? <Loader2 size={14} className="spin" /> : <Bi id="Simpan & Uji" en="Save & Test" />}</button>
                     <button className="btn btn-ghost btn-sm" onClick={() => setOpenAdd("")}><Bi id="Batal" en="Cancel" /></button>
-                    {err?.k === "add:" + el.key && <span style={{ color: "var(--danger,#ef4444)", fontSize: "var(--text-xs)" }}>{err.m}</span>}
+                    {err?.k === "add:" + el.key && <span style={{ color: "var(--danger,#ef4444)", fontSize: "var(--text-xs)" }}>{errView(err.m)}</span>}
                   </div>
                 </div>
               ) : (
