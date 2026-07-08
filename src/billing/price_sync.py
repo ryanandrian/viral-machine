@@ -69,8 +69,8 @@ def _feed_entry(feed: dict, model_id: str, provider_prefix: str | None = None) -
     if model_id in feed:
         return feed[model_id]
     seen = set()
-    prefs = ([provider_prefix.rstrip("/") + "/"] if provider_prefix else []) +             ["openai/", "anthropic/", "elevenlabs/", "replicate/", "azure/",
-             "gemini/", "groq/", "together_ai/", "vertex_ai/"]
+    prefs = ([provider_prefix.rstrip("/") + "/"] if provider_prefix else []) +             ["openai/", "anthropic/", "elevenlabs/", "azure/",
+             "gemini/", "groq/", "vertex_ai/"]
     for pref in prefs:
         if pref in seen:
             continue

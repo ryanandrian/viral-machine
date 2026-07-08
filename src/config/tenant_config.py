@@ -94,7 +94,7 @@ class TenantRunConfig:
     # Visual mode (GENERATOR AI saja; stock footage Pexels = fosil v1, dibuang 2026-06-24)
     visual_mode:        str   = ""
     # 'ai_image:gpt-image-1-mini' → AI generated image + motion
-    # 'ai_image:flux-schnell'    → AI generated image + motion (cheaper via Replicate)
+    # 'ai_image:cf-flux-schnell' → AI generated image + motion (Cloudflare, gratis harian)
     # 'ai_video:*'               → AI video generation (DISABLED v0.2)
 
     # Fase 6C fields

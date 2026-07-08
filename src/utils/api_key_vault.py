@@ -46,7 +46,6 @@ def _ai_test(provider_key: str, key: str):
         "openai_tts": ("GET", "https://api.openai.com/v1/models",      {"Authorization": f"Bearer {key}"}),
         "anthropic":  ("GET", "https://api.anthropic.com/v1/models",   {"x-api-key": key, "anthropic-version": "2023-06-01"}),
         "elevenlabs": ("GET", "https://api.elevenlabs.io/v1/user",     {"xi-api-key": key}),
-        "replicate":  ("GET", "https://api.replicate.com/v1/account",  {"Authorization": f"Token {key}"}),
     }.get(provider_key)
     if spec:
         return spec

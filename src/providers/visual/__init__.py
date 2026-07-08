@@ -3,7 +3,7 @@ Registry provider Visual — family dispatch + instansiasi terpusat (mirror prov
 
 `build_visual_provider(visual_mode, config)` = SATU sumber instansiasi provider visual (ganti instansiasi
 inline tersebar di visual_assembler). Family diturunkan dari `visual_mode`:
-  • 'ai_image:<m>' → AIImageProvider (model image dari katalog ai_models; transport openai/replicate)
+  • 'ai_image:<m>' → AIImageProvider (model image dari katalog ai_models; transport openai/gemini/cloudflare)
   • 'ai_video:<m>' → AIVideoProvider (video-gen; kini stub/disabled)
 
 Visual v2 = GENERATOR AI saja (stock footage Pexels = fosil v1, dibuang 2026-06-24).

@@ -349,9 +349,9 @@ class AIImageProvider(VisualProvider):
 
     # F5-06: registry transport image per-PLATFORM (mirror LLM ADAPTERS). Tambah platform baru
     # (mis. stability/fireworks) = +1 method `_generate_<x>` + 1 entri di sini; model-nya via ai_models (DB).
-    _TRANSPORTS = {"replicate": "_generate_replicate", "openai": "_generate_dalle",
-                   # Together = protokol images OpenAI-compatible (base_url dari ai_providers) — FLUX free-tier.
-                   "together": "_generate_dalle",
+    # Replicate + Together DIBUANG TUNTAS (keputusan owner 2026-07-09: keduanya wajib kartu kredit,
+    # kalah dari Cloudflare gratis; katalognya juga dihapus — nol fosil).
+    _TRANSPORTS = {"openai": "_generate_dalle",
                    # Gemini = protokol Google generateContent modalitas IMAGE (kunci sama dgn LLM Gemini).
                    "gemini": "_generate_gemini",
                    # Cloudflare Workers AI = REST run model (FLUX free-tier 10k neuron/hari, tanpa kartu).
@@ -372,30 +372,6 @@ class AIImageProvider(VisualProvider):
             cost_meter.add_image(self.model_config.get("model_id") or "")
         except Exception:
             pass
-
-    async def _generate_replicate(self, prompt: str, negative_prompt: str, output_path: Path) -> None:
-        try:
-            import replicate
-        except ImportError:
-            raise VisualError("replicate tidak terinstall. Jalankan: pip install replicate")
-
-        os.environ["REPLICATE_API_TOKEN"] = self.api_key
-        _input = {
-            "prompt":          prompt,
-            "negative_prompt": negative_prompt,
-            "aspect_ratio":    "9:16",
-        }
-        if self.visual_seed is not None:
-            _input["seed"] = int(self.visual_seed)   # Diversity §9.1 — frame fingerprint per video
-        output = await asyncio.to_thread(
-            replicate.run,
-            self.model_config["model_id"],
-            input=_input,
-        )
-        img_url = output[0] if isinstance(output, list) else str(output)
-        async with httpx.AsyncClient(timeout=60) as client:
-            r = await client.get(img_url)
-            output_path.write_bytes(r.content)
 
     async def _generate_dalle(self, prompt: str, negative_prompt: str, output_path: Path) -> None:
         try:
