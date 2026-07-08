@@ -90,9 +90,7 @@ export default function NewChannelPage() {
     }).select("id").single();
     setBusy(false);
     // [B11] pagar DB ux_channels_tenant_target (race): target keburu dipakai channel lain.
-    if (error) return setErr(error.message.includes("ux_channels_tenant_target")
-      ? "Channel YouTube itu baru saja dipakai channel lain — pilih channel YouTube berbeda. / That YouTube channel was just taken by another channel — pick a different one."
-      : error.message);
+    if (error) return setErr(error.message.includes("ux_channels_tenant_target") ? "__dup_target__" : error.message);
     router.push(`/channels/${data.id}`);
   }
 
@@ -127,10 +125,11 @@ export default function NewChannelPage() {
           </div>
           {/* [B11] Batch 1.7 — pilih channel YouTube tujuan (OPSIONAL; bisa nanti di Pengaturan Channel).
               Nama+foto = konfirmasi visual; terpakai channel lain = terkunci (cegatan redundant). */}
-          {ytAccounts.filter((a) => a.connected).length > 0 && (
+          {/* Koneksi tanpa identitas (legacy) disembunyikan — memilihnya = target NULL (picker ini opsional). */}
+          {ytAccounts.filter((a) => a.connected && a.yt_channel_id).length > 0 && (
             <div><label className="label"><Bi id="Channel YouTube tujuan (opsional — bisa diatur nanti)" en="Target YouTube channel (optional — can set later)" /></label>
               <div style={{ display: "grid", gap: ".4rem" }}>
-                {ytAccounts.filter((a) => a.connected).map((a) => {
+                {ytAccounts.filter((a) => a.connected && a.yt_channel_id).map((a) => {
                   const locked = (a.used_by?.length ?? 0) > 0;
                   const selY = ytPick?.id === a.id;
                   return (
@@ -155,7 +154,7 @@ export default function NewChannelPage() {
           )}
           <div><label className="label"><Bi id="Bahasa konten" en="Content language" /></label><select className="input" value={clang} onChange={(e) => setClang(e.target.value)}>{langs.map((l) => <option key={l.locale} value={l.locale}>{l.display_name}</option>)}</select></div>
           <div><label className="label">Privacy publish</label><div className="radio-row">{["private", "public"].map((p) => <span key={p} className={`radio-pill${privacy === p ? " sel" : ""}`} onClick={() => setPrivacy(p)}>{p}</span>)}</div><div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".25rem" }}><Bi id="Default private (trial-safe). Ganti ke public saat hasil cocok." en="Default private (trial-safe). Switch to public when satisfied." /></div></div>
-          {err && <div style={{ color: "var(--danger)", fontSize: "var(--text-sm)" }}>{err}</div>}
+          {err && <div style={{ color: "var(--danger)", fontSize: "var(--text-sm)" }}>{err === "__dup_target__" ? <Bi id="Channel YouTube itu baru saja dipakai channel lain — pilih channel YouTube berbeda." en="That YouTube channel was just taken by another channel — pick a different one." /> : err}</div>}
           <div className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Channel dibuat sebagai DRAFT (non-aktif). Di halaman berikutnya: lengkapi model AI + key (vault), voice, caption — ada checklist kesiapan; aktifkan saat lengkap." en="Created as a DRAFT (inactive). Next page: complete AI models + key (vault), voice, captions — a readiness checklist guides you; activate once complete." /></div>
           <div style={{ display: "flex", gap: ".5rem" }}>
             <button className="btn btn-default" disabled={busy} onClick={create}>{busy ? "Membuat…" : <Bi id="Buat channel" en="Create channel" />}</button>

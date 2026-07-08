@@ -133,8 +133,13 @@ export default function IntegrationsPage() {
   }
   async function disconnectYt(accountId: string) {
     setBusy("ytd:" + accountId); setErr(null);
-    try { await fetch("/api/youtube/disconnect", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account_id: accountId }) }); await loadYt(); }
-    catch { setErr({ k: "yt", m: "Gagal memutus." }); } finally { setBusy(""); }
+    // Gagal hapus WAJIB terlihat (dulu: respon 4xx/5xx dianggap sukses + error hanya tampil di form tambah).
+    try {
+      const r = await fetch("/api/youtube/disconnect", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account_id: accountId }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j?.ok === false) { setErr({ k: "yt", m: "__disc_failed__" }); return; }
+      await loadYt();
+    } catch { setErr({ k: "yt", m: "__disc_failed__" }); } finally { setBusy(""); }
   }
   async function saveTelegram() {
     setErr(null);
@@ -249,7 +254,8 @@ export default function IntegrationsPage() {
           </div>
           {ytMsg?.startsWith("connected:") && <div style={{ marginBottom: "0.75rem", fontSize: "var(--text-sm)", color: "var(--success)" }}><Check size={13} style={{ verticalAlign: "-2px" }} /> {ytMsg.slice(10) ? <Bi id={`Channel "${ytMsg.slice(10)}" berhasil tersambung — pastikan nama & foto di bawah sesuai.`} en={`Channel "${ytMsg.slice(10)}" connected — confirm the name & photo below match.`} /> : <Bi id="YouTube berhasil tersambung." en="YouTube connected." />}</div>}
           {ytMsg?.startsWith("already:") && <div style={{ marginBottom: "0.75rem", fontSize: "var(--text-sm)", color: "var(--success)" }}><Check size={13} style={{ verticalAlign: "-2px" }} /> <Bi id={`Channel "${ytMsg.slice(8)}" sudah pernah terhubung — koneksinya disegarkan (tidak dibuat ganda).`} en={`Channel "${ytMsg.slice(8)}" was already connected — its connection was refreshed (no duplicate created).`} /></div>}
-          {ytMsg?.startsWith("error:") && <div style={{ marginBottom: "0.75rem", fontSize: "var(--text-sm)", color: "var(--danger,#ef4444)" }}>{ytMsg.slice(6) === "identity_failed" ? <Bi id="Gagal membaca identitas channel dari Google — koneksi dibatalkan, coba lagi." en="Could not read the channel identity from Google — connection cancelled, try again." /> : <>OAuth gagal: {ytMsg.slice(6)}</>}</div>}
+          {ytMsg?.startsWith("error:") && <div style={{ marginBottom: "0.75rem", fontSize: "var(--text-sm)", color: "var(--danger,#ef4444)" }}>{ytMsg.slice(6) === "identity_failed" ? <Bi id="Gagal membaca identitas channel dari Google — koneksi dibatalkan, coba lagi." en="Could not read the channel identity from Google — connection cancelled, try again." /> : <Bi id={`Koneksi Google gagal (kode: ${ytMsg.slice(6)}) — coba lagi.`} en={`Google sign-in failed (code: ${ytMsg.slice(6)}) — try again.`} />}</div>}
+          {err?.k === "yt" && err.m === "__disc_failed__" && <div style={{ marginBottom: "0.75rem", fontSize: "var(--text-sm)", color: "var(--danger,#ef4444)" }}><Bi id="Gagal menghapus koneksi — coba lagi." en="Failed to remove the connection — try again." /></div>}
           {ytDegraded && <div style={{ marginBottom: "0.75rem", fontSize: "var(--text-xs)", color: "var(--text-muted,#888)" }}><Bi id="Status koneksi tak tersedia saat ini." en="Connection status unavailable right now." /></div>}
 
           {ytAccounts.map((a) => (
@@ -283,7 +289,7 @@ export default function IntegrationsPage() {
               <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "0.75rem" }}>
                 <button className="btn btn-default btn-sm" onClick={connectYt} disabled={busy === "yt"}>{busy === "yt" ? <Loader2 size={14} className="spin" /> : <><Video size={14} /> <Bi id="Hubungkan dengan Google" en="Connect with Google" /></>}</button>
                 <button className="btn btn-ghost btn-sm" onClick={() => setYtAdd(false)}><Bi id="Batal" en="Cancel" /></button>
-                {err?.k === "yt" && <span style={{ color: "var(--danger,#ef4444)", fontSize: "var(--text-xs)" }}>{err.m}</span>}
+                {err?.k === "yt" && err.m !== "__disc_failed__" && <span style={{ color: "var(--danger,#ef4444)", fontSize: "var(--text-xs)" }}>{err.m}</span>}
               </div>
             </div>
           )}

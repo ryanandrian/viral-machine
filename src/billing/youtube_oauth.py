@@ -361,18 +361,29 @@ def list_accounts(tenant_id: str) -> dict:
     res = (sb.table("tenant_youtube_accounts")
            .select("id,label,status,yt_channel_id,yt_channel_title,yt_channel_thumb,google_client_id,google_refresh_token_enc")
            .eq("tenant_id", tenant_id).order("created_at").execute())
-    # Peta pemakaian: youtube_account_id → daftar channel MesinViral (id+nama)
+    # Peta pemakaian — DUA kunci, selaras pagar DB ux_channels_tenant_target:
+    # (a) youtube_account_id → channel pemakai; (b) platform_channel_id → channel yang menunjuk
+    # channel YouTube itu TANPA account_id (data lama). Tanpa (b), gembok 🔒 picker bolong:
+    # koneksi tampak "Tersedia", baru ditolak index DB saat Simpan (bukan cegatan di titik input).
     used: dict[str, list[dict]] = {}
+    used_target: dict[str, list[dict]] = {}
     try:
-        chs = (sb.table("channels").select("id,channel_name,youtube_account_id")
-               .eq("tenant_id", tenant_id).not_.is_("youtube_account_id", "null").execute())
+        chs = (sb.table("channels").select("id,channel_name,youtube_account_id,platform_channel_id")
+               .eq("tenant_id", tenant_id).execute())
         for c in (chs.data or []):
-            used.setdefault(str(c["youtube_account_id"]), []).append(
-                {"id": str(c["id"]), "channel_name": c.get("channel_name") or "Channel"})
+            item = {"id": str(c["id"]), "channel_name": c.get("channel_name") or "Channel"}
+            if c.get("youtube_account_id"):
+                used.setdefault(str(c["youtube_account_id"]), []).append(item)
+            if c.get("platform_channel_id"):
+                used_target.setdefault(c["platform_channel_id"], []).append(item)
     except Exception as e:
         logger.warning(f"[yt-oauth] map used_by gagal (non-fatal): {e}")
     out = []
     for r in (res.data or []):
+        ub = list(used.get(str(r["id"]), []))
+        for it in used_target.get(r.get("yt_channel_id") or "", []):
+            if all(x["id"] != it["id"] for x in ub):
+                ub.append(it)
         out.append({
             "id": r["id"], "label": r.get("label") or "YouTube",
             "connected": bool(r.get("google_refresh_token_enc")),
@@ -380,6 +391,6 @@ def list_accounts(tenant_id: str) -> dict:
             "status": r.get("status"), "yt_channel_id": r.get("yt_channel_id"),
             "yt_channel_title": r.get("yt_channel_title"),
             "yt_channel_thumb": r.get("yt_channel_thumb"),
-            "used_by": used.get(str(r["id"]), []),
+            "used_by": ub,
         })
     return {"ok": True, "accounts": out}

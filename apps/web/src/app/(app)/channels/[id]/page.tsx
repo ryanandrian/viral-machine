@@ -551,7 +551,7 @@ export default function ChannelDetailPage() {
     }).eq("id", id);
     setBusy(false);
     // [B11] pagar DB ux_channels_tenant_target: target sudah dipakai channel lain → pesan manusiawi.
-    if (error) { setErr(error.message.includes("ux_channels_tenant_target") ? "Channel YouTube ini sudah dipakai channel lain — satu channel YouTube hanya untuk satu channel MesinViral. / This YouTube channel is already used by another channel." : error.message); return; }
+    if (error) { setErr(error.message.includes("ux_channels_tenant_target") ? "__dup_target__" : error.message); return; }
     setSaved(true); load();
   }
 
@@ -743,7 +743,7 @@ export default function ChannelDetailPage() {
               {/* [B11] Batch 1.7 — pesan hasil consent (connected/already/error) */}
               {ytFlash?.kind === "connected" && <div style={{ marginBottom: "0.5rem", fontSize: "var(--text-sm)", color: "var(--success)" }}><Check size={13} style={{ verticalAlign: "-2px" }} /> <Bi id={`Channel "${ytFlash.text}" tersambung — pilih di daftar di bawah lalu Simpan.`} en={`Channel "${ytFlash.text}" connected — select it below, then Save.`} /></div>}
               {ytFlash?.kind === "already" && <div style={{ marginBottom: "0.5rem", fontSize: "var(--text-sm)", color: "var(--success)" }}><Check size={13} style={{ verticalAlign: "-2px" }} /> <Bi id={`Channel "${ytFlash.text}" sudah pernah terhubung — koneksinya disegarkan (tidak dibuat ganda).`} en={`Channel "${ytFlash.text}" was already connected — refreshed (no duplicate).`} /></div>}
-              {ytFlash?.kind === "error" && <div style={{ marginBottom: "0.5rem", fontSize: "var(--text-sm)", color: "var(--danger,#ef4444)" }}>{ytFlash.text === "identity_failed" ? <Bi id="Gagal membaca identitas channel dari Google — coba lagi." en="Could not read channel identity from Google — try again." /> : <>OAuth gagal: {ytFlash.text}</>}</div>}
+              {ytFlash?.kind === "error" && <div style={{ marginBottom: "0.5rem", fontSize: "var(--text-sm)", color: "var(--danger,#ef4444)" }}>{ytFlash.text === "identity_failed" ? <Bi id="Gagal membaca identitas channel dari Google — coba lagi." en="Could not read channel identity from Google — try again." /> : <Bi id={`Koneksi Google gagal (kode: ${ytFlash.text}) — coba lagi.`} en={`Google sign-in failed (code: ${ytFlash.text}) — try again.`} />}</div>}
               {/* Galeri koneksi (berwajah): terpakai channel lain = terkunci (cegatan redundant) */}
               <div style={{ display: "grid", gap: "0.5rem", marginBottom: "0.6rem" }}>
                 {ytAccounts.length === 0 && <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Belum ada koneksi YouTube — hubungkan dengan tombol di bawah." en="No YouTube connection yet — connect with the button below." /></span>}
@@ -751,10 +751,17 @@ export default function ChannelDetailPage() {
                   const others = (a.used_by || []).filter((u) => u.id !== id);
                   const lockedByOther = others.length > 0;
                   const sel = ytAccountId === a.id;
-                  const selectable = a.connected && !lockedByOther;
+                  // Koneksi tanpa identitas (legacy pra-B11) TAK BISA dipilih — memilihnya = target NULL
+                  // (bisa meng-NULL-kan target yang sudah benar). Wajib re-connect dulu.
+                  const selectable = a.connected && !!a.yt_channel_id && !lockedByOther;
                   return (
                     <div key={a.id} role="radio" aria-checked={sel} aria-disabled={!selectable}
-                      onClick={() => { if (selectable) { setYtAccountId(a.id); setTargetYt(a.yt_channel_id || ""); } }}
+                      onClick={() => {
+                        if (!selectable) return;
+                        // Channel draft boleh melepas pilihan (klik ulang); channel aktif wajib punya koneksi.
+                        if (sel && !ch?.is_active) { setYtAccountId(""); setTargetYt(""); return; }
+                        setYtAccountId(a.id); setTargetYt(a.yt_channel_id || "");
+                      }}
                       style={{ display: "flex", alignItems: "center", gap: "0.625rem", padding: "0.5rem 0.625rem",
                         border: `1px solid ${sel ? "var(--accent)" : "var(--border-subtle)"}`, borderRadius: "var(--r-md)",
                         background: sel ? "var(--accent-soft)" : "transparent",
@@ -769,6 +776,7 @@ export default function ChannelDetailPage() {
                       {sel ? <span className="badge badge-success" style={{ fontSize: "0.625rem", flex: "none" }}><Check size={11} /> <Bi id="Dipilih" en="Selected" /></span>
                         : lockedByOther ? <span className="badge badge-default" style={{ fontSize: "0.625rem", flex: "none" }} title={others.map((u) => u.channel_name).join(", ")}><Lock size={10} /> <Bi id={`Dipakai oleh ${others[0].channel_name}`} en={`Used by ${others[0].channel_name}`} /></span>
                         : !a.connected ? <span className="badge badge-default" style={{ fontSize: "0.625rem", flex: "none" }}><Bi id="Belum selesai connect" en="Connect unfinished" /></span>
+                        : !a.yt_channel_id ? <span className="badge badge-default" style={{ fontSize: "0.625rem", flex: "none" }}><Bi id="Hubungkan ulang dulu (identitas belum terbaca)" en="Reconnect first (identity missing)" /></span>
                         : <span className="badge badge-default" style={{ fontSize: "0.625rem", flex: "none" }}><Bi id="Tersedia" en="Available" /></span>}
                     </div>
                   );
@@ -814,7 +822,7 @@ export default function ChannelDetailPage() {
               </div>
               {nicheMsg && <div style={{ fontSize: "var(--text-sm)", marginTop: "0.4rem", color: nicheMsg.includes("tersimpan") ? "var(--success)" : "var(--danger,#ef4444)" }}>{nicheMsg}</div>}
             </div>
-            {err && <div style={{ color: "var(--danger, #ef4444)", fontSize: "var(--text-sm)" }}>{err}</div>}
+            {err && <div style={{ color: "var(--danger, #ef4444)", fontSize: "var(--text-sm)" }}>{err === "__dup_target__" ? <Bi id="Channel YouTube ini sudah dipakai channel lain — satu channel YouTube hanya untuk satu channel MesinViral." en="This YouTube channel is already used by another channel — one YouTube channel maps to one MesinViral channel." /> : err}</div>}
             {saved && <div style={{ color: "var(--success)", fontSize: "var(--text-sm)", display: "flex", alignItems: "center", gap: "0.375rem" }}><Check size={14} /> <Bi id="Tersimpan" en="Saved" /></div>}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
               <Link href="/channels" className="btn btn-ghost"><Bi id="Batal" en="Cancel" /></Link>
