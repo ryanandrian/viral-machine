@@ -708,11 +708,13 @@ class ScriptEngine:
                 f"[ScriptEngine] {provider.provider_name} attempt {attempt} "
                 f"gagal: {e}"
             )
+            self.last_error = str(e)[:220]   # alasan vendor → error pipeline/Telegram (no-silent)
             return None
         except Exception as e:
             logger.warning(
                 f"[ScriptEngine] attempt {attempt} parse/validate gagal: {e}"
             )
+            self.last_error = str(e)[:220]
             return None
 
     def _load_insights(self, tenant_id: str, channel_id: str | None = None) -> dict | None:
@@ -836,7 +838,11 @@ Return ONLY valid JSON:
         logger.info(f"[ScriptEngine] Generating: {topic.get('topic','')[:50]}...")
 
         run_config         = self._get_run_config(tenant_config)
-        llm_provider       = run_config.effective_llm_provider() if run_config else ""
+        self.last_error    = ""   # reset per-run (dibaca pipeline saat naskah gagal total)
+        # Label provider = library NYATA channel (groq/gemini/openai/anthropic). Dulu
+        # effective_llm_provider() (peta legacy claude|openai saja) → log/Runs menulis "openai"
+        # padahal panggilan sesungguhnya ke Groq (menyesatkan diagnosa, insiden 2026-07-08).
+        llm_provider       = ((getattr(run_config, "llm_library", None) or run_config.effective_llm_provider()) if run_config else "")
         min_score          = run_config.script_min_viral_score  if run_config else 82
         max_retry          = run_config.script_max_retry        if run_config else 3
         niche_visual_style = getattr(run_config, "niche_visual_style", {}) or {}

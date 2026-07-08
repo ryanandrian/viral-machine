@@ -534,6 +534,9 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
                 continue
 
         logger.error(f"All {self.MAX_RETRIES} attempts failed. Last error: {last_error}")
+        # Alasan vendor TERAKHIR diteruskan ke error pipeline → Telegram tenant (no-silent:
+        # "No topics selected" saja tak actionable; insiden kuota Groq habis 2026-07-08).
+        self.last_error = str(last_error)[:220]
         return []
 
     def _apply_signal_factor(self, topic: dict, signals: dict) -> dict:
@@ -613,6 +616,7 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
         peak_region = signals.get("peak_region", "us")
         # LLM provider tenant (config-driven, BYOK) — model task 'utility' untuk
         # seleksi/analisis topik. Provider memegang API key + SDK client.
+        self.last_error = ""   # reset per-run (dibaca pipeline saat topik kosong)
         _llm, _model = None, ""
         try:
             from src.config.tenant_config import load_tenant_config

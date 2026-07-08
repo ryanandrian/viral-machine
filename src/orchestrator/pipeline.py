@@ -157,7 +157,9 @@ class Pipeline:
             logger.info("STEP 2/7 | Selecting best topic...")
             topics = self.niche_selector.select(signals, tenant_config, focus=niche_focus)
             if not topics:
-                raise LLMError("No topics selected", step="niche")
+                # Sertakan alasan vendor (kuota/kunci/model) — tenant butuh sebab yang actionable.
+                _why = (getattr(self.niche_selector, "last_error", "") or "").strip()
+                raise LLMError((f"No topics selected — {_why}" if _why else "No topics selected")[:300], step="niche")
             result["steps"]["topic_selection"] = {
                 "status": "ok",
                 "topics": len(topics),
@@ -172,7 +174,8 @@ class Pipeline:
             logger.info("STEP 3/7 | Generating script...")
             scripts = self.script_engine.generate_batch(topics, tenant_config, count=1)
             if not scripts:
-                raise LLMError("Script generation failed", step="script")
+                _why = (getattr(self.script_engine, "last_error", "") or "").strip()
+                raise LLMError((f"Script generation failed — {_why}" if _why else "Script generation failed")[:300], step="script")
             result["steps"]["script"] = {
                 "status":       "ok",
                 "title":        scripts[0].get("title", ""),
