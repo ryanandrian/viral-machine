@@ -133,16 +133,21 @@ def mark_ready_with_issues(inv_id: int, s3_key: str, reason: str = "",
 
 
 def recent_nonready_streak(channel_id: str, limit: int = 12) -> int:
-    """Hitung kegagalan BERUNTUN terbaru (failed + ready_with_issues) untuk channel — basis
-    circuit-breaker §4b/F7. Streak putus saat ketemu 'ready'/'published'. Hanya baca (read-only)."""
-    res = (_sb().table("content_inventory").select("status")
+    """Hitung kegagalan BERUNTUN terbaru untuk channel — basis circuit-breaker §4b/F7.
+    Sumber = production_runs (buku besar SEMUA run: buffer + direct/"Jalankan Ulang" + test).
+    Dulu membaca content_inventory (jalur buffer SAJA) → run direct sukses tidak memutus
+    streak: channel di-pause ULANG tiap siklus producer + alarm 🛑 palsu berulang, padahal
+    video barusan terbit (insiden live 2026-07-08, channel ke-2 ryan).
+    failed/qc_failed = gagal; success = streak putus; lainnya (discarded) netral."""
+    res = (_sb().table("production_runs").select("status")
            .eq("channel_id", channel_id)
            .order("created_at", desc=True).limit(limit).execute())
     streak = 0
     for row in (res.data or []):
-        if row["status"] in ("failed", "ready_with_issues"):
+        st = row["status"]
+        if st in ("failed", "qc_failed"):
             streak += 1
-        else:
+        elif st == "success":
             break
     return streak
 
