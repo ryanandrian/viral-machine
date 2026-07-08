@@ -94,7 +94,17 @@ kuota `max_channels` di DB (trigger/RLS insert channels) · invalid_grant → `s
 |---|------|--------|--------|-------|
 | 2.1 | Analytics per-channel (token per identitas + filter videos.channel_id, legacy NULL aman) | ⬜ | | |
 | 2.2 | `viral_score_weights` per-channel + seed warisan | ⬜ | | |
-| 2.3 | 6 field konten → kolom channels (NULL=warisi tenant) | ⬜ | | |
+| 2.3 | 6 field konten → kolom channels (NULL=warisi tenant) | 🟡 2.3a | `f07d44c` | **2.3a (ditarik maju, insiden live):** penyedia channel ≠ tenant → `llm_models` tenant gugur, semua task pakai `channels.llm_model`; se-penyedia → perilaku lama utuh (ch-1 diverifikasi byte-sama). Sisa 2.3 penuh (kolom per-channel 6 field) tetap ⬜ |
+
+### 🔥 INSIDEN LIVE 2026-07-08 (channel ke-2 ryan, "No topics selected" 5×) — 3 akar, SEMUA FIXED+DEPLOYED
+| Akar | Fakta (bukan asumsi) | Fix | Commit |
+|---|---|---|---|
+| G3 (terdokumentasi §2b) | NicheSelector/script pakai `llm_models` per-TENANT (model OpenAI) + penyedia per-CHANNEL (gemini/groq) → 404 `model is not found` 3× → "No topics selected" | 2.3a di atas | `f07d44c` |
+| Cache config abadi (bug BARU ditemukan) | `TenantConfigManager._cache` tanpa umur → worker TIDAK PERNAH membaca perubahan setelan tenant sampai restart (semua percobaan ganti provider owner sia-sia; log: 4 run beda waktu semua tetap Gemini). `invalidate_cache` juga no-op (kunci komposit vs pop kunci polos) | TTL 120s + invalidate per-prefix | `f07d44c` |
+| Circuit-breaker buta jalur direct (bug BARU) | `recent_nonready_streak` baca `content_inventory` (buffer SAJA) → sukses "Jalankan Ulang" tak memutus streak → channel di-pause ULANG + alarm 🛑 palsu SETELAH video terbit | streak pindah ke `production_runs` (buffer+direct+test); validasi live ch2=0 ch1=0 | `7fe489e` |
+
+> Bukti tuntas: run `direct-e0ae8246` **success** — https://www.youtube.com/shorts/hpkubUWtLDI (private, ch "Mesin Viral Test", niche kisah_teladan_islami id-ID, QC pass, hook 92/100, Telegram per-channel benar; acceptance §5 poin 5-6 esensinya terpenuhi). Pause palsu dilepas; 90dtk pantau pasca-deploy: nol pause ulang, producer mengisi stok ch-2 normal.
+> Catatan minor tersisa dari log run sukses: (a) thumbnail custom 403 — akun YouTube channel-2 belum verifikasi nomor telepon (aksi tenant di YouTube, bukan bug kita; video tetap terbit); (b) musik fallback mood-only (niche belum punya track mood 'calm' — data katalog musik, non-blocker). (c) 4 cacat FE picker/integrations hasil review 2026-07-08 (1 penting: koneksi legacy tanpa identitas bisa meng-NULL-kan target; 3 kecil) → usulan, belum diputuskan owner.
 
 ### Batch 3
 | # | Item | Status | Commit | Bukti |
