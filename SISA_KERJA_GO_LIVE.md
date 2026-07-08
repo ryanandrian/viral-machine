@@ -222,8 +222,8 @@
 ### [B10] UX AI-Catalog & Channel — audit terpadu (AUDIT_UX_AI_CATALOG.md) — 🟡 Fase 1 ✅ · Fase 2-4 ⬜ disetujui owner
 - **TUJUAN:** UI/UX area AI provider/model world-class utk tenant awam + admin (visi budget-aware + anti-bingung).
 - **SPEC + status detail = `AUDIT_UX_AI_CATALOG.md`** (temuan ber-bukti file:baris + fase + realisasi). Arsitektur rantai AI = `ARSITEKTUR_AI_PROVIDER_MODEL.md` (referensi, wajib sync per-commit).
-- **REALISASI:** ✅ **Fase 1 (2026-07-08)** — test/recover channel jelas (reuse TestNichePanel: konfirmasi+progres+hasil sopan+tautan YT Studio+lifecycle Tutup/TTL migr 0145) + picker model budget-aware (tier/Gratis/harga, sort_order) + reaper direct_jobs macet; commits `f2defec`→`c9aea19`, disegel verifikasi 10-butir. **⬜ Fase 2** (form Katalog admin: label manusiawi dwibahasa+help+contoh, duplikat-PK 409 kode→Bi, error inline) · **⬜ Fase 3** (cari/saring model) · **⬜ Fase 4** (tooltip Tersimpan, uji pakai kunci Test Lab, key_group datalist) — disetujui owner 2026-07-08, dikerjakan patuh penuh aturan (kode-error dwibahasa, gerbang localhost:3000, deploy per-batch SETELAH konfirmasi owner).
-- **DONE-BILA:** Fase 2-4 tervalidasi nyata + dikonfirmasi owner; kolom ini di-update.
+- **REALISASI:** ✅ **Fase 1 (2026-07-08)** — test/recover channel jelas (reuse TestNichePanel) + picker budget-aware + reaper + lifecycle kartu hasil; commits `f2defec`→`c9aea19`, disegel verifikasi 10-butir. ✅ **Fase 2-4 (2026-07-08, deployed `5055dbc`+`647f1c0`)** — form Katalog: label manusiawi dwibahasa+help/contoh (FIELD_META), duplikat-PK 409 kode `duplicate_key`, error INLINE dwibahasa (API kode→FE Bi); cari+saring tab Models; badge Integrasi "Tersimpan (belum diuji)"+tooltip; Uji model kunci-kosong→kunci Test Lab otomatis (divalidasi nyata); key_group datalist. Bug pra-deploy tertangkap sendiri di validasi final (nested-component → fokus input lepas) & diperbaiki sebelum rilis. Gerbang: tsc+build 0 err, localhost:3000, deploy per-batch setelah izin owner. Sisa: review visual owner.
+- **DONE-BILA:** ✅ tercapai — menunggu konfirmasi visual owner (tandai final bila owner puas).
 
 ---
 
