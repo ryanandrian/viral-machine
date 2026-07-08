@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Tv, Check, Lock } from "lucide-react";
+import { ArrowLeft, Tv, Check, Lock, Video } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 // Tambah channel (pasca-onboarding) — form fokus channel (bukan wizard akun). INSERT channels (client-RLS)
@@ -27,6 +27,10 @@ export default function NewChannelPage() {
   const [privacy, setPrivacy] = useState("private");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // [B11] Batch 1.7 — picker channel YouTube tujuan (OPSIONAL di sini; wajibnya ditegakkan checklist kesiapan).
+  type YtAcct = { id: string; connected: boolean; yt_channel_id: string | null; yt_channel_title?: string | null; yt_channel_thumb?: string | null; label: string; used_by?: { id: string; channel_name: string }[] };
+  const [ytAccounts, setYtAccounts] = useState<YtAcct[]>([]);
+  const [ytPick, setYtPick] = useState<YtAcct | null>(null);
 
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -46,6 +50,8 @@ export default function NewChannelPage() {
     setLangs(lq ?? []); setCount(c ?? 0);
     setMaxCh(pl?.max_channels ?? null);
     if (lq?.[0]) setClang(lq[0].locale);
+    // [B11] pool koneksi YouTube (berwajah + used_by) — opsional dipilih saat buat channel.
+    try { const r = await fetch("/api/youtube/status"); if (r.ok) { const j = await r.json(); setYtAccounts(j.accounts || []); } } catch { /* non-fatal */ }
     setLoading(false);
   }, [supabase]);
   useEffect(() => { load(); }, [load]);
@@ -78,10 +84,15 @@ export default function NewChannelPage() {
       tenant_id: user.id, channel_group: "default", channel_name: name.trim(), platform,
       niche: sel[0], niche_pool: sel, niche_mode: nicheMode,
       content_language: clang, publish_privacy: privacy, publish_slots: slots,
+      // [B11] pilihan channel YouTube tujuan (opsional) — ikut tersimpan sejak awal.
+      youtube_account_id: ytPick?.id ?? null, platform_channel_id: ytPick?.yt_channel_id ?? null,
       is_active: false,   // F2-01/§10.E.7: channel default NON-AKTIF (draft) → aktif setelah readiness lengkap di Manage.
     }).select("id").single();
     setBusy(false);
-    if (error) return setErr(error.message);
+    // [B11] pagar DB ux_channels_tenant_target (race): target keburu dipakai channel lain.
+    if (error) return setErr(error.message.includes("ux_channels_tenant_target")
+      ? "Channel YouTube itu baru saja dipakai channel lain — pilih channel YouTube berbeda. / That YouTube channel was just taken by another channel — pick a different one."
+      : error.message);
     router.push(`/channels/${data.id}`);
   }
 
@@ -114,6 +125,34 @@ export default function NewChannelPage() {
           <div><label className="label">{nicheMode === "random" ? <Bi id="Niche (pilih 2+)" en="Niches (pick 2+)" /> : <Bi id="Niche (pilih 1)" en="Niche (pick 1)" />}</label>
             <div className="radio-row">{niches.map((n) => <span key={n.niche_id} className={`radio-pill${sel.includes(n.niche_id) ? " sel" : ""}`} onClick={() => pickNiche(n.niche_id)}>{sel.includes(n.niche_id) && <Check size={12} />} {n.name}</span>)}</div>
           </div>
+          {/* [B11] Batch 1.7 — pilih channel YouTube tujuan (OPSIONAL; bisa nanti di Pengaturan Channel).
+              Nama+foto = konfirmasi visual; terpakai channel lain = terkunci (cegatan redundant). */}
+          {ytAccounts.filter((a) => a.connected).length > 0 && (
+            <div><label className="label"><Bi id="Channel YouTube tujuan (opsional — bisa diatur nanti)" en="Target YouTube channel (optional — can set later)" /></label>
+              <div style={{ display: "grid", gap: ".4rem" }}>
+                {ytAccounts.filter((a) => a.connected).map((a) => {
+                  const locked = (a.used_by?.length ?? 0) > 0;
+                  const selY = ytPick?.id === a.id;
+                  return (
+                    <div key={a.id} role="radio" aria-checked={selY} aria-disabled={locked}
+                      onClick={() => { if (!locked) setYtPick(selY ? null : a); }}
+                      style={{ display: "flex", alignItems: "center", gap: ".6rem", padding: ".45rem .6rem", borderRadius: "var(--r-md)",
+                        border: `1px solid ${selY ? "var(--accent)" : "var(--border-subtle)"}`, background: selY ? "var(--accent-soft)" : "transparent",
+                        opacity: locked ? .55 : 1, cursor: locked ? "not-allowed" : "pointer" }}>
+                      {a.yt_channel_thumb
+                        ? <img src={a.yt_channel_thumb} alt="" style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover", flex: "none" }} referrerPolicy="no-referrer" />
+                        : <span style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--surface-2)", display: "grid", placeItems: "center", color: "var(--text-muted)", flex: "none" }}><Video size={13} /></span>}
+                      <span style={{ flex: 1, minWidth: 0, fontSize: "var(--text-sm)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.yt_channel_title || a.label}</span>
+                      {selY ? <span className="badge badge-success" style={{ fontSize: ".625rem" }}><Check size={11} /> <Bi id="Dipilih" en="Selected" /></span>
+                        : locked ? <span className="badge badge-default" style={{ fontSize: ".625rem" }}><Lock size={10} /> <Bi id={`Dipakai oleh ${a.used_by![0].channel_name}`} en={`Used by ${a.used_by![0].channel_name}`} /></span>
+                        : <span className="badge badge-default" style={{ fontSize: ".625rem" }}><Bi id="Tersedia" en="Available" /></span>}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".3rem" }}><Bi id="Channel YouTube lain belum ada di daftar? Hubungkan dulu di menu Kredensial." en="YouTube channel not listed? Connect it first in Credentials." /></div>
+            </div>
+          )}
           <div><label className="label"><Bi id="Bahasa konten" en="Content language" /></label><select className="input" value={clang} onChange={(e) => setClang(e.target.value)}>{langs.map((l) => <option key={l.locale} value={l.locale}>{l.display_name}</option>)}</select></div>
           <div><label className="label">Privacy publish</label><div className="radio-row">{["private", "public"].map((p) => <span key={p} className={`radio-pill${privacy === p ? " sel" : ""}`} onClick={() => setPrivacy(p)}>{p}</span>)}</div><div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".25rem" }}><Bi id="Default private (trial-safe). Ganti ke public saat hasil cocok." en="Default private (trial-safe). Switch to public when satisfied." /></div></div>
           {err && <div style={{ color: "var(--danger)", fontSize: "var(--text-sm)" }}>{err}</div>}

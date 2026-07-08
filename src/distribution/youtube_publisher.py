@@ -97,6 +97,15 @@ class YouTubePublisher:
             logger.info("Token refreshed successfully")
         return creds
 
+    def _token_channel_id(self, youtube) -> str | None:
+        """[B11] Identitas channel milik token aktif (channels.list mine=true). None = tak terbaca."""
+        try:
+            items = youtube.channels().list(part="id", mine=True).execute().get("items", [])
+            return items[0]["id"] if items else None
+        except Exception as e:
+            logger.warning(f"[Publisher] baca identitas token gagal: {e}")
+            return None
+
     def _build_metadata(self, script: dict, tenant_config: TenantConfig) -> dict:
         niche    = tenant_config.niche
         title    = script.get("title", script.get("topic", "Amazing Facts"))
@@ -248,6 +257,25 @@ class YouTubePublisher:
         try:
             creds = self._get_credentials(tenant_config)
             youtube = build("youtube", "v3", credentials=creds)
+
+            # ── [B11] Batch 1.4 — PAGAR SALAH-CHANNEL (multi-channel) ─────────────────
+            # Upload YouTube SELALU jatuh ke channel milik token (API tak punya "pilih channel").
+            # Maka: identitas token HARUS == channel tujuan (channels.platform_channel_id).
+            # Selisih/tak terbaca → GAGAL JUJUR tanpa upload (no silent wrong-channel publish).
+            expected = (getattr(tenant_config, "platform_channel_id", None) or "").strip()
+            if expected:
+                actual = self._token_channel_id(youtube)
+                if not actual:
+                    msg = ("Identitas channel token YouTube tak terbaca — upload DIBATALKAN "
+                           "(pagar salah-channel; akan diulang otomatis).")
+                    logger.error(f"[Publisher] {msg}")
+                    return {"platform": "youtube", "status": "failed", "error": msg}
+                if actual != expected:
+                    msg = (f"PAGAR SALAH-CHANNEL: token = {actual}, channel tujuan = {expected}. "
+                           f"Upload DIBATALKAN. Periksa 'Koneksi YouTube' channel ini di menu Channel.")
+                    logger.error(f"[Publisher] {msg}")
+                    return {"platform": "youtube", "status": "failed", "error": msg}
+            # (expected kosong = channel tanpa target — jalur test/legacy; tak ada target utk dilindungi.)
 
             metadata = self._build_metadata(script, tenant_config)
             logger.info(f"Title: {metadata['snippet']['title']}")

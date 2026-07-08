@@ -33,7 +33,8 @@ export default function IntegrationsPage() {
   const [saved, setSaved] = useState("");
   const [err, setErr] = useState<{ k: string; m: string } | null>(null);
 
-  type YtAccount = { id: string; label: string; connected: boolean; has_client: boolean; status: string; yt_channel_id: string | null };
+  // [B11] Batch 1.6 — koneksi "berwajah": nama+foto channel YouTube + dipakai channel MesinViral mana.
+  type YtAccount = { id: string; label: string; connected: boolean; has_client: boolean; status: string; yt_channel_id: string | null; yt_channel_title?: string | null; yt_channel_thumb?: string | null; used_by?: { id: string; channel_name: string }[] };
   const [ytAccounts, setYtAccounts] = useState<YtAccount[]>([]);
   const [ytDegraded, setYtDegraded] = useState(false);
   const [ytLabel, setYtLabel] = useState("");
@@ -111,7 +112,9 @@ export default function IntegrationsPage() {
     load(); loadYt();
     const sp = new URLSearchParams(window.location.search);
     const r = sp.get("youtube");
-    if (r === "connected") { setYtMsg("connected"); window.history.replaceState({}, "", "/integrations"); loadYt(); }
+    const chName = sp.get("channel") || "";
+    if (r === "connected") { setYtMsg(`connected:${chName}`); window.history.replaceState({}, "", "/integrations"); loadYt(); }
+    else if (r === "already") { setYtMsg(`already:${chName}`); window.history.replaceState({}, "", "/integrations"); loadYt(); }  // [B11] dedup: token disegarkan, bukan baris baru
     else if (r === "error") { setYtMsg(`error:${sp.get("reason") || "unknown"}`); window.history.replaceState({}, "", "/integrations"); }
   }, [load, loadYt]);
 
@@ -244,17 +247,29 @@ export default function IntegrationsPage() {
             <span style={iconBox("#ff0000")}><Video size={18} /></span>
             <div style={{ flex: 1 }}><div style={titleS}>YouTube</div><div style={muted}><Bi id="Hubungkan akun Google Anda — bisa lebih dari satu. Tiap channel pilih akun + tujuan di Pengaturan Channel." en="Connect your Google accounts — more than one allowed. Each channel picks an account + target in Channel Settings." /></div></div>
           </div>
-          {ytMsg === "connected" && <div style={{ marginBottom: "0.75rem", fontSize: "var(--text-sm)", color: "var(--success)" }}><Check size={13} style={{ verticalAlign: "-2px" }} /> <Bi id="YouTube berhasil tersambung." en="YouTube connected." /></div>}
-          {ytMsg?.startsWith("error:") && <div style={{ marginBottom: "0.75rem", fontSize: "var(--text-sm)", color: "var(--danger,#ef4444)" }}>OAuth gagal: {ytMsg.slice(6)}</div>}
+          {ytMsg?.startsWith("connected:") && <div style={{ marginBottom: "0.75rem", fontSize: "var(--text-sm)", color: "var(--success)" }}><Check size={13} style={{ verticalAlign: "-2px" }} /> {ytMsg.slice(10) ? <Bi id={`Channel "${ytMsg.slice(10)}" berhasil tersambung — pastikan nama & foto di bawah sesuai.`} en={`Channel "${ytMsg.slice(10)}" connected — confirm the name & photo below match.`} /> : <Bi id="YouTube berhasil tersambung." en="YouTube connected." />}</div>}
+          {ytMsg?.startsWith("already:") && <div style={{ marginBottom: "0.75rem", fontSize: "var(--text-sm)", color: "var(--success)" }}><Check size={13} style={{ verticalAlign: "-2px" }} /> <Bi id={`Channel "${ytMsg.slice(8)}" sudah pernah terhubung — koneksinya disegarkan (tidak dibuat ganda).`} en={`Channel "${ytMsg.slice(8)}" was already connected — its connection was refreshed (no duplicate created).`} /></div>}
+          {ytMsg?.startsWith("error:") && <div style={{ marginBottom: "0.75rem", fontSize: "var(--text-sm)", color: "var(--danger,#ef4444)" }}>{ytMsg.slice(6) === "identity_failed" ? <Bi id="Gagal membaca identitas channel dari Google — koneksi dibatalkan, coba lagi." en="Could not read the channel identity from Google — connection cancelled, try again." /> : <>OAuth gagal: {ytMsg.slice(6)}</>}</div>}
           {ytDegraded && <div style={{ marginBottom: "0.75rem", fontSize: "var(--text-xs)", color: "var(--text-muted,#888)" }}><Bi id="Status koneksi tak tersedia saat ini." en="Connection status unavailable right now." /></div>}
 
           {ytAccounts.map((a) => (
-            <div key={a.id} style={{ display: "flex", alignItems: "center", gap: "0.5rem", borderTop: "1px solid var(--border-subtle)", paddingTop: "0.6rem", marginTop: "0.6rem" }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: "var(--text-sm)", color: "var(--text-primary)", fontWeight: 500 }}>{a.label}</div>
-                <div style={{ ...muted, fontSize: "var(--text-xs)" }}>{a.connected ? <>YT: <code>{a.yt_channel_id || "—"}</code></> : <Bi id="belum selesai connect" en="connect not finished" />}</div>
+            <div key={a.id} style={{ display: "flex", alignItems: "center", gap: "0.625rem", borderTop: "1px solid var(--border-subtle)", paddingTop: "0.6rem", marginTop: "0.6rem" }}>
+              {/* [B11] wajah channel: foto (fallback ikon) + NAMA channel YouTube — konfirmasi visual anti salah-pilih */}
+              {a.yt_channel_thumb
+                ? <img src={a.yt_channel_thumb} alt="" style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover", flex: "none" }} referrerPolicy="no-referrer" />
+                : <span style={{ ...iconBox("var(--surface-2)"), color: "var(--text-muted)" }}><Video size={16} /></span>}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: "var(--text-sm)", color: "var(--text-primary)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.yt_channel_title || a.label}</div>
+                <div style={{ ...muted, fontSize: "var(--text-xs)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {a.connected
+                    ? <>{a.yt_channel_title && a.label !== a.yt_channel_title ? <>{a.label} · </> : null}<code style={{ fontSize: "0.625rem" }}>{a.yt_channel_id || "—"}</code></>
+                    : <Bi id="belum selesai connect" en="connect not finished" />}
+                </div>
+                {(a.used_by?.length ?? 0) > 0
+                  ? <div style={{ fontSize: "var(--text-xs)", color: "var(--text-secondary)", marginTop: 2 }}><Bi id="Dipakai oleh: " en="Used by: " /><b>{a.used_by!.map((u) => u.channel_name).join(", ")}</b></div>
+                  : (a.connected && <div style={{ fontSize: "var(--text-xs)", color: "var(--text-muted)", marginTop: 2 }}><Bi id="Belum dipakai channel mana pun" en="Not used by any channel yet" /></div>)}
               </div>
-              {a.connected ? <span className="badge badge-success" style={{ fontSize: "0.625rem" }}><span className="dot" /> Tersambung</span> : <span className="badge badge-default" style={{ fontSize: "0.625rem" }}><span className="dot" /> Belum</span>}
+              {a.connected ? <span className="badge badge-success" style={{ fontSize: "0.625rem" }}><span className="dot" /> <Bi id="Tersambung" en="Connected" /></span> : <span className="badge badge-default" style={{ fontSize: "0.625rem" }}><span className="dot" /> <Bi id="Belum" en="Pending" /></span>}
               <button className="btn btn-outline btn-sm" onClick={() => disconnectYt(a.id)} disabled={busy === "ytd:" + a.id}>{busy === "ytd:" + a.id ? <Loader2 size={14} className="spin" /> : <Bi id="Hapus" en="Remove" />}</button>
             </div>
           ))}

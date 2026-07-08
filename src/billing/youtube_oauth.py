@@ -167,8 +167,9 @@ def _create_account(tenant_id: str, account_id: str | None, label: str = "") -> 
     return (res.data or [{}])[0].get("id")
 
 
-def _store_tokens(tenant_id: str, account_id: str, creds, yt_channel_id: str | None = None) -> None:
-    """Tulis token hasil consent (Fernet) ke baris pool + status='valid'. refresh_token hanya ditimpa bila ada."""
+def _store_tokens(tenant_id: str, account_id: str, creds, identity: dict | None = None) -> None:
+    """Tulis token hasil consent (Fernet) ke baris pool + status='valid' + identitas channel (nama/foto).
+    refresh_token hanya ditimpa bila ada."""
     # CATATAN: tabel tenant_youtube_accounts TIDAK punya kolom `scopes` → jangan ditulis (dulu bikin
     # update gagal → exchange_failed). Scope tak perlu disimpan: publisher fallback ke SCOPES bila kosong.
     upd = {
@@ -178,21 +179,52 @@ def _store_tokens(tenant_id: str, account_id: str, creds, yt_channel_id: str | N
     }
     if creds.refresh_token:
         upd["google_refresh_token_enc"] = encrypt(creds.refresh_token)
-    if yt_channel_id:
-        upd["yt_channel_id"] = yt_channel_id
+    if identity:
+        upd["yt_channel_id"] = identity["id"]
+        upd["yt_channel_title"] = (identity.get("title") or "")[:120] or None
+        upd["yt_channel_thumb"] = identity.get("thumb") or None
     _sb().table("tenant_youtube_accounts").update(upd).eq("id", account_id).eq("tenant_id", tenant_id).execute()
 
 
-def _fetch_channel_id(creds) -> str | None:
-    """Ambil channel_id YouTube milik pemberi-consent (mine=true). Best-effort."""
+def _fetch_channel_identity(creds) -> dict | None:
+    """Ambil IDENTITAS channel pemberi-consent: id + nama + thumbnail (mine=true).
+    [B11] Batch 1.2: identitas = fondasi pagar salah-channel → kegagalan di sini = koneksi GAGAL JUJUR
+    (bukan best-effort NULL seperti dulu; tanpa identitas semua pagar buta)."""
     try:
         from googleapiclient.discovery import build
         yt = build("youtube", "v3", credentials=creds, cache_discovery=False)
-        items = yt.channels().list(part="id", mine=True).execute().get("items", [])
-        return items[0]["id"] if items else None
+        items = yt.channels().list(part="id,snippet", mine=True).execute().get("items", [])
+        if not items:
+            return None
+        it = items[0]
+        sn = it.get("snippet") or {}
+        thumbs = sn.get("thumbnails") or {}
+        thumb = ((thumbs.get("default") or thumbs.get("medium") or {}).get("url")) or None
+        return {"id": it["id"], "title": sn.get("title") or "", "thumb": thumb}
     except Exception as e:
-        logger.warning(f"[yt-oauth] fetch channel_id gagal (non-fatal): {e}")
+        logger.warning(f"[yt-oauth] fetch channel identity gagal: {e}")
         return None
+
+
+def _find_existing_connection(tenant_id: str, yt_channel_id: str, exclude_id: str) -> str | None:
+    """Cari baris pool tenant yang SUDAH memegang channel YouTube ini (dedup, [B11] Batch 1.2)."""
+    res = (_sb().table("tenant_youtube_accounts").select("id")
+           .eq("tenant_id", tenant_id).eq("yt_channel_id", yt_channel_id)
+           .neq("id", exclude_id).limit(1).execute())
+    return (res.data or [{}])[0].get("id")
+
+
+def _delete_placeholder(tenant_id: str, account_id: str) -> None:
+    """Hapus baris pool HANYA bila masih placeholder (belum pernah punya refresh_token) —
+    jangan pernah menghapus koneksi hidup. Fail-soft."""
+    try:
+        res = (_sb().table("tenant_youtube_accounts").select("google_refresh_token_enc")
+               .eq("id", account_id).eq("tenant_id", tenant_id).limit(1).execute())
+        row = (res.data or [None])[0]
+        if row is not None and not row.get("google_refresh_token_enc"):
+            _sb().table("tenant_youtube_accounts").delete().eq("id", account_id).eq("tenant_id", tenant_id).execute()
+    except Exception as e:
+        logger.warning(f"[yt-oauth] hapus placeholder gagal (non-fatal): {e}")
 
 
 # ---------- API publik (dipanggil route webhook_app) ----------
@@ -242,15 +274,28 @@ def handle_callback(code: str | None, state: str | None, error: str | None = Non
         if not creds.refresh_token:
             # Tanpa refresh_token, upload jangka-panjang mustahil → minta tenant cabut akses & ulang.
             logger.warning(f"[yt-oauth] tenant={tenant_id} consent tanpa refresh_token")
+            _delete_placeholder(tenant_id, account_id)
             return _err("no_refresh_token")
-        yt_channel_id = _fetch_channel_id(creds)
-        _store_tokens(tenant_id, account_id, creds, yt_channel_id=yt_channel_id)
-        logger.info(f"[yt-oauth] tenant={tenant_id} akun={account_id} tersambung (yt={yt_channel_id})")
+        # [B11] Batch 1.2 — identitas WAJIB (id+nama+foto). Gagal baca = koneksi gagal JUJUR:
+        # tanpa identitas, pagar anti-duplikat & anti-salah-channel buta. Placeholder dibersihkan.
+        identity = _fetch_channel_identity(creds)
+        if not identity:
+            _delete_placeholder(tenant_id, account_id)
+            return _err("identity_failed")
+        # [B11] Batch 1.2 — DEDUP: channel YouTube ini sudah terhubung? → segarkan token di baris LAMA,
+        # buang placeholder baru, beri pesan ramah (bukan baris ganda / bukan error menakutkan).
+        existing = _find_existing_connection(tenant_id, identity["id"], exclude_id=account_id)
+        if existing:
+            _store_tokens(tenant_id, existing, creds, identity=identity)
+            _delete_placeholder(tenant_id, account_id)
+            logger.info(f"[yt-oauth] tenant={tenant_id} channel {identity['id']} sudah terhubung → token disegarkan (akun={existing})")
+            return f"{app}{ret}?youtube=already&channel={quote(identity.get('title') or identity['id'])}"
+        _store_tokens(tenant_id, account_id, creds, identity=identity)
+        logger.info(f"[yt-oauth] tenant={tenant_id} akun={account_id} tersambung (yt={identity['id']} \"{identity.get('title','')}\")")
+        return f"{app}{ret}?youtube=connected&channel={quote(identity.get('title') or identity['id'])}"
     except Exception as e:
         logger.error(f"[yt-oauth] callback gagal tenant={tenant_id}: {e}")
         return _err("exchange_failed")
-
-    return f"{app}{ret}?youtube=connected"
 
 
 def disconnect(tenant_id: str, account_id: str) -> None:
@@ -309,10 +354,23 @@ def revoke_tenant_tokens(tenant_id: str) -> int:
 
 
 def list_accounts(tenant_id: str) -> dict:
-    """Daftar koneksi YouTube tenant (untuk FE Credential). Tak bocorkan secret."""
-    res = (_sb().table("tenant_youtube_accounts")
-           .select("id,label,status,yt_channel_id,google_client_id,google_refresh_token_enc")
+    """Daftar koneksi YouTube tenant (untuk FE Credential + picker channel). Tak bocorkan secret.
+    [B11] Batch 1.3: + identitas (nama/foto channel) + used_by (channel MesinViral pemakai) —
+    dasar UI 'berwajah' + cegatan redundant di picker."""
+    sb = _sb()
+    res = (sb.table("tenant_youtube_accounts")
+           .select("id,label,status,yt_channel_id,yt_channel_title,yt_channel_thumb,google_client_id,google_refresh_token_enc")
            .eq("tenant_id", tenant_id).order("created_at").execute())
+    # Peta pemakaian: youtube_account_id → daftar channel MesinViral (id+nama)
+    used: dict[str, list[dict]] = {}
+    try:
+        chs = (sb.table("channels").select("id,channel_name,youtube_account_id")
+               .eq("tenant_id", tenant_id).not_.is_("youtube_account_id", "null").execute())
+        for c in (chs.data or []):
+            used.setdefault(str(c["youtube_account_id"]), []).append(
+                {"id": str(c["id"]), "channel_name": c.get("channel_name") or "Channel"})
+    except Exception as e:
+        logger.warning(f"[yt-oauth] map used_by gagal (non-fatal): {e}")
     out = []
     for r in (res.data or []):
         out.append({
@@ -320,5 +378,8 @@ def list_accounts(tenant_id: str) -> dict:
             "connected": bool(r.get("google_refresh_token_enc")),
             "has_client": bool(r.get("google_client_id")),
             "status": r.get("status"), "yt_channel_id": r.get("yt_channel_id"),
+            "yt_channel_title": r.get("yt_channel_title"),
+            "yt_channel_thumb": r.get("yt_channel_thumb"),
+            "used_by": used.get(str(r["id"]), []),
         })
     return {"ok": True, "accounts": out}

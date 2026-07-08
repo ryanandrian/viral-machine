@@ -195,14 +195,17 @@ class TelegramNotifier:
         return ""   # tak ada fallback sistem — tenant belum set chat_id → notif di-skip
 
     def notify_published(self, tenant_id: str, url: str, title: str = "",
-                         niche: str = "", run_id: str = "") -> bool:
+                         niche: str = "", run_id: str = "", channel_name: str = "") -> bool:
         """OPSI C: laporan SUKSES dikirim saat PUBLISHER benar-benar mempublish (on-schedule),
-        BUKAN saat producer stok. Chat_id resolve dari tenant_configs."""
+        BUKAN saat producer stok. Chat_id resolve dari tenant_configs.
+        [B11] Batch 1.5: channel_name PER-CHANNEL — tenant multi-channel tahu channel mana yang terbit."""
         chat_id = self._chat_id_for_tenant(tenant_id)
         if not chat_id:
             return False
+        head = (f"✅ <b>[{self._escape(str(channel_name))}] Video Published!</b>"
+                if channel_name else "✅ <b>Video Published!</b>")
         lines = [
-            "✅ <b>Video Published!</b>",
+            head,
             f"🎬 <i>{self._escape(str(title)[:120])}</i>" if title else "",
             f"🏷 Niche: {self._escape(str(niche))}" if niche else "",
             f"🔗 {url}" if url else "",

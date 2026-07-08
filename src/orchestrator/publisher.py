@@ -82,7 +82,8 @@ def publish_due_for_channel(sb, channel_row: dict, now_utc: datetime | None = No
     item = inventory.claim_oldest_ready(channel_id)
     if not item:
         logger.warning(f"[Publisher] Buffer KOSONG slot {slot_dt} ch={channel_id} — skip + Telegram")
-        _notify(tenant_id, f"⚠️ Buffer kosong, slot {slot_dt:%H:%M} dilewati (channel {channel_id})")
+        _ch_label = channel_row.get("channel_name") or channel_id   # [B11] sebut NAMA channel, bukan id mentah
+        _notify(tenant_id, f"⚠️ [{_ch_label}] Buffer kosong, slot {slot_dt:%H:%M} dilewati")
         return "buffer_empty"
 
     # tandai target_slot (dedup) + publish dari buffer
@@ -101,11 +102,12 @@ def publish_due_for_channel(sb, channel_row: dict, now_utc: datetime | None = No
             from src.utils.telegram_notifier import TelegramNotifier
             _meta = item.get("metadata") or {}
             TelegramNotifier().notify_published(
-                tenant_id = channel_row["tenant_id"],
-                url       = (_yt or {}).get("url", ""),
-                title     = (_yt or {}).get("title") or ((_meta.get("script") or {}).get("title", "")),
-                niche     = item.get("niche") or channel_row.get("niche", ""),
-                run_id    = _meta.get("run_id", ""),
+                tenant_id    = channel_row["tenant_id"],
+                url          = (_yt or {}).get("url", ""),
+                title        = (_yt or {}).get("title") or ((_meta.get("script") or {}).get("title", "")),
+                niche        = item.get("niche") or channel_row.get("niche", ""),
+                run_id       = _meta.get("run_id", ""),
+                channel_name = channel_row.get("channel_name", ""),   # [B11] multi-channel: sebut channel
             )
         except Exception as _te:
             logger.warning(f"[Publisher] notify_published gagal (non-fatal): {_te}")
@@ -113,7 +115,8 @@ def publish_due_for_channel(sb, channel_row: dict, now_utc: datetime | None = No
     except Exception as e:
         inventory.revert_to_ready(item["id"])           # kembalikan ke buffer utk retry
         logger.error(f"[Publisher] publish gagal inv={item['id']} ({e}) — revert ready")
-        _notify(tenant_id, f"❌ Publish gagal (channel {channel_id}), akan diulang: {e}")
+        _ch_label = channel_row.get("channel_name") or channel_id   # [B11] sebut NAMA channel
+        _notify(tenant_id, f"❌ [{_ch_label}] Publish gagal, akan diulang: {e}")
         return "failed"
 
 

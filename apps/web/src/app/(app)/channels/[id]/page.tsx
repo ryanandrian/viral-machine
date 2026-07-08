@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ExternalLink, Settings, ArrowRight, BarChart3, Calendar, Activity, Loader2, Check, Pause, Play, AlertTriangle, Mic, ShieldCheck, Sparkles, Clock, Trash2, Plus, PenLine, Image as ImageIcon, Info, Search, X, Shuffle, Upload } from "lucide-react";
+import { ExternalLink, Settings, ArrowRight, BarChart3, Calendar, Activity, Loader2, Check, Pause, Play, AlertTriangle, Mic, ShieldCheck, Sparkles, Clock, Trash2, Plus, PenLine, Image as ImageIcon, Info, Search, X, Shuffle, Upload, Lock, Video } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { effectiveStatus, TONE } from "@/lib/channel-status";
 import PresetTables from "@/components/preset-tables";
@@ -277,7 +277,10 @@ export default function ChannelDetailPage() {
   // /integrations) + channel TUJUAN (channels.platform_channel_id). Disimpan bareng identitas via save().
   const [targetYt, setTargetYt] = useState("");
   const [ytAccountId, setYtAccountId] = useState("");
-  const [ytAccounts, setYtAccounts] = useState<{ id: string; label: string; status: string | null; yt_channel_id: string | null; connected: boolean }[]>([]);
+  // [B11] Batch 1.7 — koneksi berwajah (nama+foto) + used_by (cegatan redundant di picker).
+  const [ytAccounts, setYtAccounts] = useState<{ id: string; label: string; status: string | null; yt_channel_id: string | null; connected: boolean; yt_channel_title?: string | null; yt_channel_thumb?: string | null; used_by?: { id: string; channel_name: string }[] }[]>([]);
+  const [ytFlash, setYtFlash] = useState<{ kind: "connected" | "already" | "error"; text: string } | null>(null);
+  const [ytConnBusy, setYtConnBusy] = useState(false);
 
   async function savePreset() {
     setPresetMsg(null); setSavingPreset(true);
@@ -515,6 +518,31 @@ export default function ChannelDetailPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // [B11] Batch 1.7 — kembali dari consent Google (ret=/channels/[id]): tampilkan hasil + tab settings.
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const r = sp.get("youtube");
+    if (!r) return;
+    const chName = sp.get("channel") || "";
+    window.history.replaceState({}, "", `/channels/${id}`);
+    setTab("settings");
+    if (r === "connected") setYtFlash({ kind: "connected", text: chName });
+    else if (r === "already") setYtFlash({ kind: "already", text: chName });
+    else setYtFlash({ kind: "error", text: sp.get("reason") || "unknown" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  // [B11] Hubungkan channel YouTube LAIN langsung dari sini (tanpa pindah menu) — balik ke halaman ini.
+  async function connectAnotherYt() {
+    setYtConnBusy(true); setErr(null);
+    try {
+      const r = await fetch("/api/youtube/connect", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ label: "", ret: `/channels/${id}` }) });
+      const j = await r.json();
+      if (r.ok && j.authorize_url) { window.location.href = j.authorize_url; return; }
+      setYtConnBusy(false); setErr(j.error || "Gagal memulai koneksi.");
+    } catch { setYtConnBusy(false); setErr("Server tak terjangkau."); }
+  }
+
   async function save() {
     setErr(null); setSaved(false); setBusy(true);
     const { error } = await supabase.from("channels").update({
@@ -522,7 +550,8 @@ export default function ChannelDetailPage() {
       youtube_account_id: ytAccountId || null, platform_channel_id: targetYt.trim() || null,
     }).eq("id", id);
     setBusy(false);
-    if (error) { setErr(error.message); return; }
+    // [B11] pagar DB ux_channels_tenant_target: target sudah dipakai channel lain → pesan manusiawi.
+    if (error) { setErr(error.message.includes("ux_channels_tenant_target") ? "Channel YouTube ini sudah dipakai channel lain — satu channel YouTube hanya untuk satu channel MesinViral. / This YouTube channel is already used by another channel." : error.message); return; }
     setSaved(true); load();
   }
 
@@ -709,16 +738,46 @@ export default function ChannelDetailPage() {
               </select>
             </div>
             <div style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
-              <label className="label"><Bi id="Koneksi YouTube (akun publish)" en="YouTube connection (publish account)" /></label>
-              <div className="radio-row" style={{ marginBottom: "0.5rem" }}>
-                {ytAccounts.length === 0 && <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Belum ada koneksi — tambah di " en="No connection — add in " /><Link href="/integrations" className="link"><Bi id="Kredensial" en="Credentials" /></Link>.</span>}
-                {ytAccounts.map((a) => <span key={a.id} className={`radio-pill${ytAccountId === a.id ? " sel" : ""}`} onClick={() => { setYtAccountId(a.id); setTargetYt(a.yt_channel_id || ""); }}>{a.label}{a.status === "valid" ? " ✓" : ""}</span>)}
+              <label className="label"><Bi id="Channel YouTube tujuan" en="Target YouTube channel" /></label>
+              <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "0.6rem" }}><Bi id="Pilih channel YouTube tempat video channel ini terbit. Tidak perlu menyalin ID apa pun — cukup klik." en="Pick the YouTube channel this channel publishes to. No ID copying needed — just click." /></div>
+              {/* [B11] Batch 1.7 — pesan hasil consent (connected/already/error) */}
+              {ytFlash?.kind === "connected" && <div style={{ marginBottom: "0.5rem", fontSize: "var(--text-sm)", color: "var(--success)" }}><Check size={13} style={{ verticalAlign: "-2px" }} /> <Bi id={`Channel "${ytFlash.text}" tersambung — pilih di daftar di bawah lalu Simpan.`} en={`Channel "${ytFlash.text}" connected — select it below, then Save.`} /></div>}
+              {ytFlash?.kind === "already" && <div style={{ marginBottom: "0.5rem", fontSize: "var(--text-sm)", color: "var(--success)" }}><Check size={13} style={{ verticalAlign: "-2px" }} /> <Bi id={`Channel "${ytFlash.text}" sudah pernah terhubung — koneksinya disegarkan (tidak dibuat ganda).`} en={`Channel "${ytFlash.text}" was already connected — refreshed (no duplicate).`} /></div>}
+              {ytFlash?.kind === "error" && <div style={{ marginBottom: "0.5rem", fontSize: "var(--text-sm)", color: "var(--danger,#ef4444)" }}>{ytFlash.text === "identity_failed" ? <Bi id="Gagal membaca identitas channel dari Google — coba lagi." en="Could not read channel identity from Google — try again." /> : <>OAuth gagal: {ytFlash.text}</>}</div>}
+              {/* Galeri koneksi (berwajah): terpakai channel lain = terkunci (cegatan redundant) */}
+              <div style={{ display: "grid", gap: "0.5rem", marginBottom: "0.6rem" }}>
+                {ytAccounts.length === 0 && <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Belum ada koneksi YouTube — hubungkan dengan tombol di bawah." en="No YouTube connection yet — connect with the button below." /></span>}
+                {ytAccounts.map((a) => {
+                  const others = (a.used_by || []).filter((u) => u.id !== id);
+                  const lockedByOther = others.length > 0;
+                  const sel = ytAccountId === a.id;
+                  const selectable = a.connected && !lockedByOther;
+                  return (
+                    <div key={a.id} role="radio" aria-checked={sel} aria-disabled={!selectable}
+                      onClick={() => { if (selectable) { setYtAccountId(a.id); setTargetYt(a.yt_channel_id || ""); } }}
+                      style={{ display: "flex", alignItems: "center", gap: "0.625rem", padding: "0.5rem 0.625rem",
+                        border: `1px solid ${sel ? "var(--accent)" : "var(--border-subtle)"}`, borderRadius: "var(--r-md)",
+                        background: sel ? "var(--accent-soft)" : "transparent",
+                        opacity: selectable || sel ? 1 : 0.55, cursor: selectable ? "pointer" : "not-allowed" }}>
+                      {a.yt_channel_thumb
+                        ? <img src={a.yt_channel_thumb} alt="" style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover", flex: "none" }} referrerPolicy="no-referrer" />
+                        : <span style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--surface-2)", display: "grid", placeItems: "center", color: "var(--text-muted)", flex: "none" }}><Video size={14} /></span>}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.yt_channel_title || a.label}</div>
+                        <div className="muted" style={{ fontSize: "0.625rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><code>{a.yt_channel_id || "—"}</code></div>
+                      </div>
+                      {sel ? <span className="badge badge-success" style={{ fontSize: "0.625rem", flex: "none" }}><Check size={11} /> <Bi id="Dipilih" en="Selected" /></span>
+                        : lockedByOther ? <span className="badge badge-default" style={{ fontSize: "0.625rem", flex: "none" }} title={others.map((u) => u.channel_name).join(", ")}><Lock size={10} /> <Bi id={`Dipakai oleh ${others[0].channel_name}`} en={`Used by ${others[0].channel_name}`} /></span>
+                        : !a.connected ? <span className="badge badge-default" style={{ fontSize: "0.625rem", flex: "none" }}><Bi id="Belum selesai connect" en="Connect unfinished" /></span>
+                        : <span className="badge badge-default" style={{ fontSize: "0.625rem", flex: "none" }}><Bi id="Tersedia" en="Available" /></span>}
+                    </div>
+                  );
+                })}
               </div>
-              <label className="label"><Bi id="Channel YouTube tujuan (ID)" en="Target YouTube channel (ID)" /></label>
-              <input className="input input-mono" value={targetYt || "—"} readOnly tabIndex={-1} aria-readonly="true"
-                style={{ background: "var(--surface-2)", color: "var(--text-secondary)", cursor: "default" }}
-                title="Terisi otomatis dari koneksi YouTube" />
-              <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.4rem" }}><Bi id="Terisi otomatis dari koneksi YouTube yang dipilih (tidak bisa diubah manual)." en="Auto-filled from the selected YouTube connection (not manually editable)." /></div>
+              <button className="btn btn-secondary btn-sm" onClick={connectAnotherYt} disabled={ytConnBusy}>
+                {ytConnBusy ? <Loader2 size={14} className="spin" /> : <><Plus size={13} /> <Bi id="Hubungkan channel YouTube lain" en="Connect another YouTube channel" /></>}
+              </button>
+              <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.4rem" }}><Bi id="Anda akan diarahkan ke Google — pilih channel yang diinginkan di layar Google (satu izin per channel). ID tujuan terisi otomatis, tak bisa diubah manual." en="You'll be sent to Google — pick the channel on Google's screen (one consent per channel). The target ID is auto-filled and never manually edited." /></div>
             </div>
             <div style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
               <label className="label"><Bi id="Niche channel" en="Channel niche" /></label>

@@ -360,6 +360,10 @@ class TenantConfigManager:
             v = ch.get(f)
             if v is not None:
                 setattr(config, f, v)
+        # [B11] Batch 1.5 — nama channel utk notifikasi Telegram = PER-CHANNEL (channels.channel_name),
+        # bukan tenant_configs.channel_name (dulu: semua channel tenant berlabel sama di notif).
+        if ch.get("channel_name"):
+            config.channel_name = ch["channel_name"]
         # Bahasa KONTEN per-channel → field `language` (nama kolom channel ≠ nama field, jadi di luar
         # loop overlay). NULL (channel lama) → biarkan default en-US = perilaku lama.
         if ch.get("content_language"):

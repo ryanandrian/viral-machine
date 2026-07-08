@@ -43,6 +43,9 @@ class TenantConfig:
     # Diversity Engine (Phase 6.2, AI Slop Defense §9.1) — hint TRANSIEN per-run, diset producer via
     # DiversityEngine (BUKAN dari channel_row). None → tanpa rotasi (non-breaking, perilaku lama).
     channel_id:             str | None = None   # untuk lookback rotasi per-channel
+    # [B11] Batch 1.4 — target channel YouTube (channels.platform_channel_id). Dipakai pagar
+    # salah-channel di YouTubePublisher.publish: identitas token HARUS == target ini.
+    platform_channel_id:    str | None = None
     preferred_hook_pattern: str | None = None   # saran LRU hook formula — PREFERENSI (quality-first), bukan paksa
     visual_seed:            int | None = None   # seed image-gen → frame fingerprint unik
     preferred_music_mood:   str | None = None   # mood LRU dari niches.mood_priority (niche-safe) — §9.1
@@ -71,6 +74,7 @@ def tenant_config_from_channel(channel_row: dict, niche=None) -> "TenantConfig":
         ai_disclosure   = (channel_row.get("ai_disclosure") if channel_row.get("ai_disclosure") is not None else True),
         channel_id      = (str(channel_row["id"]) if channel_row.get("id") is not None
                            else (str(channel_row["channel_id"]) if channel_row.get("channel_id") is not None else None)),
+        platform_channel_id = channel_row.get("platform_channel_id"),
     )
 
 
