@@ -33,7 +33,7 @@ def test_model(model_key: str, key: str = "") -> dict:
     """Return {ok, result|error}. SYNC — panggil via run_in_threadpool dari FastAPI."""
     key = (key or "").strip()
     sb = _service_sb()
-    m = (sb.table("ai_models").select("model_key,model_id,component,provider_key")
+    m = (sb.table("ai_models").select("model_key,model_id,component,provider_key,default_params")
          .eq("model_key", model_key).limit(1).execute().data or [])
     if not m:
         return {"ok": False, "error": "Model tidak ditemukan di katalog."}
@@ -84,7 +84,11 @@ def test_model(model_key: str, key: str = "") -> dict:
 
         elif comp == "image":
             from src.providers.visual.ai_image import AIImageProvider
-            p = AIImageProvider({"visual_provider": f"ai_image:{model_key}", "visual_api_key": key, "image_quality": "low"})
+            # model_row diinjeksi langsung dari baris DB (tanpa filter aktif) — model nonaktif
+            # HARUS bisa diuji sebelum aktivasi; get_models() produksi = aktif-only (telur-ayam).
+            p = AIImageProvider({"visual_provider": f"ai_image:{model_key}", "visual_api_key": key, "image_quality": "low",
+                                 "model_row": {"provider_key": pk, "model_id": model_id, "component": comp,
+                                               "default_params": m.get("default_params") or {}}})
             tmp = Path(tempfile.mkstemp(suffix=".png")[1])
             try:
                 asyncio.run(p._generate_image("a simple red circle centered on a plain white background", "", tmp))

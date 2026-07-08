@@ -56,8 +56,11 @@ class AIImageProvider(VisualProvider):
 
         # Katalog model image dari DB (ai_models, component='image') — config-driven,
         # admin-managed. Dispatch generate pakai platform = provider_key.
+        # config["model_row"] = injeksi model_tester agar model NONAKTIF bisa diuji SEBELUM
+        # diaktifkan (prinsip katalog: aktif = terbukti; tanpa ini telur-ayam — image tak pernah
+        # bisa lulus uji). Produksi tak pernah mengisi model_row → tetap katalog-aktif saja.
         from src.providers.llm.catalog import get_models
-        _row = get_models().get(self.ai_model)
+        _row = config.get("model_row") or get_models().get(self.ai_model)
         if not _row or _row.get("component") != "image":
             raise VisualError(
                 f"Model image '{self.ai_model}' tidak ada / non-aktif di katalog ai_models."
