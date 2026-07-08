@@ -30,6 +30,17 @@ def _now() -> str:
 
 # ── Uji-nyata kunci AI per penyedia (validate-early). Tak ada entri → 'unchecked' (validasi saat produksi). ──
 def _ai_test(provider_key: str, key: str):
+    if provider_key == "cloudflare":
+        # Kunci gabungan 'ACCOUNT_ID:API_TOKEN'. Uji = list model Workers AI — memvalidasi SEKALIGUS
+        # account_id + token + izin Workers AI (validate-early). Format salah → URL/Bearer cacat → invalid.
+        acct, _, tok = key.partition(":")
+        base = "https://api.cloudflare.com/client/v4"
+        try:
+            from src.providers.llm.catalog import get_providers
+            base = (((get_providers().get("cloudflare") or {}).get("base_url")) or base).rstrip("/")
+        except Exception:
+            pass
+        return ("GET", f"{base}/accounts/{acct.strip()}/ai/models/search", {"Authorization": f"Bearer {tok.strip()}"})
     spec = {
         "openai":     ("GET", "https://api.openai.com/v1/models",      {"Authorization": f"Bearer {key}"}),
         "openai_tts": ("GET", "https://api.openai.com/v1/models",      {"Authorization": f"Bearer {key}"}),

@@ -69,6 +69,9 @@ class AIImageProvider(VisualProvider):
             "platform": _row["provider_key"],
             "model_id": _row["model_id"],
             "size":     (_row.get("default_params") or {}).get("size", "1024x1536"),
+            # default_params utuh (ai_models.default_params, admin-editable) — parameter per-model
+            # config-driven (mis. steps Cloudflare), bukan hardcode di transport.
+            "params":   (_row.get("default_params") or {}),
         }
         # base_url provider (ai_providers) — provider image OpenAI-compatible non-OpenAI (mis. Together
         # FLUX free-tier) cukup baris DB + transport openai. None (OpenAI asli) → SDK default = perilaku lama.
@@ -350,7 +353,9 @@ class AIImageProvider(VisualProvider):
                    # Together = protokol images OpenAI-compatible (base_url dari ai_providers) — FLUX free-tier.
                    "together": "_generate_dalle",
                    # Gemini = protokol Google generateContent modalitas IMAGE (kunci sama dgn LLM Gemini).
-                   "gemini": "_generate_gemini"}
+                   "gemini": "_generate_gemini",
+                   # Cloudflare Workers AI = REST run model (FLUX free-tier 10k neuron/hari, tanpa kartu).
+                   "cloudflare": "_generate_cloudflare"}
 
     async def _generate_image(self, prompt: str, negative_prompt: str, output_path: Path) -> None:
         platform = self.model_config["platform"]
@@ -476,6 +481,37 @@ class AIImageProvider(VisualProvider):
                 cost_meter.add_llm(self.model_config["model_id"], u.get("promptTokenCount", 0), u.get("candidatesTokenCount", 0))
         except Exception:
             pass
+
+    async def _generate_cloudflare(self, prompt: str, negative_prompt: str, output_path: Path) -> None:
+        """Transport Cloudflare Workers AI — POST {base}/accounts/{acct}/ai/run/{model_id}.
+        Kunci pool = 'ACCOUNT_ID:API_TOKEN' (dua kredensial CF digabung ':' dalam satu key_enc).
+        base_url dari ai_providers (satu sumber URL, pola _generate_gemini). Skema input RESMI CF
+        (verified docs 2026-07-08): prompt ≤2048 char · steps ≤8 (dari ai_models.default_params,
+        config-driven) · seed. TANPA width/height → output persegi; renderer men-scale/pad ke 9:16
+        (pola sama gpt-image 2:3). Respons: JSON {success, result:{image: base64}}."""
+        acct, _, token = (self.api_key or "").partition(":")
+        acct, token = acct.strip(), token.strip()
+        if not (acct and token):
+            raise VisualError("Kunci Cloudflare harus berformat 'ACCOUNT_ID:API_TOKEN' — dua nilai dari dashboard Cloudflare, digabung tanda titik dua.")
+        base = (self.model_config.get("base_url") or "").rstrip("/") or "https://api.cloudflare.com/client/v4"
+        url = f"{base}/accounts/{acct}/ai/run/{self.model_config['model_id']}"
+        full_prompt = f"{prompt}\n\nStrictly avoid: {negative_prompt}"[:2048]   # batas resmi input CF
+        body: dict = {"prompt": full_prompt}
+        steps = (self.model_config.get("params") or {}).get("steps")
+        if steps:
+            body["steps"] = min(int(steps), 8)   # batas resmi CF
+        if self.visual_seed is not None:
+            body["seed"] = int(self.visual_seed)   # Diversity §9.1 — frame fingerprint per video
+        async with httpx.AsyncClient(timeout=120) as client:
+            r = await client.post(url, json=body, headers={"Authorization": f"Bearer {token}"})
+        if r.status_code != 200:
+            raise VisualError(f"Cloudflare image HTTP {r.status_code}: {r.text[:300]}")
+        data = r.json()
+        img_b64 = ((data.get("result") or {}).get("image")) or ""
+        if not (data.get("success") and img_b64):
+            raise VisualError(f"Cloudflare image: respons tanpa gambar ({str(data)[:250]})")
+        import base64 as _b64
+        output_path.write_bytes(_b64.b64decode(img_b64))
 
     # ──────────────────────────────────────────────
     # Internal: image → video dengan Ken Burns effect
