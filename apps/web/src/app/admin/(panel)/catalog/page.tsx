@@ -195,13 +195,13 @@ export default function AdminCatalogPage() {
     return <input className="input" list={dl} disabled={disabled} value={value ?? ""} onChange={(e) => onChange(e.target.value)} />;
   };
   // A1/A2: satu blok field utk kedua modal — label manusiawi (Bi) + kode kolom kecil + bantuan + tanda error.
-  const FieldBlock = ({ mapKey, k, fallbackLabel, value, onChange, disabled, pkNote }: {
-    mapKey: string; k: string; fallbackLabel: string; value: string; onChange: (v: string) => void; disabled: boolean; pkNote?: boolean;
-  }) => {
+  // FUNGSI render (dipanggil {fieldBlock(...)}), BUKAN komponen bersarang — komponen yang didefinisikan
+  // di dalam komponen berganti identitas tiap render → React remount subtree → input kehilangan fokus tiap ketikan.
+  const fieldBlock = (mapKey: string, k: string, fallbackLabel: string, value: string, onChange: (v: string) => void, disabled: boolean, pkNote?: boolean) => {
     const meta = FIELD_META[mapKey]?.[k];
     const isErr = formErr?.col === k;
     return (
-      <div>
+      <div key={k}>
         <label className="label" style={isErr ? { color: "var(--danger)" } : undefined}>
           {meta ? <Bi id={meta.id} en={meta.en} /> : fallbackLabel}
           <span className="muted mono" style={{ fontSize: "0.625rem", marginLeft: 6 }}>{k}</span>
@@ -637,9 +637,9 @@ export default function AdminCatalogPage() {
           <div className="card" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(440px,92vw)", maxHeight: "85vh", overflowY: "auto", zIndex: 61, padding: "1.25rem" }}>
             <div style={{ display: "flex", alignItems: "center", marginBottom: "0.75rem" }}><strong>Tambah {ADD_FIELDS[tab].table}</strong><button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} onClick={() => setAdd(null)}><X size={16} /></button></div>
             <div style={{ display: "grid", gap: "0.5rem" }}>
-              {ADD_FIELDS[tab].fields.map(([k, label]) => (
-                <FieldBlock key={k} mapKey={tab} k={k} fallbackLabel={label} value={add[k] ?? ""} onChange={(v) => setAdd({ ...add, [k]: v })} disabled={false} />
-              ))}
+              {ADD_FIELDS[tab].fields.map(([k, label]) =>
+                fieldBlock(tab, k, label, add[k] ?? "", (v) => setAdd({ ...add, [k]: v }), false)
+              )}
               {formErr && !formErr.col && <div style={{ color: "var(--danger)", fontSize: "var(--text-xs)" }}>{formErr.node}</div>}
               <button className="btn btn-primary btn-sm" style={{ justifySelf: "end", marginTop: "0.25rem" }} onClick={createRow}><Bi id="Simpan" en="Save" /></button>
             </div>
@@ -653,9 +653,9 @@ export default function AdminCatalogPage() {
           <div className="card" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(440px,92vw)", maxHeight: "85vh", overflowY: "auto", zIndex: 61, padding: "1.25rem" }}>
             <div style={{ display: "flex", alignItems: "center", marginBottom: "0.75rem" }}><strong>Edit {ADD_FIELDS[rowEdit.mapKey].table}</strong><button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} onClick={() => setRowEdit(null)}><X size={16} /></button></div>
             <div style={{ display: "grid", gap: "0.5rem" }}>
-              {ADD_FIELDS[rowEdit.mapKey].fields.map(([k, label]) => (
-                <FieldBlock key={k} mapKey={rowEdit.mapKey} k={k} fallbackLabel={label} value={rowEdit.values[k] ?? ""} onChange={(v) => setRowEdit({ ...rowEdit, values: { ...rowEdit.values, [k]: v } })} disabled={k === PK_OF[rowEdit.mapKey]} pkNote={k === PK_OF[rowEdit.mapKey]} />
-              ))}
+              {ADD_FIELDS[rowEdit.mapKey].fields.map(([k, label]) =>
+                fieldBlock(rowEdit.mapKey, k, label, rowEdit.values[k] ?? "", (v) => setRowEdit({ ...rowEdit, values: { ...rowEdit.values, [k]: v } }), k === PK_OF[rowEdit.mapKey], k === PK_OF[rowEdit.mapKey])
+              )}
               {formErr && !formErr.col && <div style={{ color: "var(--danger)", fontSize: "var(--text-xs)" }}>{formErr.node}</div>}
               <button className="btn btn-primary btn-sm" style={{ justifySelf: "end", marginTop: "0.25rem" }} onClick={saveRowEdit}><Bi id="Simpan" en="Save" /></button>
             </div>
