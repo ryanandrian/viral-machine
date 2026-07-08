@@ -31,6 +31,77 @@ const ENUM_FIELD_SRC: Record<string, Record<string, string[]>> = {
   ttsprof: { adapter: ["tts_adapter"], tts_class: ["tts_class"] },
 };
 
+// A1/A2 (owner 2026-07-08): label MANUSIAWI dwibahasa + bantuan/contoh per field — nama kolom DB tampil
+// kecil sbg referensi teknis, bukan jadi label. Field tanpa entri → pakai label lama (fallback).
+const FIELD_META: Record<string, Record<string, { id: string; en: string; help_id?: string; help_en?: string }>> = {
+  providers: {
+    provider_key: { id: "ID Penyedia", en: "Provider ID", help_id: "Huruf kecil tanpa spasi, permanen. Contoh: openai, groq", help_en: "Lowercase, no spaces, permanent. E.g.: openai, groq" },
+    display_name: { id: "Nama tampil", en: "Display name", help_id: "Nama yang dilihat admin & tenant. Contoh: OpenAI GPT", help_en: "Shown to admins & tenants. E.g.: OpenAI GPT" },
+    adapter: { id: "Protokol koneksi", en: "Connection protocol", help_id: "Cara mesin bicara ke vendor — pilih dari daftar yang didukung kode.", help_en: "How the engine talks to the vendor — pick from code-supported list." },
+    auth_type: { id: "Cara autentikasi", en: "Auth method", help_id: "api_key = perlu token · none = gratis tanpa kunci (mis. edge_tts)", help_en: "api_key = token required · none = free, no key (e.g. edge_tts)" },
+    key_group: { id: "Kelompok kunci (vendor)", en: "Key group (vendor)", help_id: "Vendor pemilik kunci — 1 kunci dipakai semua elemennya. Contoh: openai_tts → openai", help_en: "Key-owning vendor — one key serves all its elements. E.g.: openai_tts → openai" },
+    base_url: { id: "Alamat API (opsional)", en: "API base URL (optional)", help_id: "Hanya untuk vendor OpenAI-compatible. Contoh: https://api.groq.com/openai/v1", help_en: "Only for OpenAI-compatible vendors. E.g.: https://api.groq.com/openai/v1" },
+    price_feed_prefix: { id: "Prefix sumber harga", en: "Price feed prefix", help_id: "Nama vendor di feed harga bila beda dari ID. Contoh: together → together_ai", help_en: "Vendor name in the price feed when it differs. E.g.: together → together_ai" },
+    free_tier_note: { id: "Catatan gratis harian", en: "Free tier note", help_id: "Tampil ke tenant bila vendor memberi kuota gratis. Kosongkan bila tidak ada.", help_en: "Shown to tenants when the vendor has a free quota. Leave empty otherwise." },
+  },
+  models: {
+    provider_key: { id: "Penyedia (induk)", en: "Provider (parent)" },
+    component: { id: "Jenis model", en: "Model type", help_id: "llm = penulis naskah · tts = suara · image/video = visual", help_en: "llm = script writer · tts = voice · image/video = visuals" },
+    model_key: { id: "ID internal", en: "Internal ID", help_id: "Kunci unik di katalog kita, permanen. Contoh: gpt-4o-mini", help_en: "Unique key in our catalog, permanent. E.g.: gpt-4o-mini" },
+    model_id: { id: "ID resmi di vendor", en: "Vendor model ID", help_id: "Salin PERSIS dari dokumentasi vendor (sertakan versi). Contoh: FLUX.1-schnell. Salah ketik = gagal produksi — buktikan dgn tombol Uji.", help_en: "Copy EXACTLY from vendor docs (include version). Typos fail production — prove with the Test button." },
+    display_name: { id: "Nama tampil", en: "Display name", help_id: "Jelas versinya untuk manusia. Contoh: GPT-4o mini", help_en: "Human-clear incl. version. E.g.: GPT-4o mini" },
+    quality_tier: { id: "Tingkat kualitas", en: "Quality tier", help_id: "Dipakai tenant memilih sesuai budget: basic/standard/premium/fast", help_en: "Used by tenants to pick per budget: basic/standard/premium/fast" },
+    sort_order: { id: "Urutan tampil", en: "Sort order", help_id: "Angka kecil tampil lebih dulu di pemilih tenant.", help_en: "Smaller numbers appear first in tenant pickers." },
+  },
+  ttsprof: {
+    provider_key: { id: "ID Penyedia", en: "Provider ID" },
+    display_name: { id: "Nama tampil", en: "Display name" },
+    adapter: { id: "Protokol TTS", en: "TTS protocol", help_id: "Pilih dari daftar yang didukung kode.", help_en: "Pick from code-supported list." },
+    tts_class: { id: "Kelas timing", en: "Timing class", help_id: "timed = ada word-timestamp (caption karaoke presisi) · fast_fallback = tanpa timestamp presisi", help_en: "timed = word timestamps (precise karaoke captions) · fast_fallback = no precise timestamps" },
+    delivery_wps: { id: "Tempo dasar (kata/detik)", en: "Base pace (words/sec)", help_id: "Dipakai menghitung panjang naskah. Rentang 1.0–4.0.", help_en: "Used for script length budgeting. Range 1.0–4.0." },
+    speed_param: { id: "Nama parameter kecepatan", en: "Speed param name", help_id: "speed / rate — kosongkan bila vendor tak punya.", help_en: "speed / rate — empty if unsupported." },
+    param_schema: { id: "Skema parameter (JSON)", en: "Param schema (JSON)" },
+  },
+  languages: {
+    locale: { id: "Kode bahasa", en: "Locale code", help_id: "Format BCP-47. Contoh: id-ID", help_en: "BCP-47 format. E.g.: id-ID" },
+    display_name: { id: "Nama tampil", en: "Display name" },
+    quality_tier: { id: "Status dukungan", en: "Support status", help_id: "official = teruji penuh · experimental = coba-coba", help_en: "official = fully tested · experimental = trial" },
+    caption_font: { id: "Font caption", en: "Caption font" },
+  },
+  voice: {
+    voice_key: { id: "ID Voice (dari vendor)", en: "Voice ID (from vendor)", help_id: "Salin persis voice_id milik vendor.", help_en: "Copy the vendor's voice_id exactly." },
+    provider_key: { id: "Penyedia", en: "Provider" },
+    display_name: { id: "Nama tampil", en: "Display name" },
+    locale: { id: "Kode bahasa", en: "Locale", help_id: "Contoh: id-ID", help_en: "E.g.: id-ID" },
+    language: { id: "Bahasa", en: "Language", help_id: "Contoh: Indonesian", help_en: "E.g.: Indonesian" },
+    gender: { id: "Gender suara", en: "Voice gender" },
+    delivery_wps: { id: "Tempo voice (kata/detik)", en: "Voice pace (words/sec)", help_id: "Kosongkan = ikut tempo engine. Rentang 1.0–4.0.", help_en: "Empty = engine default. Range 1.0–4.0." },
+    preview_url: { id: "Contoh suara (URL .mp3)", en: "Voice sample (.mp3 URL)" },
+    default_settings: { id: "Setelan default (JSON)", en: "Default settings (JSON)", help_id: 'Contoh: {"stability":0.3,"style":0.5}', help_en: 'E.g.: {"stability":0.3,"style":0.5}' },
+  },
+  durations: {
+    seconds: { id: "Durasi (detik)", en: "Duration (seconds)" },
+    use_case: { id: "Kegunaan (teks ID)", en: "Use case (ID text)" },
+    use_case_en: { id: "Kegunaan (teks EN)", en: "Use case (EN text)" },
+    notes: { id: "Catatan admin", en: "Admin notes" },
+  },
+};
+
+// Penerjemah KODE error API → pesan dwibahasa (aturan: API kirim kode, FE menerjemahkan).
+function errText(code: string, detail?: Record<string, unknown> | null): React.ReactNode {
+  const col = String(detail?.col ?? "");
+  switch (code) {
+    case "duplicate_key": return <Bi id={`ID '${String(detail?.value ?? "")}' sudah terpakai — gunakan ID lain.`} en={`ID '${String(detail?.value ?? "")}' is already taken — use another.`} />;
+    case "invalid_enum": return <Bi id={`${col}: nilai tidak didukung mesin. Pilihan: ${(detail?.allowed as string[] | undefined)?.join(", ") ?? "-"}`} en={`${col}: value not supported. Options: ${(detail?.allowed as string[] | undefined)?.join(", ") ?? "-"}`} />;
+    case "invalid_json": return <Bi id={`${col}: format JSON tidak valid.`} en={`${col}: invalid JSON.`} />;
+    case "not_number": return <Bi id={`${col}: harus angka.`} en={`${col}: must be a number.`} />;
+    case "out_of_range": return <Bi id={`${col}: di luar rentang ${detail?.min}–${detail?.max}.`} en={`${col}: outside range ${detail?.min}–${detail?.max}.`} />;
+    case "pk_required": return <Bi id={`${col}: wajib diisi.`} en={`${col}: required.`} />;
+    case "no_editable_fields": return <Bi id="Tidak ada perubahan untuk disimpan." en="No changes to save." />;
+    default: return code || <Bi id="Gagal menyimpan." en="Save failed." />;
+  }
+}
+
 // Urutan hierarki (owner 2026-07-04): PROVIDER dulu → AI Models (model = DETAIL dari provider).
 const TABS: [string, string][] = [["providers", "Providers"], ["models", "AI Models"], ["music", "Music"], ["moods", "Moods"], ["voice", "Voice"], ["languages", "Languages"], ["durations", "Durasi"], ["niche", "Niche"]];
 
@@ -53,6 +124,11 @@ export default function AdminCatalogPage() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
   const [add, setAdd] = useState<Record<string, string> | null>(null);
+  // A4: error form INLINE di modal (bukan toast 2 dtk) — {node ReactNode, col field bermasalah}.
+  const [formErr, setFormErr] = useState<{ node: React.ReactNode; col?: string } | null>(null);
+  // A5: cari/saring tab AI Models (skala ratusan model).
+  const [mSearch, setMSearch] = useState("");
+  const [mComp, setMComp] = useState("");
   // Uji model (butir-1): dialog kunci uji + jalankan nyata.
   const [tm, setTm] = useState<{ mk: string; name: string; needsKey: boolean } | null>(null);
   const [tmKey, setTmKey] = useState("");
@@ -67,6 +143,7 @@ export default function AdminCatalogPage() {
   }, []);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2200); return () => clearTimeout(t); }, [toast]);
+  useEffect(() => { if (add) setFormErr(null); }, [add !== null]);  // buka modal Tambah → bersihkan error lama
 
   // Opsi dropdown: provider_key (dari daftar provider) + kolom enum (nilai-sah registry KODE).
   const fieldOptions = useCallback((mapKey: string, col: string): { value: string; label: string }[] | null => {
@@ -113,7 +190,28 @@ export default function AdminCatalogPage() {
         {opts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
     );
-    return <input className="input" disabled={disabled} value={value ?? ""} onChange={(e) => onChange(e.target.value)} />;
+    // A7: key_group = datalist saran (nilai existing; vendor baru tetap boleh diketik).
+    const dl = mapKey === "providers" && k === "key_group" ? "kg-dl" : undefined;
+    return <input className="input" list={dl} disabled={disabled} value={value ?? ""} onChange={(e) => onChange(e.target.value)} />;
+  };
+  // A1/A2: satu blok field utk kedua modal — label manusiawi (Bi) + kode kolom kecil + bantuan + tanda error.
+  const FieldBlock = ({ mapKey, k, fallbackLabel, value, onChange, disabled, pkNote }: {
+    mapKey: string; k: string; fallbackLabel: string; value: string; onChange: (v: string) => void; disabled: boolean; pkNote?: boolean;
+  }) => {
+    const meta = FIELD_META[mapKey]?.[k];
+    const isErr = formErr?.col === k;
+    return (
+      <div>
+        <label className="label" style={isErr ? { color: "var(--danger)" } : undefined}>
+          {meta ? <Bi id={meta.id} en={meta.en} /> : fallbackLabel}
+          <span className="muted mono" style={{ fontSize: "0.625rem", marginLeft: 6 }}>{k}</span>
+          {pkNote && <span className="muted"> — <Bi id="terkunci" en="locked" /></span>}
+        </label>
+        {renderField(mapKey, k, value, onChange, disabled)}
+        {meta?.help_id && <div className="muted" style={{ fontSize: "0.6875rem", marginTop: 2, lineHeight: 1.4 }}><Bi id={meta.help_id} en={meta.help_en ?? meta.help_id} /></div>}
+        {isErr && <div style={{ color: "var(--danger)", fontSize: "var(--text-xs)", marginTop: 2 }}>{formErr!.node}</div>}
+      </div>
+    );
   };
 
   async function toggle(table: string, key: string, value: boolean) {
@@ -179,6 +277,7 @@ export default function AdminCatalogPage() {
       const v = row[k];
       values[k] = v == null ? "" : (typeof v === "object" ? JSON.stringify(v) : String(v));
     }
+    setFormErr(null);
     setRowEdit({ mapKey, values });
   };
   async function saveRowEdit() {
@@ -186,10 +285,11 @@ export default function AdminCatalogPage() {
     const def = ADD_FIELDS[rowEdit.mapKey]; const pk = PK_OF[rowEdit.mapKey];
     const patch: Record<string, unknown> = {};
     for (const [k] of def.fields) if (k !== pk) patch[k] = rowEdit.values[k] === "" ? null : rowEdit.values[k];
+    setFormErr(null);
     const r = await fetch("/api/admin/catalog", { method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ table: def.table, key: rowEdit.values[pk], patch }) });
     if (r.ok) { const wasModel = def.table === "ai_models"; const mk = rowEdit.values[pk]; setToast("Tersimpan"); setRowEdit(null); await load(); if (wasModel && mk) await probePrice(String(mk)); }
-    else { const j = await r.json().catch(() => ({})); setToast(`Gagal: ${j.error ?? ""}`); }
+    else { const j = await r.json().catch(() => ({})); setFormErr({ node: errText(String(j.error ?? ""), j.detail), col: (j.detail as { col?: string } | null)?.col }); }
   }
   // PEMUTAR TUNGGAL (owner 2026-07-04, world-class): satu audio aktif; play record lain otomatis
   // stop yang sedang bunyi; klik ulang = stop; pindah tab/keluar halaman = stop.
@@ -263,9 +363,10 @@ export default function AdminCatalogPage() {
   async function createRow() {
     if (!add) return;
     const def = ADD_FIELDS[tab];
+    setFormErr(null);
     const r = await fetch("/api/admin/catalog", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table: def.table, row: add }) });
     if (r.ok) { const mk = add.model_key; setToast("Ditambah"); setAdd(null); await load(); if (def.table === "ai_models" && mk) await probePrice(String(mk)); }
-    else { const j = await r.json().catch(() => ({})); setToast(`Gagal: ${j.error ?? r.status}`); }
+    else { const j = await r.json().catch(() => ({})); setFormErr({ node: errText(String(j.error ?? r.status), j.detail), col: (j.detail as { col?: string } | null)?.col }); }
   }
 
   const Switch = ({ table, k, on }: { table: string; k: string; on: boolean }) => (
@@ -323,10 +424,21 @@ export default function AdminCatalogPage() {
         </>)}
 
         {tab === "models" && (<>
-          <div className="cat-toolbar"><span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Model = DETAIL dari provider (dikelompokkan per provider)." en="Models = details of a provider (grouped by provider)." /></span><div className="right"><button className="btn btn-default btn-sm" onClick={() => setAdd({})}><Plus size={14} /> <Bi id="Tambah model" en="Add model" /></button></div></div>
+          <div className="cat-toolbar"><span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Model = DETAIL dari provider (dikelompokkan per provider)." en="Models = details of a provider (grouped by provider)." /></span><div className="right"><button className="btn btn-default btn-sm" onClick={() => { setFormErr(null); setAdd({}); }}><Plus size={14} /> <Bi id="Tambah model" en="Add model" /></button></div></div>
+          {/* A5: cari + saring jenis — skala ratusan model (reuse .input + .radio-pill) */}
+          <div style={{ display: "flex", gap: ".5rem", alignItems: "center", flexWrap: "wrap", margin: "0 0 .6rem" }}>
+            <input className="input" style={{ height: 30, maxWidth: 260 }} placeholder="Cari model / ID / provider…" value={mSearch} onChange={(e) => setMSearch(e.target.value)} />
+            <span className={`radio-pill${mComp === "" ? " sel" : ""}`} onClick={() => setMComp("")}><Bi id="Semua" en="All" /></span>
+            {["llm", "tts", "image", "video"].map((c) => <span key={c} className={`radio-pill${mComp === c ? " sel" : ""}`} onClick={() => setMComp(mComp === c ? "" : c)}>{c}</span>)}
+          </div>
           <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl cat-tbl">
             <thead><tr><th>provider</th><th>model_key</th><th>component</th><th><Bi id="harga (USD, auto-sync harian)" en="pricing (USD, auto-synced daily)" /></th><th>tier</th><th>active</th><th></th></tr></thead>
-            <tbody>{[...data.ai_models].sort((a, b) => String(a.provider_key).localeCompare(String(b.provider_key)) || String(a.component).localeCompare(String(b.component))).map((m, i, arr) => {
+            <tbody>{[...data.ai_models].filter((m) => {
+              if (mComp && m.component !== mComp) return false;
+              const q = mSearch.trim().toLowerCase();
+              if (!q) return true;
+              return [m.model_key, m.model_id, m.display_name, m.provider_key].some((v) => String(v ?? "").toLowerCase().includes(q));
+            }).sort((a, b) => String(a.provider_key).localeCompare(String(b.provider_key)) || String(a.component).localeCompare(String(b.component))).map((m, i, arr) => {
               const mk = m.model_key as string;
               const pr = m.pricing as Record<string, unknown> | null;
               return (
@@ -516,6 +628,9 @@ export default function AdminCatalogPage() {
         )}
       </>)}
 
+      {/* A7: saran key_group dari vendor existing (nilai baru tetap boleh) */}
+      <datalist id="kg-dl">{[...new Set((data?.ai_providers ?? []).map((p) => String(p.key_group || p.provider_key)))].sort().map((kg) => <option key={kg} value={kg} />)}</datalist>
+
       {add && ADD_FIELDS[tab] && (
         <>
           <div className="cat-scrim open" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 60 }} onClick={() => setAdd(null)} />
@@ -523,11 +638,10 @@ export default function AdminCatalogPage() {
             <div style={{ display: "flex", alignItems: "center", marginBottom: "0.75rem" }}><strong>Tambah {ADD_FIELDS[tab].table}</strong><button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} onClick={() => setAdd(null)}><X size={16} /></button></div>
             <div style={{ display: "grid", gap: "0.5rem" }}>
               {ADD_FIELDS[tab].fields.map(([k, label]) => (
-                <div key={k}><label className="label">{label}</label>
-                  {renderField(tab, k, add[k] ?? "", (v) => setAdd({ ...add, [k]: v }), false)}
-                </div>
+                <FieldBlock key={k} mapKey={tab} k={k} fallbackLabel={label} value={add[k] ?? ""} onChange={(v) => setAdd({ ...add, [k]: v })} disabled={false} />
               ))}
-              <button className="btn btn-primary btn-sm" style={{ justifySelf: "end", marginTop: "0.25rem" }} onClick={createRow}>Simpan</button>
+              {formErr && !formErr.col && <div style={{ color: "var(--danger)", fontSize: "var(--text-xs)" }}>{formErr.node}</div>}
+              <button className="btn btn-primary btn-sm" style={{ justifySelf: "end", marginTop: "0.25rem" }} onClick={createRow}><Bi id="Simpan" en="Save" /></button>
             </div>
           </div>
         </>
@@ -540,11 +654,10 @@ export default function AdminCatalogPage() {
             <div style={{ display: "flex", alignItems: "center", marginBottom: "0.75rem" }}><strong>Edit {ADD_FIELDS[rowEdit.mapKey].table}</strong><button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} onClick={() => setRowEdit(null)}><X size={16} /></button></div>
             <div style={{ display: "grid", gap: "0.5rem" }}>
               {ADD_FIELDS[rowEdit.mapKey].fields.map(([k, label]) => (
-                <div key={k}><label className="label">{label}{k === PK_OF[rowEdit.mapKey] && <span className="muted"> — PK, terkunci</span>}</label>
-                  {renderField(rowEdit.mapKey, k, rowEdit.values[k] ?? "", (v) => setRowEdit({ ...rowEdit, values: { ...rowEdit.values, [k]: v } }), k === PK_OF[rowEdit.mapKey])}
-                </div>
+                <FieldBlock key={k} mapKey={rowEdit.mapKey} k={k} fallbackLabel={label} value={rowEdit.values[k] ?? ""} onChange={(v) => setRowEdit({ ...rowEdit, values: { ...rowEdit.values, [k]: v } })} disabled={k === PK_OF[rowEdit.mapKey]} pkNote={k === PK_OF[rowEdit.mapKey]} />
               ))}
-              <button className="btn btn-primary btn-sm" style={{ justifySelf: "end", marginTop: "0.25rem" }} onClick={saveRowEdit}>Simpan</button>
+              {formErr && !formErr.col && <div style={{ color: "var(--danger)", fontSize: "var(--text-xs)" }}>{formErr.node}</div>}
+              <button className="btn btn-primary btn-sm" style={{ justifySelf: "end", marginTop: "0.25rem" }} onClick={saveRowEdit}><Bi id="Simpan" en="Save" /></button>
             </div>
           </div>
         </>
@@ -556,15 +669,15 @@ export default function AdminCatalogPage() {
           <div className="card" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(460px,92vw)", zIndex: 61, padding: "1.25rem" }}>
             <div style={{ display: "flex", alignItems: "center", marginBottom: "0.5rem" }}><strong><Bi id="Uji model:" en="Test model:" /> {tm.name}</strong><button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} disabled={tmBusy} onClick={() => setTm(null)}><X size={16} /></button></div>
             <p className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "0.6rem" }}>
-              <Bi id="Menjalankan panggilan NYATA sekali ke vendor untuk membuktikan model ini benar jalan di pipeline." en="Runs one REAL call to the vendor to prove this model actually works in the pipeline." />{" "}
-              {tm.needsKey ? <Bi id="Tempel token uji (TIDAK disimpan)." en="Paste a test token (NOT stored)." /> : <Bi id="Provider gratis — tanpa kunci." en="Free provider — no key needed." />}{" "}
+              <Bi id="Menjalankan panggilan NYATA sekali ke vendor untuk membuktikan model ini benar jalan di pipeline — uji memakai kuota vendor." en="Runs one REAL call to the vendor to prove this model works in the pipeline — the test uses vendor quota." />{" "}
+              {tm.needsKey ? <Bi id="Tempel token uji (TIDAK disimpan), atau kosongkan untuk memakai kunci Test Lab bila tersedia." en="Paste a test token (NOT stored), or leave empty to use the Test Lab key if available." /> : <Bi id="Provider gratis — tanpa kunci." en="Free provider — no key needed." />}{" "}
               <Bi id="Hasil disimpan sebagai jejak audit." en="Result is saved as an audit trail." />
             </p>
-            {tm.needsKey && <input className="input" type="password" placeholder="API token uji (tidak disimpan)" value={tmKey} onChange={(e) => setTmKey(e.target.value)} style={{ marginBottom: "0.6rem" }} />}
+            {tm.needsKey && <input className="input" type="password" placeholder="API token uji (kosongkan = kunci Test Lab)" value={tmKey} onChange={(e) => setTmKey(e.target.value)} style={{ marginBottom: "0.6rem" }} />}
             {tmMsg && <div style={{ padding: "0.5rem 0.7rem", borderRadius: 8, marginBottom: "0.6rem", background: tmMsg.ok ? "var(--success-soft, #e6f7ec)" : "var(--warning-soft, #fde7e7)", color: "var(--text-primary)", fontSize: "var(--text-sm)" }}>{tmMsg.ok ? "✅ " : "⚠️ "}{tmMsg.text}</div>}
             <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
               <button className="btn btn-ghost btn-sm" disabled={tmBusy} onClick={() => setTm(null)}><Bi id="Tutup" en="Close" /></button>
-              <button className="btn btn-primary btn-sm" disabled={tmBusy || (tm.needsKey && !tmKey.trim())} onClick={runTest}>{tmBusy ? <Bi id="Menguji…" en="Testing…" /> : <Bi id="Jalankan uji" en="Run test" />}</button>
+              <button className="btn btn-primary btn-sm" disabled={tmBusy} onClick={runTest}>{tmBusy ? <Bi id="Menguji…" en="Testing…" /> : <Bi id="Jalankan uji" en="Run test" />}</button>
             </div>
           </div>
         </>

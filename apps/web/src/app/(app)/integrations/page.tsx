@@ -178,9 +178,9 @@ export default function IntegrationsPage() {
           const eProvs = provsForEl(el.comps).filter((p) => p.auth !== "none");   // berbayar → butuh kunci
           const freeProvs = provsForEl(el.comps).filter((p) => p.auth === "none"); // gratis (Edge) → tanpa kunci
           const accts = acctsForEl(el.comps);
-          const badge = (s: string) => s === "valid" ? <span className="badge badge-success" style={{ fontSize: "0.625rem" }}><span className="dot" /> Valid</span>
-            : s === "invalid" ? <span className="badge badge-danger" style={{ fontSize: "0.625rem" }}><span className="dot" /> Tidak valid</span>
-            : <span className="badge badge-default" style={{ fontSize: "0.625rem" }}><span className="dot" /> Tersimpan</span>;
+          const badge = (s: string) => s === "valid" ? <span className="badge badge-success" title="Kunci terverifikasi bekerja di penyedia" style={{ fontSize: "0.625rem" }}><span className="dot" /> <Bi id="Valid" en="Valid" /></span>
+            : s === "invalid" ? <span className="badge badge-danger" title="Kunci ditolak penyedia — periksa & simpan ulang" style={{ fontSize: "0.625rem" }}><span className="dot" /> <Bi id="Tidak valid" en="Invalid" /></span>
+            : <span className="badge badge-default" title="Kunci tersimpan namun belum terverifikasi — klik Simpan & Uji untuk memastikan" style={{ fontSize: "0.625rem" }}><span className="dot" /> <Bi id="Tersimpan (belum diuji)" en="Saved (untested)" /></span>;
           const f = addF[el.key] || { provider: "", label: "", key: "" };
           const setF = (patch: Partial<{ provider: string; label: string; key: string }>) => setAddF((s) => ({ ...s, [el.key]: { ...f, ...patch } }));
           return (

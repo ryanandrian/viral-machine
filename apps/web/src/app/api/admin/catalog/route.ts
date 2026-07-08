@@ -45,21 +45,30 @@ const NUMERIC_COLS: Record<string, Record<string, [number, number]>> = {
   niche_property_presets: { sort_order: [0, 99999] },
   tts_profiles: { delivery_wps: [1.0, 4.0] },
 };
+// Error tervalidasi ber-KODE (aturan dwibahasa: API kirim kode, FE menerjemahkan ID/EN — bukan kalimat 1 bahasa).
+class ValErr extends Error {
+  constructor(public code: string, public detail?: Record<string, unknown>) { super(code); }
+}
+const valErrResponse = (e: unknown, status = 400) =>
+  e instanceof ValErr
+    ? NextResponse.json({ error: e.code, detail: e.detail ?? null }, { status })
+    : NextResponse.json({ error: (e as Error).message }, { status });
+
 function coerceValue(table: string, col: string, val: unknown): unknown {
   // jsonb: string → objek; kosong → undefined (jangan tulis, pakai default DB)
   if (JSONB_COLS[table]?.includes(col)) {
     if (typeof val !== "string") return val;
     const s = val.trim();
     if (s === "") return undefined;
-    try { return JSON.parse(s); } catch { throw new Error(`${col}: JSON tidak valid`); }
+    try { return JSON.parse(s); } catch { throw new ValErr("invalid_json", { col }); }
   }
   // numerik: kosong/null → NULL (admin bisa RESET); else angka + clamp rentang (tolak di luar)
   const range = NUMERIC_COLS[table]?.[col];
   if (range) {
     if (val === null || val === undefined || (typeof val === "string" && val.trim() === "")) return null;
     const n = Number(val);
-    if (!Number.isFinite(n)) throw new Error(`${col}: harus angka`);
-    if (n < range[0] || n > range[1]) throw new Error(`${col}: di luar rentang ${range[0]}–${range[1]}`);
+    if (!Number.isFinite(n)) throw new ValErr("not_number", { col });
+    if (n < range[0] || n > range[1]) throw new ValErr("out_of_range", { col, min: range[0], max: range[1] });
     return n;
   }
   return val;
@@ -93,7 +102,7 @@ async function assertEnums(a: ReturnType<typeof createAdminClient>, table: strin
     const allowed = new Set<string>();
     for (const f of spec[c]) for (const v of byField.get(f) ?? []) allowed.add(v);
     if (!allowed.has(String(clean[c]))) {
-      throw new Error(`${c}: '${clean[c]}' bukan nilai yang didukung mesin (pilih: ${[...allowed].sort().join(", ")})`);
+      throw new ValErr("invalid_enum", { col: c, value: String(clean[c]), allowed: [...allowed].sort() });
     }
   }
 }
@@ -137,10 +146,10 @@ export async function PATCH(req: Request) {
   const clean: Record<string, unknown> = {};
   try {
     for (const c of def.cols) if (patch && c in patch) { const v = coerceValue(table, c, patch[c]); if (v !== undefined) clean[c] = v; }
-  } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 400 }); }
+  } catch (e) { return valErrResponse(e); }
   if (Object.keys(clean).length === 0) return NextResponse.json({ error: "no_editable_fields" }, { status: 400 });
   const a = createAdminClient();
-  try { await assertEnums(a, table, clean); } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 400 }); }
+  try { await assertEnums(a, table, clean); } catch (e) { return valErrResponse(e); }
   const { data, error } = await a.from(table).update(clean).eq(def.pk, key).select("*").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   await a.from("admin_audit").insert({ admin_uid: g.user.id, action: `catalog.update.${table}`, detail: { key, fields: Object.keys(clean) } });
@@ -154,15 +163,22 @@ export async function POST(req: Request) {
   const { table, row } = await req.json().catch(() => ({}));
   const def = CATALOG[table];
   if (!def) return NextResponse.json({ error: "table_not_allowed" }, { status: 400 });
-  if (!row?.[def.pk]) return NextResponse.json({ error: `${def.pk}_required` }, { status: 400 });
+  if (!row?.[def.pk]) return NextResponse.json({ error: "pk_required", detail: { col: def.pk } }, { status: 400 });
   const clean: Record<string, unknown> = { [def.pk]: row[def.pk] };
   try {
     for (const c of def.cols) if (c in row) { const v = coerceValue(table, c, row[c]); if (v !== undefined) clean[c] = v; }
-  } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 400 }); }
+  } catch (e) { return valErrResponse(e); }
   const a = createAdminClient();
-  try { await assertEnums(a, table, clean); } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 400 }); }
+  try { await assertEnums(a, table, clean); } catch (e) { return valErrResponse(e); }
+  // A3 anti-bingung: ID (PK) sudah terpakai → 409 kode 'duplicate_key' (bukan error mentah Postgres 500).
+  const { data: dup } = await a.from(table).select(def.pk).eq(def.pk, row[def.pk]).limit(1).maybeSingle();
+  if (dup) return NextResponse.json({ error: "duplicate_key", detail: { col: def.pk, value: String(row[def.pk]) } }, { status: 409 });
   const { data, error } = await a.from(table).insert(clean).select("*").single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    if ((error as { code?: string }).code === "23505")  // race: unique violation → tetap 409 ramah
+      return NextResponse.json({ error: "duplicate_key", detail: { col: def.pk, value: String(row[def.pk]) } }, { status: 409 });
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
   await a.from("admin_audit").insert({ admin_uid: g.user.id, action: `catalog.create.${table}`, detail: { key: row[def.pk] } });
   return NextResponse.json({ ok: true, row: data });
 }

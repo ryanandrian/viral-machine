@@ -43,8 +43,20 @@ def test_model(model_key: str, key: str = "") -> dict:
     if not prov.get("is_active"):
         return {"ok": False, "error": f"Provider '{pk}' non-aktif — aktifkan dulu sebelum uji."}
     needs_key = (prov.get("auth_type") == "api_key")
+    used_pool = False
     if needs_key and not key:
-        return {"ok": False, "error": "Provider ini butuh API token — tempel token uji (tidak disimpan)."}
+        # A6 (owner 2026-07-08): kunci kosong → coba kunci Test Lab (pool admin_test_internal, key_group vendor).
+        try:
+            kg = (sb.table("ai_providers").select("key_group").eq("provider_key", pk).limit(1).execute().data or [{}])[0].get("key_group") or pk
+            acc = (sb.table("tenant_ai_accounts").select("key_enc").eq("tenant_id", "admin_test_internal")
+                   .eq("key_group", kg).eq("status", "valid").limit(1).execute().data or [])
+            if acc:
+                from src.utils.crypto import decrypt
+                key = decrypt(acc[0]["key_enc"]); used_pool = True
+        except Exception as e:
+            logger.warning(f"[model_tester] baca kunci Test Lab gagal: {e}")
+    if needs_key and not key:
+        return {"ok": False, "error": "Provider ini butuh API token — tempel token uji (tidak disimpan), atau simpan kunci vendor ini di Test Lab."}
 
     stamp_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     try:
@@ -93,4 +105,6 @@ def test_model(model_key: str, key: str = "") -> dict:
         return {"ok": False, "error": str(e)[:220]}
 
     _stamp_audit(sb, model_key, f"{'LULUS' if ok else 'GAGAL'} uji manual admin {stamp_date}")
+    if used_pool and ok:
+        result += " (memakai kunci Test Lab)"
     return {"ok": ok, "result": result} if ok else {"ok": False, "error": result}
