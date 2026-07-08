@@ -74,7 +74,8 @@ kuota `max_channels` di DB (trigger/RLS insert channels) · invalid_grant → `s
 
 ## §4. PLAN vs REALISASI (isi SETIAP selesai + tervalidasi; format: status · commit · bukti)
 
-### Batch 1 — ✅ KODE + VALIDASI LOKAL TUNTAS 2026-07-08 (deploy VPS menyusul; acceptance §5 = uji owner)
+### Batch 1 — ✅ DEPLOYED + LIVE 2026-07-08 (commit `382afdf`; acceptance §5 = uji owner)
+> Deploy verified: mv-worker/mv-webhook/mv-web restart & **active** · situs 200 · callback OAuth 302 · endpoint status PRODUKSI mengembalikan field baru (title="RAD The Explorer" + used_by) · worker.log bersih (self_learning jalan normal). Catatan minor (c) di bawah SELESAI (kode baru live).
 | # | Item | Status | Commit | Bukti validasi |
 |---|------|--------|--------|----------------|
 | 1.1 | DB migr **0146**: pool +`yt_channel_title`/`yt_channel_thumb` + unique `(tenant_id,yt_channel_id)` + channels unique `(tenant_id,platform_channel_id)` + backfill title | ✅ APPLIED DB live | (0146) | Uji live-rollback: duplikat koneksi DITOLAK · tabrakan target DITOLAK · target beda DITERIMA · 2 placeholder NULL DITERIMA · residu 0 · backfill ryan title="RAD The Explorer" |

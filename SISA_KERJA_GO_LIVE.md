@@ -232,7 +232,7 @@
 - **PLAN (disetujui owner 2026-07-08):** Batch 1 = pagar 3 lapis + koneksi "berwajah" (nama+foto) + picker galeri + Telegram per-channel (§3 doc) → uji A-Z acceptance §5 bareng owner. Batch 2 = analytics+otak per-channel (G2/G3). Batch 3 = hardening (kuota DB, invalid_grant, dashboard per-channel).
 - **DONE-BILA:** acceptance §5 doc lulus — owner connect channel tambahan (konfirmasi visual nama benar), aktifkan channel-2, 1 video terbit ke channel YANG BENAR, Telegram sebut nama channel; Batch 2: analytics per-channel terisi terpisah.
 - **DEPENDS:** — (mandiri). **Nyambung:** [A4]/[A5] (verifikasi Google & smoke-test memakai alur connect yang sama) · `CHANNEL_LOCK_ACTIVATION_PLAN.md` (pool) · `PER_CHANNEL_OAUTH_MIGRATION.md` (historis, gap §7-nya diserap ke sini).
-- **REALISASI:** 🟡 audit + desain + doc ✅ 2026-07-08 · **Batch 1 KODE+VALIDASI LOKAL ✅ 2026-07-08** (migr 0146 APPLIED + pagar DB diuji live-rollback; pagar token diuji token nyata ryan; tsc+build PASS — rincian §4 doc). Sisa: deploy VPS + acceptance §5 bareng owner (connect channel-2). Batch 2-3 ⬜.
+- **REALISASI:** 🟡 audit + desain + doc ✅ 2026-07-08 · **Batch 1 ✅ DEPLOYED + LIVE 2026-07-08** (commit `382afdf`; migr 0146 applied + pagar DB diuji live-rollback + pagar token diuji token nyata + endpoint status produksi verified — rincian §4 doc). Sisa: **acceptance §5 bareng owner** (connect channel-2 → aktifkan → 1 video ke channel benar), lalu Batch 2 (analytics+otak per-channel) ⬜, Batch 3 ⬜.
 
 ---
 
