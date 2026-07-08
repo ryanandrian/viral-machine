@@ -162,7 +162,7 @@ kunci: channels.*_account_id → tenant_ai_accounts (decrypt Fernet)
 | `src/providers/llm/catalog.py` | `get_providers()` — muat `ai_providers` **aktif** dari DB (cache). |
 | `src/providers/tts/__init__.py` | `build_tts_provider()`, `_adapter_registry()` (`elevenlabs`/`openai_speech`/`edge`/`gemini_speech`). |
 | `src/providers/tts/{elevenlabs,openai_tts,edge_tts,gemini_tts}.py` | Adapter TTS; `.generate()` + `cost_meter.add_tts()`. |
-| `src/providers/visual/ai_image.py` | `AIImageProvider`, `_TRANSPORTS` (`openai`/`replicate`/`together`/`gemini`), `_generate_image()` + `cost_meter.add_image()`. |
+| `src/providers/visual/ai_image.py` | `AIImageProvider`, `_TRANSPORTS` (`openai`/`replicate`/`together`/`gemini`/`cloudflare`), `_generate_image()` + `cost_meter.add_image()`. Cloudflare (2026-07-08): kunci pool `ACCOUNT_ID:API_TOKEN`, prompt murni tanpa negative (NSFW filter CF false-positive), free-tier 10k neuron/hari — model `cf-flux-schnell` LULUS uji nyata. |
 | `src/config/format_catalog.py` | `tts_adapter()`, `tts_class()` — baca protokol dari `tts_profiles`. |
 | `src/production/{tts_engine,video_renderer,visual_assembler}.py` | Sintesis suara, rakit visual, render video. |
 | `src/intelligence/script_engine.py` | Hasilkan naskah + prompt visual (LLM). |
