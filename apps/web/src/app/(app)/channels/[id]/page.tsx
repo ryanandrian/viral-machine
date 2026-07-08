@@ -462,8 +462,12 @@ export default function ChannelDetailPage() {
     // Koneksi YouTube (pool) untuk pemilih di kartu identitas.
     try { const ry = await fetch("/api/youtube/status"); if (ry.ok) { const jy = await ry.json(); setYtAccounts(jy.accounts || []); } } catch { /* non-fatal */ }
     // F2-07: status efektif → subscription + readiness (RPC tenant-scoped F2-fondasi).
-    const { data: cfg } = await supabase.from("tenant_configs").select("plan_type,subscription_status,viral_score_weights,usd_idr_rate").maybeSingle();
-    setUsdIdr(Number((cfg as { usd_idr_rate?: number } | null)?.usd_idr_rate) || 0);
+    const { data: cfg } = await supabase.from("tenant_configs").select("plan_type,subscription_status,viral_score_weights").maybeSingle();
+    // Kurs USD→IDR utk tampilan harga model = app_config (BUKAN tenant_configs — kolomnya memang di sana).
+    try {
+      const { data: fx } = await supabase.from("app_config").select("value").eq("key", "usd_idr_rate").maybeSingle();
+      setUsdIdr(Number((fx as { value?: number } | null)?.value) || 0);
+    } catch { /* fail-soft: tooltip pakai USD */ }
     // Batas usang kartu hasil uji — app_config (admin-editable, fail-soft ke 24 jam).
     try {
       const { data: ttl } = await supabase.from("app_config").select("value").eq("key", "test_result_ttl_hours").maybeSingle();

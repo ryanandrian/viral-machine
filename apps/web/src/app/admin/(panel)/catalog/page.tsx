@@ -122,7 +122,7 @@ export default function AdminCatalogPage() {
   const [tab, setTab] = useState("providers");
   const [data, setData] = useState<Cat | null>(null);
   const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<React.ReactNode>(null);
   const [add, setAdd] = useState<Record<string, string> | null>(null);
   // A4: error form INLINE di modal (bukan toast 2 dtk) — {node ReactNode, col field bermasalah}.
   const [formErr, setFormErr] = useState<{ node: React.ReactNode; col?: string } | null>(null);
@@ -230,7 +230,7 @@ export default function AdminCatalogPage() {
   async function savePace(key: string, val: string) {
     const r = await fetch("/api/admin/catalog", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table: "voice_catalog", key, patch: { delivery_wps: val.trim() === "" ? null : val.trim() } }) });
     if (r.ok) { setToast(val.trim() === "" ? "Pace di-reset (ikut engine)" : "Pace voice disimpan"); setPaceEdit(null); await load(); }
-    else { const j = await r.json().catch(() => ({})); setToast(`Gagal: ${j.error ?? r.status}`); }
+    else { const j = await r.json().catch(() => ({})); setToast(<><Bi id="Gagal: " en="Failed: " />{errText(String(j.error ?? r.status), j.detail)}</>); }
   }
   // M2: CRUD musik di catalog (upload→S3, edit, delete, play). Aset = S3 (aturan owner). Durasi dibaca client-side.
   const [mUp, setMUp] = useState<{ name: string; niche: string; mood: string; bpm: string; duration_s: string; file: File | null } | null>(null);
