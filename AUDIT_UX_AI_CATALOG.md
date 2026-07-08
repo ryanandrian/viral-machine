@@ -4,7 +4,7 @@
 
 ## 🟩 STATUS REALISASI (update 2026-07-08)
 - **FASE 1 = ✅ SELESAI + DEPLOYED + DISEGEL.** Commits `f2defec` (1a-1e) + `2861ec1` (fix status `published`) + `390b406` (siklus hidup kartu hasil: Tutup/TTL `app_config.test_result_ttl_hours` migr 0145/terganti test baru). Disegel via **verifikasi 10-butir end-to-end** (panel tenang; konfirmasi; stepper dari 16 baris STEP nyata; sukses+tautan Studio+channel unpause LIVE; gagal sopan; dismiss persisten; usang 24j; terganti; reaper teruji sintetis; call-site niche/admin tak berubah). Insiden selama Fase 1 & pelajarannya: reuse komponen TANPA verifikasi vocab status (`published` vs `done`) → bug "antre"; kartu hasil tanpa siklus hidup → tampil permanen. Keduanya ditutup.
-- **FASE 2-4 = ⬜ BELUM DIMULAI** — menunggu perintah owner (sengaja tidak menumpuk fase di atas fondasi yang belum dinyatakan tenang).
+- **FASE 2-4 = ✅ SELESAI + DEPLOYED** (sinkron-dokumen audit 2026-07-09 — baris ini sebelumnya BASI menulis "belum dimulai"; realisasi sebenarnya: commits `5055dbc` form admin manusiawi+anti-salah+cari/saring model+poles, `647f1c0` fix fokus input, `d798ed6` kurs app_config+toast dwibahasa). A1-A4 terverifikasi di kode: FIELD_META label/help dwibahasa (27 entri help), duplikat-PK → HTTP 409 `duplicate_key` ramah (route.ts:173-179), error inline.
 - Temuan Katalog admin yang sudah tertutup lebih dulu (sesi 2026-07-07, commits `1996423`/`8c22b83`/`0b7a989`): dropdown enum semua field + validasi server + tombol "Uji model" + badge status uji + probe harga. Sisa temuan form admin (A1-A4 label/help/duplikat-PK/inline-error) = bagian Fase 2.
 
 ## Ringkasan verdict

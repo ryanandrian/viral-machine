@@ -83,7 +83,7 @@ Alur: admin daftar **Provider** dulu → tambah **Model** di bawahnya (＋ Model
 | `apps/web/src/app/api/admin/catalog/test-model/route.ts` | Proxy "Uji model" → vault Python (super-admin guard). |
 | `apps/web/src/app/api/admin/catalog/price-probe/route.ts` | Proxy probe harga 1 model → vault Python. |
 | `src/config/catalog_sync.py` | **Sumber tunggal.** `collect_valid_values()` (kumpulkan adapter dari registry LLM/TTS/visual + konstanta auth_type/component/tier/gender/tts_class), `sync_catalog_valid_values()` (upsert→DB, hapus usang). Dipanggil saat **startup** webhook & worker. |
-| `src/config/model_tester.py` | `test_model(model_key, key)` — jalankan adapter **produksi NYATA** sekali (LLM `complete`/TTS `generate`/image `_generate_image`); vendor keyless tanpa kunci; stamp hasil ke `cost_hint.audit`. |
+| `src/config/model_tester.py` | `test_model(model_key, key)` — jalankan adapter **produksi NYATA** sekali (LLM `complete`/TTS `generate`/image `_generate_image`); vendor keyless tanpa kunci; stamp hasil ke `cost_hint.audit`. **2026-07-08:** image memakai injeksi `model_row` (baris DB tanpa filter aktif) — model image NONAKTIF bisa diuji sebelum aktivasi (dulu telur-ayam: mustahil lulus uji). |
 | `src/billing/webhook_app.py` | Endpoint `/api/admin/catalog/test-model` & `/api/admin/catalog/price-probe` (auth `X-Internal-Secret`), + startup event `sync_catalog_valid_values()`. |
 | `apps/web/src/lib/admin/guard.ts` | `requireSuperAdmin()` — gerbang super-admin semua route admin. |
 | `apps/web/src/lib/supabase/admin.ts` | `createAdminClient()` — klien service_role (bypass RLS). |
@@ -111,7 +111,7 @@ Tenant melihat provider aktif (badge gratis/berbayar), tempel API token, klik **
 |---|---|
 | `apps/web/src/app/(app)/integrations/page.tsx` | Halaman Integrasi: daftar provider (per-vendor, incl. model nonaktif + badge "model segera hadir"), form Simpan & Uji, status. |
 | `apps/web/src/app/api/credentials/ai/route.ts` (+`/delete`) | Proxy Next → vault Python. |
-| `src/utils/api_key_vault.py` | `validate_ai_key()` (uji nyata; ElevenLabs scoped 401→valid), `set_ai_account()`/`delete_ai_account()`/`list_ai_accounts()` (kelola KOLAM, key_group dari katalog), `validate_telegram()`. |
+| `src/utils/api_key_vault.py` | `validate_ai_key()` (uji nyata; ElevenLabs scoped 401→valid; **cloudflare** = kunci gabungan `ACCOUNT_ID:API_TOKEN`, uji `GET /ai/models/search`), `set_ai_account()`/`delete_ai_account()`/`list_ai_accounts()` (kelola KOLAM, key_group dari katalog), `validate_telegram()`. FE Integrasi: provider cloudflare = **dua kolom** (Account ID + Token) digabung sistem — anti salah-format (2026-07-08). |
 | `src/utils/crypto.py` | `encrypt()`/`decrypt()` Fernet (master key hanya di server Python). |
 | `src/billing/webhook_app.py` | Endpoint `/api/credentials/ai*` (auth `X-Internal-Secret`). |
 | `apps/web/src/lib/youtube.ts` | Helper `vault(path, body)` — panggil webhook Python + secret. |
@@ -155,7 +155,7 @@ kunci: channels.*_account_id → tenant_ai_accounts (decrypt Fernet)
 | `src/orchestrator/buffer_janitor.py` | Janitor: sweep stale/orphan S3, prune logs, pemicu `sync_prices`/`sync_fx_rate`, **`reap_stuck_direct_jobs()`** (job uji macet > `DIRECT_JOB_TTL_MINUTES` → failed + pesan). |
 | `src/orchestrator/pipeline.py` | `Pipeline.run()` — orkestrasi 1 video A-Z; `_load_tenant_run_config()`; reset & `cost_meter.summary()` masuk `result["ai_usage"]`. |
 | `src/orchestrator/publisher.py` | Publikasi video buffer → YouTube. |
-| `src/config/tenant_config.py` | `load_tenant_config()` (gabung channels + tenant_configs), `_set_key_from_pool()` (ambil kunci elemen dari `tenant_ai_accounts` sesuai `*_account_id`), `llm_model_for(task)`. |
+| `src/config/tenant_config.py` | `load_tenant_config()` (gabung channels + tenant_configs; **cache TTL 120s** — perubahan setelan terbaca tanpa restart worker, fix insiden 2026-07-08), `_set_key_from_pool()` (ambil kunci elemen dari `tenant_ai_accounts` sesuai `*_account_id`), `llm_model_for(task)` (**penyedia channel ≠ tenant → `llm_models` tenant gugur, model channel dipakai semua task** — G3-slice 2026-07-08). |
 | `src/intelligence/config.py` | `TenantConfig`, `tenant_config_from_channel()` (channel row → config; `content_language`→bahasa). |
 | `src/providers/llm/__init__.py` | `build_llm_provider(cfg)` — resolve provider dari katalog + `ADAPTERS[adapter]`; gagal-jujur bila adapter tak didukung. |
 | `src/providers/llm/adapters.py` | `ADAPTERS` (registry: `openai_chat`, `anthropic_messages`); `.complete()` + `cost_meter.add_llm()`. |
