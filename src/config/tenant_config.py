@@ -10,6 +10,7 @@ Fallback hierarchy:
 """
 
 import os
+import time
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -281,8 +282,13 @@ class TenantConfigManager:
       2. Default values + env variables
     """
 
+    # Umur cache config (detik). Worker hidup berhari-hari — tanpa kedaluwarsa, perubahan setelan
+    # tenant/channel di DB tidak pernah terbaca sampai restart (insiden live 2026-07-08: ganti
+    # penyedia naskah berkali-kali via UI, produksi tetap memakai setelan pertama yang ter-cache).
+    _CACHE_TTL_S = 120
+
     def __init__(self):
-        self._cache: dict[str, TenantRunConfig] = {}
+        self._cache: dict[str, tuple[TenantRunConfig, float]] = {}
         self._supabase = self._init_supabase()
 
     def _init_supabase(self):
@@ -316,8 +322,10 @@ class TenantConfigManager:
             TenantRunConfig siap pakai (sudah ter-overlay channel bila channel_id diberi)
         """
         cache_key = f"{tenant_id}|{channel_id or '-'}|{niche or '-'}"
-        if use_cache and cache_key in self._cache:
-            return self._cache[cache_key]
+        if use_cache:
+            hit = self._cache.get(cache_key)
+            if hit and (time.time() - hit[1]) < self._CACHE_TTL_S:
+                return hit[0]
 
         config = self._load_from_supabase(tenant_id)
         if not config:
@@ -333,7 +341,7 @@ class TenantConfigManager:
             except Exception as e:
                 logger.warning(f"[TenantConfig] overlay channel gagal (ch={channel_id}): {e} — pakai config tenant")
 
-        self._cache[cache_key] = config
+        self._cache[cache_key] = (config, time.time())
         return config
 
     # Kolom channels per-channel (F1-04) → field TenantRunConfig. Hanya overlay bila NOT NULL
@@ -356,10 +364,26 @@ class TenantConfigManager:
         if not ch:
             logger.warning(f"[TenantConfig] channel {channel_id} tak ditemukan — overlay dilewati")
             return
+        tenant_llm_library = (getattr(config, "llm_library", None) or "").strip().lower()
         for f in self._CHANNEL_OVERLAY_FIELDS:
             v = ch.get(f)
             if v is not None:
                 setattr(config, f, v)
+        # [B11] G3 (Batch 2.3a) — KOHERENSI penyedia↔model naskah: bila channel memilih penyedia
+        # BERBEDA dari tenant, routing per-task tenant (`llm_models` = model milik penyedia tenant)
+        # WAJIB gugur → semua task pakai model pilihan channel (`llm_model`, sudah ter-overlay).
+        # Tanpa ini model penyedia lama disodorkan ke penyedia baru → 404 "model is not found"
+        # (insiden live 2026-07-08, channel ke-2 ryan). Channel se-penyedia dgn tenant → routing
+        # per-task tenant tetap dipakai (perilaku channel-1 tidak berubah).
+        ch_lib = (ch.get("llm_library") or "").strip().lower()
+        if ch_lib and tenant_llm_library and ch_lib != tenant_llm_library:
+            if (ch.get("llm_model") or "").strip():
+                config.llm_models = None
+                logger.info(f"[TenantConfig] channel {channel_id}: penyedia naskah channel ({ch_lib}) "
+                            f"≠ tenant ({tenant_llm_library}) → semua task pakai model channel '{config.llm_model}'")
+            else:
+                logger.error(f"[TenantConfig] channel {channel_id}: llm_library={ch_lib} tanpa llm_model — "
+                             f"model tenant milik penyedia lain ({tenant_llm_library}); produksi akan gagal jujur.")
         # [B11] Batch 1.5 — nama channel utk notifikasi Telegram = PER-CHANNEL (channels.channel_name),
         # bukan tenant_configs.channel_name (dulu: semua channel tenant berlabel sama di notif).
         if ch.get("channel_name"):
@@ -628,9 +652,13 @@ class TenantConfigManager:
         )
 
     def invalidate_cache(self, tenant_id: str) -> None:
-        """Hapus cache untuk tenant tertentu — paksa reload dari Supabase."""
-        self._cache.pop(tenant_id, None)
-        logger.info(f"[TenantConfig] Cache invalidated: {tenant_id}")
+        """Hapus cache tenant (semua channel/niche) — paksa reload dari Supabase.
+        Kunci cache = komposit "tenant|channel|niche", jadi hapus per-prefix (pop kunci
+        tenant polos tidak pernah cocok — bug lama, tak pernah menghapus apa pun)."""
+        gone = [k for k in self._cache if k.split("|", 1)[0] == tenant_id]
+        for k in gone:
+            self._cache.pop(k, None)
+        logger.info(f"[TenantConfig] Cache invalidated: {tenant_id} ({len(gone)} entri)")
 
 
 # Singleton instance — dipakai seluruh pipeline
