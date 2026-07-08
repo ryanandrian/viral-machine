@@ -495,8 +495,10 @@ class AIImageProvider(VisualProvider):
             raise VisualError("Kunci Cloudflare harus berformat 'ACCOUNT_ID:API_TOKEN' — dua nilai dari dashboard Cloudflare, digabung tanda titik dua.")
         base = (self.model_config.get("base_url") or "").rstrip("/") or "https://api.cloudflare.com/client/v4"
         url = f"{base}/accounts/{acct}/ai/run/{self.model_config['model_id']}"
-        full_prompt = f"{prompt}\n\nStrictly avoid: {negative_prompt}"[:2048]   # batas resmi input CF
-        body: dict = {"prompt": full_prompt}
+        # PROMPT MURNI tanpa merge negative (beda dari transport lain): FLUX tak punya kanal
+        # negative-prompt, dan klasifier NSFW CF terbukti FALSE-POSITIVE pada suntikan
+        # "Strictly avoid: ..." (uji nyata 2026-07-08: prompt lingkaran-merah pun ditolak 3030).
+        body: dict = {"prompt": prompt[:2048]}   # batas resmi input CF
         steps = (self.model_config.get("params") or {}).get("steps")
         if steps:
             body["steps"] = min(int(steps), 8)   # batas resmi CF
