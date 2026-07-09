@@ -5,9 +5,10 @@
 # (koneksi putus → error 255, build ikut mati). `start` kembali seketika; build + restart + verifikasi
 # situs semuanya jalan di sisi VPS sendiri.
 #
+# Lokasi di VPS = repo WORKER (~/viral-machine-v2/scripts/ — repo FE sparse hanya /apps/web/).
 # Pakai (dari mana pun):
-#   ssh vps '~/mesinviral-web/scripts/deploy_fe.sh start'    → pull + build detached (kembali ~detik)
-#   ssh vps '~/mesinviral-web/scripts/deploy_fe.sh status'   → BUILDING / OK / FAIL (+bukti situs)
+#   ssh vps '~/viral-machine-v2/scripts/deploy_fe.sh start'    → pull + build detached (kembali ~detik)
+#   ssh vps '~/viral-machine-v2/scripts/deploy_fe.sh status'   → BUILDING / OK / FAIL (+bukti situs)
 set -euo pipefail
 
 FE_ROOT="/home/rad4vm/mesinviral-web"
