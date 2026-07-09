@@ -46,7 +46,7 @@ export default async function AdminSystemPage() {
   const [hb, inv, chRows, runs24, failedRows, runsTotal, runsFailed, runsSuccess, vids, analytics, channels, direct, sysState] = await Promise.all([
     a.from("worker_heartbeats").select("*").order("worker_name"),
     a.from("content_inventory").select("channel_id, status").in("status", STOCK_STATUSES),
-    a.from("channels").select("id, channel_name, buffer_depth").eq("is_active", true).order("channel_name").limit(24),
+    a.from("channels").select("id, channel_name, buffer_depth, publish_slots").eq("is_active", true).order("channel_name").limit(24),
     a.from("production_runs").select("created_at, status").gte("created_at", since24h),
     a.from("production_runs").select("error_message").eq("status", "failed").order("created_at", { ascending: false }).limit(500),
     a.from("production_runs").select("id", { count: "exact", head: true }),
@@ -58,6 +58,12 @@ export default async function AdminSystemPage() {
     a.from("direct_jobs").select("status, job_type, created_at").order("created_at", { ascending: false }).limit(50),
     a.from("system_state").select("key, value").in("key", ["ai_price_synced_at", "fx_synced_at"]),
   ]);
+  // Target stok efektif — CERMIN rumus BE `producer.target_stock` (sadar-jadwal, owner 2026-07-09):
+  // buffer_depth eksplisit menang; NULL → slot/hari × app_config.buffer_target_days; tanpa slot → 0.
+  const btd = await a.from("app_config").select("value").eq("key", "buffer_target_days").maybeSingle();
+  const bufferTargetDays = Math.max(1, Number(btd.data?.value) || 1);
+  const effectiveTarget = (ch: { buffer_depth: number | null; publish_slots: string[] | null }) =>
+    ch.buffer_depth ?? ((ch.publish_slots?.length ?? 0) === 0 ? 0 : (ch.publish_slots!.length * bufferTargetDays));
   // Status sinkronisasi mesin (system_state, 0126) — INFORMASI read-only berbahasa manusia
   // (temuan owner 2026-07-05: epoch mentah nyasar di System Configuration = salah tempat).
   const stateMap = Object.fromEntries((sysState.data ?? []).map((r: { key: string; value: string | null }) => [r.key, r.value]));
@@ -144,7 +150,7 @@ export default async function AdminSystemPage() {
             activeChannels.map((ch) => {
               const s = stockByChannel[ch.id] ?? {};
               const stok = (s["ready"] ?? 0) + (s["ready_with_issues"] ?? 0) + (s["producing"] ?? 0);
-              const target = ch.buffer_depth ?? null;
+              const target = effectiveTarget(ch);
               const pct = target ? Math.min(100, Math.round((stok / target) * 100)) : (stok > 0 ? 100 : 0);
               const detail = [s["ready"] ? `${s["ready"]} ready` : "", s["ready_with_issues"] ? `${s["ready_with_issues"]} perlu tinjau` : "", s["producing"] ? `${s["producing"]} produksi` : "", s["publishing"] ? `${s["publishing"]} publish` : ""].filter(Boolean).join(" · ") || "kosong";
               return (

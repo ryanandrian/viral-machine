@@ -36,10 +36,25 @@ def max_concurrent_render() -> int:
     return max(1, os.cpu_count() or 2)
 
 
-def default_buffer_depth() -> int:
-    """Target stok ready per-channel (config-driven). Per-niche override = channels.buffer_depth."""
-    v = os.getenv("PRODUCER_BUFFER_DEPTH")
-    return int(v) if v and v.isdigit() else 2
+def target_stock(ch: dict) -> int:
+    """Target stok per-channel SADAR-JADWAL + SADAR-TTL (owner 2026-07-09; pengganti angka statis 2).
+    Dasar: (1) stok > kebutuhan → video menunggu > TTL 72j → disapu janitor = compute terbuang;
+    (2) tenant model gratis kuota-harian (Groq/Cloudflare) → produksi eager melebihi kuota →
+    gagal beruntun → circuit-break. Aturan:
+    • `channels.buffer_depth` eksplisit (incl. 0) = keputusan manusia → MENANG apa adanya.
+    • NULL → jumlah slot/hari × `app_config.buffer_target_days` (admin-editable, fail-soft 1),
+      di-clamp ≤ slot/hari × hari-TTL (stok takkan melebihi yang sempat tayang sebelum basi).
+    • Tanpa jadwal slot → 0 (publisher tak pernah menayangkannya; stok pasti berakhir di janitor)."""
+    explicit = ch.get("buffer_depth")
+    if explicit is not None:
+        return max(0, int(explicit))
+    slots = len(ch.get("publish_slots") or [])
+    if slots == 0:
+        return 0
+    from src.config.app_config import get_int
+    days = max(1, get_int("buffer_target_days", 1))
+    ttl_days = max(1, int(float(os.getenv("BUFFER_TTL_HOURS", "72")) // 24))
+    return max(1, slots * min(days, ttl_days))
 
 
 def _resolve_niche(channel_row: dict) -> str | None:
@@ -465,10 +480,11 @@ def _pause_channel(sb, ch: dict, reason: str) -> None:
         logger.error(f"[Producer] gagal set pause ch={ch.get('id')}: {e}")
 
 
-def plan_and_submit(sb, pool: ThreadPoolExecutor, sem: threading.Semaphore, depth: int) -> int:
-    """Satu siklus: hitung defisit buffer per-channel → submit produksi sampai slot core habis.
-    Return jumlah job di-submit. Rem: (1) semaphore=core (anti-OOM); (2) buffer penuh — issue DIHITUNG
-    stok = rem alami; (3) circuit-breaker §4b/F7: N gagal beruntun → STOP channel + alarm (anti-runaway)."""
+def plan_and_submit(sb, pool: ThreadPoolExecutor, sem: threading.Semaphore) -> int:
+    """Satu siklus: hitung defisit buffer per-channel (target = `target_stock`, sadar-jadwal) →
+    submit produksi sampai slot core habis. Return jumlah job di-submit. Rem: (1) semaphore=core
+    (anti-OOM); (2) buffer penuh — issue DIHITUNG stok = rem alami; (3) circuit-breaker §4b/F7:
+    N gagal beruntun → STOP channel + alarm (anti-runaway)."""
     channels = _active_channels(sb)
     from src.billing.limits import gate_for_channel
     from src.orchestrator.readiness import channel_readiness
@@ -508,7 +524,7 @@ def plan_and_submit(sb, pool: ThreadPoolExecutor, sem: threading.Semaphore, dept
         stok = (inventory.buffer_depth(cid, "ready")
                 + inventory.buffer_depth(cid, "ready_with_issues")
                 + inventory.buffer_depth(cid, "producing"))
-        target = ch.get("buffer_depth") or depth
+        target = target_stock(ch)
         if stok < target:
             deficits.append((target - stok, ch))
     deficits.sort(key=lambda x: -x[0])   # buffer paling tipis dulu (§12c prioritas)
@@ -533,14 +549,14 @@ def run_forever(idle_seconds: int = 10) -> None:
     """Loop persisten Producer (§12c). MAX_CONCURRENT_RENDER = core (semaphore = rem)."""
     from supabase import create_client
     sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
-    MAX, depth = max_concurrent_render(), default_buffer_depth()
-    logger.info(f"[Producer] start | MAX_CONCURRENT_RENDER={MAX} (core) | buffer_depth={depth}")
+    MAX = max_concurrent_render()
+    logger.info(f"[Producer] start | MAX_CONCURRENT_RENDER={MAX} (core) | target stok = sadar-jadwal (slot/hari × app_config.buffer_target_days; override channels.buffer_depth)")
     sem = threading.Semaphore(MAX)
     with ThreadPoolExecutor(max_workers=MAX, thread_name_prefix="producer") as pool:
         while True:
             try:
                 drain_direct(sb, pool, sem)     # jalur prioritas (test/retry/admin) — semaphore SAMA
-                plan_and_submit(sb, pool, sem, depth)   # stok-buffer dgn slot core sisa
+                plan_and_submit(sb, pool, sem)  # stok-buffer dgn slot core sisa
             except Exception as e:
                 logger.error(f"[Producer] loop error: {e}")
             time.sleep(idle_seconds)
