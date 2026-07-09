@@ -366,6 +366,10 @@ export default function ChannelDetailPage() {
           {!test.run?.qc_passed && test.run?.error_message && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".25rem" }}><Bi id="Catatan QC:" en="QC note:" /> {test.run.error_message as string}</div>}
           <div style={{ marginTop: ".4rem" }}><Bi id="Silakan evaluasi hasil uji ini di YouTube Studio Anda:" en="Please review this test in your YouTube Studio:" /></div>
           {studio && <a className="btn btn-secondary btn-sm" href={studio} target="_blank" rel="noopener noreferrer" style={{ marginTop: ".4rem", textDecoration: "none" }}><ExternalLink size={13} /> <Bi id="Buka di YouTube Studio" en="Open in YouTube Studio" /></a>}
+          {/* Studio membuka link edit di bawah identitas channel yang AKTIF di sesi browser — akun Google
+              ber-multi-channel yang sedang di channel lain akan melihat "Oops, something went wrong"
+              (fenomena Google; URL edit tak bisa memaksa identitas). Pagar terbaik = edukasi di titik klik. */}
+          {studio && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".35rem" }}><Bi id={`Bila Studio menampilkan "Oops, something went wrong": channel yang sedang aktif di YouTube Studio Anda bukan "${ch?.channel_name ?? "channel ini"}". Klik foto profil di Studio → Ganti akun → pilih "${ch?.channel_name ?? "channel ini"}", lalu buka tautan ini lagi.`} en={`If Studio shows "Oops, something went wrong": the channel currently active in your YouTube Studio is not "${ch?.channel_name ?? "this channel"}". Click your avatar in Studio → Switch account → pick "${ch?.channel_name ?? "this channel"}", then open this link again.`} /></div>}
         </div>
       );
     }
