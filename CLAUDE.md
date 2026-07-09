@@ -17,6 +17,7 @@
    - (c) Di dalam mandat, pilihan teknis yang reversible → putuskan sendiri, sebutkan di laporan.
    - (d) **Selalu propose dulu** (mengalahkan a–c) bila menyentuh: elemen UI (tambah/ubah/hapus) · uang/biaya/infra · aksi irreversible pada data (hapus/drop/purge) · lingkup/arah produk.
    - (e) Temuan baru di tengah kerja → masuk daftar usulan; dilarang dikerjakan "sekalian".
+   - (f) **Pesan owner masuk di tengah kerja = INTERRUPT**: berhenti, jawab dulu, baru lanjut. **Insiden/bug live TIDAK membatalkan (b)** — containment ≤ mengamankan state + diagnosa; fix kode tetap proposal→tunggu. Item rencana batch yang disetujui ≠ izin menariknya maju. [[feedback_owner_interrupt_stop]] *(pelanggaran berat 2026-07-08)*
 
 ## §3 GERBANG PRE-DONE (sebelum bilang "selesai" / deploy / tandai ✅)
 1. **Anti-human-error:** input kritis tidak BISA diisi salah (dropdown/validasi/tombol-uji di titik input) — "gagal-aman belakangan" saja = gagal butir ini. [[feedback_world_class_gate]]
@@ -32,8 +33,11 @@
 2. **Jujur & presisi:** pisahkan tegas SELESAI / poles-opsional / risiko tersisa; dilarang over-claim; menjelaskan sesuatu ≠ menjadikannya tugas baru. [[feedback_define_done_no_scope_creep]]
 
 ## §5 DEPLOY (satu-satunya jalur)
-**LOKAL (edit + lulus §3.4) → commit → push → VPS `git pull` + rebuild + restart.**
-Turunan pasal ini (tidak diulang di tempat lain): dilarang mengedit kode langsung di VPS · deploy per-BATCH 1× di akhir task (bukan per-langkah) · perintah VPS yang lama = detached + poll (SSH foreground diputus → error 255) · VPS hanya berisi runtime (tanpa `.md`/`apps/`). [[feedback_local_test_batch_deploy]] [[feedback_vps_clean]] [[feedback_vps_ssh_long_commands]]
+**LOKAL (edit + lulus §3.4) → commit → push → VPS WAJIB via skrip resmi (mandat owner 2026-07-09; manual `git pull`+restart tangan = DILARANG):**
+- **FE:** `ssh vps '~/viral-machine-v2/scripts/deploy_fe.sh start'` → poll `... deploy_fe.sh status` sampai `OK`/`FAIL`.
+- **BE:** `ssh vps '~/viral-machine-v2/scripts/deploy_be.sh start'` → poll `... deploy_be.sh status` sampai `OK`/`FAIL`; pagar render-aktif menunda otomatis — `start --force` hanya sadar-risiko.
+*Ukuran lulus:* status skrip `OK` (service active + situs 200 / `/health` 200) — bukan sekadar "perintah sudah dijalankan".
+Turunan pasal ini (tidak diulang di tempat lain): dilarang mengedit kode langsung di VPS · deploy per-BATCH 1× di akhir task (bukan per-langkah) · perintah VPS lama lainnya = detached + poll (SSH foreground diputus → error 255; kedua skrip sudah menerapkannya) · VPS hanya berisi runtime (tanpa `.md`/`apps/`). [[feedback_local_test_batch_deploy]] [[feedback_vps_clean]] [[feedback_vps_ssh_long_commands]] *(skrip lahir dari insiden build salah-tempat 2026-07-09)*
 
 ## §6 LARANGAN SPESIFIK (fakta lapangan; tidak diturunkan dari pasal lain)
 1. v1 = pensiun/arsip — jangan disentuh.
