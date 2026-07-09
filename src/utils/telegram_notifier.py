@@ -129,19 +129,47 @@ class TelegramNotifier:
         lines.append(f"<code>{run_id}</code>")
         return self._send(chat_id, "\n".join(lines))
 
-    def notify_circuit_break(self, tenant_id: str, channel_id: str, reason: str) -> bool:
+    def notify_circuit_break(self, tenant_id: str, channel_id: str, reason: str,
+                             channel_name: str = "") -> bool:
         """REM DARURAT §4b/F7: produksi channel DIHENTIKAN otomatis (gagal beruntun). Alarm KERAS,
-        dikirim SEKETIKA (tak menunggu slot) — cegah loop bakar-kredit."""
+        dikirim SEKETIKA (tak menunggu slot) — cegah loop bakar-kredit.
+        Header SERAGAM dgn notif lain: [nama channel] (owner 2026-07-10 — dulu UUID mentah,
+        tenant awam tak paham); fallback UUID hanya bila nama tak diberikan (caller lama)."""
         chat_id = self._chat_id_for_tenant(tenant_id)
         if not chat_id:
             return False
+        display = self._escape(str(channel_name or channel_id))
         text = (
-            f"🛑 <b>Produksi DIHENTIKAN otomatis</b>\n"
-            f"📺 Channel: <code>{self._escape(str(channel_id))}</code>\n"
+            f"🛑 <b>[{display}] Produksi DIHENTIKAN otomatis</b>\n"
             f"⚠️ {self._escape(reason)}\n"
             f"👉 Perbaiki penyebab (mis. saldo/kredensial AI), lalu tekan <b>Jalankan Ulang</b> untuk melanjutkan."
         )
         return self._send(chat_id, text)
+
+    def notify_review_pending(self, tenant_id: str, title: str, qc_reason: str,
+                              recommendation: str = "", run_config=None) -> bool:
+        """Video JADI tapi ber-catatan QC → masuk antrean Review (jalur TERJADWAL/Opsi C).
+        (Owner 2026-07-10): tanpa notif ini tenant tak tahu ada video menunggu keputusan →
+        didiamkan → TTL buang otomatis → biaya produksi hangus senyap. Arahan aksi jelas.
+        Chat & toggle per-tenant via run_config (pola notify_qc_fail); TTL & URL config-driven."""
+        chat_id = self._get_chat_id(run_config)
+        if not chat_id:
+            return False
+        channel  = self._channel_name(run_config, {"tenant_id": tenant_id})
+        ttl_days = max(1, round(float(os.getenv("BUFFER_TTL_HOURS", "72")) / 24))
+        base     = (os.getenv("APP_BASE_URL", "") or "").rstrip("/")
+        lines = [
+            f"⚠️ <b>[{self._escape(channel)}] 1 video menunggu keputusan Anda</b>",
+            f"📋 Judul: <i>{self._escape(str(title)[:100])}</i>",
+            f"📝 Catatan QC: {self._escape(qc_reason)}",
+        ]
+        if recommendation:
+            lines.append(f"💡 Saran: {self._escape(recommendation)}")
+        lines.append("👉 Buka menu <b>Review</b> → putuskan <b>Pakai (terbitkan)</b> atau <b>Buang</b>.")
+        lines.append(f"⏳ Tanpa keputusan, video terbuang otomatis dalam ±{ttl_days} hari — biaya produksinya hangus.")
+        if base:
+            lines.append(f"🔗 {base}/review")
+        return self._send(chat_id, "\n".join(lines))
 
     def notify_admin(self, text: str) -> bool:
         """Notif ke ADMIN PLATFORM (owner/tim) — mis. LEAD PANAS layak outreach personal (LIFECYCLE nurture).

@@ -246,6 +246,19 @@ def produce_one(channel_row: dict) -> int | None:
             _cleanup_local()
             _record_production_run(channel_row, result, "qc_failed", False, qc.get("reason"))
             logger.warning(f"[Producer] ready_with_issues (tinjau): {vkey} (inv {inv_id}) — {qc.get('reason','')}")
+            # Telegram (owner 2026-07-10): tenant WAJIB tahu ada video menunggu keputusan —
+            # tanpa ini video didiamkan → TTL buang senyap → biaya produksi hangus. Fail-soft.
+            try:
+                from src.utils.telegram_notifier import TelegramNotifier
+                TelegramNotifier().notify_review_pending(
+                    tenant_id=tenant_id,
+                    title=_script.get("title") or _script.get("topic", ""),
+                    qc_reason=qc.get("reason", ""),
+                    recommendation=qc.get("recommendation", ""),
+                    run_config=tc,
+                )
+            except Exception as _te:
+                logger.warning(f"[Producer] notif review-pending gagal — non-fatal: {_te}")
             return inv_id
 
         # QC-PASS → ready (siap auto-publish saat slot)
@@ -518,7 +531,8 @@ def plan_and_submit(sb, pool: ThreadPoolExecutor, sem: threading.Semaphore) -> i
             _pause_channel(sb, ch, reason)
             try:
                 from src.utils.telegram_notifier import TelegramNotifier
-                TelegramNotifier().notify_circuit_break(tenant_id=ch["tenant_id"], channel_id=cid, reason=reason)
+                TelegramNotifier().notify_circuit_break(tenant_id=ch["tenant_id"], channel_id=cid, reason=reason,
+                                                        channel_name=ch.get("channel_name") or "")
             except Exception as _te:
                 logger.warning(f"[Producer] alarm circuit-break gagal: {_te}")
             continue
