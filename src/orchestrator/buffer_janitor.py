@@ -64,18 +64,6 @@ def sweep_stale(sb=None) -> dict:
             s3_buffer.delete(k); deleted_assets += 1
         sb.table("content_inventory").delete().eq("id", r["id"]).execute()
         purged_rows += 1
-        # TUTUP LOOP sinyal (owner 2026-07-10; simetris `discard_inventory_item`): item ready_with_issues
-        # yang kedaluwarsa TTL = auto-dibuang → run asalnya WAJIB ikut padam (qc_failed → 'discarded'),
-        # kalau tidak: angka "perlu ditinjau" (dashboard/Runs) menghitungnya SELAMANYA padahal
-        # tak ada lagi yang bisa ditinjau. Fail-soft (jangan gagalkan sweep karena update ledger).
-        if r.get("status") == "ready_with_issues":
-            _rid = (r.get("metadata") or {}).get("run_id")
-            if _rid:
-                try:
-                    sb.table("production_runs").update({"status": "discarded"}) \
-                      .eq("run_id", _rid).eq("status", "qc_failed").execute()
-                except Exception as e:
-                    logger.warning(f"[janitor] padamkan sinyal run {_rid} gagal — non-fatal: {e}")
     if purged_rows:
         logger.info(f"[janitor] sweep_stale: {purged_rows} baris abandoned + {deleted_assets} aset S3 dihapus")
     return {"purged_rows": purged_rows, "deleted_assets": deleted_assets}
