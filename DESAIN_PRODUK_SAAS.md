@@ -782,6 +782,9 @@ Pipeline lama: **produksi + publish dalam satu tarikan, DI WAKTU SLOT**. Produks
 loop selamanya:
     for channel in urutkan_prioritas(channel_aktif):       # buffer paling tipis / slot terdekat dulu
         target = channel.buffer_depth                       # config per-niche: tren=1, evergreen=3-5
+        # ⭐ UPDATE 2026-07-09 (LIVE, `producer.target_stock`): buffer_depth NULL → target SADAR-JADWAL
+        #    = slot/hari × `app_config.buffer_target_days` (clamp TTL); tanpa slot → 0.
+        #    Dasar owner: anti stok basi kena TTL 72j + anti kuota-harian model gratis terbakar eager-fill.
         stok   = hitung_status_ready(channel)               # dari content_inventory
         if stok < target:
             if render_berjalan() < MAX_CONCURRENT_RENDER:   # = jumlah core (anti-overload!)
