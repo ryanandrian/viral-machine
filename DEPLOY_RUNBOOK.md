@@ -4,7 +4,9 @@
 
 > ⚠️ **UPDATE 2026-06-17 — ARSITEKTUR HOSTING BERUBAH (keputusan owner): frontend SELF-HOST di VPS, BUKAN Vercel** (hemat biaya + tanpa akun baru). Semua referensi "Vercel" di runbook ini **SUPERSEDED** → baca sebagai "VPS (systemd `mv-web` Next.js :3000 + nginx + Let's Encrypt)". Status real: `https://mesinviral.com` LIVE di VPS (frontend `mv-web` + mesin `mv-worker`). Detail: progress_journal 2026-06-17 + PROGRESS §B3.
 >
-> **🚀 DEPLOY FE RESMI (2026-07-09):** `ssh vps '~/viral-machine-v2/scripts/deploy_fe.sh start'` → poll `... status` sampai OK/FAIL. Skrip = pull + build detached di `apps/web` + restart `mv-web` + verifikasi situs, semuanya di sisi VPS (path terkunci — anti insiden build salah-tempat 2026-07-09; teruji nyata OK).
+> **🚀 DEPLOY RESMI (2026-07-09, keduanya teruji nyata OK — skrip di repo worker VPS `scripts/`):**
+> · **FE:** `ssh vps '~/viral-machine-v2/scripts/deploy_fe.sh start'` → poll `... status` sampai OK/FAIL. Pull + build detached di `apps/web` + restart `mv-web` + verifikasi situs, semuanya di sisi VPS (path terkunci — anti insiden build salah-tempat 2026-07-09).
+> · **BE:** `ssh vps '~/viral-machine-v2/scripts/deploy_be.sh start'` → poll `... status` sampai OK/FAIL. Pull + pip install bila `requirements.txt` berubah + restart `mv-worker`+`mv-webhook` + verifikasi `/health`; pagar render-aktif (tunda kecuali `start --force`) + pagar anti-dobel.
 >
 > **🔄 REKONSILIASI 2026-07-01:** **Webhook SUDAH LIVE** = systemd `mv-webhook` (uvicorn `127.0.0.1:8088`) + nginx route `mesinviral.com/api/youtube/oauth/*` (BUKAN subdomain `api.mesinviral.com` — tak dipakai). YouTube = **OAuth PLATFORM** ("Hubungkan dengan Google"; `GOOGLE_CLIENT_ID/SECRET` di `.env`). Model **BYO-CC + `tenant_credentials`** di runbook ini = **SUPERSEDED** → POOL `tenant_ai_accounts`/`tenant_youtube_accounts` (fosil di-drop migr 0090/0095). Yang TERSISA dari runbook = **HANYA gate eksternal owner** (Midtrans PRODUKSI + Supabase SMTP/Google + rotasi secret). Sumber tunggal sisa = `PROGRESS.md §GATE CUTOVER` + blok AUDIT [A].
 >
