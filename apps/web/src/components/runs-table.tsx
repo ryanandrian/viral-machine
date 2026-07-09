@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import {
   Download, Zap, ChevronLeft, ChevronRight, Search, List,
   Eye, X, RefreshCw, ArrowRight, Check, Loader2, Clock, Play, Trash2, type LucideIcon,
@@ -33,8 +33,12 @@ type RunRow = {
   id: string; run_id: string | null; channel_id: string | null; niche: string | null; topic: string | null;
   status: string | null; elapsed_seconds: string | null; youtube_url: string | null;
   youtube_video_id: string | null; viral_score: number | null; created_at: string;
-  run_metadata?: { cost?: { usd?: number; unpriced?: string[] } } | null;   // B2 biaya AI BYOK
+  run_metadata?: { cost?: { usd?: number; unpriced?: string[] }; video_title?: string } | null;   // B2 biaya + judul akhir
 };
+// Judul AKHIR video (identik dgn yang tampil di YouTube) — bukan topik internal pemilih tema.
+// Owner 2026-07-10: 1 video sempat tampil beda nama di Runs (topik) vs Studio (judul) → membingungkan.
+// Baris lama (pra-fix) tanpa video_title → fallback topik (jujur, tak bisa direkonstruksi).
+const runTitle = (d: RunRow) => d.run_metadata?.video_title || d.topic;
 const fmtK = (n: number) => n >= 1_000_000 ? `${(n / 1e6).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
 
 function fmtDur(secs: string | null) {
@@ -62,6 +66,19 @@ function Badge({ st }: { st: StKey }) {
   return <span className={`badge ${c}`}><span className="dot" /><span data-id>{idL}</span><span data-en>{enL}</span></span>;
 }
 
+// TEMPAT meninjau run "Perlu Ditinjau" (owner 2026-07-10; dua jalur by-design QC doc §7):
+// direct (ada youtube_url) → video PRIVAT di YouTube Studio · terjadwal + item tinjau masih LIVE →
+// halaman /review · item sudah disapu TTL → kedaluwarsa (tak ada lagi yang bisa ditinjau).
+function ReviewVenue({ d, issueRunIds }: { d: RunRow; issueRunIds: Set<string> }) {
+  if (statusKey(d.status) !== "review") return null;
+  const s: CSSProperties = { fontSize: "var(--text-xs)", whiteSpace: "nowrap" };
+  if (d.youtube_url)
+    return <a className="link" style={s} href={d.youtube_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}><span data-id>tinjau di YouTube Studio (privat)</span><span data-en>review in YouTube Studio (private)</span></a>;
+  if (d.run_id && issueRunIds.has(d.run_id))
+    return <a className="link" style={s} href="/review" onClick={(e) => e.stopPropagation()}><span data-id>tinjau di halaman Review</span><span data-en>review on the Review page</span></a>;
+  return <span className="muted" style={s}><span data-id>kedaluwarsa — dibuang otomatis (TTL)</span><span data-en>expired — auto-removed (TTL)</span></span>;
+}
+
 const PL_NAMES = ["Trend Radar", "Topic Select", "Script", "Hook", "TTS", "Visual", "Render", "Publish"];
 const STEP_ICON: Record<string, [string, string, LucideIcon]> = {
   done: ["var(--success)", "var(--success-soft)", Check], run: ["var(--info)", "var(--info-soft)", Loader2],
@@ -78,6 +95,7 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
   const [pvUrl, setPvUrl] = useState<string | null>(null);    // URL video → diputar di modal <video> (BUKAN window.open yg men-download)
   const [confirmCfg, setConfirmCfg] = useState<null | { title: ReactNode; message: ReactNode; confirmLabel: ReactNode; onConfirm: () => void }>(null);
   const [chMap, setChMap] = useState<Record<string, string>>({});
+  const [issueRunIds, setIssueRunIds] = useState<Set<string>>(new Set());  // run dgn item tinjau LIVE di /review
   const [views, setViews] = useState<Record<string, number>>({});
   const [usdRate, setUsdRate] = useState(16500);   // kurs tampilan (app_config usd_idr_rate; fallback = default migrasi)
   const [loading, setLoading] = useState(true);
@@ -95,7 +113,8 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
     // scope channel (tab channel): .eq HARUS sebelum .order (builder supabase). channelId kosong = semua channel.
     let prSel = supabase.from("production_runs").select("id,run_id,channel_id,niche,topic,status,elapsed_seconds,youtube_url,youtube_video_id,viral_score,created_at,run_metadata");
     if (channelId) prSel = prSel.eq("channel_id", channelId);
-    let ciSel = supabase.from("content_inventory").select("id,niche,channel_id,metadata,created_at").eq("status", "ready");
+    // + ready_with_issues: dipakai menentukan TEMPAT tinjau run "Perlu Ditinjau" (item live → /review).
+    let ciSel = supabase.from("content_inventory").select("id,status,niche,channel_id,metadata,created_at").in("status", ["ready", "ready_with_issues"]);
     if (channelId) ciSel = ciSel.eq("channel_id", channelId);
     // Banner "Produksi langsung" — WAJIB scope channel juga (cegah job channel lain bocor ke tab channel ini).
     let djSel = supabase.from("direct_jobs").select("id,status,job_type,niche").in("status", ["pending", "producing"]);
@@ -112,11 +131,15 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
     if (_rate > 0) setUsdRate(_rate);
     setDirect(dj ?? []);
     setData((runs as RunRow[]) ?? []);
-    setQueue(((ci as { id: number; niche: string | null; channel_id: string | null; metadata: { run_id?: string; script?: { title?: string; topic?: string }; duration_secs?: number; viral_score?: number; insights_grade?: string } | null; created_at: string }[]) ?? []).map((q) => ({
+    type CiRow = { id: number; status: string; niche: string | null; channel_id: string | null; metadata: { run_id?: string; script?: { title?: string; topic?: string }; duration_secs?: number; viral_score?: number; insights_grade?: string } | null; created_at: string };
+    const ciRows = ((ci as CiRow[]) ?? []);
+    // Item tinjau LIVE → run tsb ditinjau di /review (bukan Studio, bukan kedaluwarsa).
+    setIssueRunIds(new Set(ciRows.filter((r) => r.status === "ready_with_issues").map((r) => r.metadata?.run_id).filter(Boolean) as string[]));
+    setQueue(ciRows.filter((r) => r.status === "ready").map((q) => ({
       id: q.id, niche: q.niche, channel_id: q.channel_id, created_at: q.created_at,
       runId: q.metadata?.run_id ?? null,
-      // Samakan dgn daftar Runs (yg pakai production_runs.topic) → 1 konten = 1 nama di kedua tempat.
-      topic: q.metadata?.script?.topic || q.metadata?.script?.title || null,
+      // Samakan dgn daftar Runs (judul AKHIR dulu, fallback topik) → 1 konten = 1 nama di semua tempat.
+      topic: q.metadata?.script?.title || q.metadata?.script?.topic || null,
       duration: q.metadata?.duration_secs ?? null,
       viralScore: q.metadata?.viral_score ?? null,
       grade: q.metadata?.insights_grade ?? null,
@@ -161,9 +184,9 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
   }
 
   function exportCsv() {
-    const head = ["id", "channel", "niche", "topic", "status", "viral_score", "youtube_url", "created_at"];
+    const head = ["id", "channel", "niche", "title", "topic", "status", "viral_score", "youtube_url", "created_at"];
     const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const rows = data.map((r) => [r.id, chMap[r.channel_id ?? ""] ?? "", r.niche ?? "", r.topic ?? "", r.status ?? "", r.viral_score ?? "", r.youtube_url ?? "", r.created_at].map(esc).join(","));
+    const rows = data.map((r) => [r.id, chMap[r.channel_id ?? ""] ?? "", r.niche ?? "", runTitle(r) ?? "", r.topic ?? "", r.status ?? "", r.viral_score ?? "", r.youtube_url ?? "", r.created_at].map(esc).join(","));
     const blob = new Blob([[head.join(","), ...rows].join("\n")], { type: "text/csv" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `runs-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(a.href);
   }
@@ -195,7 +218,7 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
     (chFilter === "all" || d.channel_id === chFilter) &&
     (nicheFilter === "all" || d.niche === nicheFilter) &&
     (days === "all" || (() => { try { return new Date(d.created_at).getTime() >= cutoff; } catch { return true; } })()) &&
-    (!ql || `${d.id} ${d.topic ?? ""} ${prettyNiche(d.niche)}`.toLowerCase().includes(ql))
+    (!ql || `${d.id} ${runTitle(d) ?? ""} ${d.topic ?? ""} ${prettyNiche(d.niche)}`.toLowerCase().includes(ql))
   );
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE));
   const pg = Math.min(page, pageCount - 1);
@@ -276,7 +299,7 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
           {pvMsg && <div className="card-pad" style={{ paddingBottom: 0 }}><p style={{ fontSize: "var(--text-xs)", color: "var(--error)", margin: 0 }}>{pvMsg}</p></div>}
           <div style={{ overflowX: "auto" }}>
             <table className="tbl">
-              <thead><tr><th>Topik</th><th>Channel</th><th>Niche</th><th className="num">Durasi</th><th className="num">Skor viral</th><th>Grade</th><th>Diproduksi</th><th></th></tr></thead>
+              <thead><tr><th><span data-id>Judul</span><span data-en>Title</span></th><th>Channel</th><th>Niche</th><th className="num">Durasi</th><th className="num">Skor viral</th><th>Grade</th><th>Diproduksi</th><th></th></tr></thead>
               <tbody>
                 {loading ? (
                   <tr><td colSpan={8} className="muted" style={{ textAlign: "center", padding: "2rem" }}><span data-id>Memuat…</span><span data-en>Loading…</span></td></tr>
@@ -308,7 +331,7 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
         <div style={{ overflowX: "auto" }}>
           <table className="tbl">
             <thead><tr>
-              <th>ID</th><th>Channel</th><th>Niche</th><th>Topic</th><th>Status</th>
+              <th>ID</th><th>Channel</th><th>Niche</th><th><span data-id>Judul</span><span data-en>Title</span></th><th>Status</th>
               <th className="num" title="Waktu proses produksi">Proses</th>
               <th className="num" title="Biaya AI BYOK nyata (konsumsi terukur × harga resmi provider) — dibayar kunci Anda sendiri">Biaya AI</th>
               <th className="num">Views</th><th>Started</th><th></th>
@@ -325,8 +348,8 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
                     <td><span className="runid">#{d.id}</span></td>
                     <td><span className="ch-cell muted">{d.channel_id ? (chMap[d.channel_id] ?? "—") : "—"}</span></td>
                     <td><span className="muted">{prettyNiche(d.niche)}</span></td>
-                    <td><div className="topic-cell">{d.topic || <span className="muted">—</span>}</div></td>
-                    <td><Badge st={st} /></td>
+                    <td><div className="topic-cell">{runTitle(d) || <span className="muted">—</span>}</div></td>
+                    <td><Badge st={st} />{st === "review" && <div style={{ marginTop: 3 }}><ReviewVenue d={d} issueRunIds={issueRunIds} /></div>}</td>
                     <td className="num mono" style={{ fontSize: "var(--text-xs)" }}>{fmtDur(d.elapsed_seconds)}</td>
                     <td className="num mono" style={{ fontSize: "var(--text-xs)" }}>{(() => {
                       const c = (d.run_metadata as { cost?: { usd?: number; unpriced?: string[] } } | null)?.cost;
@@ -372,13 +395,13 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
               <div className="drawer-head">
                 <div>
                   <div className="runid">RUN #{selected.id}</div>
-                  <div style={{ fontSize: "var(--text-lg)", fontWeight: 600, letterSpacing: "-0.01em", marginTop: 2 }}>{selected.topic || "(tanpa topik)"}</div>
+                  <div style={{ fontSize: "var(--text-lg)", fontWeight: 600, letterSpacing: "-0.01em", marginTop: 2 }}>{runTitle(selected) || "(tanpa judul)"}</div>
                   <div style={{ fontSize: "var(--text-xs)", color: "var(--text-muted)", marginTop: 4 }}>{(selected.channel_id && chMap[selected.channel_id]) || "—"} · {prettyNiche(selected.niche)}</div>
                 </div>
                 <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setSelected(null)}><X size={16} /></button>
               </div>
               <div className="drawer-body">
-                <div><Badge st={st} /></div>
+                <div style={{ display: "flex", alignItems: "center", gap: ".6rem", flexWrap: "wrap" }}><Badge st={st} />{st === "review" && <ReviewVenue d={selected} issueRunIds={issueRunIds} />}</div>
                 <div>
                   <div className="sec-label"><span data-id>Ringkasan</span><span data-en>Summary</span></div>
                   <div className="kv"><span className="k">Durasi</span><span className="v">{fmtDur(selected.elapsed_seconds)}</span></div>

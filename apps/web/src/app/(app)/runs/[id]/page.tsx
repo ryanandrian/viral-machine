@@ -23,6 +23,7 @@ type StepState = "completed" | "running" | "pending" | "failed";
 type LogRow = { id: number | string; level: string | null; step: string | null; category: string | null; message: string | null; created_at: string };
 type RunRow = {
   id: string; queue_id: string | number | null; run_id: string | null; channel_id: string | null; topic: string | null; niche: string | null;
+  run_metadata?: { video_title?: string } | null;   // judul AKHIR video (samakan dgn YouTube; fallback topik)
   status: string | null; youtube_url: string | null; viral_score: number | null; elapsed_seconds: string | null;
   error_message: string | null; llm_provider: string | null; created_at: string;
 };
@@ -98,7 +99,7 @@ export default function RunDetailPage() {
 
   const load = useCallback(async () => {
     const { data } = await supabase.from("production_runs")
-      .select("id,queue_id,run_id,channel_id,topic,niche,status,youtube_url,viral_score,elapsed_seconds,error_message,llm_provider,created_at")
+      .select("id,queue_id,run_id,channel_id,topic,niche,status,youtube_url,viral_score,elapsed_seconds,error_message,llm_provider,created_at,run_metadata")
       .eq("id", id).maybeSingle();
     const r = data as RunRow | null;
     setRun(r);
@@ -165,7 +166,7 @@ export default function RunDetailPage() {
         <div className="run-head-main">
           <div className="run-title-block">
             <span className="run-no">RUN #{run.id}</span>
-            <h1 className="run-title">{run.topic || "(tanpa topik)"}</h1>
+            <h1 className="run-title">{run.run_metadata?.video_title || run.topic || "(tanpa judul)"}</h1>
             <div className="run-meta">
               <span className="mi"><Tag size={15} /> {prettyNiche(run.niche)}</span>
               <span className="mi"><Calendar size={15} /> {(() => { try { return new Date(run.created_at).toLocaleString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }); } catch { return run.created_at; } })()}</span>
@@ -177,6 +178,15 @@ export default function RunDetailPage() {
               <span className="dot" style={{ width: 7, height: 7, borderRadius: "50%", background: "currentColor" }} />
               {st === "completed" ? <><span data-id>Selesai</span><span data-en>Completed</span></> : st === "review" ? <><span data-id>Perlu Ditinjau</span><span data-en>Needs Review</span></> : st === "discarded" ? <><span data-id>Dibuang</span><span data-en>Discarded</span></> : st === "failed" ? <><span data-id>Gagal</span><span data-en>Failed</span></> : st === "running" ? <><span data-id>Berjalan</span><span data-en>Running</span></> : <><span data-id>Antre</span><span data-en>Queued</span></>}
             </span>
+            {/* Tempat tinjau (owner 2026-07-10): run direct qc_failed = video PRIVAT di YouTube (tombol
+                "Buka YouTube" di bawah); run terjadwal = halaman /review (bila item masih hidup). */}
+            {st === "review" && (
+              <span className="muted" style={{ fontSize: "var(--text-xs)", textAlign: "right" }}>
+                {run.youtube_url
+                  ? <><span data-id>Tinjau videonya di YouTube Studio (terunggah privat) — tombol di bawah.</span><span data-en>Review the video in YouTube Studio (uploaded private) — button below.</span></>
+                  : <><span data-id>Tinjau di <a className="link" href="/review">halaman Review</a> (bila masih tersedia — item usang dibuang otomatis).</span><span data-en>Review on the <a className="link" href="/review">Review page</a> (if still available — stale items auto-expire).</span></>}
+              </span>
+            )}
             <div className="run-actions">
               <button className="btn btn-secondary btn-sm" onClick={load}><RefreshCw size={15} /> <span data-id>Muat ulang</span><span data-en>Refresh</span></button>
               {run.youtube_url

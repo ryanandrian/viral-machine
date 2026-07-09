@@ -131,7 +131,9 @@ def _record_production_run(channel_row: dict, result: dict, status: str,
             "llm_provider":    script.get("llm_provider_used"),
             "elapsed_seconds": result.get("elapsed_seconds"),
             "error_message":   error,
-            "run_metadata":    {"scheduled": True, "mode": "buffer", **_cost_fields(result)},
+            # video_title = judul AKHIR (yang tampil di YouTube) — FE Runs menampilkan ini, bukan
+            # topik internal (owner 2026-07-10: 1 video sempat tampil beda nama di Runs vs Studio).
+            "run_metadata":    {"scheduled": True, "mode": "buffer", "video_title": script.get("title", ""), **_cost_fields(result)},
         }).execute()
     except Exception as e:
         logger.warning(f"[Producer] tulis production_runs (scheduled) gagal — non-fatal: {e}")
@@ -329,7 +331,7 @@ def run_direct(sb, job: dict) -> None:
             "llm_provider": _script.get("llm_provider_used"),
             "elapsed_seconds": result.get("elapsed_seconds"),
             "error_message": err,
-            "run_metadata": {"direct": True, "job_type": job.get("job_type"), **_cost_fields(result)},
+            "run_metadata": {"direct": True, "job_type": job.get("job_type"), "video_title": _script.get("title", ""), **_cost_fields(result)},
         }).execute()
     except Exception as e:
         logger.warning(f"[Direct] tulis production_runs gagal: {e}")

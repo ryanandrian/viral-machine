@@ -235,6 +235,36 @@ class Pipeline:
             logger.info("STEP 6/7 | Assembling visuals...")
             audio_duration = self.tts_engine.get_duration(audio_path)
             logger.info(f"[Pipeline] Audio duration: {audio_duration:.1f}s — scaling clips")
+
+            # ── GERBANG DURASI PRA-VISUAL (owner 2026-07-10) ─────────
+            # Di titik ini durasi audio SUDAH PASTI; durasi video final = audio + trailing_silence
+            # (rumus renderer s72b, sumber trailing SAMA: run-config). Bila proyeksi di luar window
+            # QC relatif (env QC_DURATION_TOLERANCE — identik _pre_publish_qc) → STOP SEKARANG,
+            # SEBELUM biaya gambar AI + render terbakar untuk video yang PASTI gagal QC
+            # (salah sistem tidak boleh jadi rugi tenant). Tanpa preset → lewat (paritas QC interim).
+            _gate_preset = getattr(tenant_config, "duration_preset", None)
+            if _gate_preset:
+                try:
+                    from src.config.tenant_config import load_tenant_config as _ltc
+                    _rc = _ltc(tenant_config.tenant_id, getattr(tenant_config, "channel_id", None),
+                               getattr(tenant_config, "niche", None))
+                    _gate_trail = float(getattr(_rc, "trailing_silence", 2.5))
+                except Exception:
+                    _gate_trail = 2.5
+                _gate_tol = float(os.getenv("QC_DURATION_TOLERANCE", "0.15"))
+                _gate_lo  = float(_gate_preset) * (1 - _gate_tol)
+                _gate_hi  = float(_gate_preset) * (1 + _gate_tol)
+                _gate_proj = audio_duration + _gate_trail
+                if not (_gate_lo <= _gate_proj <= _gate_hi):
+                    raise TTSError(
+                        f"Durasi diproyeksikan {_gate_proj:.1f}s (audio {audio_duration:.1f}s + jeda akhir "
+                        f"{_gate_trail}s) di luar ±{int(_gate_tol*100)}% preset {_gate_preset}s "
+                        f"(boleh {_gate_lo:.0f}–{_gate_hi:.0f}s) — dihentikan SEBELUM pembuatan visual "
+                        f"(biaya gambar & render TIDAK terpakai).", step="tts")
+                result["steps"]["duration_gate"] = {"status": "ok", "projected": round(_gate_proj, 1),
+                                                    "window": [round(_gate_lo), round(_gate_hi)]}
+                logger.info(f"[Pipeline] Gerbang durasi pra-visual LOLOS: proyeksi {_gate_proj:.1f}s "
+                            f"dalam window {_gate_lo:.0f}–{_gate_hi:.0f}s")
             # Image-gen per-preset (MULTI_FORMAT §3): durasi per-beat (1 image/beat) dari word_timestamps
             # NYATA → sinkron TTS. SUMBER TUNGGAL: dikonsumsi visual_assembler (bake) & video_renderer (concat).
             from src.intelligence.script_engine import compute_beat_durations
