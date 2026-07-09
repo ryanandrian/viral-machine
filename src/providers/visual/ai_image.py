@@ -73,8 +73,8 @@ class AIImageProvider(VisualProvider):
             # config-driven (mis. steps Cloudflare), bukan hardcode di transport.
             "params":   (_row.get("default_params") or {}),
         }
-        # base_url provider (ai_providers) — provider image OpenAI-compatible non-OpenAI (mis. Together
-        # FLUX free-tier) cukup baris DB + transport openai. None (OpenAI asli) → SDK default = perilaku lama.
+        # base_url provider (ai_providers) — provider image OpenAI-compatible non-OpenAI cukup
+        # baris DB + transport openai. None (OpenAI asli) → SDK default = perilaku lama.
         try:
             from src.providers.llm.catalog import get_providers
             self.model_config["base_url"] = (get_providers().get(_row["provider_key"]) or {}).get("base_url")
@@ -104,8 +104,8 @@ class AIImageProvider(VisualProvider):
         self.llm_models     = config.get("llm_models") or {}
         self.llm_model_flat = config.get("llm_model") or ""
 
-        # Kunci visual = visual_api_key (BYOK per tenant) untuk SEMUA platform (openai/replicate/dst).
-        # NO-FALLBACK: tak ada env-token platform (Replicate tetap OPSI; tenant isi kunci sendiri).
+        # Kunci visual = visual_api_key (BYOK per tenant) untuk SEMUA platform (openai/gemini/cloudflare).
+        # NO-FALLBACK: tak ada env-token platform; tenant isi kunci sendiri via pool tenant_ai_accounts.
         # Kosong → di-raise di bawah (gagal jujur). llm_api_key dipisah khusus LLM (narasi + rejection rewrite).
         self.api_key = config.get("visual_api_key") or ""
 
@@ -385,8 +385,8 @@ class AIImageProvider(VisualProvider):
 
         size = self.model_config.get("size", "1024x1536")
 
-        # base_url dari ai_providers → provider images OpenAI-compatible non-OpenAI (mis. Together FLUX
-        # free-tier) jalan lewat transport ini. `quality` = parameter khusus keluarga OpenAI — hanya
+        # base_url dari ai_providers → provider images OpenAI-compatible non-OpenAI
+        # jalan lewat transport ini. `quality` = parameter khusus keluarga OpenAI — hanya
         # dikirim ke platform openai (provider lain bisa menolak parameter tak dikenal).
         _client_kw = {"api_key": self.api_key}
         if self.model_config.get("base_url"):

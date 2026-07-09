@@ -64,7 +64,7 @@ def _feed_entry(feed: dict, model_id: str, provider_prefix: str | None = None) -
     """Cari entri feed LiteLLM: kunci persis → prefix SPESIFIK provider (DATA: ai_providers.
     price_feed_prefix, fallback provider_key) → daftar prefix legacy (jaring pengaman regresi).
     NO-HARDCODE (owner 2026-07-06): provider BARU tak lagi butuh bongkar skrip ini — cukup baris
-    ai_providers (+isi price_feed_prefix bila nama prefix feed ≠ provider_key, mis. together→together_ai).
+    ai_providers (+isi price_feed_prefix bila nama prefix feed ≠ provider_key, mis. openai_tts→openai).
     (Riwayat insiden prefix tertanam: 'elevenlabs/' 2026-07-04; gemini/groq 2026-07-06.)"""
     if model_id in feed:
         return feed[model_id]

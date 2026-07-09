@@ -41,7 +41,7 @@ const FIELD_META: Record<string, Record<string, { id: string; en: string; help_i
     auth_type: { id: "Cara autentikasi", en: "Auth method", help_id: "api_key = perlu token · none = gratis tanpa kunci (mis. edge_tts)", help_en: "api_key = token required · none = free, no key (e.g. edge_tts)" },
     key_group: { id: "Kelompok kunci (vendor)", en: "Key group (vendor)", help_id: "Vendor pemilik kunci — 1 kunci dipakai semua elemennya. Contoh: openai_tts → openai", help_en: "Key-owning vendor — one key serves all its elements. E.g.: openai_tts → openai" },
     base_url: { id: "Alamat API (opsional)", en: "API base URL (optional)", help_id: "Hanya untuk vendor OpenAI-compatible. Contoh: https://api.groq.com/openai/v1", help_en: "Only for OpenAI-compatible vendors. E.g.: https://api.groq.com/openai/v1" },
-    price_feed_prefix: { id: "Prefix sumber harga", en: "Price feed prefix", help_id: "Nama vendor di feed harga bila beda dari ID. Contoh: together → together_ai", help_en: "Vendor name in the price feed when it differs. E.g.: together → together_ai" },
+    price_feed_prefix: { id: "Prefix sumber harga", en: "Price feed prefix", help_id: "Nama vendor di feed harga bila beda dari ID. Contoh: openai_tts → openai", help_en: "Vendor name in the price feed when it differs. E.g.: openai_tts → openai" },
     free_tier_note: { id: "Catatan gratis harian", en: "Free tier note", help_id: "Tampil ke tenant bila vendor memberi kuota gratis. Kosongkan bila tidak ada.", help_en: "Shown to tenants when the vendor has a free quota. Leave empty otherwise." },
   },
   models: {

@@ -50,7 +50,7 @@ def _ai_test(provider_key: str, key: str):
     if spec:
         return spec
     # NO-HARDCODE (owner 2026-07-06, temuan status 'Tersimpan'): provider OpenAI-compatible ber-base_url
-    # (Gemini/Groq/Together/dst) diuji GENERIK via GET {base_url}/models Bearer — dari katalog, bukan peta.
+    # (Gemini/Groq/dst) diuji GENERIK via GET {base_url}/models Bearer — dari katalog, bukan peta.
     try:
         from src.providers.llm.catalog import get_providers
         row = get_providers().get(provider_key) or {}
