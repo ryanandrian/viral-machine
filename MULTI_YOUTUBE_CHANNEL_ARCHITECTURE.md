@@ -124,4 +124,5 @@ kuota `max_channels` di DB (trigger/RLS insert channels) · invalid_grant → `s
 7. (Batch 2) `videos.channel_id` & analytics penuh terisi per-channel; insight channel-1 vs channel-2 terpisah.
 
 ## Changelog
+- **2026-07-11** — **konteks utk Batch 2 (analytics+otak per-channel):** mesin hitung insight DIROMBAK (P5+P6+migr 0148 — per-VIDEO snapshot-terbaru, paginasi penuh, agregat tertimbang volume; isolasi per-channel diverifikasi SEMUA jalur baca/tulis, kebocoran NIHIL). Batch 2 kelak membangun di atas mesin ini — jangan audit ulang isolasi. Detail = memory `project_self_learning_remediation_2026_06_28` entri ⭐ 07-11.
 - **2026-07-08** — dibuat dari audit mendalam (3 penelusur + DB live); desain UI/UX + batch disetujui owner; [B11] didaftarkan di `SISA_KERJA_GO_LIVE.md`.

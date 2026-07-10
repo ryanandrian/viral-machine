@@ -64,7 +64,7 @@
 1. **Kualitas konten = segalanya** — lebih baik tidak produksi daripada produksi jelek
 2. **No silent degradation** — kalau gagal, tenant tahu via Telegram + dashboard
 3. **Diversity by design** — voice/niche/hook variation per tenant untuk YouTube compliance
-4. **Self-learning** — feedback loop dari real channel analytics
+4. **Self-learning** — feedback loop dari real channel analytics *(mekanika final 2026-07-11: metrik per-VIDEO snapshot-terbaru + sejarah penuh; agregat lintas-channel TERTIMBANG VOLUME — insight per-channel di tab channel, tot/avg di menu utama & dashboard; detail = memory self-learning + migr 0148)*
 5. **Almost fully config-driven** — tenant override default
 6. **Transparency** — BYOK + visible AI cost + auditable pipeline log
 
