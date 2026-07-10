@@ -239,11 +239,9 @@
 
 # ⏳ KELOMPOK C — DATA-GATED *(mekanisme SIAP; matang seiring data pasca-cutover — bukan "koding besar")*
 
-### [B12] Hitungan "Video terbit" /channels — paginasi (temuan audit 2026-07-11; DORMAN, terpicu skala) — ⬜
-- **BUKTI:** `channels/page.tsx:162` hitung dari `videos.select("channel_id")` tanpa paginasi → terpotong bila tenant >1.000 video published. **Hari ini TIDAK berdampak** (terbesar: ryan 207) — angka masih benar utk semua tenant. Pre-existing, BUKAN dari perubahan 2026-07-11.
-- **PLAN:** ganti ke count-exact per-channel (head query) — kecil, 1 file.
-- **PEMICU KERJAKAN:** ada tenant mendekati 1.000 video published (cek berkala) ATAU batch FE berikutnya yang memang menyentuh file ini.
-- **REALISASI:** ⬜ (freeze kode 2026-07-11: tidak disentuh sampai pemicu)
+### [B12] Sapu-bersih temuan audit 2026-07-11 (3 kelemahan kelas-skala) — ✅ TUNTAS (keputusan owner "jangan biarkan bug")
+- **3 temuan dibereskan 1 batch:** (1) tiebreaker `id` paginasi email recap (urutan total deterministik) · (2) "Video terbit" /channels → count-exact per-channel (kebal cap 1000; validasi MVT=5 RAD=202 Σ=207 identik metode lama) · (3) kartu "Biaya AI 30 hari" dashboard → paginasi berurutan stabil (cap 8k run/30hr). Semua pre-existing/kosmetik — hari itu belum ada angka salah yang tampil ke tenant mana pun.
+- **REALISASI:** ✅ deployed 2026-07-11 (lihat commit "sapu-bersih audit"); recap tetap 207/42.363 ground-truth; tsc+build 0 err. **Pasca-batch ini: NOL temuan diketahui tersisa → FREEZE KODE berlaku** (kode hanya disentuh bila memblok/menipu tenant berbayar atau permintaan Google).
 
 ### [C1] Closed-loop kalibrasi durasi — 🟡  (REMEDIASI **F5-01**)
 - **TUJUAN:** pace `P` (wps efektif) per voice×speed di-update otomatis dari data render nyata → durasi makin presisi.
