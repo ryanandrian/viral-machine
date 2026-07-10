@@ -127,24 +127,54 @@ class ViralWeightOptimizer:
             logger.warning(f"[ViralWeights] Supabase init gagal: {e}")
             return None
 
+    def _fetch_paged(self, build, order_cols, page_size=1000, max_pages=20):
+        """Paginasi penuh berurutan deterministik (P6, insiden 2026-07-11): PostgREST cap 1000
+        baris/req — tanpa paginasi, snapshot RAD 7.246 baris terpotong senyap. `build` = fungsi
+        pembuat query segar per halaman (builder supabase sekali-pakai)."""
+        out, page = [], 0
+        while page < max_pages:
+            q = build()
+            for c in order_cols:
+                q = q.order(c, desc=True, nullsfirst=False)
+            rows = (q.range(page * page_size, page * page_size + page_size - 1).execute().data) or []
+            out += rows
+            if len(rows) < page_size:
+                break
+            page += 1
+        return out
+
     def compute_and_store(self, tenant_id: str) -> dict:
-        """Korelasi dimensi→performa → bobot → tenant_configs.viral_score_weights. Return ringkasan."""
+        """Korelasi dimensi→performa → bobot → tenant_configs.viral_score_weights. Return ringkasan.
+        P6 (insiden 2026-07-11): dulu analytics diambil TANPA urutan+paginasi (cap 1000 senyap;
+        `amap` menyimpan snapshot SEMBARANG per video) → bobot viral belajar dari data terpotong
+        & acak. Kini: paginasi penuh + snapshot TERBARU per video (pola RPC 0056), id di-chunk 100."""
         if not self._sb:
             return {"tenant_id": tenant_id, "status": "no_supabase"}
         try:
-            videos = (self._sb.table("videos")
-                      .select("video_id, topic_scores, insights_grade")
-                      .eq("tenant_id", tenant_id).eq("status", "published")
-                      .not_.is_("topic_scores", "null").execute().data) or []
+            videos = self._fetch_paged(
+                lambda: (self._sb.table("videos")
+                         .select("id, video_id, topic_scores, insights_grade")
+                         .eq("tenant_id", tenant_id).eq("status", "published")
+                         .not_.is_("topic_scores", "null")),
+                order_cols=("id",))
             videos = [v for v in videos if v.get("topic_scores")]
             if not videos:
                 return {"tenant_id": tenant_id, "status": "no_topic_scores"}
 
             video_ids = [v["video_id"] for v in videos if v.get("video_id")]
-            analytics = (self._sb.table("video_analytics")
-                         .select("video_id, views, likes, ctr, avg_view_pct, subscriber_gain")
-                         .in_("video_id", video_ids).execute().data) or []
-            amap = {a["video_id"]: a for a in analytics}
+            amap: dict = {}
+            for i in range(0, len(video_ids), 100):
+                chunk = video_ids[i:i + 100]
+                rows = self._fetch_paged(
+                    lambda c=chunk: (self._sb.table("video_analytics")
+                                     .select("id, video_id, views, likes, ctr, avg_view_pct, "
+                                             "subscriber_gain, analytics_date, collected_at")
+                                     .in_("video_id", c)),
+                    order_cols=("analytics_date", "collected_at", "id"))
+                for a in rows:
+                    vid = a.get("video_id")
+                    if vid and vid not in amap:  # first-seen pada urutan DESC = snapshot TERBARU video itu
+                        amap[vid] = a
 
             paired = []
             for v in videos:

@@ -139,31 +139,51 @@ class PerformanceAnalyzer:
     # ── Data fetching ─────────────────────────────────────────────────────
 
     def _fetch_analytics(self, tenant_id: str, channel_id: Optional[str] = None) -> list:
-        """Ambil rows dari video_analytics yang sudah punya views > 0.
+        """Ambil metrik per-VIDEO = snapshot TERBARU tiap video (dedup, pola RPC 0056).
         PER-CHANNEL (6.4): bila channel_id diberi → filter ke channel itu saja (video_analytics.channel_id
         terisi 100%). channel_id=None (blok __main__/demo) → perilaku lama tenant-wide (backward-compatible).
-        Tanpa filter ini, insight tiap channel berisi data SE-TENANT (bleed antar-channel di tenant multi-channel)."""
+        P5 (insiden 2026-07-11): versi lama menjumlah PER-BARIS snapshot tanpa dedup ("MVT 23 video" = 23
+        baris dari 4 video; niche ber-2-video menang 77,8% karena JUMLAH SNAPSHOT, bukan performa) dan
+        limit(200) BARIS memotong sejarah channel besar (RAD 7.220 baris → hanya ±3% terbaca).
+        Kini: paginasi penuh berurutan total deterministik (analytics_date, collected_at, id — semua DESC;
+        pagar 20×1000 baris) → first-seen per video_id = snapshot TERBARU → n = VIDEO UNIK sungguhan;
+        pagar akhir 500 video terbaru (by published_at)."""
         try:
-            query = (
-                self._supabase
-                .table("video_analytics")
-                .select(
-                    "video_id, niche, content_type, hook_text, title, "
-                    "views, watch_time_mins, avg_view_pct, ctr, "
-                    "likes, comments, subscriber_gain, published_at"
+            latest: dict = {}
+            PAGE, page = 1000, 0
+            while page < 20:
+                query = (
+                    self._supabase
+                    .table("video_analytics")
+                    .select(
+                        "id, video_id, niche, content_type, hook_text, title, "
+                        "views, watch_time_mins, avg_view_pct, ctr, "
+                        "likes, comments, subscriber_gain, published_at, "
+                        "analytics_date, collected_at"
+                    )
+                    .eq("tenant_id", tenant_id)
                 )
-                .eq("tenant_id", tenant_id)
-            )
-            if channel_id:
-                query = query.eq("channel_id", channel_id)
-            result = (
-                query
-                .gt("views", 0)
-                .order("published_at", desc=True)
-                .limit(200)
-                .execute()
-            )
-            return result.data or []
+                if channel_id:
+                    query = query.eq("channel_id", channel_id)
+                rows = (
+                    query
+                    .gt("views", 0)
+                    .order("analytics_date", desc=True, nullsfirst=False)
+                    .order("collected_at", desc=True, nullsfirst=False)
+                    .order("id", desc=True)
+                    .range(page * PAGE, page * PAGE + PAGE - 1)
+                    .execute()
+                    .data
+                ) or []
+                for r in rows:
+                    vid = r.get("video_id")
+                    if vid and vid not in latest:  # first-seen pada urutan DESC = snapshot TERBARU video itu
+                        latest[vid] = r
+                if len(rows) < PAGE:
+                    break
+                page += 1
+            out = sorted(latest.values(), key=lambda r: str(r.get("published_at") or ""), reverse=True)
+            return out[:500]  # pagar wajar: 500 video terbaru per channel cukup utk insight
         except Exception as e:
             logger.warning(f"[Analyzer] Fetch analytics gagal: {e}")
             return []
