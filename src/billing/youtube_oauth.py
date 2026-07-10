@@ -168,13 +168,16 @@ def _create_account(tenant_id: str, account_id: str | None, label: str = "") -> 
 
 
 def _store_tokens(tenant_id: str, account_id: str, creds, identity: dict | None = None) -> None:
-    """Tulis token hasil consent (Fernet) ke baris pool + status='valid' + identitas channel (nama/foto).
-    refresh_token hanya ditimpa bila ada."""
-    # CATATAN: tabel tenant_youtube_accounts TIDAK punya kolom `scopes` → jangan ditulis (dulu bikin
-    # update gagal → exchange_failed). Scope tak perlu disimpan: publisher fallback ke SCOPES bila kosong.
+    """Tulis token hasil consent (Fernet) ke baris pool + status='valid' + identitas channel (nama/foto)
+    + `scopes` GRANTED Google (kolom migr 0149). refresh_token hanya ditimpa bila ada."""
+    # SEJARAH [B16] 2026-07-11: penulisan scopes dulu dihapus krn kolomnya tak ada (update gagal), dgn
+    # rasionalisasi "publisher fallback ke SCOPES" — benar utk publisher, TAPI kolektor analytics
+    # menjadikan scopes GERBANG Layer-Full → retensi mati senyap semua tenant sejak 24 Jun.
+    # Kini kolom ada (0149): simpan yang Google BERIKAN (granted; boleh superset — pemakai cek membership).
     upd = {
         "google_access_token_enc": encrypt(creds.token),
         "token_expiry": creds.expiry.replace(tzinfo=timezone.utc).isoformat() if creds.expiry else None,
+        "scopes": list(creds.scopes or []),
         "status": "valid", "validated_at": _now_iso(), "updated_at": _now_iso(),
     }
     if creds.refresh_token:
