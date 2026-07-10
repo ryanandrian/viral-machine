@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Zap, CheckCircle, Eye, ThumbsUp, Users, Calendar, List, Gauge as GaugeIcon, DollarSign, Sparkles, Activity, Check, Loader2, X, ChevronRight, ExternalLink } from "lucide-react";
+import { Zap, CheckCircle, Eye, ThumbsUp, Users, Calendar, List, Gauge as GaugeIcon, DollarSign, Sparkles, Activity, Check, Loader2, X, ChevronRight, ExternalLink, AlertTriangle, ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { effectiveStatus, ChannelStatusBadge, type Eff } from "@/lib/channel-status";
 import "./dashboard.css";
 
 // D1 Main Dashboard — Phase 9.3 (wired Supabase v2, anon + RLS). DATA NYATA:
@@ -64,6 +65,10 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [yt, setYt] = useState<Yt | null>(null);
   const [slots, setSlots] = useState<Slot[]>([]);
+  // D1-F2 (mandat owner 2026-07-11): kartu kondisional channel perlu-perhatian (incomplete/halted) —
+  // reuse effectiveStatus + RPC channel_readiness (sumber SAMA dgn /channels, anti-drift). Hilang saat semua sehat.
+  const [attn, setAttn] = useState<{ id: string; name: string; eff: Eff }[]>([]);
+  const [noChannel, setNoChannel] = useState(false);
   const [loading, setLoading] = useState(true);
   // B2 BYOK cost-tracking: total biaya AI 30 hari (Σ run_metadata.cost.usd × kurs app_config) — REAL.
   const [aiCost, setAiCost] = useState<{ idr: number; usd: number; videos: number; rate: number } | null>(null);
@@ -75,10 +80,10 @@ export default function DashboardPage() {
       made, success, failed, review, { data: costRows }, { data: rateRow },
     ] = await Promise.all([
       supabase.from("production_runs").select("id,topic,niche,status,elapsed_seconds,youtube_url,created_at").order("created_at", { ascending: false }).limit(50),
-      supabase.from("tenant_configs").select("display_handle,timezone").maybeSingle(),
+      supabase.from("tenant_configs").select("display_handle,timezone,subscription_status").maybeSingle(),
       supabase.rpc("get_tenant_insights_summary"),
       supabase.rpc("get_tenant_youtube_totals"),
-      supabase.from("channels").select("channel_name,publish_slots,is_active"),
+      supabase.from("channels").select("id,channel_name,publish_slots,is_active,production_paused,production_paused_reason"),
       supabase.from("production_runs").select("id", { count: "exact", head: true }),
       supabase.from("production_runs").select("id", { count: "exact", head: true }).in("status", ["success", "completed", "published"]),
       supabase.from("production_runs").select("id", { count: "exact", head: true }).in("status", ["failed", "error"]),
@@ -87,7 +92,7 @@ export default function DashboardPage() {
       supabase.from("app_config").select("value").eq("key", "usd_idr_rate").maybeSingle(),
     ]);
     setRuns((r as RunRow[]) ?? []);
-    const t = tc as { display_handle?: string; timezone?: string } | null;
+    const t = tc as { display_handle?: string; timezone?: string; subscription_status?: string } | null;
     setHandle(t?.display_handle || "");
     if (t?.timezone) setTz(t.timezone);
     const insRow = (Array.isArray(ins.data) ? ins.data[0] : ins.data) as { channels_count?: number; compliance_avg?: number; videos_analyzed?: number; last_learned?: string; top_niche?: string } | null;
@@ -98,9 +103,19 @@ export default function DashboardPage() {
     const tot = (Array.isArray(totals.data) ? totals.data[0] : totals.data) as { total_views?: number; total_likes?: number; total_followers?: number } | null;
     if (tot) setYt({ views: Number(tot.total_views) || 0, likes: Number(tot.total_likes) || 0, followers: Number(tot.total_followers) || 0 });
     setStats({ made: made.count ?? 0, success: success.count ?? 0, failed: failed.count ?? 0, review: review.count ?? 0 });
-    const channels = (chs as { channel_name: string; publish_slots: string[] | null; is_active: boolean }[] | null) ?? [];
+    const channels = (chs as { id: string; channel_name: string; publish_slots: string[] | null; is_active: boolean; production_paused: boolean | null; production_paused_reason: string | null }[] | null) ?? [];
     setSlots(channels.filter((c) => c.is_active && c.publish_slots && c.publish_slots.length)
       .map((c) => ({ name: c.channel_name, times: [...(c.publish_slots || [])].sort() })));
+    // D1-F2: deteksi channel perlu-perhatian — readiness HANYA utk kandidat (hemat; halted tak butuh RPC).
+    setNoChannel(channels.length === 0);
+    const cand = channels.filter((c) => c.production_paused || !c.is_active);
+    const rd: Record<string, { ready: boolean; missing: string[] } | null> = {};
+    await Promise.all(cand.filter((c) => !c.production_paused).map(async (c) => {
+      try { const { data } = await supabase.rpc("channel_readiness", { p_channel_id: c.id }); rd[c.id] = (data as { ready: boolean; missing: string[] }) ?? null; } catch { rd[c.id] = null; }
+    }));
+    setAttn(cand
+      .map((c) => ({ id: c.id, name: c.channel_name || "Channel", eff: effectiveStatus(c, t?.subscription_status ?? null, rd[c.id] ?? null) }))
+      .filter((x) => x.eff.key === "incomplete" || x.eff.key === "halted"));
     // Biaya AI 30 hari: hanya run yg PUNYA cost (produksi pasca-fitur); label jujur di kartu.
     const rate = Number((rateRow as { value?: number } | null)?.value) || 16500;
     let usd = 0, nCost = 0;
@@ -138,6 +153,38 @@ export default function DashboardPage() {
         </div>
         <a href="/channels" className="btn btn-secondary btn-lg"><Zap size={18} /> <Bi id="Kelola Kanal" en="Manage channels" /></a>
       </div>
+
+      {/* D1-F2: kartu kondisional — muncul HANYA saat ada channel belum-siap/dihentikan; hilang permanen saat sehat */}
+      {!loading && noChannel && (
+        <div className="card" style={{ marginBottom: "1rem", border: "1px solid color-mix(in srgb,var(--warning) 45%,transparent)" }}>
+          <div className="card-body" style={{ padding: "0.875rem 1.25rem", display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+            <AlertTriangle size={18} style={{ color: "var(--warning)", flexShrink: 0 }} />
+            <span style={{ fontSize: "var(--text-sm)", flex: 1, minWidth: 200 }}><Bi id="Channel pertama Anda belum selesai disiapkan — mesin belum bisa produksi." en="Your first channel isn't set up yet — the engine can't produce." /></span>
+            <Link href="/onboarding" className="btn btn-default btn-sm"><Bi id="Lanjutkan setup" en="Continue setup" /> <ArrowRight size={14} /></Link>
+          </div>
+        </div>
+      )}
+      {!loading && attn.length > 0 && (
+        <div className="card" style={{ marginBottom: "1rem", border: "1px solid color-mix(in srgb,var(--warning) 45%,transparent)" }}>
+          <div className="card-head"><h3 className="card-title"><AlertTriangle size={16} style={{ color: "var(--warning)" }} /> <Bi id="Channel perlu perhatian" en="Channels need attention" /></h3></div>
+          <div className="card-body" style={{ padding: "0.25rem 1.25rem 0.75rem" }}>
+            {attn.map((a) => (
+              <div key={a.id} style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.5rem 0", borderBottom: "1px solid var(--border-subtle)", flexWrap: "wrap" }}>
+                <span style={{ fontWeight: 600, fontSize: "var(--text-sm)" }}>{a.name}</span>
+                <ChannelStatusBadge eff={a.eff} />
+                <span className="muted" style={{ fontSize: "var(--text-xs)", flex: 1, minWidth: 180 }}>
+                  {a.eff.reason || (a.eff.key === "halted"
+                    ? <Bi id="Dihentikan otomatis oleh sistem — buka channel untuk memulihkan." en="Automatically halted — open the channel to recover." />
+                    : <Bi id="Konfigurasi/kredensial belum lengkap." en="Config/credentials incomplete." />)}
+                </span>
+                <Link href={`/channels/${a.id}`} className="btn btn-secondary btn-sm">
+                  {a.eff.key === "halted" ? <Bi id="Pulihkan" en="Recover" /> : <Bi id="Lengkapi" en="Complete" />} <ChevronRight size={14} />
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="kpi-row">
         <div className="kpi">

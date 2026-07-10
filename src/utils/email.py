@@ -186,19 +186,54 @@ def notify_suspend_warning(tenant_id: str, grace_days: int, sb=None) -> bool:
     )
 
 
+def _trial_recap(tenant_id: str, sb=None) -> tuple[str, str]:
+    """Recap pencapaian nyata tenant (n video terbit + total views latest-per-video, pola RPC 0056)
+    untuk personalisasi pesan konversi. Return (kalimat_id, kalimat_en); ("","") bila nol/gagal (fail-soft)."""
+    try:
+        if sb is None:
+            from supabase import create_client
+            sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+        vids = sb.table("videos").select("id", count="exact").eq("tenant_id", str(tenant_id)).eq("status", "published").execute()
+        n = vids.count or 0
+        if n <= 0:
+            return "", ""
+        views = 0
+        try:
+            rows = (sb.table("video_analytics").select("video_id,views,analytics_date,collected_at")
+                    .eq("tenant_id", str(tenant_id)).execute().data) or []
+            latest: dict = {}
+            for r in rows:
+                k = r.get("video_id")
+                key = (str(r.get("analytics_date") or ""), str(r.get("collected_at") or ""))
+                if k and (k not in latest or key > latest[k][0]):
+                    latest[k] = (key, int(r.get("views") or 0))
+            views = sum(v for _, v in latest.values())
+        except Exception:
+            pass  # views opsional; jumlah video saja tetap bermakna
+        v_id = f" dengan total {views:,} views".replace(",", ".") if views > 0 else ""
+        v_en = f" with {views:,} total views" if views > 0 else ""
+        return (f"Sejauh ini mesin sudah menerbitkan {n} video ke channel Anda{v_id} — sayang bila berhenti di sini.\n\n",
+                f"So far the engine has published {n} videos to your channel{v_en} — a shame to stop here.\n\n")
+    except Exception as e:
+        logger.warning(f"[Email] recap trial {tenant_id} gagal (lanjut tanpa recap): {e}")
+        return "", ""
+
+
 def notify_trial_ending(tenant_id: str, days_left: int, sb=None) -> bool:
-    """H-x SEBELUM trial habis → ajak upgrade + tawarkan beri masukan (skenario 1)."""
+    """H-x SEBELUM trial habis → ajak upgrade + tawarkan beri masukan (skenario 1).
+    Personalisasi recap-nilai (D1-F3, mandat owner 2026-07-11): sebut n video + views nyata bila ada."""
     to = tenant_email(tenant_id, sb)
     if not to:
         return False
     en_sisa = "tomorrow" if days_left <= 1 else f"in {days_left} days"
     id_sisa = "besok" if days_left <= 1 else f"dalam {days_left} hari"
     up, sv = _upgrade_url(), _feedback_url(tenant_id, "trial_ending")
+    recap_id, recap_en = _trial_recap(tenant_id, sb)
     return send_email(
         to, "Your trial ends soon — upgrade / Trial Anda segera berakhir — MesinViral",
-        _bi(f"Hi,\n\nYour trial ends {en_sisa}. Upgrade to keep producing content without interruption:\n{up}\n\n"
+        _bi(f"Hi,\n\nYour trial ends {en_sisa}. {recap_en}Upgrade to keep producing content without interruption:\n{up}\n\n"
             f"Not a fit? Help us improve (1 min): {sv}\n\n— The MesinViral Team",
-            f"Halo,\n\nMasa trial Anda berakhir {id_sisa}. Upgrade untuk terus memproduksi konten otomatis tanpa jeda:\n{up}\n\n"
+            f"Halo,\n\nMasa trial Anda berakhir {id_sisa}. {recap_id}Upgrade untuk terus memproduksi konten otomatis tanpa jeda:\n{up}\n\n"
             f"Belum cocok? Bantu kami jadi lebih baik (1 menit): {sv}\n\n— Tim MesinViral"),
     )
 

@@ -66,7 +66,7 @@ export function AppShell({
   const [mounted, setMounted] = useState(false);
   const [tenant, setTenant] = useState<{ name: string; plan: string; initials: string }>({ name: "", plan: "", initials: "" });
   const [studioOK, setStudioOK] = useState(false);  // F2-10/F3-03: entitlement Niche Studio (gated nav)
-  const [gate, setGate] = useState<{ status: string; daysLeft: number | null } | null>(null);  // banner billing gate
+  const [gate, setGate] = useState<{ status: string; daysLeft: number | null; videos?: number } | null>(null);  // banner billing gate (+recap nilai trial D1-F3)
 
   useEffect(() => {
     setMounted(true);
@@ -104,7 +104,12 @@ export function AppShell({
       const comp = Boolean(t?.is_developer) || ((t?.discount_pct ?? 0) >= 100);
       const st = t?.subscription_status, pe = t?.current_period_end;
       if (comp || !st) setGate(null);
-      else if (st === "trial" && pe) setGate({ status: "trial", daysLeft: Math.max(0, Math.ceil((new Date(pe).getTime() - Date.now()) / 86400000)) });
+      else if (st === "trial" && pe) {
+        // Recap-nilai (D1-F3): sebut jumlah video terbit nyata di banner — RLS scope tenant; fail-soft.
+        let nVid = 0;
+        try { const { count: vc } = await supabase.from("videos").select("id", { count: "exact", head: true }).eq("status", "published"); nVid = vc ?? 0; } catch { /* non-fatal */ }
+        setGate({ status: "trial", daysLeft: Math.max(0, Math.ceil((new Date(pe).getTime() - Date.now()) / 86400000)), videos: nVid });
+      }
       else if (st === "blocked") { const dd = t?.deletion_scheduled_at; setGate({ status: "blocked", daysLeft: dd ? Math.max(0, Math.ceil((new Date(dd).getTime() - Date.now()) / 86400000)) : null }); }
       else if (["trial_expired", "grace", "suspended"].includes(st)) setGate({ status: st, daysLeft: null });
       else setGate(null);
@@ -196,8 +201,11 @@ export function AppShell({
           const bg = (gate.status === "suspended" || gate.status === "blocked") ? "var(--danger, #ef4444)"
             : gate.status === "trial" ? "var(--brand, #6366F1)" : "var(--warning, #f59e0b)";
           const dl = gate.daysLeft;
+          const nv = gate.videos ?? 0;
           const msg = gate.status === "trial"
-            ? <Bi id={`⏳ Trial berakhir ${dl != null && dl <= 1 ? "besok" : `dalam ${dl} hari`} — upgrade agar produksi tak terhenti.`} en={`⏳ Trial ends ${dl != null && dl <= 1 ? "tomorrow" : `in ${dl} days`} — upgrade to keep producing.`} />
+            ? (nv > 0
+              ? <Bi id={`⏳ Trial berakhir ${dl != null && dl <= 1 ? "besok" : `dalam ${dl} hari`} — mesin sudah menerbitkan ${nv} video untuk Anda. Upgrade agar produksi tak terhenti.`} en={`⏳ Trial ends ${dl != null && dl <= 1 ? "tomorrow" : `in ${dl} days`} — the engine has already published ${nv} videos for you. Upgrade to keep producing.`} />
+              : <Bi id={`⏳ Trial berakhir ${dl != null && dl <= 1 ? "besok" : `dalam ${dl} hari`} — upgrade agar produksi tak terhenti.`} en={`⏳ Trial ends ${dl != null && dl <= 1 ? "tomorrow" : `in ${dl} days`} — upgrade to keep producing.`} />)
             : gate.status === "trial_expired"
             ? <Bi id="Masa trial berakhir — produksi dijeda. Upgrade untuk melanjutkan." en="Trial ended — production paused. Upgrade to continue." />
             : gate.status === "grace"
