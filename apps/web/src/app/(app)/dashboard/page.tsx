@@ -143,6 +143,8 @@ export default function DashboardPage() {
     const reload = () => { if (debRef.current) clearTimeout(debRef.current); debRef.current = setTimeout(() => load(), 400); };
     const ch = supabase.channel("rt-dashboard")
       .on("postgres_changes", { event: "*", schema: "public", table: "production_runs" }, reload)
+      // Kartu status F2 + Jadwal Hari Ini ikut segar SEKETIKA saat channel berubah (pola terbukti rt-channels; fix pelanggaran world-class 2026-07-11)
+      .on("postgres_changes", { event: "*", schema: "public", table: "channels" }, reload)
       .subscribe();
     const onVis = () => { if (document.visibilityState === "visible") load(); };
     document.addEventListener("visibilitychange", onVis);
