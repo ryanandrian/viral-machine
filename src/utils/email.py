@@ -199,15 +199,25 @@ def _trial_recap(tenant_id: str, sb=None) -> tuple[str, str]:
             return "", ""
         views = 0
         try:
-            rows = (sb.table("video_analytics").select("video_id,views,analytics_date,collected_at")
-                    .eq("tenant_id", str(tenant_id)).execute().data) or []
+            # Latest-per-video, urutan PERSIS RPC 0056 (analytics_date desc nulls last, collected_at desc nulls last).
+            # WAJIB paginasi: PostgREST cap 1000 baris/req — tanpa ini views undercount (ryan=7.220 baris, bug tertangkap audit 2026-07-11).
             latest: dict = {}
-            for r in rows:
-                k = r.get("video_id")
-                key = (str(r.get("analytics_date") or ""), str(r.get("collected_at") or ""))
-                if k and (k not in latest or key > latest[k][0]):
-                    latest[k] = (key, int(r.get("views") or 0))
-            views = sum(v for _, v in latest.values())
+            page, PAGE = 0, 1000
+            while page <= 50:  # pagar keras: 50k baris cukup utk tenant mana pun saat trial
+                rows = (sb.table("video_analytics").select("video_id,views,analytics_date,collected_at")
+                        .eq("tenant_id", str(tenant_id))
+                        .order("analytics_date", desc=True, nullsfirst=False)
+                        .order("collected_at", desc=True, nullsfirst=False)
+                        .range(page * PAGE, page * PAGE + PAGE - 1)
+                        .execute().data) or []
+                for r in rows:
+                    k = r.get("video_id")
+                    if k and k not in latest:  # first-seen pada urutan DESC = snapshot TERBARU per video
+                        latest[k] = int(r.get("views") or 0)
+                if len(rows) < PAGE:
+                    break
+                page += 1
+            views = sum(latest.values())
         except Exception:
             pass  # views opsional; jumlah video saja tetap bermakna
         v_id = f" dengan total {views:,} views".replace(",", ".") if views > 0 else ""
