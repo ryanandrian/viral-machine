@@ -208,6 +208,7 @@ def _trial_recap(tenant_id: str, sb=None) -> tuple[str, str]:
                         .eq("tenant_id", str(tenant_id))
                         .order("analytics_date", desc=True, nullsfirst=False)
                         .order("collected_at", desc=True, nullsfirst=False)
+                        .order("id", desc=True)  # tiebreaker unik → urutan TOTAL deterministik (paginasi stabil antar-halaman)
                         .range(page * PAGE, page * PAGE + PAGE - 1)
                         .execute().data) or []
                 for r in rows:

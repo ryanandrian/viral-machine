@@ -159,9 +159,12 @@ export default function ChannelsPage() {
     }));
     setRdMap(rd);
     setAnaMap(am);
-    const { data: vids } = await supabase.from("videos").select("channel_id").eq("status", "published");
+    // Hitung-pasti server-side per channel (count=exact head) — kebal cap 1000 baris berapa pun jumlah video (audit 2026-07-11).
     const vc: Record<string, number> = {};
-    ((vids ?? []) as { channel_id: string | null }[]).forEach((v) => { if (v.channel_id) vc[v.channel_id] = (vc[v.channel_id] || 0) + 1; });
+    await Promise.all(rows.map(async (c) => {
+      const { count: nv } = await supabase.from("videos").select("id", { count: "exact", head: true }).eq("channel_id", c.id).eq("status", "published");
+      vc[c.id] = nv ?? 0;
+    }));
     setVidCount(vc);
     setLoading(false);
   }, [supabase]);

@@ -88,7 +88,7 @@ export default function DashboardPage() {
       supabase.from("production_runs").select("id", { count: "exact", head: true }).in("status", ["success", "completed", "published"]),
       supabase.from("production_runs").select("id", { count: "exact", head: true }).in("status", ["failed", "error"]),
       supabase.from("production_runs").select("id", { count: "exact", head: true }).in("status", ["qc_failed", "ready_with_issues"]),
-      supabase.from("production_runs").select("run_metadata").gte("created_at", since30).limit(1000),
+      supabase.from("production_runs").select("run_metadata").gte("created_at", since30).order("created_at", { ascending: true }).order("run_id", { ascending: true }).range(0, 999),
       supabase.from("app_config").select("value").eq("key", "usd_idr_rate").maybeSingle(),
     ]);
     setRuns((r as RunRow[]) ?? []);
@@ -117,9 +117,18 @@ export default function DashboardPage() {
       .map((c) => ({ id: c.id, name: c.channel_name || "Channel", eff: effectiveStatus(c, t?.subscription_status ?? null, rd[c.id] ?? null) }))
       .filter((x) => x.eff.key === "incomplete" || x.eff.key === "halted"));
     // Biaya AI 30 hari: hanya run yg PUNYA cost (produksi pasca-fitur); label jujur di kartu.
+    // Paginasi (urutan stabil created_at+run_id; cap 8 hal = 8k run/30hr, cukup 10ch×24vid; audit 2026-07-11).
+    type CostRow = { run_metadata?: { cost?: { usd?: number } } };
+    let allCost = (costRows as CostRow[] | null) ?? [];
+    for (let cp = 1; allCost.length === cp * 1000 && cp < 8; cp++) {
+      const { data: more } = await supabase.from("production_runs").select("run_metadata").gte("created_at", since30)
+        .order("created_at", { ascending: true }).order("run_id", { ascending: true }).range(cp * 1000, cp * 1000 + 999);
+      allCost = allCost.concat((more as CostRow[] | null) ?? []);
+      if (!more || (more as CostRow[]).length < 1000) break;
+    }
     const rate = Number((rateRow as { value?: number } | null)?.value) || 16500;
     let usd = 0, nCost = 0;
-    ((costRows as { run_metadata?: { cost?: { usd?: number } } }[] | null) ?? []).forEach((row) => {
+    allCost.forEach((row) => {
       const u = row.run_metadata?.cost?.usd;
       if (typeof u === "number" && u > 0) { usd += u; nCost += 1; }
     });
