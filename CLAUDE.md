@@ -11,6 +11,7 @@
 ## §2 GERBANG PRE-TOUCH (sebelum menyentuh apa pun)
 1. **Paham dulu:** baca tuntas dokumen kanonik topik terkait, lalu petakan SEMUA permukaan terdampak (DB, BE, FE-tenant, FE-admin). *Ukuran lulus:* bisa menyebut persis file/tabel/alur yang akan disentuh — tanpa menebak, tanpa "coba dulu". [[feedback_comprehend_before_work]]
 2. **Lingkup utuh:** sebelum eksekusi 1 item, baca seluruh item/dokumen se-rantai + kolom DEPENDS-nya (anti-rework). [[feedback_review_whole_remediation_before_item]]
+2b. **Cek realita data SEBELUM menulis kode/query:** wajib bisa menyebut volume nyata tabel terkait + batas limit/paginasi jalur akses + perilaku saat gagal — tidak bisa menyebut = belum boleh menulis. *(akar bug undercount 2026-07-11: query video_analytics ditulis tanpa cek isi 7.220 baris vs cap 1000)*
 3. **Otorisasi — matriks tunggal (tidak ada wilayah abu-abu):** [[feedback_workflow]] [[feedback_owner_delegates_expert_decisions]] [[feedback_no_silent_ui_changes]]
    - (a) Ada mandat/approval owner → kerjakan PERSIS lingkup itu.
    - (b) Belum ada approval → susun proposal (temuan + opsi + rekomendasi) → TUNGGU jawaban.
@@ -23,7 +24,7 @@
 1. **Anti-human-error:** input kritis tidak BISA diisi salah (dropdown/validasi/tombol-uji di titik input) — "gagal-aman belakangan" saja = gagal butir ini. [[feedback_world_class_gate]]
 2. **Koheren per-sistem:** rantai DB→BE→FE-tenant→FE-admin konsisten satu logika; nol fosil & nol duplikat tersisa dari pekerjaan ini. [[feedback_world_class_quality]]
 3. **Config-driven:** nilai bisnis/AI/pricing dibaca dari DB/config, nol literal di kode; kegagalan komponen = stop + notifikasi, dilarang fallback senyap. [[feedback_no_hardcode]]
-4. **Bukti runtime:** klaim "jalan" hanya setelah dieksekusi dengan data/perilaku nyata; build/tsc lulus BELUM memenuhi butir ini. [[feedback_analysis_discipline]]
+4. **Bukti runtime:** klaim "jalan" hanya setelah dieksekusi dengan data/perilaku nyata; build/tsc lulus BELUM memenuhi butir ini. Bukti wajib membuktikan **KELENGKAPAN data** (dibandingkan ground-truth independen) — "angkanya tampak wajar" = BUKAN bukti. [[feedback_analysis_discipline]]
 5. **Bila menyentuh teks UI/email:** dwibahasa ID/EN via mekanisme `Bi` (API kirim KODE error, FE yang menerjemahkan). Teks satu bahasa = cacat. [[feedback_bilingual_mandatory]]
 6. **Bila menyentuh UI:** layak tenant awam — status + tombol proses dalam SATU panel; tombol disabled + label progres selama proses; pilihan dropdown/toggle auto-save (bukan tombol Simpan terpisah). [[feedback_uiux_design_for_lay_tenants]]
 7. **Tutup administrasi:** isi kolom REALISASI (status + commit + bukti) di `SISA_KERJA_GO_LIVE.md` + sinkronkan dokumen SPEC terkait.

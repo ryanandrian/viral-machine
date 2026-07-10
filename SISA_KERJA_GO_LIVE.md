@@ -239,6 +239,12 @@
 
 # ⏳ KELOMPOK C — DATA-GATED *(mekanisme SIAP; matang seiring data pasca-cutover — bukan "koding besar")*
 
+### [B12] Hitungan "Video terbit" /channels — paginasi (temuan audit 2026-07-11; DORMAN, terpicu skala) — ⬜
+- **BUKTI:** `channels/page.tsx:162` hitung dari `videos.select("channel_id")` tanpa paginasi → terpotong bila tenant >1.000 video published. **Hari ini TIDAK berdampak** (terbesar: ryan 207) — angka masih benar utk semua tenant. Pre-existing, BUKAN dari perubahan 2026-07-11.
+- **PLAN:** ganti ke count-exact per-channel (head query) — kecil, 1 file.
+- **PEMICU KERJAKAN:** ada tenant mendekati 1.000 video published (cek berkala) ATAU batch FE berikutnya yang memang menyentuh file ini.
+- **REALISASI:** ⬜ (freeze kode 2026-07-11: tidak disentuh sampai pemicu)
+
 ### [C1] Closed-loop kalibrasi durasi — 🟡  (REMEDIASI **F5-01**)
 - **TUJUAN:** pace `P` (wps efektif) per voice×speed di-update otomatis dari data render nyata → durasi makin presisi.
 - **BUKTI (verified DB):** `tts_delivery_samples`=**48 baris DITULIS** (`tts_engine._log_delivery_sample`) tapi **BELUM DIBACA** kode. Fondasi SELESAI: `voice_catalog.delivery_wps`/`pace_sample_n`/`pace_updated_at`/`pace_locked` (migr 0081) + estimator voice-first + FE admin editable.
