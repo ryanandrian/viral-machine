@@ -34,6 +34,7 @@
 2. **Jujur & presisi:** pisahkan tegas SELESAI / poles-opsional / risiko tersisa; dilarang over-claim; menjelaskan sesuatu ≠ menjadikannya tugas baru. [[feedback_define_done_no_scope_creep]]
 
 ## §5 DEPLOY (satu-satunya jalur)
+**0. IZIN DEPLOY = GERBANG OWNER, TANPA KECUALI:** deploy hanya setelah owner membaca laporan validasi dan mengucapkan izin EKSPLISIT di batch itu. Validasi lulus ≠ izin. Fix atas bug buatan sendiri ≠ izin. Mandat "tuntaskan" ≠ izin deploy. *(pelanggaran 2×, 2026-07-11 dini hari)*
 **LOKAL (edit + lulus §3.4) → commit → push → VPS WAJIB via skrip resmi (mandat owner 2026-07-09; manual `git pull`+restart tangan = DILARANG):**
 - **FE:** `ssh vps '~/viral-machine-v2/scripts/deploy_fe.sh start'` → poll `... deploy_fe.sh status` sampai `OK`/`FAIL`.
 - **BE:** `ssh vps '~/viral-machine-v2/scripts/deploy_be.sh start'` → poll `... deploy_be.sh status` sampai `OK`/`FAIL`; pagar render-aktif menunda otomatis — `start --force` hanya sadar-risiko.
