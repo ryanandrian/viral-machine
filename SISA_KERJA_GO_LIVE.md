@@ -244,6 +244,13 @@
 - **REALISASI:** ✅ deployed 2026-07-11 (lihat commit "sapu-bersih audit"); recap tetap 207/42.363 ground-truth; tsc+build 0 err. **Pasca-batch ini: NOL temuan diketahui tersisa → FREEZE KODE berlaku** (kode hanya disentuh bila memblok/menipu tenant berbayar atau permintaan Google).
 - **[B13] fix realtime kartu F2:** ✅ **DEPLOYED 2026-07-11 01:36 atas izin eksplisit owner ("deploy + verifikasi bersama")** — `f9a7f2e`, mv-web active, situs 200. 🟡 **Sisa 1 langkah: verifikasi visual OWNER (±30 dtk):** buka Dashboard di jendela 1 + halaman channel di jendela 2 → Jeda channel → kartu "Channel perlu perhatian" harus MUNCUL di Dashboard tanpa refresh → Aktifkan lagi → kartu lenyap. Lulus → [B13] TUTUP; gagal → lapor, rollback 1 perintah siap.
 
+### [B16] 🔴 PULIHKAN SINYAL RETENSI self-learning — reconnect YouTube ryan scope penuh (AKSI OWNER 2 menit) — ⬜
+- **AKAR (verified log+DB 2026-07-11):** token YouTube ryan KEHILANGAN scope `yt-analytics.readonly` sejak **24 Juni** (era migrasi OAuth platform; log worker berteriak berulang: *"yt-analytics scope tidak ditemukan di token"*). Kode alur connect BENAR (3 scope diminta, `youtube_oauth.py:47-51`) → kemungkinan centang "View YouTube Analytics" tak disetujui di layar consent saat reconnect.
+- **DAMPAK:** retensi (avg_view_pct)/watch-time/subscriber-gain per-video = 0 di semua snapshot baru → widget "Content types" kosong (0), kolom retensi hooks/topik 0%, avoid_patterns di-skip analyzer, bobot niche jatuh ke fallback views — **self-learning setengah buta sejak 24 Jun**. (Data historis 164 video ber-retensi tetap ada.)
+- **AKSI OWNER:** `/integrations` → koneksi YouTube channel RAD → putuskan → **Hubungkan dengan Google** ulang → di layar consent Google **CENTANG SEMUA izin** (khususnya *View YouTube Analytics*).
+- **DONE-BILA (verifikasi Claude pasca-reconnect):** log worker berhenti berteriak scope + snapshot baru `has_full_analytics=true` + dalam beberapa siklus harian (rotasi stalest-first, delay YouTube 48j normal) retensi terisi lagi → widget Content types & kolom retensi hidup, avoid_patterns aktif. **NOL kode.**
+- **REALISASI:** ⬜
+
 ### [B14] QC deteksi-wajah utk niche ber-larangan figur (lanjutan guardrail syariah P4a) — ⬜ DORMAN
 - **KONTEKS:** insiden 2026-07-11 (visual menyerupai Nabi ﷺ di niche islami). DNA kini larangan mutlak (`strict_prohibition`) — tapi model gambar BISA melanggar prompt; belum ada lapisan QC yang menolak otomatis.
 - **PLAN:** QC pra-publish deteksi wajah (mis. cv2/face-detect ringan) HANYA utk niche ber-flag larangan → gagal jujur, bukan terbit.
