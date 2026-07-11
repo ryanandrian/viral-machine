@@ -175,9 +175,10 @@ def _publish_from_buffer(sb, channel_row: dict, item: dict) -> None:
             viral_score   = float(meta.get("viral_score") or script.get("viral_score") or 0),
             file_size_mb  = _size_mb,
             channel_id    = tc.channel_id,
-            # voice_id = suara AKTUAL saat PRODUKSI (meta, ditulis producer) — fallback config
-            # utk item buffer lama tanpa jejak. Sumber compliance voice_diversity (owner 2026-07-11).
-            voice_id      = meta.get("tts_voice") or getattr(tc, "tts_voice", None),
+            # voice_id = suara AKTUAL saat PRODUKSI (meta, ditulis producer). Fallback item buffer
+            # lama tanpa jejak = channels.voice_key NYATA (BUKAN tc.tts_voice — konstruktor
+            # from_channel tak mengisinya → default dataclass palsu; bug tertangkap audit 2026-07-11).
+            voice_id      = meta.get("tts_voice") or channel_row.get("voice_key"),
             insights_grade= meta.get("insights_grade", ""),
             hook_pattern  = meta.get("hook_pattern"),
             visual_seed   = meta.get("visual_seed"),
