@@ -142,6 +142,7 @@ Minggu ini mesin belajar dari 34 video di 2 channel-mu:
 3. **Anti bias-umur (metrik):** metrik UTAMA kurva = **retensi** (stabil terhadap umur video); views WAJIB **ber-jendela** ("views 7 hari pertama" per video, dihitung dari SEJARAH snapshot harian `video_analytics` yang tersedia ribuan baris — bukan views lifetime yang membuat kohort tua menang palsu). Kurva historis boleh datar/berisik = baseline "sebelum" yang sah, bukan kegagalan.
 4. **Urutan eksekusi final (disepakati diskusi 2026-07-11 malam):** B17-**F0 = batch kecil PERTAMA** (1 RPC + 1 kartu dua-skop + garis penanda; sekali deploy) → lalu fokus penuh panduan tenant (2-3 mgg) → gerbang **G1 dievaluasi saat kurva PASCA-11-Jul ≥3 minggu** (bukan kurva total — sejarahnya sudah panjang; yang dinilai kesehatan tren era mesin-sehat).
 5. Status ketok: **owner BELUM mengucapkan "mulai F0 program"** — jangan mulai kode tanpa itu.
+6. **RITUAL ANTI-SALAH-PAHAM (WAJIB tiap fase, sebelum baris kode pertama):** setelah ketok fase & selesai bekal-baca §2d, eksekutor WAJIB menyerahkan **"PEMAHAMAN SAYA"** ke owner: (a) apa persisnya yang akan dibangun (bahasa bisnis), (b) file/tabel yang disentuh & yang TIDAK, (c) bentuk hasil akhirnya (rujuk wireframe §2b), (d) cara validasinya — lalu **TUNGGU konfirmasi owner**. Salah-paham tertangkap di sini = gratis; lolos ke kode = mahal. Menyerahkan proposal tanpa bagian "PEMAHAMAN SAYA" = belum memenuhi gerbang.
 
 ## §2d BEKAL-BACA WAJIB PRA-EKSEKUSI (gerbang §2.1 versi konkret — sesi eksekutor WAJIB membaca INI dulu, bukan cuma dokumen ini)
 
