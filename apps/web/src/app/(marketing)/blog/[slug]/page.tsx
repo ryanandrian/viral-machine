@@ -7,6 +7,10 @@ import { ArrowLeft, Clock } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Markdown } from "@/lib/md";
 import "../blog.css";
+// FIX 2026-07-12 (keluhan owner "paragraf menggumpal"): halaman ini memakai kelas .dc-body
+// tapi gayanya hidup di docs.css yang TIDAK pernah diimpor di route blog → tipografi artikel
+// (margin paragraf, line-height 1.75, ritme h2, list) mati total. Impor = mengaktifkannya.
+import "../../docs/docs.css";
 
 type Post = { title: string; title_en: string | null; body: string; body_en: string | null; category: string | null; published_at: string | null };
 
