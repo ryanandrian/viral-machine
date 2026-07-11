@@ -62,7 +62,7 @@ export default function ShowcasePage() {
         <div className="mk-center" style={{ marginBottom: "2rem" }}>
           <span className="mk-kicker"><Clapperboard size={13} /> <Bi id="Hasil kerja mesin" en="What the engine produces" /></span>
           <h2 className="mk-h2"><Bi id="Contoh konten yang dihasilkan" en="Real content, produced automatically" /></h2>
-          <p className="mk-lead mk-center"><Bi id="Semua video di bawah dibuat penuh oleh mesin — naskah, suara, visual, sampai render." en="Every video below was fully machine-made — script, voice, visuals, and render." /></p>
+          <p className="mk-lead mk-center"><Bi id="Semua video di bawah dibuat penuh oleh mesin — naskah, suara, visual, sampai render dan publish sesuai jadwal." en="Every video below was fully machine-made — script, voice, visuals, render, and scheduled publishing." /></p>
         </div>
         {(() => {
           const NICHES = ["Semua", ...Array.from(new Set(videos.map((v) => v.niche_label).filter(Boolean)))] as string[];
