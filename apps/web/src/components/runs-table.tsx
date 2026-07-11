@@ -244,7 +244,7 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
   return (
     <>
       {!embedded ? (
-        <PageHeader icon={List} title="Runs"
+        <PageHeader helpSlug="runs-produksi" icon={List} title="Runs"
           subtitle={<span dangerouslySetInnerHTML={{ __html: `<b>${done}</b> run sukses · <b>${fail}</b> gagal` }} />}
           action={<button className="btn btn-secondary" disabled={!data.length} onClick={exportCsv}><Download size={15} /> Export CSV</button>} />
       ) : (

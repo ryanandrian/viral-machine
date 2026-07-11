@@ -85,7 +85,7 @@ export default function BillingPage() {
 
   return (
     <>
-      <PageHeader icon={CreditCard} title="Billing" subtitle={<Bi id="Kelola langganan, pembayaran, dan invoice" en="Manage subscription, payment, and invoices" />} />
+      <PageHeader helpSlug="billing" icon={CreditCard} title="Billing" subtitle={<Bi id="Kelola langganan, pembayaran, dan invoice" en="Manage subscription, payment, and invoices" />} />
 
       {loading ? <div className="muted" style={{ padding: "2rem" }}><Bi id="Memuat…" en="Loading…" /></div> : (
       <div style={{ display: "flex", flexDirection: "column", gap: "1rem", maxWidth: 760 }}>

@@ -95,7 +95,7 @@ export default function AnalyticsPage() {
 
   if (!ov || ov.videos === 0) return (
     <>
-      <PageHeader icon={BarChart3} title="Analytics" subtitle={<Bi id="Performa channel dari data nyata" en="Real channel performance" />} />
+      <PageHeader helpSlug="analytics" icon={BarChart3} title="Analytics" subtitle={<Bi id="Performa channel dari data nyata" en="Real channel performance" />} />
       <div className="card card-pad" style={{ textAlign: "center", padding: "3rem 1.5rem" }}>
         <BarChart3 size={32} style={{ color: "var(--text-muted)", marginBottom: "0.75rem" }} />
         <p className="muted"><Bi id="Belum ada data analitik. Muncul 24-72 jam setelah video pertama tayang." en="No analytics yet. Appears 24-72h after your first video goes live." /></p>
@@ -105,7 +105,7 @@ export default function AnalyticsPage() {
 
   return (
     <>
-      <PageHeader icon={BarChart3} title="Analytics"
+      <PageHeader helpSlug="analytics" icon={BarChart3} title="Analytics"
         subtitle={<><Bi id="Performa channel dari data nyata" en="Real channel performance" /> · <Bi id="diperbarui" en="updated" /> {ago(learn?.computed_at ?? null)}</>}
         action={grade ? <span className="badge" style={{ background: "var(--success-soft)", color: "var(--success)", textTransform: "capitalize" }}><Flame size={13} style={{ verticalAlign: -2 }} /> {grade}</span> : undefined} />
 

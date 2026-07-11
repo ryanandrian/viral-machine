@@ -28,7 +28,7 @@ export default function InsightsPage() {
 
   return (
     <>
-      <PageHeader icon={Sparkles} title="Self-Learning Insights" subtitle={<Bi id="Apa yang mesin pelajari dari semua channelmu" en="What the engine learned across all your channels" />} />
+      <PageHeader helpSlug="self-learning" icon={Sparkles} title="Self-Learning Insights" subtitle={<Bi id="Apa yang mesin pelajari dari semua channelmu" en="What the engine learned across all your channels" />} />
       <InsightsView insights={ins} loading={loading} scopeLabel={{ id: "semua channel", en: "all your channels" }} learnedWeights={learned}
         curveSlot={<LearningCurveCard scopeLabel={{ id: "semua channel-mu", en: "all your channels" }} />} />
     </>

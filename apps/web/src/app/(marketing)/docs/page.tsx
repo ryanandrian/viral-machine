@@ -16,7 +16,14 @@ export default function DocsPage() {
   const [fb, setFb] = useState<null | "ya" | "tidak">(null);
   useEffect(() => {
     createClient().from("docs_articles").select("slug,grp,grp_en,title,title_en,body,body_en,sort_order").eq("status", "published").order("sort_order")
-      .then(({ data }) => { const d = (data as Doc[]) ?? []; setDocs(d); if (d[0]) setActive(d[0].slug); });
+      .then(({ data }) => {
+        const d = (data as Doc[]) ?? []; setDocs(d);
+        // [D1] deep-link help kontekstual: /docs?a=<slug> langsung buka artikelnya (client-only,
+        // tanpa useSearchParams → bebas kewajiban Suspense). Slug tak dikenal → fallback artikel pertama.
+        const want = new URLSearchParams(window.location.search).get("a");
+        const hit = want ? d.find((x) => x.slug === want) : null;
+        if (hit) setActive(hit.slug); else if (d[0]) setActive(d[0].slug);
+      });
   }, []);
 
   const ql = q.trim().toLowerCase();

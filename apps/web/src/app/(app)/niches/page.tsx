@@ -279,7 +279,7 @@ export default function NichesPage() {
 
   return (
     <>
-      <PageHeader icon={Target} title={<Bi id="Pustaka Niche" en="Niche Library" />}
+      <PageHeader helpSlug="niches" icon={Target} title={<Bi id="Pustaka Niche" en="Niche Library" />}
         subtitle={<Bi id="Semua niche yang bisa kamu pakai. Pasang niche ke channel di halaman Channel." en="All niches you can use. Assign a niche to a channel on the Channels page." />}
         action={<button className="btn btn-default btn-sm" onClick={() => (canReq ? openReq("public_90d") : setUpModal(true))}>{canReq ? <Wand2 size={14} /> : <Lock size={14} />} <Bi id="Pesan niche custom" en="Request custom niche" /></button>} />
 

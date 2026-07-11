@@ -106,7 +106,7 @@ export default function ReviewPage() {
 
   return (
     <>
-      <PageHeader icon={AlertTriangle} title={<Bi id="Perlu Ditinjau" en="Needs Review" />}
+      <PageHeader helpSlug="review-video" icon={AlertTriangle} title={<Bi id="Perlu Ditinjau" en="Needs Review" />}
         subtitle={loading ? <Bi id="Memuat…" en="Loading…" /> : <><b>{items.length}</b> <Bi id="video lolos render tapi ada catatan QC — Anda putuskan: pakai atau buang." en="videos rendered fine but have QC notes — you decide: use or discard." /></>} />
 
       {!loading && items.length === 0 && (

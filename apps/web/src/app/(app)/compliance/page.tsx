@@ -24,7 +24,7 @@ export default function CompliancePage() {
 
   return (
     <>
-      <PageHeader icon={ShieldCheck} title="Compliance Score" subtitle={<Bi id="AI Slop Defense · rata-rata semua channel" en="AI Slop Defense · averaged across all channels" />} />
+      <PageHeader helpSlug="ai-slop-defense" icon={ShieldCheck} title="Compliance Score" subtitle={<Bi id="AI Slop Defense · rata-rata semua channel" en="AI Slop Defense · averaged across all channels" />} />
       <ComplianceView compliance={cmp} loading={loading} hasRow={hasRow} />
     </>
   );

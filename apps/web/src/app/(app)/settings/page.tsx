@@ -82,7 +82,7 @@ export default function SettingsPage() {
   }
   return (
     <>
-      <PageHeader icon={SettingsIcon} title={<Bi id="Pengaturan" en="Settings" />} />
+      <PageHeader helpSlug="kelola-akun" icon={SettingsIcon} title={<Bi id="Pengaturan" en="Settings" />} />
       <div className="set-layout">
         <nav className="set-nav">
           {NAV.map(([id, ic, t, en]) => (

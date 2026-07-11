@@ -186,6 +186,11 @@ export function AppShell({
             })}
           </div>
           <div style={{ marginLeft: "auto" }} />
+          {/* [D1] Help global: buka panduan /docs di tab baru (mandat owner 2026-07-11) */}
+          <a className="btn btn-ghost btn-icon" href="/docs" target="_blank" rel="noopener"
+            title="Panduan lengkap / Full guide" aria-label="Panduan / Help">
+            <HelpCircle size={18} />
+          </a>
           <div className="segmented">
             <button aria-selected={lang === "id"} onClick={() => switchLang("id")}>ID</button>
             <button aria-selected={lang === "en"} onClick={() => switchLang("en")}>EN</button>

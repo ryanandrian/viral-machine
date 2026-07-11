@@ -181,7 +181,7 @@ export default function IntegrationsPage() {
 
   return (
     <>
-      <PageHeader icon={Globe} title={<Bi id="Kredensial & Koneksi" en="Credentials & Connections" />} subtitle={<Bi id="Isi kunci AI, hubungkan YouTube & Telegram sekali di sini — berlaku untuk semua channel Anda." en="Set AI keys, connect YouTube & Telegram once here — applies to all your channels." />} />
+      <PageHeader helpSlug="api-keys" icon={Globe} title={<Bi id="Kredensial & Koneksi" en="Credentials & Connections" />} subtitle={<Bi id="Isi kunci AI, hubungkan YouTube & Telegram sekali di sini — berlaku untuk semua channel Anda." en="Set AI keys, connect YouTube & Telegram once here — applies to all your channels." />} />
 
       <div style={{ display: "grid", gap: "1rem", maxWidth: 720 }}>
         {/* Kunci AI — per ELEMEN (LLM/TTS/Visual), boleh >1 kunci/vendor, nilai TAMPIL APA ADANYA (§0.4) */}
