@@ -80,9 +80,10 @@
 ## Penutup (setelah 31 artikel ✅)
 | Langkah | Detail | Status |
 |---|---|---|
-| Tombol **Help** di panel tenant | app-shell (ikon ? di topbar) → buka `/docs` **tab baru** (`target="_blank" rel="noopener"`), dwibahasa tooltip | ⬜ |
+| Tombol **Help** di panel tenant | app-shell (ikon ? di topbar) → buka `/docs` **tab baru** + **help KONTEKSTUAL per-halaman** (ikon ? di samping judul → `/docs?a=<slug>`; mandat owner "pairing lokasi sesuai") | ✅ kode `2b42ec0` (17 lokasi + global; 15 slug diverifikasi 100% ada; dashboard sengaja hanya global) — menunggu deploy |
+| Artikel #32 `niche-studio` | hasil inventarisasi owner: satu-satunya halaman tenant tanpa panduan → ditulis + published (sort 45, T3) | ✅ seeded 2026-07-11 |
 | Sapu silang | tiap halaman FE yang punya panduan → pastikan istilahnya konsisten dgn artikel | ⬜ |
-| Update [D1] SISA_KERJA + PROGRESS journal | tutup administrasi | ⬜ |
+| Update [D1] SISA_KERJA + PROGRESS journal | tutup administrasi | ✅ |
 
 ## PROGRESS (entri terbaru di atas)
 - **2026-07-11 (5)** — ✅ **SELURUH 31 ARTIKEL PUBLISHED** (perintah eksplisit owner "publish seluruh dokumen, agar dapat saya preview di marketing site"). Verifikasi per-widget: query PERSIS FE /docs dijalankan sbg ANON → 31 artikel tampil, 6 grup, urutan proses-bisnis benar; situs /docs HTTP 200. Owner mem-preview langsung di https://mesinviral.com/docs — koreksi kapan pun (edit via admin Content / minta Claude revisi). Sisa [D1]: koreksi owner (bila ada) + tombol Help (FE, mandat terpisah) + sapu silang istilah.
