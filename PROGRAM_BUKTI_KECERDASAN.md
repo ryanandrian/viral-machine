@@ -58,6 +58,11 @@
 
 ## §2b SPESIFIKASI UI/UX FE TENANT — di mana muncul, seperti apa, skop apa
 
+> **ATURAN KONSISTENSI UI (owner, MENGIKAT):** nol library/ikon baru — nuansa WAJIB seragam dgn aplikasi yang ada:
+> - **Ikon = Lucide SAJA** (keluarga yang sama dgn menu utama & semua halaman). Emoji pada wireframe di bawah = notasi sketsa; implementasi memakai padanan Lucide: 📈→`TrendingUp`, 🧠→`Brain` (sudah dipakai InsightsView), 🧪→`FlaskConical`, 📬→`Mail`, 🟢↑→`ArrowUp` + warna `var(--success)`.
+> - **Primitives eksisting SAJA:** kelas `card/card-title/badge/btn/progress/segmented` + token CSS (`var(--brand)`, `--success`, dst) + komponen `Bi` dwibahasa.
+> - **Chart mengikuti pola chart internal yang sudah ada** (bar div `ins-chart` / SVG ringan ala Gauge dashboard) — DILARANG menambah chart library baru.
+>
 > **HUKUM DUA SKOP (owner):** setiap elemen menyatakan skopnya eksplisit. **Per-channel** = tab "Kinerja mesin" di `/channels/[id]` (sumber: data channel itu saja). **Seluruh channel (tot/avg tertimbang volume, aturan 0148)** = menu utama `/insights` + kartu dashboard. Komponen DIBUAT SEKALI dan dipakai di dua skop via prop `scopeLabel` (pola `InsightsView` yang sudah live — anti-selisih antar-halaman).
 
 ### F0 — Kartu "Kurva Belajar" (komponen bersama, 2 penempatan)
