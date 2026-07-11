@@ -143,6 +143,19 @@ Minggu ini mesin belajar dari 34 video di 2 channel-mu:
 4. **Urutan eksekusi final (disepakati diskusi 2026-07-11 malam):** B17-**F0 = batch kecil PERTAMA** (1 RPC + 1 kartu dua-skop + garis penanda; sekali deploy) → lalu fokus penuh panduan tenant (2-3 mgg) → gerbang **G1 dievaluasi saat kurva PASCA-11-Jul ≥3 minggu** (bukan kurva total — sejarahnya sudah panjang; yang dinilai kesehatan tren era mesin-sehat).
 5. Status ketok: **owner BELUM mengucapkan "mulai F0 program"** — jangan mulai kode tanpa itu.
 
+## §2d BEKAL-BACA WAJIB PRA-EKSEKUSI (gerbang §2.1 versi konkret — sesi eksekutor WAJIB membaca INI dulu, bukan cuma dokumen ini)
+
+> Dokumen ini memuat 100% KEPUTUSAN, tapi bukan 100% DETAIL kode. Sebelum menulis satu baris untuk fase mana pun, baca sumber di bawah SAMPAI paham (uji diri: bisa menyebut bentuk data & guard-nya tanpa membuka ulang). Melewati daftar ini = pelanggaran §2.1.
+
+| Sebelum item | WAJIB baca (kode/skema live) | Yang harus dipahami |
+|---|---|---|
+| F0.1 (RPC kurva) | `migrations/0056` + `0148` (pola latest-per-video & tertimbang + guard channel-nyata) · skema `video_analytics` (kolom: analytics_date, collected_at, fetched_at, avg_view_pct, published_at; **snapshot HARIAN per video** — views-berjendela-7-hari dihitung dari sejarah snapshot) · `migrations/0057` (pola return table RPC) | kenapa dedup wajib; cara kohort minggu-publish; auth.uid() scoping |
+| F0.2 (kartu kurva) | `components/insights-view.tsx` UTUH (pola scopeLabel, guard empty ala `topNiche &&`, bar `ins-chart`, render % baris 111-127) · `channels/[id]/page.tsx:480-500` & `insights/page.tsx:20-32` (cara 2 skop memanggil komponen bersama) | komponen sekali-tulis dua-skop; kontrak nilai 0..1 utk %; empty-state |
+| F1.1 (decision_reason) | `niche_selector.py:399-427` (_build_insights_block — sumber teks alasan yang NYATA dipakai) · `pipeline.py` titik tulis `run_metadata` (pola `video_title` 07-10) · `runs/page.tsx` & `runs/[id]/page.tsx` (struktur tabel & kartu detail) | simpan yang DIPAKAI run itu, bukan rekonstruksi; fragmen ber-kode utk Bi |
+| F1.2 (laporan mingguan) | `email.py` (`_bi`, `_trial_recap` pola fail-soft+paginasi, `notify_*`) · `renewal.py:150-200` (pola sweep + anti-dobel via kolom penanda) · `app_config` pola knob + CFG_META admin | dua bahasa penuh; anti-dobel kirim; kill-switch & nada adaptif config |
+| F2/F3 | (saat gerbangnya tiba) `producer` alur pemilihan topik + `viral_weight_optimizer` (pasca-P6) + `topic_scores` di `videos` | jangan sentuh sebelum G2/G3 |
+| SEMUA fase | memory `project_self_learning_remediation_2026_06_28` entri 🌟+⭐ (rantai 4-mata + 5 bug kelas baca-terpotong) + `CLAUDE.md` §2.2b/§3.4 | pola paginasi/first-seen WAJIB tiap query; validasi kelengkapan + per-WIDGET |
+
 ## §3 GERBANG ANTAR-FASE (hukum, bukan saran)
 
 | Gerbang | Syarat lolos | Alasan |
