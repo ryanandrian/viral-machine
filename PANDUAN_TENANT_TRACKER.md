@@ -80,7 +80,7 @@
 ## Penutup (setelah 31 artikel ✅)
 | Langkah | Detail | Status |
 |---|---|---|
-| Tombol **Help** di panel tenant | app-shell (ikon ? di topbar) → buka `/docs` **tab baru** + **help KONTEKSTUAL per-halaman** (ikon ? di samping judul → `/docs?a=<slug>`; mandat owner "pairing lokasi sesuai") | ✅ LIVE `3e6edaa` 2026-07-11 19:03 (17 lokasi + global; 15 slug verified; bundle live ber-marker) |
+| Tombol **Help** di panel tenant | app-shell (ikon ? di topbar) → buka `/docs` **tab baru** + **help KONTEKSTUAL per-halaman** (ikon ? di samping judul → `/docs?a=<slug>`; mandat owner "pairing lokasi sesuai") | ✅ LIVE `3e6edaa` · ⬆️ di-upgrade SOFTCODE `5307e9b` 2026-07-12 (pemetaan pindah ke DB `help_links` + admin Content→"Tombol Help"; seed=diff nol; menunggu deploy FE) |
 | Artikel #32 `niche-studio` | hasil inventarisasi owner: satu-satunya halaman tenant tanpa panduan → ditulis + published (sort 45, T3) | ✅ seeded 2026-07-11 |
 | Sapu silang | tiap halaman FE yang punya panduan → pastikan istilahnya konsisten dgn artikel | ⬜ |
 | Update [D1] SISA_KERJA + PROGRESS journal | tutup administrasi | ✅ |
