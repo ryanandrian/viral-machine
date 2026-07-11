@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { HelpCircle, ExternalLink, Settings, ArrowRight, BarChart3, Calendar, Activity, Loader2, Check, Pause, Play, AlertTriangle, Mic, ShieldCheck, Sparkles, Clock, Trash2, Plus, PenLine, Image as ImageIcon, Info, Search, X, Shuffle, Upload, Lock, Video } from "lucide-react";
+import { ExternalLink, Settings, ArrowRight, BarChart3, Calendar, Activity, Loader2, Check, Pause, Play, AlertTriangle, Mic, ShieldCheck, Sparkles, Clock, Trash2, Plus, PenLine, Image as ImageIcon, Info, Search, X, Shuffle, Upload, Lock, Video } from "lucide-react";
+import { HelpDot } from "@/components/help-dot";
 import { createClient } from "@/lib/supabase/client";
 import { effectiveStatus, TONE } from "@/lib/channel-status";
 import PresetTables from "@/components/preset-tables";
@@ -575,7 +576,7 @@ export default function ChannelDetailPage() {
         <div className="cd-h-meta">
           <h1>{name0} <span className={`badge ${TONE[eff.tone]}`} style={{ fontSize: "var(--text-xs)" }}><span className="dot" /><Bi id={eff.label_id} en={eff.label_en} /></span>
             {/* [D1] help kontekstual → panduan Pengaturan Channel A–Z */}
-            <a href="/docs?a=pengaturan-channel" target="_blank" rel="noopener" title="Panduan halaman ini / This page's guide" aria-label="Panduan / Help" style={{ display: "inline-flex", marginLeft: "0.5rem", verticalAlign: "middle" }}><HelpCircle size={16} style={{ color: "var(--text-muted)" }} /></a>
+            <HelpDot locationKey="channel-detail" />
           </h1>
           {ch.platform_channel_id
             ? <a href={`https://youtube.com/channel/${ch.platform_channel_id}`} target="_blank" rel="noopener noreferrer" className="cd-yt-link"><span className="yt" /> youtube.com/channel/{ch.platform_channel_id} <ExternalLink size={13} /></a>

@@ -212,7 +212,7 @@ export default function ChannelsPage() {
 
   return (
     <>
-      <PageHeader helpSlug="membuat-channel" icon={Tv} title="Channels" action={<a href="/channels/new" className="btn btn-default"><Plus size={16} /> <Bi id="Tambah Channel" en="Add Channel" /></a>} />
+      <PageHeader helpKey="channels" icon={Tv} title="Channels" action={<a href="/channels/new" className="btn btn-default"><Plus size={16} /> <Bi id="Tambah Channel" en="Add Channel" /></a>} />
 
       {maxCh != null && (
         <div className="quota">

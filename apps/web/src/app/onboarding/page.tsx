@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { KeyRound, Video, Send, Tv, Check, ArrowRight, Loader2, Sparkles, HelpCircle } from "lucide-react";
+import { KeyRound, Video, Send, Tv, Check, ArrowRight, Loader2, Sparkles } from "lucide-react";
+import { HelpDot } from "@/components/help-dot";
 import "./onboarding.css";
 
 // Onboarding = PENGARAH (keputusan owner 2026-06-25): arahkan tenant baru melengkapi
@@ -61,7 +62,7 @@ export default function OnboardingPage() {
     <div className="ob-root" style={{ maxWidth: 640, margin: "0 auto", padding: "2rem 1.25rem" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.4rem" }}>
         <img src="/mesinviral_logo512.png" alt="MesinViral" style={{ width: 30, height: 30, objectFit: "contain" }} />
-        <h1 style={{ fontSize: "1.4rem", margin: 0 }}><Bi id="Selamat datang 👋" en="Welcome 👋" /><a href="/docs?a=onboarding" target="_blank" rel="noopener" title="Panduan halaman ini / This page's guide" aria-label="Panduan / Help" style={{ display: "inline-flex", marginLeft: "0.5rem", verticalAlign: "middle" }}><HelpCircle size={15} style={{ color: "var(--text-muted)" }} /></a></h1>
+        <h1 style={{ fontSize: "1.4rem", margin: 0 }}><Bi id="Selamat datang 👋" en="Welcome 👋" /><HelpDot locationKey="onboarding" size={15} /></h1>
       </div>
       <p style={{ ...muted, marginBottom: "1.5rem" }}><Bi id="Dua langkah untuk mulai: lengkapi Kredensial, lalu siapkan channel pertama. Channel aktif otomatis saat semua indikator hijau." en="Two steps to start: complete Credentials, then set up your first channel. It activates once all indicators are green." /></p>
 

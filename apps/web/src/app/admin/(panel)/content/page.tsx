@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, type CSSProperties } from "react";
 import { FileText, Plus, Trash2, Save, Eye } from "lucide-react";
 import { Markdown } from "@/lib/md";
+import { HelpLinksAdmin } from "@/components/admin/help-links-admin";
 
 // Admin CMS — kelola Blog/Docs/Demo (DB-backed). Tulis markdown → publish → tampil di halaman publik.
 
@@ -59,12 +60,15 @@ export default function AdminContentPage() {
   const [preview, setPreview] = useState(false);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const T = TABS[tab];
+  // Tab terakhir = "Tombol Help" ([D1] softcode) — UI khusus, bukan editor tabel generik.
+  const isHelpTab = tab === TABS.length;
+  const T = TABS[Math.min(tab, TABS.length - 1)];
 
   const load = useCallback(async () => {
+    if (isHelpTab) return;
     const r = await fetch(`/api/admin/content?table=${T.table}`);
     if (r.ok) setRows((await r.json()).rows);
-  }, [T.table]);
+  }, [T.table, isHelpTab]);
   useEffect(() => { setSel(null); load(); }, [load]);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2200); return () => clearTimeout(t); }, [toast]);
 
@@ -105,8 +109,12 @@ export default function AdminContentPage() {
       <h1 style={{ fontSize: "1.375rem", marginBottom: ".25rem", display: "flex", alignItems: "center", gap: ".5rem" }}><FileText size={20} /> Content (CMS)</h1>
       <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}><Bi id="Kelola isi halaman Blog, Docs, dan Demo. Markdown → Publish → tampil publik." en="Manage Blog, Docs, and Demo content. Markdown → Publish → live." /></p>
 
-      <div className="segmented" style={{ marginBottom: "1.25rem" }}>{TABS.map((t, i) => <button key={t.key} aria-selected={tab === i} onClick={() => setTab(i)}>{t.label}</button>)}</div>
+      <div className="segmented" style={{ marginBottom: "1.25rem" }}>
+        {TABS.map((t, i) => <button key={t.key} aria-selected={tab === i} onClick={() => setTab(i)}>{t.label}</button>)}
+        <button aria-selected={isHelpTab} onClick={() => setTab(TABS.length)}>Tombol Help</button>
+      </div>
 
+      {isHelpTab ? <HelpLinksAdmin /> : (
       <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: "1.25rem", alignItems: "start" }}>
         <div className="card" style={{ padding: ".5rem" }}>
           <button className="btn btn-default btn-sm" style={{ width: "100%", marginBottom: ".5rem" }} onClick={newRow}><Plus size={14} /> <Bi id="Baru" en="New" /></button>
@@ -160,6 +168,7 @@ export default function AdminContentPage() {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

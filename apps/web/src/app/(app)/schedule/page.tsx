@@ -70,7 +70,7 @@ export default function SchedulePage() {
 
   return (
     <>
-      <PageHeader helpSlug="schedule" icon={Calendar} title={<Bi id="Jadwal" en="Schedule" />}
+      <PageHeader helpKey="schedule" icon={Calendar} title={<Bi id="Jadwal" en="Schedule" />}
         subtitle={loading ? "Memuat…" : <><b>{totalSlots}</b> slot · {channels.length} channel · max <b>{cap}</b>/hari/channel (tier)</>} />
 
       <div className="opt-banner">

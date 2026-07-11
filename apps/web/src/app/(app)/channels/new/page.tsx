@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Tv, Check, Lock, Video, HelpCircle } from "lucide-react";
+import { ArrowLeft, Tv, Check, Lock, Video } from "lucide-react";
+import { HelpDot } from "@/components/help-dot";
 import { createClient } from "@/lib/supabase/client";
 
 // Tambah channel (pasca-onboarding) — form fokus channel (bukan wizard akun). INSERT channels (client-RLS)
@@ -99,7 +100,7 @@ export default function NewChannelPage() {
   return (
     <div style={{ maxWidth: 640 }}>
       <button className="btn btn-ghost btn-sm" style={{ marginBottom: ".75rem" }} onClick={() => router.push("/channels")}><ArrowLeft size={14} /> Kanal</button>
-      <h1 style={{ fontSize: "1.375rem", marginBottom: ".25rem", display: "flex", alignItems: "center", gap: ".5rem" }}><Tv size={20} /> <Bi id="Tambah Channel" en="Add Channel" /><a href="/docs?a=membuat-channel" target="_blank" rel="noopener" title="Panduan halaman ini / This page's guide" aria-label="Panduan / Help" style={{ display: "inline-flex", marginLeft: "0.25rem", verticalAlign: "middle" }}><HelpCircle size={15} style={{ color: "var(--text-muted)" }} /></a></h1>
+      <h1 style={{ fontSize: "1.375rem", marginBottom: ".25rem", display: "flex", alignItems: "center", gap: ".5rem" }}><Tv size={20} /> <Bi id="Tambah Channel" en="Add Channel" /><HelpDot locationKey="channel-new" size={15} style={{ marginLeft: "0.25rem" }} /></h1>
       <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1.25rem" }}>{count}/{maxCh ?? "—"} channel terpakai (paket Anda).</p>
 
       {full ? (
