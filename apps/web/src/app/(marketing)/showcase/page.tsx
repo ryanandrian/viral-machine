@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Play, Command, MonitorSmartphone, Clapperboard, ArrowRight } from "lucide-react";
+import { Play, Command, MonitorSmartphone, Clapperboard, ArrowRight, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { fetchTrialDays } from "@/lib/plans";
 import "./showcase.css";
@@ -21,6 +21,14 @@ export default function ShowcasePage() {
   const [trialDays, setTrialDays] = useState(7);
   // Tab per-niche (ketok owner 2026-07-11) — DINAMIS dari niche_label video aktif, pola identik kategori /blog.
   const [nicheTab, setNicheTab] = useState(0);
+  // Lightbox preview/zoom screenshot (permintaan owner 2026-07-11): klik gambar → besar; Esc/klik → tutup.
+  const [zoom, setZoom] = useState<Screen | null>(null);
+  useEffect(() => {
+    if (!zoom) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setZoom(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [zoom]);
   useEffect(() => {
     fetchTrialDays().then(setTrialDays);
     const sb = createClient();
@@ -48,7 +56,8 @@ export default function ShowcasePage() {
             <figure className="sc-shot" key={s.id} style={{ margin: 0 }}>
               <div className="sc-shot-bar"><div className="dots"><i /><i /><i /></div><div className="url"><Command size={12} /> app.mesinviral.com</div></div>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={s.image_url} alt={s.title ?? "screenshot"} loading="lazy" />
+              <img src={s.image_url} alt={s.title ?? "screenshot"} loading="lazy"
+                className="sc-zoomable" onClick={() => setZoom(s)} title="Klik untuk memperbesar · Click to enlarge" />
               {(s.title || s.caption) && <figcaption className="cap">
                 {s.title && <h3><Bi id={s.title} en={s.title_en ?? s.title} /></h3>}
                 {s.caption && <p><Bi id={s.caption} en={s.caption_en ?? s.caption} /></p>}
@@ -100,6 +109,16 @@ export default function ShowcasePage() {
           <Link href="/auth?view=signup" className="btn btn-ai btn-xl"><Bi id="Mulai Gratis" en="Start Free" /> <ArrowRight size={18} /></Link>
         </div>
       </div></section>
+
+      {/* Lightbox screenshot — klik area mana pun / tombol X / Esc = tutup */}
+      {zoom && (
+        <div className="sc-lightbox" role="dialog" aria-modal="true" onClick={() => setZoom(null)}>
+          <button className="sc-lightbox-close" aria-label="Tutup / Close" onClick={() => setZoom(null)}><X size={20} /></button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={zoom.image_url} alt={zoom.title ?? "screenshot"} onClick={(e) => e.stopPropagation()} />
+          {zoom.title && <div className="sc-lightbox-cap"><Bi id={zoom.title} en={zoom.title_en ?? zoom.title} /></div>}
+        </div>
+      )}
     </>
   );
 }

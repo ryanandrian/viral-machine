@@ -9,9 +9,10 @@ import { Moon, Sun, Menu } from "lucide-react";
 // Brand icons (youtube/telegram) tak ada di lucide → substitusi Video/Send.
 
 const NAV_LINKS = [
+  // Urutan: Harga SETELAH Showcase (permintaan owner 2026-07-11)
   { id: "Fitur", en: "Features", href: "/#features" },
-  { id: "Harga", en: "Pricing", href: "/pricing" },
   { id: "Showcase", en: "Showcase", href: "/showcase" },
+  { id: "Harga", en: "Pricing", href: "/pricing" },
   { id: "Dokumentasi", en: "Docs", href: "/docs" },
   { id: "Blog", en: "Blog", href: "/blog" },
 ];
