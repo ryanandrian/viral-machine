@@ -62,6 +62,7 @@
 > - **Ikon = Lucide SAJA** (keluarga yang sama dgn menu utama & semua halaman). Emoji pada wireframe di bawah = notasi sketsa; implementasi memakai padanan Lucide: 📈→`TrendingUp`, 🧠→`Brain` (sudah dipakai InsightsView), 🧪→`FlaskConical`, 📬→`Mail`, 🟢↑→`ArrowUp` + warna `var(--success)`.
 > - **Primitives eksisting SAJA:** kelas `card/card-title/badge/btn/progress/segmented` + token CSS (`var(--brand)`, `--success`, dst) + komponen `Bi` dwibahasa.
 > - **Chart mengikuti pola chart internal yang sudah ada** (bar div `ins-chart` / SVG ringan ala Gauge dashboard) — DILARANG menambah chart library baru.
+> - **DWIBAHASA ID/EN WAJIB di SEMUA permukaan program ini** (aturan kerja §3.5, ditegaskan owner 2026-07-11): setiap label/judul/subjudul/empty-state/tooltip/toggle FE via komponen `Bi` · **email Laporan Kecerdasan Mingguan dua bahasa penuh** (pola `_bi()` email.py yang sudah baku) · teks "🧠 Mengapa" dirakit dari **fragmen ber-kode → FE menerjemahkan** (BUKAN kalimat bebas LLM satu bahasa) · pesan error API kirim KODE, FE yang menerjemahkan. **Satu teks satu-bahasa lolos = cacat, item belum selesai.**
 >
 > **HUKUM DUA SKOP (owner):** setiap elemen menyatakan skopnya eksplisit. **Per-channel** = tab "Kinerja mesin" di `/channels/[id]` (sumber: data channel itu saja). **Seluruh channel (tot/avg tertimbang volume, aturan 0148)** = menu utama `/insights` + kartu dashboard. Komponen DIBUAT SEKALI dan dipakai di dua skop via prop `scopeLabel` (pola `InsightsView` yang sudah live — anti-selisih antar-halaman).
 
