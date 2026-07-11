@@ -135,6 +135,14 @@ Minggu ini mesin belajar dari 34 video di 2 channel-mu:
 | Laporan mingguan | — | cermin kartu kecil | — | — | ✅ utama |
 | Badge 🧪 (F2) | — | — | — | ✅ | disebut dikecualikan |
 
+## §2c UPDATE 2026-07-11 (2) — PENYEMPURNAAN F0 (poin owner: RAD sudah kaya konten; WAJIB dipahami sebelum eksekusi)
+
+1. **Kurva TIDAK menunggu data baru** — RAD punya ±15 minggu sejarah (199 video sejak akhir Maret) → F0 menghasilkan 15 titik kohort SEJAK HARI PERTAMA dihitung.
+2. **Garis penanda vertikal 11 Juli** ("mesin disehatkan") di kurva → eksperimen alami *sebelum vs sesudah*: sejarah = era mesin setengah-buta (bias snapshot + retensi mati sejak 24 Jun); bila self-learning sejati, minggu pasca-garis menanjak. Ini artefak bukti jualan terkuat.
+3. **Anti bias-umur (metrik):** metrik UTAMA kurva = **retensi** (stabil terhadap umur video); views WAJIB **ber-jendela** ("views 7 hari pertama" per video, dihitung dari SEJARAH snapshot harian `video_analytics` yang tersedia ribuan baris — bukan views lifetime yang membuat kohort tua menang palsu). Kurva historis boleh datar/berisik = baseline "sebelum" yang sah, bukan kegagalan.
+4. **Urutan eksekusi final (disepakati diskusi 2026-07-11 malam):** B17-**F0 = batch kecil PERTAMA** (1 RPC + 1 kartu dua-skop + garis penanda; sekali deploy) → lalu fokus penuh panduan tenant (2-3 mgg) → gerbang **G1 dievaluasi saat kurva PASCA-11-Jul ≥3 minggu** (bukan kurva total — sejarahnya sudah panjang; yang dinilai kesehatan tren era mesin-sehat).
+5. Status ketok: **owner BELUM mengucapkan "mulai F0 program"** — jangan mulai kode tanpa itu.
+
 ## §3 GERBANG ANTAR-FASE (hukum, bukan saran)
 
 | Gerbang | Syarat lolos | Alasan |

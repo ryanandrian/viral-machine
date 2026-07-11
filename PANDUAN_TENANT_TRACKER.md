@@ -21,7 +21,7 @@
 ### A. MULAI DI SINI (grp "Mulai di Sini" / "Getting Started")
 | # | slug | Judul | Sumber verifikasi | Status |
 |---|---|---|---|---|
-| 1 | `memulai-dengan-mesinviral` ✏️ada | Memulai dengan MesinViral | landing, DESAIN_PRODUK §pipeline | ⬜ |
+| 1 | `memulai-dengan-mesinviral` ✏️ada | Memulai dengan MesinViral | landing, DESAIN_PRODUK §pipeline | 🟡 draft 2026-07-11 (ID 1.814 + EN 1.822 chars, nol angka volatil) |
 | 2 | `apa-itu-byok` ✏️published | Apa itu BYOK? (review-selaraskan) | /integrations | ⬜ |
 | 3 | `onboarding` ✏️ada | Panduan Onboarding | /onboarding (2 langkah, indikator hijau) | ⬜ |
 | 4 | `paket-dan-trial` 🆕 | Paket, Trial & Batasan | /pricing live, plan_limits DB | ⬜ |
@@ -79,4 +79,5 @@
 | Update [D1] SISA_KERJA + PROGRESS journal | tutup administrasi | ⬜ |
 
 ## PROGRESS (entri terbaru di atas)
+- **2026-07-11 (2)** — Artikel #1 `memulai-dengan-mesinviral` DRAFT di CMS (ID 1.814 + EN 1.822 chars, nol angka volatil) — menunggu cek owner. **Urutan disepakati malam ini: B17-F0 (batch kecil kurva) DULUAN → baru batch A panduan penuh.** Daftar 31 artikel: owner belum ketok eksplisit — konfirmasi sekali lagi saat mulai batch A. Konteks penulisan artikel niche/insight WAJIB selaras arsitektur baru (memory self-learning ⭐ 07-11).
 - **2026-07-11** — Tracker dibuat; daftar 31 artikel diajukan ke owner (revisi dari 29: E dipecah). Menunggu ketok daftar → mulai batch A.
