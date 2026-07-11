@@ -9,6 +9,11 @@
 .dc-tree a { display: block; font-size: var(--text-sm); color: var(--text-secondary); text-decoration: none; padding: 0.3125rem 0.625rem; border-radius: var(--r-sm); transition: background var(--d-fast), color var(--d-fast); }
 .dc-tree a:hover { background: var(--surface-2); color: var(--text-primary); }
 .dc-tree a.active { background: var(--brand-soft); color: var(--brand); font-weight: 500; }
+/* Isi daftar menu (button .dc-tree-link — elemen yang benar-benar dirender page.tsx; rule `a` di atas
+   tak pernah kena button). Permintaan owner 2026-07-11: font agak dikecilkan + warna kuning muda. */
+.dc-tree-link { display: block; width: 100%; text-align: left; border: none; background: none; cursor: pointer; font-family: inherit; font-size: 0.8125rem; color: #f5e9a0; padding: 0.3125rem 0.625rem; border-radius: var(--r-sm); transition: background var(--d-fast), color var(--d-fast); }
+.dc-tree-link:hover { background: var(--surface-2); color: #faf3c8; }
+.dc-tree-link.active { background: var(--brand-soft); color: var(--brand); font-weight: 500; }
 .dc-main { min-width: 0; }
 .dc-bc { font-size: var(--text-xs); color: var(--text-muted); margin-bottom: 1rem; }
 .dc-main h1 { font-size: var(--text-4xl); font-weight: 800; letter-spacing: -0.03em; margin: 0 0 0.75rem; }
