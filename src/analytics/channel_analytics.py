@@ -275,7 +275,11 @@ class ChannelAnalytics:
             if not all_videos:
                 return []
 
-            # last fetched_at per video (chunk IN agar URL aman utk channel besar)
+            # last fetched_at per video (chunk IN agar URL aman utk channel besar).
+            # [B16-rotasi 2026-07-11] WAJIB paginasi + urutan: query lama tanpa order/paginasi kena cap
+            # 1000 baris/req (chunk 150 video punya RIBUAN snapshot) → peta kesegaran KORUP → rotasi
+            # berputar di tempat: 15 run × 50 hanya menyentuh 107/205 video, 98 kelaparan selamanya
+            # (terukur live). Pola fix = first-seen pada urutan fetched_at DESC (max per video) + range.
             cutoff_fetch = (
                 datetime.now(timezone.utc) - timedelta(hours=self.REFETCH_INTERVAL_HOURS)
             ).isoformat()
@@ -283,12 +287,20 @@ class ChannelAnalytics:
             last_fetch: dict = {}
             for i in range(0, len(ids), 150):
                 chunk = ids[i:i + 150]
-                fa = (self._supabase.table("video_analytics")
-                      .select("video_id, fetched_at").in_("video_id", chunk).execute())
-                for r in (fa.data or []):
-                    vid, ft = r["video_id"], r.get("fetched_at")
-                    if ft and (vid not in last_fetch or ft > last_fetch[vid]):
-                        last_fetch[vid] = ft
+                page = 0
+                while page < 20:  # pagar: 20k baris/chunk >> realita
+                    fa = (self._supabase.table("video_analytics")
+                          .select("video_id, fetched_at").in_("video_id", chunk)
+                          .order("fetched_at", desc=True, nullsfirst=False)
+                          .range(page * 1000, page * 1000 + 999).execute())
+                    rows_fa = fa.data or []
+                    for r in rows_fa:
+                        vid, ft = r["video_id"], r.get("fetched_at")
+                        if ft and vid not in last_fetch:  # first-seen DESC = fetched_at TERBARU video itu
+                            last_fetch[vid] = ft
+                    if len(rows_fa) < 1000 or len(last_fetch) >= len(ids):
+                        break
+                    page += 1
 
             # buang yang masih segar (<23j); sisanya urut PALING BASI dulu (never-fetched = "" → terdepan)
             candidates = [v for v in all_videos if last_fetch.get(v["video_id"], "") <= cutoff_fetch]
