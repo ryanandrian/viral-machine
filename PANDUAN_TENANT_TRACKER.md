@@ -6,6 +6,7 @@
 ## Aturan penulisan (WAJIB, tiap artikel)
 1. **Verifikasi dulu, tulis kemudian:** buka halaman FE terkait (kode live) — nama tombol/menu/istilah di artikel = persis yang tenant lihat. Nol fitur karangan.
 2. **Nol angka volatil dipatri** (harga/kuota/hari) — rujuk halaman live (Pricing/Billing) atau tulis "sesuai paket Anda".
+2b. **Katalog AI = HIDUP, jangan dipatok (owner 2026-07-11):** provider & model terus bertambah (katalog admin, tanpa deploy). Dilarang kalimat yang menyiratkan daftar tertutup ("mendukung N penyedia", "modelnya adalah X/Y/Z"). Sumber kebenaran daftar = layar /integrations & pemilih model channel; artikel per-vendor dibingkai "salah satu penyedia yang didukung — daftar lengkap & terbaru selalu di aplikasi, bertambah seiring waktu"; artikel konsep mengajarkan CARA MEMBACA katalog (tier/Gratis/harga) agar tetap benar berapa pun isinya kelak.
 3. **Dwibahasa penuh**: `body` (ID) + `body_en` (EN) — FE merender keduanya.
 4. Bahasa awam; langkah bernomor; satu artikel = satu tujuan; screenshot opsional menyusul (owner).
 5. Tulis via CMS `docs_articles` sebagai **draft** → lapor batch ke owner → **publish setelah owner cek**.
