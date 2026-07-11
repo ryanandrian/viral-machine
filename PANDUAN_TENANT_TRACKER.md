@@ -24,56 +24,56 @@
 | # | slug | Judul | Sumber verifikasi | Status |
 |---|---|---|---|---|
 | 1 | `memulai-dengan-mesinviral` ✏️ada | Memulai dengan MesinViral | landing, DESAIN_PRODUK §pipeline | ✅ published (terverifikasi DB 2026-07-11 — status sudah published; tak disentuh seeding) |
-| 2 | `apa-itu-byok` ✏️published | Apa itu BYOK? (review-selaraskan) | /integrations | 🟡 draft 2026-07-11 |
-| 3 | `paket-dan-trial` 🆕 | Paket, Trial & Batasan | /pricing live, plan_limits DB | 🟡 draft 2026-07-11 |
-| 4 | `onboarding` ✏️ada | Panduan Onboarding | /onboarding (2 langkah, indikator hijau) | 🟡 draft 2026-07-11 |
+| 2 | `apa-itu-byok` ✏️published | Apa itu BYOK? (review-selaraskan) | /integrations | ✅ published 2026-07-11 |
+| 3 | `paket-dan-trial` 🆕 | Paket, Trial & Batasan | /pricing live, plan_limits DB | ✅ published 2026-07-11 |
+| 4 | `onboarding` ✏️ada | Panduan Onboarding | /onboarding (2 langkah, indikator hijau) | ✅ published 2026-07-11 |
 
 ### TAHAP 2 — SIAPKAN KREDENSIAL: bekal sebelum mesin bisa jalan (grp "Siapkan Kredensial" / "Set Up Credentials") — halaman /integrations
 | # | slug | Judul | Sumber verifikasi | Status |
 |---|---|---|---|---|
-| 5 | `api-keys` ✏️ada | Kredensial AI: konsep & cara pakai | /integrations (pool, Simpan & Uji, Dipakai oleh) | 🟡 draft 2026-07-11 |
-| 6 | `kunci-gratis-groq` 🆕 | Bikin kunci Groq GRATIS | console.groq.com + free_tier_note DB | 🟡 draft 2026-07-11 |
-| 7 | `kunci-gratis-cloudflare` 🆕 | Bikin kunci Cloudflare GRATIS | dash.cloudflare.com + format ACCOUNT_ID:API_TOKEN (vault) | 🟡 draft 2026-07-11 |
-| 8 | `kunci-gemini` 🆕 | Kunci Google Gemini (gratis harian) | aistudio.google.com + free_tier_note (catatan privasi) | 🟡 draft 2026-07-11 |
-| 9 | `kunci-openai` 🆕 | Kunci OpenAI (berbayar) | platform.openai.com | 🟡 draft 2026-07-11 |
-| 10 | `kunci-anthropic` 🆕 | Kunci Anthropic (berbayar) | console.anthropic.com | 🟡 draft 2026-07-11 |
-| 11 | `kunci-elevenlabs` 🆕 | Kunci ElevenLabs (suara premium) + Edge TTS gratis | elevenlabs.io (scoped key!) + vault | 🟡 draft 2026-07-11 |
-| 12 | `connect-youtube` ✏️ada | Hubungkan channel YouTube | /integrations (Hubungkan dengan Google, multi-koneksi) + syarat verifikasi telepon (thumbnail) | 🟡 draft 2026-07-11 |
-| 13 | `notifikasi-telegram` 🆕 | Notifikasi Telegram | /integrations (chat ID) + jenis notif (per-run, review-pending, circuit-break) | 🟡 draft 2026-07-11 |
+| 5 | `api-keys` ✏️ada | Kredensial AI: konsep & cara pakai | /integrations (pool, Simpan & Uji, Dipakai oleh) | ✅ published 2026-07-11 |
+| 6 | `kunci-gratis-groq` 🆕 | Bikin kunci Groq GRATIS | console.groq.com + free_tier_note DB | ✅ published 2026-07-11 |
+| 7 | `kunci-gratis-cloudflare` 🆕 | Bikin kunci Cloudflare GRATIS | dash.cloudflare.com + format ACCOUNT_ID:API_TOKEN (vault) | ✅ published 2026-07-11 |
+| 8 | `kunci-gemini` 🆕 | Kunci Google Gemini (gratis harian) | aistudio.google.com + free_tier_note (catatan privasi) | ✅ published 2026-07-11 |
+| 9 | `kunci-openai` 🆕 | Kunci OpenAI (berbayar) | platform.openai.com | ✅ published 2026-07-11 |
+| 10 | `kunci-anthropic` 🆕 | Kunci Anthropic (berbayar) | console.anthropic.com | ✅ published 2026-07-11 |
+| 11 | `kunci-elevenlabs` 🆕 | Kunci ElevenLabs (suara premium) + Edge TTS gratis | elevenlabs.io (scoped key!) + vault | ✅ published 2026-07-11 |
+| 12 | `connect-youtube` ✏️ada | Hubungkan channel YouTube | /integrations (Hubungkan dengan Google, multi-koneksi) + syarat verifikasi telepon (thumbnail) | ✅ published 2026-07-11 |
+| 13 | `notifikasi-telegram` 🆕 | Notifikasi Telegram | /integrations (chat ID) + jenis notif (per-run, review-pending, circuit-break) | ✅ published 2026-07-11 |
 
 ### TAHAP 3 — BANGUN CHANNEL: dari niche sampai aktif (grp "Bangun Channel" / "Build Your Channel")
 | # | slug | Judul | Sumber verifikasi | Status |
 |---|---|---|---|---|
-| 14 | `niches` ✏️ada | Memahami Niche | /niches (pustaka, 🔒 upgrade, pesan custom + Evaluasi) | 🟡 draft 2026-07-11 |
-| 15 | `membuat-channel` 🆕 | Membuat & Mengaktifkan Channel | /channels/new + prasyarat + Uji channel + jeda/lanjut | 🟡 draft 2026-07-11 |
-| 16 | `pengaturan-channel` 🆕 | Pengaturan Channel A–Z | /channels/[id] per-seksi (Pengaturan · Durasi & segmentasi · Caption · Hashtag · Branded · Operasional & mutu) | 🟡 draft 2026-07-11 |
-| 17 | `ai-engines` ✏️ada | Mesin AI per-Channel | picker model channel (tier/Gratis/harga Rp) | 🟡 draft 2026-07-11 |
-| 18 | `schedule` ✏️ada | Jadwal Publish | /schedule + timezone + stok mengikuti jadwal | 🟡 draft 2026-07-11 |
+| 14 | `niches` ✏️ada | Memahami Niche | /niches (pustaka, 🔒 upgrade, pesan custom + Evaluasi) | ✅ published 2026-07-11 |
+| 15 | `membuat-channel` 🆕 | Membuat & Mengaktifkan Channel | /channels/new + prasyarat + Uji channel + jeda/lanjut | ✅ published 2026-07-11 |
+| 16 | `pengaturan-channel` 🆕 | Pengaturan Channel A–Z | /channels/[id] per-seksi (Pengaturan · Durasi & segmentasi · Caption · Hashtag · Branded · Operasional & mutu) | ✅ published 2026-07-11 |
+| 17 | `ai-engines` ✏️ada | Mesin AI per-Channel | picker model channel (tier/Gratis/harga Rp) | ✅ published 2026-07-11 |
+| 18 | `schedule` ✏️ada | Jadwal Publish | /schedule + timezone + stok mengikuti jadwal | ✅ published 2026-07-11 |
 
 ### TAHAP 4 — OPERASIONAL HARIAN: running (grp "Operasional Harian" / "Daily Operations")
 | # | slug | Judul | Sumber verifikasi | Status |
 |---|---|---|---|---|
-| 19 | `dashboard` 🆕 | Membaca Dashboard | /dashboard (KPI, Jadwal, Runs, Compliance, Biaya AI, chip Kurva) | 🟡 draft 2026-07-11 |
-| 20 | `runs-produksi` 🆕 | Memantau Produksi (Runs) | /runs + /runs/[id] live-tail + judul video | 🟡 draft 2026-07-11 |
-| 21 | `review-video` 🆕 | Meninjau Video "Perlu Ditinjau" | /review (Pakai/Buang, TTL) vs YT Studio private | 🟡 draft 2026-07-11 |
-| 22 | `biaya-ai` 🆕 | Memahami Biaya AI (BYOK) | kartu Biaya AI + kolom Runs + label "bukan biaya kami" | 🟡 draft 2026-07-11 |
+| 19 | `dashboard` 🆕 | Membaca Dashboard | /dashboard (KPI, Jadwal, Runs, Compliance, Biaya AI, chip Kurva) | ✅ published 2026-07-11 |
+| 20 | `runs-produksi` 🆕 | Memantau Produksi (Runs) | /runs + /runs/[id] live-tail + judul video | ✅ published 2026-07-11 |
+| 21 | `review-video` 🆕 | Meninjau Video "Perlu Ditinjau" | /review (Pakai/Buang, TTL) vs YT Studio private | ✅ published 2026-07-11 |
+| 22 | `biaya-ai` 🆕 | Memahami Biaya AI (BYOK) | kartu Biaya AI + kolom Runs + label "bukan biaya kami" | ✅ published 2026-07-11 |
 
 ### TAHAP 5 — EVALUASI & BERKEMBANG: makin pintar (grp "Evaluasi & Berkembang" / "Evaluate & Grow")
 | # | slug | Judul | Sumber verifikasi | Status |
 |---|---|---|---|---|
-| 23 | `analytics` ✏️ada | Analytics | /analytics vs tab kinerja-mesin per-channel + YT Studio | 🟡 draft 2026-07-11 |
-| 24 | `self-learning` ✏️ada | Self-Learning (+ Kurva Belajar) | /insights + Kurva Belajar (B17-F0 live) + mekanisme bobot per-channel | 🟡 draft 2026-07-11 |
-| 25 | `ai-slop-defense` ✏️ada | AI Slop Defense & Compliance | /compliance | 🟡 draft 2026-07-11 |
+| 23 | `analytics` ✏️ada | Analytics | /analytics vs tab kinerja-mesin per-channel + YT Studio | ✅ published 2026-07-11 |
+| 24 | `self-learning` ✏️ada | Self-Learning (+ Kurva Belajar) | /insights + Kurva Belajar (B17-F0 live) + mekanisme bobot per-channel | ✅ published 2026-07-11 |
+| 25 | `ai-slop-defense` ✏️ada | AI Slop Defense & Compliance | /compliance | ✅ published 2026-07-11 |
 
 ### TAHAP 6 — TAGIHAN, AKUN & BANTUAN (grp "Akun & Bantuan" / "Account & Help")
 | # | slug | Judul | Sumber verifikasi | Status |
 |---|---|---|---|---|
-| 26 | `billing` ✏️ada | Billing & Upgrade | /billing (GoPay+VA, Lanjutkan pembayaran, periode) | 🟡 draft 2026-07-11 |
-| 27 | `kelola-akun` 🆕 | Pengaturan Akun | /settings (Profil, timezone, Bahasa & tema, Password) | 🟡 draft 2026-07-11 |
-| 28 | `siklus-akun` 🆕 | Saat Trial/Langganan Berakhir | LIFECYCLE_NURTURE (banner→grace→suspended 30h→blocked→hapus + reaktivasi 1-klik + hak hapus data) | 🟡 draft 2026-07-11 |
-| 29 | `bantuan` 🆕 | Bantuan & Masukan | /support + /feedback | 🟡 draft 2026-07-11 |
-| 30 | `troubleshooting` ✏️ada | Troubleshooting | kasus nyata: kunci invalid, YT disconnect, QC gagal, circuit-break, thumbnail 403 | 🟡 draft 2026-07-11 |
-| 31 | `faq` ✏️ada | FAQ | rangkum pertanyaan lintas-artikel (ditulis TERAKHIR) | 🟡 draft 2026-07-11 |
+| 26 | `billing` ✏️ada | Billing & Upgrade | /billing (GoPay+VA, Lanjutkan pembayaran, periode) | ✅ published 2026-07-11 |
+| 27 | `kelola-akun` 🆕 | Pengaturan Akun | /settings (Profil, timezone, Bahasa & tema, Password) | ✅ published 2026-07-11 |
+| 28 | `siklus-akun` 🆕 | Saat Trial/Langganan Berakhir | LIFECYCLE_NURTURE (banner→grace→suspended 30h→blocked→hapus + reaktivasi 1-klik + hak hapus data) | ✅ published 2026-07-11 |
+| 29 | `bantuan` 🆕 | Bantuan & Masukan | /support + /feedback | ✅ published 2026-07-11 |
+| 30 | `troubleshooting` ✏️ada | Troubleshooting | kasus nyata: kunci invalid, YT disconnect, QC gagal, circuit-break, thumbnail 403 | ✅ published 2026-07-11 |
+| 31 | `faq` ✏️ada | FAQ | rangkum pertanyaan lintas-artikel (ditulis TERAKHIR) | ✅ published 2026-07-11 |
 
 *(Perubahan urutan vs daftar tematik lama, keputusan owner "urut proses bisnis": BYOK maju ke #2 · Paket & Trial sebelum Onboarding · Biaya AI masuk Operasional Harian · Compliance masuk Evaluasi.)*
 
@@ -85,6 +85,7 @@
 | Update [D1] SISA_KERJA + PROGRESS journal | tutup administrasi | ⬜ |
 
 ## PROGRESS (entri terbaru di atas)
+- **2026-07-11 (5)** — ✅ **SELURUH 31 ARTIKEL PUBLISHED** (perintah eksplisit owner "publish seluruh dokumen, agar dapat saya preview di marketing site"). Verifikasi per-widget: query PERSIS FE /docs dijalankan sbg ANON → 31 artikel tampil, 6 grup, urutan proses-bisnis benar; situs /docs HTTP 200. Owner mem-preview langsung di https://mesinviral.com/docs — koreksi kapan pun (edit via admin Content / minta Claude revisi). Sisa [D1]: koreksi owner (bila ada) + tombol Help (FE, mandat terpisah) + sapu silang istilah.
 - **2026-07-11 (4)** — 🏁 **SELURUH 30 ARTIKEL DITULIS & DI-SEED ke CMS sebagai draft** (mandat owner "tuntaskan seluruh panduan, koreksi setelah selesai; hanya seeding DB, nol BE/FE"). Proses: harvest label UI persis dari kode FE live (integrations/onboarding/niches/schedule/review/billing/settings/analytics/channels/runs/docs-renderer) + fakta katalog dari DB (`ai_providers.free_tier_note`) → 30 artikel struktur-baku 8-bagian, dwibahasa penuh, urut proses bisnis (sort 10-75, 6 grup), markdown sesuai kemampuan renderer (nol tabel md). Verifikasi DB pasca-seed: 31 baris = 6 grup benar, 30 draft + 1 published (#1 ternyata SUDAH published di DB — tak disentuh), semua body ID+EN >800 chars. Catatan: `apa-itu-byok` (published lama 482c satu-bahasa) kini draft ber-isi baru → sementara hilang dari /docs sampai owner publish. **MENUNGGU: koreksi owner atas 30 draft → publish → lalu tombol Help (perlu sentuh FE = mandat terpisah).**
 - **2026-07-11 (3)** — Mandat owner "tuntaskan panduan tenant" + 2 aturan dipatri: (a) daftar URUT ALUR PROSES BISNIS (tabel di atas disusun ulang: 6 tahap kenal→kunci→bangun→running→evaluasi→akun); (b) STRUKTUR BAKU ISI 8-bagian per artikel (lihat §Mekanisme) — ukuran lulus = tenant awam bisa melaksanakan sampai berhasil tanpa bertanya. Siap mulai Tahap 1 (#2-#4) begitu urutan dikonfirmasi owner.
 - **2026-07-11 (2)** — Artikel #1 `memulai-dengan-mesinviral` DRAFT di CMS (ID 1.814 + EN 1.822 chars, nol angka volatil) — menunggu cek owner. **Urutan disepakati malam ini: B17-F0 (batch kecil kurva) DULUAN → baru batch A panduan penuh.** Daftar 31 artikel: owner belum ketok eksplisit — konfirmasi sekali lagi saat mulai batch A. Konteks penulisan artikel niche/insight WAJIB selaras arsitektur baru (memory self-learning ⭐ 07-11).
