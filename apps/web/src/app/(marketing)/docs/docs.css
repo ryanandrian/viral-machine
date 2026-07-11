@@ -10,9 +10,13 @@
 .dc-tree a:hover { background: var(--surface-2); color: var(--text-primary); }
 .dc-tree a.active { background: var(--brand-soft); color: var(--brand); font-weight: 500; }
 /* Isi daftar menu (button .dc-tree-link — elemen yang benar-benar dirender page.tsx; rule `a` di atas
-   tak pernah kena button). Permintaan owner 2026-07-11: font agak dikecilkan + warna kuning muda. */
+   tak pernah kena button). Permintaan owner 2026-07-11: font agak dikecilkan + warna kuning.
+   Satu identitas kuning, dua luminansi ikut tema (owner 2026-07-11: kuning muda saru di panel siang):
+   malam = kuning muda · siang = kuning emas tua (terbaca di putih, tetap beda dari brand=item aktif). */
 .dc-tree-link { display: block; width: 100%; text-align: left; border: none; background: none; cursor: pointer; font-family: inherit; font-size: 0.8125rem; color: #f5e9a0; padding: 0.3125rem 0.625rem; border-radius: var(--r-sm); transition: background var(--d-fast), color var(--d-fast); }
 .dc-tree-link:hover { background: var(--surface-2); color: #faf3c8; }
+[data-theme="light"] .dc-tree-link { color: #8a6d05; }
+[data-theme="light"] .dc-tree-link:hover { color: #6e5604; }
 .dc-tree-link.active { background: var(--brand-soft); color: var(--brand); font-weight: 500; }
 .dc-main { min-width: 0; }
 .dc-bc { font-size: var(--text-xs); color: var(--text-muted); margin-bottom: 1rem; }
