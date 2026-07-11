@@ -56,6 +56,79 @@
 
 ---
 
+## §2b SPESIFIKASI UI/UX FE TENANT — di mana muncul, seperti apa, skop apa
+
+> **HUKUM DUA SKOP (owner):** setiap elemen menyatakan skopnya eksplisit. **Per-channel** = tab "Kinerja mesin" di `/channels/[id]` (sumber: data channel itu saja). **Seluruh channel (tot/avg tertimbang volume, aturan 0148)** = menu utama `/insights` + kartu dashboard. Komponen DIBUAT SEKALI dan dipakai di dua skop via prop `scopeLabel` (pola `InsightsView` yang sudah live — anti-selisih antar-halaman).
+
+### F0 — Kartu "Kurva Belajar" (komponen bersama, 2 penempatan)
+
+**Penempatan 1 (per-channel):** `/channels/[id]` → tab **Kinerja mesin**, kartu PALING ATAS (di atas InsightsView).
+**Penempatan 2 (seluruh channel):** `/insights` → tepat di bawah hero "Mesin sudah belajar dari N video", sebelum kartu-kartu insight.
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ 📈 Kurva Belajar — channel ini                     [Views│Retensi]│   ← segmented toggle metrik
+│ Video buatan tiap minggu, makin pintar makin tinggi                │
+│                                                                    │
+│  views/video                                            ▄▄         │
+│      ▂▂       ▄▄        ▆▆       ▅▅        ██          ██         │
+│  ────W1───────W2────────W3───────W4────────W5──────────W6────     │
+│                                                                    │
+│  Minggu ini: rata-rata 412 views/video   🟢 ↑ 12% vs minggu lalu   │
+└──────────────────────────────────────────────────────────────────┘
+```
+- **Definisi batang (anti-tipu):** KOHORT minggu-PUBLISH — "video yang DIBUAT minggu itu" (snapshot terbaru per video), bukan kalender-views; sehingga kurva naik = *keputusan mesin membaik*, bukan video lama menabung views.
+- Toggle metrik: Views/video ↔ Retensi rata-rata (config `learning_curve_metrics`).
+- Skop seluruh-channel: batang = gabungan tertimbang volume; subjudul "semua channel-mu".
+- **Empty state** (channel baru/<2 minggu): *"Kurva muncul setelah 2 minggu pertama — mesin sedang mengumpulkan pelajaran."* (Bi).
+- **Dashboard** (skop seluruh-channel, SANGAT ringkas): kartu Self-Learning yang ada +1 baris chip: `🟢 ↑12% vs minggu lalu` (klik → /insights). Tidak ada kartu baru di dashboard.
+
+### F1a — "🧠 Mengapa video ini" (per-VIDEO ⇒ skop per-channel by nature)
+
+**Penempatan 1:** `/runs/[id]` (detail run) — kartu penuh di bawah ringkasan:
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ 🧠 Mengapa mesin membuat video ini                                 │
+│ Topik dipilih karena pola "pertanyaan-misteri" menahan penonton    │
+│ rata-rata 74% di channel ini; hook meniru struktur 3 hook          │
+│ terbaikmu; niche mengikuti bobot belajar terkini (Universe 39%).   │
+└──────────────────────────────────────────────────────────────────┘
+```
+**Penempatan 2:** `/runs` (daftar) — ikon 🧠 kecil di ujung baris; hover/tap = tooltip kalimat pertama. TIDAK menambah kolom (tabel sudah padat; disiplin №3.6 — mobile aman).
+- Sumber teks: `run_metadata.decision_reason` (disimpan pipeline dari insights_block yang MEMANG dipakai saat run itu — bukan karangan retrospektif). Run lama tanpa field → elemen tidak tampil (jujur, tanpa "N/A").
+- Dwibahasa: disusun dari fragmen ber-kode → FE merangkai ID/EN (pola Bi standar, bukan teks LLM bebas 1 bahasa).
+
+### F1b — "Laporan Kecerdasan Mingguan" (skop SELURUH channel, per-channel dirinci di dalamnya)
+
+**Kanal:** email (mesin nurture yang sudah live). **Cermin in-app:** `/insights` kartu kecil "📬 Laporan minggu ini" (isi sama, agar yang tak baca email tetap melihat). **Toggle:** `/settings` → seksi baru "Notifikasi" (auto-save, pola dropdown/toggle standar §3.6) + kill-switch global admin.
+```
+Subjek: 📈 Channelmu makin pintar minggu ini — MesinViral
+──────────────────────────────────────────────
+Halo Riko,
+Minggu ini mesin belajar dari 34 video di 2 channel-mu:
+• RAD The Explorer  : 412 views/video (↑12%) · retensi 58% (↑4 poin)
+  → Pelajaran: pola "pertanyaan-misteri" unggul — porsinya dinaikkan.
+• Channel Kedua     : masih mengumpulkan data (minggu ke-1).
+[Lihat kurva lengkap →]  (link /insights)
+──────────────────────────────────────────────
+```
+- **Nada adaptif (pagar churn):** metrik turun ≥ ambang config → seksi channel itu memakai frasa "yang sedang dipelajari mesin dari penurunan ini", ATAU laporan ditahan (`learning_report_hold_on_decline`).
+
+### F2 — jejak eksperimen yang TERLIHAT tenant (saat F2 aktif kelak)
+
+- `/runs`: badge status tambahan `🧪 Eksperimen` (warna violet, Bi) pada run bertanda — jujur bahwa video itu uji sadar.
+- `/runs/[id]`: kartu 🧠 menambah 1 kalimat: *"Video ini adalah eksperimen terkontrol: menguji [hipotesis]. Hasilnya menentukan arah belajar channel — dan TIDAK dihitung dalam rapor mingguanmu."*
+- Kurva F0 & laporan F1b MENGECUALIKAN run eksperimen (tercantum di §2 arsitektur).
+
+### Matriks penempatan (rangkuman satu layar)
+
+| Elemen | `/channels/[id]` (per-channel) | `/insights` (seluruh channel) | Dashboard | `/runs` & detail | Email |
+|---|---|---|---|---|---|
+| Kurva Belajar | ✅ kartu penuh | ✅ kartu penuh (tertimbang) | chip delta 1-baris | — | angka ringkasnya |
+| 🧠 Mengapa | — | — | — | ✅ tooltip + kartu | — |
+| Laporan mingguan | — | cermin kartu kecil | — | — | ✅ utama |
+| Badge 🧪 (F2) | — | — | — | ✅ | disebut dikecualikan |
+
 ## §3 GERBANG ANTAR-FASE (hukum, bukan saran)
 
 | Gerbang | Syarat lolos | Alasan |
