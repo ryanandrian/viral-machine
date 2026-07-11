@@ -14,19 +14,20 @@
 ## Mekanisme teknis
 - Tabel: `docs_articles` (slug PK, grp, grp_en, title, title_en, body, body_en, sort_order, status draft/published). FE `/docs` render published saja, urut `sort_order`, sidebar per-grup, cari, feedback ya/tidak.
 - Tulis via Supabase REST service-role (`.env`). Slug baru = INSERT; draft lama = UPDATE body.
-- `sort_order`: kelompok A=10-19, B=20-39, C=40-49, D=50-59, E=60-69 (artikel lama di-renumber saat batch-nya digarap).
+- **⚖️ ATURAN URUTAN (owner 2026-07-11): daftar & sort_order WAJIB mengikuti ALUR PROSES BISNIS tenant** (kenal→daftar→siapkan kunci→bangun channel→running harian→evaluasi→akun/bantuan) — bukan pengelompokan tematik. 6 grup = tahap perjalanan. `sort_order`: T1=10-19 · T2=20-29 · T3=40-49 · T4=50-59 · T5=60-69 · T6=70-79 (artikel lama di-renumber + grp disesuaikan saat batch-nya digarap).
+- **⚖️ STRUKTUR BAKU ISI (disepakati 2026-07-11):** tiap artikel = ① tujuan-1-kalimat ② prasyarat+link ③ lokasi layar (nama menu/tombol PERSIS) ④ langkah bernomor + TANDA-BERHASIL per langkah (varian: tutorial/konsep/referensi-layar/penolong) ⑤ kamus istilah layar ⑥ jebakan umum dari insiden nyata ⑦ bila-gagal → link troubleshooting ⑧ link artikel selanjutnya. Ukuran lulus = tenant awam bisa MELAKSANAKAN sampai berhasil tanpa bertanya.
 
-## Daftar artikel (29) — status: ⬜ belum · 🟡 draft ditulis (nunggu cek owner) · ✅ published
+## Daftar artikel (31) — URUT ALUR PROSES BISNIS (owner 2026-07-11) — status: ⬜ belum · 🟡 draft (nunggu cek owner) · ✅ published
 
-### A. MULAI DI SINI (grp "Mulai di Sini" / "Getting Started")
+### TAHAP 1 — MULAI DI SINI: kenal → putuskan → masuk (grp "Mulai di Sini" / "Getting Started")
 | # | slug | Judul | Sumber verifikasi | Status |
 |---|---|---|---|---|
 | 1 | `memulai-dengan-mesinviral` ✏️ada | Memulai dengan MesinViral | landing, DESAIN_PRODUK §pipeline | 🟡 draft 2026-07-11 (ID 1.814 + EN 1.822 chars, nol angka volatil) |
 | 2 | `apa-itu-byok` ✏️published | Apa itu BYOK? (review-selaraskan) | /integrations | ⬜ |
-| 3 | `onboarding` ✏️ada | Panduan Onboarding | /onboarding (2 langkah, indikator hijau) | ⬜ |
-| 4 | `paket-dan-trial` 🆕 | Paket, Trial & Batasan | /pricing live, plan_limits DB | ⬜ |
+| 3 | `paket-dan-trial` 🆕 | Paket, Trial & Batasan | /pricing live, plan_limits DB | ⬜ |
+| 4 | `onboarding` ✏️ada | Panduan Onboarding | /onboarding (2 langkah, indikator hijau) | ⬜ |
 
-### B. KREDENSIAL (grp "Kredensial" / "Credentials") — halaman /integrations
+### TAHAP 2 — SIAPKAN KREDENSIAL: bekal sebelum mesin bisa jalan (grp "Siapkan Kredensial" / "Set Up Credentials") — halaman /integrations
 | # | slug | Judul | Sumber verifikasi | Status |
 |---|---|---|---|---|
 | 5 | `api-keys` ✏️ada | Kredensial AI: konsep & cara pakai | /integrations (pool, Simpan & Uji, Dipakai oleh) | ⬜ |
@@ -39,27 +40,31 @@
 | 12 | `connect-youtube` ✏️ada | Hubungkan channel YouTube | /integrations (Hubungkan dengan Google, multi-koneksi) + syarat verifikasi telepon (thumbnail) | ⬜ |
 | 13 | `notifikasi-telegram` 🆕 | Notifikasi Telegram | /integrations (chat ID) + jenis notif (per-run, review-pending, circuit-break) | ⬜ |
 
-### C. CHANNEL & KONTEN (grp "Channel & Konten" / "Channels & Content")
+### TAHAP 3 — BANGUN CHANNEL: dari niche sampai aktif (grp "Bangun Channel" / "Build Your Channel")
 | # | slug | Judul | Sumber verifikasi | Status |
 |---|---|---|---|---|
 | 14 | `niches` ✏️ada | Memahami Niche | /niches (pustaka, 🔒 upgrade, pesan custom + Evaluasi) | ⬜ |
 | 15 | `membuat-channel` 🆕 | Membuat & Mengaktifkan Channel | /channels/new + prasyarat + Uji channel + jeda/lanjut | ⬜ |
 | 16 | `pengaturan-channel` 🆕 | Pengaturan Channel A–Z | /channels/[id] per-seksi (Pengaturan · Durasi & segmentasi · Caption · Hashtag · Branded · Operasional & mutu) | ⬜ |
-| 17 | `schedule` ✏️ada | Jadwal Publish | /schedule + timezone + stok mengikuti jadwal | ⬜ |
-| 18 | `ai-engines` ✏️ada | Mesin AI per-Channel | picker model channel (tier/Gratis/harga Rp) | ⬜ |
+| 17 | `ai-engines` ✏️ada | Mesin AI per-Channel | picker model channel (tier/Gratis/harga Rp) | ⬜ |
+| 18 | `schedule` ✏️ada | Jadwal Publish | /schedule + timezone + stok mengikuti jadwal | ⬜ |
 
-### D. OPERASIONAL HARIAN (grp "Operasional" / "Daily Operations")
+### TAHAP 4 — OPERASIONAL HARIAN: running (grp "Operasional Harian" / "Daily Operations")
 | # | slug | Judul | Sumber verifikasi | Status |
 |---|---|---|---|---|
-| 19 | `dashboard` 🆕 | Membaca Dashboard | /dashboard (KPI, Jadwal, Runs, Compliance, Biaya AI) | ⬜ |
+| 19 | `dashboard` 🆕 | Membaca Dashboard | /dashboard (KPI, Jadwal, Runs, Compliance, Biaya AI, chip Kurva) | ⬜ |
 | 20 | `runs-produksi` 🆕 | Memantau Produksi (Runs) | /runs + /runs/[id] live-tail + judul video | ⬜ |
 | 21 | `review-video` 🆕 | Meninjau Video "Perlu Ditinjau" | /review (Pakai/Buang, TTL) vs YT Studio private | ⬜ |
-| 22 | `analytics` ✏️ada | Analytics | /analytics vs tab kinerja-mesin per-channel + YT Studio | ⬜ |
-| 23 | `self-learning` ✏️ada | Self-Learning | /insights + mekanisme bobot per-channel | ⬜ |
-| 24 | `ai-slop-defense` ✏️ada | AI Slop Defense & Compliance | /compliance | ⬜ |
-| 25 | `biaya-ai` 🆕 | Memahami Biaya AI (BYOK) | kartu Biaya AI + kolom Runs + label "bukan biaya kami" | ⬜ |
+| 22 | `biaya-ai` 🆕 | Memahami Biaya AI (BYOK) | kartu Biaya AI + kolom Runs + label "bukan biaya kami" | ⬜ |
 
-### E. TAGIHAN, AKUN & BANTUAN (grp "Akun & Bantuan" / "Account & Help")
+### TAHAP 5 — EVALUASI & BERKEMBANG: makin pintar (grp "Evaluasi & Berkembang" / "Evaluate & Grow")
+| # | slug | Judul | Sumber verifikasi | Status |
+|---|---|---|---|---|
+| 23 | `analytics` ✏️ada | Analytics | /analytics vs tab kinerja-mesin per-channel + YT Studio | ⬜ |
+| 24 | `self-learning` ✏️ada | Self-Learning (+ Kurva Belajar) | /insights + Kurva Belajar (B17-F0 live) + mekanisme bobot per-channel | ⬜ |
+| 25 | `ai-slop-defense` ✏️ada | AI Slop Defense & Compliance | /compliance | ⬜ |
+
+### TAHAP 6 — TAGIHAN, AKUN & BANTUAN (grp "Akun & Bantuan" / "Account & Help")
 | # | slug | Judul | Sumber verifikasi | Status |
 |---|---|---|---|---|
 | 26 | `billing` ✏️ada | Billing & Upgrade | /billing (GoPay+VA, Lanjutkan pembayaran, periode) | ⬜ |
@@ -67,9 +72,9 @@
 | 28 | `siklus-akun` 🆕 | Saat Trial/Langganan Berakhir | LIFECYCLE_NURTURE (banner→grace→suspended 30h→blocked→hapus + reaktivasi 1-klik + hak hapus data) | ⬜ |
 | 29 | `bantuan` 🆕 | Bantuan & Masukan | /support + /feedback | ⬜ |
 | 30 | `troubleshooting` ✏️ada | Troubleshooting | kasus nyata: kunci invalid, YT disconnect, QC gagal, circuit-break, thumbnail 403 | ⬜ |
-| 31 | `faq` ✏️ada | FAQ | rangkum pertanyaan lintas-artikel | ⬜ |
+| 31 | `faq` ✏️ada | FAQ | rangkum pertanyaan lintas-artikel (ditulis TERAKHIR) | ⬜ |
 
-*(31 baris karena artikel 29 lama dipecah: bantuan/troubleshooting/faq terpisah.)*
+*(Perubahan urutan vs daftar tematik lama, keputusan owner "urut proses bisnis": BYOK maju ke #2 · Paket & Trial sebelum Onboarding · Biaya AI masuk Operasional Harian · Compliance masuk Evaluasi.)*
 
 ## Penutup (setelah 31 artikel ✅)
 | Langkah | Detail | Status |
@@ -79,5 +84,6 @@
 | Update [D1] SISA_KERJA + PROGRESS journal | tutup administrasi | ⬜ |
 
 ## PROGRESS (entri terbaru di atas)
+- **2026-07-11 (3)** — Mandat owner "tuntaskan panduan tenant" + 2 aturan dipatri: (a) daftar URUT ALUR PROSES BISNIS (tabel di atas disusun ulang: 6 tahap kenal→kunci→bangun→running→evaluasi→akun); (b) STRUKTUR BAKU ISI 8-bagian per artikel (lihat §Mekanisme) — ukuran lulus = tenant awam bisa melaksanakan sampai berhasil tanpa bertanya. Siap mulai Tahap 1 (#2-#4) begitu urutan dikonfirmasi owner.
 - **2026-07-11 (2)** — Artikel #1 `memulai-dengan-mesinviral` DRAFT di CMS (ID 1.814 + EN 1.822 chars, nol angka volatil) — menunggu cek owner. **Urutan disepakati malam ini: B17-F0 (batch kecil kurva) DULUAN → baru batch A panduan penuh.** Daftar 31 artikel: owner belum ketok eksplisit — konfirmasi sekali lagi saat mulai batch A. Konteks penulisan artikel niche/insight WAJIB selaras arsitektur baru (memory self-learning ⭐ 07-11).
 - **2026-07-11** — Tracker dibuat; daftar 31 artikel diajukan ke owner (revisi dari 29: E dipecah). Menunggu ketok daftar → mulai batch A.
