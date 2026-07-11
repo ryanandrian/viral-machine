@@ -264,6 +264,11 @@
 - **PEMICU KERJAKAN:** pasca go-market (atau saat kejadian serupa terulang).
 - **REALISASI:** ⬜
 
+### [B17] PROGRAM BUKTI KECERDASAN — real self-learning terukur→terasa→terjual — ⬜ (F0 menunggu ketok)
+- **SPEC + tracker = `PROGRAM_BUKTI_KECERDASAN.md`** (alasan + arsitektur di atas fondasi terverifikasi 07-11 + hasil per-fase + gerbang + risiko). Urutan hukum: **F0 ukur (internal) → G1 kurva sehat ≥3 mgg → F1 jendela (laporan mingguan + "mengapa" per-video) → F2 eksperimen aktif (channel bervolume) → F3 warisan platform (≥N tenant)**.
+- **Keyakinan jujur:** F0 = 100% tanpa syarat; fase lanjut terkunci gerbang data — bukan janji buta.
+- **REALISASI:** ⬜ dokumen dibuat 2026-07-11; eksekusi F0 menunggu ketok owner.
+
 ### [C1] Closed-loop kalibrasi durasi — 🟡  (REMEDIASI **F5-01**)
 - **TUJUAN:** pace `P` (wps efektif) per voice×speed di-update otomatis dari data render nyata → durasi makin presisi.
 - **BUKTI (verified DB):** `tts_delivery_samples`=**48 baris DITULIS** (`tts_engine._log_delivery_sample`) tapi **BELUM DIBACA** kode. Fondasi SELESAI: `voice_catalog.delivery_wps`/`pace_sample_n`/`pace_updated_at`/`pace_locked` (migr 0081) + estimator voice-first + FE admin editable.
