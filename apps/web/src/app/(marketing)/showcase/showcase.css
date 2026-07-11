@@ -29,3 +29,8 @@
 .sc-cta h2 { font-size: var(--text-4xl); font-weight: 800; letter-spacing: -0.03em; margin: 0 0 1rem; }
 
 @media (max-width: 900px) { .sc-screens { grid-template-columns: 1fr; } }
+
+/* Tab per-niche (2026-07-11) — nilai IDENTIK .blg-cats/.blg-pill di blog/blog.css (anti-drift: bila blog berubah, samakan) */
+.sc-cats { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; margin-bottom: 2.5rem; }
+.sc-pill { padding: 0.4375rem 0.875rem; border: 1px solid var(--border); border-radius: var(--r-full); font-size: var(--text-sm); font-weight: 500; color: var(--text-secondary); cursor: pointer; background: var(--surface-1); transition: all var(--d-fast); }
+.sc-pill.sel { background: var(--brand); border-color: var(--brand); color: #fff; }

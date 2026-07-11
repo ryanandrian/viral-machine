@@ -19,6 +19,8 @@ export default function ShowcasePage() {
   const [screens, setScreens] = useState<Screen[]>([]);
   const [videos, setVideos] = useState<Video[]>([]);
   const [trialDays, setTrialDays] = useState(7);
+  // Tab per-niche (ketok owner 2026-07-11) — DINAMIS dari niche_label video aktif, pola identik kategori /blog.
+  const [nicheTab, setNicheTab] = useState(0);
   useEffect(() => {
     fetchTrialDays().then(setTrialDays);
     const sb = createClient();
@@ -62,8 +64,19 @@ export default function ShowcasePage() {
           <h2 className="mk-h2"><Bi id="Contoh konten yang dihasilkan" en="Real content, produced automatically" /></h2>
           <p className="mk-lead mk-center"><Bi id="Semua video di bawah dibuat penuh oleh mesin — naskah, suara, visual, sampai render." en="Every video below was fully machine-made — script, voice, visuals, and render." /></p>
         </div>
+        {(() => {
+          const NICHES = ["Semua", ...Array.from(new Set(videos.map((v) => v.niche_label).filter(Boolean)))] as string[];
+          const shown = nicheTab === 0 ? videos : videos.filter((v) => v.niche_label === NICHES[nicheTab]);
+          return <>
+        {NICHES.length > 2 && (
+          <div className="sc-cats">{NICHES.map((n, i) => (
+            <button key={n} className={`sc-pill${nicheTab === i ? " sel" : ""}`} onClick={() => setNicheTab(i)}>
+              {i === 0 ? <Bi id="Semua" en="All" /> : n}
+            </button>
+          ))}</div>
+        )}
         {videos.length === 0 ? <div className="mk-center muted" style={{ padding: "2rem" }}><Bi id="Contoh konten segera hadir." en="Content examples coming soon." /></div> : (
-          <div className="sc-videos">{videos.map((v) => (
+          <div className="sc-videos">{shown.map((v) => (
             <div className="sc-vid" key={v.id}>
               <div className="phone">
                 {v.niche_label && <span className="niche">{v.niche_label}</span>}
@@ -76,6 +89,8 @@ export default function ShowcasePage() {
             </div>
           ))}</div>
         )}
+          </>;
+        })()}
       </div></section>
 
       <section className="mk-section-sm"><div className="mk-container">
