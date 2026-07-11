@@ -185,9 +185,9 @@ Minggu ini mesin belajar dari 34 video di 2 channel-mu:
 
 | # | Item | Lapisan | Gerbang | Status | REALISASI (commit + bukti) |
 |---|---|---|---|---|---|
-| F0.1 | RPC `get_channel_learning_curve` (kohort mingguan, pola 0056) | DB | G0 | ⬜ | |
-| F0.2 | Kurva di /insights tab channel (+ agregat tenant di menu utama) | FE | G0 | ⬜ | |
-| F0.3 | Validasi: angka kurva vs hitung-manual independen 2 channel | — | G0 | ⬜ | |
+| F0.1 | RPC `get_channel_learning_curve` (kohort mingguan, pola 0056) | DB | G0 | ✅ | `3c1fd76` migr **0150** APPLIED (izin owner); retensi = bacaan-valid-terakhir ≤100 (pagar loop-Shorts 1261% & snapshot era-buta — cakupan 150→194/206); views ber-jendela `learning_curve_window_days`; diuji live sbg tenant (emulasi JWT): RAD 15 mgg · isolasi tenant-lain 0 baris · anon ditolak |
+| F0.2 | Kurva di /insights tab channel (+ agregat tenant di menu utama) | FE | G0 | ✅ | `3c1fd76` deployed OK 2026-07-11 13:22 (situs 200, bundle live ber-"Kurva Belajar"); `LearningCurveCard` dua-skop (/channels/[id] tab Wawasan + /insights via `curveSlot`) + chip delta dashboard + 3 knob ber-label admin; dwibahasa penuh; garis penanda dari `learning_curve_marker_date` |
+| F0.3 | Validasi: angka kurva vs hitung-manual independen 2 channel | — | G0 | ✅ | SQL vs ground-truth Python independen **IDENTIK 100%** (RAD 15 mgg · MVT 1 mgg→empty-state · gabungan tenant) + audit per-widget (bug tinggi-bar tertangkap pra-rilis & fixed) + tsc/build 0 err |
 | F1.1 | `run_metadata.decision_reason` disimpan pipeline + kolom Runs (Bi) | BE+FE | G1 | ⬜ | |
 | F1.2 | Template email "Laporan Kecerdasan Mingguan" (nurture; toggle+kill-switch+nada adaptif) | BE | G1 | ⬜ | |
 | F1.3 | Validasi: email uji data nyata + laporan channel-menurun tertahan sesuai ambang | — | G1 | ⬜ | |
@@ -199,4 +199,5 @@ Minggu ini mesin belajar dari 34 video di 2 channel-mu:
 | F3.3 | Review privasi + validasi cold-start channel uji | — | G3 | ⬜ | |
 
 ### Changelog
+- **2026-07-11 (2)** — **F0 TUNTAS+DEPLOYED** (ketok owner "mulai F0 program" → ritual PEMAHAMAN SAYA → izin "terapkan migrasi 0150 & deploy"). Kurva 15 minggu RAD LIVE hari pertama; garis penanda 11-Jul tampil (minggu pasca-garis = era belajar penuh, belum berkohort). 2 keputusan metrik dari realita data (dicatat jujur): retensi = bacaan-valid-terakhir (snapshot era-buta ≠ retensi 0) + pagar ≤100% (Shorts loop s/d 1261%). **Berikutnya: fokus panduan tenant; G1 dievaluasi saat kurva pasca-11-Jul ≥3 minggu.**
 - **2026-07-11** — dokumen dibuat (mandat owner "buatkan rencana 1 dokumen khusus plan-vs-realisasi"); fondasi = deep-dive & pembenahan total rantai belajar 2026-07-11 ([B16] + memory self-learning ⭐). Eksekusi F0 menunggu ketok.

@@ -264,10 +264,10 @@
 - **PEMICU KERJAKAN:** pasca go-market (atau saat kejadian serupa terulang).
 - **REALISASI:** ⬜
 
-### [B17] PROGRAM BUKTI KECERDASAN — real self-learning terukur→terasa→terjual — ⬜ (F0 menunggu ketok)
+### [B17] PROGRAM BUKTI KECERDASAN — real self-learning terukur→terasa→terjual — 🟡 F0 ✅ DEPLOYED · F1-F3 ber-gerbang
 - **SPEC + tracker = `PROGRAM_BUKTI_KECERDASAN.md`** (alasan + arsitektur di atas fondasi terverifikasi 07-11 + hasil per-fase + gerbang + risiko). Urutan hukum: **F0 ukur (internal) → G1 kurva sehat ≥3 mgg → F1 jendela (laporan mingguan + "mengapa" per-video) → F2 eksperimen aktif (channel bervolume) → F3 warisan platform (≥N tenant)**.
 - **Keyakinan jujur:** F0 = 100% tanpa syarat; fase lanjut terkunci gerbang data — bukan janji buta.
-- **REALISASI:** ⬜ dokumen dibuat 2026-07-11; eksekusi F0 menunggu ketok owner.
+- **REALISASI:** 🟡 **F0 ✅ TUNTAS+DEPLOYED 2026-07-11 (`3c1fd76` + migr 0150; izin eksplisit owner terapkan+deploy):** RPC `get_channel_learning_curve` (kohort minggu-publish; retensi bacaan-valid-terakhir ≤100; views ber-jendela 7-hari anti bias-umur) + kartu `LearningCurveCard` dua-skop (/channels/[id] Wawasan + /insights) + garis penanda 11-Jul + chip delta dashboard + 3 knob `app_config` ber-label admin. Bukti: SQL vs ground-truth Python IDENTIK 100% (RAD 15 mgg · MVT empty-state · gabungan) · uji live sbg tenant (isolasi ✓, anon ditolak ✓) · deploy OK situs 200 · bundle live terverifikasi. Detail = tracker §5 dokumen program. **G1 dievaluasi saat kurva pasca-11-Jul ≥3 minggu; sekarang fokus panduan tenant [D1]-F0.**
 
 ### [C1] Closed-loop kalibrasi durasi — 🟡  (REMEDIASI **F5-01**)
 - **TUJUAN:** pace `P` (wps efektif) per voice×speed di-update otomatis dari data render nyata → durasi makin presisi.
