@@ -8,7 +8,8 @@ kebijakan YouTube AI-slop (Risk #1, DESAIN §11) SEBELUM channel kena demonetisa
 5 dimensi (DESAIN §9.3):
   • niche_distribution — sebaran niche (entropy ternormalisasi; variasi = lebih aman)
   • hook_style_spread  — variasi formula hook (`videos.hook_pattern`, dari Diversity 6.2)
-  • voice_diversity    — variasi voice (`videos.voice_id`); N/A bila belum ada data (voice-rotation deferred)
+  • voice_diversity    — variasi voice SADAR-VOLUME (`videos.voice_id`, diisi pipeline sejak 2026-07-11;
+                         formula halus _voice_diversity: 1 suara pada volume wajar = 100); N/A bila data <MIN
   • dup_freshness      — bebas duplikat slug terkini (`videos.topic_slug`)
   • ai_disclosure      — `channels.ai_disclosure` ON (6.3)
 
@@ -74,6 +75,48 @@ def _spread_pct(values: list, target: int) -> float | None:
     return round(min(100.0, 100.0 * distinct / max(1, min(target, len(vals)))), 1)
 
 
+def _parse_dt(s):
+    """ISO string → datetime (fail-soft None)."""
+    try:
+        return datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+def _voice_diversity(rows: list) -> float | None:
+    """Voice diversity SADAR-VOLUME (formula halus, mandat owner 2026-07-11 — pengganti
+    _spread_pct target-5 yang kasar & menghukum desain 1-suara-per-channel).
+    Prinsip: tuntutan variasi suara tumbuh LOGARITMIK terhadap volume publish — channel
+    bersuara-tunggal pada volume wajar = 100 (sesuai desain identitas audio); banjir produksi
+    satu suara = profil content-farm → skor turun mulus, pulih dgn menambah variasi suara.
+      m     = laju publish/30-hari (ekstrapolasi rentang window)
+      k_exp = clamp(1 + log2(m / V0), 1, K)   — V0/K = app_config (no-hardcode)
+      H     = entropi Shannon sebaran voice_id (peka KETIMPANGAN pemakaian, bukan sekadar unik)
+      skor  = min(100, 100 × (1 + H) / (1 + ln k_exp))   → k_exp=1 ⇒ 100
+    Sumber = videos.voice_id (diisi pipeline sejak 2026-07-11; sejarah TIDAK di-backfill —
+    bukti tts_delivery_samples: suara pernah berganti; mengarang sejarah = bohong).
+    None bila video ber-voice_id < COMPLIANCE_MIN_VIDEOS (jujur: data belum cukup)."""
+    voiced = [r.get("voice_id") for r in rows if r.get("voice_id")]
+    if len(voiced) < _min_videos():
+        return None
+    dates = sorted(d for d in (_parse_dt(r.get("published_at")) for r in rows) if d is not None)
+    if len(dates) < 2:
+        return None
+    span_days = max((dates[-1] - dates[0]).days, 1)
+    m = len(dates) / span_days * 30.0  # laju publish per 30 hari (seluruh window, bukan hanya ber-voice)
+    try:
+        from src.config.app_config import get_int
+        v0 = max(1, get_int("voice_div_volume_baseline", 60))
+        k_cap = max(1, get_int("voice_div_max_expected", 3))
+    except Exception:
+        v0, k_cap = 60, 3  # fail-soft = default knob
+    k_exp = 1.0 if m <= v0 else min(float(k_cap), 1.0 + math.log2(m / v0))
+    counts = Counter(voiced)
+    n = len(voiced)
+    h = -sum((c / n) * math.log(c / n) for c in counts.values()) if len(counts) > 1 else 0.0
+    return round(min(100.0, 100.0 * (1.0 + h) / (1.0 + math.log(k_exp))), 1)
+
+
 class ComplianceScorer:
     """Hitung Compliance Score per-channel dari produksi nyata. Fail-soft."""
 
@@ -136,7 +179,7 @@ class ComplianceScorer:
         dims = {
             "niche_distribution": _normalized_entropy([r.get("niche") for r in rows]),
             "hook_style_spread":  _spread_pct([r.get("hook_pattern") for r in rows], target=6),
-            "voice_diversity":    _spread_pct([r.get("voice_id") for r in rows], target=5),
+            "voice_diversity":    _voice_diversity(rows),
             "dup_freshness":      self._dup_freshness(rows),
             "ai_disclosure":      (100.0 if self._ai_disclosure_on(channel_id) else 40.0),
         }

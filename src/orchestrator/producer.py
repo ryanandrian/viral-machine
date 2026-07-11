@@ -219,6 +219,9 @@ def produce_one(channel_row: dict) -> int | None:
             # Dimensi diversity (Phase 6.2) → publisher tulis ke `videos` (histori lookback berikutnya)
             "hook_pattern": _winner.get("formula"),
             "visual_seed":  tc.visual_seed,
+            # suara AKTUAL saat PRODUKSI (bukan saat publish — bisa beda bila admin ganti voice
+            # selama video di buffer) → sumber videos.voice_id utk compliance voice_diversity.
+            "tts_voice":    getattr(tc, "tts_voice", None),
             # mood AKTUAL = mood rotasi yang di-inject ke music_selector (bukan saran LLM
             # background_music_mood yang TAK dipakai music_selector). Null bila niche tanpa mood_priority.
             "music_mood":   tc.preferred_music_mood,

@@ -470,6 +470,9 @@ class Pipeline:
                         # (rotasi niche random + voice/hook/music/visual). Publisher sudah kirim; di sini
                         # (direct publish) dulu kosong = videos.channel_id NULL → LRU buta. (decisions_niche_model)
                         channel_id     = getattr(tenant_config, "channel_id", None),
+                        # voice_id = karakter suara TTS video ini (channels.voice_key → tts_voice) —
+                        # sumber dimensi compliance voice_diversity (mandat owner 2026-07-11; dulu dibuang).
+                        voice_id       = getattr(tenant_config, "tts_voice", None),
                     )
                     # ──────────────────────────────────────────────────
 
