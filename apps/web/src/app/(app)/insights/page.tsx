@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { InsightsView, type Insights, type LearnedWeights } from "@/components/insights-view";
+import { LearningCurveCard } from "@/components/learning-curve-card";
 import { PageHeader } from "@/components/page-header";
 
 // D21 Self-Learning Insights — F2-13: AGREGAT semua channel via RPC get_tenant_insights_agg.
@@ -28,7 +29,8 @@ export default function InsightsPage() {
   return (
     <>
       <PageHeader icon={Sparkles} title="Self-Learning Insights" subtitle={<Bi id="Apa yang mesin pelajari dari semua channelmu" en="What the engine learned across all your channels" />} />
-      <InsightsView insights={ins} loading={loading} scopeLabel={{ id: "semua channel", en: "all your channels" }} learnedWeights={learned} />
+      <InsightsView insights={ins} loading={loading} scopeLabel={{ id: "semua channel", en: "all your channels" }} learnedWeights={learned}
+        curveSlot={<LearningCurveCard scopeLabel={{ id: "semua channel-mu", en: "all your channels" }} />} />
     </>
   );
 }

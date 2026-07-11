@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Zap, CheckCircle, Eye, ThumbsUp, Users, Calendar, List, Gauge as GaugeIcon, DollarSign, Sparkles, Activity, Check, Loader2, X, ChevronRight, ExternalLink, AlertTriangle, ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { effectiveStatus, ChannelStatusBadge, type Eff } from "@/lib/channel-status";
+import { LearningDeltaChip } from "@/components/learning-curve-card";
 import "./dashboard.css";
 
 // D1 Main Dashboard — Phase 9.3 (wired Supabase v2, anon + RLS). DATA NYATA:
@@ -315,6 +316,8 @@ export default function DashboardPage() {
                 <p className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.625rem" }}>
                   {insights.channels > 1 ? `${insights.channels} kanal · ` : ""}<Bi id="terakhir belajar" en="last learned" /> {insights.lastLearned ? ago(insights.lastLearned) : "—"}
                 </p>
+                {/* [B17-F0] chip delta Kurva Belajar (1 baris; dormant bila data <2 minggu) */}
+                <LearningDeltaChip />
                 <div style={{ marginTop: "0.5rem" }}><Link href="/insights" className="muted" style={{ fontSize: "var(--text-xs)", textDecoration: "none" }}><Bi id="Lihat insights →" en="View insights →" /></Link></div>
               </>
             ) : (

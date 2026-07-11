@@ -17,12 +17,14 @@ const G_BILLING = "Langganan, Trial & Penagihan";
 const G_LIFECYCLE = "Pertumbuhan & Siklus-Hidup";
 const G_TREND = "Bobot Sumber Tren";
 const G_ENGINE = "Performa Mesin Tren";
+const G_LEARNING = "Kurva Belajar (Self-Learning)";
 const G_OTHER = "Lainnya";
 const CFG_GROUPS: [string, string][] = [
   [G_BILLING, "Subscription, Trial & Billing"],
   [G_LIFECYCLE, "Growth & Lifecycle"],
   [G_TREND, "Trend Source Weights"],
   [G_ENGINE, "Trend Engine Performance"],
+  [G_LEARNING, "Learning Curve (Self-Learning)"],
   [G_OTHER, "Others"],   // ← catch-all: SETIAP key app_config tanpa metadata TETAP tampil (anti-hilang selamanya)
 ];
 // DWIBAHASA WAJIB ([[feedback_bilingual_mandatory]], owner 2026-07-05): label/desc/hint/unit = {id,en};
@@ -68,6 +70,9 @@ const CFG_META: Record<string, { label: BiTxt; group: string; unit: BiTxt; desc?
   trend_weight_news:       { label: { id: "Google News", en: "Google News" }, group: G_TREND, unit: U_PCT, desc: { id: "Bobot berita terkini pada pemilihan topik.", en: "Weight of current news in topic selection." } },
   trend_weight_wikipedia:  { label: { id: "Wikipedia", en: "Wikipedia" }, group: G_TREND, unit: U_PCT, desc: { id: "Bobot halaman populer Wikipedia (pengaruh kecil).", en: "Weight of popular Wikipedia pages (minor influence)." } },
   trend_weight_hackernews: { label: { id: "HackerNews", en: "HackerNews" }, group: G_TREND, unit: U_PCT, desc: { id: "Bobot tren teknologi — hanya untuk niche teknologi.", en: "Weight of tech trends — tech niches only." } },
+  learning_curve_window_days:  { label: { id: "Jendela Views Kurva Belajar", en: "Learning Curve Views Window" }, group: G_LEARNING, unit: U_HARI, desc: { id: "Metrik views kurva = views N hari PERTAMA tiap video (anti bias-umur: video lama tak menang karena menabung views).", en: "The curve's views metric = each video's FIRST N days of views (age-bias guard: old videos can't win by piling up views)." } },
+  learning_curve_marker_date:  { label: { id: "Garis Penanda Kurva Belajar", en: "Learning Curve Marker Line" }, group: G_LEARNING, unit: U_NONE, desc: { id: "Tanggal garis vertikal \"mesin disehatkan\" di kurva (pembanding sebelum/sesudah). Kosongkan untuk menyembunyikan.", en: "Date of the vertical \"engine tuned\" marker on the curve (before/after comparison). Leave empty to hide." }, hint: { id: "YYYY-MM-DD", en: "YYYY-MM-DD" } },
+  learning_curve_metrics:      { label: { id: "Metrik Kurva Belajar", en: "Learning Curve Metrics" }, group: G_LEARNING, unit: U_NONE, desc: { id: "Metrik yang bisa dipilih tenant di kurva; urutan pertama = tampilan awal.", en: "Metrics tenants can toggle on the curve; first item = default view." }, hint: { id: 'JSON ["retention","views7d"]', en: 'JSON ["retention","views7d"]' } },
   trend_cache_ttl_sec:     { label: { id: "Penyegaran Data Tren", en: "Trend Data Refresh" }, group: G_ENGINE, unit: U_DETIK, desc: { id: "Berapa lama data tren disimpan sebelum diambil ulang. Makin lama = makin hemat kuota.", en: "How long trend data is cached before re-fetching. Longer = less quota." }, hint: { id: "43200 = 12 jam", en: "43200 = 12 hours" } },
   trend_refresh_pacing_ms: { label: { id: "Jeda Ambil Data", en: "Fetch Pacing" }, group: G_ENGINE, unit: U_MS, desc: { id: "Jeda antar-pengambilan data tren agar tidak diblokir sumbernya.", en: "Delay between trend fetches to avoid being rate-limited." }, hint: { id: "3000 = 3 detik", en: "3000 = 3 seconds" } },
 };

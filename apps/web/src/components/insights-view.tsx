@@ -35,8 +35,9 @@ function Bi({ id, en }: { id: string; en: string }) { return (<><span data-id>{i
 const prettyNiche = (s: string) => s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 const fmtNum = (n: number) => (n ?? 0).toLocaleString("id-ID");
 
-export function InsightsView({ insights: ins, loading, scopeLabel, learnedWeights }: {
+export function InsightsView({ insights: ins, loading, scopeLabel, learnedWeights, curveSlot }: {
   insights: Insights | null; loading: boolean; scopeLabel?: { id: string; en: string }; learnedWeights?: LearnedWeights;
+  curveSlot?: React.ReactNode; // [B17-F0] Kurva Belajar — dirender tepat di bawah hero (spec §2b penempatan /insights)
 }) {
   const weights = Object.entries(ins?.niche_weights ?? {}).sort((a, b) => b[1] - a[1]);
   const maxW = Math.max(0.001, ...weights.map((w) => w[1]));
@@ -91,6 +92,8 @@ export function InsightsView({ insights: ins, loading, scopeLabel, learnedWeight
           <div className="s"><div className="v">{hooks.length}</div><div className="l"><Bi id="Hook teratas" en="Top hooks" /></div></div>
         </div>
       </div>
+
+      {curveSlot}
 
       <div className="layout">
         <div className="tl">

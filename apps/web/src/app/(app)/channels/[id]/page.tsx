@@ -10,6 +10,7 @@ import PresetTables from "@/components/preset-tables";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { ComplianceView, type Compliance } from "@/components/compliance-view";
 import { InsightsView, type Insights, type LearnedWeights } from "@/components/insights-view";
+import { LearningCurveCard } from "@/components/learning-curve-card";
 import RunsTable from "@/components/runs-table";
 import TestNichePanel, { type TestInfo } from "@/components/test-niche-panel";
 import "./channel-detail.css";
@@ -705,7 +706,11 @@ export default function ChannelDetailPage() {
         <ComplianceView compliance={chCmp} loading={loading} hasRow={!!chCmp} showEdu={false} />
       )}
       {tab === "insights" && (
-        <InsightsView insights={chIns} loading={loading} scopeLabel={{ id: "channel ini", en: "this channel" }} learnedWeights={chLearned} />
+        <>
+          {/* [B17-F0] Kurva Belajar per-channel — kartu paling atas (spec §2b penempatan 1) */}
+          <LearningCurveCard channelId={id} scopeLabel={{ id: "channel ini", en: "this channel" }} />
+          <InsightsView insights={chIns} loading={loading} scopeLabel={{ id: "channel ini", en: "this channel" }} learnedWeights={chLearned} />
+        </>
       )}
       {tab === "schedule" && (
         <div className="card card-pad" style={{ maxWidth: 560 }}>
