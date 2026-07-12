@@ -9,7 +9,7 @@ import { HelpLinksAdmin } from "@/components/admin/help-links-admin";
 
 function Bi({ id, en }: { id: string; en: string }) { return (<><span data-id>{id}</span><span data-en>{en}</span></>); }
 
-type Media = { kind: "cover" | "screen" | "poster" | "video"; preview: "cover" | "wide" | "tall"; hintId: string; hintEn: string };
+type Media = { kind: "cover" | "screen" | "poster" | "video" | "testimonial"; preview: "cover" | "wide" | "tall" | "avatar"; hintId: string; hintEn: string };
 type Field = { k: string; label: string; type: "text" | "area" | "md" | "select" | "switch" | "number" | "image" | "video"; opts?: string[]; media?: Media };
 const TABS: { key: string; table: string; label: string; fields: Field[]; title: (r: Row) => string }[] = [
   { key: "blog", table: "blog_posts", label: "Blog", title: (r) => (r.title as string) || "(baru)", fields: [
@@ -47,9 +47,29 @@ const TABS: { key: string; table: string; label: string; fields: Field[]; title:
       hintEn: "PNG/JPG 9:16, min width 360px, max 3MB. Shown before the video plays." } },
     { k: "sort_order", label: "Urutan", type: "number" }, { k: "is_active", label: "Aktif", type: "switch" },
   ] },
+  // Testimoni = Case Studies (migr 0154). Konsistensi isi (kesepakatan owner 2026-07-12):
+  // 1 kartu = 1 pilar produk & metrik yang MENGUKUR pilar itu · label channel TANPA angka
+  // subscriber karangan · kutipan bebas angka volatil (angka hidup di kolom metrik).
+  { key: "testimonials", table: "testimonials", label: "Testimoni", title: (r) => (r.person_name as string) || "(baru)", fields: [
+    { k: "person_name", label: "Nama", type: "text" },
+    { k: "channel_label", label: "Label channel/peran (mis. Misteri Samudra · niche misteri — tanpa angka subscriber)", type: "text" },
+    { k: "quote", label: "Kutipan (ID) — bebas angka volatil", type: "area" }, { k: "quote_en", label: "Kutipan (EN)", type: "area" },
+    { k: "metric_value", label: "Angka sorotan (mis. 5/hari)", type: "text" },
+    { k: "metric_label", label: "Label angka (ID, mis. publish otomatis)", type: "text" }, { k: "metric_label_en", label: "Label angka (EN)", type: "text" },
+    { k: "rating", label: "Rating (1-5)", type: "number" },
+    { k: "photo_url", label: "Foto (opsional — tanpa foto: lingkaran inisial otomatis)", type: "image", media: { kind: "testimonial", preview: "avatar",
+      hintId: "PNG/JPG persegi, min 200px, maks 3MB. Tersimpan di S3 folder testimonial-photos/.",
+      hintEn: "Square PNG/JPG, min 200px, max 3MB. Stored in S3 under testimonial-photos/." } },
+    { k: "avatar_color", label: "Warna inisial (hex, dipakai bila tanpa foto — mis. #1d4ed8)", type: "text" },
+    { k: "slug", label: "Slug cerita (wajib bila isi cerita — alamat /case-studies/slug)", type: "text" },
+    { k: "story_body", label: "Cerita lengkap (markdown, ID — opsional; terisi = kartu Case Study bisa diklik)", type: "md" },
+    { k: "story_body_en", label: "Cerita lengkap (EN)", type: "md" },
+    { k: "show_on_landing", label: "Tampil di halaman utama (seksi 'Dipercaya creator Indonesia')", type: "switch" },
+    { k: "sort_order", label: "Urutan", type: "number" }, { k: "is_active", label: "Aktif", type: "switch" },
+  ] },
 ];
 const PREVIEW_STYLE: Record<string, CSSProperties> = {
-  cover: { width: 363, height: 168 }, wide: { width: 480, height: 300 }, tall: { width: 168, height: 300 },
+  cover: { width: 363, height: 168 }, wide: { width: 480, height: 300 }, tall: { width: 168, height: 300 }, avatar: { width: 96, height: 96 },
 };
 type Row = Record<string, unknown> & { id?: string };
 

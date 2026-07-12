@@ -9,6 +9,8 @@ import {
   Radar, Target, FileText, AudioLines, Image as ImageIcon, Film, Upload, type LucideIcon,
   Lock, KeyRound, EyeOff, Server, Send, Brain, TrendingUp, RotateCcw,
 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { TestimonialAvatar, type Testimonial } from "@/components/testimonial-avatar";
 import "./landing.css";
 
 // A1 Landing (PoC) — port dari design-source/Landing.html. Copy "Xendit" → "Midtrans" (keputusan final).
@@ -51,12 +53,7 @@ function Cell({ v, us }: { v: boolean | string; us?: boolean }) {
   return <span style={us ? { color: "var(--brand)", fontWeight: 700 } : { color: "var(--text-secondary)" }}>{v}</span>;
 }
 
-const TST = [
-  { q: "Set & forget — mesinnya benar-benar belajar dari channel saya dan makin pintar tiap minggu. Saya tinggal pantau hasilnya.", nm: "Riko Pratama", ch: "Misteri Samudra · 12.4K", av: "RP", c: "#1d4ed8", gr: "24/7", gl: "set & forget" },
-  { q: "Sebagai agency, saya manage 8 channel klien dari satu dashboard. Compliance score bikin saya tenang soal policy YouTube.", nm: "Sarah Wibowo", ch: "Agency · 8 channel", av: "SW", c: "#9f1239", gr: "8", gl: "channel aktif" },
-  { q: "Biaya AI transparan banget. Saya tahu persis Rp 75 per video — jauh lebih murah dari tools lain.", nm: "Dimas Aryo", ch: "Fakta Yang Bikin Mikir · 32.7K", av: "DA", c: "#047857", gr: "7.5×", gl: "lebih hemat" },
-  { q: 'Niche "Sejarah Kelam" saya akhirnya konsisten upload 5×/hari tanpa saya sentuh editing sama sekali.', nm: "Bagus Pratomo", ch: "Jejak Kelam Sejarah · 8.2K", av: "BP", c: "#7c3aed", gr: "5/hari", gl: "auto-publish" },
-];
+// TST hardcode DIBUANG 2026-07-12 → tabel `testimonials` (admin: Content → Testimoni; migr 0154)
 
 const makeFaq = (d: number): [string, string][] => [
   ["Apa itu BYOK?", "BYOK = Bring Your Own Keys. Kamu pakai API keys Anthropic/OpenAI/ElevenLabs milikmu sendiri, jadi biaya AI dibayar langsung ke provider dengan harga asli — transparan, tanpa markup dari kami."],
@@ -73,9 +70,13 @@ export default function LandingPage() {
   const [pricing, setPricing] = useState<Record<string, number>>({});
   const [plans, setPlans] = useState<Plan[]>([]);
   const [trialDays, setTrialDays] = useState(7);
+  const [tst, setTst] = useState<Testimonial[]>([]);
   useEffect(() => {
     fetchPricing().then(setPricing);
     fetchPlans().then(({ plans, trialDays }) => { setPlans(plans); setTrialDays(trialDays); });
+    // Testimoni dari DB (RLS: publik hanya baris aktif). Kosong/gagal → seksi disembunyikan.
+    createClient().from("testimonials").select("*").eq("show_on_landing", true).order("sort_order")
+      .then(({ data }) => setTst((data as Testimonial[]) ?? []));
   }, []);
   const pk = (k: string, fb: string) => pricing[k] ? `Rp ${idrK(pricing[k])}` : fb;
   // Preview harga config-driven (no-hardcode) — copy kualitatif singkat per tier; batas dari plan_limits.
@@ -251,19 +252,21 @@ export default function LandingPage() {
         </div>
       </div></section>
 
-      {/* TESTIMONIALS */}
+      {/* TESTIMONIALS — DB-driven (testimonials, admin-managed). Kosong → seksi tak dirender. */}
+      {tst.length > 0 && (
       <section className="mk-section" style={{ background: "var(--bg-elevated)", borderBlock: "1px solid var(--border-subtle)" }}><div className="mk-container">
         <div className="mk-center reveal" style={{ marginBottom: "2.5rem" }}><h2 className="mk-h2"><Bi id="Dipercaya creator Indonesia" en="Trusted by Indonesian creators" /></h2></div>
         <div className="tst-track reveal">
-          {TST.map((t, i) => (
-            <div className="tst" key={i}>
-              <div className="stars">{Array.from({ length: 5 }).map((_, k) => <Star key={k} size={15} fill="#FBBF24" color="#FBBF24" />)}</div>
-              <blockquote>&quot;{t.q}&quot;</blockquote>
-              <div className="who"><span className="av" style={{ background: t.c }}>{t.av}</span><div><div className="nm">{t.nm}</div><div className="ch">{t.ch}</div></div><div className="gr"><div className="b">{t.gr}</div><div className="l">{t.gl}</div></div></div>
+          {tst.map((t) => (
+            <div className="tst" key={t.id}>
+              <div className="stars">{Array.from({ length: Math.min(5, Math.max(1, t.rating)) }).map((_, k) => <Star key={k} size={15} fill="#FBBF24" color="#FBBF24" />)}</div>
+              <blockquote>&quot;<Bi id={t.quote} en={t.quote_en ?? t.quote} />&quot;</blockquote>
+              <div className="who"><TestimonialAvatar t={t} size={40} /><div><div className="nm">{t.person_name}</div><div className="ch">{t.channel_label}</div></div>{t.metric_value && <div className="gr"><div className="b">{t.metric_value}</div><div className="l"><Bi id={t.metric_label ?? ""} en={t.metric_label_en ?? t.metric_label ?? ""} /></div></div>}</div>
             </div>
           ))}
         </div>
       </div></section>
+      )}
 
       {/* PRICING PREVIEW */}
       <section className="mk-section" id="pricing"><div className="mk-container">

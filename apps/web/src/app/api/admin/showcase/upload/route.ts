@@ -14,6 +14,8 @@ const RULES: Record<string, { folder: string; image: boolean; minW: number; maxB
   screen: { folder: "showcase-screens", image: true, minW: 1000, maxBytes: 5 * 1024 * 1024 },
   poster: { folder: "showcase-posters", image: true, minW: 360, maxBytes: 3 * 1024 * 1024 },
   video: { folder: "showcase-videos", image: false, minW: 0, maxBytes: 80 * 1024 * 1024 },
+  // Foto testimoni (migr 0154) — tampil bulat kecil; 200px cukup tajam
+  testimonial: { folder: "testimonial-photos", image: true, minW: 200, maxBytes: 3 * 1024 * 1024 },
 };
 
 export async function POST(req: Request) {
@@ -24,7 +26,7 @@ export async function POST(req: Request) {
   const file = form.get("file");
   const kind = String(form.get("kind") || "").trim();
   const rule = RULES[kind];
-  if (!rule) return NextResponse.json({ error: "kind harus screen|video|poster" }, { status: 400 });
+  if (!rule) return NextResponse.json({ error: "kind harus screen|video|poster|testimonial" }, { status: 400 });
   if (!(file instanceof File)) return NextResponse.json({ error: "file wajib" }, { status: 400 });
   if (file.size > rule.maxBytes) return NextResponse.json({ error: `Ukuran file maksimal ${Math.round(rule.maxBytes / 1048576)}MB.` }, { status: 400 });
 

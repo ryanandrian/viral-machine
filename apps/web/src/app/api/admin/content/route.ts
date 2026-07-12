@@ -8,6 +8,8 @@ const T: Record<string, { cols: string[]; order: string }> = {
   docs_articles: { cols: ["slug", "grp", "grp_en", "title", "title_en", "body", "body_en", "status", "sort_order"], order: "sort_order" },
   showcase_screens: { cols: ["title", "title_en", "caption", "caption_en", "image_url", "is_active", "sort_order"], order: "sort_order" },
   showcase_videos: { cols: ["title", "title_en", "description", "description_en", "niche_label", "video_url", "poster_url", "is_active", "sort_order"], order: "sort_order" },
+  // Testimoni/Case Studies (migr 0154) — landing "Dipercaya creator" + blog tab Case Studies
+  testimonials: { cols: ["person_name", "channel_label", "quote", "quote_en", "metric_value", "metric_label", "metric_label_en", "rating", "avatar_color", "photo_url", "story_body", "story_body_en", "slug", "show_on_landing", "is_active", "sort_order"], order: "sort_order" },
 };
 
 export async function GET(req: Request) {

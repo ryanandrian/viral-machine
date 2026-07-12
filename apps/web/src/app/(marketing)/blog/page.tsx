@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Tv } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { TestimonialAvatar, type Testimonial } from "@/components/testimonial-avatar";
 import "./blog.css";
 type Post = { slug: string; title: string; title_en: string | null; excerpt: string | null; excerpt_en: string | null; category: string | null; published_at: string | null; cover: string | null };
 
@@ -14,18 +15,19 @@ function Bi({ id, en }: { id: string; en: string }) {
 }
 
 const GRAD = ["linear-gradient(135deg,#1e3a8a,#6366F1)", "linear-gradient(135deg,#7f1d1d,#ec4899)", "linear-gradient(135deg,#064e3b,#10b981)", "linear-gradient(135deg,#4c1d95,#8b5cf6)", "linear-gradient(135deg,#0c4a6e,#0ea5e9)", "linear-gradient(135deg,#78350f,#f59e0b)"];
-const CASES: [string, string, string, string, string, string][] = [
-  ["Misteri Samudra", "Faceless ocean mystery channel", "24/hari", "produksi otomatis", "MS", "#1d4ed8"],
-  ["Fakta Yang Bikin Mikir", "Educational facts channel", "Rp 75", "per video (BYOK)", "FB", "#047857"],
-  ["Jejak Kelam Sejarah", "Dark history storytelling", "5/hari", "auto-publish konsisten", "JS", "#9f1239"],
-  ["Sarah Wibowo Agency", "Mengelola 8 channel klien", "8", "channel dari 1 dashboard", "SW", "#7c3aed"],
-];
+// CASES hardcode DIBUANG 2026-07-12 → tabel `testimonials` (admin: Content → Testimoni; migr 0154)
 
 export default function BlogPage() {
   const [view, setView] = useState<"blog" | "cases">("blog");
   const [cat, setCat] = useState(0);
   const [posts, setPosts] = useState<Post[]>([]);
-  useEffect(() => { createClient().from("blog_posts").select("slug,title,title_en,excerpt,excerpt_en,category,published_at,cover").eq("status", "published").order("published_at", { ascending: false }).then(({ data }) => setPosts((data as Post[]) ?? [])); }, []);
+  const [caseRows, setCaseRows] = useState<Testimonial[]>([]);
+  useEffect(() => {
+    const sb = createClient();
+    sb.from("blog_posts").select("slug,title,title_en,excerpt,excerpt_en,category,published_at,cover").eq("status", "published").order("published_at", { ascending: false }).then(({ data }) => setPosts((data as Post[]) ?? []));
+    // Case studies = testimonials (RLS publik hanya baris aktif). Ber-cerita (slug+story) → kartu bisa diklik.
+    sb.from("testimonials").select("*").order("sort_order").then(({ data }) => setCaseRows((data as Testimonial[]) ?? []));
+  }, []);
   const CATS = ["Semua", ...Array.from(new Set(posts.map((p) => p.category).filter(Boolean)))] as string[];
   const cases = view === "cases";
   const shown = cat === 0 ? posts : posts.filter((p) => p.category === CATS[cat]);
@@ -52,12 +54,19 @@ export default function BlogPage() {
         ))}</div>
         )}
       </> : (
-        <div className="blg-cs-grid">{CASES.map(([name, desc, metric, ml, av, col]) => (
-          <Link href="/docs" className="blg-cs" key={name}><div className="thumb"><Tv size={32} /></div>
-            <div className="csbody"><div className="ch">{desc}</div><h3>{name}</h3><div className="metric">{metric}</div><div className="ml">{ml}</div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "1rem", fontSize: "var(--text-xs)", color: "var(--brand)" }}><Bi id="Baca cerita" en="Read story" /> →</div>
-            </div></Link>
-        ))}</div>
+        caseRows.length === 0 ? <div className="mk-center muted" style={{ padding: "2rem" }}><Bi id="Cerita segera hadir." en="Stories coming soon." /></div> :
+        <div className="blg-cs-grid">{caseRows.map((t) => {
+          const hasStory = !!(t.slug && t.story_body);
+          const inner = (<>
+            <div className="thumb">{t.photo_url ? <TestimonialAvatar t={t} size={72} /> : <Tv size={32} />}</div>
+            <div className="csbody"><div className="ch">{t.channel_label}</div><h3>{t.person_name}</h3>
+              {t.metric_value && <><div className="metric">{t.metric_value}</div><div className="ml"><Bi id={t.metric_label ?? ""} en={t.metric_label_en ?? t.metric_label ?? ""} /></div></>}
+              {hasStory && <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "1rem", fontSize: "var(--text-xs)", color: "var(--brand)" }}><Bi id="Baca cerita" en="Read story" /> →</div>}
+            </div></>);
+          return hasStory
+            ? <Link href={`/case-studies/${t.slug}`} className="blg-cs" key={t.id}>{inner}</Link>
+            : <div className="blg-cs" key={t.id} style={{ cursor: "default" }}>{inner}</div>;
+        })}</div>
       )}
       <div style={{ height: "4rem" }} />
     </div>
