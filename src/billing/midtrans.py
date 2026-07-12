@@ -6,8 +6,11 @@ ENV-DRIVEN (sandbox↔production = tukar `MIDTRANS_ENV`, NOL bongkar kode):
   • Webhook      : status OTORITATIF (signature SHA512) → aktifkan/update langganan tenant.
     JANGAN pernah aktifkan dari browser-redirect (bisa hilang) — hanya dari webhook ter-verify.
 
-Harga dari `pricing_config` (DB, no-hardcode). Audit di `payments`. Plan alias agency↔scale
-(plan_limits pakai 'agency', pricing_config seed 'plan_scale') ditangani di plan_price_idr.
+Harga dari `pricing_config` (DB, no-hardcode). Audit di `payments`.
+Tahap 1 finalisasi_tier_plan (2026-07-13): harga checkout = compute_checkout_amount (diskon
+terbesar-menang, comp ditolak) · periode = compute_new_period (rumus nilai-adil — sisa hari
+dikonversi antar-paket sesuai rasio harga) · _apply_settlement idempotent via klaim optimistik.
+(Catatan: alias tier lama agency/scale sudah direkonsiliasi migr 0025 — tidak ada penanganan alias.)
 """
 
 import os
@@ -72,6 +75,84 @@ def _app_cfg_int(sb, key: str, default: int) -> int:
     except Exception:
         pass
     return default
+
+
+def compute_new_period(sb, tenant_id: str, new_plan_type: str, now: datetime) -> tuple:
+    """
+    Periode langganan baru — RUMUS NILAI-ADIL (finalisasi_tier_plan Pilar 2, ratifikasi owner
+    2026-07-13): sisa hari periode berjalan DIKONVERSI ke paket baru sesuai rasio harga/hari:
+        period_end = now + durasi_paket + sisa_hari × (harga_paket_lama ÷ harga_paket_baru)
+    • Perpanjang paket sama (rasio 1) → sisa hari tersambung UTUH (bayar dini tak pernah rugi).
+    • Upgrade → sisa nilai terbawa proporsional (prorate jujur, tanpa mesin refund).
+    • Downgrade → nilai sisa jadi masa lebih panjang di paket murah (kapasitas dijepit gerbang kuota).
+    • Tanpa periode hidup (trial/expired/suspended/blocked/grace-lewat) ATAU paket lama tak berharga
+      (mis. 'trial' — tak ada di pricing_config) → murni now + durasi (tanpa kredit).
+    Harga acuan = pricing_config SAAT INI (config-driven). Return (start, end, catatan_log).
+    """
+    period_days = _app_cfg_int(sb, "subscription_period_days", 30)
+    credit_days = 0.0
+    note = "tanpa kredit"
+    try:
+        r = (sb.table("tenant_configs")
+             .select("subscription_status,plan_type,current_period_end")
+             .eq("tenant_id", tenant_id).limit(1).execute())
+        row = (r.data or [{}])[0]
+        status   = row.get("subscription_status") or "active"
+        old_plan = row.get("plan_type")
+        old_end  = row.get("current_period_end")
+        if status in ("active", "grace") and old_plan and old_end:
+            end_dt = datetime.fromisoformat(str(old_end).replace("Z", "+00:00"))
+            if end_dt.tzinfo is None:
+                end_dt = end_dt.replace(tzinfo=timezone.utc)
+            remaining = (end_dt - now).total_seconds() / 86400.0
+            if remaining > 0:
+                old_price = plan_price_idr(sb, old_plan)      # 'trial' → raise → except → kredit 0
+                new_price = plan_price_idr(sb, new_plan_type)
+                credit_days = remaining * (old_price / float(new_price))
+                note = f"kredit {credit_days:.2f}h (sisa {remaining:.2f}h × {old_price}/{new_price})"
+    except Exception as e:
+        logger.info(f"[Midtrans] periode tanpa kredit tenant={tenant_id}: {e}")
+        credit_days = 0.0
+    start = now
+    end = now + timedelta(days=period_days + credit_days)
+    return start, end, note
+
+
+def compute_checkout_amount(sb, tenant_id: str, plan_type: str) -> tuple:
+    """
+    Harga checkout RESMI (finalisasi_tier_plan Pilar 3, ratifikasi owner 2026-07-13):
+    dasar = pricing_config[plan] → diskon TERBESAR dari {discount_pct admin 1–99 (BERTAHAN tiap
+    tagihan sampai di-nol-kan), winback aktif (hangus otomatis)} — tak digabung; min Rp 1.000.
+    Akun comp (is_developer / discount_pct≥100) = gratis selamanya → checkout DITOLAK
+    (kode 'comp_account_no_billing' — FE memang tak menampilkan tombol bayar utk comp).
+    Return (amount, diskon_pct_terpakai).
+    """
+    base = plan_price_idr(sb, plan_type)
+    trow = {}
+    try:
+        r = (sb.table("tenant_configs").select("is_developer,discount_pct")
+             .eq("tenant_id", tenant_id).limit(1).execute())
+        trow = (r.data or [{}])[0]
+    except Exception as e:
+        logger.debug(f"[Midtrans] baca tenant utk harga gagal (diskon diabaikan): {e}")
+    from src.billing.limits import is_comp_account
+    if is_comp_account(trow):
+        raise ValueError("comp_account_no_billing")
+    admin_disc = 0
+    try:
+        d = int(trow.get("discount_pct") or 0)
+        if 0 < d < 100:
+            admin_disc = d
+    except Exception:
+        pass
+    wb = _winback_discount(sb, tenant_id)
+    disc = max(admin_disc, wb)
+    if disc <= 0:
+        return base, 0
+    amount = max(1000, round(base * (100 - disc) / 100))
+    logger.info(f"[Midtrans] diskon {disc}% ({'admin' if admin_disc >= wb else 'winback'}) "
+                f"tenant={tenant_id}: {base} → {amount}")
+    return amount, disc
 
 
 def _winback_discount(sb, tenant_id: str) -> int:
@@ -170,11 +251,7 @@ def snap_create_transaction(sb, tenant_id: str, plan_type: str,
     """LANGGANAN bulanan. Buat order `payments` pending → Snap → {order_id, token, redirect_url, amount}.
     Frontend redirect user ke redirect_url. Status final via webhook."""
     _cancel_pending_orders(sb, tenant_id, "subscription")   # anti dobel-bayar (owner 2026-07-04)
-    amount   = plan_price_idr(sb, plan_type)
-    _wb = _winback_discount(sb, tenant_id)          # diskon comeback (LIFECYCLE) bila aktif
-    if _wb > 0:
-        amount = max(1000, round(amount * (100 - _wb) / 100))
-        logger.info(f"[Midtrans] winback {_wb}% diterapkan tenant={tenant_id} → amount={amount}")
+    amount, _disc = compute_checkout_amount(sb, tenant_id, plan_type)   # diskon terbesar-menang + tolak comp
     ts       = int(time.time())
     order_id = _order_id(tenant_id, plan_type, ts)
     sb.table("payments").insert({
@@ -254,8 +331,11 @@ def verify_signature(order_id: str, status_code: str, gross_amount: str, signatu
 
 
 def _apply_settlement(sb, order: dict, txn: str | None, fraud, payment_type=None, raw=None) -> bool:
-    """SATU sumber penerapan hasil transaksi — dipakai webhook (push) DAN reconciler (pull). Idempotent.
-    settlement/capture + fraud accept → add-on: RPC settle (buat niche+email) · langganan: aktivasi tenant."""
+    """SATU sumber penerapan hasil transaksi — dipakai webhook (push) DAN reconciler (pull).
+    IDEMPOTENT via KLAIM OPTIMISTIK (Tahap 1.3): aktivasi hanya oleh penulis yang berhasil memindah
+    status order dari nilai sebelumnya → re-delivery webhook / balapan webhook×reconciler TIDAK
+    dobel-menerapkan periode (kredit nilai-adil membuat dobel-terapkan = merugikan; dulu aman karena
+    rumusnya konstan). settlement/capture + fraud accept → add-on: RPC settle · langganan: aktivasi."""
     order_id = order["order_id"]
     prev_status = order.get("status")
     upd = {"status": txn, "fraud_status": fraud, "updated_at": _now().isoformat()}
@@ -271,28 +351,40 @@ def _apply_settlement(sb, order: dict, txn: str | None, fraud, payment_type=None
         # paid_at dari waktu Midtrans (settlement_time > transaction_time, zona WIB) — fallback jam server.
         _t = (raw or {}).get("settlement_time") or (raw or {}).get("transaction_time")
         upd["paid_at"] = f"{_t}+07:00" if _t else _now().isoformat()
-        if order.get("category") == "addon":
-            try:
-                sb.rpc("settle_niche_request_paid",
-                       {"p_request_id": order.get("ref_id"), "p_order_id": order_id}).execute()
+        claimed = False
+        if prev_status not in ("settlement", "capture"):
+            # KLAIM: pindahkan status HANYA bila masih = prev_status (eq ganda). 0 baris = penulis
+            # lain sudah menerapkan (balapan/re-delivery) → jangan aktivasi ulang.
+            _cl = (sb.table("payments").update({"status": txn, "updated_at": _now().isoformat()})
+                   .eq("order_id", order_id).eq("status", prev_status).execute())
+            claimed = bool(_cl.data)
+            if not claimed:
+                logger.info(f"[Midtrans] order={order_id} sudah diterapkan penulis lain — lewati aktivasi")
+        if claimed:
+            if order.get("category") == "addon":
+                try:
+                    sb.rpc("settle_niche_request_paid",
+                           {"p_request_id": order.get("ref_id"), "p_order_id": order_id}).execute()
+                    activated = True
+                except Exception as _re:
+                    logger.error(f"[Midtrans] settle addon gagal order={order_id} ref={order.get('ref_id')}: {_re}")
+            else:
+                # Periode NILAI-ADIL (Pilar 2): sisa hari paket lama terkonversi — perpanjangan dini
+                # tak lagi memotong hak tenant; upgrade/downgrade prorate via rasio harga.
+                start, end, _note = compute_new_period(sb, order["tenant_id"], order["plan_type"], _now())
+                upd["period_start"] = start.isoformat(); upd["period_end"] = end.isoformat()
+                # Aktivasi + RESET penanda reminder + SIKLUS-HIDUP (LIFECYCLE B9) → tenant bersih dari jejak lapsed/blokir.
+                sb.table("tenant_configs").update({
+                    "subscription_status": "active", "plan_type": order["plan_type"],
+                    "current_period_end": end.isoformat(),
+                    "renewal_reminder_sent_at": None, "suspend_notified_at": None,
+                    "suspended_at": None, "blocked_at": None, "deletion_scheduled_at": None,
+                    "deletion_warn_sent": 0, "nurture_step": 0, "nurture_last_sent_at": None,
+                    "lead_temp": None, "raw_assets_purged_at": None,
+                    "winback_offer_pct": None, "winback_offer_expires_at": None,
+                }).eq("tenant_id", order["tenant_id"]).execute()
+                logger.info(f"[Midtrans] periode order={order_id}: {_note} → end {end.isoformat()}")
                 activated = True
-            except Exception as _re:
-                logger.error(f"[Midtrans] settle addon gagal order={order_id} ref={order.get('ref_id')}: {_re}")
-        else:
-            start = _now(); end = start + timedelta(days=_app_cfg_int(sb, "subscription_period_days", 30))
-            upd["period_start"] = start.isoformat(); upd["period_end"] = end.isoformat()
-            # Aktivasi + RESET penanda reminder/suspend → siklus baru dapat reminder segar (perpanjangan berikut).
-            # Aktivasi + RESET penanda reminder + SIKLUS-HIDUP (LIFECYCLE B9) → tenant bersih dari jejak lapsed/blokir.
-            sb.table("tenant_configs").update({
-                "subscription_status": "active", "plan_type": order["plan_type"],
-                "current_period_end": end.isoformat(),
-                "renewal_reminder_sent_at": None, "suspend_notified_at": None,
-                "suspended_at": None, "blocked_at": None, "deletion_scheduled_at": None,
-                "deletion_warn_sent": 0, "nurture_step": 0, "nurture_last_sent_at": None,
-                "lead_temp": None, "raw_assets_purged_at": None,
-                "winback_offer_pct": None, "winback_offer_expires_at": None,
-            }).eq("tenant_id", order["tenant_id"]).execute()
-            activated = True
     elif txn in ("refund", "partial_refund", "chargeback") and order.get("category") != "addon":
         # Refund/chargeback LANGGANAN → CABUT akses (suspend). Add-on: niche telanjur dibuat → keputusan admin.
         sb.table("tenant_configs").update({"subscription_status": "suspended"}).eq("tenant_id", order["tenant_id"]).execute()
@@ -300,8 +392,8 @@ def _apply_settlement(sb, order: dict, txn: str | None, fraud, payment_type=None
 
     sb.table("payments").update(upd).eq("order_id", order_id).execute()
 
-    # Receipt email (langganan, transisi BARU ke aktif; add-on emailnya via RPC). Fail-soft.
-    if activated and order.get("category") != "addon" and prev_status not in ("settlement", "capture"):
+    # Receipt email (langganan, hanya penulis yang mengaktivasi; add-on emailnya via RPC). Fail-soft.
+    if activated and order.get("category") != "addon":
         try:
             from src.utils.email import notify_payment_receipt
             notify_payment_receipt(order["tenant_id"], order.get("plan_type"), order.get("gross_amount") or 0, sb, order_id=order_id)

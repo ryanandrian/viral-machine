@@ -12,6 +12,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
 //                         midtrans._apply_settlement) lalu beri trial + N hari (tanpa bayar = trial, bukan active)
 const DAY_MS = 86_400_000;
 
+// PAGAR STATUS (Tahap 1.5 finalisasi_tier_plan, anti-human-error): tiap aksi hanya sah pada status
+// yang tepat — tanpa pagar ini, salah-klik "extend" pada tenant AKTIF-BERBAYAR menurunkannya jadi trial.
+const ACTION_ALLOWED_STATUS: Record<string, string[]> = {
+  extend: ["trial", "trial_expired"],
+  postpone_deletion: ["blocked"],
+  reactivate_clean: ["suspended", "blocked"],
+};
+
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const g = await requireSuperAdmin();
   if (g.error) return g.error;
@@ -19,6 +27,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const body = await req.json().catch(() => ({} as Record<string, unknown>));
   const action = body.action;
   const admin = createAdminClient();
+
+  if (typeof action !== "string" || !(action in ACTION_ALLOWED_STATUS)) {
+    return NextResponse.json({ error: "invalid_action" }, { status: 400 });
+  }
+  const { data: tcur } = await admin.from("tenant_configs")
+    .select("subscription_status").eq("tenant_id", id).maybeSingle();
+  if (!tcur) return NextResponse.json({ error: "tenant_not_found" }, { status: 404 });
+  const curStatus = String(tcur.subscription_status ?? "");
+  if (!ACTION_ALLOWED_STATUS[action].includes(curStatus)) {
+    return NextResponse.json({ error: "invalid_status_for_action", status: curStatus }, { status: 400 });
+  }
 
   async function cfgInt(key: string, dflt: number): Promise<number> {
     const { data } = await admin.from("app_config").select("value").eq("key", key).maybeSingle();

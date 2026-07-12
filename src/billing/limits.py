@@ -13,7 +13,6 @@ Dipakai: `producer` (gate produksi) + `publisher` (gate + cap harian). Fail-OPEN
 untuk tenant lama tanpa kolom (back-compat); status invalid → treat non-producing (aman).
 """
 
-import os
 from datetime import datetime, timezone
 
 from loguru import logger
@@ -55,83 +54,37 @@ def channel_quota(tenant_row: dict, plan_limits: dict) -> int:
     return int((plan_limits.get(plan) or {}).get("max_channels", 1) or 1)
 
 
-# ── Akses niche per-tier ("niche dasar", DESAIN §6) — CONFIG-DRIVEN (0124, owner 2026-07-04 A+C):
-#    plan_limits.full_niche_catalog per tier (admin-tunable). Seed: tier berbayar = katalog penuh,
-#    trial = niche is_base saja. Gerbang server sesungguhnya = RPC set_channel_niche (query identik).
+# ── Entitlement lain: gerbang aslinya di DATABASE, bukan di modul ini (Tahap 1 finalisasi_tier_plan,
+#    2026-07-13 — 5 fungsi duplikat tanpa pemanggil dibuang dari sini):
+#    • signup→trial            = trigger DB `handle_new_tenant` (migr 0028; durasi app_config)
+#    • katalog niche per-tier  = RPC `set_channel_niche` + plan_limits.full_niche_catalog (migr 0124)
+#    • ajukan niche custom     = RLS INSERT niche_requests + plan_limits.can_request_custom_niche (migr 0130)
+#    • kuota LAHIR channel     = RLS INSERT channels vs plan_limits.max_channels (migr 0155)
 
 
-def has_full_niche_catalog(sb, plan_type) -> bool:
-    """True bila tier berhak SEMUA niche publik aktif; False → hanya is_base. Fail-CLOSED (aman)."""
-    if not sb:
-        return False
+def _channel_in_quota(sb, tenant_id, channel_id: str, quota: int) -> bool:
+    """
+    Gerbang JALAN kuota channel (finalisasi_tier_plan Tahap 1.2): hanya N channel TERTUA
+    (N = max_channels paket) yang dilayani produksi/publish. Downgrade / keadaan-lama melebihi paket
+    → channel di luar N berhenti dilayani TANPA menghapus data (upgrade → hidup lagi otomatis).
+    Deterministik: urut created_at lalu id. Fail-OPEN saat error transient (lindungi channel sehat;
+    gerbang KERAS pembuatan channel = RLS 0155).
+    """
+    if not sb or not tenant_id or not channel_id:
+        return True
     try:
-        res = (sb.table("plan_limits").select("full_niche_catalog")
-               .eq("plan_type", plan_type or "starter").limit(1).execute())
-        return bool((res.data or [{}])[0].get("full_niche_catalog"))
+        res = (sb.table("channels").select("id")
+               .eq("tenant_id", tenant_id)
+               .order("created_at").order("id")
+               .limit(max(1, int(quota))).execute())
+        allowed = {str(r["id"]) for r in (res.data or [])}
+        ok = str(channel_id) in allowed
+        if not ok:
+            logger.info(f"[Limits] ch={channel_id} di LUAR kuota paket ({quota} channel) tenant={tenant_id} — tidak dilayani")
+        return ok
     except Exception as e:
-        logger.debug(f"[Limits] full_niche_catalog {plan_type} gagal: {e}")
-        return False
-
-
-def base_niches(sb) -> list:
-    """niche_id `is_base=true` & aktif (admin-editable via panel niches). Niche dasar utk tier non-full."""
-    if not sb:
-        return []
-    try:
-        res = sb.table("niches").select("niche_id").eq("is_active", True).eq("is_base", True).execute()
-        return [r["niche_id"] for r in (res.data or [])]
-    except Exception as e:
-        logger.debug(f"[Limits] base_niches gagal: {e}")
-        return []
-
-
-def available_niches(sb, plan_type: str) -> list:
-    """Niche INCLUDED per tier: full_niche_catalog (plan_limits) → semua aktif; else is_base saja.
-    NB: ini niche katalog-included; pengajuan CUSTOM niche terpisah → can_request_custom_niche()."""
-    if not sb:
-        return []
-    try:
-        q = sb.table("niches").select("niche_id").eq("is_active", True)
-        if not has_full_niche_catalog(sb, plan_type):
-            q = q.eq("is_base", True)
-        return [r["niche_id"] for r in (q.execute().data or [])]
-    except Exception as e:
-        logger.debug(f"[Limits] available_niches {plan_type} gagal: {e}")
-        return []
-
-
-def can_request_custom_niche(plan_type) -> bool:
-    """
-    Boleh AJUKAN custom niche (add-on berbayar: public-after-90d / private-permanent — [[decisions_niche_model]]).
-    starter/pro/business = YA · trial = TIDAK. (Ini ENTITLEMENT pengajuan, bukan akses katalog included.)
-    """
-    return (plan_type or "starter") in {"starter", "pro", "business"}
-
-
-# ── Trial = TIER 'trial' (BYOK, time-boxed 7 hari). Caps via plan_limits['trial'] (1ch/1vid-hari).
-#    Durasi via app_config (admin-editable). Lapse → trial_expired (lead marketing). DESAIN §3. ─────
-def trial_days() -> int:
-    """Lama trial (hari) — ADMIN-EDITABLE via app_config (no-hardcode)."""
-    from src.config.app_config import get_int
-    return get_int("trial_duration_days", 7)
-
-
-def start_trial(sb, tenant_id: str) -> dict:
-    """
-    Mulai trial (dipanggil saat signup, Phase 9). Set tier 'trial' + status 'trial' + anchor + period_end.
-    Caps (1ch/1vid-hari) otomatis dari plan_limits['trial']. BYOK — tak ada platform key.
-    """
-    from datetime import timedelta
-    now = datetime.now(timezone.utc)
-    end = now + timedelta(days=trial_days())
-    sb.table("tenant_configs").update({
-        "plan_type":           "trial",
-        "subscription_status": "trial",
-        "trial_started_at":    now.isoformat(),
-        "current_period_end":  end.isoformat(),
-    }).eq("tenant_id", tenant_id).execute()
-    logger.info(f"[Limits] trial started tenant={tenant_id} → end {end.date()} (tier 'trial', caps dari plan_limits)")
-    return {"trial_ends": end.isoformat()}
+        logger.warning(f"[Limits] cek kuota channel tenant={tenant_id} gagal ({e}) — fail-open")
+        return True
 
 
 def published_today_count(sb, channel_id: str) -> int:
@@ -165,8 +118,10 @@ def _tenant_gate_row(sb, tenant_id: str) -> dict:
 
 def gate_for_channel(sb, channel_row: dict) -> dict:
     """
-    Resolusi gate untuk 1 channel: {can_produce, daily_cap, status, plan_type}.
+    Resolusi gate untuk 1 channel: {can_produce, daily_cap, status, plan_type, in_quota}.
     Dipakai producer (skip bila not can_produce) + publisher (skip + bandingkan published_today vs daily_cap).
+    can_produce = status membolehkan DAN channel dalam kuota paket (gerbang JALAN Tahap 1.2 —
+    berlaku juga utk comp: kapasitas selalu ikut paket, caps comp = plan_type-nya).
     """
     from src.config.tenant_config import _get_plan_limits
     tid    = channel_row.get("tenant_id")
@@ -174,12 +129,16 @@ def gate_for_channel(sb, channel_row: dict) -> dict:
     status = trow.get("subscription_status") or "active"
     comp   = is_comp_account(trow)
     limits = _get_plan_limits() or {}
+    quota  = channel_quota(trow, limits)
+    in_q   = _channel_in_quota(sb, tid, str(channel_row.get("id") or ""), quota)
     return {
         # comp/developer (always-free) → SELALU producing. Trial = tier 'trial' (producing),
         # caps (1ch/1vid-hari) via plan_limits['trial'] di daily_publish_cap. trial_expired → blocked.
-        "can_produce": comp or can_produce(status),
+        "can_produce": (comp or can_produce(status)) and in_q,
         "daily_cap":   daily_publish_cap(trow, limits),
         "status":      status,
         "plan_type":   trow.get("plan_type") or "starter",
         "is_comp":     comp,
+        "in_quota":    in_q,
+        "channel_quota": quota,
     }
