@@ -264,7 +264,7 @@ export default function LandingPage() {
               <div className="who"><TestimonialAvatar t={t} size={42} /><div><div className="nm">{t.person_name}</div><div className="ch">{t.channel_label}</div></div>{t.metric_value && <div className="gr"><div className="b">{t.metric_value}</div><div className="l"><Bi id={t.metric_label ?? ""} en={t.metric_label_en ?? t.metric_label ?? ""} /></div></div>}</div>
               {t.slug && t.story_body && (
                 <a href={`/case-studies/${t.slug}`} style={{ display: "inline-flex", alignItems: "center", gap: "0.375rem", marginTop: "0.75rem", fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--brand)", textDecoration: "none" }}>
-                  <Bi id="Baca cerita lengkap" en="Read the full story" /> →
+                  <Bi id="Selengkapnya" en="More" /> →
                 </a>
               )}
             </div>

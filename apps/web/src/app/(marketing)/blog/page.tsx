@@ -61,7 +61,7 @@ export default function BlogPage() {
             <div className="thumb">{t.photo_url ? <TestimonialAvatar t={t} size={72} /> : <Tv size={32} />}</div>
             <div className="csbody"><div className="ch">{t.channel_label}</div><h3>{t.person_name}</h3>
               {t.metric_value && <><div className="metric">{t.metric_value}</div><div className="ml"><Bi id={t.metric_label ?? ""} en={t.metric_label_en ?? t.metric_label ?? ""} /></div></>}
-              {hasStory && <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "1rem", fontSize: "var(--text-xs)", color: "var(--brand)" }}><Bi id="Baca cerita" en="Read story" /> →</div>}
+              {hasStory && <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "1rem", fontSize: "var(--text-xs)", color: "var(--brand)" }}><Bi id="Selengkapnya" en="More" /> →</div>}
             </div></>);
           return hasStory
             ? <Link href={`/case-studies/${t.slug}`} className="blg-cs" key={t.id}>{inner}</Link>
