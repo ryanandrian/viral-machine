@@ -149,7 +149,7 @@ cacat. Knob + label CFG_META masuk satu batch Tahap 2.)
       3 user auth uji dihapus; server uji dimatikan). py_compile ✓ · import worker ✓ · npm build ✓.
       C7-sebagian ikut tuntas (5 fungsi mati limits.py dibuang) + C8-sebagian (docstring midtrans).
       Catatan utk Tahap 3: toast FE admin saat 400 masih generik ("Gagal memproses") — poles pesan
-      spesifik menyusul. Commit: `f1deecf`. Deploy: MENUNGGU IZIN OWNER (BE+FE).
+      spesifik menyusul. Commit: `fb04952`. Deploy: MENUNGGU IZIN OWNER (BE+FE).
 
 ### TAHAP 2 — Tahunan + permukaan tenant (Pilar 2-lengkap + 4-tenant)  ⏳
 File: `apps/web/src/app/api/billing/checkout/route.ts` + `src/billing/webhook_app.py` +
