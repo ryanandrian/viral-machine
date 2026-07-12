@@ -262,6 +262,11 @@ export default function LandingPage() {
               <div className="stars">{Array.from({ length: Math.min(5, Math.max(1, t.rating)) }).map((_, k) => <Star key={k} size={15} fill="#FBBF24" color="#FBBF24" />)}</div>
               <blockquote>&quot;<Bi id={t.quote} en={t.quote_en ?? t.quote} />&quot;</blockquote>
               <div className="who"><TestimonialAvatar t={t} size={42} /><div><div className="nm">{t.person_name}</div><div className="ch">{t.channel_label}</div></div>{t.metric_value && <div className="gr"><div className="b">{t.metric_value}</div><div className="l"><Bi id={t.metric_label ?? ""} en={t.metric_label_en ?? t.metric_label ?? ""} /></div></div>}</div>
+              {t.slug && t.story_body && (
+                <a href={`/case-studies/${t.slug}`} style={{ display: "inline-flex", alignItems: "center", gap: "0.375rem", marginTop: "0.75rem", fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--brand)", textDecoration: "none" }}>
+                  <Bi id="Baca cerita lengkap" en="Read the full story" /> →
+                </a>
+              )}
             </div>
           ))}
         </div>
