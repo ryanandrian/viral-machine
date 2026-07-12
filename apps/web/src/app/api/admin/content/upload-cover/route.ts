@@ -25,7 +25,7 @@ export async function POST(req: Request) {
   const dim = imageDimensions(body);
   if (!dim) return NextResponse.json({ error: "Format harus PNG atau JPG (berkas valid)." }, { status: 400 });
   if (dim.w < MIN_W) {
-    return NextResponse.json({ error: `Gambar terlalu kecil (${dim.w}×${dim.h}px). Minimal lebar ${MIN_W}px agar tajam di landing (disarankan ±760×352, rasio ~2,2:1).` }, { status: 400 });
+    return NextResponse.json({ error: `Gambar terlalu kecil (${dim.w}×${dim.h}px). Minimal lebar ${MIN_W}px agar tajam (disarankan 1376×768 px, rasio 16:9).` }, { status: 400 });
   }
 
   const endpoint = process.env.S3_ENDPOINT, accessKeyId = process.env.S3_ACCESS_KEY, secretAccessKey = process.env.S3_SECRET_KEY;

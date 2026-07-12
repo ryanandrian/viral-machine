@@ -15,9 +15,9 @@ const TABS: { key: string; table: string; label: string; fields: Field[]; title:
   { key: "blog", table: "blog_posts", label: "Blog", title: (r) => (r.title as string) || "(baru)", fields: [
     { k: "title", label: "Judul (ID)", type: "text" }, { k: "title_en", label: "Judul (EN)", type: "text" },
     { k: "slug", label: "Slug", type: "text" }, { k: "category", label: "Kategori", type: "text" },
-    { k: "cover", label: "Feature image (cover kartu blog)", type: "image", media: { kind: "cover", preview: "cover",
-      hintId: "PNG/JPG, maks 5MB, lebar min 720px — disarankan ±760×352 (rasio ~2,2:1, sesuai kartu di landing). Tersimpan di S3 folder blog-cover/.",
-      hintEn: "PNG/JPG, max 5MB, min width 720px — recommended ±760×352 (~2.2:1, matches landing card). Stored in S3 under blog-cover/." } },
+    { k: "cover", label: "Feature image (cover blog — kartu daftar + hero artikel)", type: "image", media: { kind: "cover", preview: "cover",
+      hintId: "PNG/JPG, maks 5MB, rasio 16:9 — disarankan 1376×768 px (min lebar 720px). Tampil sebagai cover di daftar blog & gambar hero di halaman artikel. Tersimpan di S3 folder blog-cover/.",
+      hintEn: "PNG/JPG, max 5MB, 16:9 ratio — recommended 1376×768 px (min width 720px). Shown as the list cover and the article hero image. Stored in S3 under blog-cover/." } },
     { k: "excerpt", label: "Ringkasan (ID)", type: "area" }, { k: "excerpt_en", label: "Ringkasan (EN)", type: "area" },
     { k: "body", label: "Isi (markdown, ID)", type: "md" }, { k: "status", label: "Status", type: "select", opts: ["draft", "published"] },
   ] },
