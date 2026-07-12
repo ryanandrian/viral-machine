@@ -28,6 +28,7 @@ export async function POST(req: Request) {
   const def = T[table]; if (!def) return NextResponse.json({ error: "table_not_allowed" }, { status: 400 });
   const clean: Record<string, unknown> = {};
   for (const c of def.cols) if (c in (row ?? {})) clean[c] = row[c];
+  if (table === "testimonials" && clean.slug === "") clean.slug = null; // "" ganda = tabrakan unique
   const a = createAdminClient();
   const { data, error } = await a.from(table).insert(clean).select("*").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -41,6 +42,7 @@ export async function PATCH(req: Request) {
   const def = T[table]; if (!def || !id) return NextResponse.json({ error: "bad_request" }, { status: 400 });
   const clean: Record<string, unknown> = { updated_at: new Date().toISOString() };
   for (const c of def.cols) if (c in (patch ?? {})) clean[c] = patch[c];
+  if (table === "testimonials" && clean.slug === "") clean.slug = null; // "" ganda = tabrakan unique
   const a = createAdminClient();
   const { data, error } = await a.from(table).update(clean).eq("id", id).select("*").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
