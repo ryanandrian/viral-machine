@@ -2,6 +2,7 @@
 
 > **Prinsip dokumen:** satu aturan = satu pasal (tidak ada duplikasi antar-pasal; pasal lain hanya boleh MERUJUK nomor, bukan mengulang isi). Setiap butir punya ukuran lulus/gagal yang jelas. Detail & "why" = file memory `[[...]]`; bila memory saling bertentangan → yang TERBARU menang.
 > **Cara pakai:** sebelum menyentuh apa pun → §2. Sebelum bilang "selesai"/deploy → §3. Ada satu butir gagal → STOP: jangan lanjut / jangan sebut selesai.
+> **⭐ STANDAR MUTU (berlaku LINTAS-PASAL, tanpa pengecualian):** SETIAP artefak yang saya hasilkan — kode ship, script sekali-pakai, query diagnosa, skrip analisis — DAN setiap langkah penalaran wajib **world-class best practice**: benar, tangguh terhadap kasus tepi, nol jalan-pintas malas, asumsi diverifikasi bukan ditebak. *Ukuran gagal:* "cukup jalan buat sekarang" · "toh cuma script buang" · lompatan nalar tanpa bukti = MELANGGAR (setara §3 gagal → STOP). Ini bukan gerbang pre-done saja; berlaku sejak baris pertama dipikirkan/ditulis. [[feedback_world_class_quality]] (owner tegaskan ulang 2026-07-12)
 
 ## §1 SUMBER KEBENARAN
 1. **Daftar kerja = HANYA `SISA_KERJA_GO_LIVE.md`.** Marker `[ ]`/⬜ di dokumen mana pun selain itu = bukan daftar kerja.
@@ -9,7 +10,7 @@
 3. **Pasca-compaction:** summary + memory = valid; lanjutkan thread aktif. Dilarang re-investigasi hal yang sudah tercatat. [[feedback_post_compaction]]
 
 ## §2 GERBANG PRE-TOUCH (sebelum menyentuh apa pun)
-1. **Paham dulu:** baca tuntas dokumen kanonik topik terkait, lalu petakan SEMUA permukaan terdampak (DB, BE, FE-tenant, FE-admin). *Ukuran lulus:* bisa menyebut persis file/tabel/alur yang akan disentuh — tanpa menebak, tanpa "coba dulu". [[feedback_comprehend_before_work]]
+1. **Paham dulu — HELICOPTER-VIEW, bukan kacamata kuda:** baca tuntas dokumen kanonik topik terkait, lalu petakan dampak di KELIMA permukaan **(DB · BE · FE-tenant · FE-admin · FE-marketing)** — sebutkan eksplisit mana yang tersentuh DAN mana yang TIDAK (dengan alasan; "tidak tersentuh" pun wajib hasil pengecekan, bukan asumsi). *Ukuran lulus:* bisa menyebut persis file/tabel/alur yang akan disentuh — tanpa menebak, tanpa "coba dulu". Tidak ada kategori "terlalu kecil untuk deep-dive". [[feedback_comprehend_before_work]]
 2. **Lingkup utuh:** sebelum eksekusi 1 item, baca seluruh item/dokumen se-rantai + kolom DEPENDS-nya (anti-rework). [[feedback_review_whole_remediation_before_item]]
 2b. **Cek realita data SEBELUM menulis kode/query:** wajib bisa menyebut volume nyata tabel terkait + batas limit/paginasi jalur akses + perilaku saat gagal — tidak bisa menyebut = belum boleh menulis. *(akar bug undercount 2026-07-11: query video_analytics ditulis tanpa cek isi 7.220 baris vs cap 1000)*
 3. **Otorisasi — matriks tunggal (tidak ada wilayah abu-abu):** [[feedback_workflow]] [[feedback_owner_delegates_expert_decisions]] [[feedback_no_silent_ui_changes]]
@@ -28,6 +29,7 @@
 5. **Bila menyentuh teks UI/email:** dwibahasa ID/EN via mekanisme `Bi` (API kirim KODE error, FE yang menerjemahkan). Teks satu bahasa = cacat. [[feedback_bilingual_mandatory]]
 6. **Bila menyentuh UI:** layak tenant awam — status + tombol proses dalam SATU panel; tombol disabled + label progres selama proses; pilihan dropdown/toggle auto-save (bukan tombol Simpan terpisah). [[feedback_uiux_design_for_lay_tenants]]
 7. **Tutup administrasi:** isi kolom REALISASI (status + commit + bukti) di `SISA_KERJA_GO_LIVE.md` + sinkronkan dokumen SPEC terkait.
+8. **🚫 NOL REGRESI — HARAM memunculkan bug:** setiap penambahan/perubahan/perbaikan wajib **100% valid, nol bug baru** — bukan hanya di permukaan yang disentuh, tapi di SETIAP permukaan yang dipetakan §2.1 (DB·BE·FE-tenant·FE-admin·FE-marketing). *Ukuran gagal:* satu bug/regresi lahir dari kerja ini = pelanggaran berat (kacamata kuda), STOP. Buktikan tiap permukaan terdampak masih jalan (uji nyata per §3.4), bukan berasumsi "yang lain tak kena". [[feedback_comprehend_before_work]] [[feedback_world_class_quality]]
 
 ## §4 PELAPORAN (setiap komunikasi ke owner)
 1. **Bahasa dampak-bisnis, nol jargon** — owner non-teknis; status berbentuk checklist sederhana. [[feedback_plain_language]]
