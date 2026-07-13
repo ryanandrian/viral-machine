@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { Moon, Sun, Eye, EyeOff, Command, CheckCircle, Bell, ArrowLeft, ArrowRight, Star } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { fetchTrialDays } from "@/lib/plans";
+import { fetchTrialDays, fetchPlans } from "@/lib/plans";
 import "./auth.css";
 
 // B1-B4 Auth (PoC) — port dari design-source/Auth.html. Multi-view (signup/login/forgot/verify),
@@ -66,7 +66,16 @@ export default function AuthPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [trialDays, setTrialDays] = useState(7);
-  useEffect(() => { fetchTrialDays().then(setTrialDays); }, []);
+  // T2 (owner 2026-07-13): kapasitas maks per AKUN = video/hari × channel tier tertinggi (Business
+  // 5×10=50) — dihitung LIVE dari plan_limits (admin naikkan kuota → klaim ikut). null = belum termuat.
+  const [maxDaily, setMaxDaily] = useState<number | null>(null);
+  useEffect(() => {
+    fetchTrialDays().then(setTrialDays);
+    fetchPlans().then(({ plans }) => {
+      const caps = plans.filter((p) => p.price_idr != null).map((p) => p.max_videos_per_day * p.max_channels);
+      if (caps.length) setMaxDaily(Math.max(...caps));
+    });
+  }, []);
   const supabase = createClient();
   const origin = () => (typeof window !== "undefined" ? window.location.origin : "");
 
@@ -182,7 +191,8 @@ export default function AuthPage() {
           {view === "signup" && (
             <div className="auth-card">
               <h1><Bi id={`Mulai gratis ${trialDays} hari`} en={`Start your ${trialDays}-day trial`} /></h1>
-              <p className="lead"><Bi id="5 video gratis, tanpa kartu kredit." en="5 free videos, no credit card." /></p>
+              {/* T1 (owner 2026-07-13): angka "5 video" = fosil rencana lama & basi vs setelan admin — klaim kini config-driven (trialDays). */}
+              <p className="lead"><Bi id={`Coba gratis ${trialDays} hari, tanpa kartu kredit.`} en={`Try free for ${trialDays} days, no credit card.`} /></p>
               <button className="oauth-btn" onClick={doGoogle}><GoogleLogo /><Bi id="Daftar dengan Google" en="Sign up with Google" /></button>
               <div className="divider"><Bi id="atau pakai email" en="or use email" /></div>
               <div className="form-stack">
@@ -293,7 +303,11 @@ export default function AuthPage() {
 
       <div className="auth-right">
         <div className="mesh" />
-        <div className="stat-ticker"><span style={{ width: 7, height: 7, borderRadius: "50%", background: "#34D399", display: "inline-block" }} /> <Bi id="Produksi 24/7 · hingga 24 video/hari per channel" en="Runs 24/7 · up to 24 videos/day per channel" /></div>
+        {/* T2 (owner 2026-07-13): "24/hari per channel" = klaim basi rencana lama; kini = kapasitas
+            NYATA akun tertinggi (video/hari × channel, live dari plan_limits). */}
+        <div className="stat-ticker"><span style={{ width: 7, height: 7, borderRadius: "50%", background: "#34D399", display: "inline-block" }} /> {maxDaily
+          ? <Bi id={`Produksi 24/7 · hingga ${maxDaily} video/hari`} en={`Runs 24/7 · up to ${maxDaily} videos/day`} />
+          : <Bi id="Produksi 24/7" en="Runs 24/7" />}</div>
         <div className="quote-card">
           <Stars />
           <blockquote>&quot;<Bi id="Set & forget — mesinnya benar-benar belajar dari channel saya dan makin pintar tiap minggu. Saya tinggal pantau hasilnya." en="Set & forget — the engine really learns from my channel and gets smarter every week. I just watch the results." />&quot;</blockquote>
@@ -302,6 +316,10 @@ export default function AuthPage() {
             <div><div className="nm">Riko Pratama</div><div className="ch">Misteri Samudra · 12.4K subs</div></div>
             <div className="delta"><div className="big">24/7</div><div className="lbl"><Bi id="set & forget" en="set & forget" /></div></div>
           </div>
+        </div>
+        {/* © perusahaan (mandat owner 2026-07-13) — teks PERSIS footer marketing (marketing-shell.tsx) */}
+        <div className="muted" style={{ fontSize: "var(--text-xs)", textAlign: "center", marginBottom: ".5rem" }}>
+          © 2026 MesinViral. Provided By Lumite Automasi Indonesia.
         </div>
         <div className="trust-row">
           <Bi id="Didukung oleh" en="Powered by" />

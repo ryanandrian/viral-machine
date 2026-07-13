@@ -104,7 +104,8 @@ export default function LandingPage() {
               <a href="/auth?view=signup" className="btn btn-default btn-xl"><Bi id={`Mulai Gratis ${trialDays} Hari`} en={`Start ${trialDays}-Day Free Trial`} /> <ArrowRight size={18} /></a>
               <a href="/showcase" className="btn btn-outline btn-xl"><Play size={16} /> <Bi id="Lihat Showcase" en="See Showcase" /></a>
             </div>
-            <div className="hero-fine"><CheckCircle size={15} style={{ color: "var(--success)" }} /> <Bi id="Tanpa kartu kredit · 5 video gratis · Cancel kapan saja" en="No credit card · 5 free videos · Cancel anytime" /></div>
+            {/* T1 (owner 2026-07-13): "5 video gratis" = fosil basi — kini config-driven (trialDays). */}
+            <div className="hero-fine"><CheckCircle size={15} style={{ color: "var(--success)" }} /> <Bi id={`Coba gratis ${trialDays} hari · Tanpa kartu kredit · Cancel kapan saja`} en={`Try free for ${trialDays} days · No credit card · Cancel anytime`} /></div>
             <div className="hero-trust">
               <Bi id="Didukung oleh" en="Powered by" />
               <div className="logos" style={{ fontWeight: 600 }}>
