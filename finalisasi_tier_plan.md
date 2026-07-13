@@ -212,7 +212,7 @@ buang tab Schedule · sembunyikan kolom USD¢ mati · badge kategori sesuai DB) 
       — BE OK 10:38 + FE OK 10:40, commit VPS `75675cb`, 3 service active, situs 200, admin API 401
       tanpa-auth, log worker bersih.**
 
-### TAHAP 4 — Marketing selaras mesin (Pilar 4-marketing)  ✅ SELESAI 2026-07-13 (redaksi DIRATIFIKASI; ⏳ IZIN DEPLOY)
+### TAHAP 4 — Marketing selaras mesin (Pilar 4-marketing)  ✅ SELESAI + DEPLOYED 2026-07-13
 File: `migrations/0158_marketing_matrix_blocks.sql` (tabel `marketing_blocks` + `plan_matrix_rows`,
 RLS publik-baca, seed = teks persis lama) · `apps/web/src/lib/plans.ts` (narasi + annualDiscountPct) ·
 `(marketing)/pricing/page.tsx` + `(marketing)/page.tsx` (baca DB) · 4 route admin baru
@@ -236,7 +236,7 @@ RLS publik-baca, seed = teks persis lama) · `apps/web/src/lib/plans.ts` (narasi
       admin-editable + verifikasi baca-ulang COCOK. Klaim '±10×' & FAQ = ikut tayang bersama
       izin deploy (owner tak mengoreksi). Commit: `f9cd6aa`.
 
-### TAHAP 5 — Higiene & rekonsiliasi dokumen  ✅ SELESAI 2026-07-13 (lokal; ⏳ izin deploy owner utk fallback BE)
+### TAHAP 5 — Higiene & rekonsiliasi dokumen  ✅ SELESAI + DEPLOYED 2026-07-13
 - [x] 5.1 Kode mati `limits.py` (5 fungsi) DIBUANG di Tahap 1 · komentar alias agency/scale `midtrans.py`
       diperbaiki (Tahap 1) · header "mock/PoC" /pricing diganti (Tahap 4) · **fallback caps
       `tenant_config.py` DIPERBAIKI**: gagal Supabase → `logger.error` keras + fallback TIDAK di-cache
@@ -273,7 +273,14 @@ JANGAN sentuh Notification URL). 7. ✅ (REVISI) angka per-video landing = 2 kom
 Pilar 4). 8. ✅ Jadwal harga dibuang; SOP perubahan harga = edit panel pada tanggal-nya (seketika,
 tanpa deploy; tenant berjalan kena mulai tagihan berikutnya; audit+rollback ada).
 
-## §4 LOG REALISASI
+## §4 LOG REALISASI — 🏁 SELURUH CETAK BIRU TUNTAS
+- **2026-07-13 15:41 — DEPLOY FINAL Tahap 4+5 (izin owner):** BE OK 15:40 + FE OK 15:41, commit VPS
+  `36bc01a`, 3 service active, /,/pricing 200; bukti diskriminatif: bundle live memuat kode
+  marketing_blocks. **Semua 21 item / 5 tahap = SELESAI + DEPLOYED.** Redaksi ilustrasi biaya versi
+  owner tayang; klaim ±10× & FAQ ikut sah (owner tak koreksi saat izin). Last-mile visual owner:
+  /pricing + landing + editor /admin/pricing. QRIS = aksi dashboard owner (catatan 04-07).
+
+## §4b LOG REALISASI (kronologis)
 - 2026-07-12 — audit 3-pass selesai; dokumen v1 (daftar temuan).
 - 2026-07-13 — owner: narasi fitur admin-editable + mandat rencana TERPADU anti-parsial →
   dokumen ditulis ulang jadi cetak biru 4-pilar + 5 tahap. Belum ada kode disentuh.
