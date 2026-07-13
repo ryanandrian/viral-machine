@@ -26,20 +26,22 @@ def run_once(sb=None) -> dict:
     channels = (sb.table("channels").select("tenant_id,id,channel_name")
                 .eq("is_active", True).execute().data) or []
     fetched = computed = weighted = 0
-    fetched_tenants = set()
     weighted_tenants = set()
     for ch in channels:
         tid = ch["tenant_id"]
         cid = str(ch.get("id"))
         # ANALYTICS + meta PER-CHANNEL: ChannelAnalytics pakai koneksi YouTube channel ini (pool tenant_youtube_accounts).
+        # FIX AKAR RETENSI-0 (2026-07-13): fetch WAJIB per-CHANNEL dgn koneksinya sendiri — token OAuth
+        # terikat per-IDENTITAS channel (RAD & MVT = 2 koneksi pada 1 akun Google). Gerbang lama
+        # "sekali per tenant" menyapu video SEMUA channel dgn token channel pertama → Analytics balas
+        # SUKSES-TAPI-KOSONG utk channel lain → watch/retensi 0 senyap (akar sejati saga retensi).
+        # Tak redundan: sapu di fetch_and_store kini ter-scope channel_id (tiap video tetap 1×).
         try:
             from src.analytics.channel_analytics import ChannelAnalytics
             ca = ChannelAnalytics(tenant_id=tid, channel_id=cid)
             ca.sync_channel_meta(tid, channel_id=cid)   # nama/platform_channel_id/subs — scope channel ini
-            if tid not in fetched_tenants:               # fetch analitik: sekali per tenant (hindari redundan)
-                ca.fetch_and_store(tid)
-                fetched += 1
-                fetched_tenants.add(tid)
+            ca.fetch_and_store(tid, channel_id=cid)
+            fetched += 1
         except Exception as e:
             logger.warning(f"[self_learning] analytics gagal ch={cid} tenant={tid}: {e}")
         # COMPUTE insights (channel-scoped tag)
@@ -60,7 +62,7 @@ def run_once(sb=None) -> dict:
                 logger.info(f"[self_learning] viral_weights tenant={tid}: status={vw.get('status')} n={vw.get('n')}")
             except Exception as e:
                 logger.warning(f"[self_learning] viral_weights gagal tenant={tid}: {e}")
-    logger.info(f"[self_learning] run_once: fetch={fetched} tenant | compute={computed} channel | weights={weighted} tenant")
+    logger.info(f"[self_learning] run_once: fetch={fetched} channel | compute={computed} channel | weights={weighted} tenant")
     return {"fetched": fetched, "computed": computed, "weighted": weighted}
 
 

@@ -160,10 +160,14 @@ class ChannelAnalytics:
 
     # ── Public API ────────────────────────────────────────────────────────
 
-    def fetch_and_store(self, tenant_id: str) -> dict:
+    def fetch_and_store(self, tenant_id: str, channel_id: str | None = None) -> dict:
         """
-        Pull analytics untuk semua video tenant yang sudah > 48 jam dipublish.
-        Upsert hasil ke tabel video_analytics.
+        Pull analytics video → upsert ke video_analytics.
+        channel_id (fix akar retensi-0, 2026-07-13): batasi sapu ke video CHANNEL INI — token OAuth
+        terikat per-IDENTITAS channel (`channel==MINE` = channel koneksi ini saja; RAD & MVT = 2 koneksi
+        pada 1 akun Google). Sapu lintas-channel dgn satu token → Analytics balas SUKSES-TAPI-KOSONG
+        (tanpa error) → watch/subgain 0 senyap. None = perilaku lama (kompat; JANGAN dipakai utk
+        tenant multi-koneksi).
 
         Returns:
             dict: {"fetched": int, "updated": int, "skipped": int,
@@ -176,14 +180,14 @@ class ChannelAnalytics:
         result = {"fetched": 0, "updated": 0, "skipped": 0, "errors": 0,
                   "full_analytics": self._has_analytics_scope}
 
-        # 1. Ambil video yang perlu di-fetch
-        videos = self._get_videos_to_fetch(tenant_id)
+        # 1. Ambil video yang perlu di-fetch (scoped ke channel token ini bila channel_id ada)
+        videos = self._get_videos_to_fetch(tenant_id, channel_id=channel_id)
         if not videos:
-            logger.info(f"[Analytics] Tidak ada video baru untuk di-fetch ({tenant_id})")
+            logger.info(f"[Analytics] Tidak ada video baru untuk di-fetch ({tenant_id} ch={channel_id})")
             return result
 
         logger.info(
-            f"[Analytics] Fetching {len(videos)} videos | tenant={tenant_id} "
+            f"[Analytics] Fetching {len(videos)} videos | tenant={tenant_id} ch={channel_id} "
             f"| full_analytics={self._has_analytics_scope}"
         )
 
@@ -249,10 +253,11 @@ class ChannelAnalytics:
 
     # ── Data fetching ─────────────────────────────────────────────────────
 
-    def _get_videos_to_fetch(self, tenant_id: str) -> list:
+    def _get_videos_to_fetch(self, tenant_id: str, channel_id: str | None = None) -> list:
         """
         Pilih video untuk di-fetch — ROTASI berbasis kesegaran (BUKAN hanya 50 terbaru).
-        Kriteria: status='published', dipublish > 48 jam.
+        channel_id: WAJIB utk tenant multi-koneksi (fix akar retensi-0 2026-07-13) — video channel lain
+        tak boleh disapu token channel ini (Analytics balas kosong senyap; rotasi masing-masing channel).
         Prioritas: video yang paling BASI (last fetched_at ASC; belum pernah di-fetch lebih dulu) →
         semua video ter-refresh bergiliran tiap run (cegah video lama beku snapshot selamanya).
         Skip yang sudah di-fetch < REFETCH_INTERVAL_HOURS. Ambil MAX_VIDEOS_PER_RUN per run.
@@ -265,12 +270,14 @@ class ChannelAnalytics:
             # dipindah ke _fetch_video_metrics (HANYA menahan FULL analytics yg memang baru reliabel
             # ~48j); video baru tetap ditarik utk views/likes basic. (Sebelumnya .lt publish 48j =
             # views nyata tertunda 2 hari padahal sudah ada di YouTube.)
-            result = (
+            q = (
                 self._supabase.table("videos")
                 .select("video_id, title, hook, niche, published_at, channel_id")
                 .eq("tenant_id", tenant_id).eq("status", "published")
-                .order("published_at", desc=True).limit(1000).execute()
             )
+            if channel_id:
+                q = q.eq("channel_id", channel_id)   # token per-channel → sapu HANYA channel ini
+            result = q.order("published_at", desc=True).limit(1000).execute()
             all_videos = [v for v in (result.data or []) if v.get("video_id")]
             if not all_videos:
                 return []
