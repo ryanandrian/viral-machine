@@ -243,7 +243,7 @@ RLS publik-baca, seed = teks persis lama) · `apps/web/src/lib/plans.ts` (narasi
       LIVE (banner update) · PAYMENT doc §Changelog: entri 2026-07-13 lengkap (5 tahap + insiden S3) ·
       `SISA_KERJA_GO_LIVE.md` §Changelog: entri realisasi finalisasi tier plan.
 - **REALISASI:** py_compile ✓ + smoke import BE ✓ (producer/publisher/pipeline pakai tenant_config).
-      Commit: (diisi saat commit). Deploy fallback BE = menumpang batch Tahap 4-5.
+      Commit: `9374346`. Deploy fallback BE = menumpang batch Tahap 4-5.
 
 ---
 
