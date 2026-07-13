@@ -231,7 +231,7 @@ RLS publik-baca, seed = teks persis lama) · `apps/web/src/lib/plans.ts` (narasi
       npm build ✓; /,/pricing 200; nol residu (blok di-PATCH lalu direstorasi persis, baris matriks uji
       dihapus, user uji dihapus). Migrasi 0158 terpasang DB live (RLS anon baca-saja diverifikasi).
       ⚠️ **REDAKSI COPY MARKETING (klaim "±10×", "±Rp1.736/video all-in", isi 2 profil biaya, FAQ) WAJIB
-      diratifikasi owner sebelum TAYANG (deploy)** — gerbang copy di cetak biru. Commit: (diisi saat commit).
+      diratifikasi owner sebelum TAYANG (deploy)** — gerbang copy di cetak biru. Commit: `f9cd6aa`.
 
 ### TAHAP 5 — Higiene & rekonsiliasi dokumen  ⏳
 - [ ] 5.1 Buang kode mati `limits.py` (5 fungsi; bila belum terangkut Tahap 1) + komentar basi
