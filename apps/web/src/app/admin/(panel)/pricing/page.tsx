@@ -224,8 +224,8 @@ export default function AdminPricingPage() {
           </table></div></div>
           <div className="muted" style={{ fontSize: "var(--text-xs)", margin: "0.625rem 0 0" }}><Bi id="Harga/bln tiap tier diatur di tabel pricing_config di atas (plan_starter/pro/business)." en="Per-tier monthly price is edited in the pricing_config table above (plan_starter/pro/business)." /></div>
 
-          {/* Tahap 4: blok ILUSTRASI BIAYA per video (landing) — statis, admin-editable */}
-          <h3 style={{ fontSize: "var(--text-lg)", fontWeight: 600, margin: "1.5rem 0 1rem" }}><Bi id="Ilustrasi biaya per video (landing)" en="Cost-per-video illustration (landing)" /></h3>
+          {/* Blok ILUSTRASI BIAYA per video — statis, admin-editable; tampil di /pricing seksi BYOK (pindah dari landing, owner 2026-07-14) */}
+          <h3 style={{ fontSize: "var(--text-lg)", fontWeight: 600, margin: "1.5rem 0 1rem" }}><Bi id="Ilustrasi biaya per video (/pricing, seksi BYOK)" en="Cost-per-video illustration (/pricing, BYOK section)" /></h3>
           <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl">
             <thead><tr><th>Key</th><th><Bi id="Judul (ID)" en="Title (ID)" /></th><th className="num"><Bi id="Baris" en="Lines" /></th><th></th></tr></thead>
             <tbody>{blocks.map((b) => (
@@ -237,7 +237,7 @@ export default function AdminPricingPage() {
               </tr>
             ))}</tbody>
           </table></div></div>
-          <div className="muted" style={{ fontSize: "var(--text-xs)", margin: "0.625rem 0 0" }}><Bi id="Tampil di landing sebagai ilustrasi statis ber-label periode — perbarui angka/model dari sini tanpa deploy." en="Shown on the landing page as a period-labelled static illustration — update figures/models here without deploying." /></div>
+          <div className="muted" style={{ fontSize: "var(--text-xs)", margin: "0.625rem 0 0" }}><Bi id="Tampil di halaman /pricing (seksi BYOK) sebagai ilustrasi statis — perbarui angka/model dari sini tanpa deploy." en="Shown on the /pricing page (BYOK section) as a static illustration — update figures/models here without deploying." /></div>
 
           {/* Tahap 4: MATRIKS PERBANDINGAN fitur /pricing — baris = data; sel: true, false, token auto:x, atau teks */}
           <h3 style={{ fontSize: "var(--text-lg)", fontWeight: 600, margin: "1.5rem 0 1rem" }}><Bi id='Tabel perbandingan fitur (/pricing "Compare all features")' en='Feature comparison table (/pricing "Compare all features")' /></h3>

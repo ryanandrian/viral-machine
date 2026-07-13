@@ -340,7 +340,16 @@
 
 ---
 ### Changelog
-- **2026-07-14 — AUDIT LOKASI LANGSUNG (perintah owner; teguran disiplin-update TERBUKTI lagi):**
+- **2026-07-14 (2) — Ilustrasi biaya AI DIPINDAH landing → /pricing seksi BYOK (mandat owner; lokal ✅, menunggu izin deploy FE).**
+  (a) Seksi 2 kartu konfigurasi model (marketing_blocks `cost_*`) dicabut dari landing, dipasang di
+  /pricing di bawah 3 kartu BYOK; (b) 2 teks DIBUANG di DB (reversible, nilai lama tercatat sesi ini):
+  baris head "Berdasarkan penggunaan nyata 8–12 Juli…" + kalimat footnote "Ditambah langganan per
+  video… Rp 4.967" (disclaimer "Angka ilustrasi…" dipertahankan); (c) 2 kartu kini SAMA tinggi+lebar,
+  di tengah (CSS `.cost-grid` grid stretch, maks 900px, responsif 1 kolom); (d) koherensi: 3 rujukan
+  landing ("lihat ilustrasi biaya…") diarahkan ke halaman pricing + label admin /admin/pricing
+  "(landing)" → "(/pricing, seksi BYOK)". Bukti: build lulus + replikasi query & predikat widget
+  via kunci anon (seksi render ✓, head 0 baris ✓, teks terlarang hilang ✓). BE/FE-tenant TIDAK
+  tersentuh (grep: marketing_blocks hanya dipakai landing/pricing/admin).
   (a) **[D1] /showcase TERNYATA SUDAH TERISI owner** (8 layar + 4 video aktif, live 200) — catatan
   "tabel kosong" = BASI; (b) **[B17]-F0 kurva belajar tampil di 3 lokasi** (/insights utama + channel
   setting + dashboard) — yang belum dari F1 hanya: `decision_reason` di Runs + email Laporan Kecerdasan

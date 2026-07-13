@@ -62,13 +62,19 @@ export default function PricingPage() {
   const [trialDays, setTrialDays] = useState(7);
   const [annualPct, setAnnualPct] = useState(0);           // knob admin; 0 = toggle tahunan disembunyikan
   const [matrix, setMatrix] = useState<MatrixRow[]>([]);   // matriks perbandingan (admin-editable)
+  const [costBlocks, setCostBlocks] = useState<{ key: string; title_id: string | null; title_en: string | null; lines: { id: string; en: string }[] }[]>([]);
   useEffect(() => {
     fetchPricing().then(setPricing);
     fetchPlans().then(({ plans, trialDays, annualDiscountPct }) => { setPlans(plans); setTrialDays(trialDays); setAnnualPct(annualDiscountPct); });
     createClient().from("plan_matrix_rows").select("*").order("sort_order")
       .then(({ data }) => setMatrix((data as MatrixRow[]) ?? []));
+    // Ilustrasi biaya per video — DIPINDAH dari landing ke seksi BYOK (keputusan owner 2026-07-14).
+    // Konten = marketing_blocks (admin-editable /admin/pricing, tanpa deploy). Kosong/gagal → tersembunyi.
+    createClient().from("marketing_blocks").select("key,title_id,title_en,lines").like("key", "cost_%").order("sort_order")
+      .then(({ data }) => setCostBlocks((data as typeof costBlocks) ?? []));
   }, []);
   const pm: Record<string, Plan | undefined> = Object.fromEntries(plans.map((p) => [p.plan_type, p]));
+  const cb = (k: string) => costBlocks.find((b) => b.key === k);
 
   return (
     <>
@@ -155,6 +161,28 @@ export default function PricingPage() {
           <div className="addon"><span className="ai"><DollarSign size={20} /></span><h4><Bi id="Tanpa markup, tanpa perantara" en="No markup, no middleman" /></h4><p><Bi id="Kunci API milikmu, tagihan langsung dari provider. Kami tidak mengambil sepeser pun dari biaya AI-mu." en="Your keys, billed directly by the provider. We never take a cut of your AI spend." /></p></div>
           <div className="addon"><span className="ai"><Users size={20} /></span><h4><Bi id="Kamu yang pegang kendali" en="You stay in control" /></h4><p><Bi id="Naikkan kualitas dengan model premium, atau tekan biaya dengan model hemat — ganti kapan saja per channel, tanpa terkunci vendor." en="Scale up with premium models or keep costs lean — switch anytime per channel, with zero vendor lock-in." /></p></div>
         </div>
+
+        {/* ILUSTRASI BIAYA PER VIDEO — dipindah dari landing (keputusan owner 2026-07-14): dua profil
+            NYATA ber-detail model dari marketing_blocks. Blok kosong → seluruh sub-seksi tersembunyi. */}
+        {cb("cost_profile_premium") && cb("cost_profile_free") && (
+          <div style={{ marginTop: "3rem" }}>
+            <div className="mk-center" style={{ marginBottom: "1.5rem" }}>
+              <h3 style={{ fontSize: "var(--text-xl)", fontWeight: 700 }}><Bi id={cb("cost_illustration_head")?.title_id ?? ""} en={cb("cost_illustration_head")?.title_en ?? cb("cost_illustration_head")?.title_id ?? ""} /></h3>
+              {(cb("cost_illustration_head")?.lines ?? []).map((l, i) => <p key={i} className="mk-lead mk-center" style={{ fontSize: "var(--text-sm)", marginTop: ".4rem" }}><Bi id={l.id} en={l.en || l.id} /></p>)}
+            </div>
+            <div className="cost-grid">
+              {(["cost_profile_premium", "cost_profile_free"] as const).map((k) => { const b = cb(k)!; return (
+                <div className="cost-card" key={k}>
+                  <div className="cn"><Bi id={b.title_id ?? ""} en={b.title_en ?? b.title_id ?? ""} /></div>
+                  <ul>{b.lines.map((l, i) => <li key={i}><Check size={15} /> <Bi id={l.id} en={l.en || l.id} /></li>)}</ul>
+                </div>
+              ); })}
+            </div>
+            {(cb("cost_footnote")?.lines ?? []).map((l, i) => (
+              <div key={i} className="mk-center muted" style={{ fontSize: "var(--text-xs)", marginTop: "1rem", maxWidth: 760, marginInline: "auto" }}><Bi id={l.id} en={l.en || l.id} /></div>
+            ))}
+          </div>
+        )}
       </div></section>
 
       {/* ADD-ONS */}
