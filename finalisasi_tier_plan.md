@@ -1,6 +1,7 @@
 # 🎯 FINALISASI TIER PLAN — CETAK BIRU TERPADU (pricing · paket · pembayaran · upgrade · diskon · trial · tenant khusus)
 
-> **Status:** RENCANA MATANG FINAL (audit 3-pass 2026-07-12 → desain terpadu 2026-07-13).
+> **Status:** ✅ **CLOSED 2026-07-13** — 5 tahap / 21 item + lanjutan audit-hardcode SELESAI & DEPLOYED
+> seluruhnya (VPS `fd0a88c`). Dokumen = arsip referensi; status hidup selanjutnya di SISA_KERJA_GO_LIVE.md.
 > **Mandat owner:** (1) seluruh issue skop ini = proses SALING TERINTEGRASI → penyelesaian WAJIB
 > terpadu, HARAM parsial/kacamata-kuda; (2) HARAM bug baru — tiap tahap dibuktikan nol regresi
 > di 5 permukaan; (3) daftar fitur per-paket = NARASI yang admin edit dari panel (keputusan 2026-07-13);
@@ -274,6 +275,14 @@ Pilar 4). 8. ✅ Jadwal harga dibuang; SOP perubahan harga = edit panel pada tan
 tanpa deploy; tenant berjalan kena mulai tagihan berikutnya; audit+rollback ada).
 
 ## §4 LOG REALISASI — 🏁 SELURUH CETAK BIRU TUNTAS
+- **2026-07-13 18:12 — 🔐 DOKUMEN CLOSED (deploy `fd0a88c`, izin owner).** Pasca-tuntas 21 item, audit
+  hardcode lanjutan owner melahirkan & menuntaskan: (a) klaim signup/landing dijujurkan — "5 video
+  gratis" fosil → trialDays config; "24 video/hari/channel" basi → "hingga 50/hari" live (vid×ch tier
+  tertinggi); testimoni auth dari TABEL (fiksi "Riko Pratama" dibuang); (b) © footer+auth = tahun
+  BERJALAN + legal_name live company_profile (koreksi pelanggaran no-hardcode — insiden tercatat
+  [[feedback_no_hardcode]]); (c) KEAMANAN: akses publik langsung company_profile DITUTUP (migr 0159;
+  dulu NPWP/NIB/telegram-admin terbaca anon — dibuktikan probe) → pintu resmi /api/public/company;
+  regresi invoice 4/4 utuh. Semua LIVE & terverifikasi produksi. Tidak ada item terbuka tersisa.
 - **2026-07-13 (pasca-tuntas) — Penguatan editor matriks (pertanyaan owner → mandat "kerjakan"):**
   sel matriks TETAP fleksibel teks-bebas (kebutuhan nyata: Email/∞/custom/3/semua), diperkuat 2 hal:
   (1) token dinormalisasi kapital DI SERVER via SATU helper `lib/admin/plan-matrix.ts` (dipakai kedua
@@ -281,7 +290,7 @@ tanpa deploy; tenant berjalan kena mulai tagihan berikutnya; audit+rollback ada)
   teks bebas ("Email"/"Dedicated") TIDAK disentuh; (2) saran-ketik datalist 5 token di kotak sel admin
   + hint diperluas (kapital auto-dibetulkan · token auto tak berlaku kolom Enterprise). Uji runtime
   4/4 + bundle memuat datalist ✓ + regresi >60 char tetap 400 ✓; baris uji dihapus (nol residu).
-  Commit: `3032463`. Deploy: menunggu izin owner (FE-only).
+  Commit: `3032463`. Deploy: ✅ 2026-07-13 18:12 (batch `fd0a88c`, izin owner).
 - **2026-07-13 15:41 — DEPLOY FINAL Tahap 4+5 (izin owner):** BE OK 15:40 + FE OK 15:41, commit VPS
   `36bc01a`, 3 service active, /,/pricing 200; bukti diskriminatif: bundle live memuat kode
   marketing_blocks. **Semua 21 item / 5 tahap = SELESAI + DEPLOYED.** Redaksi ilustrasi biaya versi
