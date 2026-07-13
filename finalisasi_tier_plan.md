@@ -126,7 +126,7 @@ jumlah  = max(1000, dasar × (100−diskon)/100)
 
 ## §2 TAHAP EKSEKUSI (urut; tiap tahap utuh per-sistem + uji nol-regresi 5 permukaan)
 
-### TAHAP 1 — Fondasi uang & penegakan (Pilar 1a/1b + 2-inti + 3-inti)  ✅ SELESAI 2026-07-13 (lokal; menunggu izin deploy)
+### TAHAP 1 — Fondasi uang & penegakan (Pilar 1a/1b + 2-inti + 3-inti)  ✅ SELESAI + DEPLOYED 2026-07-13
 File: `migrations/0155_tier_enforcement.sql` · `src/billing/limits.py` · `src/billing/midtrans.py` ·
 `apps/web/src/app/api/admin/tenants/[id]/lifecycle/route.ts`.
 (Catatan eksekusi: knob `annual_discount_pct` DIPINDAH ke migrasi Tahap 2 — halaman admin app-config
@@ -153,7 +153,7 @@ cacat. Knob + label CFG_META masuk satu batch Tahap 2.)
       (mv-worker+mv-webhook active, health 200) · FE OK 01:27 (mv-web active, situs 200) · commit
       VPS `0f7f435` · sanity live: rute lifecycle 401 tanpa-auth ✓, / & /pricing 200 ✓.**
 
-### TAHAP 2 — Tahunan + permukaan tenant (Pilar 2-lengkap + 4-tenant)  ⏳
+### TAHAP 2 — Tahunan + permukaan tenant (Pilar 2-lengkap + 4-tenant)  ✅ SELESAI + DEPLOYED 2026-07-13
 File: `apps/web/src/app/api/billing/checkout/route.ts` + `src/billing/webhook_app.py` +
 `src/billing/midtrans.py` (terima `period` monthly|annual) · `apps/web/src/app/(app)/billing/page.tsx`
 (drawer dari fetchPlans + pilihan periode + `display_name`) · `apps/web/src/lib/plans.ts` ·
@@ -179,7 +179,7 @@ File: `apps/web/src/app/api/billing/checkout/route.ts` + `src/billing/webhook_ap
       **Deploy: ✅ 2026-07-13 (izin owner) — BE OK 09:46 · FE OK 09:47 · commit VPS `6b6e58b` ·
       3 service active · sanity live: /,/pricing 200, checkout tanpa-auth 401.**
 
-### TAHAP 3 — Panel admin lengkap & pelaporan uang jujur (Pilar 3-lengkap + 4-admin)  ✅ SELESAI 2026-07-13 (lokal; menunggu izin deploy)
+### TAHAP 3 — Panel admin lengkap & pelaporan uang jujur (Pilar 3-lengkap + 4-admin)  ✅ SELESAI + DEPLOYED 2026-07-13
 File: `migrations/0157_plan_marketing_narrative.sql` (kolom narasi + seed teks sekarang; nomor 0156
 terpakai annual billing Tahap 2) ·
 `apps/web/src/app/admin/(panel)/pricing/page.tsx` (editor narasi per-paket · tombol Tambah entri harga ·
@@ -212,7 +212,7 @@ buang tab Schedule · sembunyikan kolom USD¢ mati · badge kategori sesuai DB) 
       — BE OK 10:38 + FE OK 10:40, commit VPS `75675cb`, 3 service active, situs 200, admin API 401
       tanpa-auth, log worker bersih.**
 
-### TAHAP 4 — Marketing selaras mesin (Pilar 4-marketing)  ✅ SELESAI 2026-07-13 (lokal; ⏳ RATIFIKASI REDAKSI + izin deploy owner)
+### TAHAP 4 — Marketing selaras mesin (Pilar 4-marketing)  ✅ SELESAI 2026-07-13 (redaksi DIRATIFIKASI; ⏳ IZIN DEPLOY)
 File: `migrations/0158_marketing_matrix_blocks.sql` (tabel `marketing_blocks` + `plan_matrix_rows`,
 RLS publik-baca, seed = teks persis lama) · `apps/web/src/lib/plans.ts` (narasi + annualDiscountPct) ·
 `(marketing)/pricing/page.tsx` + `(marketing)/page.tsx` (baca DB) · 4 route admin baru
