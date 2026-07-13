@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import { Moon, Sun, Menu } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 // Port MVMarketing (design-source/styles/marketing.js) → React. Nav + footer untuk halaman publik.
 // Brand icons (youtube/telegram) tak ada di lucide → substitusi Video/Send.
@@ -35,10 +36,15 @@ export function MarketingShell({ children }: { children: React.ReactNode }) {
   // Badge status footer = kondisi NYATA (/api/public/status, sumber sama tab Status & admin System
   // Health). null = belum/gagal dimuat → tampil netral "Status sistem" tanpa klaim (jujur).
   const [allOk, setAllOk] = useState<boolean | null>(null);
+  // Identitas perusahaan di © = company_profile.legal_name (SUMBER RESMI, admin-editable
+  // /admin/company-profile — mandat owner 2026-07-13: no-hardcode). null = belum termuat → © tanpa nama.
+  const [legalName, setLegalName] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/public/status").then((r) => { if (!r.ok) throw new Error(); return r.json(); })
       .then((j) => setAllOk(Boolean(j.all_ok))).catch(() => setAllOk(null));
+    createClient().from("company_profile").select("legal_name").eq("id", 1).maybeSingle()
+      .then(({ data }) => setLegalName((data as { legal_name?: string } | null)?.legal_name ?? null));
   }, []);
 
   useEffect(() => {
@@ -108,7 +114,8 @@ export function MarketingShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
           <div className="mk-foot-bottom">
-            <span>© 2026 MesinViral. Provided By Lumite Automasi Indonesia.</span>
+            {/* © = tahun BERJALAN otomatis + legal_name dari company_profile (no-hardcode, owner 2026-07-13) */}
+            <span>© {new Date().getFullYear()} MesinViral.{legalName ? ` Provided By ${legalName}.` : ""}</span>
             <div className="mk-foot-meta">
               <a href="/about"><span style={{ width: 7, height: 7, borderRadius: "50%", background: allOk === null ? "var(--surface-3)" : allOk ? "var(--success)" : "var(--warning)", display: "inline-block", marginRight: 5 }} />{allOk === null ? <Bi id="Status sistem" en="System status" /> : allOk ? <Bi id="Semua sistem normal" en="All systems normal" /> : <Bi id="Sebagian layanan terganggu" en="Some services degraded" />}</a>
             </div>

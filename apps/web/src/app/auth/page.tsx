@@ -5,6 +5,7 @@ import { useTheme } from "next-themes";
 import { Moon, Sun, Eye, EyeOff, Command, CheckCircle, Bell, ArrowLeft, ArrowRight, Star } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { fetchTrialDays, fetchPlans } from "@/lib/plans";
+import { TestimonialAvatar, type Testimonial } from "@/components/testimonial-avatar";
 import "./auth.css";
 
 // B1-B4 Auth (PoC) — port dari design-source/Auth.html. Multi-view (signup/login/forgot/verify),
@@ -69,14 +70,25 @@ export default function AuthPage() {
   // T2 (owner 2026-07-13): kapasitas maks per AKUN = video/hari × channel tier tertinggi (Business
   // 5×10=50) — dihitung LIVE dari plan_limits (admin naikkan kuota → klaim ikut). null = belum termuat.
   const [maxDaily, setMaxDaily] = useState<number | null>(null);
+  // © dari company_profile.legal_name (SUMBER RESMI admin-editable — no-hardcode, owner 2026-07-13);
+  // T3: testimoni panel kanan = urutan-PERTAMA tabel testimonials (satu sumber dgn landing; ubah
+  // urutan/isi di admin → halaman ini ikut). null/gagal → kartu disembunyikan (bukan data palsu).
+  const [legalName, setLegalName] = useState<string | null>(null);
+  const [tst, setTst] = useState<Testimonial | null>(null);
+  const supabase = createClient();
   useEffect(() => {
     fetchTrialDays().then(setTrialDays);
     fetchPlans().then(({ plans }) => {
       const caps = plans.filter((p) => p.price_idr != null).map((p) => p.max_videos_per_day * p.max_channels);
       if (caps.length) setMaxDaily(Math.max(...caps));
     });
+    supabase.from("company_profile").select("legal_name").eq("id", 1).maybeSingle()
+      .then(({ data }) => setLegalName((data as { legal_name?: string } | null)?.legal_name ?? null));
+    supabase.from("testimonials").select("*").eq("is_active", true).eq("show_on_landing", true)
+      .order("sort_order").limit(1).maybeSingle()
+      .then(({ data }) => setTst((data as Testimonial | null) ?? null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const supabase = createClient();
   const origin = () => (typeof window !== "undefined" ? window.location.origin : "");
 
   async function doSignup() {
@@ -168,7 +180,7 @@ export default function AuthPage() {
   }
   const ErrBox = () => err ? <div style={{ color: "var(--danger, #ef4444)", fontSize: "var(--text-sm)", marginTop: "0.5rem" }}>{err}</div> : null;
 
-  const Stars = () => <div className="stars">{Array.from({ length: 5 }).map((_, i) => <Star key={i} size={15} fill="#FBBF24" color="#FBBF24" />)}</div>;
+  const Stars = ({ n = 5 }: { n?: number }) => <div className="stars">{Array.from({ length: Math.max(1, Math.min(5, n)) }).map((_, i) => <Star key={i} size={15} fill="#FBBF24" color="#FBBF24" />)}</div>;
 
   return (
     <div className="auth">
@@ -308,18 +320,22 @@ export default function AuthPage() {
         <div className="stat-ticker"><span style={{ width: 7, height: 7, borderRadius: "50%", background: "#34D399", display: "inline-block" }} /> {maxDaily
           ? <Bi id={`Produksi 24/7 · hingga ${maxDaily} video/hari`} en={`Runs 24/7 · up to ${maxDaily} videos/day`} />
           : <Bi id="Produksi 24/7" en="Runs 24/7" />}</div>
-        <div className="quote-card">
-          <Stars />
-          <blockquote>&quot;<Bi id="Set & forget — mesinnya benar-benar belajar dari channel saya dan makin pintar tiap minggu. Saya tinggal pantau hasilnya." en="Set & forget — the engine really learns from my channel and gets smarter every week. I just watch the results." />&quot;</blockquote>
-          <div className="quote-author">
-            <span className="av">RP</span>
-            <div><div className="nm">Riko Pratama</div><div className="ch">Misteri Samudra · 12.4K subs</div></div>
-            <div className="delta"><div className="big">24/7</div><div className="lbl"><Bi id="set & forget" en="set & forget" /></div></div>
+        {/* T3 (owner 2026-07-13): testimoni dari TABEL (urutan-pertama; satu sumber dgn landing) —
+            "Riko Pratama" lama = fiksi hardcode yang tak ada di tabel. Gagal muat → kartu disembunyikan. */}
+        {tst && (
+          <div className="quote-card">
+            <Stars n={tst.rating} />
+            <blockquote>&quot;<Bi id={tst.quote} en={tst.quote_en || tst.quote} />&quot;</blockquote>
+            <div className="quote-author">
+              <TestimonialAvatar t={tst} size={40} />
+              <div><div className="nm">{tst.person_name}</div><div className="ch">{tst.channel_label ?? ""}</div></div>
+              {tst.metric_value && <div className="delta"><div className="big">{tst.metric_value}</div><div className="lbl"><Bi id={tst.metric_label ?? ""} en={tst.metric_label_en || (tst.metric_label ?? "")} /></div></div>}
+            </div>
           </div>
-        </div>
-        {/* © perusahaan (mandat owner 2026-07-13) — teks PERSIS footer marketing (marketing-shell.tsx) */}
+        )}
+        {/* © = tahun BERJALAN otomatis + legal_name dari company_profile (no-hardcode; identik footer marketing) */}
         <div className="muted" style={{ fontSize: "var(--text-xs)", textAlign: "center", marginBottom: ".5rem" }}>
-          © 2026 MesinViral. Provided By Lumite Automasi Indonesia.
+          © {new Date().getFullYear()} MesinViral.{legalName ? ` Provided By ${legalName}.` : ""}
         </div>
         <div className="trust-row">
           <Bi id="Didukung oleh" en="Powered by" />
