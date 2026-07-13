@@ -182,6 +182,22 @@ class PerformanceAnalyzer:
                 if len(rows) < PAGE:
                     break
                 page += 1
+            # [B15] (migr 0160, owner 2026-07-14): snapshot video DELISTED (dihapus/di-private di
+            # YouTube) DIKELUARKAN dari pembelajaran — analyzer baca video_analytics langsung, jadi
+            # filter status='published' konsumen lain tak menjangkaunya; tanpa ini, selera mesin
+            # tercemar konten yang sengaja dibuang owner (insiden niche islami 2026-07-11).
+            try:
+                dq = self._supabase.table("videos").select("video_id") \
+                    .eq("tenant_id", tenant_id).eq("status", "delisted")
+                if channel_id:
+                    dq = dq.eq("channel_id", channel_id)
+                delisted = {r["video_id"] for r in (dq.execute().data or []) if r.get("video_id")}
+                if delisted:
+                    n_before = len(latest)
+                    latest = {v: r for v, r in latest.items() if v not in delisted}
+                    logger.info(f"[Analyzer] [B15] {n_before - len(latest)} snapshot video delisted dikeluarkan dari insight")
+            except Exception as e:
+                logger.warning(f"[Analyzer] [B15] filter delisted gagal (lanjut tanpa filter): {e}")
             out = sorted(latest.values(), key=lambda r: str(r.get("published_at") or ""), reverse=True)
             return out[:500]  # pagar wajar: 500 video terbaru per channel cukup utk insight
         except Exception as e:

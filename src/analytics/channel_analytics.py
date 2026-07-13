@@ -345,12 +345,21 @@ class ChannelAnalytics:
         try:
             response = (
                 self._youtube.videos()
-                .list(part="statistics", id=video_id)
+                .list(part="statistics,status", id=video_id)
                 .execute()
             )
             items = response.get("items", [])
             if not items:
-                logger.warning(f"[Analytics] Video tidak ditemukan di YouTube: {video_id}")
+                # [B15] video DIHAPUS di YouTube (jawaban API sukses-tapi-kosong, BUKAN error) →
+                # tandai delisted: keluar dari pembelajaran + sapu berikutnya (ketok owner 2026-07-14).
+                logger.warning(f"[Analytics] Video tidak ditemukan di YouTube: {video_id} — tandai delisted")
+                self._mark_delisted(video, "not_found")
+                return None
+            # [B15] video DI-PRIVATE pemilik → sama: keluar dari pembelajaran (unlisted/public tetap ikut).
+            _privacy = (items[0].get("status") or {}).get("privacyStatus")
+            if _privacy == "private":
+                logger.warning(f"[Analytics] Video di-private di YouTube: {video_id} — tandai delisted")
+                self._mark_delisted(video, "private")
                 return None
 
             stats = items[0].get("statistics", {})
@@ -443,6 +452,21 @@ class ChannelAnalytics:
         return metrics
 
     # ── Storage ───────────────────────────────────────────────────────────
+
+    def _mark_delisted(self, video: dict, reason: str) -> None:
+        """[B15] Tandai videos.status='delisted' (migr 0160) — HANYA dipanggil pada jawaban PASTI
+        YouTube (not_found / private), TIDAK PERNAH pada exception/error jaringan (anti salah-tanda).
+        Efek berantai otomatis via filter status='published' di semua konsumen; snapshot analytics
+        historis TIDAK dihapus (reversible: set 'published' kembali bila keliru). Fail-soft."""
+        vid = video.get("video_id")
+        if not self._supabase or not vid:
+            return
+        try:
+            self._supabase.table("videos").update({"status": "delisted"}) \
+                .eq("video_id", vid).eq("status", "published").execute()
+            logger.info(f"[Analytics] [B15] {vid} → delisted ({reason}) — keluar dari pembelajaran & sapu")
+        except Exception as e:
+            logger.warning(f"[Analytics] [B15] tandai delisted {vid} gagal (non-fatal): {e}")
 
     def _upsert_analytics(self, tenant_id: str, video: dict, metrics: dict):
         """Upsert row ke video_analytics. Fire-and-forget."""
