@@ -176,7 +176,8 @@ File: `apps/web/src/app/api/billing/checkout/route.ts` + `src/billing/webhook_ap
       200 dgn fetchPlans baru ✓. Migrasi **0156_annual_billing** (knob `annual_discount_pct`=20 +
       `payments.period_months` default 1) TERPASANG di DB live + label CFG_META dwibahasa di admin
       app-config. Helper `plan_display_name` di limits.py (satu sumber nama). Commit: `883836c`.
-      Deploy: MENUNGGU IZIN OWNER.
+      **Deploy: ✅ 2026-07-13 (izin owner) — BE OK 09:46 · FE OK 09:47 · commit VPS `6b6e58b` ·
+      3 service active · sanity live: /,/pricing 200, checkout tanpa-auth 401.**
 
 ### TAHAP 3 — Panel admin lengkap & pelaporan uang jujur (Pilar 3-lengkap + 4-admin)  ⏳
 File: `migrations/0157_plan_marketing_narrative.sql` (kolom narasi + seed teks sekarang; nomor 0156
