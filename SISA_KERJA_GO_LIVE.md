@@ -194,11 +194,11 @@
 - **DONE-BILA:** kolom/tabel fosil hilang, nol regresi.
 - **REALISASI:** ⬜
 
-### [B6] ai_video 8s (render mode text-to-video) — ⬜ *(DITUNDA)*
-- **BUKTI (verified):** file `src/production/ai_video.py` **TIDAK ADA**; `visual_mode='ai_video:*'` belum jalan. Preset 8s butuh ini.
-- **PLAN:** bangun provider text-to-video (BYOK: Kling/Runway/Luma/Veo/Sora — 9:16, 5-8s, async) + integrasi `visual_assembler` (branch single-clip, skip xfade) + `video_renderer` (durasi sync). Spec `MULTI_FORMAT_STUDIO.md §5`. Adapter via registry F5-06 yang sudah ada.
-- **DONE-BILA:** preset 8s produksi 1 klip ai_video + audio + publish.
-- **REALISASI:** ⬜ *(prioritas rendah; 8s bukan preset utama)*
+### [B6] ai_video 8s (render mode text-to-video) — 📋 RENCANA MATANG 2026-07-14 (menunggu ketok owner mulai F0)
+- **SPEC + tracker LENGKAP = `AI_VIDEO_8S_PLAN.md`** (deep-dive terverifikasi 2026-07-14: inventaris siap-vs-gap ber-anchor + fase F0 riset-vendor → F1 DB → F2 BE → F3 FE → F4 bukti-runtime; tiap fase ber-gerbang). Keputusan owner FINAL tercatat di §0 dokumen itu: 8s KHUSUS text-to-video · vendor TIDAK dikunci (katalog extensible, riset dulu vendor ber-parameter+biaya seragam; rekomendasi = agregator fal.ai/Replicate) · BUKAN SaaS baru.
+- **Temuan kunci deep-dive:** jauh lebih siap dari catatan lama — preset 8s SUDAH di DB (is_active=false), naskah/skor-viral/QC/gerbang-durasi sudah sadar-8s, FE picker sudah siap component video, `providers/visual/ai_video.py` ADA tapi stub. Gap inti = adapter t2v + prompt-video + katalog `ai_models` video (NOL baris) + cost meter + validator kunci + bukti presisi durasi (gerbang F4 §7.3).
+- **DONE-BILA:** preset 8s produksi 1 klip ai_video + audio + publish (F4 dokumen plan: presisi 6.8–9.2s min 3 run + nol regresi 60s).
+- **REALISASI:** ⬜ *(prioritas rendah; tidak memblok jualan — mulai hanya setelah owner ucap "mulai F0 ai_video")*
 
 ### [B7] Go-live checklist teknis — ⬜  (REMEDIASI **F5-04**)
 - **PLAN:** regression e2e semua preset × beberapa niche × multi-channel; pastikan ryan stabil. (`DB_SCHEMA_V2.md` DIHAPUS 2026-07-04, keputusan owner: dokumen skema basi lebih menyesatkan daripada tidak ada — sumber kebenaran struktur = INTROSPEKSI LANGSUNG DB live via psycopg2 tiap butuh.)
