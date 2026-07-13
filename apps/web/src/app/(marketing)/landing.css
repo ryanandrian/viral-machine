@@ -126,15 +126,16 @@
 .tst .gr { margin-left: auto; text-align: right; } .tst .gr .b { color: var(--success); font-weight: 700; } .tst .gr .l { font-size: 0.625rem; color: var(--text-muted); }
 
 /* PRICING preview */
-.price-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; align-items: start; }
-.pcard { padding: 1.75rem; border: 1.5px solid var(--border); border-radius: var(--r-xl); background: var(--surface-1); position: relative; }
+/* Kartu sama tinggi (pola = .tiers/.tier di pricing.css): grid stretch + kartu flex-kolom, ul flex:1 mendorong tombol ke dasar. */
+.price-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; align-items: stretch; }
+.pcard { display: flex; flex-direction: column; padding: 1.75rem; border: 1.5px solid var(--border); border-radius: var(--r-xl); background: var(--surface-1); position: relative; }
 .pcard.pop { border-color: var(--brand); box-shadow: var(--glow-brand); }
 .pcard .pop-badge { position: absolute; top: -11px; left: 1.75rem; background: var(--brand); color: #fff; font-size: 0.625rem; font-weight: 700; padding: 4px 10px; border-radius: var(--r-full); text-transform: uppercase; letter-spacing: 0.04em; }
 .pcard .pn { font-size: var(--text-sm); font-weight: 600; color: var(--text-secondary); }
 .pcard .pp { font-size: var(--text-4xl); font-weight: 800; letter-spacing: -0.03em; margin: 0.5rem 0 0.25rem; }
 .pcard .pp small { font-size: var(--text-base); color: var(--text-muted); font-weight: 400; }
 .pcard .ptag { font-size: var(--text-xs); color: var(--text-muted); margin-bottom: 1.25rem; }
-.pcard ul { list-style: none; padding: 0; margin: 1.25rem 0; display: flex; flex-direction: column; gap: 0.625rem; }
+.pcard ul { list-style: none; padding: 0; margin: 1.25rem 0; display: flex; flex-direction: column; gap: 0.625rem; flex: 1; }
 .pcard li { font-size: var(--text-sm); color: var(--text-secondary); display: flex; gap: 0.5rem; align-items: flex-start; }
 .pcard li svg { color: var(--brand); flex: none; margin-top: 2px; }
 
