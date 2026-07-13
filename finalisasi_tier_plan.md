@@ -230,8 +230,11 @@ RLS publik-baca, seed = teks persis lama) · `apps/web/src/lib/plans.ts` (narasi
 - **REALISASI:** BE-admin 8/8 + jalur-data anon 6/6 + paritas (matriks 21 & narasi 3 paket) LULUS;
       npm build ✓; /,/pricing 200; nol residu (blok di-PATCH lalu direstorasi persis, baris matriks uji
       dihapus, user uji dihapus). Migrasi 0158 terpasang DB live (RLS anon baca-saja diverifikasi).
-      ⚠️ **REDAKSI COPY MARKETING (klaim "±10×", "±Rp1.736/video all-in", isi 2 profil biaya, FAQ) WAJIB
-      diratifikasi owner sebelum TAYANG (deploy)** — gerbang copy di cetak biru. Commit: `f9cd6aa`.
+      **REDAKSI ILUSTRASI BIAYA DIRATIFIKASI owner 2026-07-13** (format owner: '1 video 60 detik,
+      5 segmen hook–build-up–core–climax–CTA' + label LLM/TTS/Image Generator + Total Cost per
+      profil; Free = ±Rp 0/video dalam kuota harian) — DITERAPKAN ke marketing_blocks via jalur
+      admin-editable + verifikasi baca-ulang COCOK. Klaim '±10×' & FAQ = ikut tayang bersama
+      izin deploy (owner tak mengoreksi). Commit: `f9cd6aa`.
 
 ### TAHAP 5 — Higiene & rekonsiliasi dokumen  ✅ SELESAI 2026-07-13 (lokal; ⏳ izin deploy owner utk fallback BE)
 - [x] 5.1 Kode mati `limits.py` (5 fungsi) DIBUANG di Tahap 1 · komentar alias agency/scale `midtrans.py`
