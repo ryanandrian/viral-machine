@@ -207,7 +207,7 @@ buang tab Schedule · sembunyikan kolom USD¢ mati · badge kategori sesuai DB) 
 - [x] 3.6 (titipan Tahap 1) toast lifecycle admin ber-pesan spesifik saat pagar status menolak.
 - **REALISASI:** 9/9 uji runtime HTTP lulus (sesi super-admin uji, cookie ssr asli), nol residu
       (entri+audit+2 user uji dihapus; narasi trial direstorasi byte-identik). npm build ✓ · marketing
-      /,/pricing 200 ✓. Visual editor = last-mile owner pasca-deploy. Commit: (diisi saat commit).
+      /,/pricing 200 ✓. Visual editor = last-mile owner pasca-deploy. Commit: `1b6b529`.
       Deploy: MENUNGGU IZIN (satu batch dgn fix notifikasi insiden S3).
 
 ### TAHAP 4 — Marketing selaras mesin (Pilar 4-marketing)  ⏳
