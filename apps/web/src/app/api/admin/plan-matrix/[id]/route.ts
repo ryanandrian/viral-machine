@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { requireSuperAdmin } from "@/lib/admin/guard";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-// PATCH/DELETE satu baris matriks perbandingan (Tahap 4). Validasi = pola route induk.
-const CELLS = ["v_starter", "v_pro", "v_business", "v_enterprise"] as const;
+// PATCH/DELETE satu baris matriks perbandingan (Tahap 4). Aturan sel = SATU sumber lib/admin/plan-matrix
+// (token dinormalisasi kapital di titik input — typo "True" tak pernah bocor sebagai teks ke /pricing).
+import { MATRIX_CELLS as CELLS, normalizeCell } from "@/lib/admin/plan-matrix";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const g = await requireSuperAdmin();
@@ -28,9 +29,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
   for (const c of CELLS) {
     if (c in b) {
-      const s = b[c] == null || b[c] === "" ? null : String(b[c]).trim();
-      if (s && s.length > 60) return NextResponse.json({ error: `invalid ${c}` }, { status: 400 });
-      patch[c] = s;
+      const v = normalizeCell(b[c]);
+      if (v && typeof v === "object") return NextResponse.json({ error: `invalid ${c}` }, { status: 400 });
+      patch[c] = v;
     }
   }
   if (Object.keys(patch).length === 0) return NextResponse.json({ error: "no_fields" }, { status: 400 });

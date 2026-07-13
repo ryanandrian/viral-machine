@@ -274,6 +274,14 @@ Pilar 4). 8. ✅ Jadwal harga dibuang; SOP perubahan harga = edit panel pada tan
 tanpa deploy; tenant berjalan kena mulai tagihan berikutnya; audit+rollback ada).
 
 ## §4 LOG REALISASI — 🏁 SELURUH CETAK BIRU TUNTAS
+- **2026-07-13 (pasca-tuntas) — Penguatan editor matriks (pertanyaan owner → mandat "kerjakan"):**
+  sel matriks TETAP fleksibel teks-bebas (kebutuhan nyata: Email/∞/custom/3/semua), diperkuat 2 hal:
+  (1) token dinormalisasi kapital DI SERVER via SATU helper `lib/admin/plan-matrix.ts` (dipakai kedua
+  route — duplikasi CELLS lama sekalian disatukan): "TRUE"→"true", "Auto:MAX_Channels"→kanonik,
+  teks bebas ("Email"/"Dedicated") TIDAK disentuh; (2) saran-ketik datalist 5 token di kotak sel admin
+  + hint diperluas (kapital auto-dibetulkan · token auto tak berlaku kolom Enterprise). Uji runtime
+  4/4 + bundle memuat datalist ✓ + regresi >60 char tetap 400 ✓; baris uji dihapus (nol residu).
+  Commit: (diisi). Deploy: menunggu izin owner (FE-only).
 - **2026-07-13 15:41 — DEPLOY FINAL Tahap 4+5 (izin owner):** BE OK 15:40 + FE OK 15:41, commit VPS
   `36bc01a`, 3 service active, /,/pricing 200; bukti diskriminatif: bundle live memuat kode
   marketing_blocks. **Semua 21 item / 5 tahap = SELESAI + DEPLOYED.** Redaksi ilustrasi biaya versi

@@ -3,15 +3,8 @@ import { requireSuperAdmin } from "@/lib/admin/guard";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 // Matriks perbandingan fitur /pricing (Tahap 4) — baris = DATA (plan_matrix_rows).
-// GET daftar · POST tambah baris. Sel: "true"/"false"/token auto:*/teks bebas ≤60.
-const CELLS = ["v_starter", "v_pro", "v_business", "v_enterprise"] as const;
-
-function cleanCell(v: unknown): string | null | { err: true } {
-  if (v == null || v === "") return null;
-  const s = String(v).trim();
-  if (s.length > 60) return { err: true };
-  return s;
-}
+// GET daftar · POST tambah baris. Aturan sel (token dinormalisasi kapital) = SATU sumber lib/admin/plan-matrix.
+import { MATRIX_CELLS as CELLS, normalizeCell } from "@/lib/admin/plan-matrix";
 
 export async function GET() {
   const g = await requireSuperAdmin();
@@ -35,7 +28,7 @@ export async function POST(req: Request) {
     sort_order: Number.isInteger(Number(b.sort_order)) ? Number(b.sort_order) : 999,
   };
   for (const c of CELLS) {
-    const v = cleanCell(b[c]);
+    const v = normalizeCell(b[c]);
     if (v && typeof v === "object") return NextResponse.json({ error: `invalid ${c}` }, { status: 400 });
     row[c] = v;
   }

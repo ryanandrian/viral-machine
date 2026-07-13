@@ -249,16 +249,24 @@ export default function AdminPricingPage() {
                 <td><input className="input" style={{ height: "1.9rem", minWidth: 150, fontWeight: m.is_group ? 700 : 400 }} defaultValue={m.label_id} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== m.label_id) patchMatrix(m.id, { label_id: v }); }} /></td>
                 <td><input className="input" style={{ height: "1.9rem", minWidth: 150 }} defaultValue={m.label_en} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== m.label_en) patchMatrix(m.id, { label_en: v }); }} /></td>
                 {(["v_starter", "v_pro", "v_business", "v_enterprise"] as const).map((c) => (
-                  <td key={c}>{m.is_group ? <span className="muted">—</span> : <input className="input" style={{ height: "1.9rem", width: "7.5rem" }} defaultValue={m[c] ?? ""} placeholder="true/false/teks" onBlur={(e) => { const v = e.target.value.trim(); if (v !== (m[c] ?? "")) patchMatrix(m.id, { [c]: v } as Partial<MRow>); }} />}</td>
+                  <td key={c}>{m.is_group ? <span className="muted">—</span> : <input className="input" list="pm-tokens" style={{ height: "1.9rem", width: "7.5rem" }} defaultValue={m[c] ?? ""} placeholder="true/false/teks" onBlur={(e) => { const v = e.target.value.trim(); if (v !== (m[c] ?? "")) patchMatrix(m.id, { [c]: v } as Partial<MRow>); }} />}</td>
                 ))}
                 <td><button className="btn btn-ghost btn-sm" title="Hapus baris" onClick={() => delMatrixRow(m.id, m.label_id)}><X size={13} /></button></td>
               </tr>
             ))}</tbody>
           </table></div></div>
+          {/* Saran-ketik token (penguatan owner 2026-07-13): tetap teks bebas, token muncul sbg pilihan
+              saat mengetik; kapital token dinormalisasi server (typo "True" mustahil bocor ke /pricing). */}
+          <datalist id="pm-tokens">
+            <option value="true" label="✓ Ya" /><option value="false" label="✗ Tidak" />
+            <option value="auto:max_channels" label="Angka channel (otomatis dari paket)" />
+            <option value="auto:max_videos_per_day" label="Angka video/hari (otomatis dari paket)" />
+            <option value="auto:niche_studio" label="Niche Studio ✓/✗ (otomatis dari paket)" />
+          </datalist>
           <div style={{ display: "flex", gap: ".5rem", margin: "0.625rem 0 0", alignItems: "center", flexWrap: "wrap" }}>
             <button className="btn btn-secondary btn-sm" onClick={() => addMatrixRow(false)}><Bi id="+ Baris fitur" en="+ Feature row" /></button>
             <button className="btn btn-secondary btn-sm" onClick={() => addMatrixRow(true)}><Bi id="+ Judul grup" en="+ Group header" /></button>
-            <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id={'Nilai sel: "true"=✓ · "false"=✗ · "auto:max_channels" / "auto:max_videos_per_day" / "auto:niche_studio" = angka FAKTA live dari paket · selain itu tampil sebagai teks.'} en={'Cell values: "true"=✓ · "false"=✗ · "auto:max_channels" / "auto:max_videos_per_day" / "auto:niche_studio" = live FACTS from the plan · anything else renders as text.'} /></span>
+            <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id={'Nilai sel: "true"=✓ · "false"=✗ · "auto:max_channels" / "auto:max_videos_per_day" / "auto:niche_studio" = angka FAKTA live dari paket · selain itu tampil sebagai teks apa adanya (mis. Email, ∞, custom). Ketik di kotak → token muncul sebagai saran; salah kapital (True/AUTO:…) otomatis dibetulkan saat simpan. Kolom Enterprise: token auto tak berlaku (bukan paket sistem) — pakai true/false/teks.'} en={'Cell values: "true"=✓ · "false"=✗ · "auto:max_channels" / "auto:max_videos_per_day" / "auto:niche_studio" = live FACTS from the plan · anything else renders as text as-is (e.g. Email, ∞, custom). Type in a cell → tokens appear as suggestions; wrong capitalisation (True/AUTO:…) is auto-corrected on save. Enterprise column: auto tokens do not apply (not a system plan) — use true/false/text.'} /></span>
           </div>
         </div>
 
