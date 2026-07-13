@@ -247,12 +247,24 @@
 
 ### Billing Mechanics
 
-- **Cycle:** monthly auto-renew (tanggal sama dengan signup)
-- **Failed payment:** 3 retry dalam 7 hari (day 1, day 3, day 7) → suspend
+> 🔄 **UPDATE 2026-07-13 (realita implementasi, ratifikasi owner — finalisasi_tier_plan Tahap 5.2):**
+> **Perpanjangan = BAYAR MANUAL per periode (BUKAN auto-debit)**, via link Snap + email pengingat
+> (H-3 sebelum habis). Alasan: metode utama pasar ID (GoPay/VA/QRIS) tidak mendukung recurring
+> charge; kartu kredit bisa recurring tapi minoritas → recurring API TIDAK dipakai (dihindari
+> kompleksitas + gagal-debit senyap). Masa tenggang (`billing_grace_days`, default 7h) menjaga mesin
+> tetap jalan sambil menunggu bayar. **Prorate/tahunan/diskon = SUDAH nyata di mesin** (rumus
+> nilai-adil `compute_new_period` + `compute_checkout_amount`, lihat PAYMENT doc §3.4). Refund =
+> proses MANUAL via dashboard Midtrans (bukan self-service). Butir di bawah = rencana awal (sebagian
+> di-supersede baris ini).
+
+- **Cycle:** ~~monthly auto-renew~~ → **bulanan/tahunan, bayar MANUAL tiap periode** (jangkar tanggal
+  dipertahankan via prorate nilai-adil saat perpanjang paket sama)
+- **Failed payment:** tak ada auto-retry debit; tenant bayar ulang via link kapan saja dalam grace →
+  lewat grace → suspend (siklus lifecycle di PAYMENT/LIFECYCLE doc)
 - **Suspend:** scheduler stop, dashboard read-only, data + history tetap aman
 - **Grace period:** 30 hari setelah suspend baru data dihapus (vs original 14 — kasih ruang re-engage)
-- **Refund:** prorate 7 hari pertama (fair use)
-- **Annual prepay discount:** 20% off (2 bulan free) — meningkatkan LTV & cash flow
+- **Refund:** ~~prorate otomatis~~ → **manual via Midtrans** (hubungi tim ≤7 hari pembayaran pertama)
+- **Annual prepay discount:** ✅ **LIVE** — knob `annual_discount_pct` (default 20%), admin-editable
 
 ❓ **Q4 [TENTATIVE: setuju]:** Confirm 3 paket Rp 149/349/699 + Enterprise custom?
 

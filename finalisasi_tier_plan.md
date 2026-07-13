@@ -233,13 +233,17 @@ RLS publik-baca, seed = teks persis lama) · `apps/web/src/lib/plans.ts` (narasi
       ⚠️ **REDAKSI COPY MARKETING (klaim "±10×", "±Rp1.736/video all-in", isi 2 profil biaya, FAQ) WAJIB
       diratifikasi owner sebelum TAYANG (deploy)** — gerbang copy di cetak biru. Commit: `f9cd6aa`.
 
-### TAHAP 5 — Higiene & rekonsiliasi dokumen  ⏳
-- [ ] 5.1 Buang kode mati `limits.py` (5 fungsi; bila belum terangkut Tahap 1) + komentar basi
-      (`midtrans.py:9-10` alias agency/scale; header /pricing "mock") + fallback caps
-      `tenant_config.py:30-33` → log keras (bukan konstanta basi).
-- [ ] 5.2 Catat resmi: auto-renew=bayar-manual by design (DESAIN §4 + PAYMENT doc) · sinkron
-      `SISA_KERJA_GO_LIVE.md` (REALISASI) · update §9 PAYMENT doc.
-- REALISASI: —
+### TAHAP 5 — Higiene & rekonsiliasi dokumen  ✅ SELESAI 2026-07-13 (lokal; ⏳ izin deploy owner utk fallback BE)
+- [x] 5.1 Kode mati `limits.py` (5 fungsi) DIBUANG di Tahap 1 · komentar alias agency/scale `midtrans.py`
+      diperbaiki (Tahap 1) · header "mock/PoC" /pricing diganti (Tahap 4) · **fallback caps
+      `tenant_config.py` DIPERBAIKI**: gagal Supabase → `logger.error` keras + fallback TIDAK di-cache
+      (self-heal — blip transient tak membekukan caps basi selamanya). Uji diskriminatif LULUS:
+      gagal→fallback+cache tetap None, pulih→muat DB nyata + cache terisi.
+- [x] 5.2 DESAIN §4 Billing Mechanics: auto-renew→**bayar MANUAL by design** + refund manual + tahunan
+      LIVE (banner update) · PAYMENT doc §Changelog: entri 2026-07-13 lengkap (5 tahap + insiden S3) ·
+      `SISA_KERJA_GO_LIVE.md` §Changelog: entri realisasi finalisasi tier plan.
+- **REALISASI:** py_compile ✓ + smoke import BE ✓ (producer/publisher/pipeline pakai tenant_config).
+      Commit: (diisi saat commit). Deploy fallback BE = menumpang batch Tahap 4-5.
 
 ---
 

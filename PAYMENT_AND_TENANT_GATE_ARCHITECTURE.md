@@ -266,6 +266,21 @@ kuitansi terkirim. Anti dobel-bayar terbukti 2× (2 order lama auto-cancel). [A1
 4. **Signup** email baru → email konfirmasi **ber-brand** (From: `mesinviral@lumite.biz.id`) → klik → `verifyOtp` → `/auth?view=verified`. (Syarat: Supabase "Confirm email" = ON.) *(⬜ — tercakup [A5] smoke-test tenant baru)*
 
 ### Changelog
+- **2026-07-13** — **FINALISASI TIER PLAN Tahap 1-5 (`finalisasi_tier_plan.md`, akar tunggal 4-pilar).**
+  Pembayaran/harga kini: (a) **periode NILAI-ADIL** `compute_new_period` (`midtrans.py`) — perpanjang
+  paket-sama menyambung sisa hari, upgrade/downgrade prorate via rasio harga, bulanan↔TAHUNAN satu rumus
+  (durasi ×period_months); idempotent via klaim optimistik (anti dobel-terapkan webhook×reconciler).
+  (b) **harga checkout** `compute_checkout_amount` — diskon admin `discount_pct` 1–99 kini NYATA memotong
+  (dulu dekorasi), terbesar-menang vs winback, comp DITOLAK checkout. (c) **TAHUNAN** knob
+  `annual_discount_pct` + `payments.period_months` (migr 0156). (d) **kuota channel** ditegakkan server:
+  RLS INSERT `channels` vs max_channels (migr 0155) + gate JALAN N-tertua (`limits.gate_for_channel`).
+  (e) **auto-renew = BAYAR MANUAL by design** (bukan recurring API — lihat DESAIN §4 update). (f) revenue/MRR
+  admin dari agregat nyata (RPC `admin_payments_stats` migr 0157; MRR = pembayaran ÷ period_months).
+  (g) narasi paket + matriks + ilustrasi biaya = admin-editable (migr 0157/0158). (h) **insiden S3 NEO
+  2026-07-13**: notif publish-gagal jalur terjadwal (dulu fosil log-only) di-wire ke Telegram tenant +
+  alarm admin storage gagal-beruntun di janitor. Commit rangkaian: `fb04952`/`883836c`/`1b6b529`/`f9cd6aa`
+  + fix notif `dc2394b`. Deploy Tahap 1-3+fix = VPS `75675cb` (2026-07-13); Tahap 4-5 menunggu ratifikasi
+  redaksi + izin deploy owner.
 - **2026-07-04** — **🟢 GO-LIVE PRODUKSI + rekonsiliasi doc ke realita** (instruksi owner): (1) [A1] TUTUP — flip
   `MIDTRANS_ENV=production` + **pembayaran nyata pertama sukses A-Z** (GoPay effi; webhook+aktivasi+kuitansi terbukti; §9).
   (2) Fitur baru tercatat: **anti dobel-bayar** `_cancel_pending_orders` + **redirect_url/lanjutkan-pembayaran** (migr 0122,

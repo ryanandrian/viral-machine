@@ -60,9 +60,11 @@ def _get_plan_limits() -> dict:
                     logger.info(f"[PlanLimits] Loaded from Supabase: {list(limits.keys())}")
                     return _plan_limits_cache
     except Exception as e:
-        logger.warning(f"[PlanLimits] Supabase load gagal ({e}) — pakai fallback")
-    _plan_limits_cache = _PLAN_LIMITS_FALLBACK
-    return _plan_limits_cache
+        logger.error(f"[PlanLimits] Supabase load GAGAL ({e}) — pakai fallback SEMENTARA "
+                     f"(caps darurat, BISA BASI vs admin); TIDAK di-cache → coba lagi panggilan berikutnya")
+    # JANGAN cache fallback (Tahap 5.1d finalisasi_tier_plan): blip transient tak boleh membekukan
+    # caps hardcoded selamanya — begitu Supabase pulih, panggilan berikut memuat nilai admin terkini.
+    return _PLAN_LIMITS_FALLBACK
 
 # FOSIL DIHAPUS ([B3] 2026-07-05, approval owner): OPTIMAL_PUBLISH_SLOTS + auto-slot per-tenant.
 # Jadwal publish NYATA = per-CHANNEL `channels.publish_slots` (zona tenant) — dibaca publisher.py;
