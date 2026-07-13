@@ -45,7 +45,7 @@ const CMP_ROWS: [string, boolean | string, ...(boolean | string)[]][] = [
   ["Max video / hari", "50", "2", "—", "—", "—"],
   ["Custom voice (ElevenLabs)", true, false, true, false, false],
   ["Pembayaran Indonesia (Midtrans)", true, false, false, false, false],
-  ["Harga / video", "Rp 75", "Rp 18.000", "—", "—", "—"],
+  ["Biaya / video (all-in)*", "±Rp 1.736", "Rp 18.000", "—", "—", "—"],
 ];
 function Cell({ v, us }: { v: boolean | string; us?: boolean }) {
   if (v === true) return <span className="yes"><Check size={18} /></span>;
@@ -59,7 +59,7 @@ const makeFaq = (d: number): [string, string][] => [
   ["Apa itu BYOK?", "BYOK = Bring Your Own Keys. Kamu pakai API keys Anthropic/OpenAI/ElevenLabs milikmu sendiri, jadi biaya AI dibayar langsung ke provider dengan harga asli — transparan, tanpa markup dari kami."],
   ["Bisa bikin konten dalam bahasa selain Indonesia (English, Malaysia, Thailand)?", "Bisa. Pilih bahasa konten per channel saat setup. Mesin memproduksi narasi, caption, dan script dalam bahasa itu. Bahasa official: Indonesia & English; bahasa Asia Tenggara lain (Malaysia, Filipina, Thailand, Vietnam) tersedia bertahap."],
   ["Apakah aman dari penalty YouTube AI policy 2026?", "Ya. AI Slop Defense Engine kami otomatis merotasi voice, niche, hook, dan menambahkan AI disclosure. Compliance score real-time membantumu menjaga channel tetap aman."],
-  ["Berapa total biaya termasuk API?", "Langganan mulai Rp 149K/bln + biaya AI (BYOK) sekitar Rp 75/video. Untuk 5 video/hari, estimasi biaya AI ~Rp 340K/bln yang dibayar langsung ke provider."],
+  ["Berapa total biaya termasuk API?", "Dua komponen. (1) Langganan mulai Rp 149K/bln — pada kuota penuh setara ±Rp 466/video di paket Business. (2) Biaya AI (BYOK) dibayar langsung ke provider: dari produksi nyata kami ±Rp 1.270/video dengan racikan model premium, atau nyaris Rp 0 dengan racikan gratis — lihat ilustrasi biaya di halaman ini."],
   ["Bisa cancel kapan saja?", `Bisa. Tidak ada kontrak. Cancel kapan saja sebelum trial ${d} hari berakhir tanpa biaya, atau berhenti berlangganan kapan pun setelahnya.`],
   ["Channel saya 0 subs, bisa pakai?", "Tentu. Mesin mulai dengan niche default terbaik, lalu belajar dari data channelmu seiring video mulai tayang."],
   ["Apakah mesin belajar antar-channel?", "Tidak. Self-learning bersifat per-channel — data dan adaptasi satu channel tidak bocor ke channel lain."],
@@ -71,20 +71,21 @@ export default function LandingPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [trialDays, setTrialDays] = useState(7);
   const [tst, setTst] = useState<Testimonial[]>([]);
+  const [costBlocks, setCostBlocks] = useState<{ key: string; title_id: string | null; title_en: string | null; lines: { id: string; en: string }[] }[]>([]);
   useEffect(() => {
     fetchPricing().then(setPricing);
     fetchPlans().then(({ plans, trialDays }) => { setPlans(plans); setTrialDays(trialDays); });
     // Testimoni dari DB (RLS: publik hanya baris aktif). Kosong/gagal → seksi disembunyikan.
     createClient().from("testimonials").select("*").eq("show_on_landing", true).order("sort_order")
       .then(({ data }) => setTst((data as Testimonial[]) ?? []));
+    // Ilustrasi biaya per video (Tahap 4, keputusan owner: STATIS ber-label periode, admin-editable
+    // via /admin/pricing — BUKAN data hidup). Kosong/gagal → seksi disembunyikan.
+    createClient().from("marketing_blocks").select("key,title_id,title_en,lines").like("key", "cost_%").order("sort_order")
+      .then(({ data }) => setCostBlocks((data as typeof costBlocks) ?? []));
   }, []);
   const pk = (k: string, fb: string) => pricing[k] ? `Rp ${idrK(pricing[k])}` : fb;
-  // Preview harga config-driven (no-hardcode) — copy kualitatif singkat per tier; batas dari plan_limits.
-  const PREVIEW_COPY: Record<string, { ttId: string; ttEn: string; feats: string[]; pop: boolean }> = {
-    starter:  { ttId: "Untuk mulai scaling", ttEn: "To start scaling", feats: ["Niche dasar", "Self-learning"], pop: false },
-    pro:      { ttId: "Paling diminati creator", ttEn: "Most chosen by creators", feats: ["Semua niche", "Quality Gate + Compliance", "Custom voice"], pop: true },
-    business: { ttId: "Untuk agency & power user", ttEn: "For agencies & power users", feats: ["Priority queue", "Multi-channel dashboard"], pop: false },
-  };
+  const cb = (k: string) => costBlocks.find((b) => b.key === k);
+  // Narasi kartu paket = DB plan_limits.marketing_* (SATU sumber dgn /pricing; landing tampil maks 3 baris).
 
   return (
     <>
@@ -143,7 +144,7 @@ export default function LandingPage() {
       <section className="mk-section-sm"><div className="mk-container">
         <div className="stats reveal">
           <div className="stat"><div className="big">50</div><div className="lbl"><Bi id="Video / hari" en="Videos / day" /></div><div className="desc"><Bi id="Hingga — Business 5/channel × 10 channel (kompetitor ~2/hari)" en="Up to — Business 5/channel × 10 channels (~2/day on competitors)" /></div></div>
-          <div className="stat"><div className="big">7.5×</div><div className="lbl"><Bi id="Lebih murah" en="Cheaper" /></div><div className="desc"><Bi id="Rp 75/video vs Rp 18.000 di AutoShorts" en="Rp 75/video vs Rp 18,000 on AutoShorts" /></div></div>
+          <div className="stat"><div className="big">±10×</div><div className="lbl"><Bi id="Lebih murah" en="Cheaper" /></div><div className="desc"><Bi id="±Rp 1.736/video all-in (Business + AI premium) vs Rp 18.000 di AutoShorts — lihat ilustrasi biaya" en="±Rp 1,736/video all-in (Business + premium AI) vs Rp 18,000 on AutoShorts — see the cost illustration" /></div></div>
           <div className="stat"><div className="big">100%</div><div className="lbl">BYOK</div><div className="desc"><Bi id="Tenant pegang API keys, biaya transparan" en="You hold the API keys, transparent cost" /></div></div>
         </div>
       </div></section>
@@ -237,6 +238,7 @@ export default function LandingPage() {
             ))}</tbody>
           </table>
         </div>
+        <div className="mk-center muted" style={{ fontSize: "var(--text-xs)", marginTop: ".6rem" }}><Bi id="*Ilustrasi paket Business + racikan AI premium dari produksi nyata (lihat ilustrasi biaya); dengan racikan gratis bisa mendekati ±Rp 466/video." en="*Illustration: Business plan + premium AI mix from real production (see the cost illustration); with a free mix it can approach ±Rp 466/video." /></div>
       </div></section>
 
       {/* HOW */}
@@ -281,23 +283,45 @@ export default function LandingPage() {
         </div>
         <div className="price-grid reveal">
           {paidPlans(plans).map((p) => {
-            const copy = PREVIEW_COPY[p.plan_type] ?? { ttId: "", ttEn: "", feats: [], pop: false };
             return (
-              <div className={`pcard${copy.pop ? " pop" : ""}`} key={p.plan_type}>
-                {copy.pop && <span className="pop-badge">Most Popular</span>}
-                <div className="pn">{p.display_name}</div><div className="pp">{pk(`plan_${p.plan_type}`, "—")}<small>/bln</small></div><div className="ptag"><Bi id={copy.ttId} en={copy.ttEn} /></div>
+              <div className={`pcard${p.is_popular ? " pop" : ""}`} key={p.plan_type}>
+                {p.is_popular && <span className="pop-badge">Most Popular</span>}
+                <div className="pn">{p.display_name}</div><div className="pp">{pk(`plan_${p.plan_type}`, "—")}<small>/bln</small></div><div className="ptag"><Bi id={p.tagline_id} en={p.tagline_en || p.tagline_id} /></div>
                 <ul>
                   <li><Check size={15} /> {p.max_channels} channel</li>
                   <li><Check size={15} /> {p.max_videos_per_day} video / <Bi id="hari" en="day" /></li>
                   {p.niche_studio && <li><Check size={15} /> Niche Studio</li>}
-                  {copy.feats.map((f, k) => <li key={k}><Check size={15} /> {f}</li>)}
+                  {p.marketing_features.slice(0, 3).map((f, k) => <li key={k}><Check size={15} /> <Bi id={f.id} en={f.en || f.id} /></li>)}
                 </ul>
-                <a href="/auth?view=signup" className={`btn ${copy.pop ? "btn-default" : "btn-outline"}`} style={{ width: "100%" }}><Bi id={`Pilih ${p.display_name}`} en={`Choose ${p.display_name}`} /></a>
+                <a href="/auth?view=signup" className={`btn ${p.is_popular ? "btn-default" : "btn-outline"}`} style={{ width: "100%" }}><Bi id={`Pilih ${p.display_name}`} en={`Choose ${p.display_name}`} /></a>
               </div>
             );
           })}
         </div>
         <div className="mk-center" style={{ marginTop: "1.75rem" }}><a href="/pricing" style={{ color: "var(--brand)", textDecoration: "none", fontWeight: 500 }}><Bi id="Lihat semua paket & fitur" en="See all plans & features" /> →</a></div>
+
+        {/* ILUSTRASI BIAYA PER VIDEO (Tahap 4, keputusan owner 2026-07-13): dua profil NYATA ber-detail
+            model, STATIS ber-label periode — konten dari marketing_blocks (admin-editable /admin/pricing,
+            tanpa deploy). Blok kosong → seluruh seksi tersembunyi. */}
+        {cb("cost_profile_premium") && cb("cost_profile_free") && (
+          <div style={{ marginTop: "3rem" }}>
+            <div className="mk-center" style={{ marginBottom: "1.5rem" }}>
+              <h3 style={{ fontSize: "var(--text-xl)", fontWeight: 700 }}><Bi id={cb("cost_illustration_head")?.title_id ?? ""} en={cb("cost_illustration_head")?.title_en ?? cb("cost_illustration_head")?.title_id ?? ""} /></h3>
+              {(cb("cost_illustration_head")?.lines ?? []).map((l, i) => <p key={i} className="mk-lead mk-center" style={{ fontSize: "var(--text-sm)", marginTop: ".4rem" }}><Bi id={l.id} en={l.en || l.id} /></p>)}
+            </div>
+            <div className="price-grid" style={{ maxWidth: 900, margin: "0 auto" }}>
+              {(["cost_profile_premium", "cost_profile_free"] as const).map((k) => { const b = cb(k)!; return (
+                <div className="pcard" key={k}>
+                  <div className="pn" style={{ fontSize: "var(--text-base)" }}><Bi id={b.title_id ?? ""} en={b.title_en ?? b.title_id ?? ""} /></div>
+                  <ul style={{ marginTop: ".75rem" }}>{b.lines.map((l, i) => <li key={i}><Check size={15} /> <Bi id={l.id} en={l.en || l.id} /></li>)}</ul>
+                </div>
+              ); })}
+            </div>
+            {(cb("cost_footnote")?.lines ?? []).map((l, i) => (
+              <div key={i} className="mk-center muted" style={{ fontSize: "var(--text-xs)", marginTop: "1rem", maxWidth: 760, marginInline: "auto" }}><Bi id={l.id} en={l.en || l.id} /></div>
+            ))}
+          </div>
+        )}
       </div></section>
 
       {/* FAQ */}

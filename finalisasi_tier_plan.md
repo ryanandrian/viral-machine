@@ -212,17 +212,26 @@ buang tab Schedule · sembunyikan kolom USD¢ mati · badge kategori sesuai DB) 
       — BE OK 10:38 + FE OK 10:40, commit VPS `75675cb`, 3 service active, situs 200, admin API 401
       tanpa-auth, log worker bersih.**
 
-### TAHAP 4 — Marketing selaras mesin (Pilar 4-marketing)  ⏳
-File: `apps/web/src/app/(marketing)/pricing/page.tsx` (kartu dari narasi DB · toggle tahunan NYATA dgn
-knob · FAQ refund/prorate/tahunan jujur · matriks perbandingan → config) ·
-`apps/web/src/app/(marketing)/page.tsx` (kartu dari narasi DB · angka AI → pesan BYOK · FAQ) ·
-`apps/web/src/lib/plans.ts` (baca narasi). Redaksi copy final di-review owner 1× sebelum commit.
-- [ ] 4.1 Kartu paket /pricing + landing membaca narasi DB (tampilan perdana identik).
-- [ ] 4.2 Toggle tahunan tersambung knob nyata + CTA benar; FAQ prorate/refund/tahunan jujur.
-- [ ] 4.3 Landing: angka biaya-AI tetap → pesan BYOK (selaras keputusan 2026-07-04) + baris tabel
-      kompetitor disesuaikan.
-- [ ] 4.4 Matriks "Compare all features": fakta = auto config; narasi = config admin-editable.
-- REALISASI: —
+### TAHAP 4 — Marketing selaras mesin (Pilar 4-marketing)  ✅ SELESAI 2026-07-13 (lokal; ⏳ RATIFIKASI REDAKSI + izin deploy owner)
+File: `migrations/0158_marketing_matrix_blocks.sql` (tabel `marketing_blocks` + `plan_matrix_rows`,
+RLS publik-baca, seed = teks persis lama) · `apps/web/src/lib/plans.ts` (narasi + annualDiscountPct) ·
+`(marketing)/pricing/page.tsx` + `(marketing)/page.tsx` (baca DB) · 4 route admin baru
+(`api/admin/marketing-blocks[/[key]]`, `api/admin/plan-matrix[/[id]]`) · editor di `admin/(panel)/pricing`.
+- [x] 4.1 Kartu paket /pricing + landing membaca narasi DB (`plan_limits.marketing_*`) — PARITAS
+      terbukti: tagline/fitur/populer 3 paket byte-identik dgn TIER_COPY/PREVIEW_COPY lama (nol regresi).
+- [x] 4.2 Toggle tahunan tersambung knob `annual_discount_pct` (0 → disembunyikan) + harga ×(100−pct)% ·
+      FAQ prorate/tahunan/refund ditulis JUJUR sesuai mesin (prorate & tahunan kini nyata; refund manual).
+- [x] 4.3 Landing: angka "Rp 75/video·7,5×" DIGANTI 2-komponen jujur (langganan/video config + BYOK
+      nyata ±Rp1.270 premium / ±Rp0 gratis) + baris tabel kompetitor "Biaya/video all-in ±Rp1.736" + footnote.
+- [x] 4.4 Matriks "Compare all features" = `plan_matrix_rows` (admin-editable; token `auto:*` render FAKTA
+      live plan_limits) — PARITAS 21 baris identik hardcode lama.
+- [x] 4.5 (bonus) Ilustrasi biaya per-video = `marketing_blocks` STATIS ber-label periode (keputusan owner:
+      bukan data hidup) + editor admin (drawer blok + tabel matriks tambah/edit/hapus, auto-save, dwibahasa).
+- **REALISASI:** BE-admin 8/8 + jalur-data anon 6/6 + paritas (matriks 21 & narasi 3 paket) LULUS;
+      npm build ✓; /,/pricing 200; nol residu (blok di-PATCH lalu direstorasi persis, baris matriks uji
+      dihapus, user uji dihapus). Migrasi 0158 terpasang DB live (RLS anon baca-saja diverifikasi).
+      ⚠️ **REDAKSI COPY MARKETING (klaim "±10×", "±Rp1.736/video all-in", isi 2 profil biaya, FAQ) WAJIB
+      diratifikasi owner sebelum TAYANG (deploy)** — gerbang copy di cetak biru. Commit: (diisi saat commit).
 
 ### TAHAP 5 — Higiene & rekonsiliasi dokumen  ⏳
 - [ ] 5.1 Buang kode mati `limits.py` (5 fungsi; bila belum terangkut Tahap 1) + komentar basi

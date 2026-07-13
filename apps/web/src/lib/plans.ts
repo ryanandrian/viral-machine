@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/client";
 // SUMBER TUNGGAL konfigurasi tier (public-read, anon — tanpa auth). No-hardcode (owner 2026-06-21):
 // Landing/Billing/sidebar render nama + harga + batas + Niche Studio + masa trial DARI SINI, bukan literal.
 // Gabung: plan_limits (nama/batas/niche-studio/urutan) + pricing_config (harga) + app_config (trial hari).
+export type PlanFeature = { id: string; en: string };
 export type Plan = {
   plan_type: string;          // KEY stabil (trial/starter/pro/business) — jangan ditampilkan mentah
   display_name: string;       // nama yang dilihat pelanggan (admin-editable)
@@ -11,13 +12,18 @@ export type Plan = {
   max_videos_per_day: number;
   niche_studio: boolean;      // fasilitas Niche Studio (admin-editable per-tier)
   sort_order: number;
+  // Narasi marketing per-paket (Tahap 3/4 — admin-editable dari /admin/pricing, keputusan owner 2026-07-13)
+  tagline_id: string;
+  tagline_en: string;
+  is_popular: boolean;
+  marketing_features: PlanFeature[];
 };
 
 export async function fetchPlans(): Promise<{ plans: Plan[]; trialDays: number; annualDiscountPct: number }> {
   const supabase = createClient();
   const [{ data: pl }, { data: pc }, { data: ac }] = await Promise.all([
     supabase.from("plan_limits")
-      .select("plan_type, display_name, max_channels, max_videos_per_day, niche_studio, sort_order")
+      .select("plan_type, display_name, max_channels, max_videos_per_day, niche_studio, sort_order, tagline_id, tagline_en, is_popular, marketing_features")
       .order("sort_order"),
     supabase.from("pricing_config").select("key, value_idr").eq("active", true),
     supabase.from("app_config").select("key, value").in("key", ["trial_duration_days", "annual_discount_pct"]),
@@ -32,6 +38,10 @@ export async function fetchPlans(): Promise<{ plans: Plan[]; trialDays: number; 
     max_videos_per_day: r.max_videos_per_day as number,
     niche_studio: Boolean(r.niche_studio),
     sort_order: (r.sort_order as number) ?? 0,
+    tagline_id: (r.tagline_id as string) ?? "",
+    tagline_en: (r.tagline_en as string) ?? "",
+    is_popular: Boolean(r.is_popular),
+    marketing_features: (r.marketing_features as PlanFeature[]) ?? [],
   }));
   const cfg: Record<string, number> = {};
   (ac ?? []).forEach((r) => { cfg[r.key as string] = Number(r.value); });

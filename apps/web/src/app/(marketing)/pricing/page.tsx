@@ -3,58 +3,34 @@
 import { useState, useEffect } from "react";
 import { fetchPricing, idrK } from "@/lib/pricing";
 import { fetchPlans, paidPlans, type Plan } from "@/lib/plans";
+import { createClient } from "@/lib/supabase/client";
 import {
   Users, Check, X, ChevronDown, DollarSign,
   Wand2, type LucideIcon,
 } from "lucide-react";
 import "./pricing.css";
 
-// A2 Pricing (PoC) — port dari design-source/Pricing.html. Harga LITERAL = mock;
-// produksi: config-driven dari pricing_config (lihat decisions_niche_model). FAQ Xendit→Midtrans.
+// A2 Pricing — SELURUHNYA config-driven (Tahap 4 finalisasi_tier_plan, 2026-07-13):
+// harga+kuota = pricing_config/plan_limits · narasi kartu (tagline/fitur/populer) =
+// plan_limits.marketing_* (admin-editable /admin/pricing) · matriks perbandingan = plan_matrix_rows
+// (admin-editable; token auto:* dirender dari FAKTA plan_limits) · diskon tahunan = knob
+// annual_discount_pct (0 = toggle disembunyikan). Kelas/visual = Claude Design, tak diubah.
 
 function Bi({ id, en }: { id: string; en: string }) {
   return (<><span data-id>{id}</span><span data-en>{en}</span></>);
 }
 
-// Konten KUALITATIF per tier (marketing copy) — keyed by plan_type. NAMA / HARGA / CHANNEL / VIDEO-HARI /
-// NICHE-STUDIO = config-driven (plan_limits + pricing_config via fetchPlans) → no-hardcode (owner 2026-06-21).
-// Kelas/visual = Claude Design (pricing.css/marketing.css), tak diubah.
-type TierCopy = { ttId: string; ttEn: string; feats: string[]; pop: boolean };
-const TIER_COPY: Record<string, TierCopy> = {
-  starter:  { ttId: "Untuk mulai scaling", ttEn: "To start scaling", feats: ["Niche dasar", "Self-learning", "Telegram notif"], pop: false },
-  pro:      { ttId: "Paling diminati creator serius", ttEn: "Most chosen by serious creators", feats: ["Semua niche", "Quality Gate + Compliance", "Custom voice", "Captions & hashtags"], pop: true },
-  business: { ttId: "Untuk agency & power user", ttEn: "For agencies & power users", feats: ["Priority queue", "Multi-channel dashboard", "Webhook & API", "Quiet hours"], pop: false },
-};
-
-type FRow = { grp: [string, string] } | { row: [string, boolean | string, boolean | string, boolean | string, boolean | string] };
-// Baris Channel/Video-hari/Niche-Studio = config-driven (plan_limits via fetchPlans); Enterprise = literal.
-function makeFcmp(pm: Record<string, Plan | undefined>): FRow[] {
-  const ch = (k: string) => (pm[k] ? String(pm[k]!.max_channels) : "—");
-  const vd = (k: string) => (pm[k] ? String(pm[k]!.max_videos_per_day) : "—");
-  const ns = (k: string): boolean => Boolean(pm[k]?.niche_studio);
-  return [
-  { grp: ["Produksi", "Production"] },
-  { row: ["Channel", ch("starter"), ch("pro"), ch("business"), "∞"] },
-  { row: ["Video / hari", vd("starter"), vd("pro"), vd("business"), "custom"] },
-  { row: ["Self-learning engine", true, true, true, true] },
-  { row: ["BYOK (bawa API keys)", true, true, true, true] },
-  { row: ["Multi-channel paralel", false, true, true, true] },
-  { grp: ["AI & Kualitas", "AI & Quality"] },
-  { row: ["Niche tersedia", "3", "semua", "semua", "semua"] },
-  { row: ["Niche Studio (DNA kustom)", ns("starter"), ns("pro"), ns("business"), true] },
-  { row: ["Quality Gate kustom", false, true, true, true] },
-  { row: ["Compliance detail", false, true, true, true] },
-  { row: ["Custom voice (ElevenLabs)", false, true, true, true] },
-  { row: ["Captions style kustom", false, true, true, true] },
-  { row: ["Hashtags kustom", false, true, true, true] },
-  { grp: ["Kolaborasi & Integrasi", "Collaboration & Integrations"] },
-  { row: ["Telegram & Email notif", true, true, true, true] },
-  { row: ["Webhook", false, false, true, true] },
-  { row: ["Priority queue", false, false, true, true] },
-  { row: ["API access", false, false, true, true] },
-  { grp: ["Dukungan", "Support"] },
-  { row: ["Support", "Email", "Priority", "Priority", "Dedicated"] },
-  ];
+// Matriks perbandingan dari DB — sel: "true"/"false" → ikon; "auto:<fakta>" → nilai live plan_limits; lain = teks.
+type MatrixRow = { id: number; sort_order: number; is_group: boolean; label_id: string; label_en: string;
+                   v_starter: string | null; v_pro: string | null; v_business: string | null; v_enterprise: string | null };
+function resolveCell(v: string | null, plan: Plan | undefined): boolean | string {
+  if (v == null || v === "") return "—";
+  if (v === "true") return true;
+  if (v === "false") return false;
+  if (v === "auto:max_channels") return plan ? String(plan.max_channels) : "—";
+  if (v === "auto:max_videos_per_day") return plan ? String(plan.max_videos_per_day) : "—";
+  if (v === "auto:niche_studio") return Boolean(plan?.niche_studio);
+  return v;
 }
 function Fc({ v, pop }: { v: boolean | string; pop?: boolean }) {
   if (v === true) return <span className="yes"><Check size={18} /></span>;
@@ -67,12 +43,15 @@ const ADDONS: [LucideIcon, string, string, string, string, string][] = [
   [Wand2, "Niche Pack", "custom_niche_public_90d", "", "Rp 299K", "Niche kustom dibuat sesuai brief Anda, 3–5 hari delivery."],
 ];
 
-const makeFaq = (d: number): [string, string][] => [
-  ["Bisa upgrade / downgrade kapan saja?", "Bisa. Perubahan paket berlaku langsung dan biaya di-prorate otomatis di tagihan berikutnya."],
-  ["Bagaimana refund policy-nya?", `Trial ${d} hari gratis penuh. Setelah berlangganan, kami menawarkan refund 7 hari untuk pembayaran pertama jika belum cocok.`],
+// FAQ JUJUR-OLEH-SISTEM (Tahap 4): prorate & tahunan kini benar-benar bekerja di mesin; refund =
+// proses manual yang dijelaskan apa adanya (ratifikasi owner §3b-5).
+const makeFaq = (d: number, ann: number): [string, string][] => [
+  ["Bisa upgrade / downgrade kapan saja?", "Bisa. Saat ganti paket, sisa nilai paket lamamu otomatis dikonversi menjadi masa aktif di paket baru (prorate nilai-adil) — tidak ada hari yang hangus. Perpanjang paket yang sama pun menyambung sisa harimu utuh."],
+  ...(ann > 0 ? [["Apakah ada paket tahunan?", `Ada. Bayar tahunan sekali dan hemat ${ann}% dibanding bulanan — pilih “Tahunan” saat checkout di halaman Billing.`]] as [string, string][] : []),
+  ["Bagaimana refund policy-nya?", `Trial ${d} hari gratis penuh tanpa kartu kredit. Setelah pembayaran pertama, hubungi kami dalam 7 hari jika belum cocok — refund diproses manual oleh tim melalui Midtrans.`],
   ["Bagaimana biaya AI dihitung?", "Biaya AI mengikuti pemakaian aktual API milikmu (BYOK) dan dibayar langsung ke provider yang kamu pilih — bukan ke MesinViral. Besarnya sangat bervariasi tergantung provider & model: bisa mulai dari Rp 0 bila memakai tier/model gratis."],
   ["Apakah harga sudah termasuk biaya AI?", "Harga langganan terpisah dari biaya AI (BYOK) — dan biaya AI itu kamu yang kendalikan penuh, mulai dari Rp 0 dengan provider/model gratis."],
-  ["Pembayaran pakai apa?", "Kami pakai Midtrans — mendukung transfer bank, e-wallet (GoPay, ShopeePay), QRIS, kartu kredit, dan Virtual Account."],
+  ["Pembayaran pakai apa?", "Kami pakai Midtrans — mendukung transfer bank / Virtual Account, e-wallet (GoPay, ShopeePay), kartu kredit, dan metode lain yang aktif di halaman pembayaran."],
 ];
 
 export default function PricingPage() {
@@ -81,12 +60,15 @@ export default function PricingPage() {
   const [pricing, setPricing] = useState<Record<string, number>>({});
   const [plans, setPlans] = useState<Plan[]>([]);
   const [trialDays, setTrialDays] = useState(7);
+  const [annualPct, setAnnualPct] = useState(0);           // knob admin; 0 = toggle tahunan disembunyikan
+  const [matrix, setMatrix] = useState<MatrixRow[]>([]);   // matriks perbandingan (admin-editable)
   useEffect(() => {
     fetchPricing().then(setPricing);
-    fetchPlans().then(({ plans, trialDays }) => { setPlans(plans); setTrialDays(trialDays); });
+    fetchPlans().then(({ plans, trialDays, annualDiscountPct }) => { setPlans(plans); setTrialDays(trialDays); setAnnualPct(annualDiscountPct); });
+    createClient().from("plan_matrix_rows").select("*").order("sort_order")
+      .then(({ data }) => setMatrix((data as MatrixRow[]) ?? []));
   }, []);
   const pm: Record<string, Plan | undefined> = Object.fromEntries(plans.map((p) => [p.plan_type, p]));
-  const fcmp = makeFcmp(pm);
 
   return (
     <>
@@ -95,30 +77,38 @@ export default function PricingPage() {
           <span className="mk-kicker"><Bi id="Harga transparan" en="Transparent pricing" /></span>
           <h1><Bi id="Pilih paket untuk channelmu" en="Pick a plan for your channel" /></h1>
           <p className="mk-lead mk-center"><Bi id="Langganan + biaya AI (BYOK) dibayar langsung ke provider. Tanpa markup." en="Subscription + AI cost (BYOK) paid directly to providers. No markup." /></p>
-          <div className="bill-toggle">
-            <span className="secondary" style={{ fontSize: "var(--text-sm)" }}><Bi id="Bulanan" en="Monthly" /></span>
-            <label className="switch"><input type="checkbox" checked={annual} onChange={(e) => setAnnual(e.target.checked)} /><span className="track" /><span className="thumb" /></label>
-            <span className="secondary" style={{ fontSize: "var(--text-sm)" }}><Bi id="Tahunan" en="Annual" /></span>
-            <span className="save"><Bi id="Hemat 20%" en="Save 20%" /></span>
-          </div>
+          {/* Toggle tahunan NYATA (Tahap 4): knob annual_discount_pct — 0 = disembunyikan; checkout tahunan hidup di Billing */}
+          {annualPct > 0 && (
+            <div className="bill-toggle">
+              <span className="secondary" style={{ fontSize: "var(--text-sm)" }}><Bi id="Bulanan" en="Monthly" /></span>
+              <label className="switch"><input type="checkbox" checked={annual} onChange={(e) => setAnnual(e.target.checked)} /><span className="track" /><span className="thumb" /></label>
+              <span className="secondary" style={{ fontSize: "var(--text-sm)" }}><Bi id="Tahunan" en="Annual" /></span>
+              <span className="save"><Bi id={`Hemat ${annualPct}%`} en={`Save ${annualPct}%`} /></span>
+            </div>
+          )}
         </div>
 
         <div className="tiers">
           {paidPlans(plans).map((p) => {
-            const copy = TIER_COPY[p.plan_type] ?? { ttId: "", ttEn: "", feats: [], pop: false };
+            // Narasi (tagline/fitur/populer) = DB plan_limits.marketing_* — admin-editable tanpa deploy (Tahap 4).
             const baseK = Math.round((p.price_idr ?? 0) / 1000);
-            const price = annual ? Math.round(baseK * 0.8) : baseK;
-            const feats = [`${p.max_channels} channel`, `${p.max_videos_per_day} video / hari`, ...(p.niche_studio ? ["Niche Studio (DNA kustom)"] : []), ...copy.feats];
+            const showAnnual = annual && annualPct > 0;
+            const price = showAnnual ? Math.round(baseK * (100 - annualPct) / 100) : baseK;
             return (
-              <div className={`tier${copy.pop ? " pop" : ""}`} key={p.plan_type}>
-                {copy.pop && <span className="pop-badge">Most Popular</span>}
+              <div className={`tier${p.is_popular ? " pop" : ""}`} key={p.plan_type}>
+                {p.is_popular && <span className="pop-badge">Most Popular</span>}
                 <div className="tn">{p.display_name}</div>
-                <div className="tt"><Bi id={copy.ttId} en={copy.ttEn} /></div>
-                <div className="tp-strike">{annual ? `Rp ${baseK}K` : ""}</div>
+                <div className="tt"><Bi id={p.tagline_id} en={p.tagline_en || p.tagline_id} /></div>
+                <div className="tp-strike">{showAnnual ? `Rp ${baseK}K` : ""}</div>
                 <div className="tp">Rp {price}K<small>/bln</small></div>
-                <div className="muted" style={{ fontSize: "var(--text-xs)" }}>{annual ? <Bi id="ditagih tahunan" en="billed annually" /> : " "}</div>
-                <ul>{feats.map((f, k) => <li key={k}><Check size={15} /> {f}</li>)}</ul>
-                <a href="/auth?view=signup" className={`btn ${copy.pop ? "btn-default" : "btn-outline"}`} style={{ width: "100%" }}><Bi id={`Pilih ${p.display_name}`} en={`Choose ${p.display_name}`} /></a>
+                <div className="muted" style={{ fontSize: "var(--text-xs)" }}>{showAnnual ? <Bi id="ditagih tahunan" en="billed annually" /> : " "}</div>
+                <ul>
+                  <li><Check size={15} /> {p.max_channels} channel</li>
+                  <li><Check size={15} /> <Bi id={`${p.max_videos_per_day} video / hari`} en={`${p.max_videos_per_day} videos / day`} /></li>
+                  {p.niche_studio && <li><Check size={15} /> Niche Studio (DNA kustom)</li>}
+                  {p.marketing_features.map((f, k) => <li key={k}><Check size={15} /> <Bi id={f.id} en={f.en || f.id} /></li>)}
+                </ul>
+                <a href="/auth?view=signup" className={`btn ${p.is_popular ? "btn-default" : "btn-outline"}`} style={{ width: "100%" }}><Bi id={`Pilih ${p.display_name}`} en={`Choose ${p.display_name}`} /></a>
               </div>
             );
           })}
@@ -139,10 +129,14 @@ export default function PricingPage() {
         <div className="fcmp-wrap">
           <table className="fcmp">
             <thead><tr><th></th><th>{pm.starter?.display_name ?? "Starter"}</th><th className="pop">{pm.pro?.display_name ?? "Pro"}</th><th>{pm.business?.display_name ?? "Business"}</th><th>Enterprise</th></tr></thead>
-            <tbody>{fcmp.map((r, i) => "grp" in r ? (
-              <tr className="grp" key={i}><td colSpan={5}><Bi id={r.grp[0]} en={r.grp[1]} /></td></tr>
+            <tbody>{matrix.map((r) => r.is_group ? (
+              <tr className="grp" key={r.id}><td colSpan={5}><Bi id={r.label_id} en={r.label_en || r.label_id} /></td></tr>
             ) : (
-              <tr key={i}><td>{r.row[0] as string}</td><td><Fc v={r.row[1]} /></td><td className="popcol"><Fc v={r.row[2]} pop /></td><td><Fc v={r.row[3]} /></td><td><Fc v={r.row[4]} /></td></tr>
+              <tr key={r.id}><td><Bi id={r.label_id} en={r.label_en || r.label_id} /></td>
+                <td><Fc v={resolveCell(r.v_starter, pm.starter)} /></td>
+                <td className="popcol"><Fc v={resolveCell(r.v_pro, pm.pro)} pop /></td>
+                <td><Fc v={resolveCell(r.v_business, pm.business)} /></td>
+                <td><Fc v={resolveCell(r.v_enterprise, undefined)} /></td></tr>
             ))}</tbody>
           </table>
         </div>
@@ -177,7 +171,7 @@ export default function PricingPage() {
       <section className="mk-section" style={{ background: "var(--bg-elevated)", borderTop: "1px solid var(--border-subtle)" }}><div className="mk-container">
         <div className="mk-center" style={{ marginBottom: "2rem" }}><h2 className="mk-h2">FAQ <Bi id="seputar harga" en="about pricing" /></h2></div>
         <div className="faq">
-          {makeFaq(trialDays).map(([q, a], i) => (
+          {makeFaq(trialDays, annualPct).map(([q, a], i) => (
             <div className={`faq-item${faqOpen === i ? " open" : ""}`} key={i}>
               <div className="faq-q" onClick={() => setFaqOpen(faqOpen === i ? -1 : i)}>{q} <span className="chev"><ChevronDown size={18} /></span></div>
               <div className="faq-a"><p>{a}</p></div>

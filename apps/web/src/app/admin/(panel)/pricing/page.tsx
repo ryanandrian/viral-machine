@@ -51,13 +51,25 @@ export default function AdminPricingPage() {
   // Editor NARASI per-paket (Tahap 3.1) — draft lokal, simpan per-blur/aksi (auto-save).
   const [selPlan, setSelPlan] = useState<string | null>(null);
   const [draft, setDraft] = useState<{ tagline_id: string; tagline_en: string; features: Feature[] }>({ tagline_id: "", tagline_en: "", features: [] });
+  // Tahap 4: blok ilustrasi biaya (marketing_blocks) + matriks perbandingan (plan_matrix_rows).
+  type MBlock = { key: string; title_id: string | null; title_en: string | null; lines: Feature[]; sort_order: number };
+  type MRow = { id: number; sort_order: number; is_group: boolean; label_id: string; label_en: string; v_starter: string | null; v_pro: string | null; v_business: string | null; v_enterprise: string | null };
+  const [blocks, setBlocks] = useState<MBlock[]>([]);
+  const [mrows, setMrows] = useState<MRow[]>([]);
+  const [selBlock, setSelBlock] = useState<string | null>(null);
+  const [draftB, setDraftB] = useState<{ title_id: string; title_en: string; lines: Feature[] }>({ title_id: "", title_en: "", lines: [] });
 
   const load = useCallback(async () => {
     setLoading(true); setErr(null);
-    const r = await fetch("/api/admin/pricing");
+    const [r, rb, rm] = await Promise.all([
+      fetch("/api/admin/pricing"), fetch("/api/admin/marketing-blocks"), fetch("/api/admin/plan-matrix"),
+    ]);
     if (!r.ok) { setErr(`Gagal memuat (${r.status})`); setLoading(false); return; }
     const j = await r.json();
-    setPricing(j.pricing); setPlanLimits(j.plan_limits); setLoading(false);
+    setPricing(j.pricing); setPlanLimits(j.plan_limits);
+    if (rb.ok) setBlocks((await rb.json()).blocks ?? []);
+    if (rm.ok) setMrows((await rm.json()).rows ?? []);
+    setLoading(false);
   }, []);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2400); return () => clearTimeout(t); }, [toast]);
@@ -107,6 +119,26 @@ export default function AdminPricingPage() {
   function openPlanNarasi(pl: PlanLimit) {
     setSelPlan(pl.plan_type);
     setDraft({ tagline_id: pl.tagline_id ?? "", tagline_en: pl.tagline_en ?? "", features: [...(pl.marketing_features ?? [])] });
+  }
+  // ── Tahap 4: blok ilustrasi + matriks (auto-save pola sama) ────────────────
+  async function patchBlock(key: string, d: typeof draftB) {
+    const clean = d.lines.filter((l) => l.id.trim());
+    const r = await fetch(`/api/admin/marketing-blocks/${encodeURIComponent(key)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title_id: d.title_id, title_en: d.title_en, lines: clean }) });
+    if (r.ok) { setToast("Tersimpan"); await load(); } else setToast("Gagal");
+  }
+  async function patchMatrix(id: number, body: Partial<MRow>) {
+    const r = await fetch(`/api/admin/plan-matrix/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (r.ok) { setToast("Tersimpan"); await load(); } else setToast("Gagal");
+  }
+  async function addMatrixRow(isGroup: boolean) {
+    const maxSort = mrows.reduce((m, r) => Math.max(m, r.sort_order), 0);
+    const r = await fetch("/api/admin/plan-matrix", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ label_id: isGroup ? "Grup baru" : "Baris baru", label_en: isGroup ? "New group" : "New row", is_group: isGroup, sort_order: maxSort + 10 }) });
+    if (r.ok) { setToast("Baris ditambah"); await load(); } else setToast("Gagal");
+  }
+  async function delMatrixRow(id: number, label: string) {
+    if (!window.confirm(`Hapus baris "${label}" dari tabel perbandingan?`)) return;
+    const r = await fetch(`/api/admin/plan-matrix/${id}`, { method: "DELETE" });
+    if (r.ok) { setToast("Baris dihapus"); await load(); } else setToast("Gagal");
   }
   async function saveNarasi(plan: string, d: typeof draft) {
     // Baris kosong disaring (server menolak id kosong — anti-sampah); EN kosong = ikut ID (fallback server).
@@ -191,6 +223,43 @@ export default function AdminPricingPage() {
             </tbody>
           </table></div></div>
           <div className="muted" style={{ fontSize: "var(--text-xs)", margin: "0.625rem 0 0" }}><Bi id="Harga/bln tiap tier diatur di tabel pricing_config di atas (plan_starter/pro/business)." en="Per-tier monthly price is edited in the pricing_config table above (plan_starter/pro/business)." /></div>
+
+          {/* Tahap 4: blok ILUSTRASI BIAYA per video (landing) — statis, admin-editable */}
+          <h3 style={{ fontSize: "var(--text-lg)", fontWeight: 600, margin: "1.5rem 0 1rem" }}><Bi id="Ilustrasi biaya per video (landing)" en="Cost-per-video illustration (landing)" /></h3>
+          <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl">
+            <thead><tr><th>Key</th><th><Bi id="Judul (ID)" en="Title (ID)" /></th><th className="num"><Bi id="Baris" en="Lines" /></th><th></th></tr></thead>
+            <tbody>{blocks.map((b) => (
+              <tr key={b.key}>
+                <td className="mono muted" style={{ fontSize: "var(--text-xs)" }}>{b.key}</td>
+                <td style={{ fontSize: "var(--text-sm)" }}>{b.title_id ?? <span className="muted">—</span>}</td>
+                <td className="num">{(b.lines ?? []).length}</td>
+                <td><button className="btn btn-secondary btn-sm" onClick={() => { setSelBlock(b.key); setDraftB({ title_id: b.title_id ?? "", title_en: b.title_en ?? "", lines: [...(b.lines ?? [])] }); }}><Bi id="Edit" en="Edit" /></button></td>
+              </tr>
+            ))}</tbody>
+          </table></div></div>
+          <div className="muted" style={{ fontSize: "var(--text-xs)", margin: "0.625rem 0 0" }}><Bi id="Tampil di landing sebagai ilustrasi statis ber-label periode — perbarui angka/model dari sini tanpa deploy." en="Shown on the landing page as a period-labelled static illustration — update figures/models here without deploying." /></div>
+
+          {/* Tahap 4: MATRIKS PERBANDINGAN fitur /pricing — baris = data; sel: true, false, token auto:x, atau teks */}
+          <h3 style={{ fontSize: "var(--text-lg)", fontWeight: 600, margin: "1.5rem 0 1rem" }}><Bi id='Tabel perbandingan fitur (/pricing "Compare all features")' en='Feature comparison table (/pricing "Compare all features")' /></h3>
+          <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl">
+            <thead><tr><th className="num">Urut</th><th><Bi id="Label (ID)" en="Label (ID)" /></th><th><Bi id="Label (EN)" en="Label (EN)" /></th><th>Starter</th><th>Pro</th><th>Business</th><th>Enterprise</th><th></th></tr></thead>
+            <tbody>{mrows.map((m) => (
+              <tr key={m.id} style={m.is_group ? { background: "var(--bg-elevated)" } : undefined}>
+                <td className="num"><input className="input" type="number" style={{ height: "1.9rem", width: "4.2rem" }} defaultValue={m.sort_order} onBlur={(e) => { const n = parseInt(e.target.value, 10); if (Number.isInteger(n) && n !== m.sort_order) patchMatrix(m.id, { sort_order: n }); }} /></td>
+                <td><input className="input" style={{ height: "1.9rem", minWidth: 150, fontWeight: m.is_group ? 700 : 400 }} defaultValue={m.label_id} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== m.label_id) patchMatrix(m.id, { label_id: v }); }} /></td>
+                <td><input className="input" style={{ height: "1.9rem", minWidth: 150 }} defaultValue={m.label_en} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== m.label_en) patchMatrix(m.id, { label_en: v }); }} /></td>
+                {(["v_starter", "v_pro", "v_business", "v_enterprise"] as const).map((c) => (
+                  <td key={c}>{m.is_group ? <span className="muted">—</span> : <input className="input" style={{ height: "1.9rem", width: "7.5rem" }} defaultValue={m[c] ?? ""} placeholder="true/false/teks" onBlur={(e) => { const v = e.target.value.trim(); if (v !== (m[c] ?? "")) patchMatrix(m.id, { [c]: v } as Partial<MRow>); }} />}</td>
+                ))}
+                <td><button className="btn btn-ghost btn-sm" title="Hapus baris" onClick={() => delMatrixRow(m.id, m.label_id)}><X size={13} /></button></td>
+              </tr>
+            ))}</tbody>
+          </table></div></div>
+          <div style={{ display: "flex", gap: ".5rem", margin: "0.625rem 0 0", alignItems: "center", flexWrap: "wrap" }}>
+            <button className="btn btn-secondary btn-sm" onClick={() => addMatrixRow(false)}><Bi id="+ Baris fitur" en="+ Feature row" /></button>
+            <button className="btn btn-secondary btn-sm" onClick={() => addMatrixRow(true)}><Bi id="+ Judul grup" en="+ Group header" /></button>
+            <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id={'Nilai sel: "true"=✓ · "false"=✗ · "auto:max_channels" / "auto:max_videos_per_day" / "auto:niche_studio" = angka FAKTA live dari paket · selain itu tampil sebagai teks.'} en={'Cell values: "true"=✓ · "false"=✗ · "auto:max_channels" / "auto:max_videos_per_day" / "auto:niche_studio" = live FACTS from the plan · anything else renders as text.'} /></span>
+          </div>
         </div>
 
         <aside className="pr-api-panel">
@@ -278,6 +347,29 @@ export default function AdminPricingPage() {
             </div>
           </>);
         })()}
+      </aside>
+
+      {/* Drawer editor BLOK ILUSTRASI (Tahap 4) — pola sama dgn narasi paket */}
+      <div className={`pr-scrim${selBlock ? " open" : ""}`} onClick={() => setSelBlock(null)} />
+      <aside className={`pr-drawer${selBlock ? " open" : ""}`}>
+        {selBlock && (<>
+          <div className="pr-drawer-head"><div><div className="mono" style={{ fontWeight: 600 }}>{selBlock}</div><div className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Blok ilustrasi biaya di landing — tersimpan otomatis saat klik ke luar field / aksi" en="Landing cost-illustration block — auto-saves on blur / action" /></div></div><button className="btn btn-ghost btn-icon btn-sm" onClick={() => setSelBlock(null)}><X size={16} /></button></div>
+          <div className="pr-dpanel">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1rem" }}>
+              <div><label className="label"><Bi id="Judul (ID)" en="Title (ID)" /></label><input className="input" value={draftB.title_id} onChange={(e) => setDraftB({ ...draftB, title_id: e.target.value })} onBlur={() => patchBlock(selBlock, draftB)} /></div>
+              <div><label className="label"><Bi id="Judul (EN)" en="Title (EN)" /></label><input className="input" value={draftB.title_en} onChange={(e) => setDraftB({ ...draftB, title_en: e.target.value })} onBlur={() => patchBlock(selBlock, draftB)} /></div>
+            </div>
+            <label className="label"><Bi id="Baris (maks 8; ID + EN per baris)" en="Lines (max 8; ID + EN per line)" /></label>
+            {draftB.lines.map((l, i) => (
+              <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: ".4rem", marginBottom: ".4rem" }}>
+                <textarea className="input" rows={2} placeholder="Teks ID" value={l.id} onChange={(e) => { const ls = [...draftB.lines]; ls[i] = { ...ls[i], id: e.target.value }; setDraftB({ ...draftB, lines: ls }); }} onBlur={() => patchBlock(selBlock, draftB)} />
+                <textarea className="input" rows={2} placeholder="Text EN" value={l.en} onChange={(e) => { const ls = [...draftB.lines]; ls[i] = { ...ls[i], en: e.target.value }; setDraftB({ ...draftB, lines: ls }); }} onBlur={() => patchBlock(selBlock, draftB)} />
+                <button className="btn btn-ghost btn-sm" title="Hapus baris" onClick={() => { const ls = draftB.lines.filter((_, x) => x !== i); const nd = { ...draftB, lines: ls }; setDraftB(nd); patchBlock(selBlock, nd); }}><X size={13} /></button>
+              </div>
+            ))}
+            <button className="btn btn-secondary btn-sm" disabled={draftB.lines.length >= 8} onClick={() => setDraftB({ ...draftB, lines: [...draftB.lines, { id: "", en: "" }] })}><Bi id="+ Tambah baris" en="+ Add line" /></button>
+          </div>
+        </>)}
       </aside>
 
       <div className={`pr-save-toast${toast ? " show" : ""}`}><span style={{ color: "var(--success)" }}><CheckCircle size={16} /></span> {toast}</div>
