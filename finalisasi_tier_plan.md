@@ -175,7 +175,7 @@ File: `apps/web/src/app/api/billing/checkout/route.ts` + `src/billing/webhook_ap
       2 user uji dihapus, server uji dimatikan). py_compile ✓ npm build ✓ marketing /,/pricing,/showcase
       200 dgn fetchPlans baru ✓. Migrasi **0156_annual_billing** (knob `annual_discount_pct`=20 +
       `payments.period_months` default 1) TERPASANG di DB live + label CFG_META dwibahasa di admin
-      app-config. Helper `plan_display_name` di limits.py (satu sumber nama). Commit: (diisi saat commit).
+      app-config. Helper `plan_display_name` di limits.py (satu sumber nama). Commit: `883836c`.
       Deploy: MENUNGGU IZIN OWNER.
 
 ### TAHAP 3 — Panel admin lengkap & pelaporan uang jujur (Pilar 3-lengkap + 4-admin)  ⏳
