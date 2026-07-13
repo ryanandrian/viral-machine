@@ -118,10 +118,17 @@
   4. **Approved** → verifikasi nyata: (a) OAuth connect TANPA layar "unverified" (b) refresh-token permanen (bukan 7 hari) → [A4] ✅ → langsung eksekusi **[A5] smoke-test** → pintu publik resmi terbuka.
   5. **>6 minggu tanpa kabar** (> ~2026-08-16) → balas thread email T&S menanyakan status / gunakan tombol kontak di Verification Center.
 
-### [A5] Smoke-test live end-to-end (tenant baru dari nol) — 🔒⬜
+### [A5] Smoke-test live end-to-end (tenant baru dari nol) — ✅ SUDAH DILAKSANAKAN owner (koreksi 2026-07-13: dokumen telat update — pelanggaran administrasi Claude)
 - **TUJUAN:** bukti acceptance utama CHANNEL_LOCK — tenant BARU (bukan ryan) bisa jalan penuh.
 - **PLAN (owner + Claude):** signup tenant uji baru → `/integrations` isi kunci AI + connect YouTube (OAuth consent 1× nyata di browser) + Telegram → `/channels/[id]` set niche/model/voice/jadwal → semua 🟢 → Aktifkan → produksi + publish + analytics jalan. + transaksi Midtrans 1× + email egress dari VPS.
 - **DONE-BILA:** tenant baru sampai aktif + 1 video publish + bayar — mulus, nol error mentah.
+- **REALISASI (dicatat TERLAMBAT — teguran owner 2026-07-13 "selesai tak langsung update = progress terkesan stuck"):**
+  smoke-test registrasi+pembayaran SUDAH dilakukan owner memakai akun uji miliknya: **effi** (starter,
+  bayar GoPay nyata Rp149rb 2026-07-04 — pembayaran produksi pertama A-Z, lihat [A1]) + **kumala.rw22c**
+  (pro, aktif) — keduanya akun demo owner (uang owner), BUKAN pelanggan. + **Rush-Q** (2026-07-13,
+  teman owner test registrasi SSO Google → sukses sampai /onboarding, bukti log nginx 17:07). Temuan
+  UX dari Rush-Q: pasca-SSO tak ada sapaan/arahan di onboarding → tenant awam bingung (usulan fix
+  menunggu ketok owner — lihat changelog 2026-07-13 (4)).
 - **DEPENDS:** A1, A2, A4.
 - **REALISASI:** ⬜ *(butuh browser owner untuk OAuth consent)*
 
