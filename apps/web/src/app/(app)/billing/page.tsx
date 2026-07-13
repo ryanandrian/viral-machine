@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Zap, CreditCard, FileText, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { fetchPlans, paidPlans, annualPriceIdr, type Plan } from "@/lib/plans";
 import { PageHeader } from "@/components/page-header";
 import "./billing.css";
 
@@ -14,7 +15,7 @@ import "./billing.css";
 
 function Bi({ id, en }: { id: string; en: string }) { return (<><span data-id>{id}</span><span data-en>{en}</span></>); }
 function fmtIDR(n: number | null | undefined) { return n == null ? "—" : `Rp ${Number(n).toLocaleString("id-ID")}`; }
-const PLAN_LABEL: Record<string, string> = { trial: "Trial", starter: "Starter", pro: "Pro", business: "Business" };
+// Nama paket = plan_limits.display_name via fetchPlans (Pilar 4 — admin-editable, bukan label hardcode).
 
 type Pricing = { key: string; value_idr: number; description: string; category: string };
 type Payment = { order_id: string; plan_type: string | null; gross_amount: number | null; currency: string | null; status: string | null; created_at: string; redirect_url?: string | null };
@@ -27,6 +28,9 @@ export default function BillingPage() {
   const [loading, setLoading] = useState(true);
   const [plan, setPlan] = useState<{ plan_type: string; subscription_status: string; current_period_end: string | null; is_developer: boolean; discount_pct: number; winback_offer_pct?: number | null; winback_offer_expires_at?: string | null } | null>(null);
   const [prices, setPrices] = useState<Record<string, Pricing>>({});
+  const [plans, setPlans] = useState<Plan[]>([]);            // tier config-driven (nama+harga+urutan)
+  const [annualPct, setAnnualPct] = useState(0);             // 0 = pilihan tahunan disembunyikan
+  const [period, setPeriod] = useState<"monthly" | "annual">("monthly");
   const [maxCh, setMaxCh] = useState<number | null>(null);
   const [maxVid, setMaxVid] = useState<number | null>(null);
   const [chUsed, setChUsed] = useState(0);
@@ -46,6 +50,8 @@ export default function BillingPage() {
     const pmap: Record<string, Pricing> = {};
     (pc as Pricing[] ?? []).forEach((p) => { pmap[p.key] = p; });
     setPrices(pmap);
+    const { plans: pls, annualDiscountPct } = await fetchPlans();
+    setPlans(pls); setAnnualPct(annualDiscountPct);
     setChUsed(chCount ?? 0); setVidMonth(vidCount ?? 0);
     setInvoices((pay as Payment[]) ?? []);
     if (t?.plan_type) {
@@ -66,7 +72,7 @@ export default function BillingPage() {
   async function checkout(plan_type: string) {
     setPayErr(null); setPaying(plan_type);
     try {
-      const res = await fetch("/api/billing/checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ plan_type }) });
+      const res = await fetch("/api/billing/checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ plan_type, period }) });
       const j = await res.json().catch(() => ({}));
       if (res.ok && j.redirect_url) { window.location.href = j.redirect_url; return; }
       setPayErr(j.error || "Gagal memulai pembayaran."); setPaying(null);
@@ -79,7 +85,7 @@ export default function BillingPage() {
     && Date.now() - new Date(i.created_at).getTime() < 24 * 3600 * 1000) ?? null;
 
   const comp = !!plan && (plan.is_developer || (plan.discount_pct ?? 0) >= 100);
-  const planName = plan ? (PLAN_LABEL[plan.plan_type] ?? plan.plan_type) : "—";
+  const planName = plan ? (plans.find((p) => p.plan_type === plan.plan_type)?.display_name ?? plan.plan_type) : "—";
   const planPrice = plan ? prices[`plan_${plan.plan_type}`]?.value_idr : null;
   const monthCap = maxVid != null ? maxVid * 30 : null;
 
@@ -171,15 +177,29 @@ export default function BillingPage() {
         <div className="drawer-head"><h3 className="card-title"><Bi id="Pilih paket" en="Choose a plan" /></h3><button className="btn btn-ghost btn-icon btn-sm" onClick={() => setDrawer(null)}><X size={16} /></button></div>
         <div className="drawer-body">
           {payErr && <div style={{ color: "var(--danger, #ef4444)", fontSize: "var(--text-sm)", marginBottom: ".75rem" }}>{payErr}</div>}
-          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}><Bi id="Pembayaran aman via Midtrans (VA / e-wallet / kartu / QRIS). Langganan berlaku 30 hari." en="Secure payment via Midtrans (VA / e-wallet / card / QRIS). Subscription lasts 30 days." /></p>
-          {["starter", "pro", "business"].map((tier) => {
-            const p = prices[`plan_${tier}`]; if (!p) return null;
+          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}>
+            {period === "annual"
+              ? <Bi id="Pembayaran aman via Midtrans (VA / e-wallet / kartu / QRIS). Langganan berlaku 12 bulan." en="Secure payment via Midtrans (VA / e-wallet / card / QRIS). Subscription lasts 12 months." />
+              : <Bi id="Pembayaran aman via Midtrans (VA / e-wallet / kartu / QRIS). Langganan berlaku 30 hari." en="Secure payment via Midtrans (VA / e-wallet / card / QRIS). Subscription lasts 30 days." />}
+          </p>
+          {/* Pilihan periode (Tahap 2) — tampil hanya bila diskon tahunan aktif (knob admin > 0) */}
+          {annualPct > 0 && (
+            <div className="segmented" style={{ marginBottom: "1rem" }}>
+              <button aria-selected={period === "monthly"} onClick={() => setPeriod("monthly")}><Bi id="Bulanan" en="Monthly" /></button>
+              <button aria-selected={period === "annual"} onClick={() => setPeriod("annual")}><Bi id={`Tahunan (hemat ${annualPct}%)`} en={`Annual (save ${annualPct}%)`} /></button>
+            </div>
+          )}
+          {/* Tier dari plan_limits+pricing_config via fetchPlans (config-driven — tier baru/nonaktif otomatis benar) */}
+          {paidPlans(plans).map((p) => {
+            const tier = p.plan_type;
             const isCurrent = plan?.plan_type === tier && plan?.subscription_status === "active";
+            const showAnnual = period === "annual" && annualPct > 0;
+            const priceLabel = showAnnual ? annualPriceIdr(p.price_idr ?? 0, annualPct) : p.price_idr;
             return (
               <div className="addon-cat" key={tier}><span className="ic"><Zap size={18} /></span><div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: "var(--text-sm)" }}>{PLAN_LABEL[tier]} {isCurrent && <span className="badge badge-success"><Bi id="Aktif" en="Active" /></span>}</div>
+                <div style={{ fontWeight: 600, fontSize: "var(--text-sm)" }}>{p.display_name} {isCurrent && <span className="badge badge-success"><Bi id="Aktif" en="Active" /></span>}</div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: ".5rem" }}>
-                  <span style={{ color: "var(--brand)", fontWeight: 600 }}>{fmtIDR(p.value_idr)}<small>/bln</small></span>
+                  <span style={{ color: "var(--brand)", fontWeight: 600 }}>{fmtIDR(priceLabel)}<small>{showAnnual ? "/thn" : "/bln"}</small></span>
                   <button className="btn btn-default btn-sm" disabled={paying !== null} onClick={() => checkout(tier)}>{paying === tier ? "…" : <Bi id="Pilih & bayar" en="Choose & pay" />}</button>
                 </div>
               </div></div>

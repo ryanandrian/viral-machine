@@ -77,7 +77,7 @@ def _app_cfg_int(sb, key: str, default: int) -> int:
     return default
 
 
-def compute_new_period(sb, tenant_id: str, new_plan_type: str, now: datetime) -> tuple:
+def compute_new_period(sb, tenant_id: str, new_plan_type: str, now: datetime, period_months: int = 1) -> tuple:
     """
     Periode langganan baru — RUMUS NILAI-ADIL (finalisasi_tier_plan Pilar 2, ratifikasi owner
     2026-07-13): sisa hari periode berjalan DIKONVERSI ke paket baru sesuai rasio harga/hari:
@@ -87,9 +87,12 @@ def compute_new_period(sb, tenant_id: str, new_plan_type: str, now: datetime) ->
     • Downgrade → nilai sisa jadi masa lebih panjang di paket murah (kapasitas dijepit gerbang kuota).
     • Tanpa periode hidup (trial/expired/suspended/blocked/grace-lewat) ATAU paket lama tak berharga
       (mis. 'trial' — tak ada di pricing_config) → murni now + durasi (tanpa kredit).
-    Harga acuan = pricing_config SAAT INI (config-driven). Return (start, end, catatan_log).
+    Harga acuan = pricing_config SAAT INI (config-driven). period_months: 1=bulanan, 12=tahunan
+    (Tahap 2 — durasi = subscription_period_days × period_months; kredit sisa-hari tetap dihitung
+    dari rasio harga BULANAN kedua paket, konsisten satu satuan nilai/hari).
+    Return (start, end, catatan_log).
     """
-    period_days = _app_cfg_int(sb, "subscription_period_days", 30)
+    period_days = _app_cfg_int(sb, "subscription_period_days", 30) * max(1, int(period_months or 1))
     credit_days = 0.0
     note = "tanpa kredit"
     try:
@@ -118,16 +121,24 @@ def compute_new_period(sb, tenant_id: str, new_plan_type: str, now: datetime) ->
     return start, end, note
 
 
-def compute_checkout_amount(sb, tenant_id: str, plan_type: str) -> tuple:
+def compute_checkout_amount(sb, tenant_id: str, plan_type: str, period_months: int = 1) -> tuple:
     """
     Harga checkout RESMI (finalisasi_tier_plan Pilar 3, ratifikasi owner 2026-07-13):
-    dasar = pricing_config[plan] → diskon TERBESAR dari {discount_pct admin 1–99 (BERTAHAN tiap
-    tagihan sampai di-nol-kan), winback aktif (hangus otomatis)} — tak digabung; min Rp 1.000.
+    dasar = pricing_config[plan] × period_months; TAHUNAN (12 bln) dapat diskon knob
+    `annual_discount_pct` (admin-editable; bagian dari HARGA DASAR, bukan peserta max-diskon) →
+    lalu diskon personal TERBESAR dari {discount_pct admin 1–99 (BERTAHAN tiap tagihan sampai
+    di-nol-kan), winback aktif (hangus otomatis)} — tak digabung; min Rp 1.000.
     Akun comp (is_developer / discount_pct≥100) = gratis selamanya → checkout DITOLAK
     (kode 'comp_account_no_billing' — FE memang tak menampilkan tombol bayar utk comp).
-    Return (amount, diskon_pct_terpakai).
+    Return (amount, diskon_personal_pct_terpakai).
     """
-    base = plan_price_idr(sb, plan_type)
+    months = int(period_months or 1)
+    if months not in (1, 12):
+        raise ValueError("invalid_period")
+    base = plan_price_idr(sb, plan_type) * months
+    if months == 12:
+        _ann = max(0, min(99, _app_cfg_int(sb, "annual_discount_pct", 20)))
+        base = round(base * (100 - _ann) / 100)
     trow = {}
     try:
         r = (sb.table("tenant_configs").select("is_developer,discount_pct")
@@ -247,19 +258,26 @@ def _cancel_pending_orders(sb, tenant_id: str, category: str) -> None:
 
 def snap_create_transaction(sb, tenant_id: str, plan_type: str,
                             customer_email: str | None = None,
-                            finish_url: str | None = None) -> dict:
-    """LANGGANAN bulanan. Buat order `payments` pending → Snap → {order_id, token, redirect_url, amount}.
-    Frontend redirect user ke redirect_url. Status final via webhook."""
+                            finish_url: str | None = None,
+                            period_months: int = 1) -> dict:
+    """LANGGANAN bulanan/tahunan (period_months 1|12 — Tahap 2). Buat order `payments` pending →
+    Snap → {order_id, token, redirect_url, amount}. Frontend redirect ke redirect_url. Final via webhook."""
     _cancel_pending_orders(sb, tenant_id, "subscription")   # anti dobel-bayar (owner 2026-07-04)
-    amount, _disc = compute_checkout_amount(sb, tenant_id, plan_type)   # diskon terbesar-menang + tolak comp
+    months = int(period_months or 1)
+    amount, _disc = compute_checkout_amount(sb, tenant_id, plan_type, months)   # tolak comp + validasi periode
     ts       = int(time.time())
     order_id = _order_id(tenant_id, plan_type, ts)
     sb.table("payments").insert({
         "order_id": order_id, "tenant_id": tenant_id, "plan_type": plan_type,
         "gross_amount": amount, "status": "pending", "category": "subscription",
+        "period_months": months,
     }).execute()
+    from src.billing.limits import plan_display_name
+    _pname = plan_display_name(sb, plan_type)   # nama tampil (Pilar 4) — dilihat pelanggan di Midtrans
     try:
-        d = _snap_post(order_id, amount, plan_type, f"MesinViral {plan_type} (bulanan)", customer_email, finish_url,
+        d = _snap_post(order_id, amount, plan_type,
+                       f"MesinViral {_pname} ({'tahunan' if months == 12 else 'bulanan'})",
+                       customer_email, finish_url,
                        _app_cfg_int(sb, "checkout_expiry_hours", 24), customer_name=_tenant_name(sb, tenant_id))
     except urllib.error.HTTPError as e:
         logger.error(f"[Midtrans] Snap subscription gagal order={order_id}: HTTP {e.code} {e.read().decode()[:300]}")
@@ -371,7 +389,9 @@ def _apply_settlement(sb, order: dict, txn: str | None, fraud, payment_type=None
             else:
                 # Periode NILAI-ADIL (Pilar 2): sisa hari paket lama terkonversi — perpanjangan dini
                 # tak lagi memotong hak tenant; upgrade/downgrade prorate via rasio harga.
-                start, end, _note = compute_new_period(sb, order["tenant_id"], order["plan_type"], _now())
+                # Durasi ikut periode yang DIBELI order (1=bulanan, 12=tahunan — Tahap 2).
+                start, end, _note = compute_new_period(sb, order["tenant_id"], order["plan_type"], _now(),
+                                                       period_months=int(order.get("period_months") or 1))
                 upd["period_start"] = start.isoformat(); upd["period_end"] = end.isoformat()
                 # Aktivasi + RESET penanda reminder + SIKLUS-HIDUP (LIFECYCLE B9) → tenant bersih dari jejak lapsed/blokir.
                 sb.table("tenant_configs").update({

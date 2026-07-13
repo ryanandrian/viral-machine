@@ -158,17 +158,29 @@ File: `apps/web/src/app/api/billing/checkout/route.ts` + `src/billing/webhook_ap
 `src/billing/midtrans.py` (terima `period` monthly|annual) · `apps/web/src/app/(app)/billing/page.tsx`
 (drawer dari fetchPlans + pilihan periode + `display_name`) · `apps/web/src/lib/plans.ts` ·
 `apps/web/src/app/billing/invoice/[id]/page.tsx` + `src/utils/email.py` (display_name).
-- [ ] 2.1 Checkout tahunan end-to-end (harga = bulanan×12×(1−knob), period 360h via rumus) —
-      bukti: order tahunan diag = Rp 1.430.400 (starter, 20%) + period_end +360h; bulanan tak berubah.
-- [ ] 2.2 Drawer dinamis + periode + nama tampil; invoice & email pakai `display_name` — bukti:
-      ganti display_name di admin → tembus ke billing/drawer/invoice/email uji; tier nonaktif hilang
-      dari drawer.
-- [ ] 2.3 Banner "di luar kuota paket" halaman Channels (Pilar 1c, dwibahasa) — bukti: tenant simulasi
-      over-kuota melihat badge; tenant normal TIDAK melihat apa pun (nol perubahan visual).
-- REALISASI: —
+- [x] 2.1 Checkout tahunan end-to-end — bukti: `compute_checkout_amount` 12bln = Rp 1.430.400 (149rb×12×80%) ✓
+      + tumpuk diskon admin 50% = 715.200 ✓ + bulanan tak berubah ✓ + periode selain 1|12 ditolak ✓ ·
+      settlement tahunan → end=now+370h (360+kredit sisa 10h, presisi ≤1s) + ledger ikut ✓ · regresi
+      bulanan expired → now+30h ✓ · endpoint BE (jalur Next→webhook_app) period=annual → order sandbox
+      1.430.400 + period_months=12 + token; tanpa period → bulanan (kompat lama) ✓ — order uji dibatalkan.
+- [x] 2.2 Drawer dinamis (fetchPlans, tier nonaktif otomatis hilang) + segmented Bulanan/Tahunan
+      (tampil hanya bila knob>0) + `display_name` di: billing, drawer, halaman Channels, invoice
+      (API `plan_display_name`="Starter" runtime ✓ + label "(Tahunan)" saat 12 bln ✓ + tanpa-auth 401 ✓),
+      email kuitansi (body memuat "paket Starter", bukan key mentah — ditangkap runtime ✓), item Snap
+      Midtrans ("MesinViral Starter (tahunan)").
+- [x] 2.3 Badge "Di luar kuota paket — tidak diproduksi/tayang + Upgrade" per-kartu channel (dwibahasa;
+      indeks ≥ kuota pada urutan created_at = cermin gerbang BE). Tenant dalam-kuota: nol perubahan
+      visual (kondisi tak terpenuhi). Verifikasi visual penuh = last-mile owner pasca-deploy.
+- **REALISASI:** 14/14 uji lulus (10 python + 4 invoice runtime via next start), nol residu (count=0,
+      2 user uji dihapus, server uji dimatikan). py_compile ✓ npm build ✓ marketing /,/pricing,/showcase
+      200 dgn fetchPlans baru ✓. Migrasi **0156_annual_billing** (knob `annual_discount_pct`=20 +
+      `payments.period_months` default 1) TERPASANG di DB live + label CFG_META dwibahasa di admin
+      app-config. Helper `plan_display_name` di limits.py (satu sumber nama). Commit: (diisi saat commit).
+      Deploy: MENUNGGU IZIN OWNER.
 
 ### TAHAP 3 — Panel admin lengkap & pelaporan uang jujur (Pilar 3-lengkap + 4-admin)  ⏳
-File: `migrations/0156_plan_marketing_narrative.sql` (kolom narasi + seed teks sekarang) ·
+File: `migrations/0157_plan_marketing_narrative.sql` (kolom narasi + seed teks sekarang; nomor 0156
+terpakai annual billing Tahap 2) ·
 `apps/web/src/app/admin/(panel)/pricing/page.tsx` (editor narasi per-paket · tombol Tambah entri harga ·
 buang tab Schedule · sembunyikan kolom USD¢ mati · badge kategori sesuai DB) ·
 `apps/web/src/app/api/admin/plan-limits/[plan]/route.ts` (whitelist + narasi + `full_niche_catalog` +

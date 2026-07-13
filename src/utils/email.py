@@ -121,13 +121,16 @@ def notify_payment_receipt(tenant_id: str, plan_type: str, amount, sb=None, orde
         amt = f"Rp {int(amount):,}".replace(",", ".")
     except Exception:
         amt = str(amount)
+    # Nama paket yang dilihat pelanggan = plan_limits.display_name (Pilar 4 — bukan key mentah).
+    from src.billing.limits import plan_display_name
+    pname = plan_display_name(sb, plan_type)
     inv_en = f"\nInvoice / receipt: {_site_url()}/billing/invoice/{order_id}\n" if order_id else ""
     inv_id = f"\nInvoice / bukti bayar: {_site_url()}/billing/invoice/{order_id}\n" if order_id else ""
     return send_email(
         to, "Payment received / Pembayaran diterima — MesinViral",
-        _bi(f"Hi,\n\nYour payment for the {plan_type} plan ({amt}) was successful. Your subscription is now ACTIVE.\n{inv_en}"
+        _bi(f"Hi,\n\nYour payment for the {pname} plan ({amt}) was successful. Your subscription is now ACTIVE.\n{inv_en}"
             f"Happy creating!\n\n— The MesinViral Team",
-            f"Halo,\n\nPembayaran paket {plan_type} ({amt}) berhasil. Langganan Anda kini AKTIF.\n{inv_id}"
+            f"Halo,\n\nPembayaran paket {pname} ({amt}) berhasil. Langganan Anda kini AKTIF.\n{inv_id}"
             f"Selamat berkarya!\n\n— Tim MesinViral"),
     )
 

@@ -13,10 +13,17 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   const admin = createAdminClient();
   const { data: pay } = await admin.from("payments")
-    .select("order_id,tenant_id,category,plan_type,ref_id,gross_amount,currency,status,payment_type,period_start,period_end,created_at")
+    .select("order_id,tenant_id,category,plan_type,ref_id,gross_amount,currency,status,payment_type,period_start,period_end,period_months,created_at")
     .eq("order_id", order_id).maybeSingle();
   if (!pay) return NextResponse.json({ error: "not_found" }, { status: 404 });
   if (!isAdmin && pay.tenant_id !== user.id) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+
+  // Nama paket yang dilihat pelanggan = plan_limits.display_name (Pilar 4 — bukan key mentah).
+  let planDisplayName: string | null = null;
+  if (pay.plan_type) {
+    const { data: pl } = await admin.from("plan_limits").select("display_name").eq("plan_type", pay.plan_type).maybeSingle();
+    planDisplayName = (pl?.display_name as string | undefined) ?? null;
+  }
 
   const { data: tc } = await admin.from("tenant_configs").select("display_handle").eq("tenant_id", pay.tenant_id).maybeSingle();
   let email: string | null = null;
@@ -26,6 +33,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   return NextResponse.json({
     payment: pay,
+    plan_display_name: planDisplayName,
     buyer: { name: (tc as { display_handle?: string } | null)?.display_handle ?? null, email },
     company: co ?? null,
     ppn_percent: (ppn as { value?: number } | null)?.value ?? 0,

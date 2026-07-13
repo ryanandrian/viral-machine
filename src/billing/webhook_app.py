@@ -154,8 +154,11 @@ try:
         from src.billing.midtrans import snap_create_transaction
         try:
             b = await request.json()
+            # period "monthly"|"annual" (Tahap 2) — default bulanan; nilai lain ditolak di compute (invalid_period)
+            _months = 12 if b.get("period") == "annual" else 1
             return snap_create_transaction(_sb(), b.get("tenant_id"), b.get("plan_type"),
-                                           customer_email=b.get("email"), finish_url=b.get("finish_url"))
+                                           customer_email=b.get("email"), finish_url=b.get("finish_url"),
+                                           period_months=_months)
         except Exception as e:
             logger.warning(f"[billing] checkout langganan gagal: {e}")
             return JSONResponse({"error": str(e)}, status_code=400)

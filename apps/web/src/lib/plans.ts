@@ -13,14 +13,14 @@ export type Plan = {
   sort_order: number;
 };
 
-export async function fetchPlans(): Promise<{ plans: Plan[]; trialDays: number }> {
+export async function fetchPlans(): Promise<{ plans: Plan[]; trialDays: number; annualDiscountPct: number }> {
   const supabase = createClient();
   const [{ data: pl }, { data: pc }, { data: ac }] = await Promise.all([
     supabase.from("plan_limits")
       .select("plan_type, display_name, max_channels, max_videos_per_day, niche_studio, sort_order")
       .order("sort_order"),
     supabase.from("pricing_config").select("key, value_idr").eq("active", true),
-    supabase.from("app_config").select("value").eq("key", "trial_duration_days").maybeSingle(),
+    supabase.from("app_config").select("key, value").in("key", ["trial_duration_days", "annual_discount_pct"]),
   ]);
   const price: Record<string, number> = {};
   (pc ?? []).forEach((r) => { price[r.key as string] = r.value_idr as number; });
@@ -33,8 +33,15 @@ export async function fetchPlans(): Promise<{ plans: Plan[]; trialDays: number }
     niche_studio: Boolean(r.niche_studio),
     sort_order: (r.sort_order as number) ?? 0,
   }));
-  const trialDays = Number((ac as { value?: number } | null)?.value ?? 7);
-  return { plans, trialDays };
+  const cfg: Record<string, number> = {};
+  (ac ?? []).forEach((r) => { cfg[r.key as string] = Number(r.value); });
+  // Diskon tahunan (Tahap 2): 0/absen = pilihan tahunan DISEMBUNYIKAN (knob admin, no-hardcode).
+  return { plans, trialDays: cfg.trial_duration_days ?? 7, annualDiscountPct: cfg.annual_discount_pct ?? 0 };
+}
+
+// Harga TAHUNAN total (IDR) untuk satu paket — rumus resmi = bulanan × 12 × (100−diskon)% (Pilar 3).
+export function annualPriceIdr(monthly: number, discountPct: number): number {
+  return Math.round(monthly * 12 * (100 - Math.max(0, Math.min(99, discountPct))) / 100);
 }
 
 // Masa trial SAJA (ringan, 1 query) — utk halaman yang cuma butuh angka hari (showcase/auth CTA).

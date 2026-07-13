@@ -46,12 +46,12 @@ function prettyNiche(key: string) {
   return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-const PLAN_LABEL: Record<string, string> = { trial: "Trial", starter: "Starter", pro: "Pro", business: "Business" };
+// Nama paket = plan_limits.display_name (Pilar 4, config-driven — bukan label hardcode).
 
 // Card daftar — status-first (badge bersama), sinyal NYATA (Video terbit), aksi sesuai status, handle benar.
 const fmtK = (n: number) => n >= 1_000_000 ? `${(n / 1e6).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
 
-function ChannelCard({ ch, eff, vid, ana, busy, onToggle }: { ch: ChannelRow; eff: Eff; vid: number; ana?: { total_views: number; avg_engagement: number | null }; busy: boolean; onToggle: (ch: ChannelRow) => void }) {
+function ChannelCard({ ch, eff, vid, ana, busy, onToggle, outQuota }: { ch: ChannelRow; eff: Eff; vid: number; ana?: { total_views: number; avg_engagement: number | null }; busy: boolean; onToggle: (ch: ChannelRow) => void; outQuota?: boolean }) {
   const name = ch.channel_name || "Channel";
   const col = colorFor(ch.id);
   const niches = (ch.niche_pool?.length ? ch.niche_pool : ch.niche ? [ch.niche] : []).map(prettyNiche);
@@ -67,6 +67,14 @@ function ChannelCard({ ch, eff, vid, ana, busy, onToggle }: { ch: ChannelRow; ef
         </div>
         <ChannelStatusBadge eff={eff} />
       </div>
+      {/* Gerbang JALAN kuota (Pilar 1c): channel di luar N-tertua paket TIDAK dilayani mesin — jujur ke tenant. */}
+      {outQuota && <div style={{ display: "flex", gap: 8, alignItems: "flex-start", background: "var(--warning-soft)",
+        border: "1px solid color-mix(in srgb,var(--warning) 35%,transparent)", borderRadius: "var(--r-md)",
+        padding: "0.5rem 0.625rem", margin: "0.125rem 1.25rem 0.4rem", fontSize: "var(--text-xs)",
+        color: "var(--text-primary)", lineHeight: 1.55, fontWeight: 500 }}>
+        <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1, color: "var(--warning)" }} />
+        <span><Bi id="Di luar kuota paket — channel ini tidak diproduksi/tayang. " en="Beyond your plan quota — this channel is not produced/published. " />
+          <a href="/billing" style={{ color: "var(--brand)", fontWeight: 600 }}><Bi id="Upgrade paket" en="Upgrade plan" /></a></span></div>}
       <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0 1.25rem 0.4rem" }}>
         <span className="muted" style={{ fontSize: "var(--text-xs)", fontWeight: 500 }}><Bi id="Menggunakan Niche" en="Used Niche" /></span>
         {niches.length > 1 && <span className="badge" style={{ gap: "0.25rem" }}><Shuffle size={11} /> <Bi id="acak" en="random" /></span>}
@@ -118,6 +126,7 @@ export default function ChannelsPage() {
   const [supabase] = useState(() => createClient());
   const [channels, setChannels] = useState<ChannelRow[]>([]);
   const [plan, setPlan] = useState<string>("");
+  const [planName, setPlanName] = useState<string>("");   // display_name (admin-editable)
   const [maxCh, setMaxCh] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -143,8 +152,10 @@ export default function ChannelsPage() {
     const pt = (tc as { plan_type?: string } | null)?.plan_type ?? "";
     setPlan(pt);
     if (pt) {
-      const { data: pl } = await supabase.from("plan_limits").select("max_channels").eq("plan_type", pt).maybeSingle();
-      setMaxCh((pl as { max_channels?: number } | null)?.max_channels ?? null);
+      const { data: pl } = await supabase.from("plan_limits").select("max_channels,display_name").eq("plan_type", pt).maybeSingle();
+      const plr = pl as { max_channels?: number; display_name?: string } | null;
+      setMaxCh(plr?.max_channels ?? null);
+      setPlanName(plr?.display_name ?? pt);   // nama paket config-driven (Pilar 4)
     }
     // Kesiapan + resume analytics per channel (RPC) — Video NYATA (videos published) di bawah.
     const rd: Record<string, { ready: boolean; missing: string[] }> = {};
@@ -217,7 +228,7 @@ export default function ChannelsPage() {
       {maxCh != null && (
         <div className="quota">
           <Tv size={16} style={{ color: "var(--text-muted)" }} />
-          <span><b style={{ fontWeight: 600 }}>{used} dari {maxCh}</b> <Bi id="channel terpakai" en="channels used" /> <span className="muted">({PLAN_LABEL[plan] ?? plan})</span></span>
+          <span><b style={{ fontWeight: 600 }}>{used} dari {maxCh}</b> <Bi id="channel terpakai" en="channels used" /> <span className="muted">({planName || plan})</span></span>
           <div className="progress bar"><span style={{ width: `${Math.min(100, maxCh ? (used / maxCh) * 100 : 0)}%`, background: used >= maxCh ? "var(--warning)" : "var(--brand)" }} /></div>
           {used >= maxCh && plan !== "business" && <a href="/billing" className="btn btn-secondary btn-sm up"><Zap size={14} /> <Bi id="Upgrade" en="Upgrade" /></a>}
         </div>
@@ -236,7 +247,8 @@ export default function ChannelsPage() {
             ? <IncompleteCard />
             : shown.length === 0
               ? <div className="muted" style={{ padding: "2rem", gridColumn: "1/-1", textAlign: "center" }}><Bi id="Tidak ada channel pada filter ini." en="No channels in this filter." /></div>
-              : shown.map((c) => <ChannelCard key={c.id} ch={c} eff={effectiveStatus(c, sub, rdMap[c.id] ?? null)} vid={vidCount[c.id] ?? 0} ana={anaMap[c.id]} busy={busyId === c.id} onToggle={askToggle} />)}
+              : shown.map((c) => <ChannelCard key={c.id} ch={c} eff={effectiveStatus(c, sub, rdMap[c.id] ?? null)} vid={vidCount[c.id] ?? 0} ana={anaMap[c.id]} busy={busyId === c.id} onToggle={askToggle}
+                  outQuota={maxCh != null && channels.findIndex((x) => x.id === c.id) >= maxCh} />)}
       </div>
 
       <ConfirmDialog

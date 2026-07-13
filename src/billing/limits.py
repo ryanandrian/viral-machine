@@ -54,6 +54,20 @@ def channel_quota(tenant_row: dict, plan_limits: dict) -> int:
     return int((plan_limits.get(plan) or {}).get("max_channels", 1) or 1)
 
 
+def plan_display_name(sb, plan_type) -> str:
+    """Nama paket yang DILIHAT pelanggan (plan_limits.display_name, admin-editable — Pilar 4:
+    satu sumber nama utk SEMUA permukaan: item Snap, email, invoice). Fallback = key mentah."""
+    if not sb or not plan_type:
+        return str(plan_type or "")
+    try:
+        r = (sb.table("plan_limits").select("display_name")
+             .eq("plan_type", plan_type).limit(1).execute())
+        return str((r.data or [{}])[0].get("display_name") or plan_type)
+    except Exception as e:
+        logger.debug(f"[Limits] display_name {plan_type} gagal: {e}")
+        return str(plan_type)
+
+
 # ── Entitlement lain: gerbang aslinya di DATABASE, bukan di modul ini (Tahap 1 finalisasi_tier_plan,
 #    2026-07-13 — 5 fungsi duplikat tanpa pemanggil dibuang dari sini):
 #    • signup→trial            = trigger DB `handle_new_tenant` (migr 0028; durasi app_config)

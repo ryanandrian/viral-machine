@@ -9,11 +9,13 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const { plan_type } = await req.json().catch(() => ({}));
+  const { plan_type, period } = await req.json().catch(() => ({}));
   if (!plan_type || typeof plan_type !== "string") {
     return NextResponse.json({ error: "plan_type wajib" }, { status: 400 });
   }
-  const res = await vault("/api/billing/checkout", { tenant_id: user.id, plan_type, email: user.email });
+  // Periode langganan (Tahap 2): whitelist ketat — selain "annual" dianggap bulanan.
+  const p = period === "annual" ? "annual" : "monthly";
+  const res = await vault("/api/billing/checkout", { tenant_id: user.id, plan_type, period: p, email: user.email });
   const j = await res.json().catch(() => ({}));
   return NextResponse.json(j, { status: res.status });
 }

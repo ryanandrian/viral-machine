@@ -8,7 +8,9 @@ import { useParams } from "next/navigation";
 
 type Data = {
   payment: { order_id: string; category: string; plan_type: string | null; gross_amount: number; currency: string | null;
-             status: string; payment_type: string | null; period_start: string | null; period_end: string | null; created_at: string };
+             status: string; payment_type: string | null; period_start: string | null; period_end: string | null;
+             period_months?: number | null; created_at: string };
+  plan_display_name?: string | null;
   buyer: { name: string | null; email: string | null };
   company: { legal_name: string; brand: string; tagline: string; website: string; email: string; phone: string;
              address: string; npwp: string; nib: string; sk_menkum: string } | null;
@@ -40,8 +42,11 @@ export default function InvoicePage() {
   const total = p.gross_amount || 0;
   const ppn = d.ppn_percent > 0 ? Math.round(total - total / (1 + d.ppn_percent / 100)) : 0;
   const dpp = total - ppn;
+  // Nama paket = display_name (admin-editable, Pilar 4); fallback kapitalisasi key. + label periode tahunan.
+  const planLabel = d.plan_display_name || (p.plan_type ? p.plan_type.charAt(0).toUpperCase() + p.plan_type.slice(1) : "");
+  const periodTag = (p.period_months ?? 1) === 12 ? ` (${t("Tahunan", "Annual")})` : "";
   const itemName = p.category === "addon" ? t("Niche custom (add-on)", "Custom niche (add-on)")
-    : `${t("Langganan", "Subscription")} ${p.plan_type ? p.plan_type.charAt(0).toUpperCase() + p.plan_type.slice(1) : ""}`;
+    : `${t("Langganan", "Subscription")} ${planLabel}${periodTag}`;
   const periode = p.period_start && p.period_end
     ? `${new Date(p.period_start).toLocaleDateString("id-ID")} – ${new Date(p.period_end).toLocaleDateString("id-ID")}` : "—";
 
