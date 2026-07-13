@@ -208,7 +208,9 @@ buang tab Schedule · sembunyikan kolom USD¢ mati · badge kategori sesuai DB) 
 - **REALISASI:** 9/9 uji runtime HTTP lulus (sesi super-admin uji, cookie ssr asli), nol residu
       (entri+audit+2 user uji dihapus; narasi trial direstorasi byte-identik). npm build ✓ · marketing
       /,/pricing 200 ✓. Visual editor = last-mile owner pasca-deploy. Commit: `1b6b529`.
-      Deploy: MENUNGGU IZIN (satu batch dgn fix notifikasi insiden S3).
+      **Deploy: ✅ 2026-07-13 10:40 (izin owner, SATU batch dgn fix notifikasi insiden S3 `dc2394b`)
+      — BE OK 10:38 + FE OK 10:40, commit VPS `75675cb`, 3 service active, situs 200, admin API 401
+      tanpa-auth, log worker bersih.**
 
 ### TAHAP 4 — Marketing selaras mesin (Pilar 4-marketing)  ⏳
 File: `apps/web/src/app/(marketing)/pricing/page.tsx` (kartu dari narasi DB · toggle tahunan NYATA dgn
