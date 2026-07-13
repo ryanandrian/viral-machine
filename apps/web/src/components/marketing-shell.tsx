@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import { Moon, Sun, Menu } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 
 // Port MVMarketing (design-source/styles/marketing.js) → React. Nav + footer untuk halaman publik.
 // Brand icons (youtube/telegram) tak ada di lucide → substitusi Video/Send.
@@ -43,8 +42,9 @@ export function MarketingShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     fetch("/api/public/status").then((r) => { if (!r.ok) throw new Error(); return r.json(); })
       .then((j) => setAllOk(Boolean(j.all_ok))).catch(() => setAllOk(null));
-    createClient().from("company_profile").select("legal_name").eq("id", 1).maybeSingle()
-      .then(({ data }) => setLegalName((data as { legal_name?: string } | null)?.legal_name ?? null));
+    // via PINTU RESMI whitelist (bukan tabel langsung — akses anon ke company_profile ditutup migr 0159)
+    fetch("/api/public/company").then((r) => { if (!r.ok) throw new Error(); return r.json(); })
+      .then((j) => setLegalName(j.legal_name ?? null)).catch(() => setLegalName(null));
   }, []);
 
   useEffect(() => {

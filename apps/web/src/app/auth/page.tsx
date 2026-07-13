@@ -82,8 +82,9 @@ export default function AuthPage() {
       const caps = plans.filter((p) => p.price_idr != null).map((p) => p.max_videos_per_day * p.max_channels);
       if (caps.length) setMaxDaily(Math.max(...caps));
     });
-    supabase.from("company_profile").select("legal_name").eq("id", 1).maybeSingle()
-      .then(({ data }) => setLegalName((data as { legal_name?: string } | null)?.legal_name ?? null));
+    // via PINTU RESMI whitelist (bukan tabel langsung — akses anon ke company_profile ditutup migr 0159)
+    fetch("/api/public/company").then((r) => { if (!r.ok) throw new Error(); return r.json(); })
+      .then((j) => setLegalName(j.legal_name ?? null)).catch(() => setLegalName(null));
     supabase.from("testimonials").select("*").eq("is_active", true).eq("show_on_landing", true)
       .order("sort_order").limit(1).maybeSingle()
       .then(({ data }) => setTst((data as Testimonial | null) ?? null));
