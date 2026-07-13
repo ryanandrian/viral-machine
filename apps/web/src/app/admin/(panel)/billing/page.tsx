@@ -22,8 +22,11 @@ type Pay = {
   currency: string | null; status: string | null; payment_type: string | null; created_at: string;
 };
 
+type Stats = { revenue_idr: number; settled_count: number; pending_count: number; total_count: number };
+
 export default function AdminBillingPage() {
   const [rows, setRows] = useState<Pay[]>([]);
+  const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [fStatus, setFStatus] = useState("all");
@@ -32,14 +35,15 @@ export default function AdminBillingPage() {
     setLoading(true); setErr(null);
     const r = await fetch("/api/admin/payments");
     const j = await r.json().catch(() => ({}));
-    if (r.ok) setRows(j.payments ?? []); else setErr(j.error || "Gagal memuat");
+    if (r.ok) { setRows(j.payments ?? []); setStats(j.stats ?? null); } else setErr(j.error || "Gagal memuat");
     setLoading(false);
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  const revenue = useMemo(() => rows.filter((p) => SETTLED(p.status)).reduce((s, p) => s + (p.gross_amount || 0), 0), [rows]);
-  const settledCount = useMemo(() => rows.filter((p) => SETTLED(p.status)).length, [rows]);
-  const pendingCount = useMemo(() => rows.filter((p) => (p.status || "") === "pending").length, [rows]);
+  // Angka uang = agregat SQL SELURUH tabel dari server (Tahap 3 — kebal batas 500 baris daftar).
+  const revenue = stats?.revenue_idr ?? 0;
+  const settledCount = stats?.settled_count ?? 0;
+  const pendingCount = stats?.pending_count ?? 0;
   const view = useMemo(() => rows.filter((p) => fStatus === "all"
     ? true : fStatus === "settled" ? SETTLED(p.status) : (p.status || "") === fStatus), [rows, fStatus]);
 
@@ -85,7 +89,8 @@ export default function AdminBillingPage() {
           ))}
         </tbody>
       </table></div></div>
-      {!loading && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".625rem" }}>{view.length} transaksi · <Bi id="Status langganan tenant di menu Tenant." en="Tenant subscription status in the Tenants menu." /></div>}
+      {!loading && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".625rem" }}>
+        <Bi id={`menampilkan ${view.length} dari ${stats?.total_count ?? rows.length} transaksi`} en={`showing ${view.length} of ${stats?.total_count ?? rows.length} transactions`} /> · <Bi id="Status langganan tenant di menu Tenant." en="Tenant subscription status in the Tenants menu." /></div>}
     </>
   );
 }

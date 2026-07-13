@@ -167,7 +167,13 @@ export default function AdminTenantsPage() {
     if (r.ok) {
       setToast(action === "extend" ? "Trial diperpanjang" : action === "postpone_deletion" ? "Jadwal hapus diundur" : "Akun diaktifkan kembali");
       setLifeModal(null); setConfirm(null); await load();
-    } else setToast("Gagal memproses");
+    } else {
+      // Pagar status server (Tahap 1.5) → pesan SPESIFIK, bukan generik (titipan Tahap 3).
+      const j = await r.json().catch(() => ({} as { error?: string; status?: string }));
+      setToast(j.error === "invalid_status_for_action"
+        ? `Aksi tak berlaku untuk status tenant saat ini (${j.status ?? "?"})`
+        : "Gagal memproses");
+    }
   }
 
   // LIFECYCLE (B9): HAPUS PERMANEN (revoke YouTube + purge S3 + purge data). Irreversible → lewat ConfirmDialog.

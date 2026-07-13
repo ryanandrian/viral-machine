@@ -179,7 +179,7 @@ File: `apps/web/src/app/api/billing/checkout/route.ts` + `src/billing/webhook_ap
       **Deploy: ✅ 2026-07-13 (izin owner) — BE OK 09:46 · FE OK 09:47 · commit VPS `6b6e58b` ·
       3 service active · sanity live: /,/pricing 200, checkout tanpa-auth 401.**
 
-### TAHAP 3 — Panel admin lengkap & pelaporan uang jujur (Pilar 3-lengkap + 4-admin)  ⏳
+### TAHAP 3 — Panel admin lengkap & pelaporan uang jujur (Pilar 3-lengkap + 4-admin)  ✅ SELESAI 2026-07-13 (lokal; menunggu izin deploy)
 File: `migrations/0157_plan_marketing_narrative.sql` (kolom narasi + seed teks sekarang; nomor 0156
 terpakai annual billing Tahap 2) ·
 `apps/web/src/app/admin/(panel)/pricing/page.tsx` (editor narasi per-paket · tombol Tambah entri harga ·
@@ -188,13 +188,27 @@ buang tab Schedule · sembunyikan kolom USD¢ mati · badge kategori sesuai DB) 
 `can_request_custom_niche`) · `apps/web/src/app/api/admin/pricing/route.ts` (+POST tambah entri) ·
 `apps/web/src/app/api/admin/payments/route.ts` + `admin/(panel)/billing/page.tsx` (agregat SQL penuh
 + "menampilkan X dari Y") · `api/admin/tenants/route.ts` (MRR dari pembayaran nyata).
-- [ ] 3.1 Editor narasi fitur/tagline/badge-populer per-paket (auto-save, dwibahasa) — bukti: ubah
-      1 baris → tersimpan + audit; seed = teks identik sekarang.
-- [ ] 3.2 Dua tuas paket (`full_niche_catalog`, `can_request_custom_niche`) editable dari panel + audit.
-- [ ] 3.3 Tambah entri pricing_config dari UI (utk add-on masa depan DESAIN §4) + audit.
-- [ ] 3.4 Buang tab Schedule + kolom USD¢ dari UI; badge kategori benar.
-- [ ] 3.5 Revenue/MRR = agregat SQL penuh — bukti: angka kartu == SUM query pembanding, bukan panjang array.
-- REALISASI: —
+- [x] 3.1 Editor narasi per-paket: drawer tagline ID/EN + baris fitur [{id,en}] (tambah/hapus/urut,
+      auto-save on-blur, maks 12, baris kosong disaring, EN kosong → ikut ID) + toggle badge Populer.
+      Migrasi **0157**: kolom narasi + SEED teks persis kartu /pricing hari ini (dikonsumsi marketing
+      di Tahap 4). Bukti runtime: PATCH tersimpan+audit ✓ · >12 baris 400 ✓ · tagline>80 400 ✓ ·
+      uji pakai plan 'trial' lalu DIRESTORASI persis (nol residu) ✓.
+- [x] 3.2 Toggle `full_niche_catalog` + `can_request_custom_niche` (+`is_popular`) di tabel paket admin
+      — whitelist route + validasi; audit admin_audit tiap patch.
+- [x] 3.3 Tombol "+ Tambah entri" pricing (form key/IDR/kategori/deskripsi; validasi server snake_case
+      unik + IDR≥0) — bukti: entri dibuat + pricing_audit(old=null) ✓ · duplikat 409 ✓ · key cacat 400 ✓.
+- [x] 3.4 Tab Schedule DIBUANG (indeks tab & tombol simpan disesuaikan) · kolom+input USD¢ disembunyikan
+      · badge kategori = data nyata (subscription/one_time).
+- [x] 3.5 Uang jujur: RPC **admin_payments_stats** (SECURITY DEFINER, khusus service_role) → kartu
+      revenue/lunas/pending dari agregat SELURUH tabel + FE "menampilkan X dari Y" + email pakai
+      paginasi penuh (bukan cap 1000). MRR tenants = pembayaran NYATA terakhir ÷ period_months
+      (fallback harga list bila tanpa jejak). Bukti DISKRIMINATIF: revenue == SUM independen
+      (797.000==797.000) ✓ · MRR tenant ber-diskon = 74.500 BUKAN 149.000 list ✓.
+- [x] 3.6 (titipan Tahap 1) toast lifecycle admin ber-pesan spesifik saat pagar status menolak.
+- **REALISASI:** 9/9 uji runtime HTTP lulus (sesi super-admin uji, cookie ssr asli), nol residu
+      (entri+audit+2 user uji dihapus; narasi trial direstorasi byte-identik). npm build ✓ · marketing
+      /,/pricing 200 ✓. Visual editor = last-mile owner pasca-deploy. Commit: (diisi saat commit).
+      Deploy: MENUNGGU IZIN (satu batch dgn fix notifikasi insiden S3).
 
 ### TAHAP 4 — Marketing selaras mesin (Pilar 4-marketing)  ⏳
 File: `apps/web/src/app/(marketing)/pricing/page.tsx` (kartu dari narasi DB · toggle tahunan NYATA dgn

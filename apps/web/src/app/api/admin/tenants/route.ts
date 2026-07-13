@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { requireSuperAdmin } from "@/lib/admin/guard";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-// E1 list tenant (PHASE10 §2). service_role bypass-RLS lintas-tenant. MRR = pricing_config[plan_<type>]
-// × (active & non-comp). Email dari Auth admin API. Last activity = production_runs terbaru per tenant.
+// E1 list tenant (PHASE10 §2). service_role bypass-RLS lintas-tenant. MRR = pembayaran lunas terakhir
+// per tenant ÷ period_months (active & non-comp; fallback harga list bila tanpa jejak bayar — Tahap 3).
+// Email dari Auth admin API. Last activity = production_runs terbaru per tenant.
 export async function GET() {
   const g = await requireSuperAdmin();
   if (g.error) return g.error;
@@ -34,10 +35,22 @@ export async function GET() {
   const lastAct = new Map<string, string>();
   (runs ?? []).forEach((r) => { if (!lastAct.has(r.tenant_id)) lastAct.set(r.tenant_id, r.created_at); });
 
-  // pricing (active subscription rows) → MRR
+  // MRR = pembayaran NYATA terakhir yang lunas per tenant, dinormalkan bulanan (gross ÷ period_months)
+  // — Tahap 3 finalisasi_tier_plan: diskon/tahunan tercermin jujur, bukan harga list pura-pura.
+  // Fallback harga list hanya utk tenant active tanpa jejak pembayaran (kasus lawas/manual).
   const { data: pricing } = await admin
     .from("pricing_config").select("key, value_idr").eq("active", true).eq("category", "subscription");
   const priceMap = new Map((pricing ?? []).map((p) => [p.key, p.value_idr as number]));
+  const { data: paid } = await admin.from("payments")
+    .select("tenant_id, gross_amount, period_months, status, created_at")
+    .eq("category", "subscription").in("status", ["settlement", "capture", "paid"])
+    .order("created_at", { ascending: false });
+  const paidMonthly = new Map<string, number>();
+  (paid ?? []).forEach((p) => {
+    if (!paidMonthly.has(p.tenant_id)) {
+      paidMonthly.set(p.tenant_id, Math.round((p.gross_amount ?? 0) / Math.max(1, p.period_months ?? 1)));
+    }
+  });
 
   const rows = (tenants ?? []).map((t) => {
     const comp = t.is_developer || (t.discount_pct ?? 0) >= 100;
@@ -49,7 +62,7 @@ export async function GET() {
       plan: t.plan_type,
       status: t.subscription_status,
       comp,
-      mrr_idr: paying ? (priceMap.get(`plan_${t.plan_type}`) ?? 0) : 0,
+      mrr_idr: paying ? (paidMonthly.get(t.tenant_id) ?? priceMap.get(`plan_${t.plan_type}`) ?? 0) : 0,
       channels: chCount.get(t.tenant_id) ?? 0,
       joined: t.created_at,
       last_activity: lastAct.get(t.tenant_id) ?? null,
