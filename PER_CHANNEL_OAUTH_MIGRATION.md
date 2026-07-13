@@ -25,6 +25,17 @@
 - `MV_INTERNAL_SECRET` worker == mv-web (verified) — wajib sama (Next kirim, webhook cek).
 - **NOL function/trigger Supabase terdampak** (audited): tak ada fungsi DB sentuh credentials; trigger `handle_new_tenant` (signup) tak terkait; FK `channel_credentials → channels.id ON DELETE CASCADE` (kredensial ikut terhapus saat channel dihapus = bersih).
 
+## 3b. ⚠️ GOTCHA KRUSIAL — token = per-IDENTITAS CHANNEL, bukan per-akun-Google (insiden 2026-07-13)
+Satu akun Google bisa memuat BEBERAPA channel (contoh nyata ryan: `ryan.andrian.diputra@gmail.com` =
+RAD The Explorer [utama] + Mesin Viral (Test) [channel kedua] → 2 baris `tenant_youtube_accounts`,
+2 token). Analytics API `channel==MINE` = channel IDENTITAS token itu SAJA — menanyakan video channel
+lain memakai token ini dibalas Google **SUKSES-TAPI-KOSONG (tanpa error)**. Insiden nyata: gerbang
+"fetch analytics sekali per tenant" di `self_learning.py` (peninggalan era 1-tenant-1-koneksi) menyapu
+video SEMUA channel dgn token channel pertama → watch/retensi 0 senyap berminggu-minggu (saga retensi;
+akar-1 scopes fix 11-Jul, akar-2 ini fix 13-Jul `f554e38`). **ATURAN: SEMUA konsumen API YouTube
+ter-autentikasi (Data/Analytics/upload) WAJIB memakai koneksi channel terkait (`load_google_credentials(tenant, channel_id=...)`)
+dan menyapu data HANYA channel itu — jangan pernah lintas-channel dgn satu token.**
+
 ## 4. FASE & STATUS (urut)
 | Fase | Isi | Commit | Deploy | Validasi |
 |---|---|---|---|---|
