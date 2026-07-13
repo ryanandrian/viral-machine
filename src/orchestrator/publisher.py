@@ -83,7 +83,8 @@ def publish_due_for_channel(sb, channel_row: dict, now_utc: datetime | None = No
     if not item:
         logger.warning(f"[Publisher] Buffer KOSONG slot {slot_dt} ch={channel_id} — skip + Telegram")
         _ch_label = channel_row.get("channel_name") or channel_id   # [B11] sebut NAMA channel, bukan id mentah
-        _notify(tenant_id, f"⚠️ [{_ch_label}] Buffer kosong, slot {slot_dt:%H:%M} dilewati")
+        _notify(tenant_id, f"⚠️ [{_ch_label}] Buffer kosong, slot {slot_dt:%H:%M} dilewati",
+                sb=sb, once_key=f"empty:{channel_id}:{slot_dt.isoformat()}")
         return "buffer_empty"
 
     # tandai target_slot (dedup) + publish dari buffer
@@ -116,7 +117,8 @@ def publish_due_for_channel(sb, channel_row: dict, now_utc: datetime | None = No
         inventory.revert_to_ready(item["id"])           # kembalikan ke buffer utk retry
         logger.error(f"[Publisher] publish gagal inv={item['id']} ({e}) — revert ready")
         _ch_label = channel_row.get("channel_name") or channel_id   # [B11] sebut NAMA channel
-        _notify(tenant_id, f"❌ [{_ch_label}] Publish gagal, akan diulang: {e}")
+        _notify(tenant_id, f"❌ [{_ch_label}] Publish gagal, akan diulang: {e}",
+                sb=sb, once_key=f"fail:{item['id']}:{slot_dt.isoformat()}")
         return "failed"
 
 
@@ -190,9 +192,26 @@ def _publish_from_buffer(sb, channel_row: dict, item: dict) -> None:
     return yt
 
 
-def _notify(tenant_id: str, msg: str) -> None:
-    # Log dulu; wiring ke TelegramNotifier (pesan generik per-event) = refinement saat cutover.
+_NOTIFY_ONCE: set = set()   # anti-banjir: 1 telegram per kejadian (loop retry 30s ≠ 1 pesan/30s)
+
+
+def _notify(tenant_id: str, msg: str, sb=None, once_key: str | None = None) -> None:
+    """Log + kirim Telegram ke TENANT (notify_tenant — hormati saklar telegram_enabled).
+    Dulu FOSIL log-only ("wiring saat cutover" tak pernah ditunaikan) → kegagalan publish jalur
+    TERJADWAL senyap total; ketahuan di insiden S3 06:00 WIB 2026-07-13. once_key = kirim SEKALI
+    per kejadian (per item/slot) selama proses hidup. Fail-soft: telegram gagal ≠ alur publish stop."""
     logger.info(f"[Publisher][{tenant_id}] {msg}")
+    if once_key:
+        if once_key in _NOTIFY_ONCE:
+            return
+        if len(_NOTIFY_ONCE) > 512:   # jaga memori proses long-run
+            _NOTIFY_ONCE.clear()
+        _NOTIFY_ONCE.add(once_key)
+    try:
+        from src.utils.telegram_notifier import TelegramNotifier
+        TelegramNotifier().notify_tenant(sb, tenant_id, msg)
+    except Exception as e:
+        logger.warning(f"[Publisher] telegram tenant gagal (non-fatal): {e}")
 
 
 def run_forever(idle_seconds: int = 30) -> None:

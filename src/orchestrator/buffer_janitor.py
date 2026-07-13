@@ -159,6 +159,67 @@ def run_once(sb=None) -> dict:
     return {**sweep_stale(sb), **reconcile_orphans(sb), **reap_stuck_direct_jobs(sb), **prune_logs(sb)}
 
 
+# ── ALARM PENYIMPANAN (P3 pasca-insiden S3 2026-07-13: NEO tersuspend 04:24, janitor gagal 12×
+#    TANPA satu alarm pun — melanggar "gagal = beri tahu, bukan senyap"). Streak error storage
+#    beruntun ≥ ambang → Telegram ADMIN (1× per cooldown, penanda system_state — tahan restart);
+#    pulih → kabar pulih 1×. Knob infra via env (pola price_sync). ─────────────────────────────
+_S3_ALARM_STREAK   = int(os.getenv("S3_ALARM_FAIL_STREAK", "2"))
+_S3_ALARM_COOLDOWN = float(os.getenv("S3_ALARM_COOLDOWN_HOURS", "6")) * 3600
+_s3_fail_streak = 0
+
+
+def _state_epoch_get(sb, key: str) -> int:
+    """Penanda epoch di system_state (pola price_sync — status mesin, BUKAN config admin)."""
+    try:
+        r = sb.table("system_state").select("value").eq("key", key).limit(1).execute()
+        return int(r.data[0]["value"]) if r.data else 0
+    except Exception:
+        return 0
+
+
+def _state_epoch_set(sb, key: str) -> None:
+    try:
+        sb.table("system_state").upsert({"key": key, "value": str(int(time.time())),
+                                         "updated_at": datetime.now(timezone.utc).isoformat()}).execute()
+    except Exception as e:
+        logger.debug(f"[janitor] tulis system_state {key} gagal: {e}")
+
+
+def _on_loop_error(sb, e: Exception) -> None:
+    """Klasifikasi error storage (botocore) → naikkan streak → alarm admin ber-cooldown."""
+    global _s3_fail_streak
+    try:
+        from botocore.exceptions import BotoCoreError, ClientError
+        if not isinstance(e, (BotoCoreError, ClientError)):
+            return
+        _s3_fail_streak += 1
+        if _s3_fail_streak < _S3_ALARM_STREAK:
+            return
+        if time.time() - _state_epoch_get(sb, "s3_failure_alerted_at") < _S3_ALARM_COOLDOWN:
+            return
+        from src.utils.telegram_notifier import TelegramNotifier
+        TelegramNotifier().notify_admin(
+            f"🛑 <b>Penyimpanan S3/NEO BERMASALAH</b> ({_s3_fail_streak}× gagal beruntun)\n"
+            f"💥 <code>{str(e)[:200]}</code>\n"
+            f"⚠️ Produksi & publish SEMUA channel akan gagal sampai pulih — cek akun/endpoint NEO BiznetGio.")
+        _state_epoch_set(sb, "s3_failure_alerted_at")
+    except Exception as _ae:
+        logger.debug(f"[janitor] alarm storage gagal (non-fatal): {_ae}")
+
+
+def _on_loop_success(sb) -> None:
+    """Streak sempat ≥ ambang lalu sukses → kabar PULIH sekali (streak reset by construction)."""
+    global _s3_fail_streak
+    if _s3_fail_streak >= _S3_ALARM_STREAK:
+        try:
+            from src.utils.telegram_notifier import TelegramNotifier
+            TelegramNotifier().notify_admin("✅ <b>Penyimpanan S3/NEO PULIH</b> — janitor kembali normal; "
+                                            "video tertunda akan diproses di slot berikutnya.")
+        except Exception as _ae:
+            logger.debug(f"[janitor] kabar pulih gagal (non-fatal): {_ae}")
+    _s3_fail_streak = 0
+
+
 def run_forever(interval_seconds=None) -> None:
     """Loop persisten janitor — dipanggil worker_decoupled sebagai thread."""
     sb = _sb()
@@ -167,6 +228,8 @@ def run_forever(interval_seconds=None) -> None:
     while True:
         try:
             run_once(sb)
+            _on_loop_success(sb)
         except Exception as e:
             logger.error(f"[janitor] loop error: {e}")
+            _on_loop_error(sb, e)
         time.sleep(interval)

@@ -171,6 +171,27 @@ class TelegramNotifier:
             lines.append(f"🔗 {base}/review")
         return self._send(chat_id, "\n".join(lines))
 
+    def notify_tenant(self, sb, tenant_id: str, text: str) -> bool:
+        """Kirim TEKS bebas ke Telegram TENANT by tenant_id — resolve chat_id + HORMATI saklar
+        `telegram_enabled` dari tenant_configs. Untuk jalur yang tak punya run_config (publisher
+        terjadwal — wiring pasca-insiden S3 2026-07-13: kegagalan publish slot dulu senyap).
+        Teks di-escape (parse_mode HTML). Fail-soft: chat kosong/toggle off/error → False."""
+        try:
+            if not sb or not tenant_id:
+                return False
+            r = (sb.table("tenant_configs").select("telegram_chat_id, telegram_enabled")
+                 .eq("tenant_id", tenant_id).limit(1).execute())
+            row = (r.data or [{}])[0]
+            if row.get("telegram_enabled") is False:
+                return False   # tenant mematikan notif — hormati
+            chat = row.get("telegram_chat_id")
+            if not chat:
+                return False
+            return self._send(str(chat), self._escape(text))
+        except Exception as e:
+            logger.warning(f"[Telegram] notify_tenant gagal (non-fatal): {e}")
+            return False
+
     def notify_admin(self, text: str) -> bool:
         """Notif ke ADMIN PLATFORM (owner/tim) — mis. LEAD PANAS layak outreach personal (LIFECYCLE nurture).
         chat_id dari company_profile.admin_telegram_chat_id (no-hardcode, editable owner di /admin/company-profile);
