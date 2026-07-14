@@ -46,6 +46,10 @@ def _ai_test(provider_key: str, key: str):
         "openai_tts": ("GET", "https://api.openai.com/v1/models",      {"Authorization": f"Bearer {key}"}),
         "anthropic":  ("GET", "https://api.anthropic.com/v1/models",   {"x-api-key": key, "anthropic-version": "2023-06-01"}),
         "elevenlabs": ("GET", "https://api.elevenlabs.io/v1/user",     {"xi-api-key": key}),
+        # [B6] F3: fal.ai — skema auth 'Key' (bukan Bearer) → resep generik TAK cocok. Probe = pricing
+        # API (gratis, tanpa generate); endpoint_id contoh resmi dari docs fal. 200=valid · 401/403=invalid.
+        "fal":        ("GET", "https://api.fal.ai/v1/models/pricing?endpoint_id=fal-ai/flux/dev",
+                       {"Authorization": f"Key {key}"}),
     }.get(provider_key)
     if spec:
         return spec
@@ -79,6 +83,12 @@ def validate_ai_key(provider_key: str, key: str) -> str:
         # user_read/voices_read → endpoint uji balas 401 "missing_permission". Itu = kunci TERDAFTAR & usable.
         if provider_key == "elevenlabs" and r.status_code == 401 and "missing_permission" in (r.text or ""):
             return "valid"
+        # [B6] F3: fal — hanya 401/403 = kunci pasti ditolak; status lain (endpoint probe berubah/4xx lain)
+        # = TAK TERJAWAB PASTI → 'unchecked' JUJUR (kunci tetap tersimpan, terbukti saat dipakai/F4) —
+        # jangan memvonis kunci valid sbg invalid gara-gara probe (anti false-negative, pelajaran F1-09 EL).
+        if provider_key == "fal" and r.status_code not in (401, 403):
+            logger.warning(f"[vault] probe fal balas HTTP {r.status_code} (bukan 200/401/403) → unchecked")
+            return "unchecked"
         return "invalid"
     except Exception as e:
         logger.warning(f"[vault] validate_ai_key {provider_key} gagal: {e}")

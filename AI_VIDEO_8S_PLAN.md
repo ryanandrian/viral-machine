@@ -4,7 +4,7 @@
 > **Kaitan:** backlog tunggal = `SISA_KERJA_GO_LIVE.md` **[B6]** (dokumen ini = SPEC+tracker-nya, pola `PROGRAM_BUKTI_KECERDASAN.md`). Spec teknis induk = `MULTI_FORMAT_STUDIO.md §3/§5`. Prioritas jujur (§7 kompas): TIDAK memblok tenant berbayar pertama.
 
 ## 🧭 CARA LANJUT (resume pasca-compaction/sesi baru — baca INI dulu, jangan riset ulang)
-1. **POSISI SEKARANG: 🟢 F2 ✅ KODE TUNTAS 2026-07-14 (uji-asap 5/5; commit lihat git log [B6] F2) — berikutnya F3 (FE kecil: validate-key case fal + gating input 8s⇄model video + cek admin catalog/Test Lab), lalu F4 bukti-runtime (butuh kunci fal NYATA dari owner utk uji + aktivasi + izin deploy).** (Bila baris ini basi vs REALISASI di bawah → REALISASI menang; perbarui baris ini.)
+1. **POSISI SEKARANG: 🟢 F0–F3 ✅ TUNTAS 2026-07-14 (kode lengkap, teruji-asap, build bersih, SEMUA dorman, BELUM deploy) — tersisa F4 BUKTI-RUNTIME yang MENUNGGU 3 hal dari OWNER: (1) kunci API fal.ai nyata (owner buat akun fal.ai → API key), (2) izin deploy batch B6 (BE+FE — catatan: deploy BE juga mengaktifkan B15 yang sudah antre), (3) jendela uji. Urutan F4 = deploy → simpan kunci fal (uji validator) → aktifkan model+preset sementara → produksi 8s channel uji PRIVATE ≥3 run (presisi 6.8–9.2s) → regresi 60s → aktivasi final + sinkron dokumen.** (Bila baris ini basi vs REALISASI di bawah → REALISASI menang; perbarui baris ini.)
 2. Deep-dive & keputusan SUDAH TUNTAS — §0 (keputusan owner, JANGAN tanya ulang) + §1 (inventaris siap-vs-gap, verified 2026-07-14). Anchor `file:baris` wajib di-grep ulang sebelum dipakai (kode bisa bergeser) — tapi KESIMPULANNYA jangan diaudit ulang.
 3. Kerjakan fase BERURUTAN F0→F4; tiap fase selesai → **isi kolom REALISASI fase itu SAAT ITU JUGA** (✅ + tanggal + commit + bukti 1-2 kalimat) + perbarui baris POSISI di atas + sinkron header [B6] di `SISA_KERJA_GO_LIVE.md`. Fase ber-tanda "KETOK OWNER" = STOP menunggu jawaban owner, jangan lompati.
 4. Aturan kerja penuh = `CLAUDE.md` (§2 pre-touch, §3 pre-done, §5 deploy). Bukti runtime > klaim; durasi = gerbang keras F4 (§7.3).
@@ -113,7 +113,13 @@ Verifikasi **dokumen resmi vendor** (web, bukan ingatan model) sesuai kriteria o
 ### F3 — FE + validator kunci (kecil) — 🟡 BERJALAN 2026-07-14
 - **TEMUAN pre-touch (jangan riset ulang):** validator kunci tenant NYATA = **vault Python** `src/utils/api_key_vault.py` (`_ai_test`/`validate_ai_key`, jalur `/api/credentials/ai` → mv-webhook) — BUKAN `validate-key.ts` (TS hanya onboarding + admin Test Lab). Resep GENERIK vault (GET {base_url}/models, Bearer) TIDAK cocok utk fal (auth `Key`; base=queue.fal.run bukan API list) → fal wajib resep KHUSUS.
 - Eksekusi: (a) vault `_ai_test` case fal (probe `GET api.fal.ai/v1/models/pricing?endpoint_id=…`, header `Authorization: Key`; 200=valid · 401/403=invalid · lainnya='unchecked' JUJUR — kepastian final diuji F4 kunci nyata); (b) `validate-key.ts` case 'fal' (probe sama, satu semantik); (c) Channel setting: gating DI TITIK INPUT preset⇄model-video (dwibahasa `Bi`, §3.1); (d) verifikasi admin catalog menampilkan component video; (e) Test Lab video: CEK — tambah bila trivial, else defer (catat).
-- **REALISASI:** ⬜ *(berjalan; sesi terputus → lanjut persis dari butir Eksekusi di atas)*
+- **REALISASI:** ✅ **TUNTAS 2026-07-14** (build FE bersih + vault terkompilasi; belum deploy — gerbang F4):
+  (a) ✅ vault `_ai_test` case `fal` (probe pricing-API auth `Key`) + leniency `validate_ai_key` (200=valid · 401/403=invalid · lainnya='unchecked' jujur, anti false-negative pola F1-09 EL — kepastian final = F4 kunci nyata);
+  (b) ✅ `validate-key.ts` + `KNOWN_PROVIDERS` case 'fal' (probe & semantik sama — dipakai onboarding+Test Lab);
+  (c) ✅ Gating input Channel Setting dua-arah (savePreset ⇄ saveVisual: preset ai_video wajib model video & sebaliknya; pesan dwibahasa "ID / EN"; peta `presetModes` dari `duration_presets` [RLS publik sama dgn preset-tables]; nilai pembanding = nilai TERSIMPAN `ch.*` → konsisten dgn yang dipakai produksi; BE STEP 0 tetap backstop). Channel existing (model gambar + preset non-8s) = lolos tanpa perubahan perilaku;
+  (d) ✅ Admin catalog: VERIFIED generik — component video tampil tanpa kode (help text sudah menyebut image/video);
+  (e) ✅ Test Lab: VERIFIED SUDAH mendukung model video sejak dibangun (`visualModels` incl component video → prefix `ai_video:`) — nol kode.
+  **→ F3 TUNTAS. Berikutnya F4: butuh (1) kunci fal NYATA dari owner, (2) izin deploy BE+FE batch B6, (3) jendela uji.**
 
 ### F4 — BUKTI RUNTIME → aktivasi → deploy — ⬜
 1. Produksi 8s NYATA e2e di channel uji **dengan niche default kutipan/motivasi (F1)**, **publish PRIVATE** (§6.6), kunci vendor nyata.

@@ -63,7 +63,7 @@ async function checkElevenLabs(key: string): Promise<KeyCheck> {
   }
 }
 
-export const KNOWN_PROVIDERS = ["anthropic", "openai", "elevenlabs"] as const;
+export const KNOWN_PROVIDERS = ["anthropic", "openai", "elevenlabs", "fal"] as const;
 
 export async function validateProviderKey(provider: string, key: string): Promise<KeyCheck> {
   const k = (key || "").trim();
@@ -75,6 +75,10 @@ export async function validateProviderKey(provider: string, key: string): Promis
       return checkSimple("https://api.openai.com/v1/models", { Authorization: `Bearer ${k}` });
     case "elevenlabs":
       return checkElevenLabs(k);
+    case "fal":
+      // [B6] F3: fal.ai — auth skema 'Key'. Probe = pricing API (gratis, tanpa generate);
+      // semantik sama dgn vault Python (satu perilaku dua pintu).
+      return checkSimple("https://api.fal.ai/v1/models/pricing?endpoint_id=fal-ai/flux/dev", { Authorization: `Key ${k}` });
     default:
       return { ok: false, msg: "provider tak dikenal" };
   }

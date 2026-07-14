@@ -240,6 +240,16 @@ export default function ChannelDetailPage() {
   const saveVisual = () => {
     // Prefix generator dari component model terpilih: image → ai_image:, video → ai_video: (no footage/library).
     const vModel = imgOpts.find((m) => m.model_key === imgModel);
+    // [B6] F3 gating (§3.1): model video ⇄ preset text-to-video — cegah DI TITIK INPUT (BE STEP 0 backstop).
+    const _presetMode = ch?.duration_preset != null ? presetModes[ch.duration_preset] : undefined;
+    if (vModel?.component === "video" && _presetMode !== "ai_video") {
+      setAiMsg({ el: "visual", ok: false, text: "Model video hanya untuk preset durasi ber-render text-to-video — ubah Durasi channel dulu / Video models are only for text-to-video duration presets — change the channel Duration first" });
+      return;
+    }
+    if (vModel && vModel.component !== "video" && _presetMode === "ai_video") {
+      setAiMsg({ el: "visual", ok: false, text: "Preset durasi channel ini text-to-video — pilih MODEL VIDEO / this channel's duration preset is text-to-video — pick a VIDEO model" });
+      return;
+    }
     const visual_mode = imgModel && vModel ? `${vModel.component === "video" ? "ai_video" : "ai_image"}:${imgModel}` : null;
     return saveAiPart("visual", { visual_mode, image_quality: imgQuality, visual_account_id: visualAcct || null });
   };
@@ -274,6 +284,8 @@ export default function ChannelDetailPage() {
   const [dpreset, setDpreset] = useState<number | null>(null);
   const [savingPreset, setSavingPreset] = useState(false);
   const [presetMsg, setPresetMsg] = useState<string | null>(null);
+  // [B6] F3: render_mode per-preset (duration_presets) — gating input preset⇄model video (§3.1 anti-human-error).
+  const [presetModes, setPresetModes] = useState<Record<number, string>>({});
 
   // YouTube = bagian IDENTITAS channel (kartu 1): pilih KONEKSI (pool tenant_youtube_accounts, diatur di
   // /integrations) + channel TUJUAN (channels.platform_channel_id). Disimpan bareng identitas via save().
@@ -285,7 +297,20 @@ export default function ChannelDetailPage() {
   const [ytConnBusy, setYtConnBusy] = useState(false);
 
   async function savePreset() {
-    setPresetMsg(null); setSavingPreset(true);
+    setPresetMsg(null);
+    // [B6] F3 gating (§3.1): preset text-to-video ⇄ model video — cegah tersimpan salah DI TITIK INPUT
+    // (BE STEP 0 tetap backstop fail-loud). Pesan dwibahasa gabungan "ID / EN" (state string).
+    const _mode = dpreset != null ? presetModes[dpreset] : undefined;
+    const _savedVm = ch?.visual_mode ?? "";
+    if (_mode === "ai_video" && !_savedVm.startsWith("ai_video:")) {
+      setPresetMsg("Gagal: preset ini memakai render text-to-video — pilih MODEL VIDEO dulu di kartu Model AI (Visual) / this preset renders text-to-video — pick a VIDEO model first in the AI Models (Visual) card");
+      return;
+    }
+    if (_mode !== "ai_video" && _savedVm.startsWith("ai_video:")) {
+      setPresetMsg("Gagal: model visual channel saat ini MODEL VIDEO (khusus preset text-to-video) — ganti ke model gambar dulu di kartu Model AI / current visual model is a VIDEO model (text-to-video presets only) — switch to an image model first in the AI Models card");
+      return;
+    }
+    setSavingPreset(true);
     const { error } = await supabase.from("channels").update({ duration_preset: dpreset }).eq("id", id);
     setSavingPreset(false);
     setPresetMsg(error ? `Gagal: ${error.message}` : "Durasi tersimpan");
@@ -451,6 +476,9 @@ export default function ChannelDetailPage() {
     // 1a/1b: sertakan tier + harga (petunjuk budget di pill) & urutkan sort_order (kurasi admin) lalu nama.
     const { data: amRaw } = await supabase.from("ai_models").select("model_key,provider_key,component,display_name,quality_tier,pricing,sort_order").eq("is_active", true).order("sort_order").order("display_name");
     const am = ((amRaw ?? []) as (ModelOpt & { component: string })[]).filter((m) => activeProv.has(m.provider_key));
+    // [B6] F3: peta render_mode per-preset (utk gating preset⇄model video di titik input).
+    const { data: dps } = await supabase.from("duration_presets").select("seconds,render_mode").eq("is_active", true);
+    setPresetModes(Object.fromEntries(((dps ?? []) as { seconds: number; render_mode: string | null }[]).map((p) => [p.seconds, p.render_mode ?? "image_seq"])));
     setLlmOpts(am.filter((m) => m.component === "llm"));
     const imgList = am.filter((m) => m.component === "image" || m.component === "video");
     setImgOpts(imgList);
