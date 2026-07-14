@@ -261,8 +261,9 @@ Halaman `/terms` **wajib** memuat:
 **Akar masalah PASTI (screenshot video lama, dianalisis 2026-07-14):** video lama merekam consent memakai akun `ryan.andrian.diputra@gmail.com` yang **SUDAH PERNAH memberi izin** → yang tampil = layar *"wants **additional** access"* + kotak biru *"already has some access — see the 3 services"*. Sebagian izin tersembunyi di balik tautan "3 services" → reviewer tak bisa membuktikan TOTAL scope yang diminta = "does not show the OAuth consent screen workflow".
 
 **Persiapan (sebelum merekam) — KUNCI PERBAIKAN = pakai akun Google yang BELUM PERNAH connect:**
-- **Rekam dengan akun Google yang belum pernah menghubungkan MesinViral** (punya channel YouTube, boleh channel kosong) → layar consent tampil UTUH pertama-kali (tanpa kotak "already has some access"). Ini jawaban paling bersih atas komplain Google.
-- **⛔ JANGAN me-revoke akses mesinviral di akun `ryan.andrian.diputra@gmail.com`** demi "membersihkan" consent — itu MEMATIKAN token produksi channel RAD+MVT (produksi harian berhenti). Pakai akun lain.
+- **Dua opsi akun yang sah (koreksi owner 2026-07-14 — revoke BUKAN kematian permanen, sistem pulih via reconnect, terbukti 06-27 & 07-01):**
+  - **Opsi A (rekomendasi): akun Google lain yang belum pernah connect** (punya channel YouTube, boleh kosong) → consent utuh pertama-kali, NOL gangguan produksi.
+  - **Opsi B: akun ryan dgn cabut→rekam→reconnect.** Revoke di `myaccount.google.com/permissions` mematikan token RAD+MVT SEMENTARA (2 koneksi pada 1 akun) → setelah rekam, **reconnect 2×** (identitas RAD + MVT). Lakukan DI ANTARA slot publish (jauhi 19:00/21:00); jendela mati <15 mnt; publish yang gagal di jendela itu retry otomatis + notif Telegram.
 - Browser Chrome, rekam LAYAR PENUH — **address bar harus terlihat sepanjang video**.
 - Situs mesinviral.com di-set **English** (toggle bahasa) + login tenant uji.
 - Screen recorder + mic (narasi Inggris DIANJURKAN resmi oleh Google; teks caption Inggris juga boleh).
