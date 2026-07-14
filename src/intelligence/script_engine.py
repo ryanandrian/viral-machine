@@ -838,12 +838,14 @@ Return ONLY valid JSON:
         """[B6] F2 — TAHAP-2 varian VIDEO (render_mode ai_video, preset 8s): 1 LLM call membuat SATU
         prompt text-to-video (subjek + GERAK + kamera + mood) dari narasi final + SELURUH VISUAL DNA
         niche (termasuk key subject/strict_prohibition/motion — admin-editable, no-hardcode).
-        Set script['video_prompt']. Fallback EKSTRAKTIF (tak pernah kosong) — pola generate_visual_prompts."""
+        Set script['video_prompt'].
+        ⛔ NO-FALLBACK (§3.3, teguran owner 2026-07-14): prompt = SELURUH video berbayar — LLM gagal /
+        output cacat → LLMError (run STOP + Telegram), BUKAN prompt rakitan mekanis diam-diam."""
+        from src.exceptions import LLMError
         run_config = self._get_run_config(tenant_config)
         nvs        = (getattr(run_config, "niche_visual_style", {}) or {}) if run_config else {}
         dna_lines  = "\n".join(f"- {k.replace('_',' ')}: {v}" for k, v in nvs.items() if v) \
                      or "- style: cinematic, photorealistic, dramatic lighting"
-        dna_inline = "; ".join(str(v) for v in nvs.values() if v) or "cinematic, photorealistic, dramatic lighting"
         exemplars  = (getattr(run_config, "niche_visual_fallbacks", []) or []) if run_config else []
         exemplar_block = ("\nEXEMPLAR SHOTS (signature look — MATCH this bar, don't copy verbatim):\n"
                           + "\n".join(f"  • {e}" for e in exemplars[:4])) if exemplars else ""
@@ -851,21 +853,14 @@ Return ONLY valid JSON:
         narration = " ".join((script.get(b) or "").strip() for b in beats).strip() \
                     or (script.get("full_script") or "").strip()
 
-        def _extractive() -> str:
-            first = (narration.split(".")[0].strip() if narration else script.get("topic", "")) or "an inspiring moment"
-            return (f"{first}. {dna_inline}. One continuous cinematic shot, graceful slow motion, "
-                    f"gentle camera drift, vertical 9:16, photorealistic, "
-                    f"no text no words no letters no logos no watermarks.")
-
-        prompt = ""
-        # get_llm_provider() RAISE bila LLM belum terkonfigurasi (bukan return None) — tangkap agar
-        # janji fallback-ekstraktif "tak pernah kosong" utuh (ditemukan uji pra-deploy 2026-07-14).
         try:
             llm    = run_config.get_llm_provider()       if run_config else None
             model  = run_config.llm_model_for("utility") if run_config else ""
         except Exception as _le:
-            logger.warning(f"[ScriptEngine] LLM tak tersedia utk video-prompt ({_le}) → fallback ekstraktif")
-            llm, model = None, ""
+            raise LLMError(f"Prompt-video butuh LLM channel — tidak tersedia: {_le}", step="visual_prompt")
+        if not llm:
+            raise LLMError("Prompt-video butuh LLM channel — belum terkonfigurasi.", step="visual_prompt")
+        prompt = ""
         if llm:
             try:
                 system = (
@@ -890,12 +885,18 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                 low = raw.lower()
                 if len(raw) >= 40 and not any(m in low for m in ("n/a", "```", "{", "here is", "here's")):
                     prompt = raw
+            except LLMError:
+                raise
             except Exception as e:
-                logger.warning(f"[ScriptEngine] Tahap-2 video-prompt gagal ({e}) → fallback ekstraktif")
+                raise LLMError(f"Tahap-2 prompt-video gagal: {e}", step="visual_prompt") from e
 
-        script["video_prompt"] = prompt or _extractive()
-        logger.info(f"[ScriptEngine] Tahap-2 prompt-video via {'LLM' if prompt else 'fallback-ekstraktif'}: "
-                    f"{script['video_prompt'][:120]}...")
+        if not prompt:
+            # Output LLM cacat/kosong = kegagalan komponen → STOP jujur (§3.3) — video 8s berbayar
+            # tidak boleh diproduksi dari prompt rakitan mekanis diam-diam (teguran owner 2026-07-14).
+            raise LLMError("Tahap-2 prompt-video: output LLM cacat/kosong — run dihentikan (no-fallback §3.3).",
+                           step="visual_prompt")
+        script["video_prompt"] = prompt
+        logger.info(f"[ScriptEngine] Tahap-2 prompt-video (LLM): {prompt[:120]}...")
         return script
 
     def generate(self, topic, tenant_config):

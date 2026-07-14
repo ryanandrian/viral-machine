@@ -105,8 +105,12 @@ class AIVideoProvider(VisualProvider):
         if actual <= 0 or size_mb <= 0:
             raise VisualError(f"Klip video hasil unduhan tidak valid (durasi={actual}s, {size_mb:.2f}MB).")
         if needed and actual + 0.05 < needed:
-            # Klip lebih pendek dari audio → renderer tpad membekukan frame akhir (jujur, dicatat).
-            logger.warning(f"[AIVideo] Klip {actual:.1f}s < audio {needed:.1f}s — sisa ditutup freeze-frame renderer")
+            # ⛔ NO-FALLBACK (§3.3): vendor mengirim klip lebih pendek dari yang diminta = kegagalan
+            # komponen → STOP jujur (bukan freeze-frame menutupi kekurangan konten berbayar diam-diam).
+            raise VisualError(
+                f"Klip vendor {actual:.1f}s < audio {needed:.1f}s (diminta {billed_s}s) — "
+                f"run dihentikan (no-fallback)."
+            )
 
         # B2 cost-tracking: detik TERTAGIH vendor (durasi yang diminta; fallback durasi aktual).
         try:
@@ -157,8 +161,13 @@ class AIVideoProvider(VisualProvider):
         for o in opts:
             if o >= needed_s:
                 return o
-        logger.warning(f"[AIVideo] Butuh {needed_s:.1f}s > maks vendor {opts[-1]:.0f}s — pakai maks (sisa freeze-frame)")
-        return opts[-1]
+        # ⛔ NO-FALLBACK (§3.3, teguran owner 2026-07-14): audio > durasi maks vendor = konfigurasi
+        # tak koheren → STOP jujur (bukan freeze-frame diam-diam). Praktis tak terjangkau utk preset 8s
+        # (gerbang durasi pra-visual sudah menolak audio kepanjangan sebelum sampai sini).
+        raise VisualError(
+            f"Audio {needed_s:.1f}s melebihi durasi klip maksimum vendor ({opts[-1]:.0f}s) — "
+            f"run dihentikan (no-fallback)."
+        )
 
     @staticmethod
     def _probe_duration(path: Path) -> float:
