@@ -4,7 +4,7 @@
 > **Kaitan:** backlog tunggal = `SISA_KERJA_GO_LIVE.md` **[B6]** (dokumen ini = SPEC+tracker-nya, pola `PROGRAM_BUKTI_KECERDASAN.md`). Spec teknis induk = `MULTI_FORMAT_STUDIO.md §3/§5`. Prioritas jujur (§7 kompas): TIDAK memblok tenant berbayar pertama.
 
 ## 🧭 CARA LANJUT (resume pasca-compaction/sesi baru — baca INI dulu, jangan riset ulang)
-1. **POSISI SEKARANG: 🟡 F1 BERJALAN (F0 ✅ diketok owner: fal.ai + Kling) — katalog dorman ✅ · migrasi 0161 file siap MENUNGGU AKSES SQL (MCP auth owner) · niche default MENUNGGU KETOK draf DNA.** (Bila baris ini basi vs REALISASI di bawah → REALISASI menang; perbarui baris ini.)
+1. **POSISI SEKARANG: 🟢 F1 ✅ TUNTAS 2026-07-14 (katalog dorman + migrasi 0161 applied + niche radiant_affirmations dorman) — SIAP MULAI F2 (BE inti: adapter fal/ai_video.py + prompt video + assembler + cost meter + koherensi STEP 0). Mandat owner utk seluruh B6 sudah ada ("mulai kerjakan… BISMILLAH"); F2 boleh langsung jalan; gerbang owner berikutnya = izin deploy pasca-F4.** (Bila baris ini basi vs REALISASI di bawah → REALISASI menang; perbarui baris ini.)
 2. Deep-dive & keputusan SUDAH TUNTAS — §0 (keputusan owner, JANGAN tanya ulang) + §1 (inventaris siap-vs-gap, verified 2026-07-14). Anchor `file:baris` wajib di-grep ulang sebelum dipakai (kode bisa bergeser) — tapi KESIMPULANNYA jangan diaudit ulang.
 3. Kerjakan fase BERURUTAN F0→F4; tiap fase selesai → **isi kolom REALISASI fase itu SAAT ITU JUGA** (✅ + tanggal + commit + bukti 1-2 kalimat) + perbarui baris POSISI di atas + sinkron header [B6] di `SISA_KERJA_GO_LIVE.md`. Fase ber-tanda "KETOK OWNER" = STOP menunggu jawaban owner, jangan lompati.
 4. Aturan kerja penuh = `CLAUDE.md` (§2 pre-touch, §3 pre-done, §5 deploy). Bukti runtime > klaim; durasi = gerbang keras F4 (§7.3).
@@ -86,8 +86,9 @@ Verifikasi **dokumen resmi vendor** (web, bukan ingatan model) sesuai kriteria o
 - 8s `is_active` TETAP false sampai F4 lulus.
 - **REALISASI:** 🟡 **SEBAGIAN 2026-07-14 (ketok owner "setuju fal.ai + Kling"):**
   (a) ✅ **Katalog masuk DORMAN** via REST (pola preseden gemini-image "NONAKTIF s.d. lulus uji"): `ai_providers.fal` (key_group `fal`, base_url queue.fal.run, `is_active=false`) + `ai_models` video: `kling-2.5-turbo-pro` (model_id `fal-ai/kling-video/v2.5-turbo/pro/text-to-video`, $0.35/5s + $0.07/s, default_params 9:16/5s/negative_prompt TERVERIFIKASI dari halaman API) & `veo-3.1-fast` (`fal-ai/veo3.1/fast`, $0.10/s, param API diisi F2), keduanya `is_active=false`. **BUKTI DORMAN (replikasi query permukaan tenant):** model video aktif = `[]` · fal TIDAK ada di provider aktif → nol perubahan perilaku produksi/FE.
-  (b) ✅ File migrasi `migrations/0161_preset_trailing_override.sql` ditulis (kolom + CHECK 0-10 + seed 8s=1.0) — **BELUM applied** (akses SQL: menunggu owner autentikasi MCP supabase-v2 / beri kredensial pooler).
-  (c) ⬜ Niche default kutipan/motivasi — **draf DNA DIAJUKAN, menunggu ketok owner** (lihat proposal di percakapan 2026-07-14; insert dilakukan DORMAN `is_active=false` setelah ketok).
+  (b) ✅ **Migrasi 0161 APPLIED+VERIFIED** (via pooler v2, kredensial = `SUPABASE-CONNECTION.md` §VER-2 — password mengandung `@`, parse rsplit): kolom + CHECK ada, seed 8s=1.0, preset lain NULL (perilaku lama utuh).
+  (c) ✅ **Niche default `radiant_affirmations` DIBUAT DORMAN** (ketok owner "prinsipnya setuju — tetap sopan, tapi wanita SUPER cantik & menarik demi retensi"): DNA 13-key (subject super-cantik-magnetik + `strict_prohibition` aman-iklan + rotasi etnis/rambut/busana/lokasi per-video) · persona 1-kalimat afirmasi orang-kedua · scoring "personal revelation" · 4 exemplar · mood inspirational/calm/upbeat (diverifikasi ada di library) · kategori 22 · `is_active=false`. **BUKTI DORMAN:** tidak muncul di query katalog publik-aktif (replikasi Pustaka Niche).
+  **→ F1 TUNTAS 2026-07-14. Berikutnya: F2 (BE inti — adapter fal + prompt video + assembler + cost meter + koherensi STEP 0).**
 
 ### F2 — BE (inti mesin) — ⬜
 | File | Perubahan |
