@@ -247,7 +247,7 @@ Halaman `/terms` **wajib** memuat:
 - **youtube** *(hanya bila dipertahankan)* — "Used solely to update the user's own channel description
   (brandingSettings) as an optional branding convenience."
 
-### 8b. Shot-list video demo (unlisted di YouTube)
+### 8b. Shot-list video demo (unlisted di YouTube) — ⚠️ SUPERSEDED oleh §8b-REV di bawah (email T&S 2026-07-13)
 1. Tampilkan halaman `https://mesinviral.com` (homepage) — sebutkan nama app **MesinViral**.
 2. Tampilkan tombol **"Hubungkan dengan Google"** → klik → tampilkan layar **consent Google**
    (perlihatkan **Client ID** cocok dengan yang diverifikasi).
@@ -255,6 +255,55 @@ Halaman `/terms` **wajib** memuat:
 4. Tunjukkan **penggunaan tiap scope**: produksi video → **upload** ke channel; tampilkan **statistik**
    (analytics); (bila ada) tampilkan **deskripsi channel** ter-update.
 5. Tunjukkan cara **revoke** (tombol Hapus koneksi + link ke Google permissions).
+
+### 8b-REV. Shot-list REKAMAN ULANG (wajib — jawaban email T&S 2026-07-13: "demo video does not show the OAuth consent screen workflow; click '3 services' to reveal the scopes")
+
+**Akar masalah versi Google:** video lama tidak memperlihatkan ALUR layar consent — reviewer tak bisa melihat scope yang diminta. Layar consent Google versi baru MENGELOMPOKKAN izin di balik tautan **"3 services"** — reviewer mensyaratkan tautan itu DIKLIK di video hingga 3 izin terbaca.
+
+**Persiapan (sebelum merekam):**
+- Browser Chrome, rekam LAYAR PENUH — **address bar harus terlihat sepanjang video**.
+- Situs mesinviral.com di-set **English** (toggle bahasa) + siapkan akun tenant uji yang belum tersambung YouTube (atau putuskan dulu koneksi channel uji).
+- Screen recorder + mic (narasi Inggris DIANJURKAN resmi oleh Google; teks caption Inggris juga boleh).
+- JANGAN mengubah apa pun di Cloud Console (§ larangan selama review tetap berlaku — merekam video TIDAK mengubah console).
+
+**Urutan rekaman (2–4 menit):**
+1. Buka `https://mesinviral.com` — narasi: *"This is MesinViral, project `mesin-viral` (153190496639), an automated YouTube video production SaaS."* Login sebagai tenant.
+2. Menu **Channels** → tombol **Connect with Google** → klik.
+3. Layar pilih akun Google (`accounts.google.com` terlihat di address bar) → pilih akun uji.
+4. Bila muncul layar *"Google hasn't verified this app"* (normal selama review) → klik **Advanced → Go to mesinviral.com** secara transparan di kamera — reviewer memahami ini.
+5. **🎯 INTI PERBAIKAN — LAYAR CONSENT:**
+   a. Pastikan **bahasa consent = English** (toggle di kiri-bawah layar consent — syarat RESMI Google).
+   b. Layar menampilkan *"MesinViral wants access to your Google Account"*.
+   c. **KLIK tautan "3 services" / "See what MesinViral can access"** → daftar izin TERBUKA.
+   d. **Diam ±5 detik** pada daftar terbuka + narasi bacakan ketiganya: *upload YouTube videos* (`youtube.upload`) · *view your YouTube account* (`youtube.readonly`) · *view YouTube Analytics reports* (`yt-analytics.readonly`).
+6. Klik **Continue/Allow** → kembali ke app → tunjukkan channel TERSAMBUNG (nama channel tampil).
+7. **Demonstrasi pemakaian TIAP scope** (syarat resmi "how each scope is used"):
+   - `youtube.upload` → tunjukkan video hasil produksi sistem yang terbit di channel (buka YouTube Studio/link video hasil upload MesinViral).
+   - `youtube.readonly` → halaman Channel di app menampilkan identitas channel (nama/ID/subscriber) yang dibaca dari YouTube.
+   - `yt-analytics.readonly` → dashboard/Insights di app menampilkan views/watch-time yang ditarik dari YouTube Analytics.
+8. Tunjukkan **revoke**: tombol putus koneksi di app + `myaccount.google.com/permissions`.
+9. Upload **Unlisted** ke YouTube (channel mesinviral milik lumite, seperti video lama) → salin link.
+
+**Setelah video jadi → BALAS email T&S di THREAD YANG SAMA dari `lumite.biz.id@gmail.com`** (jangan thread baru) — draf balasan (isi `<LINK>`):
+
+> Subject: (reply di thread yang sama — jangan diubah)
+>
+> Hello,
+>
+> Thank you for the feedback. We have re-recorded our demo video to fully show the OAuth consent screen workflow, as requested:
+>
+> - The video now shows the complete OAuth flow from our app (https://mesinviral.com) to the Google consent screen, with the browser address bar visible throughout.
+> - On the consent screen, we click the "3 services" link to reveal all requested scopes: `youtube.upload`, `youtube.readonly`, and `yt-analytics.readonly`.
+> - The consent screen language is set to English, and the video demonstrates how each scope is used in the app (video upload to the user's own channel, reading the user's channel info, and displaying the user's YouTube Analytics metrics), plus how users can revoke access.
+>
+> New demo video: <LINK>
+>
+> Project: 153190496639 (Project ID: mesin-viral)
+>
+> Please let us know if anything else is needed.
+>
+> Best regards,
+> MesinViral Team — Lumite Automasi Indonesia
 
 ---
 
