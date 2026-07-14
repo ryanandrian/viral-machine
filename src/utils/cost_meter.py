@@ -17,7 +17,7 @@ _tl = threading.local()
 
 def reset() -> None:
     """Mulai pencatatan utk run di thread ini (dipanggil pipeline di awal run)."""
-    _tl.data = {"llm": {}, "image": {}, "tts": {}}
+    _tl.data = {"llm": {}, "image": {}, "tts": {}, "video": {}}
 
 
 def _bucket(kind: str) -> dict | None:
@@ -39,6 +39,16 @@ def add_image(model: str, count: int = 1) -> None:
     if b is None or not model:
         return
     b[model] = b.get(model, 0) + int(count)
+
+
+def add_video(model: str, seconds: float, clips: int = 1) -> None:
+    """[B6] F2: 1 klip video-gen SUKSES — catat DETIK TERTAGIH vendor (durasi diminta, bukan hasil trim)."""
+    b = _bucket("video")
+    if b is None or not model:
+        return
+    cur = b.setdefault(model, {"seconds": 0.0, "clips": 0})
+    cur["seconds"] += float(seconds or 0)
+    cur["clips"] += int(clips)
 
 
 def add_tts(model: str, chars: int) -> None:

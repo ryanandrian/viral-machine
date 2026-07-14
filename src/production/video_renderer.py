@@ -794,6 +794,13 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             trailing_silence = float(getattr(rc, "trailing_silence", 2.5))
         except Exception:
             trailing_silence = 2.5
+        # [B6] F2: trailing EFEKTIF = override preset (migr 0161) — SATU rumus dgn budget script_engine
+        # + gerbang durasi pipeline (format_catalog.effective_trailing); NULL = perilaku lama.
+        try:
+            from src.config.format_catalog import effective_trailing as _eff_trail
+            trailing_silence = _eff_trail(getattr(tenant_config, "duration_preset", None), trailing_silence)
+        except Exception:
+            pass
         total_duration = audio_duration + trailing_silence
         logger.info(
             f"[Renderer] trailing_silence={trailing_silence}s "

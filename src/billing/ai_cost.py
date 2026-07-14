@@ -3,6 +3,7 @@ AI Cost (B2 BYOK cost-tracking, owner 2026-07-04) — konversi KONSUMSI (cost_me
 
 Harga satuan = katalog `ai_models.pricing` (jsonb):
   {in_per_1m, out_per_1m, per_image, per_1m_chars, source, synced_at}
+  video ([B6] F2): {per_second_usd} ATAU {per_video_base_usd, base_seconds, per_extra_second_usd}
 Diisi otomatis oleh price_sync (feed komunitas LiteLLM, harian) — admin bisa OVERRIDE
 (pricing_locked=true → sinkron tak menimpa; wajib utk provider di luar feed, mis. ElevenLabs).
 
@@ -45,7 +46,7 @@ def compute_cost_usd(ai_usage: dict, sb=None) -> dict | None:
         return None
 
     total, unpriced = 0.0, []
-    br = {"llm": 0.0, "image": 0.0, "tts": 0.0}
+    br = {"llm": 0.0, "image": 0.0, "tts": 0.0, "video": 0.0}
     synced = None
 
     for model, u in (ai_usage.get("llm") or {}).items():
@@ -78,7 +79,24 @@ def compute_cost_usd(ai_usage: dict, sb=None) -> dict | None:
         br["tts"] += (chars / 1e6) * float(p.get("per_1m_chars") or 0)
         synced = synced or p.get("synced_at")
 
-    total = br["llm"] + br["image"] + br["tts"]
+    # [B6] F2 — video-gen: per-detik ATAU basis-per-klip + detik-tambahan (mis. Kling $0.35/5s + $0.07/s).
+    for model, u in (ai_usage.get("video") or {}).items():
+        p = prices.get(model)
+        secs  = float((u or {}).get("seconds", 0) or 0)
+        clips = int((u or {}).get("clips", 0) or 0)
+        if p and p.get("per_second_usd") is not None:
+            br["video"] += secs * float(p["per_second_usd"])
+        elif p and p.get("per_video_base_usd") is not None:
+            base   = float(p["per_video_base_usd"])
+            base_s = float(p.get("base_seconds") or 0)
+            extra  = float(p.get("per_extra_second_usd") or 0)
+            br["video"] += clips * base + max(0.0, secs - clips * base_s) * extra
+        else:
+            unpriced.append(model)
+            continue
+        synced = synced or p.get("synced_at")
+
+    total = br["llm"] + br["image"] + br["tts"] + br["video"]
     return {
         "usd": round(total, 6),
         "breakdown": {k: round(v, 6) for k, v in br.items()},

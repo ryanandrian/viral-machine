@@ -79,8 +79,9 @@ class VisualAssembler:
                     visual_mode, script, tenant_config, clips_dir, run_config
                 )
             elif visual_mode.startswith("ai_video:"):
-                logger.warning("[VisualAssembler] AI Video provider DISABLED v2 — gagal jujur (no-fallback)")
-                return []
+                return self._try_ai_video(
+                    visual_mode, script, tenant_config, clips_dir, run_config
+                )
             else:
                 logger.warning(
                     f"[VisualAssembler] visual_mode '{visual_mode}' tak dikenal — "
@@ -137,6 +138,54 @@ class VisualAssembler:
                 f"= {sum(durations):.1f}s (audio: {audio_duration:.1f}s + xfade_loss: {xfade_loss:.1f}s)"
             )
         return durations
+
+    def _try_ai_video(
+        self,
+        visual_mode: str,
+        script: dict,
+        tenant_config: TenantConfig,
+        clips_dir: Path,
+        run_config: dict,
+    ) -> list[Path]:
+        """[B6] F2 — render_mode ai_video: SATU klip text-to-video utuh (preset 8s, MULTI_FORMAT §3).
+        Klip diminta ≥ durasi audio (renderer men-trim `-t audio` + tpad trailing) — presisi durasi
+        tetap di tangan renderer (gerbang F4 §7.3). NO-FALLBACK: gagal → [] → pipeline raise."""
+        try:
+            from src.providers.visual import build_visual_provider
+
+            config = {
+                "tenant_id":       tenant_config.tenant_id,
+                "niche":           tenant_config.niche,
+                "visual_provider": visual_mode,
+                "visual_api_key":  run_config.get("visual_api_key"),
+            }
+            provider = build_visual_provider(visual_mode, config)   # F5-06: registry (family ai_video)
+
+            prompt = (script.get("video_prompt") or "").strip()
+            if not prompt:
+                logger.error("[VisualAssembler] video_prompt kosong (STEP 4.5 varian video tidak jalan?) — gagal jujur")
+                return []
+
+            audio_d = float(self._current_audio_duration or 0.0)
+            if audio_d <= 0:
+                logger.error("[VisualAssembler] audio_duration tidak tersedia utk ai_video — gagal jujur")
+                return []
+
+            clips_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"[VisualAssembler] Generating AI video: {visual_mode} — 1 klip ≥ {audio_d:.1f}s")
+            clips = asyncio.run(
+                provider.fetch_clips(
+                    keywords=[prompt], count=1,
+                    output_dir=clips_dir, clip_durations=[audio_d],
+                )
+            )
+            if clips:
+                logger.info(f"[VisualAssembler] ✅ AI Video generated: {len(clips)} klip via {visual_mode}")
+            return [clip.path for clip in clips]
+
+        except Exception as e:
+            logger.error(f"[VisualAssembler] AI Video error: {e}")
+            return []
 
     def _try_ai_image(
         self,

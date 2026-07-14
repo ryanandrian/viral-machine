@@ -90,6 +90,36 @@ def preset_beats(seconds) -> list | None:
     return list(b) if isinstance(b, list) and b else None
 
 
+def preset_render_mode(seconds, default=None):
+    """render_mode preset ('image_seq'|'ai_video') dari duration_presets — [B6] F2: dipakai gerbang
+    koherensi STEP 0 (preset ai_video ⇄ visual_mode ai_video:*) + cabang prompt STEP 4.5."""
+    if not seconds:
+        return default
+    _load()
+    row = (_CACHE["presets"] or {}).get(int(seconds))
+    return (row.get("render_mode") if row else None) or default
+
+
+def preset_trailing_override(seconds):
+    """[B6] F1 (migr 0161): jeda-akhir KHUSUS preset (detik) — None bila admin tak mengisi."""
+    if not seconds:
+        return None
+    _load()
+    row = (_CACHE["presets"] or {}).get(int(seconds))
+    v = row.get("trailing_silence_override") if row else None
+    try:
+        return float(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def effective_trailing(seconds, fallback: float) -> float:
+    """Jeda-akhir EFEKTIF = override preset (bila ada) else setelan channel/tenant. SATU rumus utk
+    ketiga pemakai (script_engine budget · pipeline gerbang durasi · renderer) — anti-drift."""
+    o = preset_trailing_override(seconds)
+    return o if o is not None else float(fallback)
+
+
 def effective_wps(format_key, tts_provider, default: float = 2.4) -> float:
     """WPS efektif untuk word-budget = **delivery rate TTS provider** (dominan; kata/detik suara).
     Inilah solusi 2-kelas TTS (owner): ElevenLabs-class ~1.8 vs edge ~2.6. Fallback ke WPS

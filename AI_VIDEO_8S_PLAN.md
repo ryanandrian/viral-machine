@@ -4,7 +4,7 @@
 > **Kaitan:** backlog tunggal = `SISA_KERJA_GO_LIVE.md` **[B6]** (dokumen ini = SPEC+tracker-nya, pola `PROGRAM_BUKTI_KECERDASAN.md`). Spec teknis induk = `MULTI_FORMAT_STUDIO.md §3/§5`. Prioritas jujur (§7 kompas): TIDAK memblok tenant berbayar pertama.
 
 ## 🧭 CARA LANJUT (resume pasca-compaction/sesi baru — baca INI dulu, jangan riset ulang)
-1. **POSISI SEKARANG: 🟢 F1 ✅ TUNTAS 2026-07-14 (katalog dorman + migrasi 0161 applied + niche radiant_affirmations dorman) — SIAP MULAI F2 (BE inti: adapter fal/ai_video.py + prompt video + assembler + cost meter + koherensi STEP 0). Mandat owner utk seluruh B6 sudah ada ("mulai kerjakan… BISMILLAH"); F2 boleh langsung jalan; gerbang owner berikutnya = izin deploy pasca-F4.** (Bila baris ini basi vs REALISASI di bawah → REALISASI menang; perbarui baris ini.)
+1. **POSISI SEKARANG: 🟢 F2 ✅ KODE TUNTAS 2026-07-14 (uji-asap 5/5; commit lihat git log [B6] F2) — berikutnya F3 (FE kecil: validate-key case fal + gating input 8s⇄model video + cek admin catalog/Test Lab), lalu F4 bukti-runtime (butuh kunci fal NYATA dari owner utk uji + aktivasi + izin deploy).** (Bila baris ini basi vs REALISASI di bawah → REALISASI menang; perbarui baris ini.)
 2. Deep-dive & keputusan SUDAH TUNTAS — §0 (keputusan owner, JANGAN tanya ulang) + §1 (inventaris siap-vs-gap, verified 2026-07-14). Anchor `file:baris` wajib di-grep ulang sebelum dipakai (kode bisa bergeser) — tapi KESIMPULANNYA jangan diaudit ulang.
 3. Kerjakan fase BERURUTAN F0→F4; tiap fase selesai → **isi kolom REALISASI fase itu SAAT ITU JUGA** (✅ + tanggal + commit + bukti 1-2 kalimat) + perbarui baris POSISI di atas + sinkron header [B6] di `SISA_KERJA_GO_LIVE.md`. Fase ber-tanda "KETOK OWNER" = STOP menunggu jawaban owner, jangan lompati.
 4. Aturan kerja penuh = `CLAUDE.md` (§2 pre-touch, §3 pre-done, §5 deploy). Bukti runtime > klaim; durasi = gerbang keras F4 (§7.3).
@@ -100,7 +100,15 @@ Verifikasi **dokumen resmi vendor** (web, bukan ingatan model) sesuai kriteria o
 | `src/production/visual_assembler.py` | Branch `ai_video:` NYATA: registry → 1 klip durasi ≥ (audio+trailing) → path; no-fallback |
 | `src/production/video_renderer.py` | Verifikasi jalur 1-klip (trim `-t`, tpad freeze, trailing dari knob preset F1); ubah HANYA bila bukti uji menuntut — nol perombakan spekulatif |
 - Overlay judul-hook TIDAK dirender utk 8s (hook kosong — verifikasi `_add_hook_title` skip).
-- **REALISASI:** ⬜
+- **REALISASI:** ✅ **KODE TUNTAS + uji-asap 5/5 LULUS 2026-07-14** (bukti runtime e2e = gerbang F4):
+  (1) `ai_video.py` DITULIS-ULANG penuh — transport `fal` (submit `queue.fal.run/{model_id}` → poll status_url [IN_QUEUE/IN_PROGRESS/COMPLETED, interval 5s, timeout 600s gagal-jujur] → response_url → unduh; body = default_params − kunci META {duration_param, allowed_durations} + prompt; durasi dipilih TERKECIL-yang-cukup dari allowed [5,10]; ffprobe bukti durasi; `model_row` injection utk Test Lab; no-fallback);
+  (2) `cost_meter.add_video` (detik-tertagih) + `ai_cost` video (per-detik ATAU basis+extra — Kling 10s=$0.70 ✓, Veo 8s=$0.80 ✓, usage lama tanpa kunci video AMAN ✓; FE hanya baca usd/unpriced → nol regresi tampilan);
+  (3) `script_engine.generate_video_prompt` (Tahap-2 varian VIDEO: DNA penuh + gerak+kamera+larangan, fallback ekstraktif) + STEP 4.5 bercabang `preset_render_mode`;
+  (4) STEP 4 SKIP utk preset tanpa beat hook (hook tetap "" → overlay `_add_hook_title` & blok deskripsi publisher otomatis skip — keduanya guard `if hook`);
+  (5) STEP 0 koherensi dua-arah preset⇄visual_mode (fail-loud pra-biaya);
+  (6) trailing EFEKTIF per-preset SATU rumus di 3 pemakai (script budget · gerbang durasi · renderer) via `format_catalog.effective_trailing` — preset lain NULL → perilaku lama IDENTIK ✓;
+  (7) assembler `_try_ai_video` (1 klip ≥ audio, no-fallback) + registry family sudah ada;
+  (8) Katalog Kling +META `duration_param`/`allowed_durations`. Kompilasi 8 file OK; pagar dorman terbukti (build via katalog-aktif DITOLAK utk model non-aktif → produksi hari ini mustahil tersentuh).
 
 ### F3 — FE (kecil) — ⬜
 - `validate-key.ts` + `KNOWN_PROVIDERS`: case vendor F0 ("Test koneksi" /integrations + Test Lab — satu sumber, nol duplikat).

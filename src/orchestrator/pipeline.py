@@ -140,6 +140,25 @@ class Pipeline:
                     "Kredensial wajib belum lengkap: " + "; ".join(_missing),
                     step="validation",
                 )
+            # [B6] F2 — KOHERENSI preset ⇄ mode visual (fail-loud SEBELUM biaya, anti-human-error §3.1):
+            # preset ai_video (8s) WAJIB model video; model video WAJIB preset ai_video (1 klip ≠ N beat).
+            _vm0 = (getattr(run_config, "visual_mode", "") or "") if run_config else ""
+            _preset0 = getattr(tenant_config, "duration_preset", None)
+            if _preset0 or _vm0.startswith("ai_video:"):
+                from src.config.format_catalog import preset_render_mode as _prm
+                _rm0 = _prm(_preset0)
+                if _rm0 == "ai_video" and not _vm0.startswith("ai_video:"):
+                    raise ConfigError(
+                        f"Preset {_preset0}s memakai render text-to-video — pilih MODEL VIDEO "
+                        f"(ai_video:*) di Channel Setting (sekarang: '{_vm0 or 'kosong'}').",
+                        step="validation",
+                    )
+                if _vm0.startswith("ai_video:") and _rm0 != "ai_video":
+                    raise ConfigError(
+                        f"Model video ({_vm0}) hanya untuk preset ber-render text-to-video — "
+                        f"preset channel sekarang {_preset0 or '(kosong)'}s ({_rm0 or 'image_seq'}).",
+                        step="validation",
+                    )
 
             # ── STEP 1: Trend Scan ──────────────────────────────────
             logger.info("STEP 1/7 | Scanning trends...")
@@ -185,27 +204,45 @@ class Pipeline:
             logger.info(f"STEP 3 DONE | {scripts[0].get('word_count', 0)} words")
 
             # ── STEP 4: Hook Optimization ───────────────────────────
-            logger.info("STEP 4/7 | Optimizing hook...")
-            optimized = self.hook_optimizer.optimize_batch(scripts, tenant_config)
-            if not optimized:
-                raise LLMError("Hook optimization failed", step="hook")
-            script       = optimized[0]
-            result["script"] = script  # Phase 5.3: ekspos full script dict (producer simpan utk publisher)
-            winner_score = script.get("hook_data", {}).get("winner", {}).get("scroll_stop_power", 0)
-            result["steps"]["hook"] = {
-                "status": "ok",
-                "score":  winner_score,
-                "hook":   script.get("hook", "")
-            }
-            logger.info(f"STEP 4 DONE | Hook [{winner_score}/100]: {script.get('hook', '')[:60]}")
+            # [B6] F2: preset TANPA beat hook (8s = core-saja) → optimasi hook DILEWATI. script['hook']
+            # tetap "" (setdefault validator) → overlay judul-hook & blok deskripsi publisher otomatis
+            # skip (keduanya guard `if hook`). Judul video tetap dari script['title'] (tak tersentuh).
+            _beats_active = (scripts[0].get("beats") or []) if scripts else []
+            if _beats_active and "hook" not in _beats_active:
+                script = scripts[0]
+                result["script"] = script
+                result["steps"]["hook"] = {"status": "skipped", "reason": "preset tanpa beat hook"}
+                logger.info("STEP 4 SKIP | preset tanpa beat hook (ultra-short) — hook-optimize dilewati")
+            else:
+                logger.info("STEP 4/7 | Optimizing hook...")
+                optimized = self.hook_optimizer.optimize_batch(scripts, tenant_config)
+                if not optimized:
+                    raise LLMError("Hook optimization failed", step="hook")
+                script       = optimized[0]
+                result["script"] = script  # Phase 5.3: ekspos full script dict (producer simpan utk publisher)
+                winner_score = script.get("hook_data", {}).get("winner", {}).get("scroll_stop_power", 0)
+                result["steps"]["hook"] = {
+                    "status": "ok",
+                    "score":  winner_score,
+                    "hook":   script.get("hook", "")
+                }
+                logger.info(f"STEP 4 DONE | Hook [{winner_score}/100]: {script.get('hook', '')[:60]}")
 
             # ── STEP 4.5: Image-prompt generation (Opsi A — Tahap-2) ────
             # LLM TERDEDIKASI membuat prompt image per-beat dari narasi FINAL (hook sudah di-optimize STEP 4).
             # Niche-aware (visual_style + nama niche dari DB). Set script['visual_suggestions'] + ['thumbnail_concept'].
-            logger.info("STEP 4.5/7 | Generating per-beat image prompts (dedicated LLM)...")
-            script = self.script_engine.generate_visual_prompts(script, tenant_config)
-            result["script"] = script
-            logger.info(f"STEP 4.5 DONE | {len(script.get('visual_suggestions', []))} image prompts (niche-aware)")
+            # [B6] F2 — cabang render_mode: ai_video → SATU prompt-video (gerak+kamera); else prompt-image per-beat.
+            from src.config.format_catalog import preset_render_mode as _prm45
+            if _prm45(getattr(tenant_config, "duration_preset", None)) == "ai_video":
+                logger.info("STEP 4.5/7 | Generating text-to-video prompt (dedicated LLM)...")
+                script = self.script_engine.generate_video_prompt(script, tenant_config)
+                result["script"] = script
+                logger.info("STEP 4.5 DONE | 1 video prompt (niche-DNA aware)")
+            else:
+                logger.info("STEP 4.5/7 | Generating per-beat image prompts (dedicated LLM)...")
+                script = self.script_engine.generate_visual_prompts(script, tenant_config)
+                result["script"] = script
+                logger.info(f"STEP 4.5 DONE | {len(script.get('visual_suggestions', []))} image prompts (niche-aware)")
 
             # ── STEP 5: TTS Audio ───────────────────────────────────
             logger.info("STEP 5/7 | Generating TTS audio...")
@@ -251,6 +288,10 @@ class Pipeline:
                     _gate_trail = float(getattr(_rc, "trailing_silence", 2.5))
                 except Exception:
                     _gate_trail = 2.5
+                # [B6] F2: trailing EFEKTIF = override preset (migr 0161) — SATU rumus dgn
+                # script_engine (budget) + renderer (format_catalog.effective_trailing).
+                from src.config.format_catalog import effective_trailing as _eff_trail
+                _gate_trail = _eff_trail(_gate_preset, _gate_trail)
                 _gate_tol = float(os.getenv("QC_DURATION_TOLERANCE", "0.15"))
                 _gate_lo  = float(_gate_preset) * (1 - _gate_tol)
                 _gate_hi  = float(_gate_preset) * (1 + _gate_tol)

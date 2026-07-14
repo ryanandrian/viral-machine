@@ -834,6 +834,64 @@ Return ONLY valid JSON:
         )
         return script
 
+    def generate_video_prompt(self, script: dict, tenant_config) -> dict:
+        """[B6] F2 — TAHAP-2 varian VIDEO (render_mode ai_video, preset 8s): 1 LLM call membuat SATU
+        prompt text-to-video (subjek + GERAK + kamera + mood) dari narasi final + SELURUH VISUAL DNA
+        niche (termasuk key subject/strict_prohibition/motion — admin-editable, no-hardcode).
+        Set script['video_prompt']. Fallback EKSTRAKTIF (tak pernah kosong) — pola generate_visual_prompts."""
+        run_config = self._get_run_config(tenant_config)
+        nvs        = (getattr(run_config, "niche_visual_style", {}) or {}) if run_config else {}
+        dna_lines  = "\n".join(f"- {k.replace('_',' ')}: {v}" for k, v in nvs.items() if v) \
+                     or "- style: cinematic, photorealistic, dramatic lighting"
+        dna_inline = "; ".join(str(v) for v in nvs.values() if v) or "cinematic, photorealistic, dramatic lighting"
+        exemplars  = (getattr(run_config, "niche_visual_fallbacks", []) or []) if run_config else []
+        exemplar_block = ("\nEXEMPLAR SHOTS (signature look — MATCH this bar, don't copy verbatim):\n"
+                          + "\n".join(f"  • {e}" for e in exemplars[:4])) if exemplars else ""
+        beats     = script.get("beats") or []
+        narration = " ".join((script.get(b) or "").strip() for b in beats).strip() \
+                    or (script.get("full_script") or "").strip()
+
+        def _extractive() -> str:
+            first = (narration.split(".")[0].strip() if narration else script.get("topic", "")) or "an inspiring moment"
+            return (f"{first}. {dna_inline}. One continuous cinematic shot, graceful slow motion, "
+                    f"gentle camera drift, vertical 9:16, photorealistic, "
+                    f"no text no words no letters no logos no watermarks.")
+
+        prompt = ""
+        llm    = run_config.get_llm_provider()       if run_config else None
+        model  = run_config.llm_model_for("utility") if run_config else ""
+        if llm:
+            try:
+                system = (
+                    "You are an elite cinematic director writing ONE text-to-video prompt for a short "
+                    "vertical clip. Output ONLY the prompt text — no JSON, no markdown, no preamble."
+                )
+                user = f"""NARRATION (final, may be non-English — the visual must match its feeling):
+"{narration[:500]}"
+
+VISUAL DNA — the niche's signature identity. Apply ALL of it, including any restrictions verbatim:
+{dna_lines}
+{exemplar_block}
+
+Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous shot:
+- Describe the SUBJECT concretely (who/what fills the frame) per the VISUAL DNA.
+- Describe the MOTION: what moves inside the frame (hair, fabric, light) AND the camera movement (slow push-in / gentle orbit) — this is video, not a still.
+- Name the lighting, lens/depth-of-field, mood and color grade explicitly.
+- Vertical 9:16. Photorealistic. ABSOLUTELY NO text, words, letters, logos, or watermarks in frame.
+- Obey every restriction in the VISUAL DNA strictly (they are non-negotiable)."""
+                raw = (llm.complete(system=system, user=user, model=model,
+                                    temperature=0.7, max_tokens=350) or "").strip().strip('"')
+                low = raw.lower()
+                if len(raw) >= 40 and not any(m in low for m in ("n/a", "```", "{", "here is", "here's")):
+                    prompt = raw
+            except Exception as e:
+                logger.warning(f"[ScriptEngine] Tahap-2 video-prompt gagal ({e}) → fallback ekstraktif")
+
+        script["video_prompt"] = prompt or _extractive()
+        logger.info(f"[ScriptEngine] Tahap-2 prompt-video via {'LLM' if prompt else 'fallback-ekstraktif'}: "
+                    f"{script['video_prompt'][:120]}...")
+        return script
+
     def generate(self, topic, tenant_config):
         logger.info(f"[ScriptEngine] Generating: {topic.get('topic','')[:50]}...")
 
@@ -904,7 +962,10 @@ Return ONLY valid JSON:
         # No-hardcode: trailing_silence + loop dari tenant_configs (sama dgn yang dipakai video_renderer).
         render_overhead_sec = 0.0
         if preset_seconds and run_config:
-            _trail = float(getattr(run_config, "trailing_silence", 2.5) or 2.5)
+            # [B6] F2: trailing EFEKTIF = override preset (migr 0161) else setelan channel/tenant —
+            # SATU rumus dgn gerbang durasi pipeline + renderer (format_catalog.effective_trailing).
+            from src.config.format_catalog import effective_trailing as _eff_trail
+            _trail = _eff_trail(preset_seconds, float(getattr(run_config, "trailing_silence", 2.5) or 2.5))
             _loopn = (float(getattr(run_config, "loop_ending_duration", 1.5) or 1.5) - 0.5) \
                      if getattr(run_config, "loop_ending_enabled", True) else 0.0
             render_overhead_sec = max(0.0, _trail + max(0.0, _loopn))
