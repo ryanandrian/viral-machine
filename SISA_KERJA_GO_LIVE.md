@@ -342,6 +342,7 @@
 
 ---
 ### Changelog
+- **2026-07-15 — 🔎 AUDIT ATRIBUSI NICHE TUNTAS (mandat owner "kritikal, 5 area, nol asumsi") = `AUDIT_ATRIBUSI_NICHE_2026-07-15.md`.** Verdict: pasca fix DNA `ee125eb`, **SEMUA 12 kelompok titik-baca produksi ber-atribusi BENAR** (niche run ter-resolve; publisher memakai niche SAAT-PRODUKSI dari baris inventory — aman walau channel ganti niche sebelum slot; musik/mood/persona/timing/emosi/hashtag/kategori/analytics ✅) + FE 3 permukaan ✅ + DB ✅. 2 temuan non-aktif menunggu ketok: **F-2** fallback senyap "niche tak dikenal → niche aktif pertama" di 6 titik (kelas §3.3; usulan gagal-jujur) · **F-3** duplikat vestigial `tenant_configs.niche/niche_pool` → [B5].
 - **2026-07-14 (2) — Ilustrasi biaya AI DIPINDAH landing → /pricing seksi BYOK (mandat owner; ✅ DEPLOYED `68e219f` 01:37, skrip resmi OK situs 200; bukti live: landing 0 teks terlarang + 3 rujukan baru, bundle /pricing memuat query & `.cost-grid`).** + ikutan izin owner: 3 kartu paket landing dirapikan SAMA TINGGI (`.price-grid` stretch + `.pcard` flex-kolom, tombol rata dasar — pola `.tier` /pricing; aturan terverifikasi di CSS live). Worker BE TIDAK di-restart (start tetap 13-Jul 19:57) → B15 tetap non-aktif menunggu izin deploy BE.
   (a) Seksi 2 kartu konfigurasi model (marketing_blocks `cost_*`) dicabut dari landing, dipasang di
   /pricing di bawah 3 kartu BYOK; (b) 2 teks DIBUANG di DB (reversible, nilai lama tercatat sesi ini):
