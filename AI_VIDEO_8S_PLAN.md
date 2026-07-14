@@ -110,12 +110,10 @@ Verifikasi **dokumen resmi vendor** (web, bukan ingatan model) sesuai kriteria o
   (7) assembler `_try_ai_video` (1 klip ≥ audio, no-fallback) + registry family sudah ada;
   (8) Katalog Kling +META `duration_param`/`allowed_durations`. Kompilasi 8 file OK; pagar dorman terbukti (build via katalog-aktif DITOLAK utk model non-aktif → produksi hari ini mustahil tersentuh).
 
-### F3 — FE (kecil) — ⬜
-- `validate-key.ts` + `KNOWN_PROVIDERS`: case vendor F0 ("Test koneksi" /integrations + Test Lab — satu sumber, nol duplikat).
-- Channel setting: cegah DI TITIK INPUT (§3.1) — pilih preset 8s tanpa model video → disabled + keterangan dwibahasa (mekanisme `Bi`).
-- `/admin/catalog`: verifikasi baris component video tampil (editor generik — kemungkinan nol kode).
-- Test Lab: dukung model video utk uji admin (cek; tambah kecil bila perlu).
-- **REALISASI:** ⬜
+### F3 — FE + validator kunci (kecil) — 🟡 BERJALAN 2026-07-14
+- **TEMUAN pre-touch (jangan riset ulang):** validator kunci tenant NYATA = **vault Python** `src/utils/api_key_vault.py` (`_ai_test`/`validate_ai_key`, jalur `/api/credentials/ai` → mv-webhook) — BUKAN `validate-key.ts` (TS hanya onboarding + admin Test Lab). Resep GENERIK vault (GET {base_url}/models, Bearer) TIDAK cocok utk fal (auth `Key`; base=queue.fal.run bukan API list) → fal wajib resep KHUSUS.
+- Eksekusi: (a) vault `_ai_test` case fal (probe `GET api.fal.ai/v1/models/pricing?endpoint_id=…`, header `Authorization: Key`; 200=valid · 401/403=invalid · lainnya='unchecked' JUJUR — kepastian final diuji F4 kunci nyata); (b) `validate-key.ts` case 'fal' (probe sama, satu semantik); (c) Channel setting: gating DI TITIK INPUT preset⇄model-video (dwibahasa `Bi`, §3.1); (d) verifikasi admin catalog menampilkan component video; (e) Test Lab video: CEK — tambah bila trivial, else defer (catat).
+- **REALISASI:** ⬜ *(berjalan; sesi terputus → lanjut persis dari butir Eksekusi di atas)*
 
 ### F4 — BUKTI RUNTIME → aktivasi → deploy — ⬜
 1. Produksi 8s NYATA e2e di channel uji **dengan niche default kutipan/motivasi (F1)**, **publish PRIVATE** (§6.6), kunci vendor nyata.
