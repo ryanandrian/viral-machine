@@ -237,21 +237,18 @@ export default function ChannelDetailPage() {
   }
   const saveLlm = () => saveAiPart("llm", { llm_model: llmModel || null, llm_library: llmProv || null, llm_account_id: llmAcct || null });
   const saveTts = () => saveAiPart("tts", { tts_provider: ttsProv || null, tts_model: ttsModel || null, voice_key: voiceKey || null, tts_account_id: ttsAcct || null });
-  const saveVisual = () => {
+  const saveVisual = async () => {
     // Prefix generator dari component model terpilih: image → ai_image:, video → ai_video: (no footage/library).
     const vModel = imgOpts.find((m) => m.model_key === imgModel);
-    // [B6] F3 gating (§3.1): model video ⇄ preset text-to-video — cegah DI TITIK INPUT (BE STEP 0 backstop).
-    const _presetMode = ch?.duration_preset != null ? presetModes[ch.duration_preset] : undefined;
-    if (vModel?.component === "video" && _presetMode !== "ai_video") {
-      setAiMsg({ el: "visual", ok: false, text: "Model video hanya untuk preset durasi ber-render text-to-video — ubah Durasi channel dulu / Video models are only for text-to-video duration presets — change the channel Duration first" });
-      return;
-    }
-    if (vModel && vModel.component !== "video" && _presetMode === "ai_video") {
-      setAiMsg({ el: "visual", ok: false, text: "Preset durasi channel ini text-to-video — pilih MODEL VIDEO / this channel's duration preset is text-to-video — pick a VIDEO model" });
-      return;
-    }
     const visual_mode = imgModel && vModel ? `${vModel.component === "video" ? "ai_video" : "ai_image"}:${imgModel}` : null;
-    return saveAiPart("visual", { visual_mode, image_quality: imgQuality, visual_account_id: visualAcct || null });
+    await saveAiPart("visual", { visual_mode, image_quality: imgQuality, visual_account_id: visualAcct || null });
+    // [B6] F3-rev (fix deadlock telur-ayam): SIMPAN lalu TUNTUN — pasangan belum serasi tetap
+    // ditolak server (STEP 0) sebelum biaya; pesan memandu langkah berikutnya.
+    const _presetMode = ch?.duration_preset != null ? presetModes[ch.duration_preset] : undefined;
+    if (vModel?.component === "video" && _presetMode !== "ai_video")
+      setAiMsg({ el: "visual", ok: true, text: "Tersimpan — LANGKAH BERIKUT: ubah Durasi channel ke preset text-to-video (8s), lalu Simpan / saved — NEXT: set the channel Duration to the text-to-video preset (8s), then Save" });
+    else if (vModel && vModel.component !== "video" && _presetMode === "ai_video")
+      setAiMsg({ el: "visual", ok: true, text: "Tersimpan — LANGKAH BERIKUT: ubah Durasi channel keluar dari preset text-to-video / saved — NEXT: change the channel Duration away from the text-to-video preset" });
   };
   // Akun valid utk vendor penyedia terpilih (untuk pemilih akun; auto bila 1, pilih bila >1).
   const acctsFor = (provider: string) => {
@@ -298,22 +295,20 @@ export default function ChannelDetailPage() {
 
   async function savePreset() {
     setPresetMsg(null);
-    // [B6] F3 gating (§3.1): preset text-to-video ⇄ model video — cegah tersimpan salah DI TITIK INPUT
-    // (BE STEP 0 tetap backstop fail-loud). Pesan dwibahasa gabungan "ID / EN" (state string).
-    const _mode = dpreset != null ? presetModes[dpreset] : undefined;
-    const _savedVm = ch?.visual_mode ?? "";
-    if (_mode === "ai_video" && !_savedVm.startsWith("ai_video:")) {
-      setPresetMsg("Gagal: preset ini memakai render text-to-video — pilih MODEL VIDEO dulu di kartu Model AI (Visual) / this preset renders text-to-video — pick a VIDEO model first in the AI Models (Visual) card");
-      return;
-    }
-    if (_mode !== "ai_video" && _savedVm.startsWith("ai_video:")) {
-      setPresetMsg("Gagal: model visual channel saat ini MODEL VIDEO (khusus preset text-to-video) — ganti ke model gambar dulu di kartu Model AI / current visual model is a VIDEO model (text-to-video presets only) — switch to an image model first in the AI Models card");
-      return;
-    }
     setSavingPreset(true);
     const { error } = await supabase.from("channels").update({ duration_preset: dpreset }).eq("id", id);
     setSavingPreset(false);
-    setPresetMsg(error ? `Gagal: ${error.message}` : "Durasi tersimpan");
+    // [B6] F3-rev (fix deadlock telur-ayam, owner 2026-07-14): SIMPAN lalu TUNTUN (bukan blokir dua arah
+    // yang saling menunggu). Pasangan preset⇄model yang belum koheren tetap DITOLAK server (STEP 0)
+    // SEBELUM biaya — pesan di sini memandu langkah berikutnya.
+    const _mode = dpreset != null ? presetModes[dpreset] : undefined;
+    const _savedVm = ch?.visual_mode ?? "";
+    if (error) setPresetMsg(`Gagal: ${error.message}`);
+    else if (_mode === "ai_video" && !_savedVm.startsWith("ai_video:"))
+      setPresetMsg("Durasi tersimpan — LANGKAH BERIKUT: pilih MODEL VIDEO di kartu Model AI (Visual), lalu Simpan (produksi menolak jalan sampai keduanya serasi) / saved — NEXT: pick a VIDEO model in the AI Models (Visual) card, then Save");
+    else if (_mode !== "ai_video" && _savedVm.startsWith("ai_video:"))
+      setPresetMsg("Durasi tersimpan — LANGKAH BERIKUT: ganti model visual ke model GAMBAR di kartu Model AI (produksi menolak jalan sampai keduanya serasi) / saved — NEXT: switch the visual model to an IMAGE model in the AI Models card");
+    else setPresetMsg("Durasi tersimpan");
     if (!error) load();
   }
 
