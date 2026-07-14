@@ -99,7 +99,23 @@ def test_model(model_key: str, key: str = "") -> dict:
             result = f"LULUS — gambar dihasilkan ({sz} byte)" if ok else "GAGAL — gambar kosong"
 
         elif comp == "video":
-            return {"ok": False, "error": "Uji video belum didukung (generator video belum aktif)."}
+            # [B6] F4 (2026-07-15, teguran owner): generator video kini AKTIF — uji nyata via adapter
+            # produksi (model_row injection = model nonaktif pun bisa diuji, pola sama image).
+            # ⚠ BERBAYAR ke vendor: klip durasi TERKECIL yang diizinkan model (clip_durations=[1.0]
+            # → _choose_duration ambil opsi minimum; mis. Hailuo 6s≈$0.27 · Kling 5s≈$0.35 · Veo 8s≈$0.80).
+            from src.providers.visual.ai_video import AIVideoProvider
+            p = AIVideoProvider({"visual_provider": f"ai_video:{model_key}", "visual_api_key": key,
+                                 "model_row": {"provider_key": pk, "model_id": model_id, "component": comp,
+                                               "default_params": m.get("default_params") or {}}})
+            with tempfile.TemporaryDirectory() as td:
+                clips = asyncio.run(p.fetch_clips(
+                    keywords=["A single red balloon drifting slowly over a calm sea at golden hour, "
+                              "gentle cinematic camera drift, photorealistic, vertical 9:16, no text, no logos"],
+                    count=1, output_dir=Path(td), clip_durations=[1.0]))
+                ok = bool(clips) and clips[0].duration > 0
+                _d = clips[0].duration if clips else 0.0
+                _mb = clips[0].file_size_mb if clips else 0.0
+            result = f"LULUS — klip {_d:.1f}s ({_mb}MB) dihasilkan (berbayar ke vendor)" if ok else "GAGAL — klip kosong"
         else:
             return {"ok": False, "error": f"Jenis komponen tak dikenal: {comp}"}
     except Exception as e:
