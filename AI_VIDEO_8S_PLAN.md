@@ -121,6 +121,12 @@ Verifikasi **dokumen resmi vendor** (web, bukan ingatan model) sesuai kriteria o
   (e) ✅ Test Lab: VERIFIED SUDAH mendukung model video sejak dibangun (`visualModels` incl component video → prefix `ai_video:`) — nol kode.
   **→ F3 TUNTAS. Berikutnya F4: butuh (1) kunci fal NYATA dari owner, (2) izin deploy BE+FE batch B6, (3) jendela uji.**
 
+### F3b — VALIDASI PRA-DEPLOY (mandat owner 2026-07-14 "pastikan 100% valid sebelum deploy") — ✅ LULUS
+- **Review-ulang kritis SELURUH diff batch** (f554e38→HEAD, 20 file kode): pipeline (4 sentuhan — aman; steps.hook.score tanpa konsumen eksternal; FE run-detail derivasi log → efek skip hanya kosmetik-sesaat) · assembler/renderer/vault/meter/ai_cost ✓ · B15 analytics ✓ sesuai desain teruji 8/8.
+- **🔴→✅ 1 KELEMAHAN DITEMUKAN & DIPERBAIKI:** `generate_video_prompt` — `get_llm_provider()` RAISE (bukan None) bila LLM tak terkonfigurasi → janji fallback-ekstraktif bisa gagal (di produksi mustahil krn STEP 3, tapi janji harus utuh). Fix: try/except → fallback; re-test LULUS.
+- **BUKTI RUNTIME LOKAL jalur 1-klip (simulasi persis klip Kling, TANPA kunci fal):** klip sintetis 10s + audio 6.2s + preset 8 → renderer: trailing override **1.0s AKTIF** · trim presisi (6.233s=audio) · Step B audio+SRT · loop-ending → **OUTPUT FINAL 8.267s — DI DALAM window QC 6.8–9.2s ✓** · overlay judul-hook benar-benar ABSEN (hook kosong) · nol crash. Fallback ekstraktif video-prompt: OK.
+- Sisa yang HANYA bisa dibuktikan dgn kunci fal nyata (F4): probe validator fal · generate klip nyata · kualitas visual wanita fotorealistis.
+
 ### F4 — BUKTI RUNTIME → aktivasi → deploy — ⬜
 1. Produksi 8s NYATA e2e di channel uji **dengan niche default kutipan/motivasi (F1)**, **publish PRIVATE** (§6.6), kunci vendor nyata.
 2. **Presisi durasi (gerbang F4 §7.3): ffprobe output 8s ±15% (6.8–9.2s), MINIMAL 3 run.**

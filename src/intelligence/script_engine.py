@@ -858,8 +858,14 @@ Return ONLY valid JSON:
                     f"no text no words no letters no logos no watermarks.")
 
         prompt = ""
-        llm    = run_config.get_llm_provider()       if run_config else None
-        model  = run_config.llm_model_for("utility") if run_config else ""
+        # get_llm_provider() RAISE bila LLM belum terkonfigurasi (bukan return None) — tangkap agar
+        # janji fallback-ekstraktif "tak pernah kosong" utuh (ditemukan uji pra-deploy 2026-07-14).
+        try:
+            llm    = run_config.get_llm_provider()       if run_config else None
+            model  = run_config.llm_model_for("utility") if run_config else ""
+        except Exception as _le:
+            logger.warning(f"[ScriptEngine] LLM tak tersedia utk video-prompt ({_le}) → fallback ekstraktif")
+            llm, model = None, ""
         if llm:
             try:
                 system = (
