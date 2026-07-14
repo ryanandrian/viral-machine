@@ -282,11 +282,10 @@ Halaman `/terms` **wajib** memuat:
    c. Ketiga izin tampil dengan checkbox: *Manage/upload your YouTube videos* · *View your YouTube account* · *View YouTube Analytics reports for your YouTube content*. **Klik tiap tautan "See access details"** satu per satu (buka → tampil → tutup) agar detail scope terbaca reviewer.
    d. **Diam ±5 detik** pada daftar izin + narasi bacakan ketiganya (`youtube.upload` · `youtube.readonly` · `yt-analytics.readonly`). Centang semua (Select all).
 6. Klik **Continue/Allow** → kembali ke app → tunjukkan channel TERSAMBUNG (nama channel tampil).
-7. **Demonstrasi pemakaian TIAP scope** (syarat resmi "how each scope is used"):
-   - `youtube.upload` → tunjukkan video hasil produksi sistem yang terbit di channel (buka YouTube Studio/link video hasil upload MesinViral).
-   - `youtube.readonly` → halaman Channel di app menampilkan identitas channel (nama/ID/subscriber) yang dibaca dari YouTube.
-   - `yt-analytics.readonly` → dashboard/Insights di app menampilkan views/watch-time yang ditarik dari YouTube Analytics.
-8. Tunjukkan **revoke**: tombol putus koneksi di app + `myaccount.google.com/permissions`.
+7. **Demonstrasi pemakaian TIAP scope** — struktur 3-SEGMEN 2-AKUN (keputusan 2026-07-14; akun demo baru = analytics kosong, itu WAJAR):
+   - **Segmen A (akun baru, lanjutan langkah 6):** `youtube.readonly` sudah terdemo — halaman Channel menampilkan nama/foto/subscriber channel yang ditarik live dari YouTube begitu tersambung.
+   - **Segmen B (akun tenant produksi ber-data — narasi: "the same app in use by an established account"):** `youtube.upload` → tunjukkan video yang di-upload otomatis sistem ke channel (Runs/link video) · `yt-analytics.readonly` → halaman analytics/insights berisi views/watch-time nyata. (Video lama bagian ini TIDAK dikomplain — pertahankan polanya.)
+8. **Segmen C — revoke pakai AKUN BARU** (izin masih aktif, nol risiko produksi): (a) tombol Disconnect/Hapus koneksi di app → koneksi hilang; (b) `myaccount.google.com/permissions` → tunjukkan mesinviral + izinnya → **Remove access**. Dua jalur pencabutan terekam (sesuai privacy policy).
 9. Upload **Unlisted** ke YouTube (channel mesinviral milik lumite, seperti video lama) → salin link.
 
 **Setelah video jadi → BALAS email T&S di THREAD YANG SAMA dari `lumite.biz.id@gmail.com`** (jangan thread baru) — draf balasan (isi `<LINK>`):
