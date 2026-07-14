@@ -8,6 +8,9 @@
 1. **8s = KHUSUS text-to-video** — bukan Ken-Burns 1 gambar (opsi "gambar dulu" DITOLAK owner).
 2. **Vendor/model TIDAK PERNAH dikunci** — katalog harus bisa terus bertambah tanpa ubah kode. Langkah awal = **riset vendor+model dengan format parameter seragam & formula biaya seragam** → proposal → ketok owner.
 3. **Bukan SaaS baru** — text-to-video = mode render tambahan DI DALAM MesinViral (rekomendasi Claude, disetujui arah owner 2026-07-14): pipeline & moat (self-learning/QC/BYOK/publish) dipakai bersama; SaaS terpisah = duplikasi 90% fondasi.
+4. **Konten 8s = kutipan/afirmasi/motivasi** (owner setuju rekomendasi Claude: format paling ideal — pesan tuntas sebelum scroll, rewatch-loop → watch ratio >100%).
+5. **Positioning 8s = KHUSUS pemain volume & retensi** — bukan kedalaman cerita; 60s tetap tulang punggung konten. Analisis performa nanti dibandingkan SESAMA durasi.
+6. **Niche DEFAULT 8s = niche khusus kutipan/afirmasi/motivasi** dibuat tersendiri (mengejar retensi) — masuk lingkup F1 (data niche: DNA visual sinematik-motivasi + gaya narasi kutipan + kaitan `format_profiles.motivational_quote` §4 MULTI_FORMAT) dan dipakai sebagai niche uji F4.
 
 ## 1. Inventaris TERVERIFIKASI 2026-07-14 (kode + DB live — anchor wajib di-grep ulang sebelum dipakai, §1.2)
 
@@ -51,9 +54,10 @@ Verifikasi **dokumen resmi vendor** (web, bukan ingatan model) sesuai kriteria o
 - **Keluaran:** matriks perbandingan + rekomendasi 1 transport perdana + model perdana → **KETOK OWNER** (gerbang F0→F1).
 - **REALISASI:** ⬜
 
-### F1 — DB (katalog + 1 migrasi kecil) — ⬜
+### F1 — DB (katalog + niche default + 1 migrasi kecil) — ⬜
 - Baris `ai_providers`: vendor terpilih (`provider_key`, `key_group` baru, `auth_type`, `free_tier_note`).
 - Baris `ai_models` component=`'video'`: `model_id`, `pricing` (per-detik/per-klip; `pricing_locked`), `default_params` (aspect 9:16, durasi klip, resolusi), `quality_tier`, `cost_hint`.
+- **Niche default 8s (keputusan owner §0.6):** niche baru khusus kutipan/afirmasi/motivasi via editor `/admin/niches` (admin-data, bukan hardcode): VISUAL DNA sinematik-motivasi (lighting/camera/motion/atmosphere) + gaya narasi kutipan (1 kalimat kuat) + keywords/hashtag/kategori YouTube + kaitan `format_profiles.motivational_quote`. Redaksi DNA final = proposal → ketok owner.
 - Migrasi: `duration_presets.trailing_silence_override numeric NULL` (knob admin-editable; 8s ≈1.0s — default 2.5s = 31% durasi video; NULL = perilaku lama; config-driven §3.3).
 - 8s `is_active` TETAP false sampai F4 lulus.
 - **REALISASI:** ⬜
@@ -78,7 +82,7 @@ Verifikasi **dokumen resmi vendor** (web, bukan ingatan model) sesuai kriteria o
 - **REALISASI:** ⬜
 
 ### F4 — BUKTI RUNTIME → aktivasi → deploy — ⬜
-1. Produksi 8s NYATA e2e di channel uji, **publish PRIVATE** (§6.6), kunci vendor nyata.
+1. Produksi 8s NYATA e2e di channel uji **dengan niche default kutipan/motivasi (F1)**, **publish PRIVATE** (§6.6), kunci vendor nyata.
 2. **Presisi durasi (gerbang F4 §7.3): ffprobe output 8s ±15% (6.8–9.2s), MINIMAL 3 run.**
 3. Bukti per-permukaan (§3.4 per-WIDGET): QC pass · baris biaya video tercatat + tampil di FE run cost · caption/karaoke tampil · musik (bila aktif) · Telegram report normal · analytics snapshot masuk · analyzer tidak error dgn video 8s.
 4. **Nol regresi (§3.8):** 1 run preset 60s channel nyata TETAP normal.
