@@ -120,10 +120,11 @@ def _get_profile(niche: str) -> dict:
     niches     = get_niches()
     niche_data = niches.get(niche)
     if not niche_data:
-        # Niche tidak dikenal — pakai niche aktif pertama sebagai fallback
-        active     = {k: v for k, v in niches.items() if v.get("is_active", True)}
-        niche_data = next(iter(active.values()), {})
-        logger.warning(f"[ScriptEngine] Niche '{niche}' tidak ada di registry — pakai fallback")
+        # F-2 audit atribusi (§3.3, owner 2026-07-15): dulu SUBSTITUSI SENYAP ke niche aktif pertama
+        # → konten niche LAIN diproduksi diam-diam. Kini gagal jujur (run stop + Telegram).
+        from src.exceptions import LLMError
+        raise LLMError(f"Niche '{niche}' tidak ditemukan di registry — run dihentikan (no-fallback §3.3).",
+                       step="script")
 
     vp = niche_data.get("narration_persona") or niche_data.get("voice_profile") or {}
 
@@ -357,11 +358,9 @@ def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, ins
     preset_seconds/format_wps: Duration Preset per-channel (MULTI_FORMAT §3). None → perilaku lama.
     cta_mode/brand_name: Branded Content (§6) — 'soft_sell' izinkan SATU sebutan brand halus.
     """
-    profile        = _get_profile(niche)
+    profile        = _get_profile(niche)   # niche tak dikenal → raise di _get_profile (F-2, no-fallback)
     niches         = get_niches()
-    niche_data     = niches.get(niche) or next(
-        (v for v in niches.values() if v.get("is_active", True)), {}
-    )
+    niche_data     = niches.get(niche) or {}   # F-2: {} mustahil pasca guard _get_profile; substitusi dibuang
     section_timing = _get_section_timing(niche)
     # Duration Preset (per-channel, opsional): skalakan timing ke target + WPS per-format (§3).
     # preset_seconds/format_wps None → perilaku lama (timing niche, WPS 2.4). Non-breaking.

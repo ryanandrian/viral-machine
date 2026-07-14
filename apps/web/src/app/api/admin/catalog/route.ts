@@ -35,7 +35,7 @@ const JSONB_COLS: Record<string, string[]> = {
   tts_profiles: ["param_schema"],
   moods: ["keywords"],
   niche_property_presets: ["value"],
-  ai_models: ["pricing", "pricing_pending"],
+  ai_models: ["pricing", "pricing_pending", "default_params", "cost_hint"],
 };
 // Kolom numerik dengan RESET-ke-NULL + guard rentang (F5-01: voice_catalog.delivery_wps pace per-voice).
 const NUMERIC_COLS: Record<string, Record<string, [number, number]>> = {

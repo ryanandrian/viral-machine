@@ -78,9 +78,10 @@ class NicheSelector:
 
     def _prepare_signals_summary(self, signals: dict, tenant_config: TenantConfig) -> str:
         niches     = get_niches()
-        niche_data = niches.get(tenant_config.niche) or next(
-            (v for v in niches.values() if v.get("is_active", True)), {}
-        )
+        niche_data = niches.get(tenant_config.niche)
+        if not niche_data:
+            # F-2 (§3.3, 2026-07-15): substitusi senyap niche-aktif-pertama DIBUANG → gagal jujur.
+            raise ValueError(f"Niche '{tenant_config.niche}' tidak ditemukan di registry — run dihentikan (no-fallback §3.3).")
         peak_region = signals.get("peak_region", "us")
         audience    = REGION_DISPLAY.get(peak_region, REGION_DISPLAY["us"])
         weights     = self._source_weights()
@@ -371,9 +372,10 @@ class NicheSelector:
                          insights: dict = None, provider=None, model: str = "",
                          recent_topics: list = None) -> list:
         niches     = get_niches()
-        niche_data = niches.get(tenant_config.niche) or next(
-            (v for v in niches.values() if v.get("is_active", True)), {}
-        )
+        niche_data = niches.get(tenant_config.niche)
+        if not niche_data:
+            # F-2 (§3.3, 2026-07-15): substitusi senyap niche-aktif-pertama DIBUANG → gagal jujur.
+            raise ValueError(f"Niche '{tenant_config.niche}' tidak ditemukan di registry — run dihentikan (no-fallback §3.3).")
 
         audience = REGION_DISPLAY.get(peak_region, REGION_DISPLAY["us"])
 

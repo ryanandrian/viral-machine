@@ -97,7 +97,7 @@ class TenantRunConfig:
     visual_mode:        str   = ""
     # 'ai_image:gpt-image-1-mini' → AI generated image + motion
     # 'ai_image:cf-flux-schnell' → AI generated image + motion (Cloudflare, gratis harian)
-    # 'ai_video:*'               → AI video generation (DISABLED v0.2)
+    # 'ai_video:*'               → AI text-to-video (AKTIF sejak [B6] 2026-07-14; model via ai_models)
 
     # Fase 6C fields
     script_min_viral_score: int            = 75
@@ -535,25 +535,23 @@ class TenantConfigManager:
 
             # Validasi niche
             niche = row.get("niche") or ""
-            # Validasi niche dari registry (Supabase-driven, no hardcode)
+            # F-2 audit atribusi (§3.3, 2026-07-15): dulu SUBSTITUSI SENYAP ke niche aktif pertama
+            # (nilai default tenant yang basi diam-diam diganti niche acak). Kini: JUJUR apa adanya —
+            # nilai dipertahankan + warning; niche run sesungguhnya di-resolve dari channel (readiness
+            # menggerbangi produksi; konsumen niche tak-dikenal kini gagal-jujur di titiknya masing2).
             try:
                 from src.intelligence.config import get_niches
-                registry      = get_niches()
-                active_niches = [k for k, v in registry.items() if v.get("is_active", True)]
+                registry = get_niches()
                 if niche not in registry:
-                    fallback = active_niches[0] if active_niches else niche
                     logger.warning(
-                        f"[TenantConfig] Niche '{niche}' tidak ada di registry — "
-                        f"fallback ke '{fallback}'"
+                        f"[TenantConfig] Niche default tenant '{niche}' tidak ada di registry — "
+                        f"dipertahankan apa adanya (produksi memakai niche channel; no-fallback §3.3)"
                     )
-                    niche = fallback
                 elif not registry[niche].get("is_active", True):
-                    fallback = active_niches[0] if active_niches else niche
                     logger.warning(
-                        f"[TenantConfig] Niche '{niche}' nonaktif — "
-                        f"fallback ke '{fallback}'"
+                        f"[TenantConfig] Niche default tenant '{niche}' nonaktif — "
+                        f"dipertahankan apa adanya (produksi memakai niche channel; no-fallback §3.3)"
                     )
-                    niche = fallback
             except Exception as _ne:
                 logger.warning(f"[TenantConfig] Validasi niche gagal ({_ne}) — pakai niche as-is")
 

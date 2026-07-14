@@ -52,9 +52,12 @@ class HookOptimizer:
     def _build_prompt(self, script: dict, tenant_config: TenantConfig,
                       top_hooks: list | None = None) -> str:
         niches     = get_niches()
-        niche_data = niches.get(tenant_config.niche) or next(
-            (v for v in niches.values() if v.get("is_active", True)), {}
-        )
+        niche_data = niches.get(tenant_config.niche)
+        if not niche_data:
+            # F-2 audit atribusi (§3.3, 2026-07-15): dulu substitusi senyap niche-aktif-pertama → hook
+            # bergaya niche LAIN. Kini gagal jujur (pipeline STEP 4 raise → run stop + Telegram).
+            from src.exceptions import LLMError
+            raise LLMError(f"Niche '{tenant_config.niche}' tidak ditemukan di registry — run dihentikan (no-fallback §3.3).", step="hook")
         formulas_text  = "\n".join([f"- {k}: {v}" for k, v in self.HOOK_FORMULAS.items()])
         historical_block = self._build_historical_block(top_hooks or [])
         hooks_count    = 6 if historical_block else 5

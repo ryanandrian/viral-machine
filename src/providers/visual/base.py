@@ -87,7 +87,6 @@ class VisualProvider(ABC):
     def is_enabled(self) -> bool:
         """
         True jika provider aktif dan siap dipakai.
-        Contoh: ai_video providers return False di v0.2 (DISABLED).
         """
         pass
 
