@@ -267,7 +267,7 @@
 - **PEMICU KERJAKAN:** SEBELUM niche islami (atau niche ber-larangan lain) ditawarkan/dipakai tenant mana pun.
 - **REALISASI:** ⬜
 
-### [B15] Video terhapus/di-private di YouTube → otomatis KELUAR dari pembelajaran — ✅ TUNTAS 2026-07-14 (lokal teruji 8/8; menunggu izin deploy BE)
+### [B15] Video terhapus/di-private di YouTube → otomatis KELUAR dari pembelajaran — ✅ TUNTAS + DEPLOYED 2026-07-14 19:13 (batch B6; izin owner "silahkan deploy"; skrip resmi OK health=200 commit 2a15df1; lokal teruji 8/8)
 - **KONTEKS:** insiden 2026-07-11 — owner hapus konten di YouTube tapi sistem tetap belajar dari analitik lamanya (tak ada sinkronisasi status).
 - **REALISASI 2026-07-14 (ketok owner; kertas-keputusan → rencana matang → uji):** migr **0160** status
   `delisted` (constraint lama chk_video_status ganda tertangkap verifikasi → disatukan) · sapu analytics
