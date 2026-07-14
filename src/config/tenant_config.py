@@ -343,8 +343,41 @@ class TenantConfigManager:
             except Exception as e:
                 logger.warning(f"[TenantConfig] overlay channel gagal (ch={channel_id}): {e} — pakai config tenant")
 
+        # ── FIX FOSIL s85 (2026-07-14, mandat owner "PERBAIKAN TUNTAS"; bukti: prompt astronot run 8s) ──
+        # Blok pemuatan DNA di _load_from_supabase lahir di era 1-tenant-1-niche (April, commit 9765c39):
+        # visual_style/fallbacks dimuat dari niche level-TENANT dan TIDAK PERNAH dimuat ulang utk niche
+        # run/channel → SEMUA channel ber-niche ≠ default tenant mendapat DNA yang salah (direproduksi:
+        # legenda_daerah & radiant_affirmations sama-sama menerima DNA universe_mysteries).
+        # Niche EFEKTIF = param `niche` run ini (resolusi pool/slot; prioritas tertinggi) → else niche
+        # CHANNEL (dari overlay) → else niche tenant (perilaku lama; jalur RAD utuh: sama = nol reload).
+        eff_niche = ((niche or "").strip()
+                     or (getattr(config, "_channel_niche", "") or "")
+                     or (getattr(config, "niche", "") or "").strip())
+        if eff_niche and eff_niche != getattr(config, "_visual_niche_loaded", None):
+            self._reload_niche_visual(config, eff_niche)
+
         self._cache[cache_key] = (config, time.time())
         return config
+
+    def _reload_niche_visual(self, config: "TenantRunConfig", eff_niche: str) -> None:
+        """Muat visual_style + visual_fallbacks utk niche EFEKTIF (semantik kegagalan = IDENTIK blok
+        asal _load_from_supabase: gagal → warning + nilai kosong; TIDAK menambah fallback baru)."""
+        if not self._supabase:
+            return
+        try:
+            nr = (self._supabase.table("niches")
+                  .select("visual_style, visual_fallbacks")
+                  .eq("niche_id", eff_niche).single().execute())
+            data = nr.data or {}
+            config.niche_visual_style     = data.get("visual_style") or {}
+            config.niche_visual_fallbacks = data.get("visual_fallbacks") or []
+            config._visual_niche_loaded   = eff_niche
+            logger.debug(f"[TenantConfig] Niche visual data dimuat-ulang utk niche efektif: {eff_niche}")
+        except Exception as e:
+            config.niche_visual_style     = {}
+            config.niche_visual_fallbacks = []
+            config._visual_niche_loaded   = eff_niche
+            logger.warning(f"[TenantConfig] Gagal load niche visual data ({eff_niche}): {e}")
 
     # Kolom channels per-channel (F1-04) → field TenantRunConfig. Hanya overlay bila NOT NULL
     # (NULL = belum dikonfigurasi → pakai nilai tenant; transisi aman).
@@ -366,6 +399,9 @@ class TenantConfigManager:
         if not ch:
             logger.warning(f"[TenantConfig] channel {channel_id} tak ditemukan — overlay dilewati")
             return
+        # Fix fosil s85: niche milik CHANNEL — kandidat niche-efektif utk reload DNA di load()
+        # (param `niche` run tetap prioritas tertinggi; kolom ini pelengkap saat param tak diberi).
+        config._channel_niche = (ch.get("niche") or "").strip() or None
         tenant_llm_library = (getattr(config, "llm_library", None) or "").strip().lower()
         for f in self._CHANNEL_OVERLAY_FIELDS:
             v = ch.get(f)
@@ -549,7 +585,7 @@ class TenantConfigManager:
                 limits["max_videos_per_day"]
             )
 
-            return TenantRunConfig(
+            config = TenantRunConfig(
                 tenant_id=tenant_id,
                 plan_type=plan_type,
                 niche=niche,
@@ -607,6 +643,10 @@ class TenantConfigManager:
                 # OAuth Token path (s84d) — opsional, auto-resolve jika kosong
                 youtube_token_path      = row.get("youtube_token_path") or "",
             )
+            # Fix fosil s85 (2026-07-14): penanda niche yang DNA-nya termuat di atas — dipakai load()
+            # utk memuat-ulang visual_style/fallbacks bila niche EFEKTIF run/channel berbeda.
+            config._visual_niche_loaded = niche
+            return config
 
         except Exception as e:
             logger.error(f"[TenantConfig] Supabase load failed for '{tenant_id}': {e}")

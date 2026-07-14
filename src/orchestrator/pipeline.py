@@ -708,6 +708,11 @@ class Pipeline:
         # durasi |aktual−target| ≤ ±QC_DURATION_TOLERANCE + clip_count = visual_beats preset.
         # Tanpa preset → interim: floor integritas (deteksi render terpotong) + clips env default.
         min_size_mb = float(os.getenv("QC_MIN_SIZE_MB", "5"))
+        # [B6] F4 fix (mandat owner 2026-07-14): ambang ukuran SADAR-DURASI — basis env = per-60s
+        # (60s→5MB tak berubah; 8s→0.67MB). Video 8s sehat (3.3MB) sempat dicap "render gagal?" oleh
+        # ambang rata. Floor 0.3MB = deteksi file korup/kosong tetap hidup. Tanpa preset → perilaku lama.
+        if target_seconds:
+            min_size_mb = max(0.3, min_size_mb * float(target_seconds) / 60.0)
         max_dur     = float(os.getenv("QC_MAX_DURATION", "180"))
         min_clips   = int(expected_beats) if expected_beats else int(os.getenv("QC_MIN_CLIPS", "6"))
 
