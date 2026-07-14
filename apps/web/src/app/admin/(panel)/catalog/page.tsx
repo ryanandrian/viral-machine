@@ -320,11 +320,15 @@ export default function AdminCatalogPage() {
 
   // B2 cost-tracking: edit manual harga model (USD per satuan). Simpan manual → pricing_locked=true
   // (sinkron feed harian TIDAK menimpa). Utk model di luar feed (ElevenLabs = tergantung paket langganan).
-  const [priceEdit, setPriceEdit] = useState<{ key: string; in1m: string; out1m: string; img: string; chars1m: string } | null>(null);
+  const [priceEdit, setPriceEdit] = useState<{ key: string; in1m: string; out1m: string; img: string; chars1m: string; sec: string } | null>(null);
   async function savePricing() {
     if (!priceEdit) return;
     const num = (s: string) => (s.trim() === "" ? null : Number(s));
-    const pricing = { in_per_1m: num(priceEdit.in1m), out_per_1m: num(priceEdit.out1m), per_image: num(priceEdit.img), per_1m_chars: num(priceEdit.chars1m), source: "manual", synced_at: new Date().toISOString() };
+    // MERGE di atas pricing lama (bug laten, temuan owner 2026-07-15): dulu REPLACE total → field
+    // harga VIDEO ber-basis-klip (per_video_base_usd/base_seconds/per_extra_second_usd) TERHAPUS
+    // saat admin menyimpan dari form. Kini kunci di luar form dipertahankan; +field /detik (video).
+    const prev = (data?.ai_models.find((m) => String(m.model_key) === priceEdit.key)?.pricing as Record<string, unknown> | null) ?? {};
+    const pricing = { ...prev, in_per_1m: num(priceEdit.in1m), out_per_1m: num(priceEdit.out1m), per_image: num(priceEdit.img), per_1m_chars: num(priceEdit.chars1m), per_second_usd: num(priceEdit.sec), source: "manual", synced_at: new Date().toISOString() };
     const r = await fetch("/api/admin/catalog", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table: "ai_models", key: priceEdit.key, patch: { pricing, pricing_locked: true } }) });
     if (r.ok) { setToast("Harga disimpan (terkunci dari sinkron otomatis)"); setPriceEdit(null); await load(); } else { const j = await r.json().catch(() => ({})); setToast(`Gagal: ${j.error ?? ""}`); }
   }
@@ -347,6 +351,10 @@ export default function AdminCatalogPage() {
     if (p.out_per_1m != null) parts.push(`out $${p.out_per_1m}/1M`);
     if (p.per_image != null) parts.push(`$${p.per_image}/img`);
     if (p.per_1m_chars != null) parts.push(`$${p.per_1m_chars}/1M chr`);
+    // Harga VIDEO ([B6]): per-detik ATAU basis-klip + detik-tambahan — dulu tak dikenal formatter
+    // → kolom harga model video tampil KOSONG (temuan owner 2026-07-15, "tidak jelas berfungsi").
+    if (p.per_second_usd != null) parts.push(`$${p.per_second_usd}/dtk`);
+    if (p.per_video_base_usd != null) parts.push(`$${p.per_video_base_usd}/klip${p.base_seconds != null ? ` ${p.base_seconds}s` : ""}${p.per_extra_second_usd != null ? ` +$${p.per_extra_second_usd}/dtk` : ""}`);
     return parts.join(" · ");
   };
 
@@ -452,6 +460,7 @@ export default function AdminCatalogPage() {
                         <input className="input" style={{ height: 26, width: 70 }} placeholder="out/1M" value={priceEdit.out1m} onChange={(e) => setPriceEdit({ ...priceEdit, out1m: e.target.value })} />
                         <input className="input" style={{ height: 26, width: 70 }} placeholder="/img" value={priceEdit.img} onChange={(e) => setPriceEdit({ ...priceEdit, img: e.target.value })} />
                         <input className="input" style={{ height: 26, width: 76 }} placeholder="/1M chr" value={priceEdit.chars1m} onChange={(e) => setPriceEdit({ ...priceEdit, chars1m: e.target.value })} />
+                        <input className="input" style={{ height: 26, width: 64 }} placeholder="/dtk" title="Harga video per-detik (USD) — harga basis-klip diedit via kolom pricing model (dipertahankan otomatis)" value={priceEdit.sec} onChange={(e) => setPriceEdit({ ...priceEdit, sec: e.target.value })} />
                         <button className="btn btn-default btn-sm" onClick={savePricing}>✓</button>
                         <button className="btn btn-ghost btn-sm" onClick={() => setPriceEdit(null)}>✕</button>
                       </span>
@@ -461,7 +470,7 @@ export default function AdminCatalogPage() {
                           : (m.is_active ? <span className="badge badge-warning" title="Model aktif tanpa harga → biaya video tampil 'belum lengkap'">⚠️ kosong</span> : <span className="muted" style={{ fontSize: "0.7rem" }}>—</span>)}
                         {m.pricing_locked ? <span title="Terkunci — sinkron otomatis tak menimpa (klik utk buka)" style={{ cursor: "pointer" }} onClick={() => toggleLock(mk, false)}>🔒</span>
                           : pr ? <span title="Ikut sinkron harian (klik utk kunci)" style={{ cursor: "pointer", opacity: .45 }} onClick={() => toggleLock(mk, true)}>🔓</span> : null}
-                        <button className="btn btn-ghost btn-sm" title="Edit harga manual" onClick={() => setPriceEdit({ key: mk, in1m: String(pr?.in_per_1m ?? ""), out1m: String(pr?.out_per_1m ?? ""), img: String(pr?.per_image ?? ""), chars1m: String(pr?.per_1m_chars ?? "") })}>✎</button>
+                        <button className="btn btn-ghost btn-sm" title="Edit harga manual" onClick={() => setPriceEdit({ key: mk, in1m: String(pr?.in_per_1m ?? ""), out1m: String(pr?.out_per_1m ?? ""), img: String(pr?.per_image ?? ""), chars1m: String(pr?.per_1m_chars ?? ""), sec: String(pr?.per_second_usd ?? "") })}>✎</button>
                         {(m.pricing_pending as Record<string, unknown> | null) && (
                           <span style={{ display: "inline-flex", gap: ".3rem", alignItems: "center", padding: ".15rem .4rem", borderRadius: 6, background: "var(--warning-soft)", fontSize: "0.6875rem" }} title={String((m.pricing_pending as Record<string, unknown>).reason ?? "")}>
                             ⚠️ <Bi id="usulan baru:" en="new proposal:" /> {fmtPricing(m.pricing_pending as Record<string, unknown>)}
