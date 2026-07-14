@@ -4,7 +4,7 @@
 > **Kaitan:** backlog tunggal = `SISA_KERJA_GO_LIVE.md` **[B6]** (dokumen ini = SPEC+tracker-nya, pola `PROGRAM_BUKTI_KECERDASAN.md`). Spec teknis induk = `MULTI_FORMAT_STUDIO.md §3/§5`. Prioritas jujur (§7 kompas): TIDAK memblok tenant berbayar pertama.
 
 ## 🧭 CARA LANJUT (resume pasca-compaction/sesi baru — baca INI dulu, jangan riset ulang)
-1. **POSISI SEKARANG: ⏸️ BELUM MULAI — seluruh fase ⬜; gerbang pembuka = owner mengucap "mulai F0 ai_video".** (Bila baris ini basi vs REALISASI di bawah → REALISASI menang; perbarui baris ini.)
+1. **POSISI SEKARANG: 🟡 F0 SELESAI (riset 2026-07-14, mandat owner "mulai kerjakan" + BISMILLAH) — proposal vendor DIAJUKAN, MENUNGGU KETOK OWNER (fal.ai + Kling perdana) sebelum F1.** (Bila baris ini basi vs REALISASI di bawah → REALISASI menang; perbarui baris ini.)
 2. Deep-dive & keputusan SUDAH TUNTAS — §0 (keputusan owner, JANGAN tanya ulang) + §1 (inventaris siap-vs-gap, verified 2026-07-14). Anchor `file:baris` wajib di-grep ulang sebelum dipakai (kode bisa bergeser) — tapi KESIMPULANNYA jangan diaudit ulang.
 3. Kerjakan fase BERURUTAN F0→F4; tiap fase selesai → **isi kolom REALISASI fase itu SAAT ITU JUGA** (✅ + tanggal + commit + bukti 1-2 kalimat) + perbarui baris POSISI di atas + sinkron header [B6] di `SISA_KERJA_GO_LIVE.md`. Fase ber-tanda "KETOK OWNER" = STOP menunggu jawaban owner, jangan lompati.
 4. Aturan kerja penuh = `CLAUDE.md` (§2 pre-touch, §3 pre-done, §5 deploy). Bukti runtime > klaim; durasi = gerbang keras F4 (§7.3).
@@ -60,7 +60,17 @@ Verifikasi **dokumen resmi vendor** (web, bukan ingatan model) sesuai kriteria o
 - Pembanding langsung: Runway · Kling · Luma · **Veo via Gemini API** (key_group `gemini` SUDAH ada di sistem) · Sora.
 - Diverifikasi per kandidat: dukungan **9:16** · durasi klip **5–10s** · pola **async submit→poll** · harga per-detik/per-klip · BYOK (tenant bikin akun sendiri) · rate limit · ketersediaan region · **KRITERIA UTAMA (§0.7): kualitas manusia fotorealistis** (wajah/tangan bersih, gerak natural — uji sampel nyata per model, bukan klaim brosur) + kebijakan konten vendor soal penggambaran manusia.
 - **Keluaran:** matriks perbandingan + rekomendasi 1 transport perdana + model perdana → **KETOK OWNER** (gerbang F0→F1).
-- **REALISASI:** ⬜
+- **REALISASI:** ✅ **RISET SELESAI 2026-07-14 (verifikasi web dokumen resmi + agregator) — PROPOSAL DIAJUKAN, MENUNGGU KETOK OWNER.** Hasil:
+
+  | Kandidat | Pola API | 9:16 | Durasi | Harga (verifikasi 07-2026) | Catatan |
+  |---|---|---|---|---|---|
+  | **fal.ai (agregator) — REKOMENDASI** | Queue seragam SEMUA model: `POST queue.fal.run/{model}` → request_id+status_url → poll → hasil; webhook opsional; auth `Authorization: Key` (1 kunci semua model) | ✓ | per-model (Kling: 5/10s) | per-detik/per-video per-model (Kling 3 ~$0.03–0.28/s · Wan 2.5 $0.05/s · Veo 3 $0.4/s) + **API harga programatik `GET api.fal.ai/v1/models/pricing`** | Persis kriteria owner: parameter seragam + billing seragam + katalog 1000+ model → vendor TAK terkunci; pricing API = auto-sync harga BYOK (selaras B2) |
+  | Replicate (agregator) | Predictions API async (status starting/processing/succeeded/failed; poll/webhook; timeout 30m) | ✓ (per-model) | per-model | per-model | Layak = transport KEDUA nanti (arsitektur _TRANSPORTS memungkinkan) |
+  | Veo via Gemini API (langsung) | Gemini API | ✓ (Veo 3.1: 4/6/8s) | 4/6/8s | Fast $0.15/s · Std $0.40/s | key_group `gemini` SUDAH ada; minus: hanya keluarga Veo, premium (8s Fast ≈ $1.2/klip) |
+  | Kling direct / Runway / Luma / Sora | API masing-masing (Sora akses publik standalone masih terbatas; Runway/Luma kredit-based) | ✓ sebagian | bervariasi | Sora $0.10/s base | Format TIDAK seragam antar-vendor → biaya adapter per-vendor; lewat agregator lebih efisien |
+
+  **Proposal ketok:** transport perdana = **fal.ai**; model perdana di katalog = **Kling text-to-video** (fotorealistis manusia kuat, 9:16, 5/10s, murah — varian persis + harga dikunci di F1 via pricing API) + opsional baris premium **Veo 3.1 Fast (via fal)**. Uji kualitas "wanita fotorealistis" dgn sampel NYATA = bagian F1/F4 (butuh kunci nyata), sesuai §0.7.
+  Sumber: [docs.fal.ai queue](https://docs.fal.ai/model-apis/model-endpoints/queue) · [fal pricing API](https://fal.ai/docs/platform-apis/v1/models/pricing) · [fal model Kling](https://fal.ai/models/fal-ai/kling-video/v2.5-turbo/pro/text-to-video/api) · [Replicate lifecycle](https://replicate.com/docs/topics/predictions/lifecycle) · [fal.ai pricing](https://fal.ai/pricing) · riset harga Veo/Sora Jul-2026 (buildmvpfast/aifreeapi/fluxnote).
 
 ### F1 — DB (katalog + niche default + 1 migrasi kecil) — ⬜
 - Baris `ai_providers`: vendor terpilih (`provider_key`, `key_group` baru, `auth_type`, `free_tier_note`).
