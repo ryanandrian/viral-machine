@@ -11,6 +11,7 @@
 4. **Konten 8s = kutipan/afirmasi/motivasi** (owner setuju rekomendasi Claude: format paling ideal — pesan tuntas sebelum scroll, rewatch-loop → watch ratio >100%).
 5. **Positioning 8s = KHUSUS pemain volume & retensi** — bukan kedalaman cerita; 60s tetap tulang punggung konten. Analisis performa nanti dibandingkan SESAMA durasi.
 6. **Niche DEFAULT 8s = niche khusus kutipan/afirmasi/motivasi** dibuat tersendiri (mengejar retensi) — masuk lingkup F1 (data niche: DNA visual sinematik-motivasi + gaya narasi kutipan + kaitan `format_profiles.motivational_quote` §4 MULTI_FORMAT) dan dipakai sebagai niche uji F4.
+7. **Formula visual niche default (owner, 2026-07-14): wanita super cantik + narasi afirmasi/motivasi** — pemirsa menikmati visual sambil membaca caption & mendengar motivasi; 8 detik habis sebelum scroll → retensi ~100%. Tujuan bisnis eksplisit: **mengejar syarat YouTube Partner (views tinggi + retensi tinggi)**. Konsekuensi teknis: (a) kualitas **manusia fotorealistis** jadi KRITERIA UTAMA pemilihan vendor/model di F0 (wajah/tangan tanpa cacat); (b) DNA wajib ber-guardrail aman-iklan (elegan, berpakaian pantas, nol pose sugestif) — lihat Risiko §3; (c) diversity engine wajib merotasi wajah/latar/wardrobe antar-video (anti-repetisi).
 
 ## 1. Inventaris TERVERIFIKASI 2026-07-14 (kode + DB live — anchor wajib di-grep ulang sebelum dipakai, §1.2)
 
@@ -50,7 +51,7 @@
 Verifikasi **dokumen resmi vendor** (web, bukan ingatan model) sesuai kriteria owner (parameter seragam + biaya seragam):
 - **Kandidat utama (rekomendasi Claude): AGREGATOR model-video** — mis. **fal.ai**, **Replicate**: SATU format API + SATU billing utk BANYAK model (Kling/Veo/Hunyuan/LTX/…) → 1 adapter transport, model baru = baris DB (nol kode), vendor tak pernah terkunci. Persis kriteria owner.
 - Pembanding langsung: Runway · Kling · Luma · **Veo via Gemini API** (key_group `gemini` SUDAH ada di sistem) · Sora.
-- Diverifikasi per kandidat: dukungan **9:16** · durasi klip **5–10s** · pola **async submit→poll** · harga per-detik/per-klip · BYOK (tenant bikin akun sendiri) · rate limit · ketersediaan region.
+- Diverifikasi per kandidat: dukungan **9:16** · durasi klip **5–10s** · pola **async submit→poll** · harga per-detik/per-klip · BYOK (tenant bikin akun sendiri) · rate limit · ketersediaan region · **KRITERIA UTAMA (§0.7): kualitas manusia fotorealistis** (wajah/tangan bersih, gerak natural — uji sampel nyata per model, bukan klaim brosur) + kebijakan konten vendor soal penggambaran manusia.
 - **Keluaran:** matriks perbandingan + rekomendasi 1 transport perdana + model perdana → **KETOK OWNER** (gerbang F0→F1).
 - **REALISASI:** ⬜
 
@@ -90,6 +91,8 @@ Verifikasi **dokumen resmi vendor** (web, bukan ingatan model) sesuai kriteria o
 - **REALISASI:** ⬜
 
 ## 3. Risiko & mitigasi
+- **⚠️ Monetisasi YouTube vs konten AI repetitif (relevan LANGSUNG dgn tujuan §0.7 "kejar YPP"):** genre "quote + wanita AI cantik" = genre farm yang populer justru KARENA formula ini — dan karena itu masuk radar kebijakan "inauthentic/mass-produced content" YouTube (syarat monetisasi). Mitigasi: diversity engine merotasi wajah/latar/wardrobe/voice antar-video (jangan 1 wanita template) + narasi afirmasi unik per-video (bukan daur ulang) + AI disclosure existing + posisikan 8s sebagai PELENGKAP channel (60s tetap mayoritas) — bukan channel 100% quote-farm.
+- **⚠️ Batas aman-iklan penggambaran wanita:** "super cantik" TIDAK boleh tergelincir sugestif (limited ads / age-restriction / demonetisasi). Mitigasi: guardrail keras di VISUAL DNA niche (elegan, berpakaian pantas, framing wajah-dan-bahu/full-figure berkelas, larangan pose/pakaian sugestif — pola `strict_prohibition` yang sudah ada) + review manual video-video awal via publish private.
 - **Latency vendor 1–3 mnt/klip** → submit→poll ber-timeout; worker async menampung; timeout = gagal jujur + Telegram (no-fallback).
 - **Klip vendor < durasi audio** → minta durasi klip ≥ audio+trailing; renderer trim; vendor durasi-fix (5/10s) → pilih ≥ kebutuhan lalu trim.
 - **Harga vendor berubah** → `ai_models.pricing` admin-editable + `pricing_locked`; tanpa harga → badge "belum lengkap" (mekanisme existing).
