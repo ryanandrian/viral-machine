@@ -2,6 +2,13 @@
 
 > **Status:** 📋 RENCANA MATANG (2026-07-14) — hasil deep-dive kode + DB live (nol asumsi), **menunggu ketok owner untuk mulai F0**.
 > **Kaitan:** backlog tunggal = `SISA_KERJA_GO_LIVE.md` **[B6]** (dokumen ini = SPEC+tracker-nya, pola `PROGRAM_BUKTI_KECERDASAN.md`). Spec teknis induk = `MULTI_FORMAT_STUDIO.md §3/§5`. Prioritas jujur (§7 kompas): TIDAK memblok tenant berbayar pertama.
+
+## 🧭 CARA LANJUT (resume pasca-compaction/sesi baru — baca INI dulu, jangan riset ulang)
+1. **POSISI SEKARANG: ⏸️ BELUM MULAI — seluruh fase ⬜; gerbang pembuka = owner mengucap "mulai F0 ai_video".** (Bila baris ini basi vs REALISASI di bawah → REALISASI menang; perbarui baris ini.)
+2. Deep-dive & keputusan SUDAH TUNTAS — §0 (keputusan owner, JANGAN tanya ulang) + §1 (inventaris siap-vs-gap, verified 2026-07-14). Anchor `file:baris` wajib di-grep ulang sebelum dipakai (kode bisa bergeser) — tapi KESIMPULANNYA jangan diaudit ulang.
+3. Kerjakan fase BERURUTAN F0→F4; tiap fase selesai → **isi kolom REALISASI fase itu SAAT ITU JUGA** (✅ + tanggal + commit + bukti 1-2 kalimat) + perbarui baris POSISI di atas + sinkron header [B6] di `SISA_KERJA_GO_LIVE.md`. Fase ber-tanda "KETOK OWNER" = STOP menunggu jawaban owner, jangan lompati.
+4. Aturan kerja penuh = `CLAUDE.md` (§2 pre-touch, §3 pre-done, §5 deploy). Bukti runtime > klaim; durasi = gerbang keras F4 (§7.3).
+
 > **Aturan tracker:** tiap fase punya kolom REALISASI — diisi LANGSUNG saat selesai (bukti + commit). Marker ⬜ di sini BUKAN daftar kerja (daftar kerja = SISA_KERJA [B6]).
 
 ## 0. Keputusan owner (FINAL, 2026-07-14 — jangan tanya ulang)
