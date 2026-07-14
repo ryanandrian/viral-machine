@@ -202,10 +202,12 @@
 - **DONE-BILA:** preset 8s produksi 1 klip ai_video + audio + publish (F4 dokumen plan: presisi 6.8–9.2s min 3 run + nol regresi 60s).
 - **REALISASI:** ⬜ *(prioritas rendah; tidak memblok jualan — mulai hanya setelah owner ucap "mulai F0 ai_video")*
 
-### [B7] Go-live checklist teknis — ⬜  (REMEDIASI **F5-04**)
-- **PLAN:** regression e2e semua preset × beberapa niche × multi-channel; pastikan ryan stabil. (`DB_SCHEMA_V2.md` DIHAPUS 2026-07-04, keputusan owner: dokumen skema basi lebih menyesatkan daripada tidak ada — sumber kebenaran struktur = INTROSPEKSI LANGSUNG DB live via psycopg2 tiap butuh.)
-- **DONE-BILA:** semua hijau.
-- **REALISASI:** ⬜
+### [B7] Go-live checklist teknis / PROGRAM PENYAPU RANJAU — 🟡 DIMANDATKAN OWNER 2026-07-15 ("pelajari SELURUH histori mendalam, paham 100% — untuk mengatakan salah harus tahu apa yang benar")
+- **MANDAT & METODE (dikunci 2026-07-15):** B7 = 2 fase berurutan.
+  **Fase-STUDI (prasyarat mutlak, sesi khusus ber-konteks segar):** baca TUNTAS urutan kanonik MEMORY.md → progress_journal → PROGRES.md → seluruh dokumen SPEC (DESAIN/MULTI_FORMAT/QC/REMEDIASI/CHANNEL_LOCK/PER_CHANNEL_OAUTH/PAYMENT/LIFECYCLE/AI_VIDEO_8S/AUDIT_ATRIBUSI) + introspeksi DB live + git log penuh → hasilkan **PETA-BENAR** (spesifikasi perilaku-benar per subsistem — baseline utk memvonis "salah").
+  **Fase-SAPU:** regresi e2e semua preset(8/15/30/45/60/75/90) × niche nyata × kedua channel × kedua mode visual + sisiran kelas-bug terbukti (atribusi lintas-permukaan 5 area · fosil/label basi · fallback senyap · konsumen-per-kolom sebelum klaim "tak dipakai") — tiap butir ber-BUKTI eksekusi; keluaran = dokumen audit yang bisa diaudit owner.
+- **DONE-BILA:** Peta-Benar terbit + seluruh matriks sapu hijau/temuan-tereksekusi.
+- **REALISASI:** 🟡 mandat tercatat; eksekusi Fase-STUDI = sesi berikutnya ber-konteks segar (sesi 2026-07-15 dini hari sudah sarat — memaksakan = studi dangkal, melanggar esensi mandat).
 
 ### [B8] Halaman `/feedback` (masukan trial-lapse) — perbaiki link MATI di email — ✅ *(SELESAI + LIVE-validated 2026-07-03)*
 - **TUJUAN:** tenant yang trial habis (dan siapa pun penerima email trial-lapse) punya halaman masukan NYATA ber-brand → kumpulkan alasan tak-upgrade (lead insight berharga) + hilangkan kesan buruk link mati. **Keputusan owner 2026-07-01: Opsi B (halaman sendiri, bukan Google Form).**
