@@ -248,25 +248,25 @@ class Pipeline:
             logger.info("STEP 5/7 | Generating TTS audio...")
             # Closed-loop durasi (NOL biaya TTS): target audio = preset − trailing_silence. Bila preset
             # di-set → tts_engine rapikan via atempo HANYA jika di luar window QC + faktor dalam batas aman.
-            # [DURASI-3, owner 2026-07-16] trailing = SATU rumus dgn budget script_engine + gerbang durasi
-            # + renderer (tenant trailing_silence → format_catalog.effective_trailing per-preset). Dulu env
-            # RENDER_TRAILING_SILENCE (1.5 umum) → korektor mengejar target BEDA dari 3 titik lain →
-            # meleset sistematis (terbukti 8s: naskah ditulis utk 7.0s, atempo memaksa ke 6.5s — suara
-            # dipercepat percuma + video final ~7.6s vs preset 8s).
+            # [DURASI-3 + F4] overhead PENUH = SATU rumus dgn budget script_engine + gerbang + renderer
+            # (format_catalog.effective_overhead = trailing efektif per-preset + loop bersih). DURASI-3
+            # menyatukan trailing; F4 menutup komponen LOOP yang masih terlewat di korektor (dulu:
+            # target audio 1s ketinggian saat loop aktif → atempo bisa meregang audio yang sudah benar —
+            # terparah di 8s ±12%).
             _preset_s = getattr(tenant_config, "duration_preset", None)
-            _target_audio, _trailing = None, None
+            _target_audio, _overhead = None, None
             if _preset_s:
+                _rc5 = None
                 try:
                     from src.config.tenant_config import load_tenant_config as _ltc5
                     _rc5 = _ltc5(tenant_config.tenant_id, getattr(tenant_config, "channel_id", None), getattr(tenant_config, "niche", None))
-                    _trailing = float(getattr(_rc5, "trailing_silence", 2.5) or 2.5)
                 except Exception:
-                    _trailing = 2.5
-                from src.config.format_catalog import effective_trailing as _eff_trail5
-                _trailing = _eff_trail5(_preset_s, _trailing)
-                _target_audio = float(_preset_s) - _trailing
+                    _rc5 = None
+                from src.config.format_catalog import effective_overhead as _eff_ovh5
+                _overhead = _eff_ovh5(_preset_s, _rc5)
+                _target_audio = max(1.0, float(_preset_s) - _overhead)
             tts_result = self.tts_engine.generate(script, tenant_config, target_audio_secs=_target_audio,
-                                                  trailing_secs=_trailing)
+                                                  overhead_secs=_overhead)
             audio_path, word_timestamps = (
                 tts_result if isinstance(tts_result, tuple)
                 else (tts_result, [])
@@ -296,17 +296,18 @@ class Pipeline:
             # (salah sistem tidak boleh jadi rugi tenant). Tanpa preset → lewat (paritas QC interim).
             _gate_preset = getattr(tenant_config, "duration_preset", None)
             if _gate_preset:
+                # [DURASI-F4] proyeksi = audio + overhead PENUH (trailing efektif + loop bersih) —
+                # SATU rumus dgn naskah/korektor/renderer (format_catalog.effective_overhead).
+                # Dulu trailing saja → proyeksi 1s KURANG saat loop aktif → salah vonis kasus batas.
+                _rc = None
                 try:
                     from src.config.tenant_config import load_tenant_config as _ltc
                     _rc = _ltc(tenant_config.tenant_id, getattr(tenant_config, "channel_id", None),
                                getattr(tenant_config, "niche", None))
-                    _gate_trail = float(getattr(_rc, "trailing_silence", 2.5))
                 except Exception:
-                    _gate_trail = 2.5
-                # [B6] F2: trailing EFEKTIF = override preset (migr 0161) — SATU rumus dgn
-                # script_engine (budget) + renderer (format_catalog.effective_trailing).
-                from src.config.format_catalog import effective_trailing as _eff_trail
-                _gate_trail = _eff_trail(_gate_preset, _gate_trail)
+                    _rc = None
+                from src.config.format_catalog import effective_overhead as _eff_ovh
+                _gate_trail = _eff_ovh(_gate_preset, _rc)
                 _gate_tol = float(os.getenv("QC_DURATION_TOLERANCE", "0.15"))
                 _gate_lo  = float(_gate_preset) * (1 - _gate_tol)
                 _gate_hi  = float(_gate_preset) * (1 + _gate_tol)

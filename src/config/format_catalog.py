@@ -120,6 +120,24 @@ def effective_trailing(seconds, fallback: float) -> float:
     return o if o is not None else float(fallback)
 
 
+def effective_overhead(seconds, run_config, trailing_fallback: float = 2.5) -> float:
+    """[DURASI-F4] Overhead render TOTAL (detik non-suara di video final) = trailing efektif
+    (override preset > setelan tenant) + loop-ending BERSIH (loop_duration − 0.5 xfade, bila enabled —
+    identik `_add_loop_ending` renderer: new = main + loop − 0.5).
+    SATU rumus utk EMPAT pemakai: naskah (script_engine budget) · korektor atempo (pipeline STEP 5) ·
+    gerbang durasi pra-visual · window `_fit_duration`. Kelanjutan DURASI-3: dulu hanya TRAILING yang
+    disatukan; komponen LOOP terlewat di korektor+gerbang → korektor bisa meregang audio yang sudah
+    benar (terparah di preset 8s: ±12%). `run_config` None → trailing saja (fail-safe, tanpa loop)."""
+    trail = effective_trailing(seconds, float(getattr(run_config, "trailing_silence", trailing_fallback) or trailing_fallback) if run_config else trailing_fallback)
+    loopn = 0.0
+    if run_config is not None and getattr(run_config, "loop_ending_enabled", True):
+        try:
+            loopn = max(0.0, float(getattr(run_config, "loop_ending_duration", 1.5) or 1.5) - 0.5)
+        except (TypeError, ValueError):
+            loopn = 0.0
+    return max(0.0, trail + loopn)
+
+
 def effective_wps(format_key, tts_provider, default: float = 2.4) -> float:
     """WPS efektif untuk word-budget = **delivery rate TTS provider** (dominan; kata/detik suara).
     Inilah solusi 2-kelas TTS (owner): ElevenLabs-class ~1.8 vs edge ~2.6. Fallback ke WPS

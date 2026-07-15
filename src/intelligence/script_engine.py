@@ -1029,13 +1029,11 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
         # No-hardcode: trailing_silence + loop dari tenant_configs (sama dgn yang dipakai video_renderer).
         render_overhead_sec = 0.0
         if preset_seconds and run_config:
-            # [B6] F2: trailing EFEKTIF = override preset (migr 0161) else setelan channel/tenant —
-            # SATU rumus dgn gerbang durasi pipeline + renderer (format_catalog.effective_trailing).
-            from src.config.format_catalog import effective_trailing as _eff_trail
-            _trail = _eff_trail(preset_seconds, float(getattr(run_config, "trailing_silence", 2.5) or 2.5))
-            _loopn = (float(getattr(run_config, "loop_ending_duration", 1.5) or 1.5) - 0.5) \
-                     if getattr(run_config, "loop_ending_enabled", True) else 0.0
-            render_overhead_sec = max(0.0, _trail + max(0.0, _loopn))
+            # [DURASI-F4] overhead PENUH (trailing efektif + loop bersih) via SATU helper
+            # format_catalog.effective_overhead — nilai identik rumus inline lama (trail + loopn),
+            # kini satu sumber dgn korektor STEP 5 + gerbang pra-visual + window _fit_duration.
+            from src.config.format_catalog import effective_overhead as _eff_ovh
+            render_overhead_sec = _eff_ovh(preset_seconds, run_config)
             logger.info(f"[ScriptEngine] #3 budget overhead-aware: preset {preset_seconds}s − overhead {render_overhead_sec}s "
                         f"= audio-target {max(1.0, preset_seconds-render_overhead_sec)}s")
         # Branded Content §6 — soft-sell (opsional; implicit → tanpa brand)
