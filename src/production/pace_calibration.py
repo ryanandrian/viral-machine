@@ -168,3 +168,124 @@ def compute_pace_calibration(sb=None, dry_run: bool = False) -> dict:
     except Exception as e:
         logger.error(f"[PaceCalib] gagal (fail-soft, produksi tak terganggu): {e}")
         return {"error": str(e)}
+
+
+# ── [DURASI-F5] SWA-PEMELIHARAAN — dipanggil berkala dari self_learning (fail-soft total) ────────────
+
+
+def align_beat_weights(sb=None, dry_run: bool = False) -> dict:
+    """[F5] Selaraskan `content_beats.weight` ke KENYATAAN (porsi kata nyata per-beat dari
+    `tts_delivery_samples.beat_words` — hitungan sistem, bukan laporan LLM).
+    Keputusan owner (delegasi 2026-07-16): dinamis-SEDERHANA — bukan optimasi kreatif; hanya
+    kalibrasi deskriptif (bobot mengikuti apa yang nyatanya ditulis, agar kuota jujur).
+    PAGAR: `weight_locked=true` → beat TAK disentuh · min-sampel per-beat (BEAT_ALIGN_MIN_N) ·
+    langkah DIBATASI ±BEAT_ALIGN_MAX_STEP_PCT per siklus (geser halus, tak pernah melompat) ·
+    bobot integer ≥1 · pembulatan tanpa-perubahan = tanpa-tulis · semua perubahan di-log."""
+    try:
+        if sb is None:
+            from supabase import create_client
+            sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+        min_n    = _env_int("BEAT_ALIGN_MIN_N", 10)
+        step_pct = max(1, min(50, _env_int("BEAT_ALIGN_MAX_STEP_PCT", 20))) / 100.0
+
+        beats = {r["beat_key"]: r for r in
+                 (sb.table("content_beats").select("beat_key,weight,weight_locked").execute().data or [])}
+        rows, off = [], 0
+        while True:
+            b = (sb.table("tts_delivery_samples").select("beat_words")
+                   .not_.is_("beat_words", "null").range(off, off + 999).execute().data or [])
+            rows += b
+            if len(b) < 1000:
+                break
+            off += 1000
+
+        # Rasio per-beat per-sampel: porsi NYATA ÷ porsi KONFIGURASI (dihitung atas set beat sampel itu
+        # sendiri — set aktif beda per preset, membandingkan share global = salah).
+        ratios: dict[str, list] = {}
+        for r in rows:
+            bw = r.get("beat_words") or {}
+            keys = [k for k in bw if k in beats and isinstance(bw[k], (int, float)) and bw[k] > 0]
+            tot_w = sum(float(bw[k]) for k in keys)
+            tot_cfg = sum(float(beats[k]["weight"]) for k in keys)
+            if len(keys) < 1 or tot_w <= 0 or tot_cfg <= 0:
+                continue
+            for k in keys:
+                share_real = float(bw[k]) / tot_w
+                share_cfg  = float(beats[k]["weight"]) / tot_cfg
+                if share_cfg > 0:
+                    ratios.setdefault(k, []).append(share_real / share_cfg)
+
+        changes, skipped_lock, below = [], [], 0
+        for bk, rs in sorted(ratios.items()):
+            if len(rs) < min_n:
+                below += 1; continue
+            row = beats[bk]
+            if row.get("weight_locked"):
+                skipped_lock.append(bk); continue
+            old = int(row["weight"])
+            med = statistics.median(rs)
+            target = old * med
+            # langkah dibatasi: bergerak menuju target, maksimal ±step_pct dari nilai lama
+            bounded = max(old * (1 - step_pct), min(old * (1 + step_pct), target))
+            new = max(1, round(bounded))
+            if new != old:
+                changes.append({"beat_key": bk, "old": old, "new": new,
+                                "ratio_median": round(med, 3), "n": len(rs)})
+                if not dry_run:
+                    sb.table("content_beats").update({"weight": new}).eq("beat_key", bk).execute()
+                logger.info(f"[BeatAlign] {bk}: weight {old} → {new} (rasio nyata/cfg {med:.3f}, n={len(rs)}, "
+                            f"step≤±{int(step_pct*100)}%){' [DRY]' if dry_run else ''}")
+        summary = {"samples": len(rows), "changes": changes, "locked_skipped": skipped_lock,
+                   "beats_below_min_n": below, "min_n": min_n, "dry_run": dry_run}
+        logger.info(f"[BeatAlign] samples={len(rows)} changes={len(changes)} locked={len(skipped_lock)} below_min={below}")
+        return summary
+    except Exception as e:
+        logger.error(f"[BeatAlign] gagal (fail-soft): {e}")
+        return {"error": str(e)}
+
+
+def check_drift_alarm(sb=None) -> dict:
+    """[F5] ALARM drift estimator: median |error| taksiran-vs-mentah pada N sampel TERBARU ber-taksiran.
+    Melewati ambang → Telegram ADMIN (bukan aksi otomatis apa pun — manusia yang menindak; §0.6).
+    Ambang & jendela config-driven (DRIFT_ALARM_PCT / DRIFT_WINDOW_N)."""
+    try:
+        if sb is None:
+            from supabase import create_client
+            sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+        window = _env_int("DRIFT_WINDOW_N", 30)
+        thresh = float(os.getenv("DRIFT_ALARM_PCT", "10"))
+        rows = (sb.table("tts_delivery_samples")
+                  .select("predicted_secs,raw_audio_secs,created_at")
+                  .not_.is_("predicted_secs", "null").not_.is_("raw_audio_secs", "null")
+                  .order("created_at", desc=True).limit(window).execute().data or [])
+        errs = [abs(float(r["predicted_secs"]) - float(r["raw_audio_secs"])) / float(r["raw_audio_secs"]) * 100
+                for r in rows if float(r["raw_audio_secs"] or 0) > 0]
+        if len(errs) < max(5, window // 3):   # data terlalu tipis → jangan bunyi (anti-alarm-palsu)
+            return {"status": "insufficient_data", "n": len(errs)}
+        med = statistics.median(errs)
+        alarmed = med > thresh
+        if alarmed:
+            try:
+                from src.utils.telegram_notifier import TelegramNotifier
+                TelegramNotifier().notify_admin(
+                    f"⚠️ DRIFT DURASI: median error taksiran {med:.1f}% (> ambang {thresh:.0f}%) "
+                    f"pada {len(errs)} render terakhir. Kalibrasi berjalan otomatis; bila angka ini "
+                    f"bertahan di siklus berikutnya, periksa perubahan voice/provider/niche terbaru.")
+            except Exception as te:
+                logger.warning(f"[DriftAlarm] kirim telegram gagal (non-fatal): {te}")
+        logger.info(f"[DriftAlarm] median_err={med:.1f}% n={len(errs)} ambang={thresh}% alarm={alarmed}")
+        return {"median_err_pct": round(med, 1), "n": len(errs), "threshold": thresh, "alarmed": alarmed}
+    except Exception as e:
+        logger.error(f"[DriftAlarm] gagal (fail-soft): {e}")
+        return {"error": str(e)}
+
+
+def run_maintenance(sb=None) -> dict:
+    """[F5] Satu pintu swa-pemeliharaan berkala (dipanggil self_learning tiap cadence):
+    (1) kalibrasi pace+α dari sampel baru → (2) selaraskan bobot-beat (dibatasi+terkunci-hormat) →
+    (3) alarm drift ke admin. Semua fail-soft — kegagalan di sini TIDAK pernah mengganggu produksi."""
+    out = {}
+    out["pace"]  = compute_pace_calibration(sb=sb)
+    out["beats"] = align_beat_weights(sb=sb)
+    out["drift"] = check_drift_alarm(sb=sb)
+    return out

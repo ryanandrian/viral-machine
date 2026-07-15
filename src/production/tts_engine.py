@@ -108,6 +108,16 @@ def _log_delivery_sample(tenant_config, config: dict, provider_name: str, word_c
                 _pause_counts = _count_pauses(text)
             except Exception:
                 _pause_counts = None
+        # [DURASI-F5] kata NYATA per-beat dari naskah final (ground-truth; hitungan SISTEM, bukan
+        # laporan LLM) → bahan penyelarasan bobot-beat berkala. Fail-soft → NULL.
+        _beat_words = None
+        try:
+            from src.content import beats as _cbeats
+            _bw = {b: len((script.get(b) or "").split()) for b in _cbeats.all_beats()
+                   if isinstance(script, dict) and (script.get(b) or "").strip()}
+            _beat_words = _bw or None
+        except Exception:
+            _beat_words = None
         from supabase import create_client
         sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
         sb.table("tts_delivery_samples").insert({
@@ -126,6 +136,7 @@ def _log_delivery_sample(tenant_config, config: dict, provider_name: str, word_c
             "target_secs":    round(float(target_audio_secs), 2) if target_audio_secs is not None else None,
             "pause_secs":     round(float(_pause_est), 2) if _pause_est is not None else None,
             "pause_counts":   _pause_counts,
+            "beat_words":     _beat_words,   # [DURASI-F5]
         }).execute()
         logger.info(f"[TTSEngine] F4-01 sample: {word_count}w @spd{speed} → {audio_secs:.1f}s "
                     f"(raw {round(float(_raw),1) if _raw is not None else '?'}s, pred "

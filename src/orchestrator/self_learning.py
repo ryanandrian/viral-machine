@@ -62,8 +62,20 @@ def run_once(sb=None) -> dict:
                 logger.info(f"[self_learning] viral_weights tenant={tid}: status={vw.get('status')} n={vw.get('n')}")
             except Exception as e:
                 logger.warning(f"[self_learning] viral_weights gagal tenant={tid}: {e}")
+    # [DURASI-F5] SWA-PEMELIHARAAN durasi (cadence yang sama): kalibrasi pace+α dari sampel baru
+    # → selaraskan bobot-beat (langkah dibatasi + weight_locked dihormati) → alarm drift ke admin.
+    # Fail-soft total: kegagalan di sini TIDAK mengganggu analytics/insights di atas maupun produksi.
+    maint = {}
+    try:
+        from src.production.pace_calibration import run_maintenance
+        maint = run_maintenance(sb)
+        logger.info(f"[self_learning] F5 maintenance: pace_cells={(maint.get('pace') or {}).get('cells_written')} "
+                    f"beat_changes={len((maint.get('beats') or {}).get('changes') or [])} "
+                    f"drift={(maint.get('drift') or {}).get('median_err_pct')}%")
+    except Exception as e:
+        logger.warning(f"[self_learning] F5 maintenance gagal (non-fatal): {e}")
     logger.info(f"[self_learning] run_once: fetch={fetched} channel | compute={computed} channel | weights={weighted} tenant")
-    return {"fetched": fetched, "computed": computed, "weighted": weighted}
+    return {"fetched": fetched, "computed": computed, "weighted": weighted, "maintenance": maint}
 
 
 def run_forever(interval_seconds=None) -> None:
