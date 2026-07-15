@@ -234,6 +234,23 @@ def _distribute_words(active: list, total_words: int) -> dict:
     return {b: max(5, round(total_words * _BEAT_WEIGHT.get(b, 5) / tot)) for b in active}
 
 
+def _script_len_tol() -> float:
+    """[DURASI-F3] Toleransi panjang naskah SATU-SUMBER — menggantikan 6 angka terpatri yang saling
+    bertentangan (prompt ±10%, rentang legacy −8/+12%, plafon beat +15%, gerbang length_ok ±10%).
+    Sumber: env `SCRIPT_LENGTH_TOLERANCE` (dihidupkan dari config-mati; default 0.12) DIPAGARI
+    `min(·, QC_DURATION_TOLERANCE)` — target internal TIDAK PERNAH lebih longgar dari penggaris QC
+    produksi (satu knob, satu kebenaran; akar insiden 'tiga penggaris beda' 2026-07-15)."""
+    try:
+        s = float(os.getenv("SCRIPT_LENGTH_TOLERANCE", "0.12"))
+    except Exception:
+        s = 0.12
+    try:
+        q = float(os.getenv("QC_DURATION_TOLERANCE", "0.15"))
+    except Exception:
+        q = 0.15
+    return max(0.02, min(s, q))
+
+
 # ── §10.A PAUSE-AWARE DURATION ESTIMATOR (provider-AGNOSTIK) ────────────────────────
 # Durasi-ucap = waktu-BICARA + waktu-JEDA. Jeda (em-dash/elipsis/akhir-kalimat) = sumber variansi
 # utama (data NYATA: P_base 1.37–2.20 → seed pace TUNGGAL salah ~½ kasus; 75s pernah meledak 105s).
@@ -377,7 +394,8 @@ def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, ins
     target_duration = int(preset_seconds) if preset_seconds else sum(section_timing.values())
     words           = {k: max(4, round(v * WPS)) for k, v in section_timing.items()}
     total_words     = sum(words.values())          # total kata = target_duration × WPS provider terdaftar
-    _lo, _hi        = round(total_words * 0.92), round(total_words * 1.12)
+    _tol            = _script_len_tol()            # [DURASI-F3] satu-sumber (ganti 0.92/1.12 terpatri)
+    _lo, _hi        = round(total_words * (1 - _tol)), round(total_words * (1 + _tol))
 
     # ── Compression-mapping per-preset (MULTI_FORMAT §3): N beat = visual_beats → narasi + scene + QC.
     from src.config.format_catalog import preset_visual_beats as _pvb
@@ -387,27 +405,34 @@ def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, ins
         # in-range pun bisa overshoot di preset pendek (terbukti: 15s 27 kata → 18.2s > window 17.2).
         _spoken = max(1.0, float(preset_seconds) - float(render_overhead_sec or 0))
         total_words = round(_spoken * WPS)
-        _lo, _hi    = round(total_words * 0.92), round(total_words * 1.12)
+        _lo, _hi    = round(total_words * (1 - _tol)), round(total_words * (1 + _tol))   # [DURASI-F3] satu-sumber
         active  = _beats_for_preset(preset_seconds)  # SEGMENTASI dari DB (single-source) / fallback _BEATS_FOR_N
         n_beats = len(active)
         words   = _distribute_words(active, total_words)   # konsentrasi budget ke beat aktif (bukan sebar 8)
         n_scenes = len(active)
         inactive = [s for s in _ALL_SECTIONS if s not in active]
         _wsum = sum(words.get(b, 0) for b in active) or 1
-        # Anggaran-kata ABSOLUT + MAX per-beat (bukan cuma %): plafon konkret per-beat jauh lebih dipatuhi
-        # LLM daripada total agregat — akar osilasi preset pendek (LLM "mengisi" tiap beat seukuran preset
-        # lebih panjang → total membengkak → speed mentok → atempo/QC-fail). `words` = _distribute_words atas
-        # total_words = T_spoken × WPS(provider) → GENERIK & no-hardcode. MAX = +15% per-beat (sedikit ruang).
+        # [DURASI-F3] BEAT PLAN = SATU-SATUNYA otoritas angka (dulu 3 tempat beda nilai → LLM disodori
+        # mistar bertentangan). Tiap beat: target + MIN + MAX dari toleransi TUNGGAL (_script_len_tol).
+        # MIN per-beat = lantai anti-KEPENDEKAN (akar 85% video pendek — dulu hanya ada plafon +15%).
+        # Plafon konkret per-beat jauh lebih dipatuhi LLM daripada total agregat (terbukti preset pendek).
+        # + Protokol swa-verifikasi: draft → hitung per-beat → revisi yang meleset → output `_beat_words`.
+        _bmin = lambda w: max(3, round(w * (1 - _tol)))
+        _bmax = lambda w: round(w * (1 + _tol)) + 1
         _plan_lines = "\n".join(
-            f"   beat {i+1} — {_ROLE_LABEL.get(b, b)}: ~{words.get(b,0)} words (HARD MAX {round(words.get(b,0)*1.15)+1}) — {round(100*words.get(b,0)/_wsum)}%"
+            f"   beat {i+1} — {_ROLE_LABEL.get(b, b)}: target {words.get(b,0)} words (MIN {_bmin(words.get(b,0))} / MAX {_bmax(words.get(b,0))}) — {round(100*words.get(b,0)/_wsum)}%"
             for i, b in enumerate(active))
         beat_plan = (
             f"\n📐 BEAT PLAN — {target_duration}s video = {len(active)} BEATS (compression-mapping, non-negotiable):\n"
             f"{_narrative_intent(target_duration, len(active))}\n"
-            f"Write EXACTLY these {len(active)} beats IN ORDER. Each beat has a HARD per-beat word budget — "
-            f"do NOT exceed any beat's MAX (over-writing ONE beat is the #1 cause of overruns):\n{_plan_lines}\n"
-            f"⚠️ PER-BEAT BUDGETS ARE BINDING: their sum (~{sum(words.get(b,0) for b in active)} words) is your TOTAL ceiling. "
-            f"Write a {target_duration}s script — NOT a longer one trimmed down.\n"
+            f"Write EXACTLY these {len(active)} beats IN ORDER. These are the ONLY word numbers that matter — "
+            f"each beat has a BINDING budget (MIN and MAX are both hard limits):\n{_plan_lines}\n"
+            f"⚠️ A beat UNDER its MIN makes the video too short and unusable — this is the #1 failure. "
+            f"A beat OVER its MAX makes the video overrun. Fill thin beats with CONCRETE substance "
+            f"(facts, numbers, names, vivid imagery) — never filler or repetition.\n"
+            f"✅ SELF-CHECK before answering (mandatory): draft all beats → COUNT the words of each beat → "
+            f"REVISE any beat outside its MIN–MAX → only then output. Report the final per-beat counts in "
+            f"`_beat_words` (they must be your real counts, not the targets).\n"
             + (f"Leave these JSON fields as EMPTY string \"\": {', '.join(inactive)}.\n" if inactive else "")
             + (f"Also output field \"core_facts_2\" (a SECOND distinct fact).\n" if "core_facts_2" in active else "")
             + f"The numbered section guide below is your CRAFT TOOLBOX — apply only the active beats' techniques.\n"
@@ -455,35 +480,32 @@ Maksimal SATU sebutan brand di seluruh script.{(' Arahan brand: ' + brand_cta_te
         # durasi mendarat di window QC. Ganti pemaksaan word-count kaku (akar 15s-overshoot/60s-undershoot).
         _P = float(delivery_p); _bspeed = float(base_speed) if base_speed else 0.95
         _Tspoken = max(1.0, float(preset_seconds) - float(render_overhead_sec or 0))
-        _Tlo, _Thi = round(_Tspoken * 0.90, 1), round(_Tspoken * 1.10, 1)
-        # PERBAIKAN PROMPT 2026-07-15 (root-cause durasi Lapis-1): (1) CABUT PINTU-KABUR — dulu prompt
-        # bilang "sistem set speed persis; utamakan nudge speed, rewrite panjang hanya bila terpaksa" →
-        # mengajari LLM bahwa jumlah kata boleh diabaikan (akar naskah-kependekan). (2) Target STRUKTUR
-        # (jumlah KALIMAT) yg BISA dilacak LLM — bukan jumlah kata yg mustahil dihitung saat menulis.
-        # (3) Panjang = SYARAT (durasi ditentukan olehnya), dicapai lewat KEKAYAAN isi bukan filler.
-        # (4) Preset-aware: 8-15s = risiko KEPANJANGAN; 30-90s = risiko KEPENDEKAN. Speed = mood saja
-        # (sistem tetap fine-tune speed diam-diam di generate(), TAPI prompt tak lagi menjadikannya alasan).
+        # [DURASI-F3] PROMPT FINAL (supersede versi 2026-07-15): (1) SERAGAM INGGRIS — blok ID di tengah
+        # kerangka EN terbukti kelas penurun-kepatuhan; bahasa NARASI output tetap diatur
+        # _content_language_block (jalur terpisah, tak tersentuh). (2) Angka HANYA di BEAT PLAN
+        # (satu otoritas; dulu 3 tempat beda nilai). (3) Hardcode ~14 kata/kalimat DIBUANG (angka
+        # karangan, bias-bahasa). (4) Pintu-kabur speed tetap TERCABUT (speed = mood saja; sistem
+        # yang menyetel speed final di generate()). (5) Preset-aware emphasis dipertahankan.
         _target_w = round(_P * _Tspoken)
-        _w_lo, _w_hi = round(0.9 * _P * _Tspoken), round(1.1 * _P * _Tspoken)
-        _sent = max(1, round(_target_w / 14))          # ~14 kata/kalimat → target STRUKTURAL yg bisa dilacak
         if len(active) <= 2:
-            _emph = (f"⚠️ ULTRA-SHORT: setiap kata berbobot. JANGAN melebihi {_w_hi} kata — kelebihan = video "
-                     f"kepanjangan & ditolak. Sampaikan SATU ide tajam, padat.")
+            _emph = ("⚠️ ULTRA-SHORT format: every word must earn its place. Exceeding a beat MAX makes the "
+                     "video overrun and be rejected. Deliver ONE razor-sharp idea, densely.")
         else:
-            _emph = (f"⚠️ KEPENDEKAN = penyebab gagal #1: bila sebuah beat terasa tipis, TAMBAH detail konkret "
-                     f"(fakta/angka/nama) — JANGAN berhenti lebih awal. Di bawah {_w_lo} kata = video terlalu pendek & tak terpakai.")
+            _emph = ("⚠️ UNDER-writing is the #1 cause of failure here: when a beat feels thin, ADD concrete "
+                     "substance (a fact, a number, a name) — never stop early, never pad with filler.")
         length_block = (
-            "🎙️ NASKAH INI AKAN DIBACAKAN SUARA — PANJANGNYA yang menentukan durasi video.\n"
-            f"VOICE: {voice_name or 'narator'} bicara ≈{_P} kata/detik. Untuk mengisi ≈{round(_Tspoken,1)}s suara, "
-            f"narasi HARUS sekitar {_target_w} kata (rentang {_w_lo}–{_w_hi}).\n"
-            f"📏 STRUKTUR (inilah cara menepati panjang — lacak STRUKTUR, bukan hitung kata): tulis sekitar "
-            f"{_sent} kalimat penuh di seluruh {len(active)} beat, dibagi sesuai bobot tiap beat. TIAP kalimat "
-            f"wajib berisi (fakta/angka/nama/citra nyata) — NOL filler, NOL pengulangan untuk sekadar menambah panjang.\n"
+            "🎙️ THIS SCRIPT WILL BE SPOKEN ALOUD — its LENGTH IS the video's duration. Length is a hard "
+            "requirement, met through RICHNESS of content, never filler.\n"
+            f"VOICE: {voice_name or 'the narrator'} speaks ≈{_P} words/sec, so ≈{round(_Tspoken,1)}s of audio "
+            f"needs ≈{_target_w} words total — but do NOT chase the total: hit each beat's MIN–MAX in the "
+            "BEAT PLAN above and the total lands automatically. The BEAT PLAN is the only word-count "
+            "authority.\n"
             f"{_emph}\n"
-            f"⏱ JEDA: maksimal ~{len(active)} jeda sengaja (≈1 per beat). Tiap em-dash (—) / elipsis (…) menambah "
-            f"≈0.6s hening — jangan berlebih; jaga pacing rapat.\n"
-            f"Set `speed` sesuai mood {niche_data.get('name', niche)} (murung→~0.85, tegas→~1.05, netral→~0.95). "
-            f"Laporkan word_count di `_duration_check`."
+            f"⏱ PAUSES: at most ~{len(active)} deliberate pauses total (≈1 per beat). Each em-dash (—) or "
+            "ellipsis (…) adds ≈0.6s of silence that eats runtime — keep pacing tight.\n"
+            f"Set `speed` to match the mood of {niche_data.get('name', niche)} (somber→~0.85, punchy→~1.05, "
+            "neutral→~0.95) — speed is for MOOD only; the system fine-tunes final timing. "
+            "Report word_count in `_duration_check` and real per-beat counts in `_beat_words`."
         )
     elif preset_seconds and len(active) <= 5:
         length_block = (
@@ -619,6 +641,7 @@ Return ONLY valid JSON — no markdown, no preamble, no explanation:
   "section_durations": {json.dumps(section_timing)},
   "tts_params": {{"speed": 0.95, "stability": 0.5, "style": 0.3}},
   "_duration_check": {{"word_count": 95, "est_seconds": 56.5}},
+  "_beat_words": {{"hook": 12, "core_facts": 45}},
   "background_music_mood": "specific mood, instrumentation, and emotional arc — not just one word",
   "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#shorts"]
 }}
@@ -1067,7 +1090,9 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
         feedback        = None  # Feedback dari attempt sebelumnya
         # F2d — target word-budget (LLM-QC length gate). Aktif hanya bila preset di-set.
         word_budget = round(max(1.0, preset_seconds - render_overhead_sec) * float(format_wps)) if (preset_seconds and format_wps) else None
-        _LEN_TOL    = float(os.getenv("SCRIPT_LENGTH_TOLERANCE", "0.12"))  # ketat: jaga durasi pas (was 0.25 → terlalu longgar, 82w lolos 108-budget → video pendek)
+        # [DURASI-F3] toleransi SATU-SUMBER utk gerbang durasi internal (dulu: _LEN_TOL dibaca tapi TAK
+        # PERNAH dipakai = config-mati, gerbang malah hardcode ±10% — insiden 'tiga penggaris' 2026-07-15).
+        _len_tol = _script_len_tol()
 
         for attempt in range(1, max_retry + 1):
             logger.info(f"[ScriptEngine] Attempt {attempt}/{max_retry} via {llm_provider}")
@@ -1150,20 +1175,29 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                 _rng       = (max(_plo, 0.7), min(_phi, 1.3))          # comfort-band: jaga MUTU suara lintas provider
                 _speed, _est, _pause, _swps = solve_speed_for_duration(_txt, _Tspoken, _base_p, speed_range=_rng,
                                                                        speed_alpha=_speed_alpha)  # [DURASI-F2]
-                _Tlo, _Thi = _Tspoken * 0.90, _Tspoken * 1.10
+                _Tlo, _Thi = _Tspoken * (1 - _len_tol), _Tspoken * (1 + _len_tol)   # [DURASI-F3] satu-sumber
                 script["tts_params"] = {**_tp, "speed": _speed}        # SPEED RESOLVED (sadar-jeda) → TTS
                 script["_duration_est"] = {"est_seconds": _est, "pause_seconds": _pause,   # observability
                                            "speed": _speed, "speech_wps": _swps, "words": wc}
                 if not (_Tlo <= _est <= _Thi):
                     length_ok = False
                     _np  = sum(_count_pauses(_txt).values())
-                    _act = (f"PERPENDEK naskah / KURANGI jeda (speed sudah {_speed})" if _est > _Thi
-                            else f"PERPANJANG naskah sedikit (speed sudah {_speed})")
+                    _act = (f"SHORTEN the script / cut pauses (speed already {_speed})" if _est > _Thi
+                            else f"LENGTHEN the script with concrete substance (speed already {_speed})")
+                    # [DURASI-F3] ground-truth PER-BEAT: sistem hitung kata NYATA tiap beat (bukan cuma
+                    # laporan model) → retry tahu persis beat mana yang tipis/gemuk (dulu cuma total).
+                    _beats_now = _beats_for_preset(preset_seconds)
+                    _quota     = _distribute_words(_beats_now, round(_swps * _Tspoken)) if _beats_now else {}
+                    _actual    = {b: len((script.get(b) or "").split()) for b in _beats_now}
+                    _offb      = [f"{b}: {_actual[b]}w vs target {_quota.get(b,0)}w"
+                                  for b in _beats_now
+                                  if _quota.get(b) and abs(_actual[b] - _quota[b]) / _quota[b] > _len_tol]
                     feedback = (feedback or []) + [
-                        f"DURATION FAIL: {wc} kata + {_pause:.1f}s jeda ({_np} tanda-jeda) → speed {_speed} → "
-                        f"est {_est:.1f}s di luar {_Tlo:.1f}–{_Thi:.1f}s (target {_Tspoken:.1f}s). {_act}. "
-                        f"Tiap em-dash/elipsis ≈0.6s hening — pangkas yang berlebih; sasaran ≈{round(_swps*_Tspoken)} kata "
-                        f"bila jeda minim (≈1/beat)."]
+                        f"DURATION FAIL: {wc} words + {_pause:.1f}s of pauses ({_np} pause marks) → speed {_speed} → "
+                        f"est {_est:.1f}s outside {_Tlo:.1f}–{_Thi:.1f}s (target {_Tspoken:.1f}s). {_act}. "
+                        f"Each em-dash/ellipsis ≈0.6s of silence — trim excess; aim ≈{round(_swps*_Tspoken)} words "
+                        f"with minimal pauses (≈1/beat)."
+                        + (f" OFF-BUDGET BEATS (fix exactly these): {'; '.join(_offb)}." if _offb else "")]
                     logger.info(f"[ScriptEngine] §10.A jeda-aware: {wc}w +{_pause:.1f}s jeda → speed {_speed} → "
                                 f"est {_est:.1f}s vs {_Tlo:.1f}-{_Thi:.1f}s → retry")
                 else:
