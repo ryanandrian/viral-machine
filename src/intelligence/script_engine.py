@@ -268,26 +268,33 @@ def pause_seconds(text: str, model: dict | None = None) -> float:
     return round(sum(c.get(k, 0) * float(m.get(k, 0)) for k in c), 3)
 
 def estimate_spoken_seconds(text: str, speed: float, delivery_wps: float,
-                            pause_model: dict | None = None) -> tuple:
-    """(est_detik, jeda_detik, speech_wps) — sadar-jeda, GENERIK lintas provider."""
+                            pause_model: dict | None = None, speed_alpha: float = 1.0) -> tuple:
+    """(est_detik, jeda_detik, speech_wps) — sadar-jeda, GENERIK lintas provider.
+    [DURASI-F2] speed_alpha = faktor respons-speed provider TERUKUR (tts_speed_response; EL≈1.32 =
+    melebih-lebihkan perintah speed). Laju efektif = swps × speed^α. Default 1.0 = patuh penuh
+    (perilaku lama persis — pemanggil tanpa data kalibrasi tak berubah)."""
     swps = max(0.1, float(delivery_wps) * _PAUSE_INFLATION)
+    a = float(speed_alpha) if speed_alpha and 0.5 <= float(speed_alpha) <= 2.0 else 1.0
     wc = len((text or "").split())
     pause = pause_seconds(text, pause_model)
-    speech = wc / (swps * max(0.1, float(speed or 1.0)))
+    speech = wc / (swps * (max(0.1, float(speed or 1.0)) ** a))
     return round(speech + pause, 2), pause, round(swps, 3)
 
 def solve_speed_for_duration(text: str, t_spoken: float, delivery_wps: float,
-                             speed_range=(0.7, 1.2), pause_model: dict | None = None) -> tuple:
+                             speed_range=(0.7, 1.2), pause_model: dict | None = None,
+                             speed_alpha: float = 1.0) -> tuple:
     """SOLVE pengali-kecepatan agar (bicara + jeda) = t_spoken; clamp ke rentang provider (generik).
-    Returns (speed, est_detik, jeda_detik, speech_wps)."""
+    [DURASI-F2] sadar-α: laju efektif = swps × speed^α → speed-diminta = (wc/(swps×budget))^(1/α).
+    α=1.0 (default/tanpa data kalibrasi) = rumus lama persis. Returns (speed, est_detik, jeda_detik, speech_wps)."""
     swps = max(0.1, float(delivery_wps) * _PAUSE_INFLATION)
+    a = float(speed_alpha) if speed_alpha and 0.5 <= float(speed_alpha) <= 2.0 else 1.0
     wc = len((text or "").split())
     pause = pause_seconds(text, pause_model)
     budget = max(0.4, float(t_spoken) - pause)          # detik tersisa utk bicara setelah jeda
     lo, hi = speed_range
-    need = wc / (swps * budget) if budget else hi
+    need = (wc / (swps * budget)) ** (1.0 / a) if budget else hi
     speed = round(min(hi, max(lo, need)), 3)
-    est = round(wc / (swps * speed) + pause, 2)
+    est = round(wc / (swps * (speed ** a)) + pause, 2)
     return speed, est, pause, round(swps, 3)
 
 
@@ -950,6 +957,26 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                                 f"(voice={getattr(run_config,'tts_voice',None)}) — override pace provider")
             except Exception:
                 pass
+            # [DURASI-F2] lapis TERTINGGI: pace TERKALIBRASI (voice×niche) dari render nyata
+            # (tts_pace_calibration via tenant_config; bukti replay: error taksiran 9.3%→4.7%).
+            # None (belum ada data/di luar guard) → lapis di atas tetap berlaku = perilaku lama persis.
+            _pcal = getattr(run_config, "pace_calibrated", None)
+            try:
+                if _pcal is not None and 1.0 <= float(_pcal) <= 4.0:
+                    format_wps = float(_pcal)
+                    logger.info(f"[ScriptEngine] F2 pace TERKALIBRASI: {format_wps} wps "
+                                f"(voice={getattr(run_config,'tts_voice',None)}×niche) — override lapis lama")
+            except Exception:
+                pass
+        # [DURASI-F2] α respons-speed provider (tts_speed_response; EL≈1.32). None/invalid → 1.0 (lama).
+        _speed_alpha = 1.0
+        if run_config:
+            try:
+                _sa = getattr(run_config, "tts_speed_alpha", None)
+                if _sa is not None and 0.5 <= float(_sa) <= 2.0:
+                    _speed_alpha = float(_sa)
+            except Exception:
+                _speed_alpha = 1.0
         # §10.A DURASI-VIA-SPEED: P = pace DASAR (delivery_wps @speed 1.0), DITANGKAP SEBELUM B1 → dipakai
         # di speed-block LLM. base_speed = speed-mood niche (hint awal; LLM nudge ∈[0.7,1.2] dari sini).
         # Speed jadi TUAS LLM (menyerap variansi kata), bukan dibakar ke word-budget. Gate = DURASI (bukan kata).
@@ -1121,7 +1148,8 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                 _Tspoken   = max(1.0, float(preset_seconds) - float(render_overhead_sec or 0))
                 _plo, _phi = _tsr(_tts_provider)                       # rentang speed provider (GENERIK, DB)
                 _rng       = (max(_plo, 0.7), min(_phi, 1.3))          # comfort-band: jaga MUTU suara lintas provider
-                _speed, _est, _pause, _swps = solve_speed_for_duration(_txt, _Tspoken, _base_p, speed_range=_rng)
+                _speed, _est, _pause, _swps = solve_speed_for_duration(_txt, _Tspoken, _base_p, speed_range=_rng,
+                                                                       speed_alpha=_speed_alpha)  # [DURASI-F2]
                 _Tlo, _Thi = _Tspoken * 0.90, _Tspoken * 1.10
                 script["tts_params"] = {**_tp, "speed": _speed}        # SPEED RESOLVED (sadar-jeda) → TTS
                 script["_duration_est"] = {"est_seconds": _est, "pause_seconds": _pause,   # observability

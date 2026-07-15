@@ -167,6 +167,10 @@ class TenantRunConfig:
     tts_model:         Optional[str] = None   # F1-05: model TTS opsional (mis. openai tts-1/tts-1-hd); None → default engine
     tts_voice_default_settings: Optional[dict] = None   # F1-05: default_settings voice dari voice_catalog (baseline delivery; no-hardcode)
     voice_delivery_wps: Optional[float] = None          # F5-01: pace PER-VOICE (voice_catalog.delivery_wps). None → fallback tts_profiles[provider]. Guard [1.0,4.0].
+    # [DURASI-F2] kalibrasi dari render NYATA (tabel tts_pace_calibration / tts_speed_response, migr 0163/0164).
+    # None = belum ada data → estimator jatuh ke lapis lama persis (nol regresi). Diisi _load_pace_calibration.
+    pace_calibrated:   Optional[float] = None           # pace (voice×niche EFEKTIF) → ('*') — prioritas TERTINGGI. Guard [1.0,4.0].
+    tts_speed_alpha:   Optional[float] = None           # α respons-speed provider (EL≈1.32). None/invalid → 1.0 (patuh penuh, perilaku lama).
     tts_api_key:       Optional[str] = None
 
     visual_api_key:    Optional[str] = None
@@ -356,8 +360,45 @@ class TenantConfigManager:
         if eff_niche and eff_niche != getattr(config, "_visual_niche_loaded", None):
             self._reload_niche_visual(config, eff_niche)
 
+        # [DURASI-F2] pace terkalibrasi (voice × niche EFEKTIF — semantik niche SAMA dgn blok DNA di atas,
+        # pelajaran bug s85) + α respons-speed provider. Gagal/kosong → None = jalur lama persis.
+        self._load_pace_calibration(config, eff_niche)
+
         self._cache[cache_key] = (config, time.time())
         return config
+
+    def _load_pace_calibration(self, config: "TenantRunConfig", eff_niche: str) -> None:
+        """[DURASI-F2] Muat pace terkalibrasi berlapis (voice×niche → voice,'*') + α respons-speed provider
+        dari tabel kalibrasi (ditulis pace_calibration.py dari render nyata). Fail-soft: apa pun gagal →
+        field tetap None → estimator memakai lapisan lama persis (nol regresi). Guard nilai di sini juga
+        (jangan percaya isi tabel membuta)."""
+        if not self._supabase:
+            return
+        vkey = getattr(config, "tts_voice", None)
+        try:
+            if vkey:
+                wanted = [n for n in (eff_niche, "*") if n]
+                pc = (self._supabase.table("tts_pace_calibration")
+                      .select("niche, delivery_wps").eq("voice_key", vkey)
+                      .in_("niche", wanted).execute())
+                by = {r["niche"]: r.get("delivery_wps") for r in (pc.data or [])}
+                val = by.get(eff_niche) if eff_niche in by else by.get("*")
+                if val is not None and 1.0 <= float(val) <= 4.0:
+                    config.pace_calibrated = float(val)
+                    logger.debug(f"[TenantConfig] F2 pace terkalibrasi {vkey}×{eff_niche or '*'} = {val}")
+        except Exception as e:
+            logger.debug(f"[TenantConfig] F2 pace calibration skip (non-fatal): {e}")
+        try:
+            prov = getattr(config, "tts_provider", None)
+            if prov:
+                sr = (self._supabase.table("tts_speed_response")
+                      .select("alpha").eq("provider", prov).limit(1).execute())
+                if sr.data:
+                    a = sr.data[0].get("alpha")
+                    if a is not None and 0.5 <= float(a) <= 2.0:
+                        config.tts_speed_alpha = float(a)
+        except Exception as e:
+            logger.debug(f"[TenantConfig] F2 speed-response skip (non-fatal): {e}")
 
     def _reload_niche_visual(self, config: "TenantRunConfig", eff_niche: str) -> None:
         """Muat visual_style + visual_fallbacks utk niche EFEKTIF (semantik kegagalan = IDENTIK blok
