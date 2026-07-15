@@ -248,10 +248,25 @@ class Pipeline:
             logger.info("STEP 5/7 | Generating TTS audio...")
             # Closed-loop durasi (NOL biaya TTS): target audio = preset − trailing_silence. Bila preset
             # di-set → tts_engine rapikan via atempo HANYA jika di luar window QC + faktor dalam batas aman.
+            # [DURASI-3, owner 2026-07-16] trailing = SATU rumus dgn budget script_engine + gerbang durasi
+            # + renderer (tenant trailing_silence → format_catalog.effective_trailing per-preset). Dulu env
+            # RENDER_TRAILING_SILENCE (1.5 umum) → korektor mengejar target BEDA dari 3 titik lain →
+            # meleset sistematis (terbukti 8s: naskah ditulis utk 7.0s, atempo memaksa ke 6.5s — suara
+            # dipercepat percuma + video final ~7.6s vs preset 8s).
             _preset_s = getattr(tenant_config, "duration_preset", None)
-            _trailing = float(os.getenv("RENDER_TRAILING_SILENCE", "1.5"))
-            _target_audio = (float(_preset_s) - _trailing) if _preset_s else None
-            tts_result = self.tts_engine.generate(script, tenant_config, target_audio_secs=_target_audio)
+            _target_audio, _trailing = None, None
+            if _preset_s:
+                try:
+                    from src.config.tenant_config import load_tenant_config as _ltc5
+                    _rc5 = _ltc5(tenant_config.tenant_id, getattr(tenant_config, "channel_id", None), getattr(tenant_config, "niche", None))
+                    _trailing = float(getattr(_rc5, "trailing_silence", 2.5) or 2.5)
+                except Exception:
+                    _trailing = 2.5
+                from src.config.format_catalog import effective_trailing as _eff_trail5
+                _trailing = _eff_trail5(_preset_s, _trailing)
+                _target_audio = float(_preset_s) - _trailing
+            tts_result = self.tts_engine.generate(script, tenant_config, target_audio_secs=_target_audio,
+                                                  trailing_secs=_trailing)
             audio_path, word_timestamps = (
                 tts_result if isinstance(tts_result, tuple)
                 else (tts_result, [])

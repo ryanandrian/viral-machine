@@ -154,12 +154,15 @@ class TTSEngine:
         tenant_config: TenantConfig,
         output_dir: str = "logs",
         target_audio_secs: float | None = None,
+        trailing_secs: float | None = None,
     ) -> tuple[str, list[dict]]:
         """
         Generate audio dari script.
         target_audio_secs: target durasi AUDIO (preset − trailing_silence). Bila di-set → closed-loop
         durasi: ukur audio, kalau di luar window QC → atempo (time-stretch, NOL biaya TTS) ke target +
         skala word_timestamps. None → perilaku lama (open-loop, non-breaking).
+        trailing_secs [DURASI-3]: trailing EFEKTIF per-preset (rumus SAMA dgn gerbang/renderer) utk
+        window _fit_duration. None → env RENDER_TRAILING_SILENCE (perilaku lama, non-breaking).
         Returns: (audio_path, word_timestamps)
         """
         os.makedirs(output_dir, exist_ok=True)
@@ -227,7 +230,7 @@ class TTSEngine:
                     _raw_secs = TTSEngine.get_duration(audio_path)
                     audio_path, word_timestamps = self._fit_duration(
                         audio_path, word_timestamps, float(target_audio_secs), output_dir,
-                        precomputed_actual=_raw_secs,
+                        precomputed_actual=_raw_secs, trailing_secs=trailing_secs,
                     )
                 # F4-01 observability: catat delivery NYATA (best-effort) → kalibrasi pace F5-01 + verifikasi P §10.D.
                 # DURASI-F1: + taksiran vs aktual + jeda (script["_duration_est"], target, teks, raw pra-atempo).
@@ -277,7 +280,7 @@ class TTSEngine:
 
     @staticmethod
     def _fit_duration(audio_path: str, word_timestamps: list, target_secs: float, output_dir: str,
-                      precomputed_actual: float | None = None):
+                      precomputed_actual: float | None = None, trailing_secs: float | None = None):
         """Closed-loop durasi TANPA biaya TTS ekstra (akar: kecepatan bicara EL bervariasi ±15%).
         SYARAT (kesepakatan owner): hanya dipakai pada audio dari naskah yg SUDAH lulus gate mutu;
         koreksi HANYA bila hasil di luar window QC; HANYA bila faktor dalam batas aman (suara tak rusak);
@@ -290,7 +293,9 @@ class TTSEngine:
             actual = float(precomputed_actual) if precomputed_actual is not None else TTSEngine.get_duration(audio_path)
             if actual <= 0:
                 return audio_path, word_timestamps
-            trailing = float(os.getenv("RENDER_TRAILING_SILENCE", "1.5"))
+            # [DURASI-3] trailing dari pemanggil = EFEKTIF per-preset (rumus sama dgn gerbang/renderer);
+            # None → env (perilaku lama persis, non-breaking).
+            trailing = float(trailing_secs) if trailing_secs is not None else float(os.getenv("RENDER_TRAILING_SILENCE", "1.5"))
             tol      = float(os.getenv("QC_DURATION_TOLERANCE", "0.15"))
             preset   = target_secs + trailing            # target FINAL ≈ preset (audio+trailing)
             final_est = actual + trailing
