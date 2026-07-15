@@ -296,16 +296,30 @@ class Pipeline:
                 _gate_lo  = float(_gate_preset) * (1 - _gate_tol)
                 _gate_hi  = float(_gate_preset) * (1 + _gate_tol)
                 _gate_proj = audio_duration + _gate_trail
-                if not (_gate_lo <= _gate_proj <= _gate_hi):
+                # KEPUTUSAN OWNER 2026-07-15: gerbang pra-visual TIDAK lagi membunuh near-miss.
+                # Near-miss (di luar ±tol tapi masih dalam PAGAR PENGAMAN) → LANJUT diproduksi →
+                # QC pasca-render (OPSI C) merutekannya ke `ready_with_issues` (tenant tinjau: publish/buang).
+                # HANYA meleset PARAH (naskah rusak, > factor×tol) yang di-stop pra-visual — hemat biaya
+                # render BYOK utk video yg pasti tak layak. Config-driven (§3.3), nol hardcode.
+                _gross_factor = float(os.getenv("QC_DURATION_GROSS_FACTOR", "2.0"))   # pagar = factor × toleransi
+                _gross_tol = _gate_tol * _gross_factor
+                _gross_lo  = float(_gate_preset) * (1 - _gross_tol)
+                _gross_hi  = float(_gate_preset) * (1 + _gross_tol)
+                if not (_gross_lo <= _gate_proj <= _gross_hi):
                     raise TTSError(
-                        f"Durasi diproyeksikan {_gate_proj:.1f}s (audio {audio_duration:.1f}s + jeda akhir "
-                        f"{_gate_trail}s) di luar ±{int(_gate_tol*100)}% preset {_gate_preset}s "
-                        f"(boleh {_gate_lo:.0f}–{_gate_hi:.0f}s) — dihentikan SEBELUM pembuatan visual "
-                        f"(biaya gambar & render TIDAK terpakai).", step="tts")
-                result["steps"]["duration_gate"] = {"status": "ok", "projected": round(_gate_proj, 1),
-                                                    "window": [round(_gate_lo), round(_gate_hi)]}
-                logger.info(f"[Pipeline] Gerbang durasi pra-visual LOLOS: proyeksi {_gate_proj:.1f}s "
-                            f"dalam window {_gate_lo:.0f}–{_gate_hi:.0f}s")
+                        f"Durasi proyeksi {_gate_proj:.1f}s meleset PARAH dari preset {_gate_preset}s "
+                        f"(pagar {_gross_lo:.0f}–{_gross_hi:.0f}s) — naskah tak layak, dihentikan sebelum "
+                        f"biaya render terpakai; diproduksi ulang otomatis siklus berikutnya.", step="tts")
+                _within = _gate_lo <= _gate_proj <= _gate_hi
+                result["steps"]["duration_gate"] = {
+                    "status": "ok" if _within else "near_miss",
+                    "projected": round(_gate_proj, 1), "window": [round(_gate_lo), round(_gate_hi)]}
+                if _within:
+                    logger.info(f"[Pipeline] Gerbang durasi pra-visual LOLOS: proyeksi {_gate_proj:.1f}s "
+                                f"dalam window {_gate_lo:.0f}–{_gate_hi:.0f}s")
+                else:
+                    logger.info(f"[Pipeline] Durasi NEAR-MISS {_gate_proj:.1f}s (window {_gate_lo:.0f}–{_gate_hi:.0f}s, "
+                                f"pagar {_gross_lo:.0f}–{_gross_hi:.0f}s) — LANJUT produksi → review pasca-render (bukan dibuang)")
             # Image-gen per-preset (MULTI_FORMAT §3): durasi per-beat (1 image/beat) dari word_timestamps
             # NYATA → sinkron TTS. SUMBER TUNGGAL: dikonsumsi visual_assembler (bake) & video_renderer (concat).
             from src.intelligence.script_engine import compute_beat_durations

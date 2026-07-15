@@ -112,22 +112,40 @@ class TelegramNotifier:
         channel      = self._channel_name(run_config, {"tenant_id": tenant_id})
         duration_str = f"{duration_secs:.1f}s" if duration_secs else "—"
 
+        # POLES PESAN (owner 2026-07-15): nada TENANG & bermartabat — video ber-catatan = PILIHAN
+        # tenant, bukan "GAGAL". Alasan teknis mentah ('di luar ±15% preset 60s') DITERJEMAHKAN ke
+        # bahasa manusia (fallback aman utk alasan tak dikenal — bukan parsing rapuh).
+        note = self._humanize_qc_reason(qc_reason)
+
         lines = []
         if is_test:
-            lines.append("🧪 <b>VIDEO UJI (PRIVATE)</b> — dari tombol \"Test now\", memakai kredit AI (BYOK) Anda.")
+            lines.append("🧪 <b>Video uji (privat)</b> — dari tombol \"Test\", memakai kredit AI (BYOK) Anda.")
         lines += [
-            f"⚠️ <b>[{channel}] QC tak lolos — di-publish PRIVAT untuk Anda tinjau</b>",
+            f"🎬 <b>[{channel}] 1 video selesai — menunggu keputusan Anda</b>",
             f"📋 Topik: <i>{self._escape(str(topic)[:100])}</i>",
-            f"❌ Alasan: {self._escape(qc_reason)}",
-            f"⏱ Durasi: {duration_str}  |  💾 {size_mb} MB",
+            f"📝 {note}",
+            f"⏱ Durasi: {duration_str}",
         ]
         if url:
-            lines.append(f"🔒 Privat: {url}")
-        if recommendation:
-            lines.append(f"💡 Saran: {self._escape(recommendation)}")
-        lines.append("👉 Anda putuskan: jadikan <b>publik</b> atau <b>hapus</b>.")
+            lines.append(f"👀 Pratinjau: {url}")
+        lines.append("👉 Tinjau lalu putuskan: <b>Terbitkan</b> atau <b>Buat ulang</b>.")
         lines.append(f"<code>{run_id}</code>")
         return self._send(chat_id, "\n".join(lines))
+
+    @staticmethod
+    def _humanize_qc_reason(reason: str) -> str:
+        """Terjemah alasan QC teknis → kalimat manusiawi menenangkan (fallback aman utk yg tak dikenal).
+        Tujuan (owner 2026-07-15): tenant tak melihat jargon '±15% preset 60s' yg bikin panik/menilai mesin buruk."""
+        r = (reason or "").lower()
+        if "durasi" in r:
+            return "Durasinya sedikit berbeda dari target ideal — video tetap layak; Anda yang menentukan."
+        if "aspect" in r or "rasio" in r or "9:16" in r:
+            return "Format layarnya perlu Anda cek sebentar sebelum tayang."
+        if "audio" in r or "suara" in r:
+            return "Bagian suaranya perlu Anda cek sebentar sebelum tayang."
+        if "kecil" in r or "mb" in r or "render" in r:
+            return "Berkas videonya perlu Anda tinjau sebentar sebelum tayang."
+        return "Video ini perlu Anda tinjau sebentar sebelum tayang."
 
     def notify_circuit_break(self, tenant_id: str, channel_id: str, reason: str,
                              channel_name: str = "") -> bool:

@@ -449,23 +449,34 @@ Maksimal SATU sebutan brand di seluruh script.{(' Arahan brand: ' + brand_cta_te
         _P = float(delivery_p); _bspeed = float(base_speed) if base_speed else 0.95
         _Tspoken = max(1.0, float(preset_seconds) - float(render_overhead_sec or 0))
         _Tlo, _Thi = round(_Tspoken * 0.90, 1), round(_Tspoken * 1.10, 1)
+        # PERBAIKAN PROMPT 2026-07-15 (root-cause durasi Lapis-1): (1) CABUT PINTU-KABUR — dulu prompt
+        # bilang "sistem set speed persis; utamakan nudge speed, rewrite panjang hanya bila terpaksa" →
+        # mengajari LLM bahwa jumlah kata boleh diabaikan (akar naskah-kependekan). (2) Target STRUKTUR
+        # (jumlah KALIMAT) yg BISA dilacak LLM — bukan jumlah kata yg mustahil dihitung saat menulis.
+        # (3) Panjang = SYARAT (durasi ditentukan olehnya), dicapai lewat KEKAYAAN isi bukan filler.
+        # (4) Preset-aware: 8-15s = risiko KEPANJANGAN; 30-90s = risiko KEPENDEKAN. Speed = mood saja
+        # (sistem tetap fine-tune speed diam-diam di generate(), TAPI prompt tak lagi menjadikannya alasan).
+        _target_w = round(_P * _Tspoken)
+        _w_lo, _w_hi = round(0.9 * _P * _Tspoken), round(1.1 * _P * _Tspoken)
+        _sent = max(1, round(_target_w / 14))          # ~14 kata/kalimat → target STRUKTURAL yg bisa dilacak
+        if len(active) <= 2:
+            _emph = (f"⚠️ ULTRA-SHORT: setiap kata berbobot. JANGAN melebihi {_w_hi} kata — kelebihan = video "
+                     f"kepanjangan & ditolak. Sampaikan SATU ide tajam, padat.")
+        else:
+            _emph = (f"⚠️ KEPENDEKAN = penyebab gagal #1: bila sebuah beat terasa tipis, TAMBAH detail konkret "
+                     f"(fakta/angka/nama) — JANGAN berhenti lebih awal. Di bawah {_w_lo} kata = video terlalu pendek & tak terpakai.")
         length_block = (
-            "🎙️ THIS SCRIPT WILL BE SPOKEN — you control BOTH the words and the pace.\n"
-            f"VOICE: {voice_name or 'the narrator'} ({tts_provider or 'TTS'}) speaks ≈{_P} words/sec at speed 1.0.\n"
-            f"Set `speed` ∈ [0.7,1.2] to match the mood of {niche_data.get('name', niche)} "
-            "(somber/dramatic→~0.85, punchy/urgent→~1.05, neutral→~0.95).\n"
-            f"The {len(active)} beats TOGETHER must last ≈{round(_Tspoken,1)}s (acceptable {_Tlo}–{_Thi}s), keeping proportions.\n"
-            f"KEEP TOTAL WORDS ≈{round(_P*_Tspoken)} (hard range {round(0.7*_P*_Tspoken)}–{round(1.2*_P*_Tspoken)}). "
-            f"The system sets the EXACT speed to land on {round(_Tspoken,1)}s — your job is to keep word count in that range (NEVER exceed {round(1.2*_P*_Tspoken)}).\n"
-            f"⏱ PAUSE BUDGET — at most ~{len(active)} deliberate pauses total (≈1 per beat). Each em-dash (—) or "
-            f"ellipsis (…) adds ≈0.6s of SILENCE that EATS runtime — over-using pauses is the #1 cause of overruns. "
-            f"Keep pacing tight; let speed (not pauses) carry the mood.\n"
-            f" 1. Pick a mood-fitting base speed (suggested for this niche: ~{_bspeed}).\n"
-            f" 2. Write the {len(active)} beats naturally — STORY FIRST.\n"
-            f" 3. Count words W. Spoken ≈ W ÷ ({_P} × speed).\n"
-            f" 4. PREFER nudging `speed` within [0.7,1.2] to fit your actual W; rewrite length only if speed can't reach {_Tlo}–{_Thi}s.\n"
-            " 5. Report word_count + est_seconds in `_duration_check`; confirm in range.\n"
-            "Words serve the story; speed makes it land on time."
+            "🎙️ NASKAH INI AKAN DIBACAKAN SUARA — PANJANGNYA yang menentukan durasi video.\n"
+            f"VOICE: {voice_name or 'narator'} bicara ≈{_P} kata/detik. Untuk mengisi ≈{round(_Tspoken,1)}s suara, "
+            f"narasi HARUS sekitar {_target_w} kata (rentang {_w_lo}–{_w_hi}).\n"
+            f"📏 STRUKTUR (inilah cara menepati panjang — lacak STRUKTUR, bukan hitung kata): tulis sekitar "
+            f"{_sent} kalimat penuh di seluruh {len(active)} beat, dibagi sesuai bobot tiap beat. TIAP kalimat "
+            f"wajib berisi (fakta/angka/nama/citra nyata) — NOL filler, NOL pengulangan untuk sekadar menambah panjang.\n"
+            f"{_emph}\n"
+            f"⏱ JEDA: maksimal ~{len(active)} jeda sengaja (≈1 per beat). Tiap em-dash (—) / elipsis (…) menambah "
+            f"≈0.6s hening — jangan berlebih; jaga pacing rapat.\n"
+            f"Set `speed` sesuai mood {niche_data.get('name', niche)} (murung→~0.85, tegas→~1.05, netral→~0.95). "
+            f"Laporkan word_count di `_duration_check`."
         )
     elif preset_seconds and len(active) <= 5:
         length_block = (
