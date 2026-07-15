@@ -6,7 +6,9 @@
 >
 > Status LIVE per-fase = `PROGRESS.md`. Pondasi multi-format = `MULTI_FORMAT_STUDIO.md`. Prinsip: [[feedback_no_hardcode]] · [[feedback_analysis_discipline]].
 >
-> **🔄 REKONSILIASI AUDIT 2026-07-01:** **Akar durasi (§2) + E3 length-gate = TUNTAS** via REMEDIASI **F4 durasi-via-speed** (LLM pilih kata+speed + per-beat word-budget; commit `8670fc3`, migr 0078/0079; 9/9 preset lolos). QC v2 Lapis 1-3 (F0-F2) = LIVE. **Masih ROADMAP (belum dibangun):** F3 quarantine · F4 self-critic pra-submit · F5 belajar-dari-QC-fail · F6 dashboard "robot belajar apa" · F7 consent-fallback penuh. **Sumber sisa DEFINITIF = `PROGRESS.md` blok AUDIT REKONSILIASI.**
+> **🔄 REKONSILIASI AUDIT 2026-07-01:** F4 durasi-via-speed diterapkan (commit `8670fc3`, migr 0078/0079). QC v2 Lapis 1-3 (F0-F2) = LIVE. **Masih ROADMAP (belum dibangun):** F3 quarantine · F4 self-critic pra-submit · F5 belajar-dari-QC-fail · F6 dashboard · F7 consent-fallback penuh.
+>
+> **⚠️ KOREKSI 2026-07-15 (data produksi membantah klaim lama "durasi TUNTAS"):** durasi MASIH sering meleset di produksi beragam-niche (±10 dari 206 run gagal "di luar ±15%"; contoh nyata: preset 60s → audio 46,8s). **ROOT-CAUSE (verified log+kode):** (1) *Lapis-1, akar utama* — LLM sering menulis naskah KEPENDEKAN (mis. 72–86 kata dari target ~134) menembus 3× retry, lalu sistem "pakai seadanya" (best-score) → durasi mustahil tercapai walau suara diperlambat mentok; (2) *Lapis-2, menipu* — estimator durasi (`solve_speed_for_duration`, seed `_PAUSE_INFLATION`=1.10 belum dikalibrasi per-suara) meleset ~9% → naskah kadang lolos gate padahal nyatanya pendek. Perbaikan lampau semua menyentuh Lapis-2 (kalibrasi/tuas speed/toleransi); **Lapis-1 belum tuntas** (tak ada pemaksaan panjang yang benar-benar mengikat). Rencana perbaikan = usulan terbuka, belum dikerjakan.
 >
 > **Aturan dokumen ini:** setiap perubahan QC/quality WAJIB lewat sini dulu (propose → approve → implement). Jangan ubah ambang QC di kode tanpa update dokumen ini.
 
@@ -179,9 +181,27 @@ Tujuan: tutup loop tidak hanya di **input** (script/hook dari analytics) tapi ju
 
 ---
 
+## 5b. PARAMETER DURASI & QC — LOKASI KONTROL (verified codebase 2026-07-15; NOL hardcode nilai bisnis)
+Semua parameter dikontrol via ADMIN PANEL atau ENV — tidak ada nilai bisnis yang terkunci di kode.
+
+| Parameter | Dikontrol di | Sumber teknis |
+|---|---|---|
+| Preset durasi (8–90s), aktif/nonaktif, segmentasi beat, jumlah gambar, use-case | **ADMIN** (Catalog) | tabel `duration_presets` |
+| `render_mode` per-preset (image_seq / ai_video) | **ADMIN** (Catalog) | `duration_presets.render_mode` |
+| Jeda-akhir KHUSUS per-preset (mis. 8s=1.0s) | **ADMIN** (Catalog) | `duration_presets.trailing_silence_override` |
+| Kecepatan bicara per-suara (`delivery_wps`) + rentang speed | **ADMIN** (Catalog) | `voice_catalog` / `tts_profiles.param_schema` |
+| Model/suara/niche/kualitas per-channel | **tenant/admin** | tabel `channels` |
+| Toleransi durasi lolos/gagal (0.15) | **ENV** `QC_DURATION_TOLERANCE` | `pipeline.py` (gate pra-visual & pre-publish) |
+| Toleransi panjang naskah (0.12) | **ENV** `SCRIPT_LENGTH_TOLERANCE` | `script_engine.py` |
+| Batas regang suara/atempo (0.80–1.35) | **ENV** `TTS_ATEMPO_MIN/MAX` | `tts_engine._fit_duration` |
+| Jeda-akhir default global (1.5s) | **ENV** `RENDER_TRAILING_SILENCE` | `tts_engine` (preset bisa menimpa via admin) |
+| Integritas render (ukuran/durasi/klip/audio/aspek min) | **ENV** `QC_MIN_SIZE_MB`·`QC_MIN_DURATION`·`QC_MAX_DURATION`·`QC_MIN_CLIPS`·`QC_REQUIRE_AUDIO`·`QC_ASPECT`·`QC_ASPECT_TOLERANCE` | `pipeline._pre_publish_qc` |
+
+> **Catatan:** semua variabel ENV di atas kini **tertulis eksplisit + berkomentar di `.env`** (nilai = default kode; 2026-07-15). Ambang QC sengaja di ENV (platform-wide, bukan per-tenant). *(Belum ada di admin panel — bila ingin diatur dari layar admin, itu item terpisah menunggu ketok owner.)*
+
 ## 6. Keputusan (2026-06-13, expert) + yang masih perlu data
 **DIPUTUSKAN** (owner delegasi keputusan teknis — [[feedback_owner_delegates_expert_decisions]]):
-1. `QC_DURATION_TOLERANCE` = **0.15 (15%)** — **diselaraskan ke KODE** (`pipeline.py:562`). *(Revisi 2026-06-16: sebelumnya tertulis 20%; owner — toleransi BUKAN lever; akar durasi diperbaiki di WPS §2, bukan dilonggarkan.)*
+1. `QC_DURATION_TOLERANCE` = **0.15 (15%)** — kini di ENV berkomentar (lihat §5b; anchor lama `pipeline.py:562` BASI — nilai dibaca di gate pra-visual & `_pre_publish_qc`, grep ulang). *(toleransi BUKAN lever; akar durasi diperbaiki di §2/root-cause, bukan dilonggarkan.)*
 2. **QC-fail durasi → REVIEW-IN-DOMAIN + APPROVE (OPSI C, owner 2026-06-17; supersede "publish-private" 2026-06-16)**, **bukan dibuang**. Video bermasalah **tetap di buffer S3** (`ready_with_issues`) → tenant **tinjau dari dashboard** + **advisory (alasan + rekomendasi)** → **tenant putuskan** Pakai (publish, kuota−1) / Buang / TTL. **TIDAK auto-upload ke YouTube** (tutup cheat flip-Studio + off-schedule). Retry/regenerate = §3/F3 + **direct** pasca-perbaikan (bukan loop bakar-kredit). **Integrasi alur §12c = OPSI C** (producer hanya stok; publisher hanya publish `ready`; issue ditinjau di domain kita — lihat §3).
 3. Self-critic = **heuristik dulu**; LLM-vision ditunda (biaya × ribuan tenant).
 4. Prioritas = **G-final integritas dulu (✅ DONE)** → QC-relatif nyusul bersama field Preset (F1).
