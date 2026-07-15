@@ -77,15 +77,37 @@ def _run_provider(provider_name: str, text: str, config: dict, output_dir: str) 
     return str(audio), timestamps
 
 
-def _log_delivery_sample(tenant_config, config: dict, provider_name: str, word_count: int, audio_path: str) -> None:
+def _log_delivery_sample(tenant_config, config: dict, provider_name: str, word_count: int, audio_path: str,
+                         script: dict | None = None, target_audio_secs: float | None = None,
+                         text: str | None = None, raw_audio_secs: float | None = None) -> None:
     """F4-01: 1 baris per render TTS SUKSES → tts_delivery_samples (delivery NYATA per voice×speed).
     Dipakai F5-01 (kalibrasi pace EWMA → ganti seed P) + verifikasi akurasi P §10.D. Best-effort/fail-soft,
-    NOL pengaruh produksi. speed = yg BENAR-BENAR dipakai provider (incl. override LLM §10.A)."""
+    NOL pengaruh produksi. speed = yg BENAR-BENAR dipakai provider (incl. override LLM §10.A).
+
+    DURASI-F1 (instrumentasi): rekam TAKSIRAN model vs AKTUAL + rincian jeda → error estimator TERUKUR (kalibrasi F2).
+      • predicted_secs/pause_secs = dari script["_duration_est"] (diisi script_engine utk run ber-preset; None → NULL)
+      • raw_audio_secs            = durasi MENTAH sebelum atempo (pembanding sah; None → pakai audio_secs = tanpa closed-loop)
+      • target_secs               = target audio (preset − trailing)
+      • pause_counts              = _count_pauses(text) — rincian tanda-jeda dari naskah
+    Semua field F1 di-guard; gagal hitung salah satu TIDAK menggagalkan insert (nullable). NOL ffprobe tambahan."""
     try:
         niche = config.get("niche")
         _vs   = (config.get("tts_voice_settings") or {}).get(niche) or {}
         speed = _vs.get("speed") or (config.get("tts_voice_default_settings") or {}).get("speed") or 1.0
         audio_secs = TTSEngine.get_duration(audio_path)
+        # F1: field observasi (masing-masing best-effort; None bila tak tersedia → kolom NULL)
+        _de = (script or {}).get("_duration_est") if isinstance(script, dict) else None
+        _de = _de if isinstance(_de, dict) else {}
+        _predicted = _de.get("est_seconds")
+        _pause_est = _de.get("pause_seconds")
+        _raw = raw_audio_secs if raw_audio_secs is not None else audio_secs   # tanpa closed-loop, mentah = final
+        _pause_counts = None
+        if text:
+            try:
+                from src.intelligence.script_engine import _count_pauses   # lazy: hindari circular + fail-soft
+                _pause_counts = _count_pauses(text)
+            except Exception:
+                _pause_counts = None
         from supabase import create_client
         sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
         sb.table("tts_delivery_samples").insert({
@@ -98,8 +120,16 @@ def _log_delivery_sample(tenant_config, config: dict, provider_name: str, word_c
             "words":      int(word_count),
             "audio_secs": round(float(audio_secs), 2),
             "preset":     getattr(tenant_config, "duration_preset", None),
+            # DURASI-F1
+            "predicted_secs": round(float(_predicted), 2) if _predicted is not None else None,
+            "raw_audio_secs": round(float(_raw), 2) if _raw is not None else None,
+            "target_secs":    round(float(target_audio_secs), 2) if target_audio_secs is not None else None,
+            "pause_secs":     round(float(_pause_est), 2) if _pause_est is not None else None,
+            "pause_counts":   _pause_counts,
         }).execute()
-        logger.info(f"[TTSEngine] F4-01 sample: {word_count}w @spd{speed} → {audio_secs:.1f}s ({provider_name}/{niche})")
+        logger.info(f"[TTSEngine] F4-01 sample: {word_count}w @spd{speed} → {audio_secs:.1f}s "
+                    f"(raw {round(float(_raw),1) if _raw is not None else '?'}s, pred "
+                    f"{round(float(_predicted),1) if _predicted is not None else '?'}s) ({provider_name}/{niche})")
     except Exception as e:
         logger.debug(f"[TTSEngine] log delivery sample skip (non-fatal): {e}")
 
@@ -189,12 +219,21 @@ class TTSEngine:
                              "~80% estimasi"
                 logger.info(f"[TTSEngine] ✅ {primary}: {size_kb:.1f}KB | {ts_count} word timestamps ({ts_quality})")
                 # Closed-loop durasi (opsional, NOL biaya TTS): rapikan via atempo bila di luar window.
+                # DURASI-F1: ukur durasi MENTAH SEKALI di sini → dipakai-ulang oleh _fit_duration (lewati
+                # ffprobe internalnya) + direkam ke sampel (raw_audio_secs). Jumlah ffprobe = SAMA dgn
+                # sebelumnya → NOL penambahan waktu pipeline.
+                _raw_secs = None
                 if target_audio_secs and target_audio_secs > 0:
+                    _raw_secs = TTSEngine.get_duration(audio_path)
                     audio_path, word_timestamps = self._fit_duration(
-                        audio_path, word_timestamps, float(target_audio_secs), output_dir
+                        audio_path, word_timestamps, float(target_audio_secs), output_dir,
+                        precomputed_actual=_raw_secs,
                     )
                 # F4-01 observability: catat delivery NYATA (best-effort) → kalibrasi pace F5-01 + verifikasi P §10.D.
-                _log_delivery_sample(tenant_config, config, primary, word_count, audio_path)
+                # DURASI-F1: + taksiran vs aktual + jeda (script["_duration_est"], target, teks, raw pra-atempo).
+                _log_delivery_sample(tenant_config, config, primary, word_count, audio_path,
+                                     script=script, target_audio_secs=target_audio_secs,
+                                     text=text, raw_audio_secs=_raw_secs)
                 # B2 cost-tracking: TTS ditagih per KARAKTER teks (fakta billing ElevenLabs/OpenAI;
                 # edge gratis → harga 0 di katalog). Dicatat per model TTS channel. Fail-soft.
                 try:
@@ -237,15 +276,18 @@ class TTSEngine:
             return 0.0
 
     @staticmethod
-    def _fit_duration(audio_path: str, word_timestamps: list, target_secs: float, output_dir: str):
+    def _fit_duration(audio_path: str, word_timestamps: list, target_secs: float, output_dir: str,
+                      precomputed_actual: float | None = None):
         """Closed-loop durasi TANPA biaya TTS ekstra (akar: kecepatan bicara EL bervariasi ±15%).
         SYARAT (kesepakatan owner): hanya dipakai pada audio dari naskah yg SUDAH lulus gate mutu;
         koreksi HANYA bila hasil di luar window QC; HANYA bila faktor dalam batas aman (suara tak rusak);
         kalau di luar batas → biarkan apa adanya (→ ready_with_issues, mutu suara > paksa durasi).
         Caption: word_timestamps diskala dgn faktor yg sama → tetap sinkron.
-        atempo: out_dur = in_dur / factor (pitch tetap)."""
+        atempo: out_dur = in_dur / factor (pitch tetap).
+        DURASI-F1: precomputed_actual = durasi mentah yg SUDAH diukur pemanggil → dipakai-ulang
+        (hemat 1 ffprobe, nol tambah waktu). None → ukur sendiri (perilaku lama persis)."""
         try:
-            actual = TTSEngine.get_duration(audio_path)
+            actual = float(precomputed_actual) if precomputed_actual is not None else TTSEngine.get_duration(audio_path)
             if actual <= 0:
                 return audio_path, word_timestamps
             trailing = float(os.getenv("RENDER_TRAILING_SILENCE", "1.5"))
