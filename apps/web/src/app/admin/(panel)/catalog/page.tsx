@@ -118,11 +118,17 @@ const ADD_FIELDS: Record<string, { table: string; fields: [string, string][] }> 
 };
 const PK_OF: Record<string, string> = { models: "model_key", providers: "provider_key", voice: "voice_key", languages: "locale", moods: "mood_id", ttsprof: "provider_key", durations: "seconds" };
 
+// [DURASI-F5] Bobot antar-adegan (content_beats.weight/weight_locked) — form di tab Durasi.
+type BeatW = { beat_key: string; sort_order: number; label_id: string; label_en: string; weight: number; weight_locked: boolean };
+
 export default function AdminCatalogPage() {
   const [tab, setTab] = useState("providers");
   const [data, setData] = useState<Cat | null>(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<React.ReactNode>(null);
+  // [DURASI-F5] bobot antar-adegan + preset terpilih utk pratinjau porsi narasi.
+  const [beatW, setBeatW] = useState<BeatW[]>([]);
+  const [wPreset, setWPreset] = useState<string>("");
   const [add, setAdd] = useState<Record<string, string> | null>(null);
   // A4: error form INLINE di modal (bukan toast 2 dtk) — {node ReactNode, col field bermasalah}.
   const [formErr, setFormErr] = useState<{ node: React.ReactNode; col?: string } | null>(null);
@@ -137,11 +143,20 @@ export default function AdminCatalogPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const r = await fetch("/api/admin/catalog");
+    // [DURASI-F5] beats dimuat paralel (fail-soft: gagal → seksi bobot tampil kosong, tab lain utuh).
+    const [r, rb] = await Promise.all([fetch("/api/admin/catalog"), fetch("/api/admin/beats")]);
     if (r.ok) setData(await r.json());
+    if (rb.ok) { const jb = await rb.json().catch(() => ({ beats: [] })); setBeatW(jb.beats ?? []); }
     setLoading(false);
   }, []);
   useEffect(() => { load(); }, [load]);
+  // [DURASI-F5] preset default utk pratinjau porsi: is_default → else preset aktif pertama.
+  useEffect(() => {
+    if (wPreset || !data) return;
+    const act = (data.duration_presets ?? []).filter((d) => d.is_active);
+    const def = act.find((d) => d.is_default) ?? act[0];
+    if (def) setWPreset(String(def.seconds));
+  }, [data, wPreset]);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2200); return () => clearTimeout(t); }, [toast]);
   useEffect(() => { if (add) setFormErr(null); }, [add !== null]);  // buka modal Tambah → bersihkan error lama
 
@@ -231,6 +246,21 @@ export default function AdminCatalogPage() {
     const r = await fetch("/api/admin/catalog", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table: "voice_catalog", key, patch: { delivery_wps: val.trim() === "" ? null : val.trim() } }) });
     if (r.ok) { setToast(val.trim() === "" ? "Pace di-reset (ikut engine)" : "Pace voice disimpan"); setPaceEdit(null); await load(); }
     else { const j = await r.json().catch(() => ({})); setToast(<><Bi id="Gagal: " en="Failed: " />{errText(String(j.error ?? r.status), j.detail)}</>); }
+  }
+  // [DURASI-F5] simpan bobot / kunci beat (auto-save; server pagari bulat 1–30 & boolean).
+  async function patchBeatW(beat_key: string, body: { weight?: number; weight_locked?: boolean }) {
+    const r = await fetch("/api/admin/beats", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ beat_key, ...body }) });
+    if (r.ok) {
+      setToast(body.weight_locked !== undefined
+        ? (body.weight_locked ? <Bi id="Adegan dikunci — mesin tidak akan menyentuh bobotnya" en="Beat locked — the machine won't touch its weight" />
+                              : <Bi id="Kunci dibuka — mesin boleh menyelaraskan lagi" en="Unlocked — the machine may align it again" />)
+        : "Tersimpan");
+      const rb = await fetch("/api/admin/beats");
+      if (rb.ok) { const jb = await rb.json().catch(() => ({ beats: [] })); setBeatW(jb.beats ?? []); }
+    } else {
+      const j = await r.json().catch(() => ({}));
+      setToast(<><Bi id="Gagal: " en="Failed: " />{String(j.hint ?? j.error ?? r.status)}</>);
+    }
   }
   // M2: CRUD musik di catalog (upload→S3, edit, delete, play). Aset = S3 (aturan owner). Durasi dibaca client-side.
   const [mUp, setMUp] = useState<{ name: string; niche: string; mood: string; bpm: string; duration_s: string; file: File | null } | null>(null);
@@ -404,6 +434,59 @@ export default function AdminCatalogPage() {
               </tr>))}</tbody>
           </table></div></div>}
           <PresetTables />
+
+          {/* [DURASI-F5] Bobot antar-adegan — porsi kata narasi per beat (GLOBAL: semua preset/niche/tenant).
+              Mesin (align_beat_weights, self_learning harian) menyelaraskan otomatis dari data produksi;
+              🔒 = weight_locked (mesin tidak menyentuh). Pratinjau % = rumus persis _distribute_words
+              (weight ÷ Σ weight beat-aktif preset terpilih; beat di luar kosakata dihitung 5 — mirror engine). */}
+          <div className="card" style={{ marginTop: "1.25rem", padding: "1rem" }}>
+            <h4 style={{ margin: "0 0 0.3rem" }}><Bi id="Bobot antar-adegan (berlaku global)" en="Per-beat weights (global)" /></h4>
+            <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "0.75rem" }}>
+              <Bi id="Bobot menentukan porsi kata narasi tiap adegan — berlaku untuk SEMUA preset, niche, dan tenant. Mesin menyelaraskannya otomatis secara berkala dari data produksi nyata (bergeser halus, maks ±20% per hari). Kunci 🔒 adegan yang tidak ingin disentuh mesin. Ubah manual hanya bila benar-benar perlu."
+                  en="Weights set each beat's share of narration words — applied to ALL presets, niches, and tenants. The machine auto-aligns them periodically from real production data (gentle steps, max ±20%/day). Lock 🔒 a beat to keep the machine from touching it. Adjust manually only when truly needed." />
+            </p>
+            <div style={{ marginBottom: "0.6rem", fontSize: "var(--text-sm)" }}>
+              <label className="muted" style={{ marginRight: 8 }}><Bi id="Pratinjau porsi narasi pada preset:" en="Preview narration share for preset:" /></label>
+              <select value={wPreset} onChange={(e) => setWPreset(e.target.value)}>
+                {(data?.duration_presets ?? []).filter((d) => d.is_active).map((d) => (
+                  <option key={String(d.seconds)} value={String(d.seconds)}>{String(d.seconds)}s</option>
+                ))}
+              </select>
+            </div>
+            {(() => {
+              const act = ((data?.duration_presets ?? []).find((d) => String(d.seconds) === wPreset)?.beats as string[] | null) ?? [];
+              const wOf = (k: string) => beatW.find((b) => b.beat_key === k)?.weight ?? 5;   // mirror _BEAT_WEIGHT.get(b,5)
+              const tot = act.reduce((s, k) => s + wOf(k), 0) || 1;
+              return (
+                <div style={{ overflowX: "auto" }}><table className="tbl cat-tbl">
+                  <thead><tr><th><Bi id="Adegan" en="Beat" /></th><th><Bi id="Bobot" en="Weight" /></th><th title="Kunci: mesin tidak menyentuh bobot adegan terkunci">🔒</th><th><Bi id={`Porsi narasi @${wPreset}s`} en={`Share @${wPreset}s`} /></th></tr></thead>
+                  <tbody>{beatW.map((b) => (
+                    <tr key={b.beat_key} style={{ opacity: act.includes(b.beat_key) ? 1 : 0.55 }}>
+                      <td><span data-id>{b.label_id}</span><span data-en>{b.label_en}</span> <span className="mono muted" style={{ fontSize: "var(--text-xs)" }}>({b.beat_key})</span></td>
+                      <td className="num">
+                        <input type="number" min={1} max={30} step={1} defaultValue={b.weight} key={`${b.beat_key}-${b.weight}`}
+                          style={{ width: 64 }}
+                          onBlur={(e) => {
+                            const v = Number(e.target.value);
+                            if (v === b.weight) return;
+                            if (!Number.isInteger(v) || v < 1 || v > 30) { setToast(<Bi id="Bobot harus bilangan bulat 1–30" en="Weight must be an integer 1–30" />); e.target.value = String(b.weight); return; }
+                            patchBeatW(b.beat_key, { weight: v });
+                          }} />
+                      </td>
+                      <td>
+                        <button className="btn btn-ghost btn-sm"
+                          title={b.weight_locked ? "Terkunci — mesin tidak menyentuh. Klik untuk membuka." : "Terbuka — mesin boleh menyelaraskan. Klik untuk mengunci."}
+                          onClick={() => patchBeatW(b.beat_key, { weight_locked: !b.weight_locked })}>
+                          {b.weight_locked ? "🔒" : "🔓"}
+                        </button>
+                      </td>
+                      <td className="num">{act.includes(b.beat_key) ? `${Math.round(100 * wOf(b.beat_key) / tot)}%` : <span className="muted" title="Adegan ini tidak aktif di preset terpilih">—</span>}</td>
+                    </tr>
+                  ))}</tbody>
+                </table></div>
+              );
+            })()}
+          </div>
         </div>
       )}
 
