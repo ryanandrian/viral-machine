@@ -320,6 +320,13 @@
 - **Keamanan (didokumentasi):** token hanya terbit dlm sesi login, TTL pendek, konfirmasi dua sisi; pemegang link dlm TTL bisa mengikat chat-nya → risiko diterima owner via desain ini.
 - **✅ Bukti mata-kepala LULUS (owner, 2026-07-16):** klik tombol → START → "sukses terhubung" — rantai FE→vault→t.me→linker→DB→balasan TERBUKTI end-to-end di produksi. **ITEM DITUTUP.**
 
+### [B21] PROGRAM AGEN & AFILIASI (partner B2B, bagi hasil selamanya) — 📋 SPEC DIKETOK 2026-07-17, implementasi ⬜ menunggu ketok "mulai F1"
+- **SPEC + tracker = `AGENT_AND_AFILIATION_ARCITECTURE.md`** (single source of truth, mandat owner 2026-07-17 — ringkasan awam + keputusan FINAL + arsitektur A–Z + rencana kerja F0–F4 urut prioritas; JANGAN riset/tanya ulang keputusan §1–§2 dokumen itu).
+- **INTI:** kami developer tanpa tim marketing → AGEN (perusahaan mitra) investasi iklan+rekrut RESELLER; tenant bayar ke Midtrans KAMI; komisi agen (Rp/% per-agen, diatur admin) cair 1×/bulan ber-gerbang owner; reseller dibayar AGEN (kami sediakan hitungan + Excel transfer-massal); atribusi = kode saat daftar, permanen; portal agen+reseller menumpang infra existing.
+- **URUTAN:** F0 kontrak+pajak (owner, paralel) → F1 mesin uang (atribusi+ledger+admin; program bisa jalan tanpa portal) → F2 portal agen → F3 reseller+Excel → F4 pelengkap. Tiap fase: rencana rinci → ketok → bukti runtime → izin deploy eksplisit.
+- **DONE-BILA:** per-fase di SPEC §7; item tutup saat F1–F3 live + ≥1 agen nyata terbayar benar.
+- **REALISASI:** ⬜
+
 ### [C2] Self-learning deepening + trend F3/F4 — 🟡  (TREND_RADAR **F3/F4**)
 - **TUJUAN:** kalibrasi `source_weights` (bobot sumber trend) dari outcome nyata per (niche,geo) + panen sinyal Analytics kaya (retensi/trafficSource/searchTerms) + agregat lintas-tenant anonim (cold-start moat).
 - **BUKTI:** loop inti hidup (`viral_score_weights`/`historical_factor`); `channel_analytics` sebagian sinyal sudah. CTR per-video=0 PERMANEN (batas API YouTube, bukan bug).
