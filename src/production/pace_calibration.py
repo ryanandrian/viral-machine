@@ -267,10 +267,13 @@ def check_drift_alarm(sb=None) -> dict:
         if alarmed:
             try:
                 from src.utils.telegram_notifier import TelegramNotifier
+                # Bahasa dampak-bisnis, nol jargon (§4.1 — teguran owner 2026-07-16 atas versi teknis).
                 TelegramNotifier().notify_admin(
-                    f"⚠️ DRIFT DURASI: median error taksiran {med:.1f}% (> ambang {thresh:.0f}%) "
-                    f"pada {len(errs)} render terakhir. Kalibrasi berjalan otomatis; bila angka ini "
-                    f"bertahan di siklus berikutnya, periksa perubahan voice/provider/niche terbaru.")
+                    f"⚠️ Pemeriksaan otomatis MesinViral — akurasi durasi video sedang di bawah standar: "
+                    f"rata-rata meleset {med:.1f}% (batas wajar {thresh:.0f}%) pada {len(errs)} video terakhir.\n"
+                    f"✅ Mesin sudah mengkalibrasi diri secara otomatis — tidak perlu tindakan apa pun dari Anda.\n"
+                    f"👉 Hanya bila peringatan yang sama muncul lagi besok: minta developer memeriksa "
+                    f"(biasanya karena ada penggantian suara/model baru yang datanya belum terkumpul).")
             except Exception as te:
                 logger.warning(f"[DriftAlarm] kirim telegram gagal (non-fatal): {te}")
         logger.info(f"[DriftAlarm] median_err={med:.1f}% n={len(errs)} ambang={thresh}% alarm={alarmed}")
