@@ -126,6 +126,9 @@ class TenantRunConfig:
     # Niche data dari tabel niches (loaded dinamis dari Supabase)
     niche_visual_style:     dict = field(default_factory=dict)
     niche_visual_fallbacks: list = field(default_factory=list)
+    # [EKSPRESI VOKAL 2026-07-16] gaya-baca narator per-niche (niches.voice_expression {style,stability});
+    # None = ikut bawaan suara. Dimuat utk NICHE EFEKTIF (semantik sama blok DNA — anti bug s85).
+    niche_voice_expression: Optional[dict] = None
 
     # Developer tenant
     is_developer:       bool  = False
@@ -413,16 +416,18 @@ class TenantConfigManager:
             return
         try:
             nr = (self._supabase.table("niches")
-                  .select("visual_style, visual_fallbacks")
+                  .select("visual_style, visual_fallbacks, voice_expression")
                   .eq("niche_id", eff_niche).single().execute())
             data = nr.data or {}
             config.niche_visual_style     = data.get("visual_style") or {}
             config.niche_visual_fallbacks = data.get("visual_fallbacks") or []
+            config.niche_voice_expression = data.get("voice_expression") or None   # [EKSPRESI VOKAL]
             config._visual_niche_loaded   = eff_niche
             logger.debug(f"[TenantConfig] Niche visual data dimuat-ulang utk niche efektif: {eff_niche}")
         except Exception as e:
             config.niche_visual_style     = {}
             config.niche_visual_fallbacks = []
+            config.niche_voice_expression = None
             config._visual_niche_loaded   = eff_niche
             logger.warning(f"[TenantConfig] Gagal load niche visual data ({eff_niche}): {e}")
 
@@ -605,11 +610,12 @@ class TenantConfigManager:
             # Load niche visual data dari tabel niches (dynamic, no hardcode)
             niche_visual_style     = {}
             niche_visual_fallbacks = []
+            niche_voice_expression = None
             try:
                 niche_row = (
                     self._supabase
                     .table("niches")
-                    .select("visual_style, visual_fallbacks")
+                    .select("visual_style, visual_fallbacks, voice_expression")
                     .eq("niche_id", niche)
                     .single()
                     .execute()
@@ -617,6 +623,7 @@ class TenantConfigManager:
                 if niche_row.data:
                     niche_visual_style     = niche_row.data.get("visual_style") or {}
                     niche_visual_fallbacks = niche_row.data.get("visual_fallbacks") or []
+                    niche_voice_expression = niche_row.data.get("voice_expression") or None   # [EKSPRESI VOKAL] dua titik-muat WAJIB seragam (kelas s85)
                     logger.debug(f"[TenantConfig] Niche visual data loaded: {niche}")
             except Exception as e:
                 logger.warning(f"[TenantConfig] Gagal load niche visual data: {e}")
@@ -674,6 +681,7 @@ class TenantConfigManager:
                 duplicate_lookback_days = int(row.get("duplicate_lookback_days", 30) or 30),
                 channel_group           = row.get("channel_group", "default") or "default",
                 niche_visual_style      = niche_visual_style,
+                niche_voice_expression  = niche_voice_expression,
                 niche_visual_fallbacks  = niche_visual_fallbacks,
                 # Telegram (s81)
                 telegram_enabled        = row.get("telegram_enabled", True),

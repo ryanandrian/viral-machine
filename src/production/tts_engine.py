@@ -53,6 +53,7 @@ def _get_provider_config(tenant_config: TenantConfig) -> dict:
         "tts_api_key":         rc.tts_api_key or "",
         "tts_voice_settings":  getattr(rc, "tts_voice_settings", {}) or {},          # delivery override per-tenant (mis. ryan speed)
         "tts_voice_default_settings": getattr(rc, "tts_voice_default_settings", {}) or {},  # baseline delivery dari voice_catalog
+        "niche_voice_expression": getattr(rc, "niche_voice_expression", None),  # [EKSPRESI VOKAL] gaya-baca per-niche (niches.voice_expression)
         "visual_api_key":      getattr(rc, "visual_api_key", "") or "",
         "niche":               tenant_config.niche,
         "tenant_id":           tenant_config.tenant_id,

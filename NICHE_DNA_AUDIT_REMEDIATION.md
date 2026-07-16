@@ -1,7 +1,9 @@
 # 🧬 NICHE DNA — Audit A-to-Z + Arsitektur Perbaikan (Plan vs Realisasi)
 
 > **Status: DISEPAKATI owner 2026-07-04 (semua §4 = YA; + keputusan tambahan: editor per-field = FE-only/DB tetap JSONB · preset per-properti dua-tingkat "pilih dulu, sunting kalau mau" · pantangan = free text ditegakkan mesin · preset karakter=pilih-satu, preset daftar=merge).**
-> **REALISASI: F1 ✅ · F2 ✅ · F3 ✅ · F4 ✅ · F6 ✅(backfill; test produksi validasi menyusul) · F5 🔨 SEDANG DIKERJAKAN (2026-07-04: migr 0119 job_type test_nopub + inventory status 'test' + janitor ✓; API tenant + panel Studio + preview musik menyusul di batch ini).**
+> **REALISASI: F1–F6 SEMUA ✅ (tuntas & tervalidasi e2e 2026-07-04 — lihat §3; frasa lama "F5 sedang dikerjakan" = snapshot usang, dikoreksi 2026-07-16).**
+> **🎙️ TAMBAHAN 2026-07-16 — EKSPRESI VOKAL (ketok owner): `niches.voice_expression` LIVE** — lihat §1.5 (satu-satunya rujukan sah untuk gaya-baca per-niche).
+> **📌 Dokumen ini = SINGLE SOURCE OF TRUTH arsitektur Niche DNA (mandat owner 2026-07-16; sinkron penuh ke codebase saat itu).**
 > **Tambahan terealisasi (2026-07-04, commit `22ac613`): Catalog wiring selaras arsitektur** — tab Providers di depan (induk; +key_group tampil/editable +jumlah model +tombol "＋ Model" per baris), AI Models dikelompokkan per provider + Add ber-dropdown, pemutar audio TUNGGAL play/stop utk Music & Voice.
 > **✅ is_active kini DIHORMATI produksi (2026-07-04, disetujui owner):** `_resolve_niche` menyaring pool rotasi dari niche nonaktif (fallback `channels.niche`; mode 'fixed' = binding eksplisit, tak disaring). Toggle Aktif di Studio kini berfungsi nyata.
 > **✅ `DB_SCHEMA_V2.md` DIHAPUS (keputusan owner 2026-07-04):** dokumen skema basi menyesatkan — sumber kebenaran struktur = INTROSPEKSI LANGSUNG DB live (psycopg2) tiap kali menyentuh DB.
@@ -16,20 +18,21 @@
 | Properti | Konsumen nyata | Status |
 |---|---|---|
 | `keywords` | trend_radar (scan tren) · niche_selector (filter) · publisher (`snippet.tags`) | ✅ sehat; ⚠️ `trend_radar.py:443` akses `["keywords"]` langsung → KeyError bila niche tak dikenal & nol niche aktif; keywords kosong (niche custom) = scan tren tanpa kata kunci |
-| `style` | prompt seleksi topik · derive persona bila kosong | ✅ sehat; 🟡 **TIDAK ADA UI editor** (field hantu di allowlist) |
-| `target_emotion` | prompt topik · hook optimizer · emotional-peak retry · scoring | ✅ sehat; 🟡 **TIDAK ADA UI editor** |
-| `hook_templates` | **NOL konsumen** (hook_optimizer pakai `HOOK_FORMULAS` hardcode) | 🔴 **FOSIL** |
+| `style` | prompt seleksi topik · derive persona bila kosong | ✅ sehat — UI editor **SUDAH ADA** (F2; catatan "field hantu" = arsip) |
+| `target_emotion` | prompt topik · hook optimizer · emotional-peak retry · scoring | ✅ sehat — UI editor **SUDAH ADA** (F2) |
+| `hook_templates` | — | ✅ **SUDAH DI-DROP** (F1, migr 0118) — baris ini arsip temuan |
 | `default_hashtags` | publisher (fallback hashtag deskripsi) | ✅ sehat |
-| `narration_persona` | prompt naskah (TONE/STYLE/AVOID/ARC/HOOK) + scoring derive | ✅ sehat (bentuk: dict 5 key `tone,style,avoid,hook_style,emotion_arc`) |
+| `narration_persona` | prompt naskah (TONE/STYLE/AVOID/ARC/HOOK) + scoring derive | ✅ sehat (dict 5 key). **Jalur ke telinga = via TEKS naskah**; parameter vokal TTS = `voice_expression` (§1.5) |
 | `visual_style` | prompt image Tahap-2 (key bebas) · hook-frame + rewrite (key SPESIFIK `base_style,color_palette,atmosphere`) | 🟡 **mismatch bentuk**: 2 konsumen butuh 3 key inti; kalau admin isi key lain saja → jatuh ke default hardcode |
 | `visual_fallbacks` | "EXEMPLAR SHOTS" few-shot prompt + padding kandidat | ✅ sehat |
 | `mood_priority` | music_selector (safety-net + fallback cascade) · producer (rotasi mood LRU) | ✅ sehat |
 | `music_config` | music_selector (mode auto/random/fixed) | ✅ sehat |
-| `emotion_scoring_criteria` | script_engine QUALITY BAR + analyzer scoring prioritas-1 | 🔴 **BUG: loader `config.py:134-152` TIDAK menyalin kolom ini** → nilai admin TIDAK PERNAH sampai (selalu fallback derive). Verified: dict loader tanpa key ini; kedua konsumen baca via `get_niches()` |
+| `emotion_scoring_criteria` | script_engine QUALITY BAR + analyzer scoring prioritas-1 | ✅ sehat — bug loader lama **SUDAH FIXED** (F1 2026-07-04) & tervalidasi e2e (F6) |
 | `section_timing` | struktur 8-section + word budget prompt naskah | ✅ sehat (validasi ketat 8 key wajib; parsial → default) |
 | `image_quality_tags` / `image_negative_prompt` | positive/negative prompt image | ✅ sehat |
 | `youtube_category_id` | publisher `snippet.categoryId` (query langsung) | ✅ sehat |
 | `voice_key` (niche) | — (di-drop migr 0083; voice = per-channel) | ✅ sudah bersih |
+| `voice_expression` 🆕2026-07-16 | adapter ElevenLabs (gaya-baca: style/stability 0–1) via `tenant_config` niche-EFEKTIF (DUA titik-muat seragam — kelas s85) | ✅ LIVE — detail §1.5 |
 | `access/exclusive/released/origin/is_base` | entitlement + lifecycle | ✅ sehat |
 
 ## 1.2 Rantai MUSIK (kecurigaan owner — TERBUKTI ada lubang)
@@ -48,6 +51,17 @@ Matriks kelengkapan (verified DB): 4 niche base admin = ✓ semua. **`imunitas_t
 - Tanpa validasi skema (mis. `music_config.mode` bebas nilai apa pun; `section_timing` parsial → diabaikan total TANPA pemberitahuan).
 - `style`/`target_emotion`/`hook_templates` di allowlist kedua API tapi tak punya UI.
 - Tenant TIDAK bisa test niche (admin sudah — Fase 1).
+
+## 1.5 🎙️ EKSPRESI VOKAL — gaya-baca narator per-niche (LIVE 2026-07-16, ketok owner; migr 0167)
+
+**Masalah yang dijawab:** kenop warisan `tenant_configs.tts_voice_settings[niche]` TERBUKTI AKTIF (94/94 render EL di log produksi memakainya — vonis 2026-07-16) tapi: buta-layar (nol UI), hanya 4 niche template, tersalin per-tenant via DEFAULT kolom. Persona niche tak pernah sampai ke parameter vokal utk 43 niche lain.
+
+**Arsitektur resmi kini:**
+- **Kolom:** `niches.voice_expression` jsonb `{"style": 0..1, "stability": 0..1}` — NULL = ikut karakter bawaan suara (`voice_catalog.default_settings`). **TANPA `speed`** (tempo = milik eksklusif mesin durasi §10.A — mencampurnya merusak presisi).
+- **Seed:** 4 niche template diisi PERSIS nilai warisan yang berbunyi (dark 0.55/0.28 · fun 0.35/0.50 · ocean 0.40/0.35 · universe 0.50/0.30) → bukti merge byte-identik.
+- **Rantai baca:** `niches.voice_expression` → `tenant_config` (dimuat utk NICHE EFEKTIF di **DUA titik-muat** `_load_from_supabase` + `_reload_niche_visual` — WAJIB seragam, kelas bug s85; ranjau satu-titik tertangkap uji-live pra-ship 2026-07-16) → `tts_engine._get_provider_config` → adapter `elevenlabs.py` merge: **bawaan-suara ⊕ ekspresi-niche ⊕ warisan-tenant** (warisan TERAKHIR = suara channel berjalan IDENTIK; guard: hanya key style/stability, angka 0..1, nilai liar dibuang).
+- **UI:** seksi "Ekspresi Vokal" di `NicheDnaEditor` (SATU komponen → admin `/admin/niches` + tenant Niche Studio): checkbox "Atur khusus" + 2 slider (Kedramatisan/Kestabilan) + **narasi fungsi** (dwibahasa): berlaku utk suara premium EL · kosong = ikut bawaan suara · tempo TIDAK diatur di sini. Validasi klien+server (`lib/niche-dna.ts` + 2 allowlist API). Ikut `TEMPLATE_COPY_COLUMNS` (niche baru dari template mewarisi jiwa vokal).
+- **⬜ Fase pembongkaran warisan** (`tenant_configs.tts_voice_settings` kolom + DEFAULT-nya): TERPISAH, ber-ketok owner, setelah lapisan baru terbukti aman berminggu — HARAM dicabut sekarang (mengubah suara channel produksi).
 
 ---
 
@@ -102,7 +116,7 @@ Panel SATU card di Niche Studio (aturan `feedback_uiux_design_for_lay_tenants`):
 
 ### F6 — Validasi & data lama — ✅ TUNTAS *(2026-07-04; SELURUH PLAN NICHE_DNA TEREALISASI 100%)*
 > **Validasi e2e (3 test produksi nyata, tanpa publish):** imunitas_tubuh QC✓ skor 82,1 · misteri_perang_dunia QC✓ skor 86,9 · rerun-musik QC✓ skor 83,2. **Bukti musik by-design:** log MusicSelector run `direct-5a8c` — 15 mood dwibahasa dimuat → mood_priority DNA niche terbaca (calm/ambient/inspirational) → deteksi 'suspense' tak ada track → fallback **calm (prioritas DNA)** → 'abyssal_silence' (BUKAN acak lintas-niche). **Bukti scoring:** loader (kode deployed) mengembalikan emotion_scoring_criteria kedua niche ✓. Video test = inventory status 'test', TTL 7 Juli ✓; transisi job antre→berjalan→done otomatis ✓.
-> **⚠️ 2 temuan tambahan (follow-up, di luar plan ini):** (1) test pertama 2026-07-03 ternyata TANPA musik (channels.music_enabled test=false; klaim lama "musik calm ocean" = salah-baca log StorageCleaner — dikoreksi). Channel test kini music_enabled=true. (2) **cache config worker TANPA kedaluwarsa** (`tenant_config._cache` per cache_key) → perubahan setelan channel/tenant baru berlaku setelah RESTART worker — dampak nyata ke tenant ("simpan setelan → tak terasa efeknya"); kandidat backlog: TTL/invalidasi cache.
+> **⚠️ 2 temuan tambahan (follow-up, di luar plan ini):** (1) test pertama 2026-07-03 ternyata TANPA musik (channels.music_enabled test=false; klaim lama "musik calm ocean" = salah-baca log StorageCleaner — dikoreksi). Channel test kini music_enabled=true. (2) cache config worker: **SUDAH BER-TTL** — run-config `_CACHE_TTL_S=120s` (verified kode 2026-07-16) + plan_limits TTL 300s (ditambah 2026-07-16). Catatan lama "tanpa kedaluwarsa" = usang.
 > Realisasi 2026-07-04: `misteri_perang_dunia` ← template dark_history + keywords perang · `imunitas_tubuh` ← komposisi preset kesehatan (persona hangat, visual cerah, mood tenang, scoring inspirasi) + keywords imunitas · matriks kelengkapan kedua niche = ✓ semua. **Menyusul pasca-deploy:** test produksi via Test Lab per niche (dengar musik benar + QUALITY BAR muncul di log) (`DB_SCHEMA_V2.md` DIHAPUS — keputusan owner 2026-07-04: sumber kebenaran = introspeksi DB live).
 
 ---
@@ -115,4 +129,5 @@ Panel SATU card di Niche Studio (aturan `feedback_uiux_design_for_lay_tenants`):
 5. Urutan eksekusi F1→F6 di atas OK? (F1 bisa jalan duluan — murni perbaikan mesin.)
 
 ### Changelog
+- **2026-07-16 — SINKRON PENUH ke codebase (mandat owner: single source of truth, nol asumsi/ambigu).** Banner F5 kontradiktif dikoreksi (semua F1–F6 ✅ sejak 04-Jul); baris §1.1 yang sudah FIXED diberi cap (scoring-loader/hook_templates/field-hantu); +kolom 18 `voice_expression`; **+§1.5 EKSPRESI VOKAL** (arsitektur lengkap: kenop warisan aktif-94/94 → kolom resmi ber-UI dua panel, merge byte-identik, fase pembongkaran warisan ber-ketok); catatan cache F6 di-update (TTL 120s/300s live).
 - 2026-07-04 — dokumen dibuat (audit tuntas, menunggu kesepakatan arsitektur).

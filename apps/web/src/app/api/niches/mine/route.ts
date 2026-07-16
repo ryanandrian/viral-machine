@@ -12,7 +12,7 @@ import { validateDnaPatch, TEMPLATE_COPY_COLUMNS } from "@/lib/niche-dna";
 const EDITABLE = [
   "name", "keywords", "style", "target_emotion", "default_hashtags", "is_active",
   "description", "description_en",
-  "visual_style", "visual_fallbacks", "mood_priority", "narration_persona", "emotion_scoring_criteria",
+  "visual_style", "visual_fallbacks", "mood_priority", "narration_persona", "voice_expression", "emotion_scoring_criteria",
   "section_timing", "image_quality_tags", "image_negative_prompt", "music_config", "youtube_category_id",
 ];
 

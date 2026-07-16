@@ -110,9 +110,16 @@ class ElevenLabsProvider(TTSProvider):
             # F1-05 (no-hardcode): baseline delivery = voice_catalog.default_settings (per voice,
             # di-inject config layer); override per-tenant via tts_voice_settings[niche] (mis. ryan speed 0.86).
             baseline      = self.config.get("tts_voice_default_settings", {}) or {}
+            # [EKSPRESI VOKAL 2026-07-16] lapisan resmi per-NICHE (niches.voice_expression via editor
+            # DNA admin+studio): hanya style/stability (speed = milik mesin durasi), guard 0..1.
+            _expr_raw = self.config.get("niche_voice_expression") or {}
+            _expr = {k: float(v) for k, v in _expr_raw.items()
+                     if k in ("style", "stability") and isinstance(v, (int, float)) and 0.0 <= float(v) <= 1.0}                     if isinstance(_expr_raw, dict) else {}
             tts_vs_config = self.config.get("tts_voice_settings", {}) or {}
             _override     = tts_vs_config.get(niche, {}) if isinstance(tts_vs_config, dict) else {}
-            niche_vs      = {**baseline, **_override}
+            # Urutan: bawaan-suara ⊕ ekspresi-niche ⊕ warisan-tenant (warisan TERAKHIR = suara channel
+            # berjalan IDENTIK hari ini; pembongkaran warisan = fase terpisah ber-ketok owner).
+            niche_vs      = {**baseline, **_expr, **_override}
             voice_settings = VoiceSettings(
                 stability        = float(niche_vs.get("stability",        0.30)),
                 similarity_boost = float(niche_vs.get("similarity_boost", 0.75)),

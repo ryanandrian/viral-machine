@@ -118,6 +118,11 @@ export default function NicheDnaEditor({ niche, onSave, busy, onCancel }: { nich
   const [style, setStyle] = useState(asStr(niche.style));
   const [emotion, setEmotion] = useState(asStr(niche.target_emotion));
   const [persona, setPersona] = useState<Record<string, string>>({ ...Object.fromEntries(PERSONA_KEYS.map((k) => [k, ""])), ...asDict(niche.narration_persona) });
+  // [EKSPRESI VOKAL 2026-07-16] {style, stability} 0..1 · null = ikut bawaan suara (voice_catalog).
+  const _ve0 = (niche as { voice_expression?: { style?: number; stability?: number } | null }).voice_expression ?? null;
+  const [veOn, setVeOn] = useState<boolean>(!!_ve0);
+  const [veStyle, setVeStyle] = useState<number>(typeof _ve0?.style === "number" ? _ve0.style : 0.5);
+  const [veStab, setVeStab] = useState<number>(typeof _ve0?.stability === "number" ? _ve0.stability : 0.4);
   // camera_motion = objek bersarang (Ken Burns), DIKELUARKAN dari dict visual datar → dikelola state terpisah.
   const _vs0 = asDict(niche.visual_style);
   const { camera_motion: _cm0, ..._vsFlat } = _vs0 as Record<string, unknown>;
@@ -189,12 +194,13 @@ export default function NicheDnaEditor({ niche, onSave, busy, onCancel }: { nich
       keywords, default_hashtags: hashtags, youtube_category_id: ytCat || null,
       style, target_emotion: emotion,
       narration_persona: personaClean, visual_style: visualClean,
+      voice_expression: veOn ? { style: veStyle, stability: veStab } : null,
       image_quality_tags: qualityTags, image_negative_prompt: negPrompt,
       visual_fallbacks: fallbacks.split("\n").map((s) => s.trim()).filter(Boolean),
       music_config: music, mood_priority: moodPriority,
       section_timing: timingVals, emotion_scoring_criteria: scoring,
     };
-  }, [name, descId, descEn, keywords, hashtags, ytCat, style, emotion, persona, visual, cameraMotion, qualityTags, negPrompt, fallbacks, musicMode, musicMood, musicTrack, moodPriority, timing, scoring]);
+  }, [name, descId, descEn, keywords, hashtags, ytCat, style, emotion, persona, visual, cameraMotion, qualityTags, negPrompt, fallbacks, musicMode, musicMood, musicTrack, moodPriority, timing, scoring, veOn, veStyle, veStab]);
 
   const errors = useMemo(() => {
     const e = validateDnaPatch(patch);
@@ -280,6 +286,27 @@ export default function NicheDnaEditor({ niche, onSave, busy, onCancel }: { nich
           </Fld>
         </div>
         {errors.narration_persona && <div style={{ fontSize: "0.6875rem", color: "var(--danger)" }}>{errors.narration_persona}</div>}
+      </Sec>
+
+      {/* [EKSPRESI VOKAL 2026-07-16] gaya-baca narator per-niche — resmi menggantikan kenop warisan buta-layar */}
+      <Sec icon={<Sparkles size={16} />} titleId="Ekspresi Vokal" titleEn="Vocal Expression"
+        subId="Mengatur GAYA BACA narator untuk niche ini — lebih dramatis ↔ lebih tenang, lebih stabil ↔ lebih hidup. Berlaku untuk suara premium (ElevenLabs). Kosong = mengikuti karakter bawaan suara yang dipilih channel. Tempo bicara TIDAK diatur di sini — dijaga otomatis oleh mesin durasi."
+        subEn="Sets the narrator's READING STYLE for this niche — more dramatic ↔ calmer, steadier ↔ livelier. Applies to premium voices (ElevenLabs). Empty = follows the chosen voice's own character. Speaking tempo is NOT set here — it is managed automatically by the duration engine.">
+        <label style={{ display: "flex", alignItems: "center", gap: ".5rem", fontSize: "var(--text-sm)" }}>
+          <input type="checkbox" checked={veOn} onChange={(e) => setVeOn(e.target.checked)} />
+          <Bi id="Atur khusus untuk niche ini" en="Customize for this niche" />
+        </label>
+        {veOn && (<>
+          <Fld label={<span><Bi id="Kedramatisan" en="Dramatic intensity" /> <span className="mono muted" style={{ fontSize: "0.6875rem" }}>({veStyle.toFixed(2)})</span></span>}
+            hint={<Bi id="0 = datar/netral · 1 = sangat ekspresif/teatrikal." en="0 = flat/neutral · 1 = highly expressive/theatrical." />}>
+            <input type="range" min={0} max={1} step={0.05} value={veStyle} onChange={(e) => setVeStyle(parseFloat(e.target.value))} style={{ width: "100%" }} />
+          </Fld>
+          <Fld label={<span><Bi id="Kestabilan" en="Stability" /> <span className="mono muted" style={{ fontSize: "0.6875rem" }}>({veStab.toFixed(2)})</span></span>}
+            hint={<Bi id="0 = sangat hidup/bervariasi (bisa liar) · 1 = sangat stabil/konsisten (bisa monoton)." en="0 = very lively/varied (can get wild) · 1 = very steady/consistent (can be monotone)." />}>
+            <input type="range" min={0} max={1} step={0.05} value={veStab} onChange={(e) => setVeStab(parseFloat(e.target.value))} style={{ width: "100%" }} />
+          </Fld>
+        </>)}
+        {errors.voice_expression && <div style={{ fontSize: "0.6875rem", color: "var(--danger)" }}>{errors.voice_expression}</div>}
       </Sec>
 
       <Sec icon={<Music size={16} />} titleId="Musik" titleEn="Music"

@@ -49,6 +49,17 @@ export function validateDnaPatch(patch: Record<string, unknown>): DnaErrors {
     if (has(k) && !isStrArr(patch[k])) e[k] = "Harus berupa daftar teks.";
   }
   if (has("narration_persona") && !isStrDict(patch.narration_persona)) e.narration_persona = "Setiap isian persona harus teks.";
+  // [EKSPRESI VOKAL 2026-07-16] {style?, stability?} angka 0..1, atau null (= ikut bawaan suara).
+  if (has("voice_expression") && patch.voice_expression !== null) {
+    const ve = patch.voice_expression as Record<string, unknown>;
+    if (!ve || typeof ve !== "object" || Array.isArray(ve)) e.voice_expression = "Ekspresi vokal tidak valid.";
+    else {
+      const keys = Object.keys(ve);
+      const badKey = keys.some((k) => k !== "style" && k !== "stability");
+      const badVal = keys.some((k) => !Number.isFinite(Number(ve[k])) || Number(ve[k]) < 0 || Number(ve[k]) > 1);
+      if (badKey || badVal || keys.length === 0) e.voice_expression = "Ekspresi vokal harus angka 0–1 untuk kedramatisan/kestabilan.";
+    }
+  }
   if (has("visual_style")) {
     const vs = patch.visual_style as Record<string, unknown>;
     if (!vs || typeof vs !== "object" || Array.isArray(vs)) e.visual_style = "Gaya visual tidak valid.";
@@ -91,7 +102,7 @@ export function validateDnaPatch(patch: Record<string, unknown>): DnaErrors {
 // Kolom DNA yang di-copy saat buat niche baru dari template (wizard — keputusan owner: copy-dari-base).
 // keywords/hashtags/fallbacks TIDAK di-copy (spesifik topik niche — harus milik niche baru).
 export const TEMPLATE_COPY_COLUMNS = [
-  "style", "target_emotion", "narration_persona", "visual_style", "mood_priority",
+  "style", "target_emotion", "narration_persona", "voice_expression", "visual_style", "mood_priority",
   "emotion_scoring_criteria", "section_timing", "image_quality_tags", "image_negative_prompt",
   "music_config", "youtube_category_id",
 ] as const;
