@@ -309,6 +309,13 @@
 - **⬜ Tahap-2 (riset dulu, keputusan owner):** TTS-via-fal — WAJIB verifikasi word-timestamps (kritis sinkron caption kelas-98%) + dukungan `speed` (tuas presisi durasi) sebelum layak; hasil riset menentukan build/tidak.
 - **DONE-BILA:** owner mengaktifkan model yang lulus uji; (tahap-2) verdict TTS tertulis.
 
+### [B19] Suara ElevenLabs BAHASA INDONESIA — ✅ LIVE 2026-07-16 (nol kode, nol deploy)
+- **GUGATAN owner:** katalog cuma 2 suara ID (Ardi/Gadis, edge gratisan) padahal EL punya banyak — mayoritas tenant Indonesia. BENAR: kesenjangan kurasi (EL key era seeding lapse), bukan arsitektur.
+- **REALISASI:** kunci EL ryan di-upgrade izin owner (read+write; sebelumnya TTS-only — akar "401" yang sempat salah kuvonis expired) → kurasi dari API resmi Voice Library `language=id` (30+ suara; dipilih 8 narasi/edukasi, semua `free_users_allowed` + preview): Luna·Aluna·Arunika·Dila (♀) + Bambang·Andi·Senja·Menit (♂) → `voice_catalog` (locale id-ID, preview ▶ di admin) → **owner dengar & AKTIFKAN SEMUA**.
+- **TEMUAN penting (koreksi klaimku):** suara Voice Library kini bisa dipakai TTS **LANGSUNG TANPA add-to-account** (uji nyata: synth pra-add ✅ 12KB audio; add via API juga ✅ bila kelak perlu) → wiring auto-add yang direncanakan = **TIDAK DIBUTUHKAN**; nol gesekan tenant sejak hari ini. Model: 4 model EL katalog semuanya multibahasa (multilingual_v2 teruji ID).
+- **Efek samping uji:** voice "Luna (ID)" tertambah di akun EL ryan (harmless; boleh dihapus manual). Tempo 8 suara baru → swa-kalibrasi F1/F5 otomatis dari render nyata.
+- **DONE-BILA:** ✅ tercapai (aktif semua + rantai TTS terbukti). Lanjutan opsional: kurasi halaman-2 library bila tenant minta variasi.
+
 ### [C2] Self-learning deepening + trend F3/F4 — 🟡  (TREND_RADAR **F3/F4**)
 - **TUJUAN:** kalibrasi `source_weights` (bobot sumber trend) dari outcome nyata per (niche,geo) + panen sinyal Analytics kaya (retensi/trafficSource/searchTerms) + agregat lintas-tenant anonim (cold-start moat).
 - **BUKTI:** loop inti hidup (`viral_score_weights`/`historical_factor`); `channel_analytics` sebagian sinyal sudah. CTR per-video=0 PERMANEN (batas API YouTube, bukan bug).
