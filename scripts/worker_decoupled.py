@@ -30,7 +30,7 @@ from loguru import logger
 
 def main() -> None:
     from src.utils.db_log_sink import setup_db_logging
-    from src.orchestrator import producer, publisher, buffer_janitor, self_learning, email_outbox, heartbeat, trend_refresher, niche_request_sweeper, payment_reconciler
+    from src.orchestrator import producer, publisher, buffer_janitor, self_learning, email_outbox, heartbeat, trend_refresher, niche_request_sweeper, payment_reconciler, telegram_linker
     from src.billing import renewal as billing_renewal
 
     setup_db_logging()
@@ -66,6 +66,8 @@ def main() -> None:
         threading.Thread(target=trend_refresher.run_forever, name="trend_refresher", daemon=True),
         threading.Thread(target=niche_request_sweeper.run_forever, name="niche_sweeper", daemon=True),
         threading.Thread(target=payment_reconciler.run_forever, name="payment_reconciler", daemon=True),
+        # [TG-LINK] Hubungkan Telegram 1-klik (long-poll getUpdates; webhook bot kosong = aman)
+        threading.Thread(target=telegram_linker.run_forever, name="telegram_linker", daemon=True),
     ]
     for t in threads:
         t.start()

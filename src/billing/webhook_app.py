@@ -140,10 +140,25 @@ try:
         except Exception as e:
             return JSONResponse({"error": str(e)}, status_code=400)
 
+    # [TG-LINK] Hubungkan Telegram 1-klik: terbitkan deep-link t.me ber-token (ketok owner 2026-07-16).
+    # tenant_id dari pemanggil (mv-web) yang SUDAH memverifikasi sesi Supabase — pola sama checkout.
+    async def _cred_telegram_link(request: "Request"):
+        if not _internal_ok(request):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        from src.utils.telegram_link import make_link_token, bot_username
+        try:
+            b = await request.json()
+            token = make_link_token(b.get("tenant_id") or "")
+            return {"url": f"https://t.me/{bot_username()}?start={token}",
+                    "ttl_min": int(os.getenv("TELEGRAM_LINK_TTL_MIN", "15"))}
+        except Exception as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+
     app.add_api_route("/api/credentials/ai",            _cred_ai_set,        methods=["POST"])
     app.add_api_route("/api/credentials/ai/list",       _cred_ai_list,       methods=["POST"])
     app.add_api_route("/api/credentials/ai/delete",     _cred_ai_delete,     methods=["POST"])
     app.add_api_route("/api/credentials/telegram/test", _cred_telegram_test, methods=["POST"])
+    app.add_api_route("/api/credentials/telegram/link", _cred_telegram_link, methods=["POST"])
 
     # ── Checkout Midtrans (buat transaksi Snap) — dipanggil server-to-server dari Next (mv-web),
     #    di-AUTH via X-Internal-Secret; tenant_id sudah diverifikasi sesi Supabase oleh pemanggil.

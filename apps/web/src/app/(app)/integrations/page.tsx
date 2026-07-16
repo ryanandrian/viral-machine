@@ -39,6 +39,7 @@ export default function IntegrationsPage() {
   const [ytDegraded, setYtDegraded] = useState(false);
   const [ytLabel, setYtLabel] = useState("");
   const [ytAdd, setYtAdd] = useState(false);
+  const [tgLinking, setTgLinking] = useState(false);   // [TG-LINK] menunggu tenant menekan START di Telegram
   const [ytMsg, setYtMsg] = useState<string | null>(null);
 
   const [tgChat, setTgChat] = useState(""); const [tgEnabled, setTgEnabled] = useState(false);
@@ -144,6 +145,33 @@ export default function IntegrationsPage() {
       await loadYt();
     } catch { setErr({ k: "yt", m: "__disc_failed__" }); } finally { setBusy(""); }
   }
+  // [TG-LINK] Hubungkan Telegram 1-KLIK (ketok owner 2026-07-16): buka t.me ber-token → tenant tekan
+  // START → BE mencatat chat_id otomatis → FE poll status s/d terhubung (tenant tak pernah lihat ID).
+  async function connectTelegram() {
+    setErr(null); setBusy("tg-link");
+    try {
+      const r = await fetch("/api/credentials/telegram-link", { method: "POST" });
+      const j = await r.json();
+      setBusy("");
+      if (!r.ok || !j.url) { setErr({ k: "tg", m: j.error || "Gagal membuat tautan" }); return; }
+      window.open(j.url, "_blank", "noopener");
+      setTgLinking(true);
+      const before = tgChat;
+      let tries = 0;
+      const iv = setInterval(async () => {
+        tries += 1;
+        const { data } = await supabase.from("tenant_configs").select("telegram_chat_id").maybeSingle();
+        const now = (data as { telegram_chat_id?: string } | null)?.telegram_chat_id ?? "";
+        if (now && now !== before) {
+          clearInterval(iv); setTgLinking(false);
+          setTgChat(now); setTgEnabled(true); flash("tg");
+        } else if (tries >= 40) {           // ±2 menit lalu berhenti sopan (tenant bisa klik lagi)
+          clearInterval(iv); setTgLinking(false);
+        }
+      }, 3000);
+    } catch { setBusy(""); setErr({ k: "tg", m: "Server tak terjangkau" }); }
+  }
+
   async function saveTelegram() {
     setErr(null);
     if (!tgChat.trim()) { setErr({ k: "tg", m: "Isi Chat ID dulu" }); return; }
@@ -328,11 +356,22 @@ export default function IntegrationsPage() {
             <div style={{ flex: 1 }}><div style={titleS}>Telegram</div><div style={muted}><Bi id="Notif real-time per run ke chat Anda" en="Real-time per-run notifications to your chat" /></div></div>
             <label className="switch"><input type="checkbox" checked={tgEnabled} onChange={(e) => toggleTg(e.target.checked)} /><span className="track" /><span className="thumb" /></label>
           </div>
-          <div className="fld"><label className="label">Telegram Chat ID</label><input className="input input-mono" value={tgChat} onChange={(e) => setTgChat(e.target.value)} placeholder="mis. 123456789" /></div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "0.75rem" }}>
-            <button className="btn btn-default btn-sm" onClick={saveTelegram} disabled={busy === "tg"}>{busy === "tg" ? <Loader2 size={14} className="spin" /> : <Bi id="Simpan Telegram" en="Save Telegram" />}</button>
+          {/* [TG-LINK] jalur UTAMA 1-klik — tenant tak perlu tahu chat ID (ketok owner 2026-07-16) */}
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+            <button className="btn btn-default btn-sm" onClick={connectTelegram} disabled={busy === "tg-link" || tgLinking}>
+              {busy === "tg-link" || tgLinking ? <Loader2 size={14} className="spin" /> : <Send size={14} />} {tgLinking ? <Bi id="Menunggu Anda menekan START di Telegram…" en="Waiting for you to press START in Telegram…" /> : (tgChat ? <Bi id="Hubungkan ulang Telegram" en="Reconnect Telegram" /> : <Bi id="Hubungkan Telegram" en="Connect Telegram" />)}
+            </button>
+            {tgChat && !tgLinking && <span className="badge badge-success"><Bi id="Terhubung" en="Connected" /></span>}
             {err?.k === "tg" && <span style={{ color: "var(--danger,#ef4444)", fontSize: "var(--text-xs)" }}>{err.m}</span>}<Saved on={saved === "tg"} />
           </div>
+          <p className="muted" style={{ fontSize: "var(--text-xs)", margin: "0.5rem 0 0" }}><Bi id="Tombol membuka Telegram — cukup tekan START, selesai. Tanpa cari-cari chat ID." en="The button opens Telegram — just press START, done. No hunting for a chat ID." /></p>
+          <details style={{ marginTop: "0.6rem" }}>
+            <summary className="muted" style={{ fontSize: "var(--text-xs)", cursor: "pointer" }}><Bi id="Cara manual (isi Chat ID sendiri)" en="Manual method (enter Chat ID yourself)" /></summary>
+            <div className="fld" style={{ marginTop: "0.5rem" }}><label className="label">Telegram Chat ID</label><input className="input input-mono" value={tgChat} onChange={(e) => setTgChat(e.target.value)} placeholder="mis. 123456789" /></div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "0.75rem" }}>
+              <button className="btn btn-default btn-sm" onClick={saveTelegram} disabled={busy === "tg"}>{busy === "tg" ? <Loader2 size={14} className="spin" /> : <Bi id="Simpan Telegram" en="Save Telegram" />}</button>
+            </div>
+          </details>
         </div>
 
         <GatedCard icon={<span style={iconBox("linear-gradient(45deg,#f09433,#dc2743,#bc1888)")}><ImageIcon size={18} /></span>}
