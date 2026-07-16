@@ -7,13 +7,22 @@ import { PageHeader } from "@/components/page-header";
 
 // Support sisi TENANT (Phase 10.9) — buat/lihat/balas tiket SENDIRI (anon + RLS auth.uid()).
 // Realtime support_messages (live chat dgn admin). Sumber tiket untuk admin E4.
+// DWIBAHASA penuh (temuan sapu-silang 2026-07-16, ketok owner): halaman ini dulu satu-bahasa —
+// kini Bi (pola baku data-id/data-en) + placeholder/tanggal via lang `mv-lang` (pola admin catalog).
 
 type Ticket = { id: string; subject: string; status: string; updated_at: string };
 type Msg = { id: string; sender: string; body: string; created_at: string };
 
+function Bi({ id, en }: { id: string; en: string }) { return (<><span data-id>{id}</span><span data-en>{en}</span></>); }
+// Terjemahan status tiket (nilai DB open/pending/resolved → label manusia dwibahasa).
+const ST_LABEL: Record<string, [string, string]> = { open: ["Terbuka", "Open"], pending: ["Menunggu", "Pending"], resolved: ["Selesai", "Resolved"] };
+
 export default function TenantSupportPage() {
   const supabase = createClient();
   const [uid, setUid] = useState<string>("");
+  // Bahasa aktif utk atribut non-CSS (placeholder, locale tanggal) — pola mv-lang yang sudah baku.
+  const [lang, setLang] = useState<"id" | "en">("id");
+  useEffect(() => { setLang((localStorage.getItem("mv-lang") as "id" | "en") || "id"); }, []);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [open, setOpen] = useState<Ticket | null>(null);
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -62,34 +71,34 @@ export default function TenantSupportPage() {
   return (
     <div style={{ maxWidth: 760 }}>
       {!open ? (<>
-        <PageHeader helpKey="support" icon={HelpCircle} title="Bantuan" subtitle="Tiket dukungan Anda"
-          action={<button className="btn btn-primary btn-sm" onClick={() => setNewT({ subject: "", body: "" })}><Plus size={14} /> Tiket baru</button>} />
+        <PageHeader helpKey="support" icon={HelpCircle} title={<Bi id="Bantuan" en="Help" />} subtitle={<Bi id="Tiket dukungan Anda" en="Your support tickets" />}
+          action={<button className="btn btn-primary btn-sm" onClick={() => setNewT({ subject: "", body: "" })}><Plus size={14} /> <Bi id="Tiket baru" en="New ticket" /></button>} />
         <div className="card"><div style={{ padding: "0.5rem" }}>
-          {tickets.length === 0 && <div className="muted" style={{ padding: "1.25rem", textAlign: "center" }}>Belum ada tiket. Buat tiket baru untuk menghubungi tim.</div>}
+          {tickets.length === 0 && <div className="muted" style={{ padding: "1.25rem", textAlign: "center" }}><Bi id="Belum ada tiket. Buat tiket baru untuk menghubungi tim." en="No tickets yet. Create a new ticket to reach the team." /></div>}
           {tickets.map((t) => (
             <div key={t.id} onClick={() => setOpen(t)} style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.75rem", borderRadius: 8, cursor: "pointer" }} className="hoverable">
-              <div style={{ flex: 1 }}><div style={{ fontWeight: 500 }}>{t.subject}</div><div className="muted" style={{ fontSize: "var(--text-xs)" }}>{new Date(t.updated_at).toLocaleString("id-ID")}</div></div>
-              <span className={`badge ${stColor(t.status)}`}>{t.status}</span>
+              <div style={{ flex: 1 }}><div style={{ fontWeight: 500 }}>{t.subject}</div><div className="muted" style={{ fontSize: "var(--text-xs)" }}>{new Date(t.updated_at).toLocaleString(lang === "en" ? "en-US" : "id-ID")}</div></div>
+              <span className={`badge ${stColor(t.status)}`}>{ST_LABEL[t.status] ? <Bi id={ST_LABEL[t.status][0]} en={ST_LABEL[t.status][1]} /> : t.status}</span>
             </div>
           ))}
         </div></div>
       </>) : (<>
-        <button className="btn btn-ghost btn-sm" style={{ marginBottom: "0.75rem" }} onClick={() => setOpen(null)}><ArrowLeft size={14} /> Kembali</button>
+        <button className="btn btn-ghost btn-sm" style={{ marginBottom: "0.75rem" }} onClick={() => setOpen(null)}><ArrowLeft size={14} /> <Bi id="Kembali" en="Back" /></button>
         <div className="card" style={{ display: "flex", flexDirection: "column", height: "60vh" }}>
           <div style={{ padding: "1rem", borderBottom: "1px solid var(--border-subtle)", display: "flex", alignItems: "center" }}>
-            <strong>{open.subject}</strong><span className={`badge ${stColor(open.status)}`} style={{ marginLeft: "auto" }}>{open.status}</span>
+            <strong>{open.subject}</strong><span className={`badge ${stColor(open.status)}`} style={{ marginLeft: "auto" }}>{ST_LABEL[open.status] ? <Bi id={ST_LABEL[open.status][0]} en={ST_LABEL[open.status][1]} /> : open.status}</span>
           </div>
           <div style={{ flex: 1, overflowY: "auto", padding: "1rem", display: "flex", flexDirection: "column", gap: "0.625rem" }}>
             {msgs.map((m) => (
               <div key={m.id} style={{ alignSelf: m.sender === "tenant" ? "flex-end" : "flex-start", maxWidth: "75%", background: m.sender === "tenant" ? "var(--brand-soft, #1e3a8a)" : "var(--surface-2, #1f2937)", color: "var(--text-primary)", padding: "0.5rem 0.75rem", borderRadius: 10, fontSize: "var(--text-sm)" }}>
-                <div style={{ fontSize: "var(--text-xs)", color: "var(--text-muted)", marginBottom: 2 }}>{m.sender === "tenant" ? "Anda" : "Admin"}</div>{m.body}
+                <div style={{ fontSize: "var(--text-xs)", color: "var(--text-muted)", marginBottom: 2 }}>{m.sender === "tenant" ? <Bi id="Anda" en="You" /> : "Admin"}</div>{m.body}
               </div>
             ))}
             <div ref={endRef} />
           </div>
           {open.status !== "resolved" && (
             <form onSubmit={(e) => { e.preventDefault(); if (!busy) sendReply(); }} style={{ padding: "0.75rem", borderTop: "1px solid var(--border-subtle)", display: "flex", gap: "0.5rem" }}>
-              <input className="input" placeholder="Tulis balasan…" value={reply} onChange={(e) => setReply(e.target.value)} style={{ flex: 1 }} />
+              <input className="input" placeholder={lang === "en" ? "Write a reply…" : "Tulis balasan…"} value={reply} onChange={(e) => setReply(e.target.value)} style={{ flex: 1 }} />
               <button className="btn btn-primary btn-icon" type="submit" disabled={busy || !reply.trim()}><Send size={16} /></button>
             </form>
           )}
@@ -99,11 +108,11 @@ export default function TenantSupportPage() {
       {newT && (<>
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 60 }} onClick={() => setNewT(null)} />
         <div className="card" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(480px,92vw)", zIndex: 61, padding: "1.25rem" }}>
-          <div style={{ display: "flex", alignItems: "center", marginBottom: "0.75rem" }}><strong>Tiket baru</strong><button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} onClick={() => setNewT(null)}><X size={16} /></button></div>
+          <div style={{ display: "flex", alignItems: "center", marginBottom: "0.75rem" }}><strong><Bi id="Tiket baru" en="New ticket" /></strong><button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} onClick={() => setNewT(null)}><X size={16} /></button></div>
           <div style={{ display: "grid", gap: "0.625rem" }}>
-            <input className="input" placeholder="Subjek" value={newT.subject} onChange={(e) => setNewT({ ...newT, subject: e.target.value })} />
-            <textarea className="input" placeholder="Jelaskan masalah Anda" rows={5} value={newT.body} onChange={(e) => setNewT({ ...newT, body: e.target.value })} />
-            <button className="btn btn-primary btn-sm" style={{ justifySelf: "end" }} disabled={busy || !newT.subject.trim() || !newT.body.trim()} onClick={createTicket}>Kirim tiket</button>
+            <input className="input" placeholder={lang === "en" ? "Subject" : "Subjek"} value={newT.subject} onChange={(e) => setNewT({ ...newT, subject: e.target.value })} />
+            <textarea className="input" placeholder={lang === "en" ? "Describe your issue" : "Jelaskan masalah Anda"} rows={5} value={newT.body} onChange={(e) => setNewT({ ...newT, body: e.target.value })} />
+            <button className="btn btn-primary btn-sm" style={{ justifySelf: "end" }} disabled={busy || !newT.subject.trim() || !newT.body.trim()} onClick={createTicket}><Bi id="Kirim tiket" en="Submit ticket" /></button>
           </div>
         </div>
       </>)}
