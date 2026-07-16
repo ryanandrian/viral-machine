@@ -104,8 +104,12 @@
 - **DEPENDS:** paling akhir sebelum publik (agar tak rotate 2×). Terkait [B1] (system-secrets bisa jadi tempat kelola).
 - **REALISASI:** ⬜
 
-### [A4] Verifikasi Google app + kumala reconnect — 🟡 SUBMITTED 2026-07-05 (menunggu review Google)
-- **TUJUAN:** pelanggan asing lihat brand MesinViral (bukan warning "unverified"); refresh-token permanen (bukan kedaluwarsa 7 hari mode Testing).
+### [A4] Verifikasi Google app + kumala reconnect — ✅ **APPROVED GOOGLE 2026-07-15 21:16 WIB** (email resmi Third Party Data Safety Team; dicatat 2026-07-16)
+- **🏁 HASIL:** OAuth App Verification **DISETUJUI** utk project 153190496639 (`mesin-viral`) — scope `youtube.readonly` + `youtube.upload`. ±10 hari dari submit (2026-07-05), lulus di percobaan ke-2 (video ulang consent-utuh §8b-REV = kuncinya). **Dampak: layar "unverified" HILANG · cap 100 test-user DICABUT · refresh-token PERMANEN → gerbang eksternal go-live terakhir TERBUKA (Midtrans produksi ✅ sejak 2026-07-04) = TINGGAL JUALAN.**
+- **⚠️ Aturan pasca-lulus (dari email Google, PERMANEN):** (1) scope baru / ubah consent screen = WAJIB verifikasi ulang → JANGAN utak-atik console tanpa kebutuhan nyata (§6.5 tetap berlaku); (2) jaga akun Project Owner/Editor aktif; (3) verifikasi tak diwariskan. *(Catatan: `yt-analytics.readonly` tak disebut di email approval — analytics fetch BERJALAN NORMAL; bila kelak dibatasi Google, tangani saat itu dgn bukti, jangan pre-emptive utak-atik console.)*
+- **⬜ Verifikasi mata-kepala (owner, 5 mnt):** alur "Hubungkan dengan Google" akun uji → consent bersih tanpa warning → catat di sini.
+- *(Riwayat di bawah = arsip perjalanan review.)*
+- ~~**TUJUAN:**~~ pelanggan asing lihat brand MesinViral (bukan warning "unverified"); refresh-token permanen (bukan kedaluwarsa 7 hari mode Testing). ✅ TERCAPAI.
 - **KONTEKS:** materi SIAP di `GOOGLE_OAUTH_PLATFORM_MIGRATION.md` — justifikasi scope (§8a, 3 scope: youtube.upload/readonly/yt-analytics.readonly), shot-list demo video (§8b), `/privacy`+`/terms` sudah LIVE & patuh. Scope SENSITIVE (bukan Restricted → tanpa CASA berbayar).
 - **PLAN (aksi owner):** Google Auth Platform (akun `lumite.biz.id@gmail.com`, project `mesin-viral`) → Publish app (Testing→Production) → Verification Center → submit (justifikasi §8a + demo video §8b). Timeline ~10 hari. ~~+ kumala reconnect~~ → **kumala reconnect YouTube = ✅ SELESAI (owner konfirmasi 2026-07-01)**. Sisa A4 = HANYA Langkah 9 (publish + submit verifikasi).
 - **DONE-BILA:** app verified (warning hilang, token permanen).

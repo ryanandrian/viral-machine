@@ -1,5 +1,7 @@
 # Migrasi Kredensial PLATFORM Google: akun ryan → akun perusahaan (lumite)
 
+> 🏁 **APPROVED GOOGLE 2026-07-15** (email Third Party Data Safety Team): OAuth verification LULUS utk scope `youtube.readonly`+`youtube.upload` — layar unverified hilang, cap test-user dicabut, token permanen. Detail & aturan pasca-lulus = `SISA_KERJA_GO_LIVE.md [A4]`. Dokumen ini = ARSIP proses. JANGAN ubah consent/scope tanpa kebutuhan (= antre verifikasi ulang).
+
 > **Status:** PLAN — siap dieksekusi. Belum ada yang diubah saat dokumen ini dibuat.
 > **Dibuat:** 2026-06-26 · **Sumber kebenaran tunggal** untuk migrasi OAuth platform.
 > **Aturan kerja:** tidak boleh merusak fitur/arsitektur mesinviral.com; semua langkah Console di bawah
