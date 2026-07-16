@@ -283,10 +283,8 @@
   menandai OTOMATIS hanya pada jawaban PASTI YouTube (not-found/private; error jaringan TIDAK menandai)
   · analyzer memfilter snapshot delisted (konsumen lain otomatis via status='published') · reversible.
   Bukti 8/8 pada 3 video hantu nyata: delisted ✓, video sehat utuh ✓, keluar antrean sapu ✓, insight
-  203→202 ✓, kurva utuh 16 mgg ✓. Commit: (lihat git). Deploy: menunggu izin owner.
-- **PLAN:** kolektor analytics menandai video yang tak lagi ditemukan API (deleted/private) → analyzer/optimizer eksklusi.
-- **PEMICU KERJAKAN:** pasca go-market (atau saat kejadian serupa terulang).
-- **REALISASI:** ⬜
+  203→202 ✓, kurva utuh 16 mgg ✓. Commit + deploy: ✅ 2026-07-14 19:13 batch B6 (commit `2a15df1`, skrip resmi OK health=200) — selaras header item. *(Baris "menunggu izin owner" lama = basi; dikoreksi 2026-07-16 sapu status total.)*
+- **PLAN & PEMICU (arsip pra-eksekusi):** kolektor analytics menandai video yang tak lagi ditemukan API (deleted/private) → analyzer/optimizer eksklusi — SUDAH terealisasi di blok REALISASI di atas.
 
 ### [B17] PROGRAM BUKTI KECERDASAN — real self-learning terukur→terasa→terjual — 🟡 F0 ✅ DEPLOYED · F1-F3 ber-gerbang
 - **SPEC + tracker = `PROGRAM_BUKTI_KECERDASAN.md`** (alasan + arsitektur di atas fondasi terverifikasi 07-11 + hasil per-fase + gerbang + risiko). Urutan hukum: **F0 ukur (internal) → G1 kurva sehat ≥3 mgg → F1 jendela (laporan mingguan + "mengapa" per-video) → F2 eksperimen aktif (channel bervolume) → F3 warisan platform (≥N tenant)**.

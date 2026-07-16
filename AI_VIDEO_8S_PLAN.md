@@ -1,6 +1,6 @@
 # [B6] PRESET 8 DETIK — RENCANA IMPLEMENTASI ai_video (text-to-video)
 
-> **Status:** 📋 RENCANA MATANG (2026-07-14) — hasil deep-dive kode + DB live (nol asumsi), **menunggu ketok owner untuk mulai F0**.
+> **Status:** 🟢 **FITUR LIVE DI PRODUKSI** (sejak 2026-07-14 malam — F0–F4 tuntas + deployed; preset 8s + model video + DNA radiant jalan). **Sisa HANYA di tangan owner: turnamen model** (Test 5 kandidat via tombol Test → pilih pemenang → 1 run e2e final → [B6] ditutup). Detail terkini = baris POSISI di bawah + header [B6] `SISA_KERJA_GO_LIVE.md`. *(Header lama "menunggu ketok F0" = basi; dikoreksi 2026-07-16 sapu status total.)*
 > **Kaitan:** backlog tunggal = `SISA_KERJA_GO_LIVE.md` **[B6]** (dokumen ini = SPEC+tracker-nya, pola `PROGRAM_BUKTI_KECERDASAN.md`). Spec teknis induk = `MULTI_FORMAT_STUDIO.md §3/§5`. Prioritas jujur (§7 kompas): TIDAK memblok tenant berbayar pertama.
 
 ## 🧭 CARA LANJUT (resume pasca-compaction/sesi baru — baca INI dulu, jangan riset ulang)
@@ -114,7 +114,7 @@ Verifikasi **dokumen resmi vendor** (web, bukan ingatan model) sesuai kriteria o
 ### F3 — FE + validator kunci (kecil) — 🟡 BERJALAN 2026-07-14
 - **TEMUAN pre-touch (jangan riset ulang):** validator kunci tenant NYATA = **vault Python** `src/utils/api_key_vault.py` (`_ai_test`/`validate_ai_key`, jalur `/api/credentials/ai` → mv-webhook) — BUKAN `validate-key.ts` (TS hanya onboarding + admin Test Lab). Resep GENERIK vault (GET {base_url}/models, Bearer) TIDAK cocok utk fal (auth `Key`; base=queue.fal.run bukan API list) → fal wajib resep KHUSUS.
 - Eksekusi: (a) vault `_ai_test` case fal (probe `GET api.fal.ai/v1/models/pricing?endpoint_id=…`, header `Authorization: Key`; 200=valid · 401/403=invalid · lainnya='unchecked' JUJUR — kepastian final diuji F4 kunci nyata); (b) `validate-key.ts` case 'fal' (probe sama, satu semantik); (c) Channel setting: gating DI TITIK INPUT preset⇄model-video (dwibahasa `Bi`, §3.1); (d) verifikasi admin catalog menampilkan component video; (e) Test Lab video: CEK — tambah bila trivial, else defer (catat).
-- **REALISASI:** ✅ **TUNTAS 2026-07-14** (build FE bersih + vault terkompilasi; belum deploy — gerbang F4):
+- **REALISASI:** ✅ **TUNTAS 2026-07-14** (build FE bersih + vault terkompilasi; deploy MENYUSUL malam itu juga bersama F4 — batch `ee125eb`/`29eff8a` 14-Jul + `6801203` 15-Jul, fitur LIVE):
   (a) ✅ vault `_ai_test` case `fal` (probe pricing-API auth `Key`) + leniency `validate_ai_key` (200=valid · 401/403=invalid · lainnya='unchecked' jujur, anti false-negative pola F1-09 EL — kepastian final = F4 kunci nyata);
   (b) ✅ `validate-key.ts` + `KNOWN_PROVIDERS` case 'fal' (probe & semantik sama — dipakai onboarding+Test Lab);
   (c) ✅ Gating input Channel Setting dua-arah (savePreset ⇄ saveVisual: preset ai_video wajib model video & sebaliknya; pesan dwibahasa "ID / EN"; peta `presetModes` dari `duration_presets` [RLS publik sama dgn preset-tables]; nilai pembanding = nilai TERSIMPAN `ch.*` → konsisten dgn yang dipakai produksi; BE STEP 0 tetap backstop). Channel existing (model gambar + preset non-8s) = lolos tanpa perubahan perilaku;
