@@ -19,12 +19,19 @@ const TABS: { key: string; table: string; label: string; fields: Field[]; title:
       hintId: "PNG/JPG, maks 5MB, rasio 16:9 — disarankan 1376×768 px (min lebar 720px). Tampil sebagai cover di daftar blog & gambar hero di halaman artikel. Tersimpan di S3 folder blog-cover/.",
       hintEn: "PNG/JPG, max 5MB, 16:9 ratio — recommended 1376×768 px (min width 720px). Shown as the list cover and the article hero image. Stored in S3 under blog-cover/." } },
     { k: "excerpt", label: "Ringkasan (ID)", type: "area" }, { k: "excerpt_en", label: "Ringkasan (EN)", type: "area" },
-    { k: "body", label: "Isi (markdown, ID)", type: "md" }, { k: "status", label: "Status", type: "select", opts: ["draft", "published"] },
+    { k: "body", label: "Isi (markdown, ID)", type: "md" },
+    // [teguran owner 2026-07-16] field EN sebelumnya TIDAK ada di form (kolom & API sudah siap) →
+    // konten EN mustahil direvisi dari panel. Kini lengkap dua bahasa.
+    { k: "body_en", label: "Isi (markdown, EN)", type: "md" },
+    { k: "status", label: "Status", type: "select", opts: ["draft", "published"] },
   ] },
   { key: "docs", table: "docs_articles", label: "Docs", title: (r) => (r.title as string) || "(baru)", fields: [
     { k: "title", label: "Judul (ID)", type: "text" }, { k: "title_en", label: "Judul (EN)", type: "text" },
-    { k: "slug", label: "Slug", type: "text" }, { k: "grp", label: "Grup", type: "text" },
-    { k: "body", label: "Isi (markdown)", type: "md" }, { k: "sort_order", label: "Urutan", type: "number" },
+    { k: "slug", label: "Slug", type: "text" },
+    { k: "grp", label: "Grup (ID)", type: "text" }, { k: "grp_en", label: "Grup (EN)", type: "text" },
+    { k: "body", label: "Isi (markdown, ID)", type: "md" },
+    { k: "body_en", label: "Isi (markdown, EN)", type: "md" },
+    { k: "sort_order", label: "Urutan", type: "number" },
     { k: "status", label: "Status", type: "select", opts: ["draft", "published"] },
   ] },
   { key: "screens", table: "showcase_screens", label: "Showcase Layar", title: (r) => (r.title as string) || "(baru)", fields: [

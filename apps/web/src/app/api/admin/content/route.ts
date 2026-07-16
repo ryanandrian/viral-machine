@@ -29,6 +29,11 @@ export async function POST(req: Request) {
   const clean: Record<string, unknown> = {};
   for (const c of def.cols) if (c in (row ?? {})) clean[c] = row[c];
   if (table === "testimonials" && clean.slug === "") clean.slug = null; // "" ganda = tabrakan unique
+  // [teguran owner 2026-07-16] buat-baru LANGSUNG published tanpa tanggal → stempel sekarang
+  // (paritas dgn PATCH; tanpa ini post tampil tanpa tanggal & urutan /blog kacau).
+  if (table === "blog_posts" && clean.status === "published" && !clean.published_at) {
+    clean.published_at = new Date().toISOString();
+  }
   const a = createAdminClient();
   const { data, error } = await a.from(table).insert(clean).select("*").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -44,6 +49,15 @@ export async function PATCH(req: Request) {
   for (const c of def.cols) if (c in (patch ?? {})) clean[c] = patch[c];
   if (table === "testimonials" && clean.slug === "") clean.slug = null; // "" ganda = tabrakan unique
   const a = createAdminClient();
+  // [teguran owner 2026-07-16] AUTO-STEMPEL published_at blog saat PERTAMA kali published & masih
+  // kosong (form tak pernah mengisinya → post baru tanpa tanggal + urutan daftar /blog kacau —
+  // daftar diurut kolom ini). Publish-ulang TIDAK menimpa tanggal asli.
+  if (table === "blog_posts" && clean.status === "published" && !("published_at" in clean)) {
+    try {
+      const { data: cur } = await a.from(table).select("published_at").eq("id", id).single();
+      if (!cur?.published_at) clean.published_at = new Date().toISOString();
+    } catch { /* fail-soft: gagal cek → jangan stempel (jangan menimpa buta) */ }
+  }
   const { data, error } = await a.from(table).update(clean).eq("id", id).select("*").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   await a.from("admin_audit").insert({ admin_uid: g.user.id, action: `content.update.${table}`, detail: { id } });
