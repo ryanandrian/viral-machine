@@ -26,18 +26,43 @@ def can_produce(subscription_status) -> bool:
     return (subscription_status or "active") in PRODUCING_STATUSES
 
 
+def effective_discount_pct(tenant_row: dict) -> int:
+    """
+    [owner 2026-07-16 b] Diskon EFEKTIF tenant = discount_pct, TAPI 0 bila `discount_until` terisi
+    dan sudah lewat (promo ber-tanggal-kedaluwarsa; kosong = tanpa batas, perilaku lama persis).
+    SATU-SATUNYA sumber makna diskon — dipakai checkout (midtrans) & comp-check di bawah.
+    Fail-safe: tanggal tak terbaca → diskon dianggap MASIH berlaku (jangan cabut hak diam-diam).
+    """
+    try:
+        pct = int(tenant_row.get("discount_pct") or 0)
+    except Exception:
+        return 0
+    if pct <= 0:
+        return 0
+    until = tenant_row.get("discount_until")
+    if until:
+        try:
+            from datetime import datetime, timezone
+            dt = datetime.fromisoformat(str(until).replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            if dt < datetime.now(timezone.utc):
+                return 0
+        except Exception:
+            pass  # tanggal korup → anggap masih berlaku (fail-safe pro-tenant)
+    return pct
+
+
 def is_comp_account(tenant_row: dict) -> bool:
     """
-    Comp/internal account = GRATIS SELAMANYA, bypass siklus billing (DESAIN: akun developer owner).
-    Sumber: is_developer=True ATAU discount_pct>=100. Implikasi: SELALU producing, TAK PERNAH
-    suspended/expired/ditagih, current_period_end boleh null (perpetual). Renewal-checker WAJIB exempt ini.
+    Comp/internal account = GRATIS, bypass siklus billing (DESAIN: akun developer owner).
+    Sumber: is_developer=True ATAU diskon EFEKTIF >=100 (comp-via-diskon ikut kedaluwarsa bila
+    `discount_until` lewat — [owner 2026-07-16 b]; is_developer TIDAK pernah kedaluwarsa).
+    Implikasi comp: SELALU producing, TAK PERNAH suspended/expired/ditagih. Renewal WAJIB exempt.
     """
     if tenant_row.get("is_developer"):
         return True
-    try:
-        return int(tenant_row.get("discount_pct") or 0) >= 100
-    except Exception:
-        return False
+    return effective_discount_pct(tenant_row) >= 100
 
 
 def daily_publish_cap(tenant_row: dict, plan_limits: dict) -> int:
@@ -122,7 +147,7 @@ def _tenant_gate_row(sb, tenant_id: str) -> dict:
         return {}
     try:
         res = (sb.table("tenant_configs")
-               .select("subscription_status,plan_type,videos_per_day,max_videos_per_day,is_developer,discount_pct,trial_started_at")
+               .select("subscription_status,plan_type,videos_per_day,max_videos_per_day,is_developer,discount_pct,discount_until,trial_started_at")
                .eq("tenant_id", tenant_id).limit(1).execute())
         return (res.data or [{}])[0]
     except Exception as e:

@@ -141,7 +141,7 @@ def compute_checkout_amount(sb, tenant_id: str, plan_type: str, period_months: i
         base = round(base * (100 - _ann) / 100)
     trow = {}
     try:
-        r = (sb.table("tenant_configs").select("is_developer,discount_pct")
+        r = (sb.table("tenant_configs").select("is_developer,discount_pct,discount_until")
              .eq("tenant_id", tenant_id).limit(1).execute())
         trow = (r.data or [{}])[0]
     except Exception as e:
@@ -149,13 +149,10 @@ def compute_checkout_amount(sb, tenant_id: str, plan_type: str, period_months: i
     from src.billing.limits import is_comp_account
     if is_comp_account(trow):
         raise ValueError("comp_account_no_billing")
-    admin_disc = 0
-    try:
-        d = int(trow.get("discount_pct") or 0)
-        if 0 < d < 100:
-            admin_disc = d
-    except Exception:
-        pass
+    # [owner 2026-07-16 b] diskon EFEKTIF (hormati discount_until) — SATU sumber makna di limits.py.
+    from src.billing.limits import effective_discount_pct
+    _eff = effective_discount_pct(trow)
+    admin_disc = _eff if 0 < _eff < 100 else 0
     wb = _winback_discount(sb, tenant_id)
     disc = max(admin_disc, wb)
     if disc <= 0:

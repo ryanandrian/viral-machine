@@ -164,7 +164,7 @@ def sweep_subscriptions(sb) -> dict:
     warn_days = [_cfg(sb, "deletion_warn1_days", 30), _cfg(sb, "deletion_warn2_days", 7), _cfg(sb, "deletion_warn3_days", 1)]
 
     rows = (sb.table("tenant_configs")
-            .select("tenant_id,subscription_status,current_period_end,is_developer,discount_pct,"
+            .select("tenant_id,subscription_status,current_period_end,is_developer,discount_pct,discount_until,"
                     "trial_reminder_sent_at,renewal_reminder_sent_at,suspend_notified_at,"
                     "lead_temp,nurture_step,nurture_last_sent_at,suspended_at,blocked_at,"
                     "deletion_scheduled_at,raw_assets_purged_at,winback_offer_pct,winback_offer_expires_at,deletion_warn_sent")

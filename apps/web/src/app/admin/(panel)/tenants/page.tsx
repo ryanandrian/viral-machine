@@ -84,7 +84,7 @@ export default function AdminTenantsPage() {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [busy, setBusy] = useState(false);
   const [compose, setCompose] = useState<{ subject: string; body: string } | null>(null);
-  const [compModal, setCompModal] = useState<{ is_developer: boolean; discount_pct: number } | null>(null);
+  const [compModal, setCompModal] = useState<{ is_developer: boolean; discount_pct: number; discount_until: string } | null>(null);   // discount_until = YYYY-MM-DD ("" = tanpa batas) [owner 2026-07-16 b]
   // LIFECYCLE (B9): aksi manual — modal isi hari (extend/undur-hapus) + konfirmasi (aktifkan-bersih/hapus).
   const [lifeModal, setLifeModal] = useState<{ action: "extend" | "postpone_deletion"; days: string } | null>(null);
   const [confirm, setConfirm] = useState<null | "reactivate" | "delete">(null);
@@ -286,7 +286,7 @@ export default function AdminTenantsPage() {
             {(cur.status === "suspended" || cur.status === "blocked") && (
               <button className="btn btn-secondary btn-sm" disabled={busy} style={{ color: "var(--success)" }} onClick={() => setConfirm("reactivate")}><RotateCcw size={14} /> <Bi id="Aktifkan bersih" en="Reactivate" /></button>
             )}
-            <button className="btn btn-secondary btn-sm" disabled={busy || !detail} onClick={() => setCompModal({ is_developer: !!detail?.tenant?.is_developer, discount_pct: detail?.tenant?.discount_pct ?? 0 })}>{cur.comp ? "Comp ✓" : "Comp/Diskon"}</button>
+            <button className="btn btn-secondary btn-sm" disabled={busy || !detail} onClick={() => setCompModal({ is_developer: !!detail?.tenant?.is_developer, discount_pct: detail?.tenant?.discount_pct ?? 0, discount_until: ((detail?.tenant as { discount_until?: string })?.discount_until ?? "").slice(0, 10) })}>{cur.comp ? "Comp ✓" : "Comp/Diskon"}</button>
             {(cur.status === "suspended" || cur.status === "blocked") && (
               <button className="btn btn-secondary btn-sm" disabled={busy} style={{ color: "var(--danger)" }} onClick={() => setConfirm("delete")}><Trash2 size={14} /> <Bi id="Hapus sekarang" en="Delete now" /></button>
             )}
@@ -329,6 +329,11 @@ export default function AdminTenantsPage() {
                 <label className="label">Diskon (%)</label>
                 <input className="input" type="number" min={0} max={100} value={compModal.discount_pct} onChange={(e) => setCompModal({ ...compModal, discount_pct: Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0)) })} />
                 <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: 3 }}>≥100% = gratis (setara comp). 0 = tanpa diskon.</div>
+              </div>
+              <div>
+                <label className="label">Diskon berlaku s/d (opsional)</label>
+                <input className="input" type="date" value={compModal.discount_until} onChange={(e) => setCompModal({ ...compModal, discount_until: e.target.value })} />
+                <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: 3 }}>Kosong = tanpa batas. Terisi = diskon HANGUS OTOMATIS lewat tanggal itu (promo aman tanpa perlu ingat menol-kan).</div>
               </div>
               <button className="btn btn-primary btn-sm" disabled={busy} style={{ justifySelf: "end" }} onClick={saveComp}>Simpan</button>
             </div>

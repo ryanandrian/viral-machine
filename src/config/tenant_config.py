@@ -33,12 +33,14 @@ _PLAN_LIMITS_FALLBACK = {
     "business": {"max_videos_per_day": 5, "max_channels": 10},
 }
 _plan_limits_cache: Optional[dict] = None
+_plan_limits_cache_ts: float = 0.0
+_PLAN_LIMITS_TTL_S = 300   # [owner 2026-07-16 a] perubahan kuota di admin berlaku di worker ≤5 mnt (dulu: seumur proses → butuh restart)
 
 
 def _get_plan_limits() -> dict:
-    """Load plan limits dari Supabase tabel plan_limits. Cache per-process."""
-    global _plan_limits_cache
-    if _plan_limits_cache is not None:
+    """Load plan limits dari Supabase tabel plan_limits. Cache ber-TTL 5 mnt (fail-safe: gagal refresh → pakai cache lama)."""
+    global _plan_limits_cache, _plan_limits_cache_ts
+    if _plan_limits_cache is not None and (time.time() - _plan_limits_cache_ts) < _PLAN_LIMITS_TTL_S:
         return _plan_limits_cache
     try:
         from supabase import create_client
@@ -57,9 +59,13 @@ def _get_plan_limits() -> dict:
                 }
                 if limits:
                     _plan_limits_cache = limits
+                    _plan_limits_cache_ts = time.time()
                     logger.info(f"[PlanLimits] Loaded from Supabase: {list(limits.keys())}")
                     return _plan_limits_cache
     except Exception as e:
+        if _plan_limits_cache is not None:
+            logger.warning(f"[PlanLimits] refresh gagal ({e}) — pakai cache lama (≤TTL lewat) sampai panggilan berikutnya")
+            return _plan_limits_cache
         logger.error(f"[PlanLimits] Supabase load GAGAL ({e}) — pakai fallback SEMENTARA "
                      f"(caps darurat, BISA BASI vs admin); TIDAK di-cache → coba lagi panggilan berikutnya")
     # JANGAN cache fallback (Tahap 5.1d finalisasi_tier_plan): blip transient tak boleh membekukan
