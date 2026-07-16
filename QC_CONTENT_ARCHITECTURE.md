@@ -1,16 +1,21 @@
 # QC & Content-Quality Architecture — MesinViral v2
 
-> ✅🔒 **CLOSED sbg backlog aktif (2026-07-01).** QC v2 (F0-F2) + durasi (F4) = LIVE. Roadmap belum-dibangun (F3 quarantine/F4 self-critic/F5 belajar-QC-fail/F6 dashboard/F7 consent-fallback) = tercatat di **[`SISA_KERJA_GO_LIVE.md`](SISA_KERJA_GO_LIVE.md)** (data-gated/pasca-launch). **Dokumen ini = SPEC/living-design QC.**
+> ✅🔒 **CLOSED sbg backlog aktif (2026-07-01).** Daftar kerja = HANYA **[`SISA_KERJA_GO_LIVE.md`](SISA_KERJA_GO_LIVE.md)**. **Dokumen ini = SPEC/single-source-of-truth arsitektur QC konten** (sinkron penuh ke codebase 2026-07-16 atas mandat owner).
+>
+> **⚠️ DUA PENOMORAN "F" BERBEDA di dokumen ini — jangan tertukar:**
+> 1. **"QC-F0…QC-F7"** (§5) = fase roadmap QC lama (2026-06-13). Status: QC-F0/F1/F2 ✅ LIVE · QC-F3 quarantine, QC-F4 self-critic, QC-F5 belajar-QC-fail (sebagian terwujud), QC-F6 dashboard, QC-F7 consent-fallback = ROADMAP.
+> 2. **"PROGRAM DURASI F1…F5"** (banner 🎯 di bawah) = program perbaikan durasi 2026-07-16. Status: **SEMUANYA ✅ LIVE.**
+> 3. Kode fase lain yang ikut disebut (mis. `F1-05`, `F5-01` = fase dokumen REMEDIASI; `[B6] F0–F4` = tracker AI-video) = penomoran dokumen/tracker LAIN — selalu dibaca bersama konteks kalimatnya.
 
 > **Living document.** Tujuan: arsitektur khusus untuk *quality control* + *self-improvement* yang **terus dievaluasi & di-improve** sampai ideal. Cakupan: **dari ScriptAnalyzer → seluruh tahap produksi → file hasil (pra-submit)** + **loop self-analyzer/self-improvement** (janji landing page: "robot pintar, makin pintar tiap hari").
 >
 > Status LIVE per-fase = `PROGRESS.md`. Pondasi multi-format = `MULTI_FORMAT_STUDIO.md`. Prinsip: [[feedback_no_hardcode]] · [[feedback_analysis_discipline]].
 >
-> **🔄 REKONSILIASI AUDIT 2026-07-01:** F4 durasi-via-speed diterapkan (commit `8670fc3`, migr 0078/0079). QC v2 Lapis 1-3 (F0-F2) = LIVE. **Masih ROADMAP (belum dibangun):** F3 quarantine · F4 self-critic pra-submit · F5 belajar-dari-QC-fail · F6 dashboard · F7 consent-fallback penuh.
+> **🔄 REKONSILIASI AUDIT 2026-07-01:** durasi-via-speed (fase F4 milik dokumen REMEDIASI, commit `8670fc3`, migr 0078/0079) diterapkan. QC v2 Lapis 1-3 (QC-F0–QC-F2) = LIVE. **Masih ROADMAP:** QC-F3 quarantine · QC-F4 self-critic pra-submit · QC-F5 belajar-dari-QC-fail · QC-F6 dashboard · QC-F7 consent-fallback penuh.
 >
 > **⚠️ KOREKSI 2026-07-15 (data produksi membantah klaim lama "durasi TUNTAS"):** durasi MASIH sering meleset di produksi beragam-niche (±10 dari 206 run gagal "di luar ±15%"; contoh nyata: preset 60s → audio 46,8s). **ROOT-CAUSE (verified log+kode):** (1) *Lapis-1, akar utama* — LLM sering menulis naskah KEPENDEKAN (mis. 72–86 kata dari target ~134) menembus 3× retry, lalu sistem "pakai seadanya" (best-score) → durasi mustahil tercapai walau suara diperlambat mentok; (2) *Lapis-2, menipu* — estimator durasi (`solve_speed_for_duration`, seed `_PAUSE_INFLATION`=1.10 belum dikalibrasi per-suara) meleset ~9% → naskah kadang lolos gate padahal nyatanya pendek. Perbaikan lampau semua menyentuh Lapis-2 (kalibrasi/tuas speed/toleransi); **Lapis-1 belum tuntas** (tak ada pemaksaan panjang yang mengikat).
 >
-> **✅ DITANGANI 2026-07-15 (commit `d27273b`; ✅ DEPLOYED 2026-07-16 bersama batch F1):** (a) **Lapis-1 prompt** `script_engine._build_user_prompt` — CABUT pintu-kabur ("sistem set speed; rewrite panjang hanya bila terpaksa" = yang mengajari LLM abaikan jumlah kata) → target **STRUKTUR (jumlah kalimat)** yang bisa dipatuhi LLM (bukan hitung-kata yang mustahil) + panjang=syarat via kekayaan isi + **preset-aware** (8–15s cegah kepanjangan · 30–90s cegah kependekan). (b) **Gerbang durasi pra-visual** kini HANYA stop meleset PARAH (`QC_DURATION_GROSS_FACTOR`×tol, default ±30%); **near-miss LANJUT diproduksi → OPSI C review** (tak dibuang, tak panik). (c) **Pesan review** dimanusiakan (`_humanize_qc_reason`; nol jargon, nol "GAGAL"). *(Catatan F3: blok prompt ini akan disempurnakan — masih berbahasa ID di kerangka EN + hardcode ~14 kata/kalimat.)*
+> **✅ DITANGANI 2026-07-15 (commit `d27273b`; ✅ DEPLOYED 2026-07-16 bersama batch F1):** (a) **Lapis-1 prompt** `script_engine._build_user_prompt` — CABUT pintu-kabur ("sistem set speed; rewrite panjang hanya bila terpaksa" = yang mengajari LLM abaikan jumlah kata) → target **STRUKTUR (jumlah kalimat)** yang bisa dipatuhi LLM (bukan hitung-kata yang mustahil) + panjang=syarat via kekayaan isi + **preset-aware** (8–15s cegah kepanjangan · 30–90s cegah kependekan). (b) **Gerbang durasi pra-visual** kini HANYA stop meleset PARAH (`QC_DURATION_GROSS_FACTOR`×tol, default ±30%); **near-miss LANJUT diproduksi → OPSI C review** (tak dibuang, tak panik). (c) **Pesan review** dimanusiakan (`_humanize_qc_reason`; nol jargon, nol "GAGAL"). *(Blok prompt versi ini SUDAH digantikan penuh oleh PROGRAM DURASI F3 di bawah — seragam EN, hardcode dibuang.)*
 >
 > **🎯 PROGRAM DURASI 5-FASE (mandat owner 2026-07-16 "tuntas 100% no turn-back"; tracker = `SISA_KERJA_GO_LIVE.md [C1]`):**
 > **ROOT-CAUSE FINAL (data 110 render + backfill log + DNA niche — MENYEMPURNAKAN koreksi 2026-07-15 di atas):** 85% video keluar PENDEK; biang dominan = **taksiran pace salah per (voice × gaya-DNA-niche)** — voice SAMA beda niche pace nyata beda s/d 25% (Ardi: legenda_daerah 2.53 vs radiant_affirmations 2.00 wps); niche yang pace-nya kebetulan pas (dark_history) = **86% dalam ±15%**, yang melenceng cuma 20–58%. `tts_profiles.delivery_wps` global SUDAH akurat <1% (**JANGAN dikalibrasi ulang membuta**); `voice_catalog.delivery_wps` per-voice mayoritas NULL. Error taksiran per-niche terukur (backfill): ocean 3% · dark 6% · legenda ~10% · radiant ~12% · **fun_facts ~20%**. DNA mempengaruhi durasi via `narration_persona.style` (radiant "ONE sentence" = konflik struktural) + kepadatan jeda; visual TIDAK menentukan durasi (ai_video: klip diskrit ≥ audio lalu di-trim; hukum durasi final tetap `audio + trailing` utk SEMUA render_mode — `video_renderer.py` `total_duration`).
@@ -31,7 +36,7 @@
 1. **QC ≠ penilaian konten.** Kualitas konten (hook, retensi, CTA) dinilai **di hulu** oleh `ScriptAnalyzer` (ambang ≥80). QC pra-submit hanya menjawab: *"apakah FILE hasil render utuh, sesuai NIAT produksi, dan sah untuk platform?"* — bukan "apakah kontennya bagus".
 2. **Relatif, bukan absolut.** Tidak ada angka ajaib global (mis. "≥45s"). Ambang diturunkan dari **Duration Preset** + **Format Profile** tenant (8/15/30/45/60/75/90s). Floor absolut = anti-pattern yang membuang video valid + biaya render.
 3. **Config-driven, no-hardcode.** Semua ambang dari config/DB/env, dapat ditambah super-admin. Tidak ada nama provider/angka tertanam di pesan error.
-4. **Fail-soft yang jujur.** Kegagalan komponen (mis. TTS) → fallback yang dicatat, bukan diam-diam. QC-fail → video TIDAK dibuang membabi-buta; lihat §5 (kebijakan retry/quarantine).
+4. **GAGAL JUJUR, nol degradasi senyap.** Kegagalan komponen produksi (TTS/visual) = **STOP + tercatat + ternotifikasi** — TIDAK pindah diam-diam ke cadangan (NO-FALLBACK, F1-05; fallback ber-izin = fitur opt-in masa depan §4b). QC-fail → video TIDAK dibuang membabi-buta → OPSI C review (§2/§7). *Yang boleh "fail-soft" hanyalah komponen OBSERVASI (logging/kalibrasi/alarm) — gagal mengamati tak boleh mengganggu produksi.*
 5. **Self-improving.** Output nyata (analytics) harus mengalir balik menaikkan kualitas generasi berikutnya — terukur, bukan klaim.
 
 ---
@@ -46,10 +51,10 @@ Pipeline `src/orchestrator/pipeline.py` (7 step) dengan gate kualitas di beberap
 | 2 | Niche/topic select | **insights-driven** (smart focus dari grade) + dedup topik 30d | `intelligence/niche_selector.py` |
 | 3 | **Script gen + ANALISIS** | **`ScriptAnalyzer` skor 6-dimensi, ambang ≥80, retry s/d 3× dgn feedback** | `intelligence/script_engine.py`, `script_analyzer.py` |
 | 4 | Hook optimize | generate N hook → skor → pilih winner; inject *historical top hooks* | `intelligence/hook_optimizer.py` |
-| 5 | TTS | chain config-driven primary→fallback (fail-soft) | `production/tts_engine.py` |
-| 6 | Visual assembly | N clip (saat ini **hardcode 6**), hook-frame | `production/visual_assembler.py` |
-| 7 | Render | xfade + caption (karaoke ASS) + music ducking | `production/video_renderer.py` |
-| 7.5 | **Pre-publish QC** | **integritas file (size/durasi/clip_count)** — lihat §2 | `pipeline.py::_pre_publish_qc` |
+| 5 | TTS | **NO-FALLBACK (F1-05)**: HANYA provider terkonfigurasi channel; gagal = gagal jujur. + closed-loop atempo (`_fit_duration`, overhead PENUH per-preset F4) + instrumen F1 (`_log_delivery_sample` → taksiran-vs-aktual + `beat_words`) | `production/tts_engine.py` |
+| 6 | Visual assembly | N clip = **`visual_beats` preset** (per-preset; legacy tanpa-preset default 6); ai_video = 1 klip ≥ audio lalu di-trim | `production/visual_assembler.py` |
+| 7 | Render | xfade + caption (karaoke ASS) + music ducking + trailing efektif per-preset + loop-ending | `production/video_renderer.py` |
+| 7.5 | **Pre-publish QC** | **QC v2 relatif** (durasi ±tol vs preset · clip=visual_beats · size SADAR-DURASI per-60s floor 0.3MB · stream audio+video · aspect) — lihat §2 | `pipeline.py::_pre_publish_qc` |
 
 ### 1a. ScriptAnalyzer — gate kualitas konten utama (HULU)
 `VIRAL_DIMENSIONS` berbobot (`script_analyzer.py`):
@@ -69,22 +74,28 @@ video nyata → video_analytics (views, watch_time, avg_view_pct, ctr, subscribe
 
 ---
 
-## 2. QC pra-submit SAAT INI + masalahnya
+## 2. QC pra-submit — KONDISI NYATA (sinkron kode 2026-07-16)
 
-`_pre_publish_qc(video_path, duration_secs, clip_count)` — 4 cek:
-1. size ≥ `QC_MIN_SIZE_MB` (default 5)
-2. durasi ≥ `QC_MIN_DURATION` (**interim default 3** — sebelumnya 45 lalu sempat 20)
-3. durasi ≤ `QC_MAX_DURATION` (default 180)
-4. clip_count ≥ `QC_MIN_CLIPS` (default 6)
+`_pre_publish_qc(video_path, duration_secs, clip_count, target_seconds, expected_beats)` — dua mode:
 
-### Masalah arsitektur (yang sedang diperbaiki)
-- 🔴 **Floor durasi absolut.** `<45s` (warisan v1) **memblokir preset 8s/15s** — `MULTI_FORMAT_STUDIO.md` baris 16 menandai ini "blocker", baris 53 minta **"QC relatif"**. Sempat saya turunkan ke 20s → **tetap memblokir 8/15s** (bug yang sama, angka beda). **Sekarang interim 3s** (hanya deteksi render kosong) sampai redesign §3.
-- 🔴 **Mencampur integritas & konten.** "Durasi layak" itu penilaian konten, bukan integritas. Konten sudah di-gate ScriptAnalyzer.
-- 🟡 **`clip_count` & `size` absolut.** 6-clip & 5MB benar untuk produksi 6-scene saat ini, tapi salah untuk preset ultra-short (2–3 beat, file lebih kecil — `MULTI_FORMAT_STUDIO.md` baris 53).
-- 🟡 **QC-fail = buang total.** Video QC-fail dihapus + biaya render hangus, tanpa retry/quarantine cerdas.
-- ✅ **(DIFIX) Cek integritas teknis** — kini `_pre_publish_qc` cek stream video+audio + aspect 9:16 (config `QC_REQUIRE_AUDIO`/`QC_ASPECT`/`QC_ASPECT_TOLERANCE`). Tervalidasi: render tanpa-audio & aspect salah ditolak; 9:16+audio lolos.
+**Ber-preset (produksi normal) → QC v2 RELATIF penuh:**
+1. **Durasi**: `|aktual − preset| / preset ≤ QC_DURATION_TOLERANCE` (default 0.15) — tanpa floor absolut.
+2. **Clip**: `clip_count ≥ expected_beats` (= `visual_beats` preset — BUKAN hardcode 6).
+3. **Ukuran SADAR-DURASI** ([B6] F4 2026-07-14): ambang env = basis per-60s, diskalakan `× target/60`, floor 0.3MB (8s sehat 3.3MB tak lagi dicap "render gagal").
+4. **Integritas**: stream video+audio (`QC_REQUIRE_AUDIO`) + aspect 9:16 (`QC_ASPECT`/`QC_ASPECT_TOLERANCE`).
 
-### Root cause DURASI (UPDATE 2026-06-16 — WPS 2.4 hardcode SUDAH ditangani; residual = mismatch provider)
+**Tanpa preset (legacy) → interim integritas:** size ≥ `QC_MIN_SIZE_MB`(5) · durasi ≥ `QC_MIN_DURATION`(**3**) & ≤ `QC_MAX_DURATION`(180) · clip ≥ `QC_MIN_CLIPS`(6).
+
+**Gerbang KEDUA di hulu (pra-visual, `pipeline.py` STEP 6):** proyeksi `audio + overhead PENUH` (trailing efektif + loop bersih — `effective_overhead`, F4) vs window QC yang SAMA; meleset **PARAH** (>`QC_DURATION_GROSS_FACTOR`×tol) → stop sebelum biaya gambar/render; **near-miss → LANJUT → OPSI C review** (owner 2026-07-15).
+
+### Masalah arsitektur (status 2026-07-16 — SEMUA butir lama TERTUTUP)
+- ✅ Floor durasi absolut → QC relatif preset (F2 QC v2) + interim 3s utk legacy.
+- ✅ Integritas vs konten dipisah (konten = ScriptAnalyzer; QC = file/niat/platform).
+- ✅ `clip_count` & `size` absolut → clip = visual_beats preset; size sadar-durasi.
+- ✅ QC-fail = buang total → **OPSI C**: `ready_with_issues` → tenant tinjau/putuskan (§3, §7).
+- ✅ Cek integritas teknis (stream audio+video + aspect) — tervalidasi.
+
+### 🗄️ ARSIP — Root cause DURASI (kronik 2026-06-16/17; SUPERSEDED oleh banner "PROGRAM DURASI 5-FASE" di atas — root-cause FINAL = pace per voice×niche + α respons-speed + overhead, semua SUDAH ditangani F1–F5)
 **KOREKSI status:** WPS **bukan lagi** `2.4` hardcode. F1 (migr 0012) memasukkan **`format_wps` per-format/provider** dari `tts_profiles` (`script_engine.py:224` `WPS = format_wps if format_wps else 2.4`; 2.4 kini **fallback legacy** saja; sumber: `_eff_wps(format_profile, tts_provider)` `script_engine.py:511`). `tts_profiles.delivery_wps`: elevenlabs **1.8** · edge_tts/openai_tts **2.6**.
 **Residual (tervalidasi test ryan 2026-06-16):** word-budget pakai `delivery_wps` provider **TERKONFIGURASI** (ryan=elevenlabs→1.8) tapi yang **me-RENDER = edge** (fallback krn ElevenLabs lapse, 2.6) → budget 60×1.8=108 kata, edge bicara 108/2.6 ≈ **43s** untuk target 60s → QC-fail. **Akar = WPS budget ≠ WPS provider AKTUAL (saat fallback).**
 **Akar KEDUA — LLM under-produce word budget (tervalidasi e2e ryan 2026-06-16, run `direct-0f73a253`):** kali ini ElevenLabs **berhasil** (98% timestamps, no fallback) TAPI durasi tetap pendek (**48.3s** vs 60s) karena `ScriptEngine` hanya menghasilkan **73 kata** vs budget 108 — `length-gate` (script_engine.py:629 "73w vs target 108w → retry") retry 3× lalu **pakai best-available** (78/100) yang tetap pendek. Jadi miss-durasi bisa datang dari **(a) WPS provider-mismatch saat fallback** ATAU **(b) LLM tak memenuhi word_budget** meski provider utama jalan. **Implikasi fix:** selain WPS-follow-actual (a), perlu **length-gate lebih tegas** (b) — mis. retry sampai ≥ budget×toleransi, atau prompt yang memaksa panjang, sebelum publish (masuk F3/F5 self-tune). *Advisory dinamis (§3) sudah benar menangani kedua kasus: `fallback_used=True`→saran provider; `False`→saran preset/panjang skrip.*
@@ -98,7 +109,7 @@ video nyata → video_analytics (views, watch_time, avg_view_pct, ctr, subscribe
 
 ---
 
-## 3. ARSITEKTUR TARGET — QC v2 (spec-aware, relatif, berlapis)
+## 3. ARSITEKTUR QC v2 (spec-aware, relatif, berlapis) — ✅ TERPASANG (desain 2026-06-13 → live sejak 2026-06-16; kondisi kode = §2)
 
 QC menjadi **3 lapis**, semua ambang config-driven, ambang relatif diturunkan dari **Duration Preset × Format Profile** run tsb.
 
@@ -121,12 +132,12 @@ QC menjadi **3 lapis**, semua ambang config-driven, ambang relatif diturunkan da
 ### Di LUAR QC (tetap di hulu)
 - Kualitas naratif (hook/retensi/emosi/CTA) = **ScriptAnalyzer ≥80** (STEP 3). QC tak menilai ini.
 
-### Sumber `target_preset` & `expected_beats`
-Dari **Duration Preset tenant** — mekanisme di `MULTI_FORMAT_STUDIO.md §3` (8/15/30/45/60/75/90s; word_budget = detik×WPS; visual beat per preset). **Belum ada field-nya di `tenant_configs`** → QC v2 **mendarat bersama** field preset. Interim sekarang (§2) aman karena produksi aktif ~40s/6-clip.
+### Sumber `target_preset` & `expected_beats` (kondisi nyata)
+Dari **`channels.duration_preset`** (per-CHANNEL, migr 0012 — bukan di `tenant_configs`) → detail preset dari tabel `duration_presets` (`seconds`/`visual_beats`/`beats`/`render_mode`/`trailing_silence_override`, admin-editable di Catalog). Mekanisme multi-format = `MULTI_FORMAT_STUDIO.md §3`. Channel tanpa preset (NULL) → jalur legacy interim §2.
 
 ### Kebijakan QC-fail (DIPUTUSKAN owner 2026-06-16 → **DIREVISI ke OPSI C 2026-06-17**)
 - **Tinjau di DOMAIN KITA + approve, BUKAN buang & BUKAN auto-upload ke YouTube (OPSI C, owner 2026-06-17).** QC-fail (video jadi) → video **tetap di buffer S3** dengan status **`ready_with_issues`** + diagnosa tersimpan → tenant **tinjau dari dashboard (preview dari S3)** + **advisory** (alasan + rekomendasi, via Telegram/FE) → **tenant putuskan**: **Pakai** (kita publish, **kuota−1**) / **Buang** (hapus S3) / diabaikan (TTL → auto-buang). **YouTube TIDAK PERNAH menerima video bermasalah tanpa persetujuan ber-kuota** → flip-di-Studio mustahil, kuota tak bisa diakali. *(Mengganti hapus-video `pipeline.py:317` DAN superseding "upload-private-ke-YouTube" Opsi A.)*
-- Bila penyebab transient terukur (mis. fallback TTS bikin durasi meleset) → boleh **re-generate terarah** (kalibrasi WPS §2), bukan loop bakar-kredit.
+- Bila penyebab transient terukur → boleh **re-generate terarah** (mis. via tombol produksi-langsung pasca-perbaikan), bukan loop bakar-kredit. *(Contoh lama "fallback TTS bikin durasi meleset" sudah tidak mungkin — TTS kini NO-FALLBACK.)*
 - Catat **alasan terstruktur** (lapis+metrik) ke `pipeline_run_logs` untuk feedback ke §4.
 - **Integrasi alur §12c — OPSI C (owner-confirmed 2026-06-17, MENGGANTIKAN Opsi A).** Producer **HANYA stok** ke buffer: QC-pass→`ready`; QC-fail-ada-video→**`ready_with_issues`** (+metadata issue/koreksi); crash-tanpa-video→`failed`. **Producer TIDAK memanggil `publish()`/Telegram** → mengembalikan invariant §12c yang dilanggar Opsi A. **`ready` + `ready_with_issues` SAMA-SAMA dihitung stok → REM ALAMI** (buffer penuh ⇒ producer berhenti; menutup runaway). Publisher saat slot **hanya auto-publish `ready`** (kuota−1, lapor sukses saat publish); `ready_with_issues` **tak pernah auto-tayang** → ditinjau tenant (approve=publish+kuota / buang / TTL). Hard-fail beruntun (N, config) → **circuit-breaker**: pause channel + **alarm Telegram SEKETIKA**; auto-recover saat 1 produce sukses (mis. via direct pasca-perbaikan). **Alasan ganti dari Opsi A:** Opsi A meng-upload video bermasalah privat ke YouTube DARI producer → (1) melanggar decouple, (2) banjir upload off-schedule saat loop, (3) lubang cheat flip-di-Studio (di luar kendali kita). **Opsi C menutup ketiganya di sumber + otomatis menyetop runaway** (insiden 2026-06-17). *(Alternatif "upload-private ke YouTube" = Opsi A, ditolak; "lewat buffer + publisher force-private di slot" juga ditolak.)*
 
@@ -152,10 +163,11 @@ Tujuan: tutup loop tidak hanya di **input** (script/hook dari analytics) tapi ju
 
 > **Prinsip (kuatkan §0.4): TIDAK ada degradasi kualitas yang SENYAP.** Setiap fallback ke provider cadangan = penurunan kualitas yang tenant **bayar** untuk dihindari (mis. suara premium ElevenLabs → edge_tts). Diam-diam menurunkannya = pelanggaran kepercayaan + kualitas.
 
-### Kondisi nyata (tervalidasi 2026-06-13, vs kode)
-- **TTS fallback SILENT** — `tts_engine.generate` hanya `logger.warning` saat fallback; **tak ada notifikasi tenant**. Field `tts_fallback_provider` ADA (default `edge_tts`).
-- **Visual = GENERATOR AI saja, NO-FALLBACK** (sejak 2026-06-24, Pexels dibuang): `visual_assembler` pakai HANYA generator pilihan channel (`ai_image:`/`ai_video:`); gagal → `[]` → pipeline raise → notify → retry manual. Tak ada lagi rantai ai_image→Pexels→black-screen. (Kebijakan transparansi/no-silent-degradasi tetap berlaku untuk TTS.)
-- **Konsekuensi kualitas edge_tts nyata**: timestamp **aproksimasi** (interpolasi batas-kalimat) → sinkron caption ~80% vs ElevenLabs char-level ~98%. ⚠️ *Inkonsistensi kode: docstring edge_tts klaim ~95%, engine label ~80% — REKONSILIASI dulu (verifikasi angka nyata) sebelum dipakai sebagai janji.*
+### Kondisi nyata (SINKRON KODE 2026-07-16 — kondisi 2026-06-13 di bawah ini SUDAH BERUBAH TOTAL)
+- ✅ **TTS kini NO-FALLBACK (F1-05, verified `tts_engine.py`):** HANYA provider terkonfigurasi channel; gagal = **gagal jujur** (log + run gagal), TIDAK pindah diam-diam ke edge. Field `tts_fallback_provider` **SUDAH TIDAK ADA di kode**. Klaim lama "TTS fallback SILENT" = sejarah (memicu insiden runaway 2026-06-17), bukan kondisi sekarang.
+- ✅ **Visual = GENERATOR AI saja, NO-FALLBACK** (sejak 2026-06-24, Pexels dibuang): gagal → `[]` → pipeline raise → notify → retry. Konsisten dgn TTS: **kedua komponen kini gagal-jujur** — prinsip "nol degradasi senyap" terpenuhi via TIDAK ADA degradasi sama sekali.
+- **Konsekuensi utk roadmap F7:** checkbox "izinkan fallback" (model B di bawah) = fitur OPT-IN masa depan (bila owner mau menawarkan mode hemat), BUKAN perbaikan kondisi sekarang. Model A (transparansi) tetap prinsip wajib bila fallback pernah diaktifkan.
+- Rekonsiliasi akurasi caption edge (~80% vs klaim 95%) masih terbuka (§6).
 
 ### Model: dua sumbu, JANGAN disatukan jadi satu toggle
 **A) Transparansi — WAJIB di KEDUA mode (tak bisa di-opt-out):**
@@ -166,34 +178,34 @@ Tujuan: tutup loop tidak hanya di **input** (script/hook dari analytics) tapi ju
 - ☑ **Izinkan fallback** → produksi lanjut pakai cadangan (tenant terima konsekuensi yang dijelaskan eksplisit).
 - ☐ **Tidak diizinkan** → komponen utama gagal → **item DIHENTIKAN** (status blocked) + **alert keras** ("kredit ElevenLabs habis — inject sekarang"). Tak ada konten turun-kualitas tayang. Terhubung ke **monitor kredit BYOK**.
 
-### Tier fallback (acceptability BERBEDA)
-| Komponen | Rantai | Boleh tayang (bila diizinkan)? |
+### Tier fallback (STATUS NYATA 2026-07-16: keduanya NO-FALLBACK — tabel = desain F7 bila opt-in dibuka)
+| Komponen | Kondisi SEKARANG | Bila F7 opt-in dibuka kelak |
 |---|---|---|
-| TTS | ElevenLabs → edge_tts | ✅ degradasi wajar (caption ~80%, suara generik) |
-| Visual | generator AI (ai_image:/ai_video:) — **NO-FALLBACK** | ❌ tak ada cadangan; gagal → stop jujur (Pexels dibuang 2026-06-24) |
+| TTS | **NO-FALLBACK** (F1-05) — gagal jujur | rantai izin-tenant ke edge = degradasi wajar (caption ~80%) |
+| Visual | **NO-FALLBACK** (Pexels dibuang 2026-06-24) — gagal jujur | ❌ tetap tanpa cadangan (kualitas visual = nilai jual) |
 
 ### Default & teknis
-- **Default** (keputusan owner — lihat §6): rekomendasi **stop** untuk provider **premium berbayar** (nilai jual = kualitas premium).
-- **Pendaratan:** config per-komponen (TTS: `tts_fallback_provider` + boolean allow; Visual: kebijakan `visual_fallback`); **frontend checkbox + penjelasan konsekuensi spesifik**; wiring `telegram_notifier`; flag `content_inventory.metadata`.
+- **Default TERPASANG = keputusan owner §6.5: stop/gagal-jujur** untuk SEMUA komponen (sudah kondisi nyata, bukan rencana).
+- **Pendaratan F7 (bila dibuka):** config boolean allow per-komponen + **frontend checkbox + penjelasan konsekuensi**; wiring `telegram_notifier`; flag `content_inventory.metadata`. *(Field `tts_fallback_provider` lama sudah dibuang — rancang ulang saat F7 dikerjakan.)*
 
 ---
 
-## 5. Rencana eksekusi (fase — diisi/di-update saat dikerjakan)
+## 5. Roadmap QC (penomoran "QC-F"; lihat catatan kepala dokumen — BEDA dari Program Durasi F1–F5)
 
-- **F0 (DONE):** QC interim aman (floor 3s) — tak memblokir preset; produksi aktif tetap terlindungi.
-- **F1 ✅ DONE (2026-06-14):** katalog **`format_profiles`** (WPS per-format §4: energik/listicle 2.4, edukasi 2.2, motivasi 1.6 + section_template/cta/render) + **`duration_presets`** (8/15/30/45/60/75/90s + visual_beats §3) + field `channels.duration_preset`/`format_profile` (NULLABLE = non-breaking). Migr `0012`, public-read, tervalidasi v2. Prasyarat QC v2 & multi-format. *(field di channels, bukan tenant_configs — per-channel, selaras niche/content_language.)*
-- **F2 ✅ DONE (2026-06-16 dikonfirmasi):** **QC v2 Lapis 1–3 SUDAH diterapkan** di `_pre_publish_qc`. Lapis-1/3 integritas (stream video+audio + aspect 9:16). **Lapis-2 konformitas-durasi-relatif AKTIF**: `|durasi−target_preset|/target_preset ≤ QC_DURATION_TOLERANCE` (`pipeline.py:562`, default **0.15**) + clip_count = visual_beats preset. `target_preset` dari `channels.duration_preset` (F1). Terbukti di test ryan (43s vs 60s ditolak, "di luar ±15%"). **Sisa nyata = akurasi durasi (WPS provider-aktual, §2), bukan QC-nya.**
-- **F3:** Kebijakan **quarantine + re-generate terarah** (ganti buang-buta) + diagnosa terstruktur ke `pipeline_run_logs`.
-- **F4:** **Self-critic pra-submit** (review render: caption-sync, keterbacaan, brand-safety).
-- **F5:** Loop belajar dari QC-fail → auto-tune word_budget/section_timing per preset; A/B hook/thumbnail.
-- **F6:** Dashboard "robot belajar apa" untuk tenant (transparansi klaim landing).
-- **F7 (§4b):** **Consent & Transparency Fallback** (TTS+Visual) — notifikasi+flag WAJIB; checkbox lanjut-vs-stop per-komponen; tier (black-screen selalu stop); alert "inject kredit". Rekonsiliasi dulu angka akurasi edge_tts (95% vs 80%).
+- **QC-F0 ✅ DONE:** QC interim aman (floor 3s) — tak memblokir preset; produksi aktif tetap terlindungi.
+- **QC-F1 ✅ DONE (2026-06-14):** katalog **`format_profiles`** (WPS per-format §4: energik/listicle 2.4, edukasi 2.2, motivasi 1.6 + section_template/cta/render) + **`duration_presets`** (8/15/30/45/60/75/90s + visual_beats §3) + field `channels.duration_preset`/`format_profile` (NULLABLE = non-breaking). Migr `0012`, public-read, tervalidasi v2. Prasyarat QC v2 & multi-format. *(field di channels, bukan tenant_configs — per-channel, selaras niche/content_language.)*
+- **QC-F2 ✅ DONE (2026-06-16 dikonfirmasi):** **QC v2 Lapis 1–3 SUDAH diterapkan** di `_pre_publish_qc`. Lapis-1/3 integritas (stream video+audio + aspect 9:16). **Lapis-2 konformitas-durasi-relatif AKTIF**: `|durasi−target_preset|/target_preset ≤ QC_DURATION_TOLERANCE` (env `QC_DURATION_TOLERANCE` default **0.15**; anchor baris historis — grep ulang bila perlu) + clip_count = visual_beats preset. `target_preset` dari `channels.duration_preset` (F1). Terbukti di test ryan (43s vs 60s ditolak, "di luar ±15%"). *(Catatan lama "sisa = akurasi durasi" → SUDAH TUNTAS via PROGRAM DURASI F1–F5, lihat banner.)*
+- **QC-F3 (roadmap):** Kebijakan **quarantine + re-generate terarah** (ganti buang-buta) + diagnosa terstruktur ke `pipeline_run_logs`.
+- **QC-F4 (roadmap):** **Self-critic pra-submit** (review render: caption-sync, keterbacaan, brand-safety).
+- **QC-F5 (roadmap, SEBAGIAN terwujud):** Loop belajar dari QC-fail → auto-tune word_budget/section_timing per preset; A/B hook/thumbnail. *(Sebagian TERWUJUD via PROGRAM DURASI F5 2026-07-16: word_budget kini swa-kalibrasi [pace voice×niche + α + bobot-beat dinamis-terbatas] — sisa scope: belajar dari alasan QC-fail non-durasi + A/B.)*
+- **QC-F6 (roadmap):** Dashboard "robot belajar apa" untuk tenant (transparansi klaim landing).
+- **QC-F7 (roadmap, §4b):** **Consent & Transparency Fallback** (TTS+Visual) — notifikasi+flag WAJIB; checkbox lanjut-vs-stop per-komponen; tier (black-screen selalu stop); alert "inject kredit". Rekonsiliasi dulu angka akurasi edge_tts (95% vs 80%).
 
 > Urutan & detail tiap fase **diputuskan bersama owner** sebelum koding (propose-first).
 
 ---
 
-## 5b. PARAMETER DURASI & QC — LOKASI KONTROL (verified codebase 2026-07-15; NOL hardcode nilai bisnis)
+## 5b. PARAMETER DURASI & QC — LOKASI KONTROL (verified codebase 2026-07-16; NOL hardcode nilai bisnis)
 Semua parameter dikontrol via ADMIN PANEL atau ENV — tidak ada nilai bisnis yang terkunci di kode.
 
 | Parameter | Dikontrol di | Sumber teknis |
@@ -210,9 +222,12 @@ Semua parameter dikontrol via ADMIN PANEL atau ENV — tidak ada nilai bisnis ya
 | Jeda-akhir per-run (rantai KOHEREN 4 titik: naskah·korektor·gerbang·renderer) | **tenant/admin** (`tenant_configs.trailing_silence` → override per-preset admin) | `format_catalog.effective_trailing` — sejak DURASI-3 2026-07-16 pipeline STEP 5 kirim `trailing_secs` ke `_fit_duration`; env di bawah tinggal fallback non-preset |
 | Jeda-akhir fallback global (1.5s — HANYA run tanpa preset) | **ENV** `RENDER_TRAILING_SILENCE` | `tts_engine._fit_duration` (bila `trailing_secs` tak dikirim) |
 | Integritas render (ukuran/durasi/klip/audio/aspek min) | **ENV** `QC_MIN_SIZE_MB`·`QC_MIN_DURATION`·`QC_MAX_DURATION`·`QC_MIN_CLIPS`·`QC_REQUIRE_AUDIO`·`QC_ASPECT`·`QC_ASPECT_TOLERANCE` | `pipeline._pre_publish_qc` |
-| **Instrumen durasi (F1, baca-saja)** — taksiran vs aktual per render | **otomatis** (tiap render TTS sukses) | `tts_delivery_samples.{predicted_secs, raw_audio_secs, target_secs, pause_secs, pause_counts}` (migr 0162; `tts_engine._log_delivery_sample`, fail-soft, nol waktu tambahan) |
+| **Instrumen durasi (F1, baca-saja)** — taksiran vs aktual + kata per-beat per render | **otomatis** (tiap render TTS sukses) | `tts_delivery_samples.{predicted_secs, raw_audio_secs, target_secs, pause_secs, pause_counts, beat_words}` (migr 0162+0165; `tts_engine._log_delivery_sample`, fail-soft, nol waktu tambahan) |
+| **Pace terkalibrasi (voice×niche) + α respons-speed provider** | **otomatis** (F5 swa-kalibrasi harian; `voice_catalog.pace_locked` = veto admin per-voice) | `tts_pace_calibration` + `tts_speed_response` (migr 0163/0164; penulis TUNGGAL `pace_calibration.py`; kosong → lapisan admin/provider) |
+| **Bobot antar-adegan** (porsi kata narasi, GLOBAL) | **ADMIN** (Catalog > Durasi: bobot + kunci 🔒 + pratinjau porsi) + **otomatis** (F5 selaras berkala ±20%/siklus; `weight_locked` = veto admin per-beat) | `content_beats.weight`/`weight_locked` (migr 0165); API `/api/admin/beats` (pagar bulat 1–30) |
+| Ambang swa-pemeliharaan F5 (min-sampel kalibrasi/align, langkah maks, jendela+ambang alarm drift) | **ENV** `PACE_CALIB_*` · `BEAT_ALIGN_*` · `DRIFT_*` | `pace_calibration.py` (nilai = default kode, berkomentar di `.env`) |
 
-> ⚠️ **Utang F3 (diketahui, JANGAN dipakai sbg acuan):** toleransi internal `script_engine` masih **hardcode** (prompt ±10%/±12%, `length_ok` 0.90/1.10, beat MAX +15%) & `SCRIPT_LENGTH_TOLERANCE` di ENV **belum dibaca** gerbang — akan disatukan ke `QC_DURATION_TOLERANCE` (1 sumber) di F3 program durasi.
+> ✅ **Utang F3 LUNAS (2026-07-16):** toleransi internal `script_engine` kini SATU-SUMBER `SCRIPT_LENGTH_TOLERANCE` via `_script_len_tol()` (dipagari `min(·, QC_DURATION_TOLERANCE)`); 6 angka terpatri lama (prompt ±10%/−8+12%/beat +15%/gerbang ±10%) sudah DIBUANG.
 
 > **Catatan:** semua variabel ENV di atas kini **tertulis eksplisit + berkomentar di `.env`** (nilai = default kode; 2026-07-15). Ambang QC sengaja di ENV (platform-wide, bukan per-tenant). *(Belum ada di admin panel — bila ingin diatur dari layar admin, itu item terpisah menunggu ketok owner.)*
 
@@ -222,11 +237,11 @@ Semua parameter dikontrol via ADMIN PANEL atau ENV — tidak ada nilai bisnis ya
 2. **QC-fail durasi → REVIEW-IN-DOMAIN + APPROVE (OPSI C, owner 2026-06-17; supersede "publish-private" 2026-06-16)**, **bukan dibuang**. Video bermasalah **tetap di buffer S3** (`ready_with_issues`) → tenant **tinjau dari dashboard** + **advisory (alasan + rekomendasi)** → **tenant putuskan** Pakai (publish, kuota−1) / Buang / TTL. **TIDAK auto-upload ke YouTube** (tutup cheat flip-Studio + off-schedule). Retry/regenerate = §3/F3 + **direct** pasca-perbaikan (bukan loop bakar-kredit). **Integrasi alur §12c = OPSI C** (producer hanya stok; publisher hanya publish `ready`; issue ditinjau di domain kita — lihat §3).
 3. Self-critic = **heuristik dulu**; LLM-vision ditunda (biaya × ribuan tenant).
 4. Prioritas = **G-final integritas dulu (✅ DONE)** → QC-relatif nyusul bersama field Preset (F1).
-5. Default fallback = **stop** untuk provider premium berbayar (nilai jual = kualitas). Visual = generator AI **NO-FALLBACK** (Pexels dibuang 2026-06-24); TTS premium→edge boleh bila tenant izinkan (transparan).
+5. Default fallback = **stop/gagal-jujur** — dan sejak F1-05 ini **kondisi terpasang** utk TTS & Visual (NO-FALLBACK, §4b). "TTS premium→edge bila tenant izinkan" = fitur opt-in masa depan (roadmap QC-F7), BUKAN perilaku sekarang.
 
-**Masih perlu DATA/biaya (jangan dikoding buta):**
-- Kalibrasi WPS per-provider + G-audio loop → butuh ukur WPS (run; ElevenLabs lapse) + validasi render (biaya owner).
-- Rekonsiliasi akurasi edge_tts (95% vs 80%).
+**Status "perlu data" (update 2026-07-16):**
+- ✅ **Kalibrasi pace per-provider/voice/niche + loop audio — SELESAI** (Program Durasi F1–F5: instrumen `tts_delivery_samples` + `tts_pace_calibration`/`tts_speed_response` + swa-kalibrasi harian + atempo closed-loop overhead-penuh). Datanya kini mengalir sendiri dari tiap render.
+- ⬜ Rekonsiliasi akurasi caption edge_tts (klaim 95% vs label 80%) — masih terbuka, kecil, non-blocking.
 
 ---
 
@@ -252,6 +267,7 @@ Semua parameter dikontrol via ADMIN PANEL atau ENV — tidak ada nilai bisnis ya
 ---
 
 ### Changelog
+- **2026-07-16 (2) — SINKRONISASI PENUH dokumen ↔ codebase (mandat owner: single source of truth, nol ambigu).** §0.4 prinsip diluruskan (GAGAL-JUJUR/no-fallback = kondisi terpasang; "fail-soft" hanya utk komponen observasi) · §1 tabel rantai disinkron (TTS NO-FALLBACK + instrumen; clip = visual_beats; QC v2 relatif) · §2 ditulis ulang sesuai kode (dua mode QC; size sadar-durasi; gerbang pra-visual overhead-penuh; SEMUA masalah lama ✅ tertutup; root-cause 2026-06 → ARSIP) · §3 dicap TERPASANG + sumber preset dikoreksi (channels.duration_preset, bukan 'belum ada field') · §4b kondisi nyata NO-FALLBACK kedua komponen (field tts_fallback_provider sudah tiada; checkbox = opt-in masa depan QC-F7) · §5 penomoran QC-F dipertegas (catatan kepala dokumen: 3 penomoran fase berbeda) · §5b +baris kalibrasi/bobot-beat/ambang-F5; utang-F3 dicap LUNAS · §6 'perlu data' kalibrasi pace → SELESAI. Form bobot-beat admin (Catalog>Durasi) DEPLOYED FE `4bf98cf` situs 200.
 - **2026-07-16 — PROGRAM DURASI 5-FASE dimulai; F1+korektor DEPLOYED (`fe83d28`+`a4ea83e`, deploy_be OK health=200; izin eksplisit owner).** (1) **F1 instrumen**: migr 0162 +5 kolom nullable `tts_delivery_samples` (taksiran vs aktual + jeda + mentah-pra-atempo); nol ffprobe/waktu tambahan (durasi mentah diukur 1×, dipakai-ulang `_fit_duration`). (2) **Backfill mining `worker.log`** (16-Jun→16-Jul): 78/112 baris lama terisi (0 ambigu; md5 kolom lama identik) → error taksiran per-niche kini TERUKUR (ocean 3% · dark 6% · legenda ~10% · radiant ~12% · fun_facts ~20%). (3) **DURASI-3 korektor**: trailing atempo SATU rumus per-preset dgn naskah/gerbang/renderer (dulu env global → 8s diperas 7.0→6.5s). (4) **Root-cause DISEMPURNAKAN** dari data: biang dominan = pace per (voice×gaya-DNA-niche), bukan estimator global (delivery_wps provider akurat <1%); dark_history (pace pas) = 86% dalam ±15% = patokan DONE. (5) Batch `d27273b` 2026-07-15 ikut terangkat (near-miss→review · pesan manusiawi · prompt Lapis-1). Sisa: F2 kalibrasi → F3 prompt+toleransi-1-sumber → F4 jalur DNA → F5 swa-kalibrasi+alarm (tracker `SISA_KERJA [C1]`). **Insiden dihindari**: `SUPABASE-CONNECTION.md` berisi URI v1+v2 → nyaris ALTER di DB v1; kini guard identitas DB wajib sebelum tulis.
 - **2026-07-15 — perbaikan durasi 3-serangkai (commit `d27273b`; keputusan owner; lokal-teruji; ✅ DEPLOYED 2026-07-16).** (1) Gerbang durasi pra-visual: near-miss TIDAK lagi dibunuh → lanjut produksi → OPSI C review; hanya meleset PARAH (`QC_DURATION_GROSS_FACTOR` ±30%) di-stop (hemat render naskah rusak). (2) `notify_qc_fail` dimanusiakan (`_humanize_qc_reason`; nada "menunggu keputusan Anda", nol jargon/"GAGAL"). (3) Prompt `_build_user_prompt`: cabut pintu-kabur speed + target STRUKTUR (kalimat) + preset-aware (Lapis-1 root-cause). Param baru `QC_DURATION_GROSS_FACTOR` di `.env` berkomentar. Uji lokal lulus; bukti runtime durasi = pending.
 - 2026-07-10 (3) — **Notif Telegram jalur terjadwal + header circuit-break** (mandat owner; commit `c6f3161`, 2 pesan uji nyata terkirim ✓): (a) `notify_review_pending` — video masuk antrean Review kini MEMBERI TAHU tenant (judul + catatan QC + saran + arahan Pakai/Buang + peringatan TTL hangus + link /review; chat/toggle per-tenant, TTL & URL config-driven) — menutup celah "video menunggu senyap → TTL → biaya hangus tanpa tenant tahu"; (b) header `notify_circuit_break` seragam `[nama channel]` (dulu UUID mentah).
@@ -263,4 +279,4 @@ Semua parameter dikontrol via ADMIN PANEL atau ENV — tidak ada nilai bisnis ya
 - **2026-06-16 — SINKRON ke realita + keputusan owner (test e2e ryan):** (1) §2 root-cause di-update: **WPS bukan lagi 2.4 hardcode** (F1 per-provider `format_wps`); residual = budget pakai WPS provider terkonfigurasi vs provider AKTUAL fallback (EL 1.8 vs edge 2.6 → 43s/60s). (2) **F2/Lapis-2 durasi-relatif KONFIRMASI SUDAH AKTIF** (`QC_DURATION_TOLERANCE` default 0.15). (3) §6.1 toleransi diselaraskan **20%→15%** (sesuai kode; owner: toleransi bukan lever, WPS yang diperbaiki, **no preset-hack**). (4) §6.2/§3 kebijakan QC-fail → **publish PRIVATE + advisory** (bukan buang). (5) **Isu no-hardcode ditemukan**: `tts_engine` concern-messages **hardcode "ElevenLabs"/"Edge"** + hanya ke log (langgar §0.3) → diperbaiki bareng F7/advisory (eksekusi #2).
 - **2026-06-16 (lanjutan) — OPSI A dikunci + plan masuk PROGRESS.** Owner pilih **Opsi A** (AskUserQuestion) utk integrasi QC-fail→publish-private+advisory ke alur decoupled §12c: **uniform di `pipeline.run`** (producer & direct), **buffer tetap murni**, publisher tak berubah, upload-private = artefak advisory out-of-band (invariant §12c terjaga). Ditulis ke §3 & §6.2. **Plan eksekusi (checklist) dipindah ke `PROGRESS.md §IMPROVEMENT — QC Self-Healing + Trend Radar`** (disisip sebelum §GATE CUTOVER); doc ini tetap = desain/roadmap (F-series), PROGRESS = checklist status. Centang PROGRESS hanya setelah tervalidasi 100%.
 - **2026-06-17 — OPSI A → OPSI C (REVISI BESAR, owner; sekaligus penutup INSIDEN RUNAWAY).** Analisa nyata (DB+kode VPS) insiden 2026-06-17: producer loop tanpa rem + Opsi A meng-upload video QC-fail privat ke YouTube DARI producer → 29 produce/23 upload-privat-off-schedule dalam ~45 mnt (root: ElevenLabs lapse→edge fallback→durasi 32–39s<51s; diperparah **tak ada §4b/F7 stop-on-fail** + Opsi A langgar decouple). **Keputusan owner: ganti ke OPSI C** — producer **hanya stok** (`ready`/`ready_with_issues`/`failed`, dua pertama dihitung stok = **rem alami**); publisher **hanya auto-publish `ready`** (kuota saat publish); video bermasalah **ditinjau di dashboard (preview S3), approve→publish+kuota / buang / TTL**, **TIDAK auto ke YouTube** (tutup cheat flip-Studio + off-schedule di sumber); hard-fail beruntun → **circuit-breaker pause+alarm seketika**. **Kuota = video yang KITA UPLOAD/jadi-publik per hari** (titik yang kita kuasai). **Otomatis menyetop runaway ryan.** Plan eksekusi = `PROGRESS.md §PERBAIKAN ARSITEKTUR PRODUKSI v2 (OPSI C)`.
-- **2026-06-28 — §7 Alur Produksi & Antrian (acuan operasional) DITAMBAH + 4 fix produksi/antrian** (batch lokal, BELUM deploy): (1) **FIFO sungguhan** — `mark_ready` isi `produced_at` (dulu di-pop tanpa pengganti = selalu NULL) + `claim_oldest_ready` urut `created_at` (dulu order by NULL → acak → konten lama basi terlewat). (2) **Reject tutup loop** — `discard_inventory_item` set `production_runs`=`discarded` (dulu hanya content_inventory → sinyal "perlu ditinjau" menggantung; akar: production_runs.qc_failed ledger ≠ content_inventory.ready_with_issues antrean-live). (3) **TTL 'ready' 168→72 jam** (penjaga kesegaran tren). (4) **Viral score clamp ≤100** (boost historical/signal dulu tembus 102,7; formula dasar 0-100 BENAR). FE: tab Runs "Running" dibuang + "Queued"→"Menunggu publish" (content_inventory.ready, kolom Durasi/Skor/Grade + Pratinjau). Lihat [[project_self_learning_remediation_2026_06_28]] / progress_journal.
+- **2026-06-28 — §7 Alur Produksi & Antrian (acuan operasional) DITAMBAH + 4 fix produksi/antrian** (batch lokal saat dicatat; ✅ deployed & verified 2026-07-01): (1) **FIFO sungguhan** — `mark_ready` isi `produced_at` (dulu di-pop tanpa pengganti = selalu NULL) + `claim_oldest_ready` urut `created_at` (dulu order by NULL → acak → konten lama basi terlewat). (2) **Reject tutup loop** — `discard_inventory_item` set `production_runs`=`discarded` (dulu hanya content_inventory → sinyal "perlu ditinjau" menggantung; akar: production_runs.qc_failed ledger ≠ content_inventory.ready_with_issues antrean-live). (3) **TTL 'ready' 168→72 jam** (penjaga kesegaran tren). (4) **Viral score clamp ≤100** (boost historical/signal dulu tembus 102,7; formula dasar 0-100 BENAR). FE: tab Runs "Running" dibuang + "Queued"→"Menunggu publish" (content_inventory.ready, kolom Durasi/Skor/Grade + Pratinjau). Lihat [[project_self_learning_remediation_2026_06_28]] / progress_journal.
