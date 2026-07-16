@@ -63,9 +63,13 @@ def test_model(model_key: str, key: str = "") -> dict:
         if comp == "llm":
             from src.providers.llm import build_llm_provider
             p = build_llm_provider({"llm_library": pk, "llm_model": model_id, "llm_api_key": key})
-            out = p.complete(system="", user="Reply with exactly one word: OK", model=model_id, max_tokens=16, temperature=0)
+            # max_tokens 16→512 (owner 2026-07-16): model BERNALAR (GPT-5/Claude 5) memakai jatah token
+            # yang sama utk berpikir internal dulu — 16 habis utk nalar → jawaban KOSONG → vonis gagal
+            # palsu. 512 = ruang nalar + jawaban; biaya uji tetap receh. Produksi tak tersentuh
+            # (jalurnya sudah 350–2000 token).
+            out = p.complete(system="", user="Reply with exactly one word: OK", model=model_id, max_tokens=512, temperature=0)
             ok = bool(out and out.strip())
-            result = f"LULUS — model menjawab: {out.strip()[:50]}" if ok else "GAGAL — balasan kosong"
+            result = f"LULUS — model menjawab: {out.strip()[:50]}" if ok else "GAGAL — balasan kosong (kemungkinan jatah token uji habis utk nalar internal model)"
 
         elif comp == "tts":
             from src.providers.tts import build_tts_provider
