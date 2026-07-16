@@ -71,7 +71,7 @@ export default function TenantSupportPage() {
   return (
     <div style={{ maxWidth: 760 }}>
       {!open ? (<>
-        <PageHeader helpKey="support" icon={HelpCircle} title={<Bi id="Bantuan" en="Help" />} subtitle={<Bi id="Tiket dukungan Anda" en="Your support tickets" />}
+        <PageHeader helpKey="support" icon={HelpCircle} title={<Bi id="Bantuan" en="Support" />} subtitle={<Bi id="Tiket dukungan Anda" en="Your support tickets" />}
           action={<button className="btn btn-primary btn-sm" onClick={() => setNewT({ subject: "", body: "" })}><Plus size={14} /> <Bi id="Tiket baru" en="New ticket" /></button>} />
         <div className="card"><div style={{ padding: "0.5rem" }}>
           {tickets.length === 0 && <div className="muted" style={{ padding: "1.25rem", textAlign: "center" }}><Bi id="Belum ada tiket. Buat tiket baru untuk menghubungi tim." en="No tickets yet. Create a new ticket to reach the team." /></div>}
