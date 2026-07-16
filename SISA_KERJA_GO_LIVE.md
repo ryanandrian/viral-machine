@@ -200,11 +200,11 @@
 - **DONE-BILA:** kolom/tabel fosil hilang, nol regresi.
 - **REALISASI:** ⬜
 
-### [B6] ai_video 8s (render mode text-to-video) — 📋 RENCANA MATANG 2026-07-14 (menunggu ketok owner mulai F0)
+### [B6] ai_video 8s (render mode text-to-video) — 🟡 **FITUR LIVE utk tenant sejak 2026-07-14** (preset 8s + niche radiant DNA v3 + 5 model video [kling/veo/hailuo aktif · seedance×2 nonaktif [B18]]) — SISA: turnamen Test owner pilih model pemenang → 1 run e2e final → tutup
 - **SPEC + tracker LENGKAP = `AI_VIDEO_8S_PLAN.md`** (deep-dive terverifikasi 2026-07-14: inventaris siap-vs-gap ber-anchor + fase F0 riset-vendor → F1 DB → F2 BE → F3 FE → F4 bukti-runtime; tiap fase ber-gerbang). Keputusan owner FINAL tercatat di §0 dokumen itu: 8s KHUSUS text-to-video · vendor TIDAK dikunci (katalog extensible, riset dulu vendor ber-parameter+biaya seragam; rekomendasi = agregator fal.ai/Replicate) · BUKAN SaaS baru · konten 8s = kutipan/afirmasi/motivasi, positioning KHUSUS volume+retensi · niche DEFAULT 8s dibuat tersendiri khusus kutipan/motivasi (masuk F1).
 - **Temuan kunci deep-dive:** jauh lebih siap dari catatan lama — preset 8s SUDAH di DB (is_active=false), naskah/skor-viral/QC/gerbang-durasi sudah sadar-8s, FE picker sudah siap component video, `providers/visual/ai_video.py` ADA tapi stub. Gap inti = adapter t2v + prompt-video + katalog `ai_models` video (NOL baris) + cost meter + validator kunci + bukti presisi durasi (gerbang F4 §7.3).
 - **DONE-BILA:** preset 8s produksi 1 klip ai_video + audio + publish (F4 dokumen plan: presisi 6.8–9.2s min 3 run + nol regresi 60s).
-- **REALISASI:** ⬜ *(prioritas rendah; tidak memblok jualan — mulai hanya setelah owner ucap "mulai F0 ai_video")*
+- **REALISASI:** 🟡 LIVE (tracker penuh = `AI_VIDEO_8S_PLAN.md` — F0–F3 deployed; DNA v3; harmonisasi durasi F4-program). Header lama "menunggu ketok F0" = basi, dikoreksi 2026-07-16. SISA: Test owner (5 kandidat) → pemenang → e2e → tutup.
 
 ### [B7] Go-live checklist teknis / PROGRAM PENYAPU RANJAU — 🟡 DIMANDATKAN OWNER 2026-07-15 ("pelajari SELURUH histori mendalam, paham 100% — untuk mengatakan salah harus tahu apa yang benar")
 - **MANDAT & METODE (dikunci 2026-07-15):** B7 = 2 fase berurutan.
