@@ -30,7 +30,27 @@ class _BaseAdapter(LLMProvider):
 
 
 class AnthropicMessagesAdapter(_BaseAdapter):
-    """Protokol Anthropic Messages API. JSON via instruksi prompt (tanpa response_format)."""
+    """Protokol Anthropic Messages API. JSON via instruksi prompt (tanpa response_format).
+
+    ADAPTASI-PROTOKOL `temperature` (bugfix owner 2026-07-16): model Claude generasi baru
+    (keluarga Claude 5 / Opus 4.8) MENOLAK parameter `temperature` (HTTP 400 "deprecated").
+    Solusi tanpa-hardcode-nama-model: kirim normal → HANYA bila vendor menjawab persis
+    error itu → ulang SEKALI tanpa `temperature` (tercatat di log) → model dimemo di
+    `_NO_TEMPERATURE_MODELS` (per-proses) sehingga panggilan berikutnya langsung bersih
+    (nol penalti latensi berulang). Satu adapter = satu perilaku utk tombol-Test admin
+    DAN produksi tenant (mustahil 'test lulus, tenant gagal'). Error lain apa pun =
+    GAGAL JUJUR seperti sebelumnya. Model lama: byte-identik (temperature tetap dikirim)."""
+
+    # Memo per-proses: model yang TERBUKTI menolak temperature (belajar dari jawaban vendor).
+    _NO_TEMPERATURE_MODELS: set = set()
+
+    @staticmethod
+    def _is_temperature_rejected(err: Exception) -> bool:
+        """Cocokkan KETAT: 400 invalid_request + 'temperature' + deprecated/not supported."""
+        msg = str(err).lower()
+        return ("temperature" in msg
+                and ("deprecated" in msg or "not supported" in msg)
+                and ("400" in msg or "invalid_request" in msg))
 
     def complete(self, *, system, user, model, temperature=0.7, max_tokens=2000,
                  as_json=False) -> str:
@@ -51,15 +71,29 @@ class AnthropicMessagesAdapter(_BaseAdapter):
         kwargs = {"api_key": self.api_key}
         if self.base_url:
             kwargs["base_url"] = self.base_url
+
+        def _call(client, with_temperature: bool):
+            req = dict(model=model, max_tokens=max_tokens, system=system_prompt,
+                       messages=[{"role": "user", "content": user}])
+            if with_temperature:
+                req["temperature"] = min(temperature, 1.0)
+            return client.messages.create(**req)
+
         try:
             client = anthropic.Anthropic(**kwargs)
-            resp = client.messages.create(
-                model=model,
-                max_tokens=max_tokens,
-                temperature=min(temperature, 1.0),
-                system=system_prompt,
-                messages=[{"role": "user", "content": user}],
-            )
+            _with_temp = model not in self._NO_TEMPERATURE_MODELS
+            try:
+                resp = _call(client, with_temperature=_with_temp)
+            except Exception as e:
+                if _with_temp and self._is_temperature_rejected(e):
+                    # Vendor menyatakan temperature usang utk model ini → ulang SEKALI tanpanya + memo.
+                    from loguru import logger
+                    logger.info(f"[LLM] model '{model}' menolak `temperature` (vendor: deprecated) — "
+                                f"dikirim ulang tanpa parameter itu & dimemo utk panggilan berikutnya")
+                    self._NO_TEMPERATURE_MODELS.add(model)
+                    resp = _call(client, with_temperature=False)
+                else:
+                    raise
             # B2 cost-tracking: usage menumpang di respons yg sama (nol overhead). Fail-soft.
             try:
                 from src.utils import cost_meter
