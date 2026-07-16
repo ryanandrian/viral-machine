@@ -355,7 +355,10 @@ class AIImageProvider(VisualProvider):
                    # Gemini = protokol Google generateContent modalitas IMAGE (kunci sama dgn LLM Gemini).
                    "gemini": "_generate_gemini",
                    # Cloudflare Workers AI = REST run model (FLUX free-tier 10k neuron/hari, tanpa kartu).
-                   "cloudflare": "_generate_cloudflare"}
+                   "cloudflare": "_generate_cloudflare",
+                   # fal.ai = agregator (queue submit→poll→unduh) — protokol SAMA dgn ai_video._generate_fal
+                   # yang sudah teruji produksi ([B6]). Model (FLUX dst.) via ai_models; kunci = pool key_group fal.
+                   "fal": "_generate_fal"}
 
     async def _generate_image(self, prompt: str, negative_prompt: str, output_path: Path) -> None:
         platform = self.model_config["platform"]
@@ -372,6 +375,59 @@ class AIImageProvider(VisualProvider):
             cost_meter.add_image(self.model_config.get("model_id") or "")
         except Exception:
             pass
+
+    async def _generate_fal(self, prompt: str, negative_prompt: str, output_path: Path) -> None:
+        """Transport fal.ai utk IMAGE (skema OpenAPI resmi diverifikasi 2026-07-16) — protokol queue
+        SAMA dgn ai_video._generate_fal yang teruji produksi:
+          submit : POST {base}/{model_id}  header 'Authorization: Key <FAL_KEY>' → {status_url, response_url}
+          poll   : GET status_url → IN_QUEUE|IN_PROGRESS|COMPLETED (lainnya/timeout = GAGAL JUJUR)
+          hasil  : GET response_url → {"images":[{"url": ...}]} → unduh.
+        Body = default_params ai_models (mis. image_size {width,height} custom — verified max 14142;
+        num_inference_steps) + prompt + seed (Diversity §9.1). FLUX tak punya kanal negative-prompt →
+        negative TIDAK disuntik ke prompt (pelajaran false-positive CF 2026-07-08; prompt murni)."""
+        base = (self.model_config.get("base_url") or "").rstrip("/") or "https://queue.fal.run"
+        url  = f"{base}/{self.model_config['model_id']}"
+        params = dict(self.model_config.get("params") or {})
+        body: dict = {**params, "prompt": prompt}
+        if self.visual_seed is not None:
+            body["seed"] = int(self.visual_seed)
+        headers = {"Authorization": f"Key {self.api_key}"}
+        _interval, _timeout = 2.0, 180.0   # gambar jauh lebih cepat dari video
+
+        async with httpx.AsyncClient(timeout=60) as client:
+            r = await client.post(url, json=body, headers=headers)
+            if r.status_code not in (200, 201, 202):
+                raise VisualError(f"fal image submit HTTP {r.status_code}: {r.text[:300]}")
+            sub = r.json()
+            status_url, response_url = sub.get("status_url"), sub.get("response_url")
+            if not (status_url and response_url):
+                raise VisualError(f"fal image submit: respons tanpa status_url/response_url ({str(sub)[:250]})")
+            waited = 0.0
+            while True:
+                await asyncio.sleep(_interval)
+                waited += _interval
+                s = await client.get(status_url, headers=headers)
+                if s.status_code >= 400:
+                    raise VisualError(f"fal image status HTTP {s.status_code}: {s.text[:300]}")
+                status = (s.json() or {}).get("status", "")
+                if status == "COMPLETED":
+                    break
+                if status not in ("IN_QUEUE", "IN_PROGRESS"):
+                    raise VisualError(f"fal image job status tak dikenal/gagal: '{status}' ({s.text[:250]})")
+                if waited >= _timeout:
+                    raise VisualError(f"fal image timeout >{int(_timeout)}s (status terakhir: {status})")
+            res = await client.get(response_url, headers=headers)
+            if res.status_code != 200:
+                raise VisualError(f"fal image result HTTP {res.status_code}: {res.text[:300]}")
+            data = res.json() or {}
+            imgs = data.get("images") or []
+            img_url = (imgs[0] or {}).get("url", "") if imgs else ""
+            if not img_url:
+                raise VisualError(f"fal image result: respons tanpa images[0].url ({str(data)[:250]})")
+            v = await client.get(img_url)
+            if v.status_code != 200 or not v.content:
+                raise VisualError(f"Unduh gambar fal gagal HTTP {v.status_code} ({img_url[:120]})")
+            output_path.write_bytes(v.content)
 
     async def _generate_dalle(self, prompt: str, negative_prompt: str, output_path: Path) -> None:
         try:
