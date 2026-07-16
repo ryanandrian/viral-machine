@@ -109,7 +109,38 @@ class AnthropicMessagesAdapter(_BaseAdapter):
 
 class OpenAIChatAdapter(_BaseAdapter):
     """Protokol OpenAI Chat Completions (kompatibel banyak vendor via base_url).
-    JSON via response_format={'type':'json_object'}."""
+    JSON via response_format={'type':'json_object'}.
+
+    ADAPTASI-PROTOKOL parameter (bugfix owner 2026-07-16 — kelanjutan pola Anthropic):
+    model OpenAI generasi baru MENOLAK parameter lama (400): `max_tokens` → wajib
+    `max_completion_tokens`; `temperature` custom ditolak sebagian model. Solusi
+    tanpa-hardcode-nama-model: kirim normal → HANYA bila vendor menjawab persis
+    "unsupported parameter X (use Y instead)" / "'X' does not support ..." → tukar/
+    tanggalkan parameter itu, ulang (maks 3 adaptasi/panggilan, tiap ulang WAJIB
+    dipicu parameter BARU yang masih ada di body — anti loop) → memo per (vendor,model)
+    di `_PARAM_ADAPTATIONS` sehingga panggilan berikutnya langsung bersih. Adapter ini
+    dipakai BANYAK vendor via base_url → memo dikunci per-vendor agar tak menular.
+    Error lain = GAGAL JUJUR. Model lama: byte-identik."""
+
+    # Memo per-proses: (base_url|'openai', model) -> {param_lama: pengganti|None(=ditanggalkan)}
+    _PARAM_ADAPTATIONS: dict = {}
+
+    @staticmethod
+    def _parse_param_rejection(err: Exception):
+        """Cocokkan KETAT jawaban vendor 400 unsupported-parameter.
+        Return (param, pengganti|None) atau None bila bukan kelas error ini."""
+        import re
+        low = str(err).lower()
+        if not (("400" in low) or ("invalid_request" in low)):
+            return None
+        m = re.search(r"unsupported parameter:?\s*'(\w+)'", low)
+        if m:
+            m2 = re.search(r"use\s+'(\w+)'\s+instead", low)
+            return (m.group(1), m2.group(1) if m2 else None)
+        m = re.search(r"'(\w+)'\s+(?:does not support|is not supported)", low)
+        if m:
+            return (m.group(1), None)
+        return None
 
     def complete(self, *, system, user, model, temperature=0.7, max_tokens=2000,
                  as_json=False) -> str:
@@ -137,9 +168,37 @@ class OpenAIChatAdapter(_BaseAdapter):
         kwargs = {"api_key": self.api_key}
         if self.base_url:
             kwargs["base_url"] = self.base_url
+
+        # Terapkan adaptasi yang SUDAH dipelajari utk (vendor, model) ini — langsung bersih.
+        memo_key = (self.base_url or "openai", model)
+        for old, new in (self._PARAM_ADAPTATIONS.get(memo_key) or {}).items():
+            if old in body:
+                val = body.pop(old)
+                if new:
+                    body[new] = val
+
         try:
             client = OpenAI(**kwargs)
-            resp = client.chat.completions.create(**body)
+            resp = None
+            for _attempt in range(4):                      # 1 normal + maks 3 adaptasi (bounded)
+                try:
+                    resp = client.chat.completions.create(**body)
+                    break
+                except Exception as e:
+                    rej = self._parse_param_rejection(e)
+                    if not rej or rej[0] not in body:      # bukan kelas ini / param tak ada → gagal jujur
+                        raise
+                    old, new = rej
+                    from loguru import logger
+                    logger.info(f"[LLM] model '{model}' ({memo_key[0]}) menolak `{old}`"
+                                f"{f' → pakai `{new}`' if new else ' → ditanggalkan'} (vendor: unsupported) — dimemo")
+                    val = body.pop(old)
+                    if new:
+                        body[new] = val
+                    self._PARAM_ADAPTATIONS.setdefault(memo_key, {})[old] = new
+            if resp is None:                               # 3 adaptasi tak cukup → jangan berputar
+                raise LLMError(f"Provider '{self.display_name}' gagal: parameter model '{model}' "
+                               f"tak kunjung diterima setelah adaptasi berulang.")
             # B2 cost-tracking: usage menumpang di respons yg sama (nol overhead). Fail-soft.
             try:
                 from src.utils import cost_meter
