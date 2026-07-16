@@ -441,11 +441,15 @@ export default function AdminCatalogPage() {
               (weight ÷ Σ weight beat-aktif preset terpilih; beat di luar kosakata dihitung 5 — mirror engine). */}
           <div className="card" style={{ marginTop: "1.25rem", padding: "1rem" }}>
             <h4 style={{ margin: "0 0 0.3rem" }}><Bi id="Bobot antar-adegan (berlaku global)" en="Per-beat weights (global)" /></h4>
-            <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "0.75rem" }}>
-              <Bi id="Bobot menentukan porsi kata narasi tiap adegan — berlaku untuk SEMUA preset, niche, dan tenant. Mesin menyelaraskannya otomatis secara berkala dari data produksi nyata (bergeser halus, maks ±20% per hari). Kunci 🔒 adegan yang tidak ingin disentuh mesin. Ubah manual hanya bila benar-benar perlu."
-                  en="Weights set each beat's share of narration words — applied to ALL presets, niches, and tenants. The machine auto-aligns them periodically from real production data (gentle steps, max ±20%/day). Lock 🔒 a beat to keep the machine from touching it. Adjust manually only when truly needed." />
+            <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "0.35rem" }}>
+              <Bi id="Bobot = porsi kata narasi tiap adegan — berlaku untuk SEMUA preset, niche, dan tenant. Mesin menyetel ANGKA bobot ini otomatis tiap hari dari data produksi nyata (bergeser halus, maks ±20%/hari). Ubah manual hanya bila benar-benar perlu."
+                  en="Weight = each beat's share of narration words — applied to ALL presets, niches, and tenants. The machine auto-tunes these NUMBERS daily from real production data (gentle steps, max ±20%/day). Adjust manually only when truly needed." />
             </p>
-            <div style={{ marginBottom: "0.6rem", fontSize: "var(--text-sm)" }}>
+            <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "0.75rem" }}>
+              <Bi id="Analogi: preset menentukan SIAPA pemain di lapangan (adegan yang ikut); bobot = jatah menit main tiap pemain; mesin = pelatih yang menyetel jatah dari statistik; kunci 🔒 = perintah Anda 'jatah pemain ini jangan diutak-atik pelatih' — adegannya TETAP ikut produksi normal."
+                  en="Analogy: the preset decides WHO plays (which beats are used); weight = each player's minutes; the machine = a coach tuning minutes from stats; lock 🔒 = your order 'don't touch this player's minutes' — the beat itself is STILL produced normally." />
+            </p>
+            <div style={{ marginBottom: "0.35rem", fontSize: "var(--text-sm)" }}>
               <label className="muted" style={{ marginRight: 8 }}><Bi id="Pratinjau porsi narasi pada preset:" en="Preview narration share for preset:" /></label>
               <select value={wPreset} onChange={(e) => setWPreset(e.target.value)}>
                 {(data?.duration_presets ?? []).filter((d) => d.is_active).map((d) => (
@@ -453,13 +457,17 @@ export default function AdminCatalogPage() {
                 ))}
               </select>
             </div>
+            <p className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "0.6rem" }}>
+              <Bi id="Baris ABU-ABU = adegan yang tidak dipakai preset terpilih di pratinjau ini (kolom porsi '—'). Bukan nonaktif — tetap bisa diatur; ganti preset di atas untuk melihat porsinya."
+                  en="GRAY rows = beats not used by the preset selected above (share column '—'). Not disabled — still editable; switch the preset above to see their share." />
+            </p>
             {(() => {
               const act = ((data?.duration_presets ?? []).find((d) => String(d.seconds) === wPreset)?.beats as string[] | null) ?? [];
               const wOf = (k: string) => beatW.find((b) => b.beat_key === k)?.weight ?? 5;   // mirror _BEAT_WEIGHT.get(b,5)
               const tot = act.reduce((s, k) => s + wOf(k), 0) || 1;
               return (
                 <div style={{ overflowX: "auto" }}><table className="tbl cat-tbl">
-                  <thead><tr><th><Bi id="Adegan" en="Beat" /></th><th><Bi id="Bobot" en="Weight" /></th><th title="Kunci: mesin tidak menyentuh bobot adegan terkunci">🔒</th><th><Bi id={`Porsi narasi @${wPreset}s`} en={`Share @${wPreset}s`} /></th></tr></thead>
+                  <thead><tr><th><Bi id="Adegan" en="Beat" /></th><th><Bi id="Bobot" en="Weight" /></th><th title="Kunci angka: 🔒 = angka bobot ini TIDAK diubah penyetel otomatis harian (adegan tetap diproduksi normal)"><Bi id="Kunci angka" en="Lock number" /></th><th><Bi id={`Porsi narasi @${wPreset}s`} en={`Share @${wPreset}s`} /></th></tr></thead>
                   <tbody>{beatW.map((b) => (
                     <tr key={b.beat_key} style={{ opacity: act.includes(b.beat_key) ? 1 : 0.55 }}>
                       <td><span data-id>{b.label_id}</span><span data-en>{b.label_en}</span> <span className="mono muted" style={{ fontSize: "var(--text-xs)" }}>({b.beat_key})</span></td>
@@ -475,7 +483,9 @@ export default function AdminCatalogPage() {
                       </td>
                       <td>
                         <button className="btn btn-ghost btn-sm"
-                          title={b.weight_locked ? "Terkunci — mesin tidak menyentuh. Klik untuk membuka." : "Terbuka — mesin boleh menyelaraskan. Klik untuk mengunci."}
+                          title={b.weight_locked
+                            ? "🔒 Angka bobot ini DIBEKUKAN — penyetel otomatis harian melewatinya (adegan tetap diproduksi normal). Klik untuk membuka."
+                            : "🔓 Angka bobot ini boleh disetel halus oleh mesin tiap hari dari data nyata (disarankan). Klik untuk membekukan angka."}
                           onClick={() => patchBeatW(b.beat_key, { weight_locked: !b.weight_locked })}>
                           {b.weight_locked ? "🔒" : "🔓"}
                         </button>
