@@ -316,6 +316,12 @@
 - **Efek samping uji:** voice "Luna (ID)" tertambah di akun EL ryan (harmless; boleh dihapus manual). Tempo 8 suara baru → swa-kalibrasi F1/F5 otomatis dari render nyata.
 - **DONE-BILA:** ✅ tercapai (aktif semua + rantai TTS terbukti). Lanjutan opsional: kurasi halaman-2 library bila tenant minta variasi.
 
+### [B20] "Hubungkan Telegram" 1-KLIK — ✅ TUNTAS + DEPLOYED 2026-07-16 (`9129007` BE+FE OK; bukti linker hidup di log: start + drain 1 update basi tanpa tindak)
+- **KELUHAN owner:** tenant kesulitan menemukan chat-ID Telegram. **SOLUSI:** tombol "Hubungkan Telegram" di /integrations → t.me deep-link ber-token → tenant tekan START → chat_id tercatat OTOMATIS + balasan bot dwibahasa + badge "Terhubung" (FE poll 3s×40). Manual = jalur cadangan (details).
+- **Teknis:** token HMAC stateless (nol migrasi; kunci=sha256(SUPABASE_KEY|tg-link); 56 char ≤64 t.me; TTL env `TELEGRAM_LINK_TTL_MIN` 15m) · endpoint vault `/api/credentials/telegram/link` (pola telegram/test) + route authed FE · listener `telegram_linker` thread worker (long-poll; webhook bot diverifikasi KOSONG; offset persisten `app_config ops_tg_update_offset`; init-drain anti-token-basi; 5 cabang balasan dwibahasa; fail-soft). Artikel `notifikasi-telegram` ID+EN tersinkron (live). Uji: token 4 kasus + linker 6 cabang + build.
+- **Keamanan (didokumentasi):** token hanya terbit dlm sesi login, TTL pendek, konfirmasi dua sisi; pemegang link dlm TTL bisa mengikat chat-nya → risiko diterima owner via desain ini.
+- **⬜ Bukti mata-kepala:** owner klik tombol → START → bot balas "✅ Terhubung!" (uji nyata pamungkas).
+
 ### [C2] Self-learning deepening + trend F3/F4 — 🟡  (TREND_RADAR **F3/F4**)
 - **TUJUAN:** kalibrasi `source_weights` (bobot sumber trend) dari outcome nyata per (niche,geo) + panen sinyal Analytics kaya (retensi/trafficSource/searchTerms) + agregat lintas-tenant anonim (cold-start moat).
 - **BUKTI:** loop inti hidup (`viral_score_weights`/`historical_factor`); `channel_analytics` sebagian sinyal sudah. CTR per-video=0 PERMANEN (batas API YouTube, bukan bug).
