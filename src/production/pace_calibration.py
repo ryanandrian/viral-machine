@@ -264,20 +264,53 @@ def check_drift_alarm(sb=None) -> dict:
             return {"status": "insufficient_data", "n": len(errs)}
         med = statistics.median(errs)
         alarmed = med > thresh
+        suppressed = False
         if alarmed:
+            # REM JEDA-ULANG persisten (owner 2026-07-16: 6 dering sehari krn tiap deploy me-restart
+            # worker → penjaga langsung periksa → alarm lagi; memori proses hilang saat restart —
+            # itulah akarnya → waktu alarm terakhir disimpan di DB `app_config`, BUKAN di memori).
+            # Maks 1 alarm per DRIFT_ALARM_COOLDOWN_H (default 24 jam). Fail-soft: gagal baca/tulis
+            # jam-terakhir → alarm TETAP terkirim (lebih baik dering ganda daripada bisu senyap).
+            cooldown_h = float(os.getenv("DRIFT_ALARM_COOLDOWN_H", "24"))
+            _KEY = "ops_drift_alarm_last_at"
             try:
-                from src.utils.telegram_notifier import TelegramNotifier
-                # Bahasa dampak-bisnis, nol jargon (§4.1 — teguran owner 2026-07-16 atas versi teknis).
-                TelegramNotifier().notify_admin(
-                    f"⚠️ Pemeriksaan otomatis MesinViral — akurasi durasi video sedang di bawah standar: "
-                    f"rata-rata meleset {med:.1f}% (batas wajar {thresh:.0f}%) pada {len(errs)} video terakhir.\n"
-                    f"✅ Mesin sudah mengkalibrasi diri secara otomatis — tidak perlu tindakan apa pun dari Anda.\n"
-                    f"👉 Hanya bila peringatan yang sama muncul lagi besok: minta developer memeriksa "
-                    f"(biasanya karena ada penggantian suara/model baru yang datanya belum terkumpul).")
-            except Exception as te:
-                logger.warning(f"[DriftAlarm] kirim telegram gagal (non-fatal): {te}")
-        logger.info(f"[DriftAlarm] median_err={med:.1f}% n={len(errs)} ambang={thresh}% alarm={alarmed}")
-        return {"median_err_pct": round(med, 1), "n": len(errs), "threshold": thresh, "alarmed": alarmed}
+                from datetime import datetime, timezone
+                row = (sb.table("app_config").select("value_text").eq("key", _KEY)
+                       .limit(1).execute().data or [])
+                last = row[0].get("value_text") if row else None
+                if last:
+                    dt_last = datetime.fromisoformat(last.replace("Z", "+00:00"))
+                    hours = (datetime.now(timezone.utc) - dt_last).total_seconds() / 3600.0
+                    if 0 <= hours < cooldown_h:
+                        suppressed = True
+                        logger.info(f"[DriftAlarm] alarm DITAHAN (rem {cooldown_h:.0f}j; terakhir {hours:.1f}j lalu)")
+            except Exception as ce:
+                logger.warning(f"[DriftAlarm] baca jam-alarm-terakhir gagal (alarm tetap dikirim): {ce}")
+            if not suppressed:
+                try:
+                    from src.utils.telegram_notifier import TelegramNotifier
+                    # Bahasa dampak-bisnis, nol jargon (§4.1 — teguran owner 2026-07-16 atas versi teknis).
+                    TelegramNotifier().notify_admin(
+                        f"⚠️ Pemeriksaan otomatis MesinViral — akurasi durasi video sedang di bawah standar: "
+                        f"rata-rata meleset {med:.1f}% (batas wajar {thresh:.0f}%) pada {len(errs)} video terakhir.\n"
+                        f"✅ Mesin sudah mengkalibrasi diri secara otomatis — tidak perlu tindakan apa pun dari Anda.\n"
+                        f"👉 Hanya bila peringatan yang sama muncul lagi besok: minta developer memeriksa "
+                        f"(biasanya karena ada penggantian suara/model baru yang datanya belum terkumpul).")
+                    try:
+                        from datetime import datetime, timezone
+                        sb.table("app_config").upsert({
+                            "key": _KEY,
+                            "value": 0,   # kolom NOT NULL (int); nilai sebenarnya di value_text
+                            "value_text": datetime.now(timezone.utc).isoformat(),
+                            "description": "OPS (otomatis, jangan diubah manual): waktu alarm drift durasi terakhir — rem 1×/DRIFT_ALARM_COOLDOWN_H",
+                        }).execute()
+                    except Exception as we:
+                        logger.warning(f"[DriftAlarm] tulis jam-alarm gagal (non-fatal): {we}")
+                except Exception as te:
+                    logger.warning(f"[DriftAlarm] kirim telegram gagal (non-fatal): {te}")
+        logger.info(f"[DriftAlarm] median_err={med:.1f}% n={len(errs)} ambang={thresh}% alarm={alarmed} ditahan={suppressed}")
+        return {"median_err_pct": round(med, 1), "n": len(errs), "threshold": thresh,
+                "alarmed": alarmed, "suppressed": suppressed}
     except Exception as e:
         logger.error(f"[DriftAlarm] gagal (fail-soft): {e}")
         return {"error": str(e)}
