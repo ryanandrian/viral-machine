@@ -108,7 +108,13 @@ export async function PATCH(req: Request) {
       if ((old.used_count ?? 0) > 0) return NextResponse.json({ error: "kode sudah pernah dipakai mendaftar — BEKU (jejak atribusi). Buat agen memakai kode itu terus." }, { status: 400 });
       const { error: ie } = await a.from("partner_codes").insert({ code: nc, owner_kind: "agent", agent_id: id });
       if (ie) return NextResponse.json({ error: ie.message.includes("duplicate") ? "kode sudah dipakai" : ie.message }, { status: 400 });
-      await a.from("partner_codes").delete().eq("code", old.code);
+      // [AUDIT T-2] delete kode lama WAJIB dicek — gagal (mis. FK atribusi) dgn insert sudah jadi
+      // = dua kode aktif senyap. Gagal → rollback kode baru + pesan jujur.
+      const { error: de } = await a.from("partner_codes").delete().eq("code", old.code);
+      if (de) {
+        await a.from("partner_codes").delete().eq("code", nc);
+        return NextResponse.json({ error: "kode lama tidak bisa dilepas (sudah dipakai atribusi) — kode BEKU" }, { status: 400 });
+      }
     } else if (!old) {
       const { error: ie } = await a.from("partner_codes").insert({ code: nc, owner_kind: "agent", agent_id: id });
       if (ie) return NextResponse.json({ error: ie.message }, { status: 400 });

@@ -34,18 +34,23 @@ export async function GET(req: NextRequest) {
     a.from("tenant_attribution").select("reseller_id").eq("agent_id", g.agent.id).not("reseller_id", "is", null),
   ]);
   let breakdown: Record<string, { total_idr: number; n_payment: number }> = {};
+  let breakdownOk = false; // [AUDIT T-3] hitung gagal ≠ nol — UI wajib tampilkan "—", bukan Rp 0 palsu
   if (periodMonth) {
     try {
       const r = await vault("/api/partner/op", { op: "reseller_breakdown", agent_id: g.agent.id, period_month: periodMonth });
       const j = await r.json().catch(() => ({}));
-      if (r.ok) breakdown = Object.fromEntries((j.rows ?? []).map((x: { reseller_id: string; total_idr: number; n_payment: number }) => [x.reseller_id, x]));
-    } catch { /* breakdown opsional — tabel tetap tampil tanpa angka periode */ }
+      if (r.ok) {
+        breakdown = Object.fromEntries((j.rows ?? []).map((x: { reseller_id: string; total_idr: number; n_payment: number }) => [x.reseller_id, x]));
+        breakdownOk = true;
+      }
+    } catch { /* breakdownOk tetap false → UI beri tanda jelas */ }
   }
   const nTen: Record<string, number> = {}; (att ?? []).forEach((r) => { if (r.reseller_id) nTen[r.reseller_id] = (nTen[r.reseller_id] ?? 0) + 1; });
   const codeOf: Record<string, { code: string; active: boolean; used_count: number }> = {};
   (codes ?? []).forEach((c) => { if (c.reseller_id) codeOf[c.reseller_id] = c; });
   return NextResponse.json({
     join_code: g.agent.join_code,
+    breakdown_ok: breakdownOk || !periodMonth,
     resellers: (rs ?? []).map((r) => ({
       id: r.id, name: r.name, email: r.email, phone: r.phone, status: r.status,
       commission_type: r.commission_type, commission_value: r.commission_value,
@@ -114,7 +119,12 @@ export async function POST(req: NextRequest) {
     if ((old.used_count ?? 0) > 0) return NextResponse.json({ error: "kode sudah pernah dipakai mendaftar — BEKU (jejak atribusi)" }, { status: 400 });
     const { error: ie } = await a.from("partner_codes").insert({ code: nc, owner_kind: "reseller", agent_id: g.agent.id, reseller_id: rs.id });
     if (ie) return NextResponse.json({ error: ie.message.includes("duplicate") ? "kode sudah dipakai" : ie.message }, { status: 400 });
-    await a.from("partner_codes").delete().eq("code", old.code);
+    // [AUDIT T-2] cermin fix admin: delete gagal → rollback kode baru (anti dua-kode senyap)
+    const { error: de } = await a.from("partner_codes").delete().eq("code", old.code);
+    if (de) {
+      await a.from("partner_codes").delete().eq("code", nc);
+      return NextResponse.json({ error: "kode lama tidak bisa dilepas (sudah dipakai atribusi) — kode BEKU" }, { status: 400 });
+    }
     return NextResponse.json({ ok: true, code: nc });
   }
 
@@ -150,6 +160,13 @@ export async function POST(req: NextRequest) {
       uid = gl.user.id;
     } else {
       uid = created.user.id;
+    }
+    // [AUDIT T-5] satu email = satu identitas reseller: sudah tertaut reseller LAIN (agen mana pun)
+    // → tolak jelas (portal reseller hanya bisa menampilkan satu profil; uang tetap benar tapi
+    // tampilan sebagian = membingungkan — lebih baik jujur di muka).
+    const { data: linked } = await a.from("resellers").select("id").eq("user_id", uid).neq("id", rs.id).limit(1);
+    if (linked && linked.length > 0) {
+      return NextResponse.json({ error: "email ini sudah menjadi reseller terdaftar (di agen lain) — minta calon memakai email berbeda" }, { status: 400 });
     }
     const { error: re } = await a.auth.admin.updateUserById(uid, { app_metadata: { role: "reseller" } });
     if (re) return NextResponse.json({ error: `gagal set peran: ${re.message}` }, { status: 500 });

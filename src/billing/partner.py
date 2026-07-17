@@ -140,7 +140,10 @@ def record_refund_reversal(sb, order: dict) -> dict | None:
     if dup:
         return {"ok": True, "skipped": "reversal_exists"}
 
-    already_paid = acc["status"] == "paid"
+    # [AUDIT 2026-07-17 T-1] 'approved' diperlakukan seperti 'paid': baris sudah DIKUNCI ke payout
+    # (mark_paid menimpa status by payout_id) → reversal WAJIB tinggal 'accrued' sebagai pengurang
+    # bulan berikut. Dulu hanya 'paid' → refund di jendela approve→paid membuat tarik-balik HANGUS.
+    already_paid = acc["status"] in ("paid", "approved")
     rev_status = "accrued" if already_paid else "reversed"
     rev = {k: acc[k] for k in ("order_id", "tenant_id", "agent_id", "reseller_id", "gross_idr",
                                "months_paid", "agent_rate_type", "agent_rate_value",

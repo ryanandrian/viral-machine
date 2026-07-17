@@ -25,6 +25,7 @@ function thisMonth(): string {
 
 export default function AgentResellers() {
   const [rows, setRows] = useState<Rs[]>([]);
+  const [bdOk, setBdOk] = useState(true);
   const [joinCode, setJoinCode] = useState<string | null>(null);
   const [period, setPeriod] = useState(thisMonth());
   const [busy, setBusy] = useState(false);
@@ -35,7 +36,7 @@ export default function AgentResellers() {
   const load = useCallback(async (p: string) => {
     const j = await fetch(`/api/agent/resellers?period=${p}`).then((r) => r.json()).catch(() => null);
     if (j) {
-      setRows(j.resellers ?? []); setJoinCode(j.join_code);
+      setRows(j.resellers ?? []); setJoinCode(j.join_code); setBdOk(j.breakdown_ok !== false);
       setRate(Object.fromEntries((j.resellers ?? []).map((r: Rs) => [r.id, { t: r.commission_type, v: String(r.commission_value) }])));
     }
   }, []);
@@ -124,7 +125,7 @@ export default function AgentResellers() {
                   </span>
                 </td>
                 <td className="ag-num">{r.tenants}</td>
-                <td className="ag-num">{idr(r.period_total_idr)}<div style={{ fontSize: "var(--text-xs)", color: "var(--text-muted)" }}>{r.period_n_payment}× bayar</div></td>
+                <td className="ag-num">{bdOk ? idr(r.period_total_idr) : "—"}<div style={{ fontSize: "var(--text-xs)", color: "var(--text-muted)" }}>{bdOk ? `${r.period_n_payment}× bayar` : <Bi id="hitungan tak tersedia — muat ulang" en="totals unavailable — reload" />}</div></td>
                 <td><span className={`badge ${r.status === "active" ? "badge-success" : "badge-error"}`}>{r.status}</span></td>
                 <td style={{ whiteSpace: "nowrap" }}>
                   <button className="btn btn-outline btn-sm" disabled={busy} onClick={() => void act({ action: "toggle", reseller_id: r.id })} title={r.status === "active" ? "Suspend (kode berhenti terima pendaftaran baru)" : "Aktifkan kembali"}>
