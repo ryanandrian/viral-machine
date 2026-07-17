@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Handshake, Plus, X, RefreshCw, Eye, CheckCircle2, Banknote } from "lucide-react";
+import { Handshake, Plus, X, RefreshCw, Eye, CheckCircle2, Banknote, HelpCircle } from "lucide-react";
 import "./partners.css";
 
 // [B21] Admin Program Agen F1 (SPEC AGENT_AND_AFILIATION_ARCITECTURE.md §1f/5c):
@@ -152,8 +152,13 @@ export default function PartnersAdmin() {
                en={`Payout on day ${cfg.partner_payout_day ?? 5} monthly · minimum ${idr(cfg.partner_min_payout_idr)} · attribution = code at signup (permanent)`} />
           </p>
         </div>
-        <button className="btn btn-default" onClick={() => { setEditId(null); setForm(EMPTY_FORM); setShowForm(true); }}>
-          <Plus size={15} /> <Bi id="Tambah agen" en="Add agent" /></button>
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+          {/* Panduan operasi — buka dokumen HTML di tab baru (mandat owner: Help di admin, bukan file lepas) */}
+          <a className="btn btn-outline" href="/panduan/program-agen.html" target="_blank" rel="noopener noreferrer" title="Panduan cara mengoperasikan Program Agen">
+            <HelpCircle size={15} /> <Bi id="Panduan" en="Guide" /></a>
+          <button className="btn btn-default" onClick={() => { setEditId(null); setForm(EMPTY_FORM); setShowForm(true); }}>
+            <Plus size={15} /> <Bi id="Tambah agen" en="Add agent" /></button>
+        </div>
       </div>
 
       <div className="pt-kpis">

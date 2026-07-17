@@ -288,6 +288,9 @@ MesinViral ──kontrak + bagi hasil──▶ AGEN (perusahaan mitra)
 
 ---
 
+## §9d PANDUAN OPERASI = TOMBOL HELP DI ADMIN 2026-07-17 (arahan owner: bukan file lepas)
+- Panduan operasi owner (siapkan→rekrut→pencairan bulanan+situasi lain) = dokumen `apps/web/public/panduan/program-agen.html` (HTML mandiri, dwibahasa-tema, nol dependensi) diakses via tombol **"Panduan"** (ikon Help) di header halaman Program Agen → buka tab baru `/panduan/program-agen.html`. Publik tanpa auth (owner: "tidak ada yang rahasia"). File HTML lepas di repo-root DIBUANG (anti-fosil §3.2). Bukti: statis tersaji 200 + isi valid + admin page sehat + tsc/build lulus. Tim developer akses via repo; siapa pun via URL setelah deploy.
+
 ## §9c KONFIGURASI ADMIN TERPUSAT 2026-07-17 (teguran owner: kenop berserakan)
 - **Masalah:** 9 kenop partner + 3 penanda `ops_*` jatuh ke kelompok "Lainnya" di Konfigurasi Sistem sbg nama mentah tanpa label — "asal jadi, tidak world-class". Akar: F1–F4 hanya menyisipkan baris DB, tak menyelesaikan sisi layar admin.
 - **Fix (1 file `admin/(panel)/app-config/page.tsx` + guard 1 file route):** kartu **"Program Agen (Partner)"** = 9 kenop ber-label+deskripsi dwibahasa, satuan benar (tgl/Rp/%), tipe komisi = **dropdown** percent/flat_idr (anti salah-ketik). Kartu **"Internal — ditulis mesin"** = 3 penanda (`ops_partner_reminder_last`, `ops_tg_update_offset`, `ops_drift_alarm_last_at`) READ-ONLY (🔒, tampil demi transparansi) + **guard PATCH server menolak `ops_*`** (pertahanan berlapis; mesin menulisnya via klien Python, bukan route ini).
