@@ -145,10 +145,14 @@ try:
     async def _cred_telegram_link(request: "Request"):
         if not _internal_ok(request):
             return JSONResponse({"error": "unauthorized"}, status_code=401)
-        from src.utils.telegram_link import make_link_token, bot_username
+        from src.utils.telegram_link import make_link_token, make_link_token_agent, bot_username
         try:
             b = await request.json()
-            token = make_link_token(b.get("tenant_id") or "")
+            # [B21-F4] satu endpoint dua prinsipal: tenant_id (lama) ATAU agent_id (agen) — mekanisme sama
+            if b.get("agent_id"):
+                token = make_link_token_agent(b["agent_id"])
+            else:
+                token = make_link_token(b.get("tenant_id") or "")
             return {"url": f"https://t.me/{bot_username()}?start={token}",
                     "ttl_min": int(os.getenv("TELEGRAM_LINK_TTL_MIN", "15"))}
         except Exception as e:

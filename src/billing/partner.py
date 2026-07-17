@@ -114,6 +114,11 @@ def record_settlement_commission(sb, order: dict, paid_at_iso: str | None = None
     try:
         ins = sb.table("commission_ledger").insert(row).execute()
         logger.info(f"[Partner] komisi lahir order={order['order_id']} agen={att['agent_id']} Rp{agent_amount}")
+        # [F4] kabar gembira ke agen (fail-soft — uang sudah tercatat di atas)
+        notify_agent(sb, att["agent_id"],
+                     f"🤝💸 Komisi baru {_idr(agent_amount)} — pelanggan bawaan Anda baru saja membayar"
+                     f"{' (tahunan ×' + str(months) + ' bln)' if months > 1 else ''}."
+                     f"{' Jatah reseller: ' + _idr(r_amount) + '.' if r_amount else ''} Detail: mesinviral.com/agent")
         return {"ok": True, "ledger_id": ins.data[0]["id"], "agent_amount_idr": agent_amount}
     except Exception as e:
         if "duplicate" in str(e).lower() or "unique" in str(e).lower():
@@ -246,6 +251,13 @@ def mark_payout_paid(sb, payout_id: str, transfer_ref: str = "") -> dict:
     sb.table("agent_payouts").update({"status": "paid", "paid_at": now,
                                       "transfer_ref": transfer_ref or None, "updated_at": now}
                                      ).eq("id", payout_id).execute()
+    # [F4] kabar cair ke agen (fail-soft; angka dari baris payout yang barusan dikunci)
+    po2 = (sb.table("agent_payouts").select("agent_id,period_month,net_paid_idr").eq("id", payout_id)
+           .limit(1).execute().data or [None])[0]
+    if po2:
+        notify_agent(sb, po2["agent_id"],
+                     f"🤝✅ Komisi periode {str(po2['period_month'])[:7]} sebesar {_idr(po2['net_paid_idr'] or 0)} "
+                     f"sudah DITRANSFER{(' (ref ' + transfer_ref + ')') if transfer_ref else ''}. Terima kasih!")
     return {"ok": True}
 
 
@@ -315,3 +327,65 @@ def reseller_monthly_breakdown(sb, agent_id: str, period_month: str, include_ban
         out.append(item)
     out.sort(key=lambda x: -x["total_idr"])
     return {"period": period_month, "rows": out}
+
+
+# ── [F4] NOTIFIKASI TELEGRAM AGEN (mekanisme chat 1-klik yang sama dgn tenant — ketok owner) ──
+def notify_agent(sb, agent_id: str, text: str) -> bool:
+    """Kirim teks ke chat Telegram AGEN (agents.telegram_chat_id). Fail-soft total —
+    notifikasi TIDAK BOLEH mengganggu jalur uang; belum terhubung → False."""
+    try:
+        ag = (sb.table("agents").select("telegram_chat_id").eq("id", agent_id).limit(1).execute().data or [None])[0]
+        chat = (ag or {}).get("telegram_chat_id")
+        if not chat:
+            return False
+        from src.utils.telegram_notifier import TelegramNotifier
+        n = TelegramNotifier()
+        return n._send(str(chat), n._escape(text))
+    except Exception as e:
+        logger.warning(f"[Partner] notify_agent gagal (non-fatal): {e}")
+        return False
+
+
+def _idr(n) -> str:
+    return f"Rp {int(n):,}".replace(",", ".")
+
+
+# ── [F4] PENGINGAT PENCAIRAN ke OWNER (sekali per periode, marker persisten anti-spam) ───────
+_REMINDER_KEY = "ops_partner_reminder_last"
+
+
+def maybe_send_payout_reminder(sb) -> dict:
+    """Dipanggil dari loop periodik worker: bila hari ini ≥ partner_payout_day dan pengingat
+    periode ini belum terkirim dan ADA komisi accrued → Telegram admin. Fail-soft."""
+    try:
+        from datetime import date
+        today = date.today()
+        day = _cfg_int(sb, "partner_payout_day", 5)
+        if today.day < day:
+            return {"skipped": "belum_tanggalnya"}
+        marker = f"{today.year:04d}-{today.month:02d}"
+        r = sb.table("app_config").select("value_text").eq("key", _REMINDER_KEY).limit(1).execute()
+        if r.data and (r.data[0].get("value_text") or "") == marker:
+            return {"skipped": "sudah_dikirim"}
+        # periode yang ditagih = bulan SEBELUMNYA (SPEC §5g.4)
+        pm = date(today.year - (1 if today.month == 1 else 0), 12 if today.month == 1 else today.month - 1, 1)
+        period = pm.isoformat()
+        accrued = (sb.table("commission_ledger").select("agent_amount_idr")
+                   .eq("entry_kind", "accrual").eq("status", "accrued").eq("period_month", period)
+                   .execute().data or [])
+        if not accrued:
+            # tak ada tagihan → tandai periode ini selesai tanpa kirim (jangan cek terus tiap loop)
+            sb.table("app_config").upsert({"key": _REMINDER_KEY, "value": 0, "value_text": marker,
+                                           "description": "Program Agen: penanda pengingat pencairan terakhir (otomatis)"}).execute()
+            return {"skipped": "nol_komisi"}
+        total = sum(int(x["agent_amount_idr"]) for x in accrued)
+        from src.utils.telegram_notifier import TelegramNotifier
+        TelegramNotifier().notify_admin(
+            f"🤝💰 Pengingat pencairan komisi agen: periode {period[:7]} punya {len(accrued)} komisi "
+            f"menunggu (± {_idr(total)}). Buka Admin → Program Agen → Susun draft → setujui → transfer.")
+        sb.table("app_config").upsert({"key": _REMINDER_KEY, "value": 0, "value_text": marker,
+                                       "description": "Program Agen: penanda pengingat pencairan terakhir (otomatis)"}).execute()
+        return {"sent": True, "period": period, "total": total}
+    except Exception as e:
+        logger.warning(f"[Partner] pengingat pencairan gagal (non-fatal): {e}")
+        return {"error": str(e)}

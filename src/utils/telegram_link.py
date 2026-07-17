@@ -104,3 +104,39 @@ def bot_username() -> str:
     _BOT_USERNAME["v"] = u
     logger.info(f"[TgLink] bot username: @{u}")
     return u
+
+
+# ── [B21-F4] varian AGEN (mekanisme sama persis — ketok owner 2026-07-17) ─────────────────────
+# Token agen = "ag" + hex32(agent_uuid) → panjang bagian-1 = 34 (tenant = 32) → kompatibel-mundur:
+# verify_link_token lama tetap menolak token agen ("bad_tenant"), verifier baru membedakan kind.
+
+def make_link_token_agent(agent_id: str) -> str:
+    """Token deep-link utk AGEN (TTL sama dgn tenant)."""
+    hex32 = agent_id.replace("-", "").lower()
+    if len(hex32) != 32:
+        raise ValueError("agent_id bukan UUID valid")
+    ttl_min = int(os.getenv("TELEGRAM_LINK_TTL_MIN", "15"))
+    exp = _b36(int(time.time()) + ttl_min * 60)
+    payload = f"ag{hex32}_{exp}"
+    return f"{payload}_{_sign(payload)}"
+
+
+def verify_link_token_any(token: str):
+    """Return (kind, principal_id, None) — kind 'tenant'|'agent' — atau (None, None, alasan)."""
+    try:
+        part1, exp36, sig = token.strip().split("_")
+        payload = f"{part1}_{exp36}"
+        if not hmac.compare_digest(_sign(payload), sig):
+            return None, None, "invalid_signature"
+        if _b36_dec(exp36) < int(time.time()):
+            return None, None, "expired"
+        if part1.startswith("ag") and len(part1) == 34:
+            kind, hex32 = "agent", part1[2:]
+        elif len(part1) == 32:
+            kind, hex32 = "tenant", part1
+        else:
+            return None, None, "bad_principal"
+        pid = f"{hex32[0:8]}-{hex32[8:12]}-{hex32[12:16]}-{hex32[16:20]}-{hex32[20:32]}"
+        return kind, pid, None
+    except Exception:
+        return None, None, "malformed"

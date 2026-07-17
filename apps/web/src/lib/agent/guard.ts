@@ -11,7 +11,7 @@ export type AgentRowDb = {
   id: string; company_name: string; pic_name: string | null; pic_email: string; status: string;
   commission_type: string; commission_value: number; tax_status: string;
   bank_name: string | null; bank_holder: string | null; bank_account_enc: string | null;
-  join_code: string | null; user_id: string | null; created_at: string;
+  join_code: string | null; user_id: string | null; telegram_chat_id: string | null; created_at: string;
 };
 
 export async function requireAgent(): Promise<

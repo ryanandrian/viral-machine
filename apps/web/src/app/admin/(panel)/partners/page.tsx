@@ -227,6 +227,7 @@ export default function PartnersAdmin() {
         <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "0.875rem", flexWrap: "wrap" }}>
           <input className="input" type="month" style={{ width: "11rem" }} value={period} onChange={(e) => setPeriod(e.target.value)} />
           <button className="btn btn-default btn-sm" onClick={buildDrafts} disabled={busy}><RefreshCw size={13} /> <Bi id="Susun draft tagihan periode ini" en="Build drafts for this period" /></button>
+          <a className="btn btn-outline btn-sm" href={`/api/admin/partners/tax-recap?year=${period.slice(0, 4)}`}><Bi id={`Rekap pajak ${period.slice(0, 4)} (Excel)`} en={`Tax recap ${period.slice(0, 4)} (Excel)`} /></a>
         </div>
         <div style={{ overflowX: "auto" }}>
           <table className="tbl">

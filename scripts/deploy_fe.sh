@@ -38,6 +38,12 @@ case "${1:-}" in
 
   _build)  # internal — dijalankan nohup oleh 'start'; JANGAN dipanggil manual.
     cd "$APP_DIR"
+    # [ketok owner 2026-07-17] pasang dependency sesuai lockfile SEBELUM build — insiden F3 (exceljs):
+    # dependency FE baru menjegal build krn skrip tak pernah install. No-op cepat bila tak ada perubahan.
+    if ! npm install --no-audit --no-fund; then
+      echo "FAIL $(date '+%F %T') npm install gagal — log: $LOG" > "$STATUS"
+      exit 1
+    fi
     if npm run build; then
       sudo systemctl restart mv-web
       sleep 5

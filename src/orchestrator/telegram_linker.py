@@ -90,21 +90,33 @@ def _handle_update(sb, u: dict) -> None:
     if len(parts) == 1:                      # /start polos (tanpa token)
         _send(chat_id, _MSG_PLAIN)
         return
-    from src.utils.telegram_link import verify_link_token
-    tenant_id, reason = verify_link_token(parts[1])
-    if not tenant_id:
+    from src.utils.telegram_link import verify_link_token_any
+    kind, principal_id, reason = verify_link_token_any(parts[1])
+    if not principal_id:
         _send(chat_id, _MSG_EXPIRED if reason == "expired" else _MSG_INVALID)
         logger.info(f"[TgLinker] token ditolak ({reason}) chat={chat_id}")
         return
+    if kind == "agent":                       # [B21-F4] agen — mekanisme sama, sasaran tabel beda
+        r = (sb.table("agents")
+               .update({"telegram_chat_id": str(chat_id)})
+               .eq("id", principal_id).execute())
+        if r.data:
+            _send(chat_id, "✅ Terhubung! Notifikasi komisi MesinViral Partner aktif di chat ini.\n"
+                           "✅ Connected! MesinViral Partner commission notifications are now active here.")
+            logger.info(f"[TgLinker] ✅ terhubung: agen={principal_id} chat={chat_id}")
+        else:
+            _send(chat_id, _MSG_INVALID)
+            logger.warning(f"[TgLinker] agen {principal_id} tak ditemukan saat link (chat={chat_id})")
+        return
     r = (sb.table("tenant_configs")
            .update({"telegram_chat_id": str(chat_id), "telegram_enabled": True})
-           .eq("tenant_id", tenant_id).execute())
+           .eq("tenant_id", principal_id).execute())
     if r.data:
         _send(chat_id, _MSG_OK)
-        logger.info(f"[TgLinker] ✅ terhubung: tenant={tenant_id} chat={chat_id}")
+        logger.info(f"[TgLinker] ✅ terhubung: tenant={principal_id} chat={chat_id}")
     else:                                     # tenant tak ditemukan (mis. akun terhapus) — jujur
         _send(chat_id, _MSG_INVALID)
-        logger.warning(f"[TgLinker] tenant {tenant_id} tak ditemukan saat link (chat={chat_id})")
+        logger.warning(f"[TgLinker] tenant {principal_id} tak ditemukan saat link (chat={chat_id})")
 
 
 def run_once(sb) -> int:

@@ -26,4 +26,11 @@ def run_forever(interval_seconds=None) -> None:
             reconcile_pending(sb)
         except Exception as e:  # fire-and-forget: jangan pernah matikan loop
             logger.error(f"[PaymentReconcile] error: {e}")
+        try:
+            # [B21-F4] pengingat pencairan komisi agen ke owner — murah (marker persisten,
+            # kirim maks 1×/periode), menumpang cadence loop billing ini. Fail-soft internal.
+            from src.billing.partner import maybe_send_payout_reminder
+            maybe_send_payout_reminder(sb)
+        except Exception as e:
+            logger.warning(f"[PaymentReconcile] pengingat partner gagal (non-fatal): {e}")
         time.sleep(interval)

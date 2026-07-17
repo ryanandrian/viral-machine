@@ -29,6 +29,7 @@ export async function GET() {
       commission_type: ag.commission_type, commission_value: ag.commission_value,
       bank_name: ag.bank_name, bank_holder: ag.bank_holder,
       bank_account_set: Boolean(ag.bank_account_enc),
+      telegram_connected: Boolean(ag.telegram_chat_id), // [F4]
     },
     codes: codes ?? [],
     tenants: (tenants ?? []).map((t) => ({

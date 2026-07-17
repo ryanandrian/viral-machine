@@ -12,7 +12,7 @@ function Bi({ id, en }: { id: string; en: string }) {
 
 type Overview = {
   agent: { company_name: string; status: string; commission_type: string; commission_value: number;
-    bank_name: string | null; bank_holder: string | null; bank_account_set: boolean };
+    bank_name: string | null; bank_holder: string | null; bank_account_set: boolean; telegram_connected: boolean };
   codes: { code: string; owner_kind: string; active: boolean; used_count: number }[];
   tenants: { label: string; plan: string; status: string; locked_at: string | null; code: string | null }[];
   ledger: { id: number; order_id: string; entry_kind: string; status: string; agent_amount_idr: number; period_month: string; months_paid: number }[];
@@ -27,13 +27,54 @@ export default function AgentDashboard() {
   const [ov, setOv] = useState<Overview | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [tgBusy, setTgBusy] = useState(false);
+  const [reg, setReg] = useState({ email: "", pw: "" });
+  const [regMsg, setRegMsg] = useState<string | null>(null);
+  const [regBusy, setRegBusy] = useState(false);
 
-  useEffect(() => {
-    fetch("/api/agent/overview").then(async (r) => {
+  async function loadOv() {
+    return fetch("/api/agent/overview").then(async (r) => {
       if (!r.ok) throw new Error((await r.json().catch(() => ({})) as { error?: string }).error || `HTTP ${r.status}`);
-      setOv(await r.json());
-    }).catch((e) => setErr(String(e.message || e)));
-  }, []);
+      const j = await r.json(); setOv(j); return j as Overview;
+    });
+  }
+  useEffect(() => { loadOv().catch((e) => setErr(String(e.message || e))); }, []);
+
+  // [F4] Hubungkan Telegram — mekanisme 1-klik yang sama dgn tenant: buka t.me + poll status
+  async function connectTelegram() {
+    setTgBusy(true);
+    const j = await fetch("/api/agent/telegram-link", { method: "POST" }).then((r) => r.json()).catch(() => null);
+    if (!j?.url) { setTgBusy(false); return; }
+    window.open(j.url, "_blank");
+    for (let i = 0; i < 40; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const o = await loadOv().catch(() => null);
+      if (o?.agent.telegram_connected) break;
+    }
+    setTgBusy(false);
+  }
+  async function disconnectTelegram() {
+    setTgBusy(true);
+    await fetch("/api/agent/telegram-link", { method: "DELETE" }).catch(() => {});
+    await loadOv().catch(() => {});
+    setTgBusy(false);
+  }
+  // [F4] agen mendaftarkan pelanggan langsung — memakai jalur signup resmi + kode agen sendiri
+  async function registerTenant(mainCode: string) {
+    setRegMsg(null);
+    if (!reg.email.trim() || reg.pw.length < 8) { setRegMsg("Email + password sementara (min. 8) wajib."); return; }
+    setRegBusy(true);
+    const res = await fetch("/api/auth/signup", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: reg.email.trim(), password: reg.pw, lang: "id", refCode: mainCode }),
+    }).catch(() => null);
+    const j = res ? await res.json().catch(() => ({})) : {};
+    setRegBusy(false);
+    if (!res || !res.ok) { setRegMsg(j.msg || "gagal"); return; }
+    setRegMsg("✓ Terdaftar sebagai bawaan Anda — email konfirmasi terkirim ke pelanggan. Minta dia klik konfirmasi + ganti password.");
+    setReg({ email: "", pw: "" });
+    void loadOv().catch(() => {});
+  }
 
   async function copy(text: string, key: string) {
     try { await navigator.clipboard.writeText(text); setCopied(key); setTimeout(() => setCopied(null), 1500); } catch { /* clipboard ditolak browser — abaikan */ }
@@ -127,6 +168,31 @@ export default function AgentDashboard() {
             <span className="ag-num" style={{ color: l.entry_kind === "reversal" ? "var(--error)" : undefined }}>{idr(l.agent_amount_idr)} <span className="badge badge-outline">{l.status}</span></span>
           </div>))}
         </div>
+      </div>
+
+      <div className="ag-card">{/* [F4] Telegram 1-klik + daftarkan pelanggan langsung */}
+        <p className="ag-sec"><Bi id="Notifikasi & alat jualan" en="Notifications & sales tools" /></p>
+        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center", marginBottom: "0.875rem" }}>
+          {ov.agent.telegram_connected ? (<>
+            <span className="badge badge-success"><Bi id="Telegram terhubung — komisi masuk & pencairan dikabari otomatis" en="Telegram connected — commissions & payouts notify you automatically" /></span>
+            <button className="btn btn-outline btn-sm" disabled={tgBusy} onClick={() => void disconnectTelegram()}><Bi id="Putuskan" en="Disconnect" /></button>
+          </>) : (
+            <button className="btn btn-default btn-sm" disabled={tgBusy} onClick={() => void connectTelegram()}>
+              {tgBusy ? <Bi id="Menunggu Anda menekan START di Telegram…" en="Waiting for you to press START in Telegram…" /> : <Bi id="Hubungkan Telegram (1 klik)" en="Connect Telegram (1 click)" />}
+            </button>
+          )}
+        </div>
+        {mainCode && (<>
+          <p style={{ fontSize: "var(--text-xs)", color: "var(--text-muted)", margin: "0 0 0.5rem" }}>
+            <Bi id="Jualan tatap muka? Daftarkan pelanggan langsung di sini — otomatis tercatat bawaan Anda. Email konfirmasi + ganti-password dikirim ke pelanggan."
+               en="Selling face-to-face? Register the customer here — automatically credited to you. Confirmation email goes to the customer." /></p>
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+            <input className="input" style={{ width: "16rem" }} type="email" placeholder="email pelanggan" value={reg.email} onChange={(e) => setReg({ ...reg, email: e.target.value })} />
+            <input className="input" style={{ width: "12rem" }} type="text" placeholder="password sementara (min. 8)" value={reg.pw} onChange={(e) => setReg({ ...reg, pw: e.target.value })} />
+            <button className="btn btn-outline btn-sm" disabled={regBusy} onClick={() => void registerTenant(mainCode)}>{regBusy ? "…" : <Bi id="Daftarkan pelanggan" en="Register customer" />}</button>
+          </div>
+          {regMsg && <div style={{ fontSize: "var(--text-xs)", marginTop: "0.375rem", color: regMsg.startsWith("✓") ? "var(--success)" : "var(--error)" }}>{regMsg}</div>}
+        </>)}
       </div>
 
       <div className="ag-card" style={{ color: "var(--text-muted)", fontSize: "var(--text-sm)" }}>
