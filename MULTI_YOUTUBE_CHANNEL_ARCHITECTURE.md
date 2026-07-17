@@ -92,8 +92,8 @@ kuota `max_channels` di DB (trigger/RLS insert channels) · invalid_grant → `s
 ### Batch 2
 | # | Item | Status | Commit | Bukti |
 |---|------|--------|--------|-------|
-| 2.1 | Analytics per-channel (token per identitas + filter videos.channel_id, legacy NULL aman) | ⬜ | | |
-| 2.2 | `viral_score_weights` per-channel + seed warisan | ⬜ | | |
+| 2.1 | Analytics per-channel (token per identitas + filter videos.channel_id, legacy NULL aman) | ✅ **SELESAI 2026-07-13** (koreksi tracker 18-Jul — dulu tertulis ⬜; realisasi via remediasi [B16], LUPUT dicerminkan ke sini) | `f554e38` (+`ee9bc01`) | fetch analytics PER-CHANNEL dgn koneksi masing2 (`self_learning.py:30-46`); `videos.channel_id` terisi (RAD 303/MVT 11); `channel_insights` TERPISAH per-channel (RAD 155/MVT 22, verified DB live 18-Jul). `channel_analytics` tak pernah jadi tabel — data di `videos`+`channel_insights`. |
+| 2.2 | `viral_score_weights` per-channel + seed warisan | ⬜ **MASIH TERBUKA** (verified 18-Jul: `viral_score_weights` di `tenant_configs` per-TENANT; `niche_selector.py:183` baca level tenant → RAD & MVT berbagi 1 otak pemilih-topik) | | |
 | 2.3 | 6 field konten → kolom channels (NULL=warisi tenant) | 🟡 2.3a | `f07d44c` | **2.3a (ditarik maju, insiden live):** penyedia channel ≠ tenant → `llm_models` tenant gugur, semua task pakai `channels.llm_model`; se-penyedia → perilaku lama utuh (ch-1 diverifikasi byte-sama). Sisa 2.3 penuh (kolom per-channel 6 field) tetap ⬜ |
 
 ### 🔥 INSIDEN LIVE 2026-07-08 (channel ke-2 ryan, "No topics selected" 5×) — 3 akar, SEMUA FIXED+DEPLOYED
@@ -109,8 +109,8 @@ kuota `max_channels` di DB (trigger/RLS insert channels) · invalid_grant → `s
 ### Batch 3
 | # | Item | Status | Commit | Bukti |
 |---|------|--------|--------|-------|
-| 3.1 | Kuota max_channels server-side | ⬜ | | |
-| 3.2 | invalid_grant → tandai+pause+notif | ⬜ | | |
+| 3.1 | Kuota max_channels server-side | ✅ **SELESAI** (koreksi tracker 18-Jul — dulu ⬜) | migr `0155_tier_enforcement` | RLS INSERT `channels_tenant_insert` menegakkan `plan_limits.max_channels` per paket (verified DB live 18-Jul) |
+| 3.2 | invalid_grant → tandai+pause+notif | ⬜ **MASIH TERBUKA** (verified 18-Jul: nol penanganan di distribution/analytics/orchestrator; token mati = gagal senyap per-run) | | |
 | 3.3 | Dashboard dimensi channel + nama channel di Runs | ⬜ | | |
 | 3.4 | Buang fallback senyap kunci · i18n sisa · atribusi channel_id jalur direct | ⬜ | | |
 
