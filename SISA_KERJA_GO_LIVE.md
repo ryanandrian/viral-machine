@@ -320,7 +320,7 @@
 - **Keamanan (didokumentasi):** token hanya terbit dlm sesi login, TTL pendek, konfirmasi dua sisi; pemegang link dlm TTL bisa mengikat chat-nya → risiko diterima owner via desain ini.
 - **✅ Bukti mata-kepala LULUS (owner, 2026-07-16):** klik tombol → START → "sukses terhubung" — rantai FE→vault→t.me→linker→DB→balasan TERBUKTI end-to-end di produksi. **ITEM DITUTUP.**
 
-### [B21] PROGRAM AGEN & AFILIASI (partner B2B, bagi hasil selamanya) — 📋 SPEC DIKETOK 2026-07-17, implementasi ⬜ menunggu ketok "mulai F1"
+### [B21] PROGRAM AGEN & AFILIASI (partner B2B, bagi hasil selamanya) — 🟡 F1 MESIN UANG ✅ dibangun+tervalidasi lokal 2026-07-17 (uji 18/18 + rantai signup nyata; migr 0168 applied) · ⛔ BELUM DEPLOY (menunggu izin owner)
 - **SPEC + tracker = `AGENT_AND_AFILIATION_ARCITECTURE.md`** (single source of truth, mandat owner 2026-07-17 — ringkasan awam + keputusan FINAL + arsitektur A–Z + rencana kerja F0–F4 urut prioritas; JANGAN riset/tanya ulang keputusan §1–§2 dokumen itu).
 - **INTI:** kami developer tanpa tim marketing → AGEN (perusahaan mitra) investasi iklan+rekrut RESELLER; tenant bayar ke Midtrans KAMI; komisi agen (Rp/% per-agen, diatur admin) cair 1×/bulan ber-gerbang owner; reseller dibayar AGEN (kami sediakan hitungan + Excel transfer-massal); atribusi = kode saat daftar, permanen; portal agen+reseller menumpang infra existing.
 - **URUTAN:** F0 🟡 (draf kontrak Lampiran-A + riset pajak §6b ✅ 17-Jul; sisa angka & validasi = owner, paralel) → F1 mesin uang (atribusi+ledger+admin; program bisa jalan tanpa portal) → F2 portal agen → F3 reseller+Excel → F4 pelengkap. Tiap fase: rencana rinci → ketok → bukti runtime → izin deploy eksplisit.

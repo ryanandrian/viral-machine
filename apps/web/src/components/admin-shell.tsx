@@ -7,6 +7,7 @@ import { useTheme } from "next-themes";
 import {
   Users, HelpCircle, Activity, List, Target, DollarSign, LogOut, UserCog, FlaskConical, FileText,
   Menu, Search, Moon, Sun, ChevronRight, SlidersHorizontal, CreditCard, MessageSquare, Building2,
+  Handshake,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -20,6 +21,7 @@ const NAV: NavEntry[] = [
   { section: { id: "Operasi", en: "Operations" } },
   { id: "tenants", icon: Users, idL: "Tenant", en: "Tenants", href: "/admin/tenants" },
   { id: "billing", icon: CreditCard, idL: "Pembayaran", en: "Payments", href: "/admin/billing" },
+  { id: "partners", icon: Handshake, idL: "Program Agen", en: "Partner Program", href: "/admin/partners" },
   { id: "app-config", icon: SlidersHorizontal, idL: "Konfigurasi Sistem", en: "System Configuration", href: "/admin/app-config" },
   { id: "company-profile", icon: Building2, idL: "Profil Perusahaan", en: "Company Profile", href: "/admin/company-profile" },
   { id: "support", icon: HelpCircle, idL: "Dukungan", en: "Support", href: "/admin/support" },

@@ -154,6 +154,34 @@ try:
         except Exception as e:
             return JSONResponse({"error": str(e)}, status_code=400)
 
+    # [B21] Program Agen F1 — logika uang & enkripsi rekening hidup di partner.py (SATU otoritas);
+    # Next admin routes (ber-guard super-admin) memanggil ke sini via X-Internal-Secret.
+    async def _partner_op(request: "Request"):
+        if not _internal_ok(request):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        from src.billing import partner
+        try:
+            b = await request.json()
+            op, sb = b.get("op"), _sb()
+            if op == "payouts_build":
+                return partner.build_monthly_payouts(sb, b["period_month"])
+            if op == "payout_approve":
+                return partner.approve_payout(sb, b["payout_id"], b.get("tax_override_idr"))
+            if op == "payout_paid":
+                return partner.mark_payout_paid(sb, b["payout_id"], b.get("transfer_ref") or "")
+            if op == "bank_set":
+                return partner.set_agent_bank(sb, b["agent_id"], b.get("bank_name") or "",
+                                              b.get("account_no") or "", b.get("holder") or "")
+            if op == "bank_reveal":
+                return partner.reveal_agent_bank(sb, b["agent_id"])
+            return JSONResponse({"error": f"op tak dikenal: {op}"}, status_code=400)
+        except (ValueError, KeyError) as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+        except Exception as e:
+            return JSONResponse({"error": str(e)}, status_code=500)
+
+    app.add_api_route("/api/partner/op", _partner_op, methods=["POST"])
+
     app.add_api_route("/api/credentials/ai",            _cred_ai_set,        methods=["POST"])
     app.add_api_route("/api/credentials/ai/list",       _cred_ai_list,       methods=["POST"])
     app.add_api_route("/api/credentials/ai/delete",     _cred_ai_delete,     methods=["POST"])

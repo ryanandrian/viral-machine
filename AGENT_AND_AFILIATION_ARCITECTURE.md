@@ -31,7 +31,7 @@
 
 ## §0 CARA LANJUT (resume pasca-compaction/sesi baru — baca INI dulu, jangan riset ulang)
 
-1. **POSISI TERKINI:** 📋 Spec final + dimatangkan 2026-07-17 (pajak §6b ✅ · draf kontrak Lampiran A ✅ · klarifikasi §5g/§3b ✅). Belum ada kode/DB/FE yang disentuh.
+1. **POSISI TERKINI:** 🟡 **F1 SELESAI DIBANGUN + tervalidasi lokal 2026-07-17 (bukti 18/18 + rantai signup nyata — lihat REALISASI F1 §7); ⛔ BELUM DEPLOY (menunggu izin eksplisit owner §5.0).** Migrasi 0168 SUDAH di DB live. Berikutnya: izin deploy BE+FE batch F1 → bukti klik→layar produksi → lalu F2 portal agen (rencana rinci → ketok).
    **🎯 PERINTAH OWNER 2026-07-17: sesi berikutnya FOKUS menyelesaikan modul ini** — paham 100% apa yang dibangun (dokumen ini) + peta & progres (§7). Langkah pertama sesi berikut: susun **rencana teknis rinci F1 + daftar file** → sodorkan ke owner → tunggu "ya" → eksekusi → bukti runtime → izin deploy.
 2. Seluruh keputusan owner = §1 + §2 — **FINAL, jangan tanya ulang**. Yang masih terbuka = §8 (tanya HANYA saat fasenya tiba).
 3. Skema DB di §4 = **rancangan**; DDL final wajib introspeksi DB live dulu (aturan kerja: kode+DB live = fakta; dokumen = peta). Anchor kode di §5 wajib di-grep ulang sebelum dipakai.
@@ -233,7 +233,9 @@ MesinViral ──kontrak + bagi hasil──▶ AGEN (perusahaan mitra)
 - **Lingkup:** semua tabel §4 + RLS · kolom kode di form daftar + `?ref=` (5a) · sambungan webhook settlement → ledger (5b) · reversal refund (5e) · **admin panel:** CRUD agen + rate + resume lintas-agen + rinci per-agen + draft-approve-catat pencairan (5c) · **dukungan pajak §6b** (status pajak di profil agen + kolom potongan PPh di draft payout + rekap bruto per-agen) · config ber-label · notifikasi-gagal Telegram.
 - **Nilai bisnis:** owner sudah bisa merekrut & membayar agen pertama; laporan sementara via admin.
 - **DONE-BILA (ukur, bukan rasa):** ≥1 pendaftaran uji ber-kode terkunci benar · ≥1 pembayaran uji (sandbox/riil kecil) melahirkan baris ledger dgn rupiah PERSIS sesuai §2.1–2.2 (kasus: bulanan-persen · bulanan-flat · tahunan-flat ×12 · dgn-diskon basis-net) · refund uji menghasilkan reversal benar · draft payout bulanan terbentuk & bisa disetujui-dicatat · RLS terbukti (agen tak bisa baca data agen lain — diuji nyata).
-- **REALISASI:** ⬜
+- **REALISASI:** ✅ **DIBANGUN + TERVALIDASI LOKAL 2026-07-17 (ketok owner "mulai bangun F1"); ⛔ BELUM DEPLOY (gerbang §5.0).**
+  Migrasi **0168 APPLIED ke DB live** (6 tabel + RLS terkunci-total + 9 kenop ber-label; guard identitas v2). `src/billing/partner.py` = SATU otoritas uang (accrual/reversal/payout/pajak-prefill/bank-Fernet) · pengait di `_apply_settlement` (settlement→komisi; refund→reversal; fail-soft BER-ALARM Telegram) · endpoint `mv-webhook /api/partner/op` · form daftar +kolom kode+`?ref=`+cek-hidup `/api/partner/check` · route signup: validasi→tolak-di-titik-input→kunci atribusi (idempotent; used_count naik hanya saat baris baru; gagal-tulis tercatat `admin_audit`) · admin **/admin/partners** (KPI+tabel agen+drawer rinci+form+rekening terenkripsi+gerbang pencairan draft→approve→paid) via design system existing (1-nuansa §3.9).
+  **BUKTI runtime (data nyata DB live): uji Python 18/18 LULUS** — 4 kasus rupiah-PERSIS ✓ (100rb/50rb/600rb/80rb) · reseller-info ✓ · addon & tanpa-kode TIDAK berkomisi ✓ · idempoten ✓ · refund pra-bayar saling-meniadakan ✓ & pasca-bayar jadi pengurang ✓ · net-negatif digulung ✓ · draft→approve(lock 2 baris)→paid ✓ · pajak prefill 2%/2,5% presisi ✓ · bank terenkripsi+reveal ✓ · RLS anon buta 6/6 tabel ✓ · data uji bersih (0 sisa). **Rantai FE nyata (next start lokal + curl): check valid/invalid ✓ · signup kode-salah DITOLAK 400 dwibahasa ✓ · signup nyata ber-kode → atribusi TERKUNCI benar ✓ · kirim-ulang idempoten (used_count tetap 1) ✓ · user uji auth DIHAPUS bersih.** tsc 0 error · next build lulus (route /admin/partners + /api/partner/check di manifest) · webhook app terkonstruksi dgn route /api/partner/op ✓. **Sisa jujur F1: bukti klik→layar admin UI di produksi (setelah deploy ber-izin) + 1 pembayaran Midtrans nyata pertama sebagai bukti hidup end-to-end.**
 
 ### F2 — PORTAL AGEN (prioritas #2)
 - **Lingkup:** pintu masuk agen (path/subdomain = ketok §8-K3) · login · **dasbor:** pelanggan bawaannya + status bayar + komisi berjalan + riwayat pencairan · kode & tautan uniknya · dwibahasa penuh.
@@ -265,6 +267,7 @@ MesinViral ──kontrak + bagi hasil──▶ AGEN (perusahaan mitra)
 | K5 | Administrasi pajak: siapa yang MENGURUS (owner sendiri via Coretax vs konsultan) + validasi angka §6b. *(Memotong PPh = wajib hukum, bukan pilihan — yang diputuskan hanya pengurusnya.)* | F0, sebelum pencairan pertama |
 | K6 | Pembayaran NON-langganan (mis. custom-niche kelak) ikut berkomisi? | Default rancangan: **TIDAK** (§5g.10) — ubah = ketok owner |
 | K7 | Nasib komisi saat kontrak agen BERAKHIR (berhenti seketika · masa transisi N bulan · tetap utk tenant existing?) | F0/F1 — Pasal 10 draf kontrak memakai placeholder pilihan ini |
+| K8 | Pendaftaran via tombol **Google** tidak punya kolom kode (OAuth) → calon bawaan agen yang memilih Google = TIDAK ter-atribusi. F1: atribusi hanya via form email (+`?ref=`). Perlu dukungan jalur Google (mis. bawa `ref` melewati OAuth)? | F2 — keputusan owner; menyentuh alur OAuth |
 
 ---
 

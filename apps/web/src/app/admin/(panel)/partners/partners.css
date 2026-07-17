@@ -1,0 +1,25 @@
+/* [B21] Admin Program Agen — mengikuti idiom halaman admin (pola tenants.css, token design system) */
+.pt-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+.pt-head h1 { font-size: var(--text-3xl); font-weight: 700; letter-spacing: -0.02em; margin: 0 0 0.25rem; }
+.pt-kpis { display: grid; grid-template-columns: repeat(4,1fr); gap: 0.875rem; margin-bottom: 1.25rem; }
+.pt-kpi { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 1rem 1.125rem; }
+.pt-kpi .l { font-size: var(--text-xs); color: var(--text-muted); }
+.pt-kpi .v { font-size: var(--text-2xl); font-weight: 700; letter-spacing: -0.02em; margin-top: 0.25rem; font-variant-numeric: tabular-nums; }
+.pt-card { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 1.125rem; margin-bottom: 1.25rem; }
+.pt-sec { font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin: 0 0 0.625rem; }
+.pt-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.pt-grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; }
+.pt-tbl tbody tr { cursor: pointer; }
+.pt-num { font-variant-numeric: tabular-nums; font-weight: 600; }
+.pt-scrim { position: fixed; inset: 0; background: rgba(0,0,0,0.5); opacity: 0; pointer-events: none; transition: opacity var(--d-mid); z-index: 40; }
+.pt-scrim.open { opacity: 1; pointer-events: auto; }
+.pt-drawer { position: fixed; top: 0; right: 0; height: 100vh; width: 540px; max-width: 96vw; background: var(--bg-elevated); border-left: 1px solid var(--border); box-shadow: var(--shadow-xl); transform: translateX(100%); transition: transform var(--d-mid) var(--ease-out); z-index: 41; display: flex; flex-direction: column; }
+.pt-drawer.open { transform: none; }
+.pt-drawer-head { padding: 1.25rem; border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center; }
+.pt-drawer-body { padding: 1.25rem; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 1.25rem; }
+.pt-kv { display: flex; justify-content: space-between; font-size: var(--text-sm); padding: 0.3125rem 0; }
+.pt-kv .k { color: var(--text-muted); }
+.pt-kv .v { color: var(--text-primary); font-weight: 500; }
+.pt-mini .row { display: flex; justify-content: space-between; gap: 0.5rem; font-size: var(--text-sm); padding: 0.375rem 0; border-bottom: 1px solid var(--border-subtle); }
+.pt-mini .row:last-child { border-bottom: none; }
+@media (max-width: 900px) { .pt-kpis { grid-template-columns: repeat(2,1fr); } .pt-grid3, .pt-grid2 { grid-template-columns: 1fr; } }

@@ -402,10 +402,36 @@ def _apply_settlement(sb, order: dict, txn: str | None, fraud, payment_type=None
                 }).eq("tenant_id", order["tenant_id"]).execute()
                 logger.info(f"[Midtrans] periode order={order_id}: {_note} → end {end.isoformat()}")
                 activated = True
+                # [B21] Program Agen: pembayaran langganan beratribusi → komisi (SPEC 5b).
+                # Fail-soft BER-ALARM (desain diketok SPEC 5b.3): pembayaran tenant TIDAK boleh
+                # terganggu; komisi menyusul setelah admin dibereskan — BUKAN fallback senyap.
+                try:
+                    from src.billing.partner import record_settlement_commission
+                    record_settlement_commission(sb, order, paid_at_iso=upd.get("paid_at"))
+                except Exception as _pe:
+                    logger.error(f"[Partner] GAGAL catat komisi order={order_id}: {_pe}")
+                    try:
+                        from src.utils.telegram_notifier import TelegramNotifier
+                        TelegramNotifier().notify_admin(
+                            f"🤝⚠️ Komisi agen GAGAL tercatat utk order {order_id}: {_pe}\n"
+                            f"Pembayaran tenant AMAN & aktif. Bereskan lalu catat manual/ulang.")
+                    except Exception:
+                        pass
     elif txn in ("refund", "partial_refund", "chargeback") and order.get("category") != "addon":
         # Refund/chargeback LANGGANAN → CABUT akses (suspend). Add-on: niche telanjur dibuat → keputusan admin.
         sb.table("tenant_configs").update({"subscription_status": "suspended"}).eq("tenant_id", order["tenant_id"]).execute()
         logger.info(f"[Midtrans] refund order={order_id} → tenant {order['tenant_id']} SUSPENDED (akses dicabut)")
+        # [B21] Program Agen: tarik-balik komisi (SPEC §2.3/5e; idempotent di dalam fungsinya).
+        try:
+            from src.billing.partner import record_refund_reversal
+            record_refund_reversal(sb, order)
+        except Exception as _pe:
+            logger.error(f"[Partner] GAGAL reversal komisi order={order_id}: {_pe}")
+            try:
+                from src.utils.telegram_notifier import TelegramNotifier
+                TelegramNotifier().notify_admin(f"🤝⚠️ Tarik-balik komisi GAGAL utk refund order {order_id}: {_pe}")
+            except Exception:
+                pass
 
     sb.table("payments").update(upd).eq("order_id", order_id).execute()
 

@@ -1,0 +1,272 @@
+"""
+PROGRAM AGEN & AFILIASI [B21] F1 — mesin komisi (SPEC = AGENT_AND_AFILIATION_ARCITECTURE.md).
+
+SATU otoritas seluruh hitungan uang program partner (dipanggil midtrans._apply_settlement,
+endpoint mv-webhook, dan job bulanan). Prinsip §3 SPEC: buku besar APPEND-ONLY (koreksi = baris
+reversal, nilai tak pernah di-UPDATE) · rate di-SNAPSHOT per baris · gagal = raise (pemanggil
+yang memutuskan alarm; HARAM menebak diam-diam).
+
+Aturan uang terkunci (§2 SPEC, ketok owner 2026-07-17):
+  1. flat_idr = per BULAN-LANGGANAN yang dibayar (order tahunan period_months=12 → ×12).
+  2. percent  = dari rupiah yang BENAR-BENAR masuk (gross settlement, sudah net-diskon).
+  3. Refund pasca-bayar = pengurang pencairan berikutnya; pra-bayar = saling meniadakan.
+  Pembulatan: rupiah penuh terdekat, half-up (§5g.5).
+"""
+from __future__ import annotations
+
+import logging
+from datetime import datetime, timezone
+from decimal import Decimal, ROUND_HALF_UP
+
+logger = logging.getLogger(__name__)
+
+
+# ── util config (app_config: angka di `value`, teks di `value_text`) ─────────────────────────
+def _cfg_int(sb, key: str, default: int) -> int:
+    try:
+        r = sb.table("app_config").select("value").eq("key", key).limit(1).execute()
+        return int(r.data[0]["value"]) if r.data else default
+    except Exception:
+        return default
+
+
+def _cfg_text(sb, key: str, default: str) -> str:
+    try:
+        r = sb.table("app_config").select("value_text").eq("key", key).limit(1).execute()
+        v = (r.data[0].get("value_text") if r.data else None)
+        return v if v not in (None, "") else default
+    except Exception:
+        return default
+
+
+def _round_idr(x) -> int:
+    """Rupiah penuh terdekat, half-up (SPEC §5g.5)."""
+    return int(Decimal(str(x)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
+def compute_commission(rate_type: str, rate_value, gross_idr, months_paid: int) -> int:
+    """Nilai komisi satu pembayaran. flat_idr=per bulan-langganan ×months; percent=dari gross."""
+    v = Decimal(str(rate_value or 0))
+    if v <= 0:
+        return 0
+    if rate_type == "flat_idr":
+        return _round_idr(v * int(months_paid or 1))
+    if rate_type == "percent":
+        return _round_idr(Decimal(str(gross_idr or 0)) * v / Decimal(100))
+    raise ValueError(f"rate_type tak dikenal: {rate_type!r}")
+
+
+def _period_month(paid_at_iso: str | None) -> str:
+    """Periode = bulan kalender menurut tanggal settlement tercatat (SPEC §5g.4)."""
+    if paid_at_iso:
+        try:
+            d = datetime.fromisoformat(str(paid_at_iso).replace("Z", "+00:00"))
+            return f"{d.year:04d}-{d.month:02d}-01"
+        except ValueError:
+            pass  # format tak terduga → fallback bulan berjalan (di bawah)
+    now = datetime.now(timezone.utc)
+    return f"{now.year:04d}-{now.month:02d}-01"
+
+
+# ── ACCRUAL: pembayaran settlement → baris buku besar (dipanggil _apply_settlement) ──────────
+def record_settlement_commission(sb, order: dict, paid_at_iso: str | None = None) -> dict | None:
+    """Tulis komisi utk 1 order settlement. None = order bukan objek komisi (bukan langganan /
+    tanpa atribusi). Raise = data rusak (agen atribusi hilang) — pemanggil wajib alarm admin.
+    Idempotent 2 lapis: klaim-optimistik pemanggil + unique(order_id, entry_kind) DB."""
+    if (order.get("category") or "subscription") != "subscription":
+        return None  # SPEC §5g.10: HANYA pembayaran langganan plan yang berkomisi
+    att = (sb.table("tenant_attribution").select("*")
+           .eq("tenant_id", order["tenant_id"]).limit(1).execute().data or [None])[0]
+    if not att:
+        return None  # tanpa kode saat daftar = bukan bawaan siapa pun (SPEC §1b)
+
+    ag = (sb.table("agents").select("id,status,commission_type,commission_value")
+          .eq("id", att["agent_id"]).limit(1).execute().data or [None])[0]
+    if not ag:
+        raise RuntimeError(f"atribusi tenant {order['tenant_id']} menunjuk agen {att['agent_id']} yang TIDAK ADA")
+    # Agen suspended: default K4 SPEC §8 = komisi tenant lama TETAP dihitung (atribusi & ledger sah);
+    # pembekuan = keputusan owner per-kasus di gerbang pencairan.
+    gross = int(order.get("gross_amount") or 0)
+    months = int(order.get("period_months") or 1)
+    agent_amount = compute_commission(ag["commission_type"], ag["commission_value"], gross, months)
+
+    r_type = r_value = None
+    r_amount = 0
+    if att.get("reseller_id"):
+        rs = (sb.table("resellers").select("id,commission_type,commission_value")
+              .eq("id", att["reseller_id"]).limit(1).execute().data or [None])[0]
+        if rs:  # nilai INFORMASI utk agen (kewajiban agen, bukan kami — SPEC §1a)
+            r_type, r_value = rs["commission_type"], rs["commission_value"]
+            r_amount = compute_commission(r_type, r_value, gross, months)
+
+    row = {
+        "order_id": order["order_id"], "tenant_id": order["tenant_id"],
+        "agent_id": att["agent_id"], "reseller_id": att.get("reseller_id"),
+        "gross_idr": gross, "months_paid": months,
+        "agent_rate_type": ag["commission_type"], "agent_rate_value": float(ag["commission_value"]),
+        "agent_amount_idr": agent_amount,
+        "reseller_rate_type": r_type,
+        "reseller_rate_value": (float(r_value) if r_value is not None else None),
+        "reseller_amount_idr": r_amount,
+        "entry_kind": "accrual", "status": "accrued",
+        "period_month": _period_month(paid_at_iso or order.get("paid_at")),
+    }
+    try:
+        ins = sb.table("commission_ledger").insert(row).execute()
+        logger.info(f"[Partner] komisi lahir order={order['order_id']} agen={att['agent_id']} Rp{agent_amount}")
+        return {"ok": True, "ledger_id": ins.data[0]["id"], "agent_amount_idr": agent_amount}
+    except Exception as e:
+        if "duplicate" in str(e).lower() or "unique" in str(e).lower():
+            logger.info(f"[Partner] accrual order={order['order_id']} sudah ada — lewati (idempotent)")
+            return {"ok": True, "skipped": "duplicate"}
+        raise
+
+
+# ── REVERSAL: refund/chargeback → baris minus (SPEC §2.3 / §5e) ──────────────────────────────
+def record_refund_reversal(sb, order: dict) -> dict | None:
+    """Refund order → baris reversal. Belum dibayar: keduanya 'reversed' (saling meniadakan).
+    Sudah dibayar: reversal tinggal 'accrued' minus → pengurang pencairan berikutnya."""
+    acc = (sb.table("commission_ledger").select("*")
+           .eq("order_id", order["order_id"]).eq("entry_kind", "accrual").limit(1).execute().data or [None])[0]
+    if not acc:
+        return None  # tak pernah berkomisi (mis. tanpa atribusi) → tak ada yang ditarik
+    dup = (sb.table("commission_ledger").select("id")
+           .eq("order_id", order["order_id"]).eq("entry_kind", "reversal").limit(1).execute().data)
+    if dup:
+        return {"ok": True, "skipped": "reversal_exists"}
+
+    already_paid = acc["status"] == "paid"
+    rev_status = "accrued" if already_paid else "reversed"
+    rev = {k: acc[k] for k in ("order_id", "tenant_id", "agent_id", "reseller_id", "gross_idr",
+                               "months_paid", "agent_rate_type", "agent_rate_value",
+                               "reseller_rate_type", "reseller_rate_value", "period_month")}
+    rev.update({
+        "agent_amount_idr": -int(acc["agent_amount_idr"]),
+        "reseller_amount_idr": -int(acc["reseller_amount_idr"]),
+        "entry_kind": "reversal", "reversal_of": acc["id"], "status": rev_status,
+    })
+    ins = sb.table("commission_ledger").insert(rev).execute()
+    if not already_paid:
+        sb.table("commission_ledger").update({"status": "reversed"}).eq("id", acc["id"]).execute()
+    logger.info(f"[Partner] reversal order={order['order_id']} (accrual {'SUDAH' if already_paid else 'belum'} dibayar)")
+    return {"ok": True, "ledger_id": ins.data[0]["id"], "deduct_next_payout": already_paid}
+
+
+# ── PENCAIRAN BULANAN (draft → approve → paid; gerbang owner — SPEC §1d/5c) ──────────────────
+def _tax_pct(sb, tax_status: str) -> Decimal:
+    return Decimal(_cfg_text(sb, f"partner_tax_pct_{tax_status}", "0"))
+
+
+def _select_payable(sb, agent_id: str, period_month: str) -> tuple[list, list]:
+    """Baris yang masuk pencairan: accrual 'accrued' periode itu + SEMUA reversal 'accrued'
+    (pengurang menggantung, periode berapa pun — SPEC §2.3)."""
+    accs = (sb.table("commission_ledger").select("id,agent_amount_idr")
+            .eq("agent_id", agent_id).eq("entry_kind", "accrual").eq("status", "accrued")
+            .eq("period_month", period_month).execute().data or [])
+    revs = (sb.table("commission_ledger").select("id,agent_amount_idr")
+            .eq("agent_id", agent_id).eq("entry_kind", "reversal").eq("status", "accrued")
+            .execute().data or [])
+    return accs, revs
+
+
+def build_monthly_payouts(sb, period_month: str) -> dict:
+    """Susun/segarkan DRAFT tagihan per agen utk 1 periode ('YYYY-MM-01'). Di bawah ambang →
+    digulung (baris tetap accrued). Draft yang sudah approved/paid TIDAK disentuh."""
+    min_idr = _cfg_int(sb, "partner_min_payout_idr", 0)
+    agents = sb.table("agents").select("id,company_name,tax_status").execute().data or []
+    built, skipped = [], []
+    for ag in agents:
+        accs, revs = _select_payable(sb, ag["id"], period_month)
+        gross = sum(int(a["agent_amount_idr"]) for a in accs)
+        deduction = -sum(int(r["agent_amount_idr"]) for r in revs)  # reversal minus → angka positif
+        if gross == 0 and deduction == 0:
+            continue
+        net_pre_tax = gross - deduction
+        if net_pre_tax < min_idr:
+            skipped.append({"agent_id": ag["id"], "net": net_pre_tax, "reason": "di_bawah_ambang"})
+            continue
+        tax = _round_idr(Decimal(net_pre_tax) * _tax_pct(sb, ag["tax_status"]) / Decimal(100))
+        existing = (sb.table("agent_payouts").select("id,status").eq("agent_id", ag["id"])
+                    .eq("period_month", period_month).limit(1).execute().data or [None])[0]
+        vals = {"gross_commission_idr": gross, "deduction_idr": deduction,
+                "tax_withheld_idr": tax, "net_paid_idr": net_pre_tax - tax,
+                "updated_at": datetime.now(timezone.utc).isoformat()}
+        if existing:
+            if existing["status"] != "draft":
+                skipped.append({"agent_id": ag["id"], "reason": f"sudah_{existing['status']}"})
+                continue
+            sb.table("agent_payouts").update(vals).eq("id", existing["id"]).execute()
+            pid = existing["id"]
+        else:
+            ins = sb.table("agent_payouts").insert({"agent_id": ag["id"], "period_month": period_month,
+                                                    "status": "draft", **vals}).execute()
+            pid = ins.data[0]["id"]
+        built.append({"payout_id": pid, "agent": ag["company_name"], "gross": gross,
+                      "deduction": deduction, "tax": tax, "net": net_pre_tax - tax})
+    return {"period": period_month, "built": built, "skipped": skipped}
+
+
+def approve_payout(sb, payout_id: str, tax_override_idr: int | None = None) -> dict:
+    """Owner menyetujui draft: baris ledger terkait DIKUNCI (approved + payout_id) dan angka payout
+    dibekukan dari baris yang dikunci (satu sumber). Pajak boleh dikoreksi owner saat approve."""
+    po = (sb.table("agent_payouts").select("*").eq("id", payout_id).limit(1).execute().data or [None])[0]
+    if not po:
+        raise ValueError("payout tidak ditemukan")
+    if po["status"] != "draft":
+        raise ValueError(f"payout berstatus {po['status']} — hanya draft yang bisa disetujui")
+    accs, revs = _select_payable(sb, po["agent_id"], po["period_month"])
+    ids = [r["id"] for r in accs + revs]
+    if not ids:
+        raise ValueError("tidak ada baris komisi tersisa utk payout ini (sudah berubah?) — susun ulang draft")
+    gross = sum(int(a["agent_amount_idr"]) for a in accs)
+    deduction = -sum(int(r["agent_amount_idr"]) for r in revs)
+    net_pre_tax = gross - deduction
+    ag = (sb.table("agents").select("tax_status").eq("id", po["agent_id"]).limit(1).execute().data)[0]
+    tax = int(tax_override_idr) if tax_override_idr is not None else \
+        _round_idr(Decimal(net_pre_tax) * _tax_pct(sb, ag["tax_status"]) / Decimal(100))
+    now = datetime.now(timezone.utc).isoformat()
+    for _id in ids:  # status = workflow (bukan nilai) — append-only tetap terjaga
+        sb.table("commission_ledger").update({"status": "approved", "payout_id": payout_id}).eq("id", _id).execute()
+    sb.table("agent_payouts").update({
+        "gross_commission_idr": gross, "deduction_idr": deduction, "tax_withheld_idr": tax,
+        "net_paid_idr": net_pre_tax - tax, "status": "approved", "approved_at": now, "updated_at": now,
+    }).eq("id", payout_id).execute()
+    return {"ok": True, "rows_locked": len(ids), "net_paid_idr": net_pre_tax - tax}
+
+
+def mark_payout_paid(sb, payout_id: str, transfer_ref: str = "") -> dict:
+    """Owner mencatat bukti transfer → payout & seluruh baris terkuncinya = paid."""
+    po = (sb.table("agent_payouts").select("id,status").eq("id", payout_id).limit(1).execute().data or [None])[0]
+    if not po:
+        raise ValueError("payout tidak ditemukan")
+    if po["status"] != "approved":
+        raise ValueError(f"payout berstatus {po['status']} — hanya approved yang bisa ditandai dibayar")
+    now = datetime.now(timezone.utc).isoformat()
+    sb.table("commission_ledger").update({"status": "paid"}).eq("payout_id", payout_id).execute()
+    sb.table("agent_payouts").update({"status": "paid", "paid_at": now,
+                                      "transfer_ref": transfer_ref or None, "updated_at": now}
+                                     ).eq("id", payout_id).execute()
+    return {"ok": True}
+
+
+# ── REKENING AGEN (nomor terenkripsi Fernet — pola vault; SPEC §4/§6) ────────────────────────
+def set_agent_bank(sb, agent_id: str, bank_name: str, account_no: str, holder: str) -> dict:
+    from src.utils.crypto import encrypt
+    if not (bank_name and account_no and holder):
+        raise ValueError("bank_name, account_no, holder wajib diisi")
+    sb.table("agents").update({
+        "bank_name": bank_name.strip(), "bank_account_enc": encrypt(account_no.strip()),
+        "bank_holder": holder.strip(), "updated_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", agent_id).execute()
+    return {"ok": True}
+
+
+def reveal_agent_bank(sb, agent_id: str) -> dict:
+    """Buka nomor rekening (dipakai owner saat transfer) — hanya via endpoint ber-guard."""
+    from src.utils.crypto import decrypt
+    ag = (sb.table("agents").select("bank_name,bank_account_enc,bank_holder")
+          .eq("id", agent_id).limit(1).execute().data or [None])[0]
+    if not ag:
+        raise ValueError("agen tidak ditemukan")
+    return {"bank_name": ag.get("bank_name"), "bank_holder": ag.get("bank_holder"),
+            "account_no": (decrypt(ag["bank_account_enc"]) if ag.get("bank_account_enc") else None)}

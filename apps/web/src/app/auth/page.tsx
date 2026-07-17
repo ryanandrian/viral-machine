@@ -55,6 +55,9 @@ export default function AuthPage() {
     if (v && ["signup", "login", "forgot", "forgot-sent", "verify", "verified", "reset"].includes(v)) setView(v);
     const e = qs.get("error");
     if (e) setErr(e); // error dari /auth/callback (link kedaluwarsa, dll)
+    const rf = qs.get("ref"); // [B21] tautan agen/reseller ?ref=KODE → isi otomatis + validasi
+    if (rf) { const c = rf.trim().toUpperCase(); setRefCode(c); void checkRef(c); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function switchLang(l: "id" | "en") { setLang(l); document.documentElement.lang = l; localStorage.setItem("mv-lang", l); }
@@ -62,6 +65,16 @@ export default function AuthPage() {
 
   // ── Supabase Auth (Phase 9.1) — email flows. signUp → provisioning otomatis via trigger 0028.
   const [email, setEmail] = useState("");
+  // [B21] kode agen/reseller (opsional) — atribusi PERMANEN saat daftar (SPEC §1b); ?ref= mengisi otomatis.
+  const [refCode, setRefCode] = useState("");
+  const [refStatus, setRefStatus] = useState<"idle" | "checking" | "ok" | "bad">("idle");
+  async function checkRef(code: string) {
+    const c = code.trim().toUpperCase();
+    if (!c) { setRefStatus("idle"); return; }
+    setRefStatus("checking");
+    const r = await fetch(`/api/partner/check?code=${encodeURIComponent(c)}`).then((x) => x.json()).catch(() => null);
+    setRefStatus(r?.valid ? "ok" : "bad");
+  }
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
   const [busy, setBusy] = useState(false);
@@ -96,13 +109,18 @@ export default function AuthPage() {
     setErr(null);
     if (pw.length < 8) return setErr(lang === "id" ? "Password minimal 8 karakter." : "Password must be at least 8 characters.");
     if (pw !== pw2) return setErr(lang === "id" ? "Konfirmasi password tidak cocok." : "Passwords do not match.");
+    // [B21] anti-salah-di-titik-input (§3.1): kode terisi tapi tak dikenal → tolak SEBELUM kirim
+    // (server tetap memvalidasi ulang — satu semantik).
+    if (refCode.trim() && refStatus === "bad") {
+      return setErr(lang === "id" ? "Kode agen/reseller tidak dikenal. Kosongkan bila tidak punya." : "Partner code not recognized. Leave empty if you don't have one.");
+    }
     setBusy(true);
     // Email konfirmasi DIKIRIM SENDIRI oleh mv-web (ber-brand, dwibahasa, link token_hash lintas-alat)
     // via /api/auth/signup → BUKAN supabase.auth.signUp (email default Supabase + PKCE rapuh lintas-alat).
     const res = await fetch("/api/auth/signup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: email.trim(), password: pw, lang }),
+      body: JSON.stringify({ email: email.trim(), password: pw, lang, refCode: refCode.trim().toUpperCase() || undefined }),
     }).catch(() => null);
     setBusy(false);
     if (!res || !res.ok) {
@@ -214,6 +232,14 @@ export default function AuthPage() {
                   <PwInput id="pw1" placeholder="Min. 8 karakter" value={pw} onChange={(e) => setPw(e.target.value)} />
                 </div>
                 <div><label className="label"><Bi id="Konfirmasi password" en="Confirm password" /></label><PwInput id="pw2" value={pw2} onChange={(e) => setPw2(e.target.value)} /></div>
+                <div>{/* [B21] atribusi agen — opsional, validasi langsung di titik input */}
+                  <label className="label"><Bi id="Kode agen/reseller (opsional)" en="Partner code (optional)" /></label>
+                  <input className="input" value={refCode} placeholder="MIS. MAJU2026" style={{ textTransform: "uppercase" }}
+                    onChange={(e) => { setRefCode(e.target.value.toUpperCase()); setRefStatus("idle"); }}
+                    onBlur={(e) => void checkRef(e.target.value)} />
+                  {refStatus === "ok" && <div style={{ fontSize: "var(--text-xs)", color: "var(--ok, #059669)", marginTop: "0.25rem" }}><Bi id="✓ Kode valid — pendaftaran Anda tercatat lewat mitra kami." en="✓ Valid code — your signup is credited to our partner." /></div>}
+                  {refStatus === "bad" && <div style={{ fontSize: "var(--text-xs)", color: "var(--danger, #dc2626)", marginTop: "0.25rem" }}><Bi id="✗ Kode tidak dikenal. Kosongkan bila tidak punya." en="✗ Code not recognized. Leave empty if you don't have one." /></div>}
+                </div>
                 <label className="terms"><input type="checkbox" defaultChecked /><Bi id="Saya setuju dengan Ketentuan Layanan dan Kebijakan Privasi MesinViral." en="I agree to MesinViral's Terms of Service and Privacy Policy." /></label>
                 <button className="btn btn-default btn-lg" style={{ width: "100%" }} onClick={doSignup} disabled={busy}>{busy ? "…" : <Bi id="Buat Akun" en="Create account" />}</button>
                 <ErrBox />
