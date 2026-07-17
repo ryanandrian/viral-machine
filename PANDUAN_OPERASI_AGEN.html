@@ -1,0 +1,258 @@
+<title>Panduan Operasi Program Agen — MesinViral Partner</title>
+<style>
+  :root {
+    --paper: #f5f4f0;
+    --surface: #fffefb;
+    --ink: #1a2030;
+    --ink-soft: #4a5163;
+    --muted: #7b8194;
+    --line: #e4e2db;
+    --line-soft: #edeae2;
+    --accent: #3b5bdb;
+    --accent-soft: #eaeeff;
+    --money: #2f9e6f;
+    --money-soft: #e6f4ec;
+    --warn: #b7791f;
+    --warn-soft: #fbf3e2;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #14161d; --surface: #1c1f28; --ink: #eef0f5; --ink-soft: #c0c5d2;
+      --muted: #8990a0; --line: #2c303b; --line-soft: #24272f;
+      --accent: #8ea2ff; --accent-soft: #232a44; --money: #5fce9d; --money-soft: #17342a;
+      --warn: #e0b055; --warn-soft: #322a17;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #14161d; --surface: #1c1f28; --ink: #eef0f5; --ink-soft: #c0c5d2;
+    --muted: #8990a0; --line: #2c303b; --line-soft: #24272f;
+    --accent: #8ea2ff; --accent-soft: #232a44; --money: #5fce9d; --money-soft: #17342a;
+    --warn: #e0b055; --warn-soft: #322a17;
+  }
+  :root[data-theme="light"] {
+    --paper: #f5f4f0; --surface: #fffefb; --ink: #1a2030; --ink-soft: #4a5163;
+    --muted: #7b8194; --line: #e4e2db; --line-soft: #edeae2;
+    --accent: #3b5bdb; --accent-soft: #eaeeff; --money: #2f9e6f; --money-soft: #e6f4ec;
+    --warn: #b7791f; --warn-soft: #fbf3e2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: var(--sans); line-height: 1.6; font-size: 17px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; padding: clamp(1.5rem, 4vw, 4rem) clamp(1.1rem, 4vw, 2rem) 5rem; }
+
+  header.masthead { border-bottom: 2px solid var(--ink); padding-bottom: 1.5rem; margin-bottom: 2.5rem; }
+  .kicker { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); margin: 0 0 0.9rem; }
+  h1 { font-family: var(--serif); font-weight: 600; font-size: clamp(1.9rem, 5vw, 2.9rem); line-height: 1.08; letter-spacing: -0.01em; text-wrap: balance; margin: 0 0 0.6rem; }
+  .dek { color: var(--ink-soft); font-size: 1.08rem; max-width: 60ch; margin: 0; }
+
+  .concept { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 1.4rem 1.5rem; margin-bottom: 3rem; }
+  .concept p { margin: 0; color: var(--ink-soft); }
+  .concept strong { color: var(--ink); font-weight: 600; }
+
+  .phase { margin-bottom: 3.2rem; }
+  .phase-head { display: flex; align-items: baseline; gap: 0.75rem; margin-bottom: 0.4rem; }
+  .phase-tag { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase; padding: 0.25rem 0.6rem; border-radius: 999px; white-space: nowrap; }
+  .tag-once { background: var(--accent-soft); color: var(--accent); }
+  .tag-month { background: var(--money-soft); color: var(--money); }
+  .phase h2 { font-family: var(--serif); font-weight: 600; font-size: 1.5rem; letter-spacing: -0.01em; margin: 0; }
+  .phase-sub { color: var(--muted); font-size: 0.96rem; margin: 0.15rem 0 1.5rem; }
+
+  ol.steps { list-style: none; counter-reset: s; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1.15rem; }
+  ol.steps > li { counter-increment: s; display: grid; grid-template-columns: 2.1rem 1fr; gap: 1rem; align-items: start; }
+  ol.steps > li::before {
+    content: counter(s); grid-row: 1 / span 2;
+    font-family: var(--serif); font-size: 1.05rem; font-weight: 600; color: var(--accent);
+    width: 2.1rem; height: 2.1rem; display: grid; place-items: center;
+    border: 1.5px solid var(--accent); border-radius: 50%; font-variant-numeric: tabular-nums;
+  }
+  .step-t { font-weight: 600; margin: 0.25rem 0 0.2rem; }
+  .step-d { color: var(--ink-soft); margin: 0; font-size: 0.98rem; }
+  .step-d .btn { font-family: var(--sans); font-weight: 600; color: var(--ink); background: var(--line-soft); border: 1px solid var(--line); border-radius: 6px; padding: 0.05rem 0.4rem; font-size: 0.88rem; white-space: nowrap; }
+  .path { font-family: var(--mono); font-size: 0.82rem; color: var(--muted); }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--line-soft); padding: 0.08rem 0.35rem; border-radius: 5px; color: var(--ink); }
+
+  .callout { display: grid; grid-template-columns: auto 1fr; gap: 0.9rem; align-items: start; border-radius: 12px; padding: 1.05rem 1.25rem; margin: 1.6rem 0 0; }
+  .callout .ico { font-size: 1.2rem; line-height: 1.5; }
+  .callout p { margin: 0; font-size: 0.96rem; }
+  .callout.gate { background: var(--money-soft); border: 1px solid color-mix(in srgb, var(--money) 30%, transparent); }
+  .callout.gate strong { color: var(--money); }
+  .callout.warn { background: var(--warn-soft); border: 1px solid color-mix(in srgb, var(--warn) 32%, transparent); }
+  .callout.warn strong { color: var(--warn); }
+
+  .misc { display: grid; gap: 0.1rem; margin-top: 1rem; }
+  .misc dt { font-weight: 600; margin-top: 1rem; }
+  .misc dd { margin: 0.15rem 0 0; color: var(--ink-soft); font-size: 0.98rem; }
+
+  .ref { width: 100%; border-collapse: collapse; margin-top: 1.4rem; font-size: 0.94rem; }
+  .ref caption { text-align: left; color: var(--muted); font-size: 0.9rem; margin-bottom: 0.6rem; }
+  .ref th, .ref td { text-align: left; padding: 0.65rem 0.7rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .ref th { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .ref td:first-child { font-family: var(--mono); font-size: 0.82rem; color: var(--accent); white-space: nowrap; }
+  .ref .tbl-scroll { overflow-x: auto; }
+
+  .divider { border: none; border-top: 1px solid var(--line); margin: 3.2rem 0; }
+  footer { color: var(--muted); font-size: 0.9rem; border-top: 2px solid var(--ink); padding-top: 1.3rem; }
+  footer strong { color: var(--ink-soft); }
+  .todo { list-style: none; padding: 0; margin: 0.8rem 0 0; display: flex; flex-direction: column; gap: 0.55rem; }
+  .todo li { display: grid; grid-template-columns: 1.3rem 1fr; gap: 0.5rem; color: var(--ink-soft); font-size: 0.96rem; }
+  .todo li::before { content: "☐"; color: var(--accent); }
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <p class="kicker">MesinViral Partner · Panduan Operasi</p>
+    <h1>Cara Menjalankan Program Agen</h1>
+    <p class="dek">Rujukan singkat untuk Anda sebagai owner — dari menyiapkan angka, merekrut agen, sampai membayar komisi tiap bulan.</p>
+  </header>
+
+  <section class="concept">
+    <p><strong>Inti programnya:</strong> agen (perusahaan mitra) membawa pelanggan lewat kode unik mereka. Setiap pelanggan bawaan membayar, komisi agen <strong>lahir otomatis</strong> di buku besar. Sebulan sekali Anda mentransfer komisi ke agen — dan agen membayar sendiri para resellernya (Anda cukup menyediakan hitungan + file Excel). Uang pelanggan selalu masuk ke Anda; uang komisi tidak pernah keluar tanpa persetujuan Anda.</p>
+  </section>
+
+  <section class="phase">
+    <div class="phase-head">
+      <span class="phase-tag tag-once">Sekali saja</span>
+      <h2>Siapkan angka programnya</h2>
+    </div>
+    <p class="phase-sub">Semua nilai bisa Anda ubah kapan saja tanpa menyentuh kode.</p>
+    <ol class="steps">
+      <li>
+        <div>
+          <p class="step-t">Buka kartu pengaturan</p>
+          <p class="step-d"><span class="path">Admin → Konfigurasi Sistem → kartu "Program Agen (Partner)"</span></p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <p class="step-t">Tetapkan 5 angka utama</p>
+          <p class="step-d">Saklar program (hidup/mati), tanggal pencairan tiap bulan, ambang minimum pencairan, lalu tipe &amp; nilai komisi default untuk agen baru. Empat kenop pajak (PPh) sudah terisi sesuai riset — biarkan sampai konsultan pajak Anda memvalidasi.</p>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <section class="phase">
+    <div class="phase-head">
+      <span class="phase-tag tag-once">Per agen baru</span>
+      <h2>Merekrut seorang agen</h2>
+    </div>
+    <p class="phase-sub">Agen hanya lahir dari tangan Anda — tidak ada pendaftaran mandiri untuk agen.</p>
+    <ol class="steps">
+      <li>
+        <div>
+          <p class="step-t">Tandatangani kontrak lebih dulu</p>
+          <p class="step-d">Di luar sistem. Kontrak mengikat kewajiban agen (investasi iklan, larangan janji palsu) — sistem hanya menegakkan angkanya.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <p class="step-t">Daftarkan agennya</p>
+          <p class="step-d"><span class="path">Admin → Program Agen → <span class="btn">Tambah agen</span></span><br>Isi nama perusahaan, email PIC, <strong>kode unik</strong> (4–12 huruf/angka — inilah kode yang dibawa pelanggannya), tipe &amp; nilai komisi, dan status pajak.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <p class="step-t">Isi rekening &amp; beri akses portal</p>
+          <p class="step-d">Buka detail agen → isi rekening tujuan transfer (nomor tersimpan terenkripsi) → klik <span class="btn">Undang login portal</span>. Agen menerima email untuk membuat kata sandi dan masuk ke <code>mesinviral.com/agent</code>.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <p class="step-t">Agen jalan sendiri</p>
+          <p class="step-d">Dari portalnya, agen menyebarkan kode/tautan, merekrut reseller (lewat <code>mesinviral.com/agent/join/KODE</code>), dan menghubungkan Telegram agar dikabari tiap komisi masuk. Anda tidak perlu terlibat di sini.</p>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <section class="phase">
+    <div class="phase-head">
+      <span class="phase-tag tag-month">Rutin bulanan</span>
+      <h2>Membayar komisi agen</h2>
+    </div>
+    <p class="phase-sub">Ini satu-satunya pekerjaan rutin Anda — beberapa menit tiap bulan.</p>
+    <ol class="steps">
+      <li>
+        <div>
+          <p class="step-t">Terima pengingat</p>
+          <p class="step-d">Pada tanggal pencairan yang Anda tetapkan, bila ada komisi menunggu, Telegram Anda otomatis mengingatkan.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <p class="step-t">Susun tagihan</p>
+          <p class="step-d"><span class="path">Admin → Program Agen</span> → pilih bulan → <span class="btn">Susun draft tagihan periode ini</span>. Sistem menghitung otomatis per agen (dikurangi refund bila ada; tagihan di bawah ambang digulung ke bulan berikutnya).</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <p class="step-t">Periksa lalu setujui</p>
+          <p class="step-d">Lihat angka kotor, potongan PPh, dan jumlah bersih → <span class="btn">Setujui</span>. Baris komisi terkunci agar tidak berubah.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <p class="step-t">Transfer dari bank Anda</p>
+          <p class="step-d">Klik <span class="btn">Rekening</span> untuk melihat nomor rekening agen → lakukan transfer manual lewat bank/aplikasi Anda sendiri.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <p class="step-t">Catat buktinya</p>
+          <p class="step-d">Isi nomor referensi transfer → <span class="btn">Tandai dibayar</span>. Selesai — agen otomatis dikabari lewat Telegram bahwa komisinya sudah cair.</p>
+        </div>
+      </li>
+    </ol>
+    <div class="callout gate">
+      <span class="ico">🔒</span>
+      <p><strong>Uang tidak pernah keluar otomatis.</strong> Anda adalah gerbangnya di setiap pencairan — sistem hanya menghitung dan menyodorkan tagihan; transfer selalu dilakukan tangan Anda sendiri.</p>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <section class="phase">
+    <h2 style="font-family:var(--serif);font-weight:600;font-size:1.5rem;margin:0 0 1rem;">Situasi lain yang mungkin muncul</h2>
+    <dl class="misc">
+      <dt>Ada pelanggan yang refund</dt>
+      <dd>Ditangani otomatis. Bila komisinya belum dibayar, langsung saling meniadakan; bila sudah terlanjur dibayar, menjadi pengurang tagihan agen bulan berikutnya. Anda tidak perlu menagih balik.</dd>
+      <dt>Ingin menghentikan seorang agen</dt>
+      <dd>Tombol Suspend / <span class="btn">Aktifkan</span> pada baris agen. Saat disuspend, seluruh kodenya berhenti menerima pendaftaran baru seketika — data &amp; komisi lama tetap utuh.</dd>
+      <dt>Butuh laporan untuk pajak</dt>
+      <dd>Tombol <span class="btn">Rekap pajak (Excel)</span> di halaman Program Agen menghasilkan satu file per tahun: seluruh pencairan yang benar-benar dibayar, lengkap dengan potongan PPh &amp; NPWP — siap diserahkan ke konsultan pajak Anda.</dd>
+      <dt>Bagaimana dengan reseller?</dt>
+      <dd>Sepenuhnya urusan agen — merekrut, menyetujui, dan membayar mereka. Sistem menyiapkan hitungan + file Excel transfer massal untuk agen; Anda cukup membayar agen, bukan resellernya.</dd>
+    </dl>
+  </section>
+
+  <section class="phase">
+    <div class="tbl-scroll">
+    <table class="ref">
+      <caption>Rujukan cepat — kenop di kartu "Program Agen (Partner)"</caption>
+      <thead><tr><th>Kenop</th><th>Fungsi</th></tr></thead>
+      <tbody>
+        <tr><td>Saklar Program</td><td>Hidup/mati. Saat mati, kode agen ditolak di form pendaftaran; komisi pelanggan lama tetap berjalan.</td></tr>
+        <tr><td>Tanggal Pencairan</td><td>Tanggal berapa tiap bulan Anda diingatkan untuk membayar komisi periode sebelumnya.</td></tr>
+        <tr><td>Ambang Minimum</td><td>Tagihan di bawah nilai ini digulung ke bulan berikutnya (hemat biaya transfer receh).</td></tr>
+        <tr><td>Komisi Default</td><td>Nilai awal saat membuat agen baru — persen dari pembayaran, atau Rupiah tetap per bulan langganan. Bisa diubah per agen.</td></tr>
+        <tr><td>4× Kenop PPh</td><td>Persentase potongan pajak yang disarankan per status agen. Validasi dulu dengan konsultan pajak.</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <footer>
+    <p><strong>Sebelum merekrut agen nyata pertama, tiga hal ada di tangan Anda:</strong></p>
+    <ul class="todo">
+      <li>Tetapkan angka komisi &amp; ambang di kartu pengaturan.</li>
+      <li>Validasikan persentase pajak dan draf kontrak ke konsultan pajak &amp; hukum Anda.</li>
+      <li>Coba sendiri satu putaran penuh dengan agen uji sebelum yang sungguhan.</li>
+    </ul>
+  </footer>
+</div>
