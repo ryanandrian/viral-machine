@@ -1,6 +1,6 @@
 # MANAJEMEN ERROR AI — ARSITEKTUR (SINGLE SOURCE OF TRUTH)
 
-> **Status:** 🟢 KERANGKA LIVE-READY (dibangun 2026-07-18) — taksonomi + adapter EL-direct terverifikasi + circuit-breaker semantik + persistensi. ⛔ **BELUM DEPLOY** (menunggu izin owner).
+> **Status:** ✅ **LIVE PRODUKSI 2026-07-18 01:04** (izin owner "deploy BE", commit `99b1c32`, mv-worker/webhook active, health 200; verifikasi: nol error import/ErrorClass, 3 thread produksi start bersih). Taksonomi + adapter EL-direct terverifikasi + circuit-breaker semantik + persistensi migr 0170.
 > **Fungsi dokumen:** peta + tata-kelola. **Kode = otoritatif; dokumen = peta + bukti.** Kontradiksi → kode menang; perbarui dokumen SAAT ITU.
 > **Aturan emas:** sebuah kode error masuk registry **HANYA bila ada bukti sampel nyata** (log kita / respons asli). Belum terbukti → `UNKNOWN` = aman (retryable, perilaku lama). **Update kode + dokumen dalam commit yang SAMA** (anti-drift, disiplin CLAUDE.md §3.7).
 
@@ -66,4 +66,4 @@ Klasifikasi menempel pada **transport yang menerima error**, bukan merek model. 
 Uji `test_errmgmt.py` **13/13 LULUS** vs DB live: classifier EL 2 string NYATA (payment_issue→BILLING, quota_exceeded→QUOTA) + structured-body + error-asing→UNKNOWN · taksonomi/FAST_FAIL benar · persistensi `error_class` end-to-end (`_record_production_run`→`latest_failure`) · keputusan hard=rem-di-1 · **regresi: UNKNOWN tetap streak-3, success memutus streak** · migr 0170 applied (guard identitas) · py_compile + import worker bersih · data uji 0 sisa. **FE tak tersentuh.**
 
 ## §8 CHANGELOG
-- **2026-07-18** — Lahir + kerangka dibangun. Pemicu: insiden RAD 2026-07-17 (langganan EL gagal-bayar → 3× gagal bakar biaya LLM sebelum rem). Owner minta manajemen error world-class extensible (bukan tambalan). Isi awal registry: EL-direct (✅), OpenAI (⏳). ⛔ belum deploy.
+- **2026-07-18** — Lahir + kerangka dibangun + **DEPLOYED PRODUKSI 01:04 (`99b1c32`, izin owner)**. Pemicu: insiden RAD 2026-07-17 (langganan EL gagal-bayar → 3× gagal bakar biaya LLM sebelum rem). Owner minta manajemen error world-class extensible (bukan tambalan). Isi awal registry: EL-direct (✅), OpenAI (⏳). Verifikasi produksi: nol error import, 3 thread produksi start bersih.
