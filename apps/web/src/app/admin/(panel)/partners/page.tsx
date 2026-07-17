@@ -25,7 +25,7 @@ type AgentRow = {
   id: string; company_name: string; pic_name: string | null; pic_email: string; pic_phone: string | null;
   status: string; commission_type: string; commission_value: number; tax_status: string;
   npwp: string | null; notes: string | null; bank_name: string | null; bank_holder: string | null;
-  bank_account_set: boolean;
+  bank_account_set: boolean; user_id: string | null;
 };
 type Detail = {
   agent: AgentRow;
@@ -114,6 +114,15 @@ export default function PartnersAdmin() {
   async function revealBank(agentId: string) {
     const j = await ops({ op: "bank_reveal", agent_id: agentId }) as { bank_name?: string; account_no?: string; bank_holder?: string } | null;
     if (j) window.alert(`${j.bank_name ?? "?"} · ${j.account_no ?? "(belum diisi)"} · a.n. ${j.bank_holder ?? "?"}`);
+  }
+  async function invitePortal(agentId: string) {
+    setBusy(true); setMsg(null);
+    const res = await fetch("/api/admin/partners/invite", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agent_id: agentId }) });
+    const j = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (!res.ok) return setMsg(j.error || "gagal mengundang");
+    setMsg("undangan portal terkirim ke email PIC");
+    void openDetail(agentId);
   }
   async function buildDrafts() {
     const j = await ops({ op: "payouts_build", period_month: `${period}-01` }) as { built?: unknown[]; skipped?: unknown[] } | null;
@@ -266,6 +275,13 @@ export default function PartnersAdmin() {
               <div className="pt-kv"><span className="k"><Bi id="Kode" en="Codes" /></span><span className="v">{detail.codes.map((c) => `${c.code}${c.used_count ? ` (dipakai ${c.used_count}×)` : ""}`).join(" · ") || "—"}</span></div>
               <div className="pt-kv"><span className="k"><Bi id="Komisi" en="Commission" /></span><span className="v">{detail.agent.commission_type === "percent" ? `${detail.agent.commission_value}%` : `${idr(detail.agent.commission_value)}/bln`}</span></div>
               <div className="pt-kv"><span className="k"><Bi id="Pajak" en="Tax" /></span><span className="v">{TAX[detail.agent.tax_status] ?? detail.agent.tax_status}{detail.agent.npwp ? ` · NPWP ${detail.agent.npwp}` : ""}</span></div>
+              <div className="pt-kv"><span className="k"><Bi id="Portal agen" en="Agent portal" /></span>
+                <span className="v" style={{ display: "inline-flex", gap: "0.5rem", alignItems: "center" }}>
+                  <span className={`badge ${detail.agent.user_id ? "badge-success" : "badge-default"}`}>{detail.agent.user_id ? <Bi id="terhubung" en="linked" /> : <Bi id="belum ada login" en="no login yet" />}</span>
+                  <button className="btn btn-outline btn-sm" disabled={busy} onClick={() => void invitePortal(detail.agent.id)}>
+                    {detail.agent.user_id ? <Bi id="Kirim ulang undangan" en="Resend invite" /> : <Bi id="Undang login portal" en="Invite portal login" />}
+                  </button>
+                </span></div>
             </div>
             <div>
               <p className="pt-sec"><Bi id="Rekening transfer (nomor terenkripsi)" en="Transfer bank (number encrypted)" /></p>

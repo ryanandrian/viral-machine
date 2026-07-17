@@ -68,6 +68,33 @@ export async function updateSession(request: NextRequest) {
     return response;
   }
 
+  // ── Gate PORTAL AGEN [B21] F2 (pola persis gate admin; K3 owner: path /agent) ──
+  const isAgent = user?.app_metadata?.role === "agent";
+  if (path === "/agent/login") {
+    if (isAgent) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/agent";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    return response;
+  }
+  if (path === "/agent" || path.startsWith("/agent/")) {
+    if (!user) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/agent/login";
+      url.search = `?next=${encodeURIComponent(path)}`;
+      return NextResponse.redirect(url);
+    }
+    if (!isAgent) {
+      const url = request.nextUrl.clone();
+      url.pathname = isSuperAdmin ? "/admin/tenants" : "/dashboard";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    return response;
+  }
+
   // ── Route TENANT ter-proteksi ──
   const isProtected = PROTECTED.some((p) => path === p || path.startsWith(`${p}/`));
   // Super-admin TIDAK boleh masuk panel tenant (jalur terpisah — owner 2026-06-15) → balik ke /admin.
@@ -75,6 +102,13 @@ export async function updateSession(request: NextRequest) {
   if (isProtected && isSuperAdmin) {
     const url = request.nextUrl.clone();
     url.pathname = "/admin/tenants";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+  // User agen TIDAK punya panel tenant (bukan tenant; anti nyangkut di onboarding) → balik ke portalnya.
+  if (isProtected && isAgent) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/agent";
     url.search = "";
     return NextResponse.redirect(url);
   }

@@ -152,3 +152,31 @@ export function renderConfirmEmail(lang: Lang, actionUrl: string): RenderedEmail
     text: textVersion(t.heading, t.intro, t.cta, actionUrl, t.security, lang),
   };
 }
+
+// ── [B21] Undangan portal agen (MesinViral Partner) ───────────────────────────
+export function renderAgentInviteEmail(lang: Lang, actionUrl: string, companyName: string): RenderedEmail {
+  const t = lang === "id"
+    ? {
+        subject: `Akses portal MesinViral Partner untuk ${companyName}`,
+        preview: "Aktifkan akses portal agen Anda — pantau komisi & pelanggan bawaan Anda.",
+        heading: "Selamat datang di MesinViral Partner",
+        intro: `Anda ditunjuk sebagai PIC portal agen untuk ${companyName}. Klik tombol di bawah untuk membuat kata sandi dan masuk ke dasbor Anda — pelanggan bawaan, komisi berjalan, dan riwayat pencairan, semuanya transparan.`,
+        cta: "Aktifkan akses portal",
+        fallback: "Atau salin tautan ini:",
+        security: "Tautan ini kedaluwarsa demi keamanan dan hanya bisa dipakai sekali. Jika Anda tidak merasa bermitra dengan MesinViral, abaikan email ini.",
+      }
+    : {
+        subject: `Your MesinViral Partner portal access for ${companyName}`,
+        preview: "Activate your partner portal — track commissions & referred customers.",
+        heading: "Welcome to MesinViral Partner",
+        intro: `You've been designated as the portal PIC for ${companyName}. Click below to set your password and access your dashboard — referred customers, running commissions, and payout history, fully transparent.`,
+        cta: "Activate portal access",
+        fallback: "Or copy this link:",
+        security: "This link expires for your security and can only be used once. If you're not a MesinViral partner, you can safely ignore this email.",
+      };
+  return {
+    subject: t.subject,
+    html: shell({ lang, preview: t.preview, heading: t.heading, intro: t.intro, ctaLabel: t.cta, ctaUrl: actionUrl, fallbackLabel: t.fallback, security: t.security }),
+    text: textVersion(t.heading, t.intro, t.cta, actionUrl, t.security, lang),
+  };
+}
