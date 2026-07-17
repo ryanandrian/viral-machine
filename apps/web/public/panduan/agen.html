@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panduan Agen — MesinViral Partner</title>
+<style>
+  :root {
+    --paper: #f5f4f0; --surface: #fffefb; --ink: #1a2030; --ink-soft: #4a5163;
+    --muted: #7b8194; --line: #e4e2db; --line-soft: #edeae2;
+    --accent: #3b5bdb; --accent-soft: #eaeeff; --money: #2f9e6f; --money-soft: #e6f4ec;
+    --warn: #b7791f; --warn-soft: #fbf3e2;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #14161d; --surface: #1c1f28; --ink: #eef0f5; --ink-soft: #c0c5d2;
+      --muted: #8990a0; --line: #2c303b; --line-soft: #24272f;
+      --accent: #8ea2ff; --accent-soft: #232a44; --money: #5fce9d; --money-soft: #17342a;
+      --warn: #e0b055; --warn-soft: #322a17;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #14161d; --surface: #1c1f28; --ink: #eef0f5; --ink-soft: #c0c5d2;
+    --muted: #8990a0; --line: #2c303b; --line-soft: #24272f;
+    --accent: #8ea2ff; --accent-soft: #232a44; --money: #5fce9d; --money-soft: #17342a;
+    --warn: #e0b055; --warn-soft: #322a17;
+  }
+  :root[data-theme="light"] {
+    --paper: #f5f4f0; --surface: #fffefb; --ink: #1a2030; --ink-soft: #4a5163;
+    --muted: #7b8194; --line: #e4e2db; --line-soft: #edeae2;
+    --accent: #3b5bdb; --accent-soft: #eaeeff; --money: #2f9e6f; --money-soft: #e6f4ec;
+    --warn: #b7791f; --warn-soft: #fbf3e2;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--sans); line-height: 1.6; font-size: 17px; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 780px; margin: 0 auto; padding: clamp(1.5rem, 4vw, 4rem) clamp(1.1rem, 4vw, 2rem) 5rem; }
+  header.masthead { border-bottom: 2px solid var(--ink); padding-bottom: 1.5rem; margin-bottom: 2.5rem; }
+  .kicker { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); margin: 0 0 0.9rem; }
+  h1 { font-family: var(--serif); font-weight: 600; font-size: clamp(1.9rem, 5vw, 2.9rem); line-height: 1.08; letter-spacing: -0.01em; text-wrap: balance; margin: 0 0 0.6rem; }
+  .dek { color: var(--ink-soft); font-size: 1.08rem; max-width: 60ch; margin: 0; }
+  .concept { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 1.4rem 1.5rem; margin-bottom: 3rem; }
+  .concept p { margin: 0; color: var(--ink-soft); }
+  .concept strong { color: var(--ink); font-weight: 600; }
+  .concept .earn { color: var(--money); font-weight: 600; }
+  .phase { margin-bottom: 3.2rem; }
+  .phase-head { display: flex; align-items: baseline; gap: 0.75rem; margin-bottom: 0.4rem; }
+  .phase-tag { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase; padding: 0.25rem 0.6rem; border-radius: 999px; white-space: nowrap; background: var(--accent-soft); color: var(--accent); }
+  .phase-tag.money { background: var(--money-soft); color: var(--money); }
+  .phase h2 { font-family: var(--serif); font-weight: 600; font-size: 1.5rem; letter-spacing: -0.01em; margin: 0; }
+  .phase-sub { color: var(--muted); font-size: 0.96rem; margin: 0.15rem 0 1.5rem; }
+  ol.steps { list-style: none; counter-reset: s; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1.15rem; }
+  ol.steps > li { counter-increment: s; display: grid; grid-template-columns: 2.1rem 1fr; gap: 1rem; align-items: start; }
+  ol.steps > li::before { content: counter(s); grid-row: 1 / span 2; font-family: var(--serif); font-size: 1.05rem; font-weight: 600; color: var(--accent); width: 2.1rem; height: 2.1rem; display: grid; place-items: center; border: 1.5px solid var(--accent); border-radius: 50%; font-variant-numeric: tabular-nums; }
+  .step-t { font-weight: 600; margin: 0.25rem 0 0.2rem; }
+  .step-d { color: var(--ink-soft); margin: 0; font-size: 0.98rem; }
+  .step-d .btn { font-family: var(--sans); font-weight: 600; color: var(--ink); background: var(--line-soft); border: 1px solid var(--line); border-radius: 6px; padding: 0.05rem 0.4rem; font-size: 0.88rem; white-space: nowrap; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--line-soft); padding: 0.08rem 0.35rem; border-radius: 5px; color: var(--ink); }
+  .callout { display: grid; grid-template-columns: auto 1fr; gap: 0.9rem; align-items: start; border-radius: 12px; padding: 1.05rem 1.25rem; margin: 1.6rem 0 0; }
+  .callout .ico { font-size: 1.2rem; line-height: 1.5; }
+  .callout p { margin: 0; font-size: 0.96rem; }
+  .callout.gate { background: var(--money-soft); border: 1px solid color-mix(in srgb, var(--money) 30%, transparent); }
+  .callout.gate strong { color: var(--money); }
+  .callout.warn { background: var(--warn-soft); border: 1px solid color-mix(in srgb, var(--warn) 32%, transparent); }
+  .callout.warn strong { color: var(--warn); }
+  .misc { display: grid; gap: 0.1rem; margin-top: 1rem; }
+  .misc dt { font-weight: 600; margin-top: 1rem; }
+  .misc dd { margin: 0.15rem 0 0; color: var(--ink-soft); font-size: 0.98rem; }
+  .divider { border: none; border-top: 1px solid var(--line); margin: 3.2rem 0; }
+  footer { color: var(--muted); font-size: 0.9rem; border-top: 2px solid var(--ink); padding-top: 1.3rem; }
+  footer strong { color: var(--ink-soft); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="masthead">
+    <p class="kicker">MesinViral Partner · Panduan Agen</p>
+    <h1>Cara Menghasilkan sebagai Agen MesinViral</h1>
+    <p class="dek">Anda membawa pelanggan, MesinViral menyediakan sistemnya, dan Anda dibayar komisi setiap bulan — selama pelanggan Anda terus berlangganan.</p>
+  </header>
+
+  <section class="concept">
+    <p><strong>Cara kerjanya:</strong> Anda punya <strong>kode unik</strong>. Setiap orang yang mendaftar MesinViral dengan membawa kode Anda tercatat sebagai pelanggan bawaan Anda — <strong>selamanya</strong>. Tiap kali mereka membayar langganan, Anda mendapat <span class="earn">komisi otomatis</span>. Anda berinvestasi memasarkan (iklan, konten, merekrut penjual); MesinViral yang melayani pelanggan &amp; membayar komisi Anda tiap bulan. Pelanggan membayar ke MesinViral dengan harga resmi — Anda tidak perlu menangani uang pelanggan.</p>
+  </section>
+
+  <section class="phase">
+    <div class="phase-head"><span class="phase-tag">Mulai</span><h2>Masuk ke portal Anda</h2></div>
+    <p class="phase-sub">MesinViral membuatkan akun Anda setelah kontrak ditandatangani.</p>
+    <ol class="steps">
+      <li><div><p class="step-t">Buka email undangan</p><p class="step-d">Anda menerima email "MesinViral Partner" berisi tautan untuk membuat kata sandi. Klik, buat sandi, selesai.</p></div></li>
+      <li><div><p class="step-t">Masuk kapan saja</p><p class="step-d">Berikutnya cukup buka <code>mesinviral.com/agent</code> dan masuk dengan email + kata sandi Anda.</p></div></li>
+    </ol>
+  </section>
+
+  <section class="phase">
+    <div class="phase-head"><span class="phase-tag">Inti pekerjaan</span><h2>Sebarkan kode &amp; tautan Anda</h2></div>
+    <p class="phase-sub">Ini sumber penghasilan Anda — makin luas sebarannya, makin banyak komisinya.</p>
+    <ol class="steps">
+      <li><div><p class="step-t">Ambil kode &amp; tautan</p><p class="step-d">Di dasbor ada kode unik Anda dan tautan siap-bagi <code>mesinviral.com/?ref=KODEANDA</code>, lengkap dengan tombol salin.</p></div></li>
+      <li><div><p class="step-t">Bagikan lewat mana saja</p><p class="step-d">Iklan, media sosial, WhatsApp, tatap muka. Calon pelanggan yang membuka tautan Anda otomatis membawa kode itu di formulir daftar.</p></div></li>
+      <li><div><p class="step-t">Pelanggan terkunci jadi milik Anda</p><p class="step-d">Begitu mereka mendaftar dengan kode Anda, atribusinya <strong>permanen</strong> — tidak bisa berpindah ke agen lain.</p></div></li>
+    </ol>
+    <div class="callout gate"><span class="ico">💸</span><p><strong>Komisi lahir otomatis.</strong> Setiap pelanggan bawaan Anda membayar, komisi Anda langsung tercatat di dasbor — tanpa Anda melapor atau menagih apa pun.</p></div>
+  </section>
+
+  <section class="phase">
+    <div class="phase-head"><span class="phase-tag">Perbesar tim</span><h2>Rekrut reseller Anda sendiri</h2></div>
+    <p class="phase-sub">Opsional — bangun pasukan penjual di bawah Anda.</p>
+    <ol class="steps">
+      <li><div><p class="step-t">Bagikan tautan rekrut</p><p class="step-d">Di menu <span class="btn">Reseller</span>, buat tautan rekrut Anda dan bagikan ke calon penjual. Mereka mendaftar sendiri (mengisi data + rekening).</p></div></li>
+      <li><div><p class="step-t">Setujui &amp; atur jatahnya</p><p class="step-d">Calon muncul di antrean Anda → setujui → tentukan jatah komisi reseller (persen atau Rupiah). Reseller mendapat kode &amp; portalnya sendiri.</p></div></li>
+      <li><div><p class="step-t">Bayar reseller Anda tiap bulan</p><p class="step-d">MesinViral menyediakan hitungan rinci + <strong>file Excel siap-transfer</strong> (nama, rekening, jumlah) — Anda tinggal transfer massal ke para reseller.</p></div></li>
+    </ol>
+    <div class="callout warn"><span class="ico">ℹ️</span><p>Komisi reseller adalah <strong>kewajiban Anda</strong> sebagai agen, dibayar dari komisi Anda. MesinViral hanya menyediakan alat hitung &amp; Excel-nya, bukan membayar reseller.</p></div>
+  </section>
+
+  <section class="phase">
+    <div class="phase-head"><span class="phase-tag money">Penghasilan</span><h2>Komisi &amp; pembayaran Anda</h2></div>
+    <ol class="steps">
+      <li><div><p class="step-t">Dihitung otomatis</p><p class="step-d">Lihat komisi berjalan, riwayat per pembayaran, dan pencairan di dasbor Anda kapan saja — angka yang sama persis dengan catatan MesinViral.</p></div></li>
+      <li><div><p class="step-t">Dibayar sebulan sekali</p><p class="step-d">MesinViral mentransfer komisi ke rekening Anda pada tanggal pencairan tiap bulan, untuk komisi periode sebelumnya (di atas ambang minimum).</p></div></li>
+      <li><div><p class="step-t">Dikabari lewat Telegram</p><p class="step-d">Hubungkan Telegram (satu klik di dasbor) agar dikabari otomatis tiap komisi masuk dan tiap pencairan cair.</p></div></li>
+    </ol>
+  </section>
+
+  <hr class="divider">
+
+  <section class="phase">
+    <h2 style="font-family:var(--serif);font-weight:600;font-size:1.5rem;margin:0 0 1rem;">Pertanyaan yang sering muncul</h2>
+    <dl class="misc">
+      <dt>Berapa lama saya dapat komisi dari satu pelanggan?</dt>
+      <dd>Selama pelanggan itu terus berlangganan dan kerjasama Anda dengan MesinViral berlaku — tidak dibatasi waktu.</dd>
+      <dt>Bagaimana kalau pelanggan berhenti / refund?</dt>
+      <dd>Komisi dari pembayaran yang di-refund otomatis dikoreksi. Selebihnya tetap milik Anda.</dd>
+      <dt>Bisa jualan tatap muka?</dt>
+      <dd>Bisa. Di dasbor Anda bisa mendaftarkan pelanggan langsung — otomatis tercatat sebagai bawaan Anda.</dd>
+      <dt>Bisakah saya ubah sendiri persentase komisi saya?</dt>
+      <dd>Tidak — nilai komisi agen &amp; rekening diatur oleh MesinViral sesuai kontrak. Yang Anda atur sendiri adalah jatah komisi reseller Anda.</dd>
+      <dt>Apakah saya memegang uang pelanggan?</dt>
+      <dd>Tidak. Semua pelanggan membayar langsung ke MesinViral dengan harga resmi. Anda hanya menerima komisi.</dd>
+    </dl>
+  </section>
+
+  <footer>
+    <p><strong>Ringkas:</strong> sebarkan kode Anda seluas mungkin, bangun tim reseller bila mau, dan biarkan sistem menghitung serta membayar komisi Anda tiap bulan. Pertanyaan lebih lanjut — hubungi tim MesinViral.</p>
+  </footer>
+</div>
+</body>
+</html>

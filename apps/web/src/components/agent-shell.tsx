@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
-import { Moon, Sun, LogOut, LayoutDashboard, Users } from "lucide-react";
+import { Moon, Sun, LogOut, LayoutDashboard, Users, HelpCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 // [B21] F2 — rangka PORTAL AGEN "MesinViral Partner" (K2 owner). Satu halaman → topbar sederhana
@@ -53,6 +53,8 @@ export function AgentShell({ company, status, children }: { company: string; sta
       <nav style={{ display: "flex", gap: "0.375rem", maxWidth: 1080, margin: "0 auto", padding: "0.75rem 1.25rem 0" }}>
         <Link className={`btn btn-sm ${pathname === "/agent" ? "btn-default" : "btn-outline"}`} href="/agent"><LayoutDashboard size={13} /> <Bi id="Dasbor" en="Dashboard" /></Link>
         <Link className={`btn btn-sm ${pathname.startsWith("/agent/resellers") ? "btn-default" : "btn-outline"}`} href="/agent/resellers"><Users size={13} /> Reseller</Link>
+        {/* Panduan agen — dokumen HTML di tab baru (mandat owner: Help dalam portal, bukan file lepas) */}
+        <a className="btn btn-sm btn-outline" href="/panduan/agen.html" target="_blank" rel="noopener noreferrer" style={{ marginLeft: "auto" }}><HelpCircle size={13} /> <Bi id="Panduan" en="Guide" /></a>
       </nav>
       <main style={{ maxWidth: 1080, margin: "0 auto", padding: "1rem 1.25rem 3rem" }}>{children}</main>
     </div>

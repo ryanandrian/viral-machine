@@ -288,8 +288,10 @@ MesinViral ──kontrak + bagi hasil──▶ AGEN (perusahaan mitra)
 
 ---
 
-## §9d PANDUAN OPERASI = TOMBOL HELP DI ADMIN 2026-07-17 (arahan owner: bukan file lepas)
-- Panduan operasi owner (siapkan→rekrut→pencairan bulanan+situasi lain) = dokumen `apps/web/public/panduan/program-agen.html` (HTML mandiri, dwibahasa-tema, nol dependensi) diakses via tombol **"Panduan"** (ikon Help) di header halaman Program Agen → buka tab baru `/panduan/program-agen.html`. Publik tanpa auth (owner: "tidak ada yang rahasia"). File HTML lepas di repo-root DIBUANG (anti-fosil §3.2). Bukti: statis tersaji 200 + isi valid + admin page sehat + tsc/build lulus. **✅ DEPLOYED PRODUKSI 2026-07-17 20:17 (izin owner "deploy FE", `be79406`) — https://mesinviral.com/panduan/program-agen.html tersaji 200; tombol Panduan aktif di Admin → Program Agen.**
+## §9d PANDUAN = TOMBOL HELP (arahan owner: bukan file lepas) — DUA panduan
+- **Panduan OWNER** (siapkan→rekrut→pencairan bulanan+situasi lain) = `apps/web/public/panduan/program-agen.html` → tombol **"Panduan"** di header **Admin → Program Agen**. ✅ LIVE 2026-07-17 20:17 (`be79406`).
+- **Panduan AGEN** (masuk portal→sebar kode→rekrut reseller→komisi&pencairan+FAQ) = `apps/web/public/panduan/agen.html` → tombol **"Panduan"** di nav **portal agen** (`/agent`). URL publik bisa dikirim ke CALON agen saat rekrut. Dibangun 2026-07-17; tsc/build lulus; statis tersaji 200 + owner-guide nol regresi. ⛔ menunggu deploy FE.
+- Keduanya HTML mandiri satu-set (desain sama, dwibahasa-tema, nol dependensi), publik tanpa auth (owner: "tidak ada yang rahasia"). File HTML lepas repo-root DIBUANG (anti-fosil §3.2).
 
 ## §9c KONFIGURASI ADMIN TERPUSAT 2026-07-17 (teguran owner: kenop berserakan)
 - **Masalah:** 9 kenop partner + 3 penanda `ops_*` jatuh ke kelompok "Lainnya" di Konfigurasi Sistem sbg nama mentah tanpa label — "asal jadi, tidak world-class". Akar: F1–F4 hanya menyisipkan baris DB, tak menyelesaikan sisi layar admin.
