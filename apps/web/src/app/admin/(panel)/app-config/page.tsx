@@ -18,14 +18,18 @@ const G_LIFECYCLE = "Pertumbuhan & Siklus-Hidup";
 const G_TREND = "Bobot Sumber Tren";
 const G_ENGINE = "Performa Mesin Tren";
 const G_LEARNING = "Kurva Belajar (Self-Learning)";
+const G_PARTNER = "Program Agen (Partner)";
 const G_OTHER = "Lainnya";
+const G_INTERNAL = "Internal — ditulis mesin (jangan diubah)";
 const CFG_GROUPS: [string, string][] = [
   [G_BILLING, "Subscription, Trial & Billing"],
   [G_LIFECYCLE, "Growth & Lifecycle"],
   [G_TREND, "Trend Source Weights"],
   [G_ENGINE, "Trend Engine Performance"],
   [G_LEARNING, "Learning Curve (Self-Learning)"],
+  [G_PARTNER, "Partner Program"],   // [B21] kartu terpusat 9 kenop (teguran owner 2026-07-17: jangan berserakan di Lainnya)
   [G_OTHER, "Others"],   // ← catch-all: SETIAP key app_config tanpa metadata TETAP tampil (anti-hilang selamanya)
+  [G_INTERNAL, "Internal — machine-written (do not edit)"],   // penanda mesin: tampil (transparansi) tapi READ-ONLY
 ];
 // DWIBAHASA WAJIB ([[feedback_bilingual_mandatory]], owner 2026-07-05): label/desc/hint/unit = {id,en};
 // desc FE ini = sumber tampilan (DB description = fallback teknis). Key baru TANPA meta = CACAT — lengkapi di sini.
@@ -33,7 +37,22 @@ type BiTxt = { id: string; en: string };
 const U_HARI: BiTxt = { id: "hari", en: "days" }; const U_JAM: BiTxt = { id: "jam", en: "hours" };
 const U_PCT: BiTxt = { id: "%", en: "%" }; const U_DETIK: BiTxt = { id: "detik", en: "sec" };
 const U_MS: BiTxt = { id: "ms", en: "ms" }; const U_NONE: BiTxt = { id: "", en: "" };
-const CFG_META: Record<string, { label: BiTxt; group: string; unit: BiTxt; desc?: BiTxt; hint?: BiTxt }> = {
+const U_RP: BiTxt = { id: "Rp", en: "IDR" }; const U_TGL: BiTxt = { id: "tgl/bln", en: "day/mo" };
+const CFG_META: Record<string, { label: BiTxt; group: string; unit: BiTxt; desc?: BiTxt; hint?: BiTxt; options?: string[]; readonly?: boolean }> = {
+  // ── [B21] PROGRAM AGEN — 9 kenop terpusat (SPEC AGENT_AND_AFILIATION_ARCITECTURE.md §3.2) ──
+  partner_program_enabled:          { label: { id: "Saklar Program", en: "Program Switch" }, group: G_PARTNER, unit: U_NONE, desc: { id: "1 = hidup; 0 = mati (kode agen/reseller DITOLAK di form daftar; komisi tenant lama tetap berjalan).", en: "1 = on; 0 = off (partner codes rejected at signup; existing tenants keep earning)." } },
+  partner_payout_day:               { label: { id: "Tanggal Pencairan Bulanan", en: "Monthly Payout Day" }, group: G_PARTNER, unit: U_TGL, desc: { id: "Komisi periode bulan sebelumnya dicairkan tiap tanggal ini (pengingat Telegram otomatis ke Anda).", en: "Previous month's commissions are paid on this day (automatic Telegram reminder to you)." } },
+  partner_min_payout_idr:           { label: { id: "Ambang Minimum Pencairan", en: "Minimum Payout Threshold" }, group: G_PARTNER, unit: U_RP, desc: { id: "Tagihan agen di bawah ini DIGULUNG ke bulan berikutnya (hemat biaya transfer receh).", en: "Agent bills below this roll over to next month (avoids petty transfers)." } },
+  partner_default_commission_type:  { label: { id: "Tipe Komisi Default (Agen Baru)", en: "Default Commission Type (New Agent)" }, group: G_PARTNER, unit: U_NONE, options: ["percent", "flat_idr"], desc: { id: "Prefill saat membuat agen baru: percent = % dari pembayaran; flat_idr = Rupiah tetap per bulan-langganan. Nilai per-agen tetap diatur di halaman Program Agen.", en: "Prefill for new agents: percent of payment, or flat IDR per subscription-month. Per-agent value is still set on the Partner page." } },
+  partner_default_commission_value: { label: { id: "Nilai Komisi Default (Agen Baru)", en: "Default Commission Value (New Agent)" }, group: G_PARTNER, unit: U_NONE, desc: { id: "Angka prefill agen baru — maknanya ikut tipe di atas (% atau Rp).", en: "Prefill number for new agents — meaning follows the type above (% or IDR)." } },
+  partner_tax_pct_badan_npwp:       { label: { id: "PPh — Badan ber-NPWP", en: "Withholding — Company w/ Tax ID" }, group: G_PARTNER, unit: U_PCT, desc: { id: "Prefill potongan PPh 23 saat menyusun pencairan utk agen badan usaha ber-NPWP (bisa dikoreksi per-pencairan). Validasi konsultan pajak.", en: "PPh 23 withholding prefill for companies with tax ID (editable per payout). Validate with your tax consultant." } },
+  partner_tax_pct_badan_non_npwp:   { label: { id: "PPh — Badan TANPA NPWP", en: "Withholding — Company w/o Tax ID" }, group: G_PARTNER, unit: U_PCT, desc: { id: "Prefill PPh 23 tarif ganda utk badan tanpa NPWP.", en: "Doubled PPh 23 prefill for companies without tax ID." } },
+  partner_tax_pct_perorangan:       { label: { id: "PPh — Agen Perorangan", en: "Withholding — Individual Agent" }, group: G_PARTNER, unit: U_PCT, desc: { id: "Prefill PPh 21 bukan-pegawai (lapisan awal PMK 168/2023).", en: "PPh 21 non-employee prefill (first bracket, PMK 168/2023)." } },
+  partner_tax_pct_pkp:              { label: { id: "PPh — Agen PKP", en: "Withholding — VAT-registered Agent" }, group: G_PARTNER, unit: U_PCT, desc: { id: "Prefill PPh 23 utk agen PKP (PPN-nya ditagih agen via faktur pajak, bukan potongan).", en: "PPh 23 prefill for VAT-registered agents (VAT is invoiced by the agent, not withheld)." } },
+  // ── PENANDA INTERNAL (ditulis & dibaca MESIN — read-only di layar; anti-tersenggol) ──
+  ops_partner_reminder_last:        { label: { id: "Penanda: Pengingat Pencairan Terakhir", en: "Marker: Last Payout Reminder" }, group: G_INTERNAL, unit: U_NONE, readonly: true, desc: { id: "Ditulis mesin — periode terakhir pengingat pencairan komisi terkirim (anti-spam 1×/bulan).", en: "Machine-written — last period the payout reminder was sent (anti-spam, once per month)." } },
+  ops_tg_update_offset:             { label: { id: "Penanda: Posisi Baca Bot Telegram", en: "Marker: Telegram Bot Read Offset" }, group: G_INTERNAL, unit: U_NONE, readonly: true, desc: { id: "Ditulis mesin tiap beberapa detik — sampai pesan mana bot 'Hubungkan Telegram' sudah memproses (restart tidak mengulang pesan lama).", en: "Machine-written every few seconds — how far the connect-bot has processed messages (restarts don't replay old ones)." } },
+  ops_drift_alarm_last_at:          { label: { id: "Penanda: Alarm Drift Durasi Terakhir", en: "Marker: Last Duration Drift Alarm" }, group: G_INTERNAL, unit: U_NONE, readonly: true, desc: { id: "Ditulis mesin — kapan alarm akurasi-durasi terakhir dikirim (jeda anti-banjir 24 jam).", en: "Machine-written — when the duration-drift alarm last fired (24h anti-flood cooldown)." } },
   trial_duration_days:          { label: { id: "Masa Trial Gratis", en: "Free Trial Length" }, group: G_BILLING, unit: U_HARI, desc: { id: "Berapa hari calon pelanggan bisa mencoba gratis sebelum harus berlangganan.", en: "How many days a prospect can try for free before subscribing." } },
   trial_reminder_days_before:   { label: { id: "Pengingat Sebelum Trial Habis", en: "Reminder Before Trial Ends" }, group: G_BILLING, unit: U_HARI, desc: { id: "Kirim email pengingat upgrade H-x sebelum trial berakhir (0 = matikan).", en: "Send an upgrade reminder x days before the trial ends (0 = off)." } },
   renewal_reminder_days_before: { label: { id: "Pengingat Sebelum Langganan Habis", en: "Renewal Reminder" }, group: G_BILLING, unit: U_HARI, desc: { id: "Kirim email pengingat perpanjangan H-x sebelum langganan berakhir (0 = matikan).", en: "Send a renewal reminder x days before the subscription ends (0 = off)." } },
@@ -181,7 +200,15 @@ export default function AppConfigPage() {
                           </div>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: ".4rem", flex: "none" }}>
-                          {a.value_text != null ? (
+                          {m?.readonly ? (
+                            /* Penanda internal: ditulis mesin — tampil demi transparansi, TIDAK bisa diedit */
+                            <span className="muted" style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)" }}>{a.value_text ?? a.value} 🔒</span>
+                          ) : m?.options && a.value_text != null ? (
+                            /* Pilihan terbatas (mis. tipe komisi) — dropdown auto-save, anti salah-ketik */
+                            <select className="input" style={{ width: "9rem", height: "2rem", fontSize: "var(--text-xs)" }} defaultValue={a.value_text} onChange={(e) => { const v = e.target.value; if (v !== a.value_text) patch(a.key, { value_text: v }); }}>
+                              {m.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                            </select>
+                          ) : a.value_text != null ? (
                             /* Baris TEKS/JSON (0125, value_text) — mis. default_publish_slots */
                             <input className="input" type="text" style={{ width: "13rem", height: "2rem", fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)" }} defaultValue={a.value_text} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== a.value_text) patch(a.key, { value_text: v }); }} />
                           ) : (

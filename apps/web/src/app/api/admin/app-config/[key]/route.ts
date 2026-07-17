@@ -7,6 +7,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ key: s
   const g = await requireSuperAdmin();
   if (g.error) return g.error;
   const { key } = await params;
+  // Penanda internal (prefix ops_) ditulis MESIN langsung (klien Python, bukan route ini) → HARAM
+  // diedit via admin (UI sudah read-only; ini pertahanan berlapis anti-korupsi state mesin).
+  if (key.startsWith("ops_")) return NextResponse.json({ error: "readonly_key" }, { status: 400 });
   const { value, value_text } = await req.json().catch(() => ({}));
   const admin = createAdminClient();
 

@@ -288,6 +288,11 @@ MesinViral ──kontrak + bagi hasil──▶ AGEN (perusahaan mitra)
 
 ---
 
+## §9c KONFIGURASI ADMIN TERPUSAT 2026-07-17 (teguran owner: kenop berserakan)
+- **Masalah:** 9 kenop partner + 3 penanda `ops_*` jatuh ke kelompok "Lainnya" di Konfigurasi Sistem sbg nama mentah tanpa label — "asal jadi, tidak world-class". Akar: F1–F4 hanya menyisipkan baris DB, tak menyelesaikan sisi layar admin.
+- **Fix (1 file `admin/(panel)/app-config/page.tsx` + guard 1 file route):** kartu **"Program Agen (Partner)"** = 9 kenop ber-label+deskripsi dwibahasa, satuan benar (tgl/Rp/%), tipe komisi = **dropdown** percent/flat_idr (anti salah-ketik). Kartu **"Internal — ditulis mesin"** = 3 penanda (`ops_partner_reminder_last`, `ops_tg_update_offset`, `ops_drift_alarm_last_at`) READ-ONLY (🔒, tampil demi transparansi) + **guard PATCH server menolak `ops_*`** (pertahanan berlapis; mesin menulisnya via klien Python, bukan route ini).
+- **Bukti runtime (sesi admin nyata):** GET 9 partner+3 ops hadir ✓ · PATCH `ops_*` → 400 `readonly_key` ✓ · PATCH partner_payout_day & tipe-komisi(value_text) sah ✓ · mapping deterministik 9→G_PARTNER 3→G_INTERNAL ✓ (render CSR — kartu dirakit browser; owner lihat langsung) · nilai uji dipulihkan (tgl 5, percent) · admin uji dihapus · tsc+build lulus. Aturan dipatri di CLAUDE.md §3.3.
+
 ## §9b AUDIT TERPADU A–Z 2026-07-17 (mandat owner "pastikan tidak ada error/bug")
 - **Lingkup:** DB live (higienitas+konstrain) · seluruh jalur uang (accrual/reversal/payout) · gerbang & isolasi · integrasi (signup, Midtrans, Telegram, Excel) · kesehatan produksi (log worker, endpoint ter-guard).
 - **Bersih:** 6 tabel partner = 0 sisa uji · 0 user-uji auth · 9+1 kenop benar · unique/FK/PK terpasang · log worker nol error partner · marker pengingat sudah ditulis PRODUKSI sendiri (bukti F4 hidup).
