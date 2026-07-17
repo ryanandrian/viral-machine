@@ -270,3 +270,48 @@ def reveal_agent_bank(sb, agent_id: str) -> dict:
         raise ValueError("agen tidak ditemukan")
     return {"bank_name": ag.get("bank_name"), "bank_holder": ag.get("bank_holder"),
             "account_no": (decrypt(ag["bank_account_enc"]) if ag.get("bank_account_enc") else None)}
+
+
+# ── [F3] RESELLER: rekening terenkripsi + hitungan bulanan utk Excel agen (SPEC 5d) ──────────
+def set_reseller_bank(sb, reseller_id: str, bank_name: str, account_no: str, holder: str) -> dict:
+    from src.utils.crypto import encrypt
+    if not (bank_name and account_no and holder):
+        raise ValueError("bank_name, account_no, holder wajib diisi")
+    sb.table("resellers").update({
+        "bank_name": bank_name.strip(), "bank_account_enc": encrypt(account_no.strip()),
+        "bank_holder": holder.strip(), "updated_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", reseller_id).execute()
+    return {"ok": True}
+
+
+def reseller_monthly_breakdown(sb, agent_id: str, period_month: str, include_bank: bool = False) -> dict:
+    """Rincian komisi PER-RESELLER satu agen utk 1 periode ('YYYY-MM-01') — dasar Excel
+    transfer-massal (SPEC 5d; kewajiban bayar = agen). Angka = Σ reseller_amount_idr baris
+    accrual + reversal periode tsb (refund otomatis mengurangi). include_bank=True membuka
+    nomor rekening (HANYA utk export ber-guard)."""
+    from src.utils.crypto import decrypt
+    rs_rows = (sb.table("resellers")
+               .select("id,name,email,status,commission_type,commission_value,bank_name,bank_account_enc,bank_holder")
+               .eq("agent_id", agent_id).execute().data or [])
+    led = (sb.table("commission_ledger")
+           .select("reseller_id,reseller_amount_idr,entry_kind")
+           .eq("agent_id", agent_id).eq("period_month", period_month)
+           .not_.is_("reseller_id", "null").execute().data or [])
+    agg: dict[str, dict] = {}
+    for row in led:
+        a = agg.setdefault(row["reseller_id"], {"total": 0, "n_payment": 0, "n_refund": 0})
+        a["total"] += int(row["reseller_amount_idr"])
+        a["n_payment" if row["entry_kind"] == "accrual" else "n_refund"] += 1
+    out = []
+    for r in rs_rows:
+        s = agg.get(r["id"], {"total": 0, "n_payment": 0, "n_refund": 0})
+        item = {"reseller_id": r["id"], "name": r["name"], "email": r["email"], "status": r["status"],
+                "commission_type": r["commission_type"], "commission_value": float(r["commission_value"]),
+                "total_idr": s["total"], "n_payment": s["n_payment"], "n_refund": s["n_refund"],
+                "bank_name": r.get("bank_name"), "bank_holder": r.get("bank_holder"),
+                "bank_account_set": bool(r.get("bank_account_enc"))}
+        if include_bank and r.get("bank_account_enc"):
+            item["account_no"] = decrypt(r["bank_account_enc"])
+        out.append(item)
+    out.sort(key=lambda x: -x["total_idr"])
+    return {"period": period_month, "rows": out}

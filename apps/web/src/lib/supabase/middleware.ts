@@ -79,6 +79,9 @@ export async function updateSession(request: NextRequest) {
     }
     return response;
   }
+  if (path.startsWith("/agent/join/")) {
+    return response; // [F3] form pendaftaran reseller = PUBLIK (calon belum punya akun apa pun)
+  }
   if (path === "/agent" || path.startsWith("/agent/")) {
     if (!user) {
       const url = request.nextUrl.clone();
@@ -95,6 +98,33 @@ export async function updateSession(request: NextRequest) {
     return response;
   }
 
+  // ── Gate PORTAL RESELLER [B21] F3 (cermin gate agen; /agent/join/* = PUBLIK, bukan portal) ──
+  const isReseller = user?.app_metadata?.role === "reseller";
+  if (path === "/reseller/login") {
+    if (isReseller) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/reseller";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    return response;
+  }
+  if (path === "/reseller" || path.startsWith("/reseller/")) {
+    if (!user) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/reseller/login";
+      url.search = `?next=${encodeURIComponent(path)}`;
+      return NextResponse.redirect(url);
+    }
+    if (!isReseller) {
+      const url = request.nextUrl.clone();
+      url.pathname = isSuperAdmin ? "/admin/tenants" : isAgent ? "/agent" : "/dashboard";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    return response;
+  }
+
   // ── Route TENANT ter-proteksi ──
   const isProtected = PROTECTED.some((p) => path === p || path.startsWith(`${p}/`));
   // Super-admin TIDAK boleh masuk panel tenant (jalur terpisah — owner 2026-06-15) → balik ke /admin.
@@ -105,10 +135,10 @@ export async function updateSession(request: NextRequest) {
     url.search = "";
     return NextResponse.redirect(url);
   }
-  // User agen TIDAK punya panel tenant (bukan tenant; anti nyangkut di onboarding) → balik ke portalnya.
-  if (isProtected && isAgent) {
+  // User agen/reseller TIDAK punya panel tenant (bukan tenant; anti nyangkut onboarding) → portalnya.
+  if (isProtected && (isAgent || isReseller)) {
     const url = request.nextUrl.clone();
-    url.pathname = "/agent";
+    url.pathname = isAgent ? "/agent" : "/reseller";
     url.search = "";
     return NextResponse.redirect(url);
   }

@@ -174,6 +174,12 @@ try:
                                               b.get("account_no") or "", b.get("holder") or "")
             if op == "bank_reveal":
                 return partner.reveal_agent_bank(sb, b["agent_id"])
+            if op == "reseller_bank_set":
+                return partner.set_reseller_bank(sb, b["reseller_id"], b.get("bank_name") or "",
+                                                 b.get("account_no") or "", b.get("holder") or "")
+            if op == "reseller_breakdown":
+                return partner.reseller_monthly_breakdown(sb, b["agent_id"], b["period_month"],
+                                                          include_bank=bool(b.get("include_bank")))
             return JSONResponse({"error": f"op tak dikenal: {op}"}, status_code=400)
         except (ValueError, KeyError) as e:
             return JSONResponse({"error": str(e)}, status_code=400)

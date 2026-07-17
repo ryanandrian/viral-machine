@@ -180,3 +180,31 @@ export function renderAgentInviteEmail(lang: Lang, actionUrl: string, companyNam
     text: textVersion(t.heading, t.intro, t.cta, actionUrl, t.security, lang),
   };
 }
+
+// ── [B21-F3] Undangan portal reseller ─────────────────────────────────────────
+export function renderResellerInviteEmail(lang: Lang, actionUrl: string, agentCompany: string): RenderedEmail {
+  const t = lang === "id"
+    ? {
+        subject: `Anda disetujui sebagai reseller ${agentCompany} — aktifkan akses Anda`,
+        preview: "Pendaftaran reseller Anda disetujui — buat kata sandi dan mulai pantau komisi Anda.",
+        heading: "Selamat, Anda resmi jadi reseller!",
+        intro: `${agentCompany} menyetujui pendaftaran reseller Anda di program MesinViral Partner. Klik tombol di bawah untuk membuat kata sandi — dasbor Anda menampilkan kode unik, pelanggan bawaan, dan komisi Anda setiap bulan.`,
+        cta: "Aktifkan akses reseller",
+        fallback: "Atau salin tautan ini:",
+        security: "Tautan ini kedaluwarsa demi keamanan dan hanya bisa dipakai sekali. Jika Anda tidak pernah mendaftar sebagai reseller, abaikan email ini.",
+      }
+    : {
+        subject: `You're approved as a reseller for ${agentCompany} — activate your access`,
+        preview: "Your reseller registration is approved — set a password and track your commissions.",
+        heading: "Congratulations, you're officially a reseller!",
+        intro: `${agentCompany} approved your reseller registration in the MesinViral Partner program. Click below to set your password — your dashboard shows your unique code, referred customers, and monthly commissions.`,
+        cta: "Activate reseller access",
+        fallback: "Or copy this link:",
+        security: "This link expires for your security and can only be used once. If you never registered as a reseller, you can safely ignore this email.",
+      };
+  return {
+    subject: t.subject,
+    html: shell({ lang, preview: t.preview, heading: t.heading, intro: t.intro, ctaLabel: t.cta, ctaUrl: actionUrl, fallbackLabel: t.fallback, security: t.security }),
+    text: textVersion(t.heading, t.intro, t.cta, actionUrl, t.security, lang),
+  };
+}
