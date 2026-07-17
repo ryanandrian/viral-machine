@@ -15,6 +15,7 @@ from loguru import logger
 from dotenv import load_dotenv
 
 from src.intelligence.config import TenantConfig
+from src.exceptions import ErrorClass, PipelineError
 
 load_dotenv()
 
@@ -159,6 +160,11 @@ class TTSEngine:
         self.last_primary = None
         self.last_provider = None
         self.last_fallback_used = False   # no-fallback (F1-05): selalu False; dipertahankan utk advisory pipeline
+        # [ERROR-MGMT] detail error TERAKHIR — dipropagasi pipeline (error TTS ditelan di sini,
+        # return "",[]; tanpa ini detail provider [billing/quota] hilang). Di-reset tiap generate().
+        self.last_error = None
+        self.last_error_class = ErrorClass.UNKNOWN
+        self.last_human_error = None
 
     def generate(
         self,
@@ -220,6 +226,9 @@ class TTSEngine:
         self.last_primary = primary
         self.last_provider = None
         self.last_fallback_used = False
+        self.last_error = None                       # [ERROR-MGMT] reset per generate
+        self.last_error_class = ErrorClass.UNKNOWN
+        self.last_human_error = None
         # NO-FALLBACK (F1-05/§3.8): HANYA provider terkonfigurasi channel — gagal = GAGAL JUJUR (tak pindah diam-diam).
         try:
             logger.info(f"[TTSEngine] Generating with: {primary}")
@@ -262,6 +271,15 @@ class TTSEngine:
             logger.error(f"[TTSEngine] {primary}: audio kosong/tak terbentuk — gagal jujur (no-fallback)")
             return "", []
         except Exception as e:
+            # [ERROR-MGMT] simpan detail (error ditelan di sini → return "",[]) agar pipeline bisa
+            # meneruskan makna + pesan manusiawi. Perilaku return TIDAK berubah (nol regresi pemanggil).
+            self.last_error = str(e)
+            if isinstance(e, PipelineError):
+                self.last_error_class = getattr(e, "error_class", ErrorClass.UNKNOWN)
+                self.last_human_error = getattr(e, "human_message", None)
+            else:
+                self.last_error_class = ErrorClass.UNKNOWN
+                self.last_human_error = None
             logger.error(f"[TTSEngine] {primary} failed: {e} — gagal jujur (no-fallback)")
             return "", []
 

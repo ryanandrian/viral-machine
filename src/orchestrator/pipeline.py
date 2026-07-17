@@ -31,7 +31,7 @@ from src.distribution.youtube_publisher import YouTubePublisher
 from src.utils.storage_cleaner import StorageCleaner
 from src.utils.supabase_writer import SupabaseWriter
 from src.utils.telegram_notifier import TelegramNotifier
-from src.exceptions import PipelineError, ConfigError, LLMError, TTSError, VisualError, RenderError
+from src.exceptions import PipelineError, ConfigError, LLMError, TTSError, VisualError, RenderError, ErrorClass
 
 load_dotenv()
 
@@ -272,7 +272,15 @@ class Pipeline:
                 else (tts_result, [])
             )
             if not audio_path:
-                raise TTSError("TTS generation failed", step="tts")
+                # [ERROR-MGMT] error TTS ditelan tts_engine (return "",[]); teruskan makna + pesan
+                # manusiawi yang disimpan di last_* → mengalir ke result → production_runs.error_class.
+                _te = self.tts_engine
+                raise TTSError(
+                    getattr(_te, "last_human_error", None) or getattr(_te, "last_error", None) or "TTS generation failed",
+                    step="tts",
+                    error_class=getattr(_te, "last_error_class", ErrorClass.UNKNOWN),
+                    human_message=getattr(_te, "last_human_error", None),
+                )
             ts_info = f"{len(word_timestamps)} word timestamps" if word_timestamps else "no timestamps (estimasi)"
             result["steps"]["tts"] = {
                 "status": "ok", "path": audio_path, "timestamps": len(word_timestamps),
@@ -633,6 +641,11 @@ class Pipeline:
             # Phase 2: kategori + step terstruktur (PipelineError) untuk log/notify/persist.
             result["error_category"] = getattr(e, "category", "interrupt" if is_interrupt else "unknown")
             result["error_step"]     = getattr(e, "step", None)
+            # [ERROR-MGMT] dimensi SEMANTIK (makna) + pesan manusiawi → dicatat producer & dipakai
+            # circuit-breaker. Default UNKNOWN (aman) utk error non-PipelineError.
+            _ec = getattr(e, "error_class", ErrorClass.UNKNOWN)
+            result["error_class"]  = _ec.value if isinstance(_ec, ErrorClass) else str(_ec or ErrorClass.UNKNOWN.value)
+            result["human_error"]  = getattr(e, "human_message", None)
             result["elapsed_seconds"] = elapsed
             try:
                 from src.utils import cost_meter

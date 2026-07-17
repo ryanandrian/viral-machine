@@ -14,6 +14,49 @@ from pathlib import Path
 from loguru import logger
 
 from src.providers.tts.base import TTSProvider, TTSError
+from src.exceptions import ErrorClass
+
+
+# [ERROR-MGMT 2026-07-18] Classifier transport ElevenLabs-DIRECT (SPEC AI_ERROR_MANAGEMENT_ARCHITECTURE.md
+# §4 registry). HANYA kode terverifikasi dari log kita (16-Jun quota_exceeded, 17-Jul payment_issue).
+# Kode belum-terbukti → UNKNOWN (aman). CATATAN: ElevenLabs-VIA-fal BUKAN di sini — itu milik adapter fal.
+_EL_ERROR_MAP = {
+    "payment_issue":    ErrorClass.ACCOUNT_BILLING,
+    "payment_required": ErrorClass.ACCOUNT_BILLING,
+    "quota_exceeded":   ErrorClass.QUOTA_EXHAUSTED,
+}
+# Kalimat kurasi (dari pesan provider asli terverifikasi) — dipakai bila message terstruktur tak terbaca.
+_EL_HUMAN = {
+    ErrorClass.ACCOUNT_BILLING: "Langganan ElevenLabs bermasalah: pembayaran gagal/belum lunas. Selesaikan tagihan (invoice) di ElevenLabs, lalu Jalankan Ulang.",
+    ErrorClass.QUOTA_EXHAUSTED: "Kredit ElevenLabs habis untuk permintaan ini. Isi ulang/upgrade paket di ElevenLabs, lalu Jalankan Ulang.",
+}
+
+
+def _classify_el_error(exc: Exception) -> tuple[ErrorClass, str | None]:
+    """Petakan error SDK ElevenLabs → (ErrorClass, human_message). Bebas asumsi:
+    kode dideteksi via body terstruktur BILA ada, else string-scan token PASTI di str(exc).
+    Tak cocok → (UNKNOWN, None) = aman (perilaku lama)."""
+    detail = {}
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict):
+        d = body.get("detail")
+        if isinstance(d, dict):
+            detail = d
+    blob = str(exc)
+    # kode: struktur dulu, lalu string-scan token pasti (kedua sumber = kode yang sama)
+    code = str(detail.get("code") or detail.get("status") or "")
+    ec = _EL_ERROR_MAP.get(code)
+    if ec is None:
+        for tok, cls in _EL_ERROR_MAP.items():
+            if tok in blob:
+                ec = cls
+                break
+    if ec is None:
+        return ErrorClass.UNKNOWN, None
+    provider_msg = detail.get("message") if isinstance(detail.get("message"), str) else None
+    human = provider_msg or _EL_HUMAN.get(ec)
+    return ec, human
+
 
 def _chars_to_words(
     characters: list[str],
@@ -170,7 +213,11 @@ class ElevenLabsProvider(TTSProvider):
         except TTSError:
             raise
         except Exception as e:
-            raise TTSError(f"ElevenLabs generation failed: {e}") from e
+            # [ERROR-MGMT] klasifikasikan di transport (di sinilah kode EL pasti) → bawa error_class
+            # + human_message terstruktur ke atas (ditelan tts_engine → dipropagasi via last_*).
+            ec, human = _classify_el_error(e)
+            raise TTSError(f"ElevenLabs generation failed: {e}", step="tts",
+                           error_class=ec, human_message=human) from e
 
     def get_word_timestamps(self) -> list[dict] | None:
         return self._word_timestamps

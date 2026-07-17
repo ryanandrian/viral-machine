@@ -152,6 +152,20 @@ def recent_nonready_streak(channel_id: str, limit: int = 12) -> int:
     return streak
 
 
+def latest_failure(channel_id: str) -> dict | None:
+    """[ERROR-MGMT] {error_class, error_message} run TERBARU channel BILA run itu gagal (failed/
+    qc_failed). Sumber = production_runs (SAMA dgn recent_nonready_streak → konsisten). Dipakai
+    circuit-breaker untuk REM SEGERA pada error non-retryable (billing/kuota) + pesan manusiawi.
+    Return None bila run terbaru sukses/kosong → jatuh ke jalur streak biasa (aman)."""
+    res = (_sb().table("production_runs").select("status,error_class,error_message")
+           .eq("channel_id", channel_id)
+           .order("created_at", desc=True).limit(1).execute())
+    row = (res.data or [None])[0]
+    if not row or row.get("status") not in ("failed", "qc_failed"):
+        return None
+    return {"error_class": row.get("error_class"), "error_message": row.get("error_message")}
+
+
 def revert_to_ready(inv_id: int) -> None:
     """Publish gagal → kembalikan ke buffer untuk retry (jangan hapus aset)."""
     _sb().table("content_inventory").update({"status": "ready"}).eq("id", inv_id).execute()

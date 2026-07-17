@@ -17,6 +17,10 @@ from concurrent.futures import ThreadPoolExecutor
 from loguru import logger
 
 from src.orchestrator import inventory
+from src.exceptions import FAST_FAIL
+
+# [ERROR-MGMT] nilai string ErrorClass yang memicu rem-segera (persis set FAST_FAIL exceptions.py).
+_FAST_FAIL_VALUES = frozenset(ec.value for ec in FAST_FAIL)
 from src.utils import s3_buffer
 
 
@@ -131,6 +135,7 @@ def _record_production_run(channel_row: dict, result: dict, status: str,
             "llm_provider":    script.get("llm_provider_used"),
             "elapsed_seconds": result.get("elapsed_seconds"),
             "error_message":   error,
+            "error_class":     result.get("error_class"),   # [ERROR-MGMT] makna → circuit-breaker semantik
             # video_title = judul AKHIR (yang tampil di YouTube) — FE Runs menampilkan ini, bukan
             # topik internal (owner 2026-07-10: 1 video sempat tampil beda nama di Runs vs Studio).
             "run_metadata":    {"scheduled": True, "mode": "buffer", "video_title": script.get("title", ""), **_cost_fields(result)},
@@ -193,9 +198,13 @@ def produce_one(channel_row: dict) -> int | None:
         video = result.get("video_path")
         # HARD-FAIL (crash render/visual, TANPA video jadi) → failed (TIDAK dihitung stok).
         if result.get("status") != "success" or not video or not os.path.exists(video):
-            _err = result.get("error") or "produksi gagal (tanpa video)"
-            inventory.mark_failed(inv_id, _err)
+            _err = result.get("human_error") or result.get("error") or "produksi gagal (tanpa video)"
+            # [ERROR-MGMT] catat production_runs (ber-error_class) DULU, baru mark_failed. mark_failed
+            # melepas slot "producing" → deficit muncul lagi; bila baris belum tertulis, siklus producer
+            # bisa submit percobaan berikut TANPA melihat error_class → fast-fail kebobolan. Reorder ini
+            # menjamin baris ada sebelum slot bebas (2 tabel independen — nol dependensi).
             _record_production_run(channel_row, result, "failed", False, _err)
+            inventory.mark_failed(inv_id, _err)
             return None
 
         run_id = result["run_id"]
@@ -327,7 +336,8 @@ def run_direct(sb, job: dict) -> None:
             err = qc.get("reason") or "QC tak lolos — di-publish privat untuk ditinjau"
         else:
             status = "failed"
-            err = qc.get("reason") or result.get("error") or "tidak publish (QC/produksi gagal)"
+            # [ERROR-MGMT] utamakan pesan manusiawi (mis. billing EL) agar tampil bersih di Runs/Telegram.
+            err = qc.get("reason") or result.get("human_error") or result.get("error") or "tidak publish (QC/produksi gagal)"
     except Exception as e:
         err = str(e)
         logger.error(f"[Direct] job {jid} gagal: {e}")
@@ -347,6 +357,7 @@ def run_direct(sb, job: dict) -> None:
             "llm_provider": _script.get("llm_provider_used"),
             "elapsed_seconds": result.get("elapsed_seconds"),
             "error_message": err,
+            "error_class": result.get("error_class"),   # [ERROR-MGMT]
             "run_metadata": {"direct": True, "job_type": job.get("job_type"), "video_title": _script.get("title", ""), **_cost_fields(result)},
         }).execute()
     except Exception as e:
@@ -437,6 +448,7 @@ def _run_test_no_publish(sb, job: dict, ch: dict, run_id: str) -> None:
             "llm_provider": _script.get("llm_provider_used"),
             "elapsed_seconds": result.get("elapsed_seconds"),
             "error_message": err,
+            "error_class": result.get("error_class"),   # [ERROR-MGMT]
             # video_s3 WAJIB di sini juga (drawer memutar video dari run_metadata — insiden 2026-07-04:
             # dulu hanya di inventory metadata → panel tak bisa putar video).
             "run_metadata": {"direct": True, "test": True, "job_type": job.get("job_type") or "admin_test", "inventory_id": inv_id,
@@ -524,13 +536,22 @@ def plan_and_submit(sb, pool: ThreadPoolExecutor, sem: threading.Semaphore) -> i
         if not _rd["ready"] and not _rd["check_failed"]:
             logger.info(f"[Producer] skip ch={cid} — channel belum READY (kurang: {', '.join(_rd['missing'])})")
             continue
-        # REM DARURAT (§4b/F7): N produksi beruntun gagal/bermasalah (failed + ready_with_issues) →
-        # STOP channel + alarm SEKETIKA. Cegah loop bakar-kredit saat akar sistemik (mis. ElevenLabs habis).
+        # REM DARURAT (§4b/F7): N produksi beruntun gagal/bermasalah → STOP channel + alarm SEKETIKA.
+        # [ERROR-MGMT 2026-07-18] REM SEGERA (setelah 1×) bila kegagalan TERAKHIR = kelas non-retryable
+        # (kredit habis / pembayaran gagal) — mustahil sembuh dgn diulang → hemat biaya LLM percobaan
+        # ke-2/3. Error lain (transien/unknown) TETAP toleransi `fail_stop` (nol regresi channel sehat).
         streak = inventory.recent_nonready_streak(cid)
-        if streak >= fail_stop:
-            reason = (f"{streak}x produksi beruntun gagal/bermasalah → produksi channel DIHENTIKAN "
-                      f"otomatis. Periksa kredensial/konfigurasi, lalu Jalankan Ulang (direct).")
-            logger.error(f"[Producer] CIRCUIT-BREAK ch={cid}: {reason}")
+        _lf = inventory.latest_failure(cid)
+        _hard = bool(_lf and _lf.get("error_class") in _FAST_FAIL_VALUES)
+        if streak >= fail_stop or (_hard and streak >= 1):
+            if _hard:
+                _human = (_lf.get("error_message") or "").strip()
+                reason = (f"Produksi channel DIHENTIKAN otomatis: {_human or 'kredit/pembayaran provider bermasalah'} "
+                          f"(perbaiki penyebabnya, lalu Jalankan Ulang).")
+            else:
+                reason = (f"{streak}x produksi beruntun gagal/bermasalah → produksi channel DIHENTIKAN "
+                          f"otomatis. Periksa kredensial/konfigurasi, lalu Jalankan Ulang (direct).")
+            logger.error(f"[Producer] CIRCUIT-BREAK ch={cid} (hard={_hard}): {reason}")
             _pause_channel(sb, ch, reason)
             try:
                 from src.utils.telegram_notifier import TelegramNotifier

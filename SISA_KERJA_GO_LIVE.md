@@ -328,6 +328,11 @@
 - **DONE-BILA:** per-fase di SPEC §7; item tutup saat F1–F3 live + ≥1 agen nyata terbayar benar.
 - **REALISASI:** ⬜
 
+### [B22] MANAJEMEN ERROR AI + REM-CEPAT non-retryable — 🟡 DIBANGUN+TERUJI LOKAL 2026-07-18, ⛔ BELUM DEPLOY
+- **SPEC/SSOT = `AI_ERROR_MANAGEMENT_ARCHITECTURE.md`.** Pemicu: insiden RAD 2026-07-17 (langganan ElevenLabs gagal-bayar → 3× produksi gagal beruntun, tiap percobaan bakar biaya LLM sebelum mati di TTS → circuit-break). Owner: rem SEGERA utk error mustahil-sembuh (kredit/pembayaran), + kerangka error world-class extensible SEMUA adapter (bukan tambalan EL).
+- **REALISASI:** taksonomi `ErrorClass` + `FAST_FAIL={billing,quota}` (exceptions.py) · classifier EL-direct terverifikasi (elevenlabs.py) · propagasi last_* (tts_engine→pipeline) · persistensi migr **0170** `production_runs.error_class` · circuit-breaker semantik + reorder produce_one (producer.py) · helper `inventory.latest_failure`. **Uji 13/13 vs DB live** (classifier 2 string EL nyata · persistensi e2e · rem-di-1 utk billing/quota · regresi UNKNOWN tetap streak-3 · success memutus streak) · py_compile+import bersih · FE tak tersentuh · data uji 0 sisa.
+- **Sisa:** izin deploy BE owner → bukti runtime produksi. Extension: OpenAI/fal `classify_error` menyusul saat ada sampel (registry §4).
+
 ### [C2] Self-learning deepening + trend F3/F4 — 🟡  (TREND_RADAR **F3/F4**)
 - **TUJUAN:** kalibrasi `source_weights` (bobot sumber trend) dari outcome nyata per (niche,geo) + panen sinyal Analytics kaya (retensi/trafficSource/searchTerms) + agregat lintas-tenant anonim (cold-start moat).
 - **BUKTI:** loop inti hidup (`viral_score_weights`/`historical_factor`); `channel_analytics` sebagian sinyal sudah. CTR per-video=0 PERMANEN (batas API YouTube, bukan bug).

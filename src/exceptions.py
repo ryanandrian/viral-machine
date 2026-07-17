@@ -9,20 +9,50 @@ Provider error (`LLMError`/`TTSError`/`VisualError`) di-RE-EXPORT dari sini di f
 base provider masing-masing → satu sumber kebenaran, semua jadi `PipelineError`
 subclass TANPA memutus import lama (`from src.providers.llm.base import LLMError`
 tetap jalan). Persist error ke DB = Phase 3 (`pipeline_run_logs`).
+
+[ERROR-MGMT 2026-07-18] Dimensi SEMANTIK error ditambah: `error_class` (ErrorClass) —
+ORTOGONAL dengan `category` (category=DI MANA gagal: tts/llm/visual; error_class=KENAP
+gagal: billing/quota/rate-limit/…). Adapter tiap transport memetakan kode provider-nya
+→ ErrorClass (single source of truth arsitektur = AI_ERROR_MANAGEMENT_ARCHITECTURE.md).
+Circuit-breaker berpikir dalam ErrorClass, bukan teks. SPEC = dokumen tsb.
 """
+
+from enum import Enum
+
+
+class ErrorClass(str, Enum):
+    """Klasifikasi SEMANTIK error AI — provider-agnostik. Adapter memetakan kode
+    mentah provider ke sini; sistem (circuit-breaker) beraksi atas MAKNA, bukan teks.
+    str-Enum → nilai `.value` aman disimpan ke DB (production_runs.error_class) & JSON."""
+    ACCOUNT_BILLING = "account_billing"   # pembayaran/langganan gagal → non-retryable
+    QUOTA_EXHAUSTED = "quota_exhausted"   # kredit/kuota habis → non-retryable
+    AUTH_INVALID    = "auth_invalid"      # kunci salah/diblokir → non-retryable (belum di FAST_FAIL)
+    RATE_LIMIT      = "rate_limit"        # throttle sesaat (429) → retryable
+    TRANSIENT       = "transient"         # jaringan/5xx/timeout → retryable
+    UNKNOWN         = "unknown"           # belum dikenali → retryable (DEFAULT AMAN)
+
+
+# Kelas yang memicu REM SEGERA (rem setelah 1× gagal — hemat biaya retry yang mustahil sembuh).
+# Lingkup owner 2026-07-17: PERSIS "kredit habis / masalah pembayaran". AUTH sengaja BELUM masuk
+# (di luar instruksi eksplisit; mudah ditambah bila diketok). Menambah = ubah SATU set ini.
+FAST_FAIL: frozenset = frozenset({ErrorClass.ACCOUNT_BILLING, ErrorClass.QUOTA_EXHAUSTED})
 
 
 class PipelineError(Exception):
-    """Base error pipeline terstruktur. Membawa `category` + `step` untuk
-    logging/notify/persist. `category` di-set per subclass; `step` opsional per-raise."""
+    """Base error pipeline terstruktur. Membawa `category` (di mana) + `step` +
+    `error_class` (makna, ERROR-MGMT) + `human_message` (pesan siap-tampil ke manusia,
+    dinormalkan tiap adapter). `category` di-set per subclass; sisanya opsional per-raise."""
 
     category: str = "pipeline"
 
-    def __init__(self, message: str = "", *, step: str | None = None, category: str | None = None):
+    def __init__(self, message: str = "", *, step: str | None = None, category: str | None = None,
+                 error_class: "ErrorClass" = ErrorClass.UNKNOWN, human_message: str | None = None):
         super().__init__(message)
         self.step = step
         if category:
             self.category = category
+        self.error_class = error_class
+        self.human_message = human_message
 
 
 class ConfigError(PipelineError):
@@ -58,4 +88,5 @@ class PublishError(PipelineError):
 __all__ = [
     "PipelineError", "ConfigError", "LLMError", "TTSError",
     "VisualError", "RenderError", "PublishError",
+    "ErrorClass", "FAST_FAIL",
 ]
