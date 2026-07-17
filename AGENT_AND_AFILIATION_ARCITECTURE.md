@@ -1,6 +1,6 @@
 # PROGRAM AGEN & AFILIASI MESINVIRAL — ARSITEKTUR LENGKAP A–Z
 
-> **Status:** 📋 SPEC DISETUJUI OWNER (2026-07-17) — konsep + seluruh aturan bisnis DIKETOK; **implementasi BELUM dimulai** (menunggu ketok per-fase).
+> **Status:** 📋 SPEC DISETUJUI OWNER (2026-07-17) — konsep + seluruh aturan bisnis DIKETOK; **implementasi BELUM dimulai** (menunggu ketok per-fase). **DIMATANGKAN 2026-07-17 (mandat owner "evaluasi lagi, semua harus clear"):** + riset pajak (§6b) + draf kontrak (Lampiran A) + aturan operasional rinci (§5g) + inventaris permukaan (§3b).
 > **Fungsi dokumen:** SINGLE SOURCE OF TRUTH + PROGRESS MONITOR program agen/afiliasi (mandat owner 2026-07-17).
 > **Kaitan:** daftar kerja resmi = `SISA_KERJA_GO_LIVE.md` item **[B21]** (dokumen ini = SPEC+tracker-nya, pola `PROGRAM_BUKTI_KECERDASAN.md`). Marker ⬜ di sini BUKAN daftar kerja.
 > **Aturan tracker:** tiap fase punya kolom REALISASI — diisi LANGSUNG saat selesai (✅ + tanggal + commit + bukti) + sinkron header [B21] + baris POSISI §0. Fase ber-gerbang KETOK = STOP menunggu owner.
@@ -25,13 +25,14 @@
 
 **Kamus singkat:** **Tenant** = pelanggan pembayar MesinViral · **Atribusi** = pencatatan "pelanggan ini bawaan siapa" (via kode, permanen) · **Buku besar / ledger** = daftar baris komisi yang hanya bisa ditambah, tak bisa diedit (koreksi = baris baru minus; setiap rupiah tertelusur) · **Pencairan / payout** = transfer bulanan kita ke agen, selalu lewat persetujuan owner · **Settlement** = uang benar-benar cair di Midtrans (satu-satunya pemicu komisi).
 
-**Peta dokumen ini:** §1–§2 keputusan owner FINAL → §3 prinsip → §4 data → §5 alur uang → §6 keamanan/privasi → §7 **rencana kerja urut prioritas (progress monitor — lihat di sini untuk tahu posisi terkini)** → §8 keputusan yang masih terbuka → §9 risiko.
+**Peta dokumen ini:** §1–§2 keputusan owner FINAL → §3 prinsip + §3b inventaris permukaan → §4 data → §5 alur uang + §5g aturan operasional rinci → §6 keamanan/privasi → §6b pajak komisi → §7 **rencana kerja urut prioritas (progress monitor — lihat di sini untuk tahu posisi terkini)** → §8 keputusan yang masih terbuka → §9 risiko → **Lampiran A: draf kontrak kerjasama**.
 
 ---
 
 ## §0 CARA LANJUT (resume pasca-compaction/sesi baru — baca INI dulu, jangan riset ulang)
 
-1. **POSISI TERKINI:** 📋 Spec final 2026-07-17. Belum ada kode/DB/FE yang disentuh. Langkah berikut = owner ketok "mulai F1" → susun rencana teknis rinci F1 + daftar file → tunggu "ya" → eksekusi.
+1. **POSISI TERKINI:** 📋 Spec final + dimatangkan 2026-07-17 (pajak §6b ✅ · draf kontrak Lampiran A ✅ · klarifikasi §5g/§3b ✅). Belum ada kode/DB/FE yang disentuh.
+   **🎯 PERINTAH OWNER 2026-07-17: sesi berikutnya FOKUS menyelesaikan modul ini** — paham 100% apa yang dibangun (dokumen ini) + peta & progres (§7). Langkah pertama sesi berikut: susun **rencana teknis rinci F1 + daftar file** → sodorkan ke owner → tunggu "ya" → eksekusi → bukti runtime → izin deploy.
 2. Seluruh keputusan owner = §1 + §2 — **FINAL, jangan tanya ulang**. Yang masih terbuka = §8 (tanya HANYA saat fasenya tiba).
 3. Skema DB di §4 = **rancangan**; DDL final wajib introspeksi DB live dulu (aturan kerja: kode+DB live = fakta; dokumen = peta). Anchor kode di §5 wajib di-grep ulang sebelum dipakai.
 4. Aturan kerja penuh = `CLAUDE.md` (§2 pre-touch · §3 pre-done · §5 deploy per-batch ber-izin eksplisit · dwibahasa · config-driven · gagal-jujur).
@@ -106,6 +107,22 @@ MesinViral ──kontrak + bagi hasil──▶ AGEN (perusahaan mitra)
 6. **Rate di-snapshot per baris komisi:** perubahan % / Rp oleh admin/agen berlaku untuk pembayaran BERIKUTNYA; baris yang sudah tercatat tidak berubah.
 7. **Privasi tenant utuh:** agen/reseller hanya melihat data tenant seperlunya (label nama + status bayar + nilai komisinya) — TIDAK PERNAH isi akun, kredensial, channel, email penuh.
 8. **UI layak orang awam** (§3.6): status + tombol dalam satu panel, auto-save, narasi singkat fungsi tiap kenop.
+9. **🎨 SATU NUANSA UI (mandat owner 2026-07-17):** portal agen, portal reseller, dan modul admin WAJIB memakai **pustaka UI & pola halaman yang SUDAH ADA** di `apps/web` (komponen, tema, tipografi, pola form/tabel/badge yang sama dengan panel tenant & admin) — DILARANG membangun gaya/library baru. Ukuran lulus: orang yang membuka portal agen merasa di aplikasi yang sama.
+10. **⚖️ ATURAN KERJA WAJIB (mandat owner 2026-07-17):** SETIAP sesi yang menyentuh modul ini wajib menerapkan `CLAUDE.md` penuh tanpa kecuali — deep-dive §2 pre-touch sebelum menyentuh, daftar-file → ketok sebelum edit, bukti runtime §3.4 sebelum "selesai", izin deploy eksplisit §5.0, world-class best practice di DB/BE/FE.
+
+### §3b INVENTARIS PERMUKAAN (helicopter view — apa tersentuh & apa TIDAK, dengan alasan)
+
+| Permukaan | Tersentuh? | Apa persisnya |
+|---|---|---|
+| **DB** | ✅ | HANYA tabel-tabel baru §4 + kunci config baru. Tabel produksi (`videos`, `production_runs`, `channels`, `niches`, dst.) TIDAK diubah — hanya DIBACA status pembayarannya |
+| **BE — webhook billing** (`mv-webhook`) | ✅ 1 titik | Satu langkah tambahan pasca-settlement Midtrans (5b) + reversal refund (5e) |
+| **BE — worker produksi video** (`mv-worker`, pipeline) | ❌ **TIDAK TERSENTUH SAMA SEKALI** | Program ini murni lapisan komersial; nol risiko ke produksi konten — pemisahan ini disengaja & wajib dipertahankan tiap fase |
+| **FE-marketing** | ✅ 1 titik | Form daftar: kolom "Kode agen/reseller (opsional)" + dukungan `?ref=` (5a). Landing & halaman lain TIDAK berubah (keputusan §1b) |
+| **FE-tenant** (panel tenant) | ❌ TIDAK | Tenant tidak melihat program ini sama sekali pasca-daftar |
+| **FE-admin** | ✅ modul baru | Modul "Partner": CRUD agen · rate · resume + rinci per-agen · gerbang pencairan · config |
+| **Portal agen & reseller** | ✅ BARU | Pintu masuk baru menumpang aplikasi web existing (§3.1); tanpa server baru |
+| **Infra/nginx** | ⚠️ hanya bila K3 = subdomain | Path `/agent` = nol perubahan infra; subdomain = 1 blok nginx |
+| **Notifikasi (Telegram/email)** | ✅ reuse | Alarm gagal-hitung ke admin (F1); notifikasi ke agen (F4) — infra sudah ada |
 
 ---
 
@@ -157,6 +174,19 @@ MesinViral ──kontrak + bagi hasil──▶ AGEN (perusahaan mitra)
 2. Calon reseller mengisi: nama · kontak · login · bank+rekening (§2.5) → status `pending`.
 3. Agen melihat antrean di dasbornya → setujui/tolak → disetujui = kode reseller aktif + (agen menyetel rate komisinya) → reseller bisa login melihat pencapaiannya.
 
+### 5g. ATURAN OPERASIONAL RINCI (anti-ambigu — hasil evaluasi total 2026-07-17)
+1. **Onboarding agen — TIDAK ada pendaftaran-mandiri agen.** Alur satu-satunya: kontrak ditandatangani (Lampiran A) → admin membuat agen di admin panel (nama, rate, rekening) → sistem mengundang email PIC agen membuat login. Agen hanya lahir dari tangan admin.
+2. **Format kode:** huruf besar + angka, 4–12 karakter, input case-insensitive, **unik GLOBAL** (satu daftar kode lintas agen & reseller — mustahil dua entitas berkode sama). Default dibuat sistem; boleh diganti pemiliknya selama unik & belum pernah dipakai mendaftar (kode yang pernah dipakai = beku selamanya, jejak atribusi).
+3. **Satu email = satu peran.** Email user agen/reseller tidak boleh sama dengan email tenant/admin (model auth existing: 1 user = 1 tenant). Ditolak jelas di titik input.
+4. **Definisi periode & cut-off:** periode komisi = **bulan kalender menurut tanggal settlement**. Pencairan periode itu terjadi pada `partner_payout_day` bulan BERIKUTNYA (contoh config=5: settlement 1–31 Jan → cair 5 Feb). Tidak ada wilayah abu-abu tanggal.
+5. **Pembulatan:** hasil hitung persen dibulatkan ke rupiah penuh terdekat per baris ledger. *(Keputusan teknis reversible — diputuskan di sini, CLAUDE.md §2.3c.)*
+6. **Suspend agen = cascade:** seluruh kode di bawahnya (kode agen + semua kode reseller-nya) berhenti menerima pendaftaran BARU seketika; atribusi & ledger lama utuh. Nasib komisi berjalan selama suspend = §8-K4.
+7. **Reseller nonaktif:** kodenya mati untuk pendaftaran baru; atribusi tenant lama TETAP padanya (§1b permanen); agen bebas mengubah rate reseller kapan pun — berlaku hanya untuk pembayaran berikutnya (§3.6).
+8. **Putus kontrak agen:** akun & semua kode dinonaktifkan; seluruh ledger/payout **disimpan** (kewajiban audit & pajak); nasib komisi pasca-putus = §8-K7 (dicerminkan Pasal 10 draf kontrak).
+9. **Agen sekaligus tenant:** boleh (akun terpisah), tapi TIDAK berkomisi atas langganan miliknya sendiri / akun se-identitas (blok self-referral §6).
+10. **Komisi HANYA dari pembayaran langganan plan** (default rancangan): pembayaran jenis lain (mis. pesanan custom-niche bila kelak live) TIDAK berkomisi — mengubahnya = keputusan §8-K6.
+11. **Mata uang tunggal:** IDR. **Format export:** .xlsx, dibuat on-demand per periode dari ledger (bukan file tersimpan — selalu angka terkini).
+
 ---
 
 ## §6 KEAMANAN, PERAN & PRIVASI
@@ -172,21 +202,35 @@ MesinViral ──kontrak + bagi hasil──▶ AGEN (perusahaan mitra)
 - **Rekening bank** (agen & reseller) terenkripsi at-rest (pakai pola vault kredensial yang sudah ada — anchor: `src/utils/api_key_vault.py`, grep ulang saat implementasi); tak pernah tampil di log/chat (CLAUDE.md §6.3).
 - **Anti-kecurangan bawaan:** komisi HANYA dari settlement nyata · atribusi permanen-unik (UNIQUE tenant_id) · kode self-signup diblok utk email/identitas yang sama dgn pemilik kode · ambang minimum pencairan · ledger append-only (audit penuh) · agen `suspended` = kode mati seketika tapi ledger utuh.
 
+### §6b PAJAK KOMISI AGEN (hasil riset Claude 2026-07-17 — mandat owner; WAJIB validasi konsultan pajak/DJP sebelum pencairan pertama)
+
+> Memotong PPh atas komisi = **kewajiban hukum PIHAK PEMBAYAR (kita)**, bukan pilihan. Yang tersisa untuk diputuskan owner hanyalah SIAPA yang mengurus administrasinya (§8-K5).
+
+| Status agen | Jenis pajak | Tarif | Praktiknya bagi kita |
+|---|---|---|---|
+| **Badan usaha** (PT/CV) ber-NPWP | PPh 23 — jasa keagenan/perantara (non-final) | **2% × bruto komisi** | Kita potong saat transfer → setor → terbitkan **bukti potong** (via Coretax DJP) |
+| Badan **tanpa NPWP** | PPh 23 | **4%** (2× lipat) | idem — dorong semua agen ber-NPWP sejak kontrak |
+| **Perorangan** | PPh 21 bukan-pegawai (PMK 168/2023, non-final) | tarif progresif Ps.17 × (50% × bruto) → lapisan awal efektif **2,5%** | idem |
+| Agen berstatus **PKP** | PPN jasa keagenan | efektif **11%** (12% × DPP 11/12, PMK 131/2024; faktur pajak kode 04) | Agen MENAGIH kita komisi **+ PPN** (bukan potongan) — anggarkan |
+
+**Dukungan sistem (masuk lingkup F1):** rekap bruto komisi per-agen per-bulan = dasar bukti potong; kolom potongan-pajak di draft payout admin (nilai transfer = bruto − PPh); status pajak agen (badan/perorangan/NPWP/PKP) tercatat di profil agen.
+**Catatan:** (a) agen UMKM ber-Surat Keterangan PP 55/2022 bisa berhak potongan final 0,5% — ditangani per-kasus saat onboarding, minta suratnya; (b) angka-angka di atas = riset internet per 2026-07-17 (sumber DJP/Ortax/Klikpajak/DDTC) — peraturan pajak bisa berubah; validasi konsultan sebelum pencairan pertama adalah gerbang F0.
+
 ---
 
 ## §7 RENCANA KERJA — URUT PRIORITAS (progress monitor; isi REALISASI SAAT ITU JUGA)
 
 > Setiap fase: rencana teknis rinci + daftar file → **ketok owner** → bangun → bukti runtime §3.4 (uji data nyata, bukan build-lulus) → laporan → **izin deploy eksplisit** (§5.0) → REALISASI diisi + sinkron [B21] + §0.
 
-### F0 — PERSIAPAN BISNIS (tugas OWNER — tanpa kode; boleh paralel dgn F1)
-- Template **kontrak kemitraan** per agen (kewajiban investasi iklan, larangan janji-palsu, hak putus) — sistem menegakkan angka, kontrak menegakkan perilaku.
-- Konfirmasi **pajak** komisi (PPh) ke konsultan pajak — sistem menyediakan rekap per-agen (5c.3), kewajiban potong/lapor = keputusan owner.
-- Tetapkan angka awal: default komisi agen · tanggal pencairan · ambang minimum (§8-K1/K2).
-- **DONE-BILA:** owner menyatakan kontrak & angka siap (tidak memblok F1 dimulai; memblok agen pertama DIREKRUT).
-- **REALISASI:** ⬜
+### F0 — PERSIAPAN BISNIS (tanpa kode; boleh paralel dgn F1)
+- ✅ **Draf kontrak kemitraan** — disiapkan Claude (mandat owner 17-Jul) = **Lampiran A**. Sisa: review owner + konsultan hukum → template resmi.
+- ✅ **Riset pajak komisi** — selesai Claude 17-Jul = **§6b**. Sisa: validasi konsultan pajak + keputusan §8-K5 (siapa mengurus administrasi).
+- ⬜ Owner tetapkan angka awal: default komisi agen · tanggal pencairan · ambang minimum (§8-K1).
+- **DONE-BILA:** kontrak tervalidasi siap-tanda-tangan + angka awal diketok (tidak memblok F1 DIMULAI; memblok agen pertama DIREKRUT).
+- **REALISASI:** 🟡 draf kontrak + riset pajak ✅ 2026-07-17 (sesi yang sama dgn lahirnya SPEC); sisa = validasi eksternal & angka (owner).
 
 ### F1 — MESIN UANG (prioritas #1 — program bisa jalan dgn agen pertama TANPA portal)
-- **Lingkup:** semua tabel §4 + RLS · kolom kode di form daftar + `?ref=` (5a) · sambungan webhook settlement → ledger (5b) · reversal refund (5e) · **admin panel:** CRUD agen + rate + resume lintas-agen + rinci per-agen + draft-approve-catat pencairan (5c) · config ber-label · notifikasi-gagal Telegram.
+- **Lingkup:** semua tabel §4 + RLS · kolom kode di form daftar + `?ref=` (5a) · sambungan webhook settlement → ledger (5b) · reversal refund (5e) · **admin panel:** CRUD agen + rate + resume lintas-agen + rinci per-agen + draft-approve-catat pencairan (5c) · **dukungan pajak §6b** (status pajak di profil agen + kolom potongan PPh di draft payout + rekap bruto per-agen) · config ber-label · notifikasi-gagal Telegram.
 - **Nilai bisnis:** owner sudah bisa merekrut & membayar agen pertama; laporan sementara via admin.
 - **DONE-BILA (ukur, bukan rasa):** ≥1 pendaftaran uji ber-kode terkunci benar · ≥1 pembayaran uji (sandbox/riil kecil) melahirkan baris ledger dgn rupiah PERSIS sesuai §2.1–2.2 (kasus: bulanan-persen · bulanan-flat · tahunan-flat ×12 · dgn-diskon basis-net) · refund uji menghasilkan reversal benar · draft payout bulanan terbentuk & bisa disetujui-dicatat · RLS terbukti (agen tak bisa baca data agen lain — diuji nyata).
 - **REALISASI:** ⬜
@@ -218,7 +262,9 @@ MesinViral ──kontrak + bagi hasil──▶ AGEN (perusahaan mitra)
 | K2 | Nama resmi program (utk kontrak & UI; "MesinViral Partner" = placeholder) | F2 (UI portal) |
 | K3 | Pintu portal agen: `mesinviral.com/agent` vs subdomain `agen.mesinviral.com` | F2 (dampak: config nginx) |
 | K4 | Kebijakan agen `suspended`: komisi berjalan dibekukan atau tetap cair utk tenant lama? | F1 (default rancangan: tetap cair — atribusi & ledger sah; pembekuan = keputusan owner per-kasus) |
-| K5 | Pajak: dipotong kami saat transfer atau gross (agen lapor sendiri)? | F0 (konsultan pajak owner) |
+| K5 | Administrasi pajak: siapa yang MENGURUS (owner sendiri via Coretax vs konsultan) + validasi angka §6b. *(Memotong PPh = wajib hukum, bukan pilihan — yang diputuskan hanya pengurusnya.)* | F0, sebelum pencairan pertama |
+| K6 | Pembayaran NON-langganan (mis. custom-niche kelak) ikut berkomisi? | Default rancangan: **TIDAK** (§5g.10) — ubah = ketok owner |
+| K7 | Nasib komisi saat kontrak agen BERAKHIR (berhenti seketika · masa transisi N bulan · tetap utk tenant existing?) | F0/F1 — Pasal 10 draf kontrak memakai placeholder pilihan ini |
 
 ---
 
@@ -237,4 +283,49 @@ MesinViral ──kontrak + bagi hasil──▶ AGEN (perusahaan mitra)
 ---
 
 ## §10 CHANGELOG
+- **2026-07-17 (3)** — +§3.9 SATU-NUANSA UI (wajib pustaka UI existing `apps/web`) & +§3.10 aturan-kerja-wajib per-sesi (mandat owner "LANJUTKAN + 1 nuansa + WAJIB aturan kerja").
+- **2026-07-17 (2)** — DIMATANGKAN (mandat owner "evaluasi lagi, jangan ada yang terlewat/confuse/ambigu, seluruh area terinventarisir" + "sesi berikutnya fokus selesaikan modul ini"): +§3b inventaris permukaan (worker produksi TIDAK tersentuh — eksplisit) · +§5g 11 aturan operasional rinci (onboarding agen admin-only, kode unik-global & beku-setelah-dipakai, 1-email-1-peran, cut-off periode, pembulatan, cascade suspend, retensi data, agen-sekaligus-tenant, komisi hanya-langganan) · +§6b pajak (riset: PPh 23 2%/4%, PPh 21 bukan-pegawai ~2,5%, PPN PKP 11%, dukungan sistem masuk F1) · +Lampiran A draf kontrak 13 pasal · F0 → 🟡 (kontrak+pajak selesai, sisa angka & validasi owner) · §8 +K6/K7, K5 direframe.
 - **2026-07-17** — Dokumen lahir (mandat owner "arsitektur lengkap A–Z + rencana kerja urut prioritas, single source of truth & progress monitor"). Seluruh §1–§2 = keputusan owner FINAL dari diskusi 2026-07-16→17 (jenjang 2-tingkat · bayar-ke-kami · selamanya · Rp/% dua-tingkat · pencairan bulanan ber-tanggal-config · reseller dibayar agen + Excel · pendaftaran reseller mandiri ber-persetujuan · admin resume+rinci · 5 aturan sengketa · penolakan §1g). Implementasi belum dimulai.
+
+---
+
+## LAMPIRAN A — DRAF PERJANJIAN KERJASAMA KEAGENAN PEMASARAN
+
+> ⚠️ **Status draf:** disusun sistematis selaras seluruh keputusan §1–§2 dokumen ini, namun **BUKAN nasihat hukum** — wajib direview konsultan hukum owner sebelum dipakai. Bagian `[...]` = diisi per-agen. Bagian bertanda **[K7]** menunggu keputusan owner §8-K7.
+
+### PERJANJIAN KERJASAMA KEAGENAN PEMASARAN — MESINVIRAL
+
+Perjanjian ini dibuat pada tanggal `[tanggal]` oleh dan antara:
+1. **`[PT/badan usaha owner]`**, penyelenggara platform **mesinviral.com** ("**MesinViral**"); dan
+2. **`[nama perusahaan/perorangan agen]`**, `[alamat]`, NPWP `[nomor / "tidak memiliki"]` ("**Agen**").
+
+**Pasal 1 — Definisi.** (a) **Platform** = layanan SaaS mesinviral.com beserta sistem keagenannya; (b) **Tenant** = pelanggan yang berlangganan Platform; (c) **Reseller** = penjual yang direkrut & disetujui Agen melalui sistem; (d) **Kode** = kode unik atribusi milik Agen/Reseller; (e) **Komisi** = imbalan bagi-hasil sebagaimana Pasal 5; (f) **Periode** = satu bulan kalender berdasarkan tanggal pembayaran diterima (settlement); (g) **Sistem** = pencatatan elektronik MesinViral (dasbor, buku besar komisi, laporan) yang menjadi sumber data tunggal Perjanjian ini.
+
+**Pasal 2 — Ruang Lingkup & Sifat Hubungan.** (1) MesinViral menunjuk Agen secara **non-eksklusif** untuk memasarkan Platform. (2) Agen adalah **mitra usaha independen** — bukan pegawai, perwakilan hukum, atau kuasa MesinViral; Agen tidak berwenang membuat perikatan apa pun atas nama MesinViral. (3) Seluruh Tenant adalah pelanggan MesinViral: membayar langsung ke MesinViral dengan harga resmi dan dilayani oleh MesinViral.
+
+**Pasal 3 — Kewajiban Agen.** (1) Menanggung **seluruh biaya pemasarannya sendiri** (iklan, konten promosi, perekrutan Reseller) tanpa hak penggantian. (2) Materi promosi wajib **akurat & jujur**: dilarang menjanjikan penghasilan/hasil tertentu, klaim fitur yang tidak ada, atau mengatasnamakan MesinViral di luar pedoman. (3) Mematuhi peraturan periklanan, anti-spam, dan perlindungan konsumen yang berlaku. (4) Tidak mengubah/menyimpangkan harga resmi Platform. (5) **Bertanggung jawab penuh atas Reseller-nya**, termasuk pembayaran komisi Reseller (Pasal 8). (6) Menjaga nama baik MesinViral.
+
+**Pasal 4 — Kewajiban MesinViral.** (1) Menyediakan Sistem: dasbor Agen, Kode & tautan, pencatatan atribusi & komisi yang transparan, perhitungan komisi Reseller beserta berkas ekspor. (2) Membayar Komisi sesuai Pasal 5. (3) Melayani & mendukung Tenant sepenuhnya. (4) Memberitahukan perubahan harga/paket yang memengaruhi perhitungan Komisi.
+
+**Pasal 5 — Komisi & Pembayaran.** (1) Besaran komisi Agen tercantum pada **Lampiran-1** (bentuk: Rupiah tetap per bulan-langganan ATAU persentase). (2) Komisi timbul **hanya** atas pembayaran Tenant beratribusi Agen yang **berhasil diterima** (settlement); dasar persentase = nilai yang benar-benar diterima setelah diskon. (3) Pembayaran di muka multi-bulan: komisi Rupiah-tetap dihitung per bulan-langganan yang dibayar. (4) Pencairan **satu kali per bulan** pada tanggal yang ditetapkan MesinViral dalam Sistem, atas seluruh komisi Periode sebelumnya, setelah dikurangi pajak (Pasal 7) dan koreksi ayat (5); nilai di bawah ambang minimum digulung ke bulan berikutnya. (5) Pengembalian dana (refund)/pembatalan membatalkan komisi terkait; bila telah dibayarkan, menjadi **pengurang pencairan berikutnya**. (6) Komisi berlaku berkelanjutan selama Tenant bersangkutan terus membayar **dan Perjanjian ini berlaku** [K7: ketentuan pasca-berakhir — lihat Pasal 10 ayat 4].
+
+**Pasal 6 — Atribusi Pelanggan.** (1) Tenant terhitung bawaan Agen **hanya apabila** mencantumkan Kode Agen/Reseller-nya saat pendaftaran; atribusi bersifat **permanen** sejak pendaftaran. (2) Pendaftaran tanpa Kode bukan bawaan pihak mana pun dan tidak dapat diklaim kemudian. (3) Data Sistem (buku besar) = **satu-satunya acuan** penghitungan; kedua pihak dapat melihat angka yang sama di dasbor masing-masing.
+
+**Pasal 7 — Pajak.** (1) MesinViral memotong PPh atas Komisi sesuai peraturan yang berlaku menurut status Agen (badan/perorangan/NPWP) dan menerbitkan bukti potong. (2) Agen berstatus PKP menerbitkan faktur pajak atas Komisi + PPN sesuai ketentuan. (3) Masing-masing pihak menanggung kewajiban pajaknya sendiri di luar mekanisme pemotongan tersebut.
+
+**Pasal 8 — Reseller.** (1) Reseller mendaftar melalui tautan Sistem milik Agen dan hanya aktif setelah **disetujui Agen**. (2) Besaran & **pembayaran komisi Reseller sepenuhnya kewajiban Agen**; MesinViral hanya menyediakan perhitungan & berkas ekspor sebagai alat bantu. (3) Perbuatan Reseller dalam memasarkan Platform = tanggung jawab Agen sebagaimana perbuatannya sendiri.
+
+**Pasal 9 — Kerahasiaan & Data Pribadi.** (1) Agen/Reseller hanya menerima data Tenant seperlunya (label nama, status pembayaran, nilai komisi) dan dilarang menggunakannya di luar Perjanjian ini. (2) Kedua pihak tunduk pada UU Perlindungan Data Pribadi; data rekening Agen/Reseller disimpan terenkripsi oleh MesinViral. (3) Kewajiban ini bertahan setelah Perjanjian berakhir.
+
+**Pasal 10 — Jangka Waktu & Pengakhiran.** (1) Berlaku `[12 bulan]` sejak ditandatangani, diperpanjang otomatis kecuali salah satu pihak memberitahukan sebaliknya `[30 hari]` sebelumnya. (2) Masing-masing pihak dapat mengakhiri dengan pemberitahuan tertulis `[30 hari]`. (3) MesinViral dapat mengakhiri/menangguhkan **seketika** bila Agen/Reseller-nya melanggar Pasal 3, 6, 8, atau 9. (4) **[K7 — pilih salah satu]** Akibat pengakhiran terhadap komisi berjalan: (a) komisi berhenti pada tanggal berakhir; ATAU (b) komisi Tenant existing tetap dibayar selama `[N bulan]` masa transisi; ATAU (c) komisi Tenant existing tetap berjalan sepanjang Tenant membayar, kecuali pengakhiran karena pelanggaran (huruf mana pun: pelanggaran = komisi berhenti seketika). (5) Kewajiban yang telah timbul sebelum pengakhiran tetap diselesaikan.
+
+**Pasal 11 — Merek & Materi.** Agen boleh memakai nama/logo MesinViral hanya untuk memasarkan Platform sesuai pedoman selama Perjanjian berlaku; hak itu berhenti otomatis saat berakhir.
+
+**Pasal 12 — Keadaan Kahar.** Kegagalan akibat keadaan di luar kendali wajar (bencana, gangguan infrastruktur luas, perubahan regulasi) tidak dianggap wanprestasi; pihak terdampak memberitahu pihak lain segera.
+
+**Pasal 13 — Hukum & Penyelesaian Sengketa.** Perjanjian tunduk pada hukum Republik Indonesia. Sengketa diselesaikan musyawarah `[30 hari]`; bila gagal, melalui `[Pengadilan Negeri (domisili owner) / arbitrase]`. Bila terdapat perbedaan antara pemahaman para pihak dan catatan Sistem mengenai angka, catatan Sistem yang berlaku (Pasal 6 ayat 3).
+
+**LAMPIRAN-1 (per-Agen):** bentuk & besaran komisi: `[Rp ____ per bulan-langganan / ____% ]` · ambang minimum pencairan: `[Rp ____]` · tanggal pencairan bulanan: `[tgl __]` · PIC & rekening Agen: `[...]` · status pajak: `[badan ber-NPWP / perorangan / PKP]`.
+
+*Ditandatangani oleh para pihak dalam keadaan sadar tanpa paksaan.*
+`[MesinViral]` ——— `[Agen]`

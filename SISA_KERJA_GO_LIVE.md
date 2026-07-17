@@ -323,7 +323,8 @@
 ### [B21] PROGRAM AGEN & AFILIASI (partner B2B, bagi hasil selamanya) — 📋 SPEC DIKETOK 2026-07-17, implementasi ⬜ menunggu ketok "mulai F1"
 - **SPEC + tracker = `AGENT_AND_AFILIATION_ARCITECTURE.md`** (single source of truth, mandat owner 2026-07-17 — ringkasan awam + keputusan FINAL + arsitektur A–Z + rencana kerja F0–F4 urut prioritas; JANGAN riset/tanya ulang keputusan §1–§2 dokumen itu).
 - **INTI:** kami developer tanpa tim marketing → AGEN (perusahaan mitra) investasi iklan+rekrut RESELLER; tenant bayar ke Midtrans KAMI; komisi agen (Rp/% per-agen, diatur admin) cair 1×/bulan ber-gerbang owner; reseller dibayar AGEN (kami sediakan hitungan + Excel transfer-massal); atribusi = kode saat daftar, permanen; portal agen+reseller menumpang infra existing.
-- **URUTAN:** F0 kontrak+pajak (owner, paralel) → F1 mesin uang (atribusi+ledger+admin; program bisa jalan tanpa portal) → F2 portal agen → F3 reseller+Excel → F4 pelengkap. Tiap fase: rencana rinci → ketok → bukti runtime → izin deploy eksplisit.
+- **URUTAN:** F0 🟡 (draf kontrak Lampiran-A + riset pajak §6b ✅ 17-Jul; sisa angka & validasi = owner, paralel) → F1 mesin uang (atribusi+ledger+admin; program bisa jalan tanpa portal) → F2 portal agen → F3 reseller+Excel → F4 pelengkap. Tiap fase: rencana rinci → ketok → bukti runtime → izin deploy eksplisit.
+- **🎯 PERINTAH OWNER 2026-07-17: sesi berikutnya FOKUS menyelesaikan modul ini** — mulai dari rencana teknis rinci F1 + daftar file → ketok.
 - **DONE-BILA:** per-fase di SPEC §7; item tutup saat F1–F3 live + ≥1 agen nyata terbayar benar.
 - **REALISASI:** ⬜
 
