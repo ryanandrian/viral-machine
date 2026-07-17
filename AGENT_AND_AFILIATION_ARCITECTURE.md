@@ -290,7 +290,7 @@ MesinViral ──kontrak + bagi hasil──▶ AGEN (perusahaan mitra)
 
 ## §9d PANDUAN = TOMBOL HELP (arahan owner: bukan file lepas) — DUA panduan
 - **Panduan OWNER** (siapkan→rekrut→pencairan bulanan+situasi lain) = `apps/web/public/panduan/program-agen.html` → tombol **"Panduan"** di header **Admin → Program Agen**. ✅ LIVE 2026-07-17 20:17 (`be79406`).
-- **Panduan AGEN** (masuk portal→sebar kode→rekrut reseller→komisi&pencairan+FAQ) = `apps/web/public/panduan/agen.html` → tombol **"Panduan"** di nav **portal agen** (`/agent`). URL publik bisa dikirim ke CALON agen saat rekrut. Dibangun 2026-07-17; tsc/build lulus; statis tersaji 200 + owner-guide nol regresi. ⛔ menunggu deploy FE.
+- **Panduan AGEN** (masuk portal→sebar kode→rekrut reseller→komisi&pencairan+FAQ) = `apps/web/public/panduan/agen.html` → tombol **"Panduan"** di nav **portal agen** (`/agent`). URL publik bisa dikirim ke CALON agen saat rekrut. ✅ LIVE 2026-07-17 22:58 (`d755077`) — https://mesinviral.com/panduan/agen.html tersaji 200; tombol Panduan aktif di portal agen; owner-guide nol regresi.
 - Keduanya HTML mandiri satu-set (desain sama, dwibahasa-tema, nol dependensi), publik tanpa auth (owner: "tidak ada yang rahasia"). File HTML lepas repo-root DIBUANG (anti-fosil §3.2).
 
 ## §9c KONFIGURASI ADMIN TERPUSAT 2026-07-17 (teguran owner: kenop berserakan)
