@@ -251,6 +251,16 @@ Minggu ini mesin belajar dari 34 video di 2 channel-mu:
 | W1 | Warisan: agregator + cold-start + benih RAD | ±1 sesi | ≥X vonis (config) + K6 | Channel-uji baru menerima prior berlabel · isolasi privasi teruji |
 Administrasi tiap fase: rekonsiliasi dokumen ini + `SISA_KERJA` + memory DI COMMIT YANG SAMA (§3.7). TIDAK disentuh: pipeline inti, program durasi, error-mgmt, partner, DNA niche, FE tenant (sampai jendela pasca-G1).
 
+### §6e2 🦴 DAFTAR SAPU FOSIL TERIKAT-FASE (perintah owner 18-Jul: "jangan meninggalkan fosil setitikpun BE/DB/FE") — WAJIB dieksekusi di fase tercantum, bukan "nanti"
+| Fosil | Lokasi (terverifikasi 18-Jul) | Disapu di fase |
+|---|---|---|
+| Tampilan retensi mentah >100 tak konsisten | `top_hooks` (JSON channel_insights) tampil 102,5% di FE vs cap-100 di tempat lain | **M2** (bersama lahirnya dua-sinyal) |
+| Penulis formula fitur-hampa | `src/analytics/viral_weight_optimizer.py` + panggilan `self_learning.py` (blok VIRAL-WEIGHTS) | **A2** (saat otak analis LIVE menggantikan) |
+| Pembaca bobot di produksi | `niche_selector._get_blended_weights` + `_calculate_viral_score` (sumber bobot diganti/disederhanakan) | **A2** |
+| FE-tenant 3 titik pembaca `viral_score_weights` | kartu "Formula yang dipelajari mesin" `insights-view.tsx` · fetch di `channels/[id]/page.tsx` · breakdown `runs/[id]/page.tsx` | **A2** (ganti ke sumber baru/buku keputusan — bukan dihapus diam-diam, diganti yang jujur) |
+| Kolom DB `tenant_configs.viral_score_weights` | tenant_configs | **Pasca-A2**, drop = IREVERSIBEL → **ketok owner terpisah** (§2.3d) |
+| Aturan no-hardcode M1 | Semua nilai kebijakan (umur ambil/refresh/limit/menyerah) = `app_config` ber-kartu admin; definisi matematis fitur (mis. jendela hook) = konstanta ber-nama + ber-uji di modul, BUKAN nilai bisnis | M1 |
+
 ### §6f RISIKO JUJUR
 | Risiko | Mitigasi ter-desain |
 |---|---|
