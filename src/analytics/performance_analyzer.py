@@ -261,7 +261,11 @@ class PerformanceAnalyzer:
                 "hook":             hook,
                 "ctr":              row.get("ctr") or 0.0,
                 "views":            row.get("views") or 0,
-                "avg_view_pct":     row.get("avg_view_pct") or 0.0,
+                # [B17 §6 M2, ketok K2 dua-sinyal]: nilai TERSIMPAN = completion (cap 100,
+                # "seberapa habis ditonton") — Shorts loop bisa >100% dan dulu bocor MENTAH ke
+                # JSON → prompt LLM ("1261% watched"). Sinyal tonton-ulang TERPISAH =
+                # video_retention_curves.loop_factor (M1). Urutan hooks TIDAK berubah (by views).
+                "avg_view_pct":     min(100.0, row.get("avg_view_pct") or 0.0),
                 "subscriber_gain":  row.get("subscriber_gain") or 0,
             })
 
@@ -443,7 +447,9 @@ class PerformanceAnalyzer:
                 continue
             views   = row.get("views") or 0
             subs    = row.get("subscriber_gain") or 0
-            avg_v   = row.get("avg_view_pct") or 0.0
+            # [B17 §6 M2, ketok K2]: completion (cap 100) — selaras top_hooks; loop terpisah di M1.
+            # composite_score TIDAK memakai avg_v → ranking topik tak berubah (nol regresi).
+            avg_v   = min(100.0, row.get("avg_view_pct") or 0.0)
             score   = views * 0.4 + subs * 1000 * 0.6
 
             topics.append({
