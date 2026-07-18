@@ -254,7 +254,12 @@
 - **REALISASI:** 🟡 audit + desain + doc ✅ 2026-07-08 · **Batch 1 ✅ DEPLOYED + LIVE 2026-07-08** (`382afdf`; migr 0146; insiden "No topics" 5× → 3 akar fixed `f07d44c`+`7fe489e`; 1 video terbit ke channel-2 benar) · **4 cacat FE picker ✅ `d0e0575`**.
   - **✅ 2.1 ANALYTICS PER-CHANNEL — SELESAI 2026-07-13 (`f554e38`+`ee9bc01`; koreksi tracker 18-Jul: dikerjakan dalam remediasi [B16] tapi LUPUT dicerminkan ke sini — kelalaian administrasi Claude).** Ground-truth DB live 18-Jul: `channel_insights` terpisah (RAD 155/MVT 22) · `videos.channel_id` terisi (303/11) · fetch per-channel dgn koneksi masing2. Kedua channel ryan belajar TERISOLASI — celah G2 sudah TIDAK menggigit.
   - **✅ 3.1 KUOTA max_channels — SELESAI (migr 0155 tier_enforcement + RLS `channels_tenant_insert`).**
-  - **⬜ SISA NYATA (verified 18-Jul):** 2.2 `viral_score_weights` masih per-tenant → RAD+MVT berbagi 1 otak pemilih-topik (menggigit saat KEDUA aktif; MVT kini `is_active=false`) · 2.3 6 field konten (hook_title_style/trailing_silence/tts_voice_settings/peak_region/duplicate_lookback_days/llm_models) masih per-tenant (2.3a llm sudah) · 3.2 invalid_grant gagal-senyap (token mati tak ditandai/pause/notif — risiko laten kedua channel) · 3.3 dashboard per-channel · 3.4 sisa i18n/fallback. Rencana rinci diajukan 2026-07-09, menunggu ketok owner.
+  - **⬜ SISA NYATA — VONIS FINAL pasca deep-dive+review 5 dokumen (18-Jul; detail = progress_journal 18-Jul(3)):**
+    - **3.2 invalid_grant = BUG SEJATI, PRIORITAS #1, SIAP** — koneksi YouTube putus → gagal SENYAP (langgar "no silent degradation"). `youtube_publisher.py:95` refresh tanpa penangkap; `tenant_youtube_accounts.status` tak pernah di-set invalid. Fix kecil (infra 90% ada) + menempel [B22] AUTH_INVALID. Kerjakan HANYA ini dulu (deep-dive 5 permukaan + uji regresi PERMANEN + rekonsiliasi doc same-commit).
+    - **2.2 viral_score_weights per-channel = REKOMENDASI DICABUT (prematur)** — B17 (`PROGRAM_BUKTI_KECERDASAN`) = otoritas; kecerdasan per-channel SUDAH via `channel_insights`→niche_selector; weights=lapisan sekunder per-tenant. WAJIB rekonsiliasi B17+trend dulu; jangan dorong sbg bug.
+    - **peak_region per-channel = BELUM SIAP** — terikat trend radar tanpa region 'id' (`RISET_NICHE:201`); owner dulu TUNDA ke "Phase 6". Butuh rekonsiliasi trend dulu.
+    - **2.3 lain (tts_voice_settings dll) = BUKAN BUG** — tts_voice_settings=EKSPRESI VOKAL per-niche by-design (NICHE_DNA §1.5, ketok owner 16-Jul). Jangan sentuh.
+    - **3.3 = sebagian besar SUDAH JADI** (tab per-channel Runs/Insights live); sisa kecil = kolom nama-channel di daftar Runs gabungan (belum diverifikasi). Bukan bug.
 
 ---
 
