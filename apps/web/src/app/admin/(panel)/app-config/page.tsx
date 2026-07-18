@@ -19,6 +19,7 @@ const G_TREND = "Bobot Sumber Tren";
 const G_ENGINE = "Performa Mesin Tren";
 const G_LEARNING = "Kurva Belajar (Self-Learning)";
 const G_RETENTION = "Mata Mesin — Kurva Retensi Per-Momen (Lapis 1)";   // [B17 §6 M1] kebijakan kolektor
+const G_ANALYST = "Otak Analis (Lapis 2)";   // [B17 §6 A1] analis LLM per-channel + buku keputusan
 const G_PARTNER = "Program Agen (Partner)";
 const G_OTHER = "Lainnya";
 const G_INTERNAL = "Internal — ditulis mesin (jangan diubah)";
@@ -29,6 +30,7 @@ const CFG_GROUPS: [string, string][] = [
   [G_ENGINE, "Trend Engine Performance"],
   [G_LEARNING, "Learning Curve (Self-Learning)"],
   [G_RETENTION, "Engine Eyes — Per-Moment Retention Curves (Layer 1)"],   // [B17 §6 M1]
+  [G_ANALYST, "Analyst Brain (Layer 2)"],   // [B17 §6 A1]
   [G_PARTNER, "Partner Program"],   // [B21] kartu terpusat 9 kenop (teguran owner 2026-07-17: jangan berserakan di Lainnya)
   [G_OTHER, "Others"],   // ← catch-all: SETIAP key app_config tanpa metadata TETAP tampil (anti-hilang selamanya)
   [G_INTERNAL, "Internal — machine-written (do not edit)"],   // penanda mesin: tampil (transparansi) tapi READ-ONLY
@@ -94,6 +96,9 @@ const CFG_META: Record<string, { label: BiTxt; group: string; unit: BiTxt; desc?
   trend_weight_news:       { label: { id: "Google News", en: "Google News" }, group: G_TREND, unit: U_PCT, desc: { id: "Bobot berita terkini pada pemilihan topik.", en: "Weight of current news in topic selection." } },
   trend_weight_wikipedia:  { label: { id: "Wikipedia", en: "Wikipedia" }, group: G_TREND, unit: U_PCT, desc: { id: "Bobot halaman populer Wikipedia (pengaruh kecil).", en: "Weight of popular Wikipedia pages (minor influence)." } },
   trend_weight_hackernews: { label: { id: "HackerNews", en: "HackerNews" }, group: G_TREND, unit: U_PCT, desc: { id: "Bobot tren teknologi — hanya untuk niche teknologi.", en: "Weight of tech trends — tech niches only." } },
+  analyst_enabled:        { label: { id: "Saklar Analis", en: "Analyst Switch" }, group: G_ANALYST, unit: U_NONE, desc: { id: "1 = analis AI jalan per channel (MODE BAYANGAN sampai fase A2: hanya mencatat keputusan ke buku keputusan, NOL efek produksi); 0 = mati total.", en: "1 = the AI analyst runs per channel (SHADOW MODE until phase A2: only records decisions, ZERO production effect); 0 = fully off." } },
+  analyst_interval_days:  { label: { id: "Jarak Antar Siklus Analis", en: "Analyst Cycle Interval" }, group: G_ANALYST, unit: U_HARI, desc: { id: "Analis membaca dosir data channel & mengeluarkan keputusan tiap N hari. Default mingguan.", en: "The analyst reads the channel dossier & issues decisions every N days. Default weekly." } },
+  analyst_min_videos:     { label: { id: "Gerbang Data Minimum", en: "Minimum Data Gate" }, group: G_ANALYST, unit: { id: "video", en: "videos" }, desc: { id: "Analis hanya jalan bila channel punya minimal N video teranalisis — di bawah itu datanya terlalu tipis untuk keputusan bermakna.", en: "The analyst only runs once a channel has at least N analyzed videos — below that the data is too thin for meaningful decisions." } },
   retention_curve_min_age_days:     { label: { id: "Umur Minimum Video Sebelum Diambil", en: "Minimum Video Age Before Fetch" }, group: G_RETENTION, unit: U_HARI, desc: { id: "Kurva retensi detik-per-detik baru tersedia beberapa hari setelah tayang — video lebih muda dari ini dilewati dulu (bukan error).", en: "Per-moment retention curves only become available a few days after publish — younger videos are skipped for now (not an error)." } },
   retention_curve_refresh_age_days: { label: { id: "Umur Ambil-Ulang (Kurva Matang)", en: "Refresh Age (Matured Curve)" }, group: G_RETENTION, unit: U_HARI, desc: { id: "Saat video melewati umur ini, kurvanya diambil ULANG sekali (versi matang) lalu final — maksimal 2 pengambilan seumur hidup video.", en: "Once a video passes this age its curve is re-fetched once (matured version) then finalized — at most 2 fetches per video lifetime." } },
   retention_curve_max_per_run:      { label: { id: "Batas Pengambilan per Siklus", en: "Fetch Limit per Cycle" }, group: G_RETENTION, unit: { id: "video/siklus", en: "videos/cycle" }, desc: { id: "Batas jumlah video yang kurvanya diambil per channel per siklus self-learning (pengaman kuota API YouTube; 1 request = 1 video).", en: "Cap on how many videos get their curve fetched per channel per self-learning cycle (YouTube API quota guard; 1 request = 1 video)." } },

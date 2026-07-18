@@ -62,6 +62,15 @@ def run_once(sb=None) -> dict:
             logger.info(f"[self_learning] insights ch={cid}: grade={res.get('grade')} n={res.get('videos_analyzed')}")
         except Exception as e:
             logger.warning(f"[self_learning] compute insights gagal ch={cid}: {e}")
+        # [B17 §6 A1] OTAK ANALIS mode BAYANGAN — dosir→LLM tenant→buku keputusan.
+        # NOL efek produksi (tak ada konsumen sampai A2). Fail-soft terisolasi.
+        try:
+            from src.intelligence.channel_analyst import run_if_due
+            ar = run_if_due(sb, tid, cid)
+            if ar.get("status") not in ("not_due", "disabled"):
+                logger.info(f"[self_learning] analyst ch={cid}: {ar}")
+        except Exception as e:
+            logger.warning(f"[self_learning] analyst gagal ch={cid} (non-fatal): {e}")
         # VIRAL-WEIGHTS adaptif (S3-A) — PER-TENANT (kolom tenant_configs), sekali per tenant.
         if tid not in weighted_tenants:
             try:
