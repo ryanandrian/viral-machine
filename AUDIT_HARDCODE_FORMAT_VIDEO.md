@@ -125,5 +125,33 @@
 - **3 keputusan PRODUK yang tak bisa diputuskan kode** (wajib owner): durasi regular (D3) · arc naskah regular (D4) · perlakuan DNA niche orientasi (§7d).
 - **STATUS: MENUNGGU KETOK** — langkah berikutnya bila owner setuju: proposal desain teknis rinci (file/tabel/urutan fase + "coming soon" di FE) → ketok → bangun.
 
+## §11 BAHAN KEPUTUSAN OWNER — 3 kartu matang (disusun 2026-07-19 atas perintah "matangkan dan bungkus dulu")
+
+### KARTU 1 — Durasi video Regular (landscape)
+**Fakta kode:** seluruh mesin durasi (preset 8–90 dtk · anggaran kata = detik×WPS · beat plan · kalibrasi pace F1–F5 · QC maks 180 dtk) DITALA di semesta shorts. Regular = semesta menit.
+| Opsi | Isi | Konsekuensi |
+|---|---|---|
+| **A (rekomendasi)** | Regular perdana = **1–3 menit** (preset baru mis. 60/120/180 dtk landscape) | Memakai ulang mesin naskah/durasi/kalibrasi yang ada (rentang masih dekat); biaya per video ±2–3× video 60 dtk (TTS+gambar+render linear); tercepat keluar dari "coming soon" |
+| B | Langsung long-form 8–15 menit | Mesin naskah/beat/kalibrasi harus didesain ulang (bab/segmen); biaya per video ±8–15×; kerja besar |
+| C | Tunda keputusan durasi — fase 1 fitur hanya pipa+dropdown "coming soon" | Nol risiko sekarang; keputusan durasi diketok saat Regular mau diaktifkan |
+⚠️ Fakta luar yang BELUM diverifikasi: aturan monetisasi YouTube utk video regular (ambang iklan mid-roll dsb.) — bila jadi dasar pemilihan durasi, wajib verifikasi web dulu.
+
+### KARTU 2 — Alur naskah (arc) video Regular
+**Fakta kode:** `format_profiles` (DB) memang rumah arc naskah (kolom: sections, wps, cta_mode, render_mode) — mekanismenya SUDAH DB-driven; `script_engine._get_section_timing` baca per-niche. Arc shorts 8-beat direntang ke 3 menit = pacing rusak (bukan opsi).
+| Opsi | Isi | Konsekuensi |
+|---|---|---|
+| **A (rekomendasi)** | 1 arc regular generik perdana (mis. "explainer": intro-hook → 3–4 segmen isi → payoff+CTA) sebagai BARIS BARU `format_profiles` | Memakai mekanisme katalog yang ada; arc lain menyusul dari data |
+| B | Banyak arc sejak hari-1 (dokumenter/listicle/story) | Desain & uji berlipat sebelum ada bukti permintaan |
+
+### KARTU 3 — DNA niche yang menulis orientasi (10/47 niche)
+**Fakta kode+keputusan terekam:** [[decisions_niche_owns_content_config]]: NICHE memiliki gaya konten; CHANNEL memiliki format tampilan. Orientasi = turunan FORMAT (milik channel) → kata "vertical/9:16" di DNA niche **melanggar pembagian kepemilikan yang sudah Anda ketok dulu**.
+| Opsi | Isi | Konsekuensi |
+|---|---|---|
+| **A (rekomendasi)** | **Orientasi = milik MESIN**: bersihkan kata orientasi dari 10 DNA (sekali, hati-hati, uji output) + ATURAN baru: DNA wajib netral-orientasi; mesin menyuntik orientasi per-format saat merakit prompt | Satu sumber kebenaran; nol konflik prompt; konsisten dgn keputusan lama. Risiko: edit DNA bisa menggeser gaya visual → wajib uji banding per-niche sebelum ganti |
+| B | DNA dibiarkan; mesin menimpa dgn suffix format saat render | Nol edit DNA, tapi prompt bisa memuat DUA instruksi bertentangan ("vertical…" + "landscape 16:9") → hasil gambar tak deterministik |
+
+**Cara ketok:** sebut saja mis. "Kartu 1=A, Kartu 2=A, Kartu 3=A" (atau kombinasi lain/koreksi). Setelah ketok → proposal desain teknis rinci disusun di atas ketiganya.
+
 ### Changelog
+- 2026-07-19 (2) — §11 kartu keputusan matang ditambahkan (perintah owner "matangkan dan bungkus dulu 3 hal").
 - 2026-07-19 — dokumen lahir (audit tuntas 5 permukaan, per-baris, oleh Claude; mandat owner "tidak boleh ada 1 baris terlewat").
