@@ -173,6 +173,13 @@ class ChannelAnalytics:
 
     # ── Public API ────────────────────────────────────────────────────────
 
+    @property
+    def analytics_client(self):
+        """Klien YouTube Analytics v2 koneksi channel ini (None bila scope/creds absen).
+        Dipakai RetentionCurveCollector ([B17 §6 M1]) — reuse kredensial per-channel yang
+        sudah ter-init, hindari load ganda per siklus."""
+        return self._analytics
+
     def fetch_and_store(self, tenant_id: str, channel_id: str | None = None) -> dict:
         """
         Pull analytics video → upsert ke video_analytics.

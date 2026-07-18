@@ -36,6 +36,7 @@ def run_once(sb=None) -> dict:
         # "sekali per tenant" menyapu video SEMUA channel dgn token channel pertama → Analytics balas
         # SUKSES-TAPI-KOSONG utk channel lain → watch/retensi 0 senyap (akar sejati saga retensi).
         # Tak redundan: sapu di fetch_and_store kini ter-scope channel_id (tiap video tetap 1×).
+        ca = None
         try:
             from src.analytics.channel_analytics import ChannelAnalytics
             ca = ChannelAnalytics(tenant_id=tid, channel_id=cid)
@@ -44,6 +45,15 @@ def run_once(sb=None) -> dict:
             fetched += 1
         except Exception as e:
             logger.warning(f"[self_learning] analytics gagal ch={cid} tenant={tid}: {e}")
+        # [B17 §6 M1] LAPIS 1 "MATA": kurva retensi per-momen — klien Analytics MILIK KONEKSI
+        # CHANNEL INI (reuse dari ca; token per-identitas channel). Fail-soft terisolasi:
+        # gagal di sini TIDAK mengganggu compute insights / channel lain. ADDITIVE murni.
+        try:
+            if ca is not None and ca.analytics_client is not None:
+                from src.analytics.retention_curves import RetentionCurveCollector
+                RetentionCurveCollector(tid, cid, ca.analytics_client, sb).run()
+        except Exception as e:
+            logger.warning(f"[self_learning] retention curves gagal ch={cid} (non-fatal): {e}")
         # COMPUTE insights (channel-scoped tag)
         try:
             from src.analytics.performance_analyzer import PerformanceAnalyzer
