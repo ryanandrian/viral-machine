@@ -15,12 +15,12 @@ Sistem berpikir dalam **MAKNA** error, bukan teks/HTTP-status mentah. Dua dimens
 |---|---|---|
 | `ACCOUNT_BILLING` | pembayaran/langganan gagal | **non-retryable → REM SEGERA** |
 | `QUOTA_EXHAUSTED` | kredit/kuota habis | **non-retryable → REM SEGERA** |
-| `AUTH_INVALID` | kunci salah/diblokir | non-retryable (BELUM di fast-fail) |
+| `AUTH_INVALID` | kunci/koneksi ditolak PERMANEN (mis. OAuth `invalid_grant`) | **non-retryable → REM SEGERA** |
 | `RATE_LIMIT` | throttle sesaat (429) | retryable → toleransi normal |
 | `TRANSIENT` | jaringan/5xx/timeout | retryable → toleransi normal |
 | `UNKNOWN` | belum dikenali | retryable (DEFAULT AMAN) |
 
-**`FAST_FAIL = {ACCOUNT_BILLING, QUOTA_EXHAUSTED}`** (`src/exceptions.py`) — persis lingkup owner 2026-07-17 ("kredit habis / masalah pembayaran"). Menambah kelas ke fast-fail = ubah SATU set ini.
+**`FAST_FAIL = {ACCOUNT_BILLING, QUOTA_EXHAUSTED, AUTH_INVALID}`** (`src/exceptions.py`). Awal (2026-07-17): "kredit habis / masalah pembayaran". **Diperluas 2026-07-18** (ketok owner "rem segera, jangan bakar duit tenant", [B11] 3.2): `AUTH_INVALID` — koneksi YouTube putus permanen mustahil sembuh dgn diulang. Menambah/menghapus kelas = ubah SATU set ini.
 
 ## §2 Transport-keyed (bukan merek model)
 Klasifikasi menempel pada **transport yang menerima error**, bukan merek model. "Suara ElevenLabs" = model; "API EL" & "API fal" = dua transport → dua kontrak error.
@@ -41,6 +41,7 @@ Klasifikasi menempel pada **transport yang menerima error**, bukan merek model. 
 |---|---|---|---|---|
 | **ElevenLabs (direct)** | `payment_issue`, `payment_required` | ACCOUNT_BILLING | ✅ AKTIF | worker.log 2026-07-17 (RAD) |
 | **ElevenLabs (direct)** | `quota_exceeded` | QUOTA_EXHAUSTED | ✅ AKTIF | worker.log 2026-06-16 |
+| **Google OAuth (YouTube)** | `invalid_grant` | AUTH_INVALID | ✅ AKTIF | OAuth2 RFC 6749 (refresh token dicabut/kedaluwarsa); klasifikasi di `youtube_publisher._get_credentials` + `channel_analytics._load_credentials` → `mark_youtube_account_invalid` (status='invalid' → gerbang `channel_missing` menutup → produksi berhenti). RefreshError LAIN = transien (tak ditandai). [B11] 3.2 2026-07-18 |
 | **OpenAI (LLM/image)** | `insufficient_quota` | QUOTA_EXHAUSTED | ⏳ TERVERIFIKASI, belum diimplement | worker.log 2026-07-09 (niche_selector) |
 | **OpenAI** | `billing_hard_limit_reached` | ACCOUNT_BILLING | ⏳ dokumentasi, belum ada sampel | — |
 | **fal (agregator)** | ? | ? | ⏳ menunggu sampel error nyata | adapter tangkap `status_code`+body (`ai_video.py:219`) |
@@ -66,4 +67,5 @@ Klasifikasi menempel pada **transport yang menerima error**, bukan merek model. 
 Uji `test_errmgmt.py` **13/13 LULUS** vs DB live: classifier EL 2 string NYATA (payment_issue→BILLING, quota_exceeded→QUOTA) + structured-body + error-asing→UNKNOWN · taksonomi/FAST_FAIL benar · persistensi `error_class` end-to-end (`_record_production_run`→`latest_failure`) · keputusan hard=rem-di-1 · **regresi: UNKNOWN tetap streak-3, success memutus streak** · migr 0170 applied (guard identitas) · py_compile + import worker bersih · data uji 0 sisa. **FE tak tersentuh.**
 
 ## §8 CHANGELOG
+- **2026-07-18 (2)** — **[B11] 3.2** menambah transport **Google OAuth** ke registry: `invalid_grant` → `AUTH_INVALID` (masuk FAST_FAIL). Koneksi YouTube putus permanen kini GAGAL JUJUR (bukan senyap): ditandai `status='invalid'` (helper `mark_youtube_account_invalid`) → gerbang `channel_missing` menutup → produksi channel berhenti seketika + notif tenant sekali + badge FE + publish menahan video (bukan "akan diulang" menyesatkan). RefreshError non-invalid_grant tetap transien (regresi dijaga uji `tests/test_youtube_auth_invalid.py` 10/10). ⛔ status deploy: lihat progress_journal.
 - **2026-07-18** — Lahir + kerangka dibangun + **DEPLOYED PRODUKSI 01:04 (`99b1c32`, izin owner)**. Pemicu: insiden RAD 2026-07-17 (langganan EL gagal-bayar → 3× gagal bakar biaya LLM sebelum rem). Owner minta manajemen error world-class extensible (bukan tambalan). Isi awal registry: EL-direct (✅), OpenAI (⏳). Verifikasi produksi: nol error import, 3 thread produksi start bersih.

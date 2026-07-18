@@ -5,9 +5,11 @@ from loguru import logger
 from dotenv import load_dotenv
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
+from google.auth.exceptions import RefreshError
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from src.intelligence.config import TenantConfig, system_config
+from src.exceptions import PublishError, ErrorClass
 
 load_dotenv()
 
@@ -92,7 +94,25 @@ class YouTubePublisher:
         )
         if creds.expired and creds.refresh_token:
             logger.info("Refreshing expired YouTube token (pool)...")
-            creds.refresh(Request())
+            try:
+                creds.refresh(Request())
+            except RefreshError as e:
+                # [B11] 3.2 — HANYA `invalid_grant` (refresh token dicabut/kedaluwarsa PERMANEN,
+                # kode kanonik OAuth2 RFC 6749) = koneksi mati, mustahil sembuh dgn diulang → tandai
+                # INVALID (rem produksi/publish seketika, hemat biaya) + gagal JUJUR ber-kelas
+                # AUTH_INVALID. RefreshError LAIN (mis. 5xx endpoint token) = transien → re-raise apa
+                # adanya (perilaku lama, retryable). HARAM tandai-invalid atas asumsi liar (§6 error-mgmt).
+                if "invalid_grant" in str(e).lower():
+                    from src.utils.tenant_credentials import mark_youtube_account_invalid
+                    mark_youtube_account_invalid(tenant_config.tenant_id, ch_id, reason=str(e)[:200])
+                    _label = getattr(tenant_config, "channel_name", "") or ch_id or ""
+                    raise PublishError(
+                        f"YouTube OAuth invalid_grant (koneksi channel {_label} dicabut/kedaluwarsa): {e}",
+                        step="publish", error_class=ErrorClass.AUTH_INVALID,
+                        human_message=(f"Koneksi YouTube channel '{_label}' terputus — sambungkan ulang "
+                                       f"di menu Integrasi → Koneksi YouTube."),
+                    ) from e
+                raise
             save_google_access_token(tenant_config.tenant_id, creds.token, channel_id=ch_id)
             logger.info("Token refreshed successfully")
         return creds
@@ -331,7 +351,13 @@ class YouTubePublisher:
 
         except Exception as e:
             logger.error(f"YouTube upload error: {e}")
-            return {"platform": "youtube", "status": "failed", "error": str(e)}
+            # [B11] 3.2 — teruskan makna error (error_class/human_message) lewat dict hasil supaya
+            # pemanggil (publisher decoupled) bisa bereaksi tepat (mis. AUTH_INVALID = jangan kirim
+            # pesan 'akan diulang' yang menyesatkan). Aditif → nol regresi pemanggil lama.
+            _ec = getattr(e, "error_class", None)
+            return {"platform": "youtube", "status": "failed", "error": str(e),
+                    "error_class": _ec.value if _ec else None,
+                    "human_error": getattr(e, "human_message", None)}
 
     def _upload_thumbnail(self, youtube, video_id: str, thumbnail_path: str,
                           content_type: str = "short") -> bool:

@@ -73,3 +73,52 @@ def save_google_access_token(tenant_id: str, access_token: str, token_expiry=Non
         sb.table("tenant_youtube_accounts").update(upd).eq("id", aid).execute()
     except Exception as e:
         logger.warning(f"[tenant_credentials] simpan access_token gagal (non-fatal): {e}")
+
+
+def mark_youtube_account_invalid(tenant_id: str, channel_id: str | None = None, *, reason: str = "") -> bool:
+    """[B11] 3.2 — Tandai koneksi YouTube (pool) INVALID saat refresh token DITOLAK PERMANEN oleh
+    Google (OAuth `invalid_grant`: token dicabut/kedaluwarsa). Mustahil sembuh dengan diulang.
+
+    Efek berantai (semua sudah terpasang): `status='invalid'` → fungsi DB `channel_missing`
+    (syarat status='valid') menutup gerbang readiness → producer BERHENTI memproduksi channel ini
+    (hemat biaya) & FE /integrations menampilkan badge invalid. Pulih otomatis saat tenant reconnect
+    (OAuth callback set status='valid').
+
+    IDEMPOTEN & best-effort (TAK PERNAH meng-crash pipeline): flip HANYA bila status masih 'valid'
+    → return True (transisi). Sudah invalid / tak ada baris → return False (no-op).
+    Pada transisi, kirim notif SEKALI ke tenant (no silent degradation)."""
+    try:
+        sb = _sb()
+        aid = _account_id_for(sb, tenant_id, channel_id)
+        if not aid:
+            return False
+        res = (sb.table("tenant_youtube_accounts")
+               .select("status,yt_channel_title,label").eq("id", aid).limit(1).execute())
+        row = (res.data or [None])[0]
+        if not row or row.get("status") == "invalid":
+            return False   # tak ada baris / sudah invalid → no-op (cegah notif berulang)
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc).isoformat()
+        sb.table("tenant_youtube_accounts").update(
+            {"status": "invalid", "validated_at": now, "updated_at": now}
+        ).eq("id", aid).execute()
+        logger.error(f"[tenant_credentials] koneksi YouTube {aid} → INVALID (tenant {tenant_id}; {reason or 'invalid_grant'})")
+        _notify_youtube_invalid(sb, tenant_id, row.get("yt_channel_title") or row.get("label") or "")
+        return True
+    except Exception as e:
+        logger.warning(f"[tenant_credentials] mark invalid gagal (non-fatal): {e}")
+        return False
+
+
+def _notify_youtube_invalid(sb, tenant_id: str, channel_label: str) -> None:
+    """Best-effort Telegram ke TENANT (hormati saklar telegram_enabled). Pesan jelas & actionable:
+    koneksi putus → produksi/publish DITAHAN → sambungkan ulang. Gagal telegram ≠ crash."""
+    try:
+        from src.utils.telegram_notifier import TelegramNotifier
+        _who = f"'{channel_label}' " if channel_label else ""
+        msg = (f"❌ Koneksi YouTube {_who}terputus (izin dicabut / kedaluwarsa). "
+               f"Produksi & publish channel ini DITAHAN otomatis agar tidak membuang biaya. "
+               f"Sambungkan ulang di menu Integrasi → Koneksi YouTube untuk melanjutkan.")
+        TelegramNotifier().notify_tenant(sb, tenant_id, msg)
+    except Exception as e:
+        logger.warning(f"[tenant_credentials] notif invalid gagal (non-fatal): {e}")

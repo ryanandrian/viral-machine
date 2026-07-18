@@ -114,9 +114,17 @@ def publish_due_for_channel(sb, channel_row: dict, now_utc: datetime | None = No
             logger.warning(f"[Publisher] notify_published gagal (non-fatal): {_te}")
         return "published"
     except Exception as e:
-        inventory.revert_to_ready(item["id"])           # kembalikan ke buffer utk retry
-        logger.error(f"[Publisher] publish gagal inv={item['id']} ({e}) — revert ready")
+        inventory.revert_to_ready(item["id"])           # kembalikan ke buffer (publish ulang saat pulih)
         _ch_label = channel_row.get("channel_name") or channel_id   # [B11] sebut NAMA channel
+        # [B11] 3.2 — koneksi YouTube putus PERMANEN (invalid_grant): mark_youtube_account_invalid
+        # SUDAH menandai koneksi invalid + notif tenant SEKALI (produksi channel otomatis berhenti
+        # via gerbang readiness). JANGAN kirim "akan diulang" yang MENYESATKAN (tak akan sukses
+        # sampai reconnect). Cukup log; video ditahan di buffer, terbit otomatis begitu tersambung.
+        from src.exceptions import ErrorClass
+        if getattr(e, "error_class", None) == ErrorClass.AUTH_INVALID:
+            logger.error(f"[Publisher] publish DITAHAN inv={item['id']} ch={_ch_label} — koneksi YouTube putus (sambungkan ulang)")
+            return "auth_invalid"
+        logger.error(f"[Publisher] publish gagal inv={item['id']} ({e}) — revert ready")
         _notify(tenant_id, f"❌ [{_ch_label}] Publish gagal, akan diulang: {e}",
                 sb=sb, once_key=f"fail:{item['id']}:{slot_dt.isoformat()}")
         return "failed"
@@ -142,7 +150,15 @@ def _publish_from_buffer(sb, channel_row: dict, item: dict) -> None:
     yt = YouTubePublisher().publish(video_path, script, tc,
                                     thumbnail_path=thumb_path, content_type="short")
     if not yt.get("video_id"):
-        raise RuntimeError(yt.get("error", "YouTube publish gagal"))
+        # [B11] 3.2 — bawa error_class (mis. AUTH_INVALID dari invalid_grant) ke pemanggil, bukan
+        # RuntimeError generik yang membuang makna. error_class None → UNKNOWN (perilaku lama).
+        from src.exceptions import PublishError, ErrorClass
+        _ecv = yt.get("error_class")
+        raise PublishError(
+            yt.get("error", "YouTube publish gagal"), step="publish",
+            error_class=ErrorClass(_ecv) if _ecv else ErrorClass.UNKNOWN,
+            human_message=yt.get("human_error"),
+        )
 
     # Tautkan video_id/url BALIK ke production_runs (via run_id). Sebelumnya hanya ditulis ke `videos`
     # → kolom Views di /runs kosong utk run terjadwal. Non-fatal (publish sudah sukses).

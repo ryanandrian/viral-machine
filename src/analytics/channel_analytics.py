@@ -122,6 +122,7 @@ class ChannelAnalytics:
         try:
             from google.oauth2.credentials import Credentials
             from google.auth.transport.requests import Request
+            from google.auth.exceptions import RefreshError
 
             token_data = None
             if self._tenant_id:
@@ -142,7 +143,19 @@ class ChannelAnalytics:
 
             if creds.expired and creds.refresh_token:
                 logger.info("[Analytics] Refreshing token...")
-                creds.refresh(Request())
+                try:
+                    creds.refresh(Request())
+                except RefreshError as e:
+                    # [B11] 3.2 — invalid_grant = koneksi mati PERMANEN (token dicabut/kedaluwarsa) →
+                    # tandai INVALID (rem produksi + notif tenant SEKALI via helper) lalu return None.
+                    # Analytics = latar; tetap non-fatal, TAPI kini koneksi TERCATAT mati (bukan senyap).
+                    # RefreshError lain (transien) → re-raise → handler generik di bawah (perilaku lama).
+                    if "invalid_grant" in str(e).lower() and self._tenant_id:
+                        from src.utils.tenant_credentials import mark_youtube_account_invalid
+                        mark_youtube_account_invalid(self._tenant_id, self._channel_id, reason=str(e)[:200])
+                        logger.error(f"[Analytics] invalid_grant (tenant {self._tenant_id}) → koneksi ditandai invalid")
+                        return None
+                    raise
                 # Simpan access_token baru ke POOL (tenant_youtube_accounts).
                 if self._tenant_id:
                     try:

@@ -26,16 +26,20 @@ class ErrorClass(str, Enum):
     str-Enum → nilai `.value` aman disimpan ke DB (production_runs.error_class) & JSON."""
     ACCOUNT_BILLING = "account_billing"   # pembayaran/langganan gagal → non-retryable
     QUOTA_EXHAUSTED = "quota_exhausted"   # kredit/kuota habis → non-retryable
-    AUTH_INVALID    = "auth_invalid"      # kunci salah/diblokir → non-retryable (belum di FAST_FAIL)
+    AUTH_INVALID    = "auth_invalid"      # kunci/koneksi ditolak-permanen (mis. OAuth invalid_grant) → non-retryable
     RATE_LIMIT      = "rate_limit"        # throttle sesaat (429) → retryable
     TRANSIENT       = "transient"         # jaringan/5xx/timeout → retryable
     UNKNOWN         = "unknown"           # belum dikenali → retryable (DEFAULT AMAN)
 
 
 # Kelas yang memicu REM SEGERA (rem setelah 1× gagal — hemat biaya retry yang mustahil sembuh).
-# Lingkup owner 2026-07-17: PERSIS "kredit habis / masalah pembayaran". AUTH sengaja BELUM masuk
-# (di luar instruksi eksplisit; mudah ditambah bila diketok). Menambah = ubah SATU set ini.
-FAST_FAIL: frozenset = frozenset({ErrorClass.ACCOUNT_BILLING, ErrorClass.QUOTA_EXHAUSTED})
+# Lingkup owner 2026-07-17: "kredit habis / masalah pembayaran". DIPERLUAS 2026-07-18 (ketok owner
+# "rem segera, jangan bakar duit tenant", [B11] 3.2): AUTH_INVALID — koneksi YouTube putus permanen
+# (OAuth invalid_grant) mustahil sembuh dengan diulang → hentikan produksi/publish channel seketika.
+# Menambah/menghapus kelas = ubah SATU set ini.
+FAST_FAIL: frozenset = frozenset({
+    ErrorClass.ACCOUNT_BILLING, ErrorClass.QUOTA_EXHAUSTED, ErrorClass.AUTH_INVALID,
+})
 
 
 class PipelineError(Exception):
