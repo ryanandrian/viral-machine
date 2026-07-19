@@ -6,7 +6,7 @@
 
 ## 📌 CARA PAKAI DOKUMEN INI (WAJIB — untuk sesi Claude berikutnya & owner)
 1. **Urutan baca sesi baru:** §0 kamus → §2 ledger keputusan (apa yang SUDAH/BELUM diputus) → §8 posisi fase → baru bagian teknis sesuai fase aktif. **JANGAN mulai dari asumsi/ingatan.**
-2. **HARAM keras:** (a) menulis kode fitur ini sebelum F0 diketok owner; (b) mengaudit ulang §4 (sudah tuntas per-baris — cukup grep ulang anchor `file:baris` yang MAU dipakai); (c) menganggap item TERBUKA di §2 sebagai sudah diputus; (d) mengarang keputusan yang tidak tercatat di §2.
+2. **HARAM keras:** (a) menulis kode fase mana pun sebelum GERBANG fase itu diketok owner (§8 kolom Gerbang); (b) mengaudit ulang §4 (sudah tuntas per-baris — cukup grep ulang anchor `file:baris` yang MAU dipakai); (c) menganggap item TERBUKA di §2 sebagai sudah diputus; (d) mengarang keputusan yang tidak tercatat di §2.
 3. **Perawatan (aturan hidup dokumen):** SETIAP kemajuan/keputusan/pergeseran = update file ini SAAT ITU JUGA (ledger §2 bila keputusan baru; REALISASI §8 bila fase maju + bukti; changelog). File ini = SATU-SATUNYA sumber kebenaran fitur Content Category — bila isi chat ≠ file ini, yang belum tercatat di sini dianggap BELUM terjadi.
 4. **Untuk owner:** cukup baca §1 (ringkasan) + §2 kolom Status (apa yang menunggu jawaban Anda) + §8 (sampai mana). Cara menjawab: sebut nomornya, mis. "L4: entry = starter+trial · L5 setuju · L7=A".
 
@@ -183,8 +183,8 @@ L4 trial&starter=Shorts · L5 tabel slot visual · L6 t2v belakangan · L7=A (1 
 |---|---|---|---|
 | D1 | `channels` | **TIDAK ADA kolom kategori/orientasi** | 🗄️DB — kolom baru (usulan §7b) + masuk `_CHANNEL_OVERLAY_FIELDS` |
 | D2 | `videos` / `production_runs` / `content_inventory` | Tak menyimpan kategori (semua implisit shorts) | 🗄️DB — kolom kategori utk atribusi/analytics (keputusan desain) |
-| D3 | `duration_presets` (8/15/30/45/60/75/90 dtk; 8=ai_video; kunci `seconds` TUNGGAL) | Semesta durasi shorts | 🗄️DB — +dimensi kategori di kunci (90/120 dua-dunia, L3) + 6 baris baru (L2) |
-| D4 | `format_profiles` (arc naskah, wps) | Profil naskah shorts (4 arc) | 🗄️DB — arc Regular = L7 (terbuka) |
+| D3 | `duration_presets` (8/15/30/45/60/75/90 dtk; 8=ai_video; kunci `seconds` TUNGGAL) | Semesta durasi shorts | 🗄️DB — +dimensi kategori di kunci + 8 baris baru → desain final §7g.1 |
+| D4 | `format_profiles` (arc naskah, wps) | Profil naskah shorts (4 arc) | 🗄️DB — arc `explainer` (L7=A KETOK) → desain final §7g.2 |
 | D5 | `plan_limits` (trial/starter/pro/business) | **Nol kolom durasi/kategori** | 🗄️DB — kolom gating baru (usulan §7d) + kartu admin |
 
 **Katalog `ai_models.default_params` (DB-driven, 7 model ber-ukuran portrait):**
@@ -197,7 +197,7 @@ L4 trial&starter=Shorts · L5 tabel slot visual · L6 t2v belakangan · L7=A (1 
 
 **Kenop ENV QC (platform-wide):** `QC_ASPECT="9:16"` · `QC_ASPECT_TOLERANCE` · `QC_MAX_DURATION` (180, semantik Shorts) · `QC_MIN_DURATION` → per-kategori-kan (lokasi env vs DB = keputusan desain, G15).
 
-**DNA niche (`niches.visual_style`) — 10/47 menulis vertical/9:16/portrait:** `ai_tech_frontier, book_wisdom, business_rise_fall, cerita_hikmah, crypto_decoded, culture_shock, geography_explained, history_turning_points, psychology_human_behavior, radiant_affirmations` → L8 (terbuka).
+**DNA niche (`niches.visual_style`) — 10/47 menulis vertical/9:16/portrait:** `ai_tech_frontier, book_wisdom, business_rise_fall, cerita_hikmah, crypto_decoded, culture_shock, geography_explained, history_turning_points, psychology_human_behavior, radiant_affirmations` → L8=A KETOK; prosedur bersih = §7h.5.
 
 **Konten CMS:** `docs_articles` 1 artikel menyebut Shorts · `blog_posts` 5 post → 📄COPY saat Regular rilis.
 
@@ -225,7 +225,7 @@ Pola: segmen bertambah bertingkat; pace visual 7,5→12,9 dtk/gambar. `format_pr
 
 ---
 
-## §6 CELAH YANG BELUM DIBUNGKUS (hasil sisir-ulang 19-Jul, perintah owner "apa lagi yang belum dibahas") — tiap item = aspek yang WAJIB masuk proposal desain rinci
+## §6 REGISTER CELAH G1–G16 (hasil sisir-ulang 19-Jul) — **STATUS: SEMUA sudah punya rumah desain (peta = §7k); tabel ini = konteks fakta per-celah, bukan daftar terbuka**
 
 | # | Celah | Fakta terverifikasi | Aspek yang harus diputuskan/didesain |
 |---|---|---|---|
@@ -256,14 +256,14 @@ Pola: segmen bertambah bertingkat; pace visual 7,5→12,9 dtk/gambar. `format_pr
 3. **Gagal jujur:** kombinasi tak valid (preset di luar tier, model tanpa varian landscape) DITOLAK di titik input, bukan fallback senyap.
 4. **Nol regresi shorts:** default semua channel existing = shorts; jalur shorts tidak berubah perilaku satu bit pun tanpa bukti uji.
 
-### §7b Skema DB usulan (garis besar)
+### §7b Skema DB usulan (garis besar HISTORIS — bentuk FINAL & lengkap = §7g; dipertahankan sebagai konteks)
 - `channels.content_category` TEXT 'short'|'long' NOT NULL DEFAULT 'short' → anggota baru `_CHANNEL_OVERLAY_FIELDS`; mengisi `TenantRunConfig.content_type` (mengganti patri `pipeline.py:106`).
 - `duration_presets`: +kolom `content_category`, kunci unik (content_category, seconds); 7 baris existing = 'short'; +6 baris 'long' (L2) + baris 'long' 90/120 bila diketok; +kolom slot visual (G6).
 - `videos` / `production_runs`: +`content_category` (atribusi & analytics, G9).
 - `ai_models.default_params`: varian ukuran per-kategori (bentuk final di proposal desain — params_landscape vs struktur bersarang).
 - QC: kenop per-kategori (rumah final = keputusan G15).
 
-### §7c Slot visual per segmen (PROPOSAL L5 — angka hidup di DB, admin bisa tala)
+### §7c Slot visual per segmen (✅ KETOK L5 19-Jul — angka hidup di DB, admin bisa tala; pemetaan final ke segmen explainer = §7g.3)
 Prinsip: pace melambat bertahap 13→20 dtk/gambar · hook terpadat · core_facts porsi terbesar.
 
 | Segmen | 120s | 180s | 300s | 480s | 600s | 720s |
@@ -282,7 +282,7 @@ Prinsip: pace melambat bertahap 13→20 dtk/gambar · hook terpadat · core_fact
 
 Catatan: nama segmen final mengikuti keputusan arc L7; tabel = pola distribusi, bukan patri nama.
 
-### §7d Gating tier usulan (menunggu L4 dikonfirmasi)
+### §7d Gating tier (✅ KETOK L4 19-Jul; bentuk kolom final = §7g.4)
 `plan_limits` +kolom (bentuk final di proposal): kategori yang diizinkan + durasi maks per-kategori. Isi usulan (selaras §3b): **trial & starter → Shorts saja · pro → Shorts + Regular ≤180s · business → semua.** Ditegakkan BERLAPIS mengikuti pola penegakan existing (§3b): dropdown FE terfilter di titik input (anti-human-error §3.1) + guard PATCH channel + gerbang jalan `gate_for_channel`/producer (anti-bypass; comp ikut plan_type) + perilaku downgrade prinsip §3b.2.
 
 ### §7e PROPOSAL DESAIN TEKNIS F1 — Fondasi kategori (disusun 19-Jul pasca F0 tutup; **MENUNGGU KETOK — nol kode sebelum itu**)
@@ -290,12 +290,12 @@ Catatan: nama segmen final mengikuti keputusan arc L7; tabel = pola distribusi, 
 
 | Lapis | Perubahan PERSIS | File/objek |
 |---|---|---|
-| DB (1 migrasi) | `channels.content_category` TEXT NOT NULL DEFAULT 'short' CHECK IN ('short','long') · kolom sama di `videos` + `production_runs` (atribusi; baris lama otomatis 'short' — benar secara sejarah) | `migrations/017x_content_category.sql` |
-| BE | (1) `content_category` masuk `_CHANNEL_OVERLAY_FIELDS` → mengisi `TenantRunConfig.content_type` (jahitan B9 hidup) · (2) `pipeline.py:106` baca dari config channel, patri "short" DIBUANG (B4) · (3) stamp kategori ke `production_runs`/`videos` saat run/video lahir (titik persis diverifikasi grep saat build) | `src/config/tenant_config.py` · `src/orchestrator/pipeline.py` (+titik stamp) |
-| FE-tenant | Kartu/dropdown BARU "Kategori Konten" di Channel→Setting (dekat kartu Durasi :871): **Shorts (aktif)** / **Regular — coming soon (terkunci + badge)**, dwibahasa `Bi`, auto-save pola kolom-bersih (spt duration_preset :299) | `(app)/channels/[id]/page.tsx` |
+| DB (1 migrasi) | `channels.content_category` TEXT NOT NULL DEFAULT 'short' **+ constraint `channels_content_category_f1_lock` CHECK ='short'** (anti-bypass API sampai F2; teruji 19-Jul: 'long' DITOLAK DB) · kolom sama (CHECK short/long) di `videos` + `production_runs` + **`content_inventory`** (kategori WAJIB menempel item buffer — publisher publish dari buffer, bukan dari channel saat-publish) | `migrations/017x_content_category.sql` *(draf 0173 pernah diterapkan+diverifikasi lalu DICABUT bersih 19-Jul atas perintah owner — tinggal diterapkan ulang)* |
+| BE | (1) `_apply_channel_overlay` (tenant_config.py:436) memetakan `content_category`→`config.content_type` (jahitan B9 hidup) · (2) **`TenantConfig` intelligence/config.py +field `content_type` + mapping di `tenant_config_from_channel` :54-78** (temuan 19-Jul: konstruktor producer/publisher TIDAK memetakan — tanpa ini seam mati di jalur terjadwal) · (3) `pipeline.py:106` `resolved_content_type` dari config (patri dibuang) + `result["content_type"]` diisi (dipakai stamp producer) · (4) stamp `production_runs` di **producer.py:126/352/444** · stamp `videos` via param baru 3 metode **supabase_writer.py:149/200/233** + pemanggilnya (pipeline.py:475/533/663 · publisher.py:183) · (5) **publisher.py:150 `publish(content_type="short")` patri → dari channel_row/inventory** (temuan 19-Jul, luput dari tabel audit §4) · (6) stamp `content_inventory` di titik insert producer (inventory.py — anchor digrep saat build) | `src/config/tenant_config.py` · `src/intelligence/config.py` · `src/orchestrator/pipeline.py` · `src/orchestrator/producer.py` · `src/utils/supabase_writer.py` · `src/orchestrator/publisher.py` (+`inventory.py`) |
+| FE-tenant | Kartu/dropdown BARU "Kategori Konten" di Channel→Setting (dekat kartu Durasi :871): **Shorts (aktif)** / **Regular — coming soon (terkunci + badge)**, dwibahasa `Bi`, auto-save pola kolom-bersih (spt duration_preset :299) + kolom ikut select :440 | `(app)/channels/[id]/page.tsx` |
 | FE-admin | TIDAK tersentuh (bukan kenop `app_config` — kolom data channel; §3.3 kenop-lengkap tidak terpicu). Katalog Durasi disentuh di F2 | — |
 | FE-marketing/email | TIDAK tersentuh (copy berubah di F4) | — |
-| Uji/bukti | Uji unit permanen (overlay field + default + stamp) · tsc+build · **regresi runtime: run produksi nyata tetap 'short' identik + kolom terisi** · klik→layar dropdown (Regular terbukti terkunci) · nol regresi 5 permukaan | `tests/test_content_category_f1.py` (baru) |
+| Uji/bukti | Uji unit permanen (overlay + konstruktor + default + writer-param + stamp) · py_compile+import · tsc+build · **regresi runtime: resolve config channel RAD nyata → content_type='short' + run nyata kolom terisi 'short' identik** · klik→layar dropdown (Regular terbukti terkunci) · nol regresi 5 permukaan | `tests/test_content_category_f1.py` (baru) |
 
 Di luar lingkup F1 (tegas): duration_presets/gating/plan_limits (F2) · kanvas/QC/prompt/mesin long (F3) · publish metadata (F4). Deploy F1 = gerbang izin owner terpisah (§5.0 CLAUDE.md).
 
@@ -304,23 +304,112 @@ Fondasi yang dibuat sekarang agar t2v tinggal menyala: konsep slot visual (§7c)
 
 ---
 
+### §7g DESAIN RINCI F2 — KATALOG & GATING (matang 19-Jul; eksekusi menunggu gerbang F2)
+*Menutup: G1 · G2 · G6 (rumah DB) · sebagian G15. Legenda: 📏 = angka kalibrasi, diisi dari data uji dgn metode tertulis — BUKAN lubang desain.*
+
+**1. Skema `duration_presets` (kunci ganda):**
+- +`content_category TEXT NOT NULL DEFAULT 'short'`; kunci unik lama (`seconds`) → **komposit `(content_category, seconds)`**; `is_default` bermakna per-kategori.
+- +`visual_slots JSONB NULL` — peta segmen→jumlah gambar (L5). **NULL = 1 slot/segmen (perilaku lama persis — 7 baris shorts existing tak berubah byte pun).** `visual_beats` tetap = TOTAL slot (kompat; = sum(visual_slots)).
+- +`min_hard_seconds NUMERIC NULL` — lantai durasi KERAS one-sided (L9=A): baris long-480 = 480.0; NULL = window dua-sisi lama. Generik, bukan patri angka di kode.
+- **Konsumen kunci yang WAJIB ikut** (dari audit + verifikasi 19-Jul): `format_catalog.py:35` (dict keyed `int(seconds)` → filter per-kategori dari run config + cache per-kategori) · FE tenant `channels/[id]/page.tsx:475` (select + filter kategori channel; `presetModes` keyed seconds tetap valid DALAM satu kategori) · FE admin `catalog/page.tsx:117,119` (PK_OF `durations: seconds` → komposit; tabel tampil ber-kolom kategori).
+- `channels.duration_preset` TETAP integer detik; maknanya = pasangan (channels.content_category, seconds). **Aturan ganti kategori:** preset tak tersedia di kategori tujuan → auto-reset ke default kategori itu + pemberitahuan di UI (anti-state yatim). Default long = 180 (pilihan teknis reversible; owner bisa ganti via `is_default`).
+- **Baris baru = 8:** short-120 + long-90/120/180/300/480/600/720 (L2+L3; short-120 = Shorts tetap ≤3 mnt aman).
+
+**2. Arc naskah long (L7=A) — baris baru `format_profiles`:**
+`format_key='explainer'` · sections **8 segmen**: `hook → context → chapter_1 → chapter_2 → chapter_3 → recap_bridge → payoff → cta` · `default_wps` 2.2 · `cta_mode` implicit · `render_mode` image_sequence. Bobot durasi antar-segmen = baris baru di mekanisme `content_beats` (weight per beat long — rumah SUDAH ada + form admin tab Durasi, temuan 19-Jul; **jangan bikin mekanisme kembar**). Channel kategori long ⇒ `format_profile='explainer'` (auto-set saat kategori diganti; editable saat arc long >1 kelak).
+
+**3. Isi `visual_slots` per preset long** (distribusi §7c dipetakan ke segmen explainer; short-120 memakai 8-beat shorts existing + slot §7c kolom 120):
+| Segmen | 90L | 120L | 180 | 300 | 480 | 600 | 720 |
+|---|---|---|---|---|---|---|---|
+| hook | 1 | 1 | 1 | 2 | 2 | 3 | 3 |
+| context | 1 | 1 | 1 | 2 | 2 | 3 | 3 |
+| chapter_1 | 1 | 1 | 2 | 3 | 4 | 4 | 5 |
+| chapter_2 | 1 | 2 | 3 | 5 | 9 | 9 | 12 |
+| chapter_3 | 1 | 1 | 1 | 2 | 3 | 3 | 4 |
+| recap_bridge | 1 | 1 | 1 | 1 | 2 | 2 | 2 |
+| payoff | 1 | 1 | 2 | 2 | 3 | 4 | 5 |
+| cta | 1 | 1 | 1 | 1 | 2 | 2 | 2 |
+| **TOTAL** | **8** | **9** | **12** | **18** | **27** | **30** | **36** |
+
+**4. Gating `plan_limits`** (L4 KETOK): +`allow_long BOOLEAN NOT NULL DEFAULT false` + `long_max_seconds INT NOT NULL DEFAULT 0`. Isi: trial/starter `false/0` · pro `true/180` · business `true/720`. Shorts (8–120) = semua tier, tanpa gate durasi (L4). **Kartu admin baru "Kategori & Durasi per Paket"** (§3.3 CLAUDE.md LENGKAP: kelompok sendiri, label+deskripsi dwibahasa, toggle utk boolean, dropdown durasi dari katalog long).
+
+**5. Penegakan berlapis (pola terverifikasi §3b):**
+(i) **FE titik input**: dropdown kategori & durasi terfilter paket + label ajakan upgrade; (ii) **DB**: lepas `channels_content_category_f1_lock` → guard UPDATE `channels` (pola RLS migr 0155) memvalidasi (content_category, duration_preset) vs plan tenant; (iii) **runtime**: `gate_for_channel`/producer — channel long milik tenant turun-paket → TIDAK dilayani, data utuh, upgrade = hidup lagi (preseden `_channel_in_quota`, §3b.2) + notifikasi jujur; (iv) comp mengikuti plan_type (§3b).
+
+**6. Rekonsiliasi `render_mode`:** tetap milik PRESET (kini per (kategori, seconds)); `channels.visual_mode` tetap pilihan sumber visual; gating input preset⇄model video ([B6] F3) tetap. Pilihan t2i/t2v penuh per-channel = fase t2v (§7f) — TIDAK dicampur di F2.
+
+### §7h DESAIN RINCI F3 — MESIN LONG (matang 19-Jul; eksekusi menunggu gerbang F3 + hasil uji beban)
+*Menutup: G3 · G4 · G5 · G7 · G14 · G15 · G6 (sisi render) · L8 · L9-mekanik.*
+
+**0. PRASYARAT — uji beban (metode dipatri, dijalankan SEBELUM kode F3 diketok):** render sintetis di VPS jam sepi: audio sunyi 720s + 36 gambar uji → ukur wall-time/CPU/RAM/disk/ukuran file utk 180/480/720; hasil mengisi semua 📏 G7. Skrip uji sekali-pakai, worktree terpisah, nol sentuh produksi.
+
+**1. Naskah ber-babak (G3):** 2 tahap LLM — (a) **outline**: topik → judul+ringkasan+anggaran kata per segmen (anggaran = durasi_segmen × WPS explainer; durasi segmen dari bobot `content_beats` long) + viral_score di outline; (b) **per-segmen**: generate isi segmen dgn konteks ringkasan segmen sebelumnya (anti-drift, hemat token) → rakit → QC koherensi final. Kalibrasi pace long = mekanisme durasi-via-speed existing (§10.A) diperluas; angka awal WPS 2.2 dari `format_profiles`, dikoreksi data run long pertama 📏.
+
+**2. TTS panjang (G4):** potong per-SEGMEN (bukan per-karakter buta) → sintesis per-chunk provider channel (retry per-chunk; chunk gagal = run GAGAL JUJUR, §0.6) → gabung ffmpeg concat (codec seragam) → `word_timestamps` digeser offset kumulatif per-chunk (caption & beat_durations tetap presisi) → ukur TOTAL → atempo GLOBAL (mekanisme existing) bila di luar window. +kolom **`tts_profiles.max_chars_per_request`** (fakta 19-Jul: kolom belum ada; nilai per vendor diisi dari dokumentasi resmi saat build 📏). Window durasi: dua-sisi seperti sekarang, KECUALI preset ber-`min_hard_seconds` → one-sided [lantai, lantai+2×guard]; guard awal 10 dtk 📏.
+
+**3. Musik long (G5) — FAKTA TERVERIFIKASI 19-Jul: pustaka 28 track SEMUA 80–110 dtk → loop WAJIB, bukan opsi.** Desain: `_mix_music` — bila durasi track < durasi audio: ulang track yang SAMA (mood konsisten) via concat ber-`acrossfade` 1 dtk di tiap sambungan; fade-out akhir tetap; `-t total_duration` tetap. Kurasi track panjang = opsional owner kemudian (biaya lisensi), bukan blocker.
+
+**4. Kanvas & slot visual (B1/B2/B15/B18/B19/B21/B23/B33 + G6):** konstanta kanvas → helper tunggal `canvas_for(content_type)` (short 1080×1920 · long 1920×1080) — SEMUA titik dimensi merujuknya (B2 sudah via konstanta = aman); logo maks relatif % lebar kanvas (B33); Ken Burns netral-rasio (B19). Assembler membaca `visual_slots`: segmen ber-slot>1 → prompt varian bernomor (sudut/adegan berbeda per slot, mekanisme prompt per-beat existing diperluas per-slot); Ken Burns per-slot.
+
+**5. Orientasi prompt SATU PINTU (B16/B17/B22/B24/B25/B27/B30):** helper `orientation_suffix(content_type)` di satu modul; semua titik 🤖 memanggilnya — nol string orientasi tersebar lagi. **DNA (L8=A) prosedur:** (a) arsip nilai lama 10 niche (kolom/tabel riwayat) → (b) hapus frasa orientasi → (c) uji banding visual per-niche (1 gambar sebelum-vs-sesudah, owner menilai) → (d) aturan "DNA netral-orientasi" masuk pedoman NICHE_DNA + validasi editor admin (tolak kata orientasi saat simpan).
+
+**6. Caption landscape (B3/G14):** preset caption per-kategori (font, words_per_line, margin_v) = kenop DB ber-kartu admin; ASS PlayResX/Y ikut kanvas; nilai awal long 📏 dari uji visual nyata (§3.4 per-widget).
+
+**7. QC per-kategori (B5/B6/B34/G15):** pindah ENV → `app_config` per-kategori (`qc_aspect_short/long`, `qc_max_duration_short/long`, `qc_min_duration_short/long`; long max awal 780) + kartu admin "QC per Kategori" dwibahasa; ENV lama = fallback transisi 1 rilis lalu dicabut (fosil disapu §3.2).
+
+**8. Katalog model per-kategori (§4e/B20/B21):** +`ai_models.default_params_long JSONB NULL` — NULL = model belum mendukung long → titik input model channel-long HANYA menawarkan model ber-params-long (anti-human-error §3.1); isi awal: flux/gpt-image ukuran landscape, model video aspect 16:9; admin katalog menampilkan kedua varian.
+
+**9. Anti-sumbat antrian (G7, mandat L10):** dari hasil uji beban 📏 → (a) bobot slot: job long menempati ceil(t_long/t_short) slot pool; (b) fair-share round-robin antar tenant di producer; (c) kenop `ops_render_long_max_concurrent` (kartu Internal, read-only tenant); (d) telemetri `elapsed_seconds` per preset + alarm admin ambang antrean (deteksi sebelum tenant merasa).
+
+### §7i DESAIN RINCI F4 — PUBLISH & RILIS REGULAR (matang 19-Jul; gerbang F4)
+*Menutup: G11 · G16 · sisa 📄COPY + 🔀 publish.*
+
+1. **Metadata publish bercabang** (content_type sudah mengalir sejak F1): #Shorts & tags shorts HANYA short (B10/B11) · URL `watch?v=` utk long (B12; konsumen regex producer.py:28-31 sudah siap ✅) · pesan/log/docstring (B7/B8/B14/B31) · contoh hashtag skema naskah (B26) ikut kategori.
+2. **Chapters otomatis** (nilai tambah long): deskripsi long diisi "0:00 <judul segmen>" dari `beat_durations` NYATA pasca-render — gratis, menaikkan navigasi & watch-time; judul segmen dari outline naskah.
+3. **Thumbnail long:** hero prompt landscape (B22 via `orientation_suffix`) → jalur thumbnail 1280×720 (B13, sudah 2-cabang); kualitas CTR = bahan analis F5.
+4. **Rilis & switching:** unlock dropdown Regular per tier (gating F2 hidup) · ganti kategori channel = revalidasi preset+arc (§7g.1) · **video long PERTAMA per channel auto-private untuk review tenant** (kenop; selaras §6.6 CLAUDE.md) → tenant menyetujui → publik berikutnya.
+5. **Copy semua permukaan** (daftar persis dari §4): FE-marketing M1/M3 + email M4 + admin hints A1–A3 + CMS (1 artikel docs + 5 blog) + email nurture B32 — dwibahasa `Bi`, positioning "Shorts + video panjang".
+6. **Bukti rantai penuh** (§3.4): checklist klik→layar per permukaan + 1 video long e2e nyata (produksi→publish→tampil benar di YouTube player landscape).
+
+### §7j DESAIN RINCI F5 — KECERDASAN SADAR-KATEGORI (matang 19-Jul; gerbang F5)
+*Menutup: G9 · G10 · B28/B29.*
+
+1. **Fondasi = stamp F1** (`videos`/`production_runs`/`content_inventory`.content_category) — semua agregasi kecerdasan bisa memfilter kategori.
+2. **Analis (B17 §6):** dosir per-channel menyertakan kategori channel + prompt analis menyebut format nyata (B28); menu keputusan sama, konteksnya benar.
+3. **Benchmark terpisah:** kurva retensi M1, top_hooks/topics, avoid_patterns — dianalisis DALAM kategori masing-masing (semesta retensi 60 dtk ≠ 12 menit; jangan banding silang). Data per-channel sudah bersih by-design (kategori = per-channel).
+4. **Warisan (W1/K6):** prior hanya dari kategori SAMA; lintas-kategori = label keyakinan-rendah (pola K6 yang sudah diketok) — pelajaran Shorts tidak menyetir long tanpa tanda.
+5. **Trend radar (B29/G10):** query per-kategori (short: "shorts"; long: tanpa suffix + istilah long-form) — detail kecil diketok di gerbang F5 dengan sampel hasil nyata.
+
+### §7k MATRIKS CAKUPAN TOTAL — bukti nol titik yatim (setiap ID audit & celah → rumah fase)
+| Titik | Rumah |
+|---|---|
+| B4 B9 (seam) · D1 D2 + `content_inventory` · publisher.py:150 · `tenant_config_from_channel` | **F1** (§7e rev) |
+| D3 D4 D5 · T4 (dropdown) · G1 G2 · G6-rumah-DB · rekonsiliasi render_mode | **F2** (§7g) |
+| B1 B2 B3 B5 B6 B15–B25 B27 B30 B33 B34 · §4e ai_models · §4e ENV-QC · §4e DNA (L8) · G3 G4 G5 G7 G14 G15 · L9-mekanik | **F3** (§7h) |
+| B7 B8 B10–B14 B26 B31 B32 · T1 T2 T3 · A1 A2 A3 · M1–M4 · CMS · G11 G16 | **F4** (§7i) |
+| B28 B29 · G9 G10 | **F5** (§7j) |
+| G8 (kuota) = L10 KETOK (tuntas) · G12 (migrasi/nol-regresi) = kewajiban TIAP fase (bukti §3.8 CLAUDE.md) · G13 (istilah) = §0 kamus (tuntas) | — |
+| ✅AMAN yang TIDAK diubah: B2(via konstanta) A4 M5 T3(player) | diverifikasi ulang saat fase terkait |
+
 ## §8 PLAN vs REALISASI (fase ber-gerbang — TIAP fase butuh ketok owner sebelum kode; kolom REALISASI diisi HANYA dengan bukti)
 
 | Fase | Isi | Gerbang masuk | REALISASI |
 |---|---|---|---|
 | **F-1 Audit + arsitektur** | Audit hardcode 5 permukaan per-baris · kartu keputusan · sisir-ulang celah G1–G16 · dokumen arsitektur ini | mandat owner 19-Jul | ✅ 19-Jul: audit tuntas (§4) · ledger keputusan (§2) · celah terbungkus (§6) · file di-rename & disempurnakan |
 | **F0 Keputusan & verifikasi** | Owner ketok L4–L10 + verifikasi web L9 | — | ✅ **TUTUP 19-Jul**: L4/L5/L6/L7=A/L8/L9=A/L10 semua diketok (ledger §2) + web terverifikasi + catatan owner L7 (4 permukaan) & L10 (anti-sumbat G7) terekam |
-| **F1 Fondasi kategori (nol perubahan perilaku)** | Kolom `channels.content_category` + aliran ke seam s92 (B4/B9) + `videos`/`production_runs` atribusi + dropdown channel "Shorts / Regular (coming soon)" terkunci | F0 ✅ · **proposal rinci = §7e, menunggu ketok** | ⏳ |
-| **F2 Katalog & gating** | `duration_presets` ber-dimensi kategori + 6 preset baru + slot visual (G6) + `plan_limits` gating (G1) + filter FE + guard BE + rekonsiliasi render_mode | F1 terbukti nol regresi | ⏳ |
-| **F3 Mesin long** | Naskah ber-babak + kalibrasi (G3) · TTS chunk (G4) · musik loop (G5) · kanvas/prompt/QC per-kategori (B1–B34 kelompok ⚙️/🤖/🔀) · caption landscape (G14) · uji beban render (G7) · **bukti presisi durasi (gerbang §7.3)** | F2 live | ⏳ |
-| **F4 Publish & rilis Regular** | Metadata publish bercabang (B10–B13) + thumbnail landscape/chapters (G11) + copy marketing/email/CMS (G16) + buka kunci "coming soon" | F3 terbukti end-to-end | ⏳ |
-| **F5 Kecerdasan sadar-kategori** | Dosir analis + warisan + benchmark per-kategori (G9) + trend radar (G10) | F4 live + data long masuk | ⏳ |
+| **F1 Fondasi kategori (nol perubahan perilaku)** | Kolom `channels.content_category` + aliran ke seam s92 (B4/B9) + `videos`/`production_runs` atribusi + dropdown channel "Shorts / Regular (coming soon)" terkunci | F0 ✅ · proposal §7e diketok 19-Jul · **⛔ eksekusi DITAHAN owner 19-Jul sampai dokumen matang 100%** | ⏳ (migr 0173 sempat APPLIED → DICABUT bersih 19-Jul atas perintah owner; verifikasi titik stamp TETAP berlaku: `producer.py:126/352/444` · `supabase_writer.py:149/200/233` · +temuan `publisher.py:150` patri content_type="short" & `tenant_config_from_channel` tanpa content_type — masuk lingkup F1 saat dilanjut) |
+| **F2 Katalog & gating** | Desain rinci = **§7g** (kunci ganda preset · visual_slots · arc explainer · gating plan_limits · penegakan 4 lapis) | F1 terbukti nol regresi · ketok proposal eksekusi F2 | ⏳ |
+| **F3 Mesin long** | Desain rinci = **§7h** (uji beban dulu · naskah 2-tahap · TTS per-segmen · musik loop · kanvas/orientasi/QC/caption per-kategori · anti-sumbat) · **bukti presisi durasi (gerbang §7.3 CLAUDE.md)** | F2 live · hasil uji beban mengisi 📏 · ketok | ⏳ |
+| **F4 Publish & rilis Regular** | Desain rinci = **§7i** (metadata bercabang · chapters otomatis · first-long-private · copy semua permukaan · bukti klik→layar e2e) | F3 terbukti end-to-end · ketok | ⏳ |
+| **F5 Kecerdasan sadar-kategori** | Desain rinci = **§7j** (dosir+benchmark per-kategori · warisan pola K6 · trend radar) | F4 live + data long masuk · ketok | ⏳ |
 
 Aturan pengisian REALISASI: bukti runtime nyata (uji + angka), bukan "build lulus"; tiap fase tutup administrasi §3.7 (file ini + MEMORY.md + SISA_KERJA).
 
 ---
 
 ## Changelog
+- 2026-07-19 (10) — **PEMATANGAN 100% (mandat owner "dokumen wajib matang dulu"):** +§7g desain rinci F2 (kunci ganda preset + visual_slots + min_hard_seconds + arc explainer 8 segmen + tabel slot long-90..720 + gating plan_limits allow_long/long_max_seconds + penegakan 4 lapis) · +§7h desain rinci F3 (uji beban ber-metode; naskah 2-tahap; TTS potong-per-segmen + max_chars_per_request; **musik: FAKTA 28 track semua 80–110 dtk → loop wajib**; canvas_for(); orientation_suffix() satu-pintu; prosedur DNA L8; caption+QC per-kategori; ai_models params_long; anti-sumbat 4 komponen) · +§7i F4 (publish bercabang + chapters otomatis + first-long-private + copy semua permukaan) · +§7j F5 (kecerdasan sadar-kategori, benchmark terpisah, warisan pola K6) · +§7k MATRIKS cakupan total (nol titik yatim) · §7e F1 direvisi lengkap (publisher.py:150 + tenant_config_from_channel + content_inventory + 6 titik stamp ber-anchor). Titik kalibrasi ditandai 📏 + metode pengisiannya tertulis. Sapu koherensi: §7b/§7c/§7d diberi banner status final · D3/D4/DNA/G-register disinkronkan ke rumah desainnya · CARA-PAKAI 2(a) diperluas ke gerbang per-fase.
+- 2026-07-19 (9) — **Eksekusi F1 DITAHAN owner** ("bersihkan dulu, dokumen wajib matang 100%"): migr 0173 yang sempat diterapkan DICABUT bersih (3 kolom+constraint drop, verified NOL sisa; file migrasi dihapus; kode BE/FE belum tersentuh). Warisan berharga dari persiapan F1 dipatri di §8 F1: titik stamp terverifikasi + 2 temuan baru (publisher.py:150 patri "short" di luar tabel audit; `tenant_config_from_channel` intelligence/config.py TIDAK memetakan content_type → wajib dipetakan saat F1). Fase berikutnya = PEMATANGAN dokumen (F2–F5 rinci).
 - 2026-07-19 (8) — **F0 TUTUP PENUH: KETOK L7=A** (+catatan owner "catat baik-baik": 4 permukaan durasi/segmentasi wajib disesuaikan — anchor admin Katalog→Durasi & tenant Channel→Durasi & segmentasi konten TERVERIFIKASI) **+ L9=A** (label 8 menit, mesin jamin ≥480.0s). Temuan baru: `content_beats.weight` + form admin = rumah alami distribusi slot visual (G6 di-update, anti mekanisme-kembar). NEXT: proposal desain teknis F1.
 - 2026-07-19 (7) — **KETOK L5 · L6 · L8 · L10** (owner). L10 menyertakan mandat antisipasi penyumbatan antrian → G7 diperluas (slot berbobot · fair-share per tenant · cap long terpisah · telemetri+alarm; final di F3 ber-angka uji beban). Sisa terbuka: L7 (arc) + L9-lanjutan (jaminan 8:00) — menunggu jawaban owner pasca penjelasan sederhana.
 - 2026-07-19 (6) — **L4 KETOK** (trial & starter = Shorts saja · pro ≤180s · business semua) + **L9 TERVERIFIKASI web** (Shorts maks 3 mnt ✅ · mid-roll ambang KERAS ≥8:00 → G3 window one-sided utk 480s · musik Shorts >60s wajib royalty-free) + L10 dimatangkan (fakta BYOK: biaya AI = tanggungan kunci tenant) + §2b disegarkan.
