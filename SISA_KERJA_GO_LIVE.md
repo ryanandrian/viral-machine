@@ -341,6 +341,13 @@
 - **REALISASI:** taksonomi `ErrorClass` + `FAST_FAIL={billing,quota}` (exceptions.py) · classifier EL-direct terverifikasi (elevenlabs.py) · propagasi last_* (tts_engine→pipeline) · persistensi migr **0170** `production_runs.error_class` · circuit-breaker semantik + reorder produce_one (producer.py) · helper `inventory.latest_failure`. **Uji 13/13 vs DB live** (classifier 2 string EL nyata · persistensi e2e · rem-di-1 utk billing/quota · regresi UNKNOWN tetap streak-3 · success memutus streak) · py_compile+import bersih · FE tak tersentuh · data uji 0 sisa.
 - **DEPLOYED 2026-07-18 01:04** (izin owner; BE OK health=200; nol error import, 3 thread produksi start bersih). **Sisa:** bukti hidup alami saat insiden billing/quota berikutnya (rem di 1×); extension OpenAI/fal `classify_error` menyusul saat ada sampel (registry §4).
 
+### [B23] CONTENT CATEGORY per-channel (Shorts / Regular) — 🟡 F0 ✅ diketok penuh 19-Jul · F1 ketok, sedang dibangun
+- **SPEC/SSOT = `CONTENT_CATEGORY_ARCHITECTURE.md`** (eks AUDIT_HARDCODE_FORMAT_VIDEO; WAJIB baca blok CARA PAKAI + ledger §2 sebelum menyentuh — semua keputusan L4–L10 sudah diketok, JANGAN tanya ulang).
+- **TUJUAN:** tenant memilih per-channel: Shorts (portrait, aktif) vs Regular (landscape 90–720 dtk, "coming soon" → hidup bertahap F2–F4); gating tier trial&starter=Shorts · pro=+Regular≤180s · business=semua.
+- **FASE (gerbang per-fase, §8 SPEC):** F0 keputusan ✅ TUTUP 19-Jul · **F1 fondasi kategori (ketok 19-Jul, nol perubahan perilaku)** · F2 katalog+gating · F3 mesin long (menunggu uji beban) · F4 publish+rilis · F5 kecerdasan.
+- **DONE-BILA:** channel Regular pertama tenant nyata memproduksi + mempublikasikan video landscape sesuai tier, nol regresi jalur Shorts.
+- **REALISASI:** (diisi per-fase dengan bukti — lihat §8 SPEC)
+
 ### [C2] Self-learning deepening + trend F3/F4 — 🟡  (TREND_RADAR **F3/F4**)
 - **TUJUAN:** kalibrasi `source_weights` (bobot sumber trend) dari outcome nyata per (niche,geo) + panen sinyal Analytics kaya (retensi/trafficSource/searchTerms) + agregat lintas-tenant anonim (cold-start moat).
 - **BUKTI:** loop inti hidup (`viral_score_weights`/`historical_factor`); `channel_analytics` sebagian sinyal sudah. CTR per-video=0 PERMANEN (batas API YouTube, bukan bug).
