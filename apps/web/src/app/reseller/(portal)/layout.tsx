@@ -8,7 +8,8 @@ export default async function ResellerPortalLayout({ children }: { children: Rea
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/reseller/login");
-  if (user.app_metadata?.role !== "reseller") redirect("/dashboard");
+  // [B21 MGM §9a.5] reseller murni (role) ATAU tenant ber-tautan (reseller_linked — satu login)
+  if (user.app_metadata?.role !== "reseller" && user.app_metadata?.reseller_linked !== true) redirect("/dashboard");
   const admin = createAdminClient();
   const { data: rows } = await admin.from("resellers").select("name,status,agent_id").eq("user_id", user.id).limit(1);
   const rs = rows?.[0];

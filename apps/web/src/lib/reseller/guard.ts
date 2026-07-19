@@ -20,7 +20,10 @@ export async function requireReseller(): Promise<
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: NextResponse.json({ error: "unauthorized" }, { status: 401 }) };
-  if (user.app_metadata?.role !== "reseller") {
+  // [B21 MGM §9a.5, ketok 2026-07-19] reseller murni (role) ATAU tenant ber-tautan reseller
+  // (penanda reseller_linked — satu login dua wilayah). Keduanya tetap wajib punya baris
+  // `resellers.user_id` di bawah (profil = sumber kebenaran; penanda saja tidak cukup).
+  if (user.app_metadata?.role !== "reseller" && user.app_metadata?.reseller_linked !== true) {
     return { error: NextResponse.json({ error: "forbidden" }, { status: 403 }) };
   }
   const admin = createAdminClient();

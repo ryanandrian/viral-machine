@@ -25,7 +25,8 @@ export default function ResellerLoginPage() {
     if (error) { setBusy(false); return setErr(error.message); }
     // Verifikasi peran SEBELUM masuk — akun non-agen di-sign-out (jangan nyangkut redirect loop).
     const { data: { user } } = await supabase.auth.getUser();
-    if (user?.app_metadata?.role !== "reseller") {
+    // [B21 MGM §9a.5] terima juga tenant ber-tautan reseller (reseller_linked — satu login)
+    if (user?.app_metadata?.role !== "reseller" && user?.app_metadata?.reseller_linked !== true) {
       await supabase.auth.signOut();
       setBusy(false);
       return setErr("Akun ini bukan akun reseller. / This is not a reseller account.");

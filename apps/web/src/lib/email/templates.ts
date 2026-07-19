@@ -182,6 +182,35 @@ export function renderAgentInviteEmail(lang: Lang, actionUrl: string, companyNam
 }
 
 // ── [B21-F3] Undangan portal reseller ─────────────────────────────────────────
+// [B21 MGM §9a.5, ketok 2026-07-19] Tenant existing DITAUTKAN jadi reseller (satu login):
+// email "portal aktif" — TANPA link set-password (akunnya sudah hidup; recovery = salah pesan).
+export function renderResellerLinkedEmail(lang: Lang, portalUrl: string, agentCompany: string): RenderedEmail {
+  const t = lang === "id"
+    ? {
+        subject: `Anda disetujui sebagai reseller ${agentCompany} — portal Anda sudah aktif`,
+        preview: "Pendaftaran reseller Anda disetujui — masuk dengan akun MesinViral Anda yang sudah ada.",
+        heading: "Selamat, Anda resmi jadi reseller!",
+        intro: `${agentCompany} menyetujui pendaftaran reseller Anda di program MesinViral Partner. Karena Anda sudah punya akun MesinViral, tidak perlu membuat kata sandi baru — cukup masuk dengan akun Anda yang biasa (email/Google yang sama), lalu buka portal reseller untuk melihat kode unik, pelanggan bawaan, dan komisi Anda.`,
+        cta: "Buka portal reseller",
+        fallback: "Atau salin tautan ini:",
+        security: "Akses dashboard MesinViral Anda tidak berubah — portal reseller adalah wilayah tambahan pada akun yang sama. Jika Anda tidak pernah mendaftar sebagai reseller, hubungi kami.",
+      }
+    : {
+        subject: `You're approved as a reseller for ${agentCompany} — your portal is active`,
+        preview: "Your reseller registration is approved — sign in with your existing MesinViral account.",
+        heading: "Congratulations, you're officially a reseller!",
+        intro: `${agentCompany} approved your reseller registration in the MesinViral Partner program. Since you already have a MesinViral account, there's no new password to set — just sign in as usual (same email/Google), then open the reseller portal to see your unique code, referred customers, and commissions.`,
+        cta: "Open reseller portal",
+        fallback: "Or copy this link:",
+        security: "Your MesinViral dashboard access is unchanged — the reseller portal is an additional area on the same account. If you never registered as a reseller, please contact us.",
+      };
+  return {
+    subject: t.subject,
+    html: shell({ lang, preview: t.preview, heading: t.heading, intro: t.intro, ctaLabel: t.cta, ctaUrl: portalUrl, fallbackLabel: t.fallback, security: t.security }),
+    text: textVersion(t.heading, t.intro, t.cta, portalUrl, t.security, lang),
+  };
+}
+
 export function renderResellerInviteEmail(lang: Lang, actionUrl: string, agentCompany: string): RenderedEmail {
   const t = lang === "id"
     ? {

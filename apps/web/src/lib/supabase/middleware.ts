@@ -100,8 +100,12 @@ export async function updateSession(request: NextRequest) {
 
   // ── Gate PORTAL RESELLER [B21] F3 (cermin gate agen; /agent/join/* = PUBLIK, bukan portal) ──
   const isReseller = user?.app_metadata?.role === "reseller";
+  // [B21 MGM §9a.5, ketok 2026-07-19] Tenant yang DITAUTKAN jadi reseller (satu login):
+  // penanda reseller_linked=true di app_metadata — BUKAN role (role='reseller' justru mengusirnya
+  // dari dashboard tenant miliknya, blok di bawah). Ia boleh masuk KEDUA wilayah.
+  const isResellerLinked = user?.app_metadata?.reseller_linked === true;
   if (path === "/reseller/login") {
-    if (isReseller) {
+    if (isReseller || isResellerLinked) {
       const url = request.nextUrl.clone();
       url.pathname = "/reseller";
       url.search = "";
@@ -116,7 +120,7 @@ export async function updateSession(request: NextRequest) {
       url.search = `?next=${encodeURIComponent(path)}`;
       return NextResponse.redirect(url);
     }
-    if (!isReseller) {
+    if (!isReseller && !isResellerLinked) {
       const url = request.nextUrl.clone();
       url.pathname = isSuperAdmin ? "/admin/tenants" : isAgent ? "/agent" : "/dashboard";
       url.search = "";

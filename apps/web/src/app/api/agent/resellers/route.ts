@@ -3,7 +3,7 @@ import { requireAgent } from "@/lib/agent/guard";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { vault } from "@/lib/youtube";
 import { sendMail } from "@/lib/email/smtp";
-import { renderResellerInviteEmail } from "@/lib/email/templates";
+import { renderResellerInviteEmail, renderResellerLinkedEmail } from "@/lib/email/templates";
 
 // [B21] F3 — kelola reseller oleh AGEN (SPEC §1c/5f): tautan rekrut · antrean setujui/tolak ·
 // rate reseller (Rp/%) DIATUR AGEN · kode (beku setelah dipakai §5g.2) · kinerja per periode.
@@ -132,12 +132,20 @@ export async function POST(req: NextRequest) {
     const email = String(rs.email || "").trim().toLowerCase();
     if (!email) return NextResponse.json({ error: "email calon kosong" }, { status: 400 });
     if (rs.status === "active" && rs.user_id) {
-      // sudah aktif → approve ulang = KIRIM ULANG undangan (tanpa menyentuh kode/peran)
-      const { data: link2, error: lke2 } = await a.auth.admin.generateLink({ type: "recovery", email });
-      const p2 = link2?.properties as { hashed_token?: string; verification_type?: string } | undefined;
-      if (lke2 || !p2?.hashed_token) return NextResponse.json({ error: lke2?.message || "gagal membuat tautan" }, { status: 500 });
-      const url2 = `${originOf(req)}/auth/callback?token_hash=${encodeURIComponent(p2.hashed_token)}&type=${p2.verification_type}&next=${encodeURIComponent("/reseller/setup")}`;
-      const m2 = renderResellerInviteEmail("id", url2, g.agent.company_name);
+      // sudah aktif → approve ulang = KIRIM ULANG (tanpa menyentuh kode/peran).
+      // [MGM §9a.5] tenant tertaut = email "portal aktif" (BUKAN link set-password — link recovery
+      // akan mereset password akun TENANT-nya, salah pesan & berbahaya).
+      const { data: tcr } = await a.from("tenant_configs").select("tenant_id").eq("tenant_id", rs.user_id).limit(1);
+      let m2: { subject: string; html: string; text: string };
+      if (tcr && tcr.length > 0) {
+        m2 = renderResellerLinkedEmail("id", `${originOf(req)}/reseller`, g.agent.company_name);
+      } else {
+        const { data: link2, error: lke2 } = await a.auth.admin.generateLink({ type: "recovery", email });
+        const p2 = link2?.properties as { hashed_token?: string; verification_type?: string } | undefined;
+        if (lke2 || !p2?.hashed_token) return NextResponse.json({ error: lke2?.message || "gagal membuat tautan" }, { status: 500 });
+        const url2 = `${originOf(req)}/auth/callback?token_hash=${encodeURIComponent(p2.hashed_token)}&type=${p2.verification_type}&next=${encodeURIComponent("/reseller/setup")}`;
+        m2 = renderResellerInviteEmail("id", url2, g.agent.company_name);
+      }
       try { await sendMail(email, m2.subject, m2.html, m2.text); } catch (e) {
         console.error("[reseller.resend] SMTP gagal:", e);
         return NextResponse.json({ error: "email gagal terkirim — coba lagi" }, { status: 500 });
@@ -149,6 +157,7 @@ export async function POST(req: NextRequest) {
     // [B21 fix 2026-07-19] role diset SAAT createUser → trigger handle_new_tenant (migr 0173)
     // tidak mencetak user reseller sebagai tenant trial (bug tenant-hantu).
     let uid: string | null = null;
+    let tenantLink = false; // [B21 MGM §9a.5, ketok 2026-07-19] email = TENANT existing → TAUTKAN, bukan tolak
     const { data: created, error: ce } = await a.auth.admin.createUser({ email, email_confirm: true, app_metadata: { role: "reseller" } });
     if (ce) {
       const m = (ce.message || "").toLowerCase();
@@ -158,7 +167,9 @@ export async function POST(req: NextRequest) {
       const role = (gl.user.app_metadata as Record<string, unknown> | null)?.role;
       if (role && role !== "reseller") return NextResponse.json({ error: "email ini sudah dipakai akun lain — minta calon memakai email berbeda" }, { status: 400 });
       const { data: tc } = await a.from("tenant_configs").select("tenant_id").eq("tenant_id", gl.user.id).limit(1);
-      if (tc && tc.length > 0) return NextResponse.json({ error: "email ini terdaftar sebagai TENANT — satu email satu peran" }, { status: 400 });
+      // MGM (member-get-member): tenant boleh merangkap reseller dengan SATU login. Penanda
+      // reseller_linked (bukan role) menjaga akses dashboard tenant-nya tetap hidup.
+      tenantLink = Boolean(tc && tc.length > 0);
       uid = gl.user.id;
     } else {
       uid = created.user.id;
@@ -170,8 +181,18 @@ export async function POST(req: NextRequest) {
     if (linked && linked.length > 0) {
       return NextResponse.json({ error: "email ini sudah menjadi reseller terdaftar (di agen lain) — minta calon memakai email berbeda" }, { status: 400 });
     }
-    const { error: re } = await a.auth.admin.updateUserById(uid, { app_metadata: { role: "reseller" } });
-    if (re) return NextResponse.json({ error: `gagal set peran: ${re.message}` }, { status: 500 });
+    if (tenantLink) {
+      // [MGM §9a.5] MERGE manual metadata (anti-asumsi: perlakukan update sbg REPLACE — ambil
+      // metadata sekarang, pertahankan seluruh isinya, tambah penanda; role TIDAK disentuh).
+      const { data: curU, error: gue } = await a.auth.admin.getUserById(uid);
+      if (gue || !curU?.user) return NextResponse.json({ error: gue?.message || "user lookup gagal" }, { status: 500 });
+      const meta = { ...(curU.user.app_metadata as Record<string, unknown> | null ?? {}), reseller_linked: true };
+      const { error: re } = await a.auth.admin.updateUserById(uid, { app_metadata: meta });
+      if (re) return NextResponse.json({ error: `gagal menautkan: ${re.message}` }, { status: 500 });
+    } else {
+      const { error: re } = await a.auth.admin.updateUserById(uid, { app_metadata: { role: "reseller" } });
+      if (re) return NextResponse.json({ error: `gagal set peran: ${re.message}` }, { status: 500 });
+    }
     // — kode unik reseller (global registry; retry anti-tabrakan)
     let code: string | null = null;
     for (let i = 0; i < 5 && !code; i++) {
@@ -182,19 +203,25 @@ export async function POST(req: NextRequest) {
     }
     if (!code) return NextResponse.json({ error: "gagal membuat kode unik — coba lagi" }, { status: 500 });
     await a.from("resellers").update({ user_id: uid, status: "active", updated_at: new Date().toISOString() }).eq("id", rs.id);
-    // — email undangan (link set-password → /reseller/setup)
-    const { data: link, error: lke } = await a.auth.admin.generateLink({ type: "recovery", email });
-    const props = link?.properties as { hashed_token?: string; verification_type?: string } | undefined;
-    if (lke || !props?.hashed_token) return NextResponse.json({ error: lke?.message || "gagal membuat tautan undangan" }, { status: 500 });
-    const action_url = `${originOf(req)}/auth/callback?token_hash=${encodeURIComponent(props.hashed_token)}&type=${props.verification_type}&next=${encodeURIComponent("/reseller/setup")}`;
-    const { subject, html, text } = renderResellerInviteEmail("id", action_url, g.agent.company_name);
+    // — email: tenant tertaut = portal AKTIF (login existing, TANPA set-password);
+    //   reseller murni = undangan set-password → /reseller/setup (perilaku lama persis)
+    let subject: string, html: string, text: string;
+    if (tenantLink) {
+      ({ subject, html, text } = renderResellerLinkedEmail("id", `${originOf(req)}/reseller`, g.agent.company_name));
+    } else {
+      const { data: link, error: lke } = await a.auth.admin.generateLink({ type: "recovery", email });
+      const props = link?.properties as { hashed_token?: string; verification_type?: string } | undefined;
+      if (lke || !props?.hashed_token) return NextResponse.json({ error: lke?.message || "gagal membuat tautan undangan" }, { status: 500 });
+      const action_url = `${originOf(req)}/auth/callback?token_hash=${encodeURIComponent(props.hashed_token)}&type=${props.verification_type}&next=${encodeURIComponent("/reseller/setup")}`;
+      ({ subject, html, text } = renderResellerInviteEmail("id", action_url, g.agent.company_name));
+    }
     try {
       await sendMail(email, subject, html, text);
     } catch (e) {
       console.error("[reseller.approve] SMTP gagal:", e);
       return NextResponse.json({ ok: true, code, warning: "reseller AKTIF tapi email undangan gagal terkirim — hubungi reseller / coba setujui ulang utk kirim ulang" });
     }
-    return NextResponse.json({ ok: true, code });
+    return NextResponse.json({ ok: true, code, linked_tenant: tenantLink });
   }
 
   return NextResponse.json({ error: "action tidak dikenal" }, { status: 400 });
