@@ -270,7 +270,7 @@ MesinViral ──kontrak + bagi hasil──▶ AGEN (perusahaan mitra)
 | K5 | Administrasi pajak: siapa yang MENGURUS (owner sendiri via Coretax vs konsultan) + validasi angka §6b. *(Memotong PPh = wajib hukum, bukan pilihan — yang diputuskan hanya pengurusnya.)* | F0, sebelum pencairan pertama |
 | K6 | Pembayaran NON-langganan (mis. custom-niche kelak) ikut berkomisi? | Default rancangan: **TIDAK** (§5g.10) — ubah = ketok owner |
 | K7 | Nasib komisi saat kontrak agen BERAKHIR (berhenti seketika · masa transisi N bulan · tetap utk tenant existing?) | F0/F1 — Pasal 10 draf kontrak memakai placeholder pilihan ini |
-| K8 | ✅ **DIKETOK 2026-07-17: DITUNDA/TIDAK PERLU** — login agen TANPA Google (email+password via `agents.user_id`); atribusi tenant tetap via form email + `?ref=` saja. Bila kelak mau dukung jalur Google utk tenant beratribusi = ketok baru | selesai |
+| K8 | ✅ **DIBUKA-ULANG & DIKETOK 2026-07-19: Google = CARA MASUK agen (bukan cara daftar).** Fakta pemicu: Supabase auto-link identitas Google ke user agen ber-email sama (terbukti live: agen THETANGGA masuk via tombol Google /auth saat undangan macet di relay). Tombol "Masuk dengan Google" ditambah resmi di `/agent/login` (§9a.3). Akun agen tetap HANYA lahir dari undangan admin (§5g.1) | selesai (19-Jul) |
 
 ---
 
@@ -304,7 +304,34 @@ MesinViral ──kontrak + bagi hasil──▶ AGEN (perusahaan mitra)
 - **Bersih:** 6 tabel partner = 0 sisa uji · 0 user-uji auth · 9+1 kenop benar · unique/FK/PK terpasang · log worker nol error partner · marker pengingat sudah ditulis PRODUKSI sendiri (bukti F4 hidup).
 - **Temuan & status:** **T-1 KRITIKAL FIXED+TERUJI A1–A4**: refund di jendela approve→paid dulu HANGUS (mark_paid menimpa status by payout_id) → kini `approved` diperlakukan spt `paid` (reversal tinggal accrued = pengurang bulan berikut). **T-2 FIXED**: ganti-kode (agen&reseller) — delete kode lama tak dicek → bisa dua-kode senyap; kini rollback+pesan jujur. **T-3 FIXED**: breakdown reseller gagal-ambil dulu tampil "Rp 0" palsu → kini "—"+catatan (anti §0.6 tampilan). **T-5 FIXED**: satu email jadi reseller di 2 agen → portal cuma tampilkan satu; kini DITOLAK jelas saat approve. **T-4 = KEBIJAKAN dipatri** (§5e partial_refund tarik penuh). **Informasional (bukan bug):** approve menghitung-ulang baris terkini (komisi baru masuk antara draft & approve ikut terbayar — angka final yang tampil pasca-reload); used_count berpotensi undercount pada signup serentak (freeze tetap dijaga FK atribusi).
 
+## §9a PERBAIKAN 2026-07-19 (ketok owner "realisasi sesuai kesepakatan, nol bug") + DESAIN MGM
+
+### §9a.1 BUG tenant-hantu — user partner tercetak sebagai tenant trial (FIXED kode; DB menunggu izin apply)
+- **Akar (terbukti DB):** trigger `handle_new_tenant` (migr 0028) berjalan utk SETIAP auth user baru; invite agen & approve reseller membuat user DULU baru menyetel role → user partner lahir ber-baris `tenant_configs` trial. Insiden nyata: agen THETANGGA tampil di daftar tenant admin (baris hantu 19-Jul 04:51; dependensi terverifikasi NOL: attribution/channel/payment/AI/YouTube/video/run).
+- **Fix:** migr **0173** pagar trigger (role agent/reseller → lewati) + `invite/route.ts:32` & `resellers/route.ts:150` set `app_metadata.role` LANGSUNG saat `createUser` (didukung tipe `AdminUserAttributes.app_metadata`). **Sisa 1 langkah DB (izin owner): apply 0173 + hapus 1 baris hantu `a3195614…`** — eksekusi SQL diblokir sistem izin sesi ini.
+- Dampak bila DB belum di-apply: agen tetap tampil sbg tenant + email nurture trial salah sasar mulai 22-Jul.
+
+### §9a.2 Anti-komisi-diri DITEGAKKAN di kode (dulu §5g.9/§6 hanya tertulis — temuan SPEC≠kode 19-Jul)
+`partner.py record_settlement_commission`: pembayar = pemilik login AGEN → komisi agen 0 · pembayar = pemilik login RESELLER → jatah reseller 0, komisi agen TETAP (keputusan teknis reversible). Baris ledger tetap lahir (jejak audit). **Uji permanen `tests/test_partner_self_commission.py` 5/5** (2 kasus diri + 3 regresi) · suite penuh 42/42.
+
+### §9a.3 Login Google portal agen (K8 dibuka-ulang, ketok 19-Jul)
+`/agent/login` + tombol "Masuk dengan Google" — pola persis `/auth` (`signInWithOAuth` + `prompt select_account`), callback resmi `next=/agent` (pagar open-redirect sudah ada di callback:14-15); salah-akun → middleware existing melempar ke /dashboard (perilaku teruji N5). Consent/scope Google Console TIDAK tersentuh (nol risiko verifikasi ulang [A4]).
+
+### §9a.4 Pagar ganti email-PIC (insiden 19-Jul: pic_email diganti saat troubleshooting SMTP → undangan menembak email tanpa akun)
+`api/admin/partners/route.ts` PATCH: pic_email pada agen yang SUDAH ber-login (user_id terisi) = DITOLAK dgn pesan jelas dwibahasa; agen belum diundang = bebas diedit. Memindahkan login ke email baru = ketok terpisah (bukan efek samping edit form).
+
+### §9a.5 DESAIN — MGM "tenant ⇄ reseller SATU login" (DESAIN MATANG; build menunggu ketok terpisah owner)
+Latar: owner 19-Jul — MGM (member-get-member) tak boleh memaksa orang punya 2 email; koreksi resmi: dinding 1-email-1-peran utk kasus reseller = aturan aplikasi, bukan fondasi. Desain (semua anchor terverifikasi 19-Jul):
+1. **Penanda, BUKAN role:** tenant yang di-approve jadi reseller mendapat `app_metadata.reseller_linked=true` (role TIDAK diubah — kalau role='reseller', middleware :139-144 justru mengusirnya dari dashboard tenant-nya). ⚠️ update app_metadata = REPLACE → wajib MERGE manual (uji eksplisit anti-hilang-role).
+2. **Middleware** (`lib/supabase/middleware.ts:102-123` + `:139-144`): akses /reseller = role reseller ATAU reseller_linked; blok pengusir hanya utk role murni.
+3. **Guard** (`lib/reseller/guard.ts:23`): terima role='reseller' ATAU (reseller_linked && baris `resellers.user_id`=uid ada — lookup :27 sudah ada).
+4. **Approve** (`api/agent/resellers/route.ts:157-160`): email = tenant existing → bukan TOLAK, tapi TAUTKAN (set resellers.user_id=uid + penanda; TANPA createUser → nol interaksi trigger; email "portal reseller aktif" alih-alih undangan set-password).
+5. **Anti-komisi-diri = §9a.2 (SUDAH terpasang)** — prasyarat uang MGM aman.
+6. **Pintu masuk UI** dashboard tenant (elemen UI baru = ketok §2.3d saat build).
+7. Alternatif pelengkap (belum didesain, opsi bisnis): MGM reward potongan tagihan via seam `tenant_configs.discount_pct/discount_until` (`limits.py:29-53`) — ketok terpisah bila diinginkan.
+
 ## §10 CHANGELOG
+- **2026-07-19** — §9a: fix tenant-hantu (kode ✓, DB menunggu izin) · anti-komisi-diri ditegakkan (uji 5/5) · Google login agen (K8 dibuka-ulang) · pagar email-PIC · desain MGM satu-login (§9a.5, build menunggu ketok). Insiden relay SMTP idcloudhost (452 storage penuh) = CLOSED via tiket owner; undangan agen TERKIRIM & di-follow-up.
 - **2026-07-17 (3)** — +§3.9 SATU-NUANSA UI (wajib pustaka UI existing `apps/web`) & +§3.10 aturan-kerja-wajib per-sesi (mandat owner "LANJUTKAN + 1 nuansa + WAJIB aturan kerja").
 - **2026-07-17 (2)** — DIMATANGKAN (mandat owner "evaluasi lagi, jangan ada yang terlewat/confuse/ambigu, seluruh area terinventarisir" + "sesi berikutnya fokus selesaikan modul ini"): +§3b inventaris permukaan (worker produksi TIDAK tersentuh — eksplisit) · +§5g 11 aturan operasional rinci (onboarding agen admin-only, kode unik-global & beku-setelah-dipakai, 1-email-1-peran, cut-off periode, pembulatan, cascade suspend, retensi data, agen-sekaligus-tenant, komisi hanya-langganan) · +§6b pajak (riset: PPh 23 2%/4%, PPh 21 bukan-pegawai ~2,5%, PPN PKP 11%, dukungan sistem masuk F1) · +Lampiran A draf kontrak 13 pasal · F0 → 🟡 (kontrak+pajak selesai, sisa angka & validasi owner) · §8 +K6/K7, K5 direframe.
 - **2026-07-17** — Dokumen lahir (mandat owner "arsitektur lengkap A–Z + rencana kerja urut prioritas, single source of truth & progress monitor"). Seluruh §1–§2 = keputusan owner FINAL dari diskusi 2026-07-16→17 (jenjang 2-tingkat · bayar-ke-kami · selamanya · Rp/% dua-tingkat · pencairan bulanan ber-tanggal-config · reseller dibayar agen + Excel · pendaftaran reseller mandiri ber-persetujuan · admin resume+rinci · 5 aturan sengketa · penolakan §1g). Implementasi belum dimulai.

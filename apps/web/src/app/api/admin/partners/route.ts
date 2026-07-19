@@ -98,6 +98,17 @@ export async function PATCH(req: Request) {
   const a = createAdminClient();
   let clean: Record<string, unknown>;
   try { clean = cleanAgent(patch ?? {}); } catch (e) { return NextResponse.json({ error: String(e) }, { status: 400 }); }
+  // [B21 pagar 2026-07-19] Ganti pic_email pada agen yang SUDAH punya login = DITOLAK jelas.
+  // Insiden nyata 19-Jul (THETANGGA): pic_email diganti saat troubleshooting SMTP → login (user_id)
+  // tetap milik email lama → "Kirim ulang undangan" menembak email tanpa akun + tautan Google putus.
+  // Memindahkan login ke email baru = keputusan sadar (buka ketok terpisah), bukan efek samping edit form.
+  if (typeof clean.pic_email === "string") {
+    const { data: curAg } = await a.from("agents").select("pic_email,user_id").eq("id", id).limit(1);
+    const cur0 = curAg?.[0];
+    if (cur0?.user_id && String(clean.pic_email).trim().toLowerCase() !== String(cur0.pic_email || "").trim().toLowerCase()) {
+      return NextResponse.json({ error: "Email PIC tidak bisa diganti: agen ini SUDAH punya akun login yang terikat ke email lama (undangan/Google). Mengganti email = memutus login & undangan. Bila memang harus pindah email, hubungi developer (perlu pemindahan akun, bukan sekadar edit). / PIC email is locked: this agent already has a login bound to the old email." }, { status: 400 });
+    }
+  }
   // Ganti kode: HANYA bila kode lama belum pernah dipakai mendaftar (BEKU §5g.2)
   if (patch?.code) {
     const nc = String(patch.code).trim().toUpperCase();

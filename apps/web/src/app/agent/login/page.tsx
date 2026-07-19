@@ -5,9 +5,12 @@ import { ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import "../../auth/auth.css";
 
-// [B21] F2 — login PORTAL AGEN (cermin pola /admin/login; K3 owner: path /agent; K8 owner:
-// TANPA Google — email+password saja, akun di-provision via undangan admin). Publik (di luar
+// [B21] F2 — login PORTAL AGEN (cermin pola /admin/login; K3 owner: path /agent). Publik (di luar
 // group (portal) yang ke-gate). Gate sebenarnya = app_metadata.role='agent' (middleware + layout).
+// [K8 DIBUKA-ULANG ketok owner 2026-07-19] + "Masuk dengan Google": Supabase auto-link identitas
+// Google ke user agen ber-email sama & terverifikasi (TERBUKTI live: agen THETANGGA 19-Jul).
+// Akun tetap HANYA lahir dari undangan admin (§5g.1) — Google = cara MASUK, bukan cara daftar.
+// Salah akun Google (bukan agen) → callback /agent → middleware existing melempar ke /dashboard.
 function Bi({ id, en }: { id: string; en: string }) {
   return (<><span data-id>{id}</span><span data-en>{en}</span></>);
 }
@@ -35,6 +38,15 @@ export default function AgentLoginPage() {
     window.location.href = next && next.startsWith("/agent") ? next : "/agent";
   }
 
+  // [K8 dibuka-ulang 2026-07-19] Google OAuth — pola PERSIS /auth (page.tsx:197): callback resmi
+  // + next=/agent; peran tetap dijaga middleware (non-agen dilempar keluar portal).
+  async function doGoogle() {
+    setErr(null); setBusy(true);
+    const after = `${window.location.origin}/auth/callback?next=${encodeURIComponent("/agent")}`;
+    const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: after, queryParams: { prompt: "select_account" } } });
+    if (error) { setBusy(false); setErr(error.message); }
+  }
+
   return (
     <div style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: "1.5rem", background: "var(--bg)" }}>
       <div className="auth-card" style={{ width: "min(400px, 100%)" }}>
@@ -50,6 +62,9 @@ export default function AgentLoginPage() {
           <div><label className="label">Password</label><input className="input" type="password" value={pw} onChange={(e) => setPw(e.target.value)} onKeyDown={(e) => e.key === "Enter" && doLogin()} /></div>
           <button className="btn btn-default btn-lg" style={{ width: "100%" }} onClick={doLogin} disabled={busy}>
             {busy ? "…" : <><Bi id="Masuk" en="Sign in" /> <ArrowRight size={15} /></>}
+          </button>
+          <button className="btn btn-outline btn-lg" style={{ width: "100%" }} onClick={doGoogle} disabled={busy}>
+            <Bi id="Masuk dengan Google" en="Sign in with Google" />
           </button>
           {err && <div style={{ color: "var(--error, #dc2626)", fontSize: "var(--text-sm)" }}>{err}</div>}
         </div>

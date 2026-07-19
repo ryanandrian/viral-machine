@@ -146,8 +146,10 @@ export async function POST(req: NextRequest) {
     }
     if (rs.status !== "pending") return NextResponse.json({ error: "hanya calon pending yang bisa disetujui" }, { status: 400 });
     // — buat/temukan user auth + tolak email peran lain (pola invite agen yang terbukti)
+    // [B21 fix 2026-07-19] role diset SAAT createUser → trigger handle_new_tenant (migr 0173)
+    // tidak mencetak user reseller sebagai tenant trial (bug tenant-hantu).
     let uid: string | null = null;
-    const { data: created, error: ce } = await a.auth.admin.createUser({ email, email_confirm: true });
+    const { data: created, error: ce } = await a.auth.admin.createUser({ email, email_confirm: true, app_metadata: { role: "reseller" } });
     if (ce) {
       const m = (ce.message || "").toLowerCase();
       if (!(m.includes("registered") || m.includes("already"))) return NextResponse.json({ error: ce.message }, { status: 500 });

@@ -29,7 +29,9 @@ export async function POST(req: NextRequest) {
   let uid = agent.user_id as string | null;
   if (!uid) {
     // Buat user baru; email sudah terpakai → periksa perannya (1 email = 1 peran, §5g.3)
-    const { data: created, error: ce } = await a.auth.admin.createUser({ email, email_confirm: true });
+    // [B21 fix 2026-07-19] role WAJIB diset SAAT createUser (bukan sesudahnya): trigger DB
+    // handle_new_tenant (migr 0173) membaca role utk TIDAK mencetak user partner sebagai tenant.
+    const { data: created, error: ce } = await a.auth.admin.createUser({ email, email_confirm: true, app_metadata: { role: "agent" } });
     if (ce) {
       const m = (ce.message || "").toLowerCase();
       if (!(m.includes("registered") || m.includes("already"))) {

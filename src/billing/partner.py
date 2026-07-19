@@ -80,7 +80,7 @@ def record_settlement_commission(sb, order: dict, paid_at_iso: str | None = None
     if not att:
         return None  # tanpa kode saat daftar = bukan bawaan siapa pun (SPEC §1b)
 
-    ag = (sb.table("agents").select("id,status,commission_type,commission_value")
+    ag = (sb.table("agents").select("id,status,commission_type,commission_value,user_id")
           .eq("id", att["agent_id"]).limit(1).execute().data or [None])[0]
     if not ag:
         raise RuntimeError(f"atribusi tenant {order['tenant_id']} menunjuk agen {att['agent_id']} yang TIDAK ADA")
@@ -89,15 +89,27 @@ def record_settlement_commission(sb, order: dict, paid_at_iso: str | None = None
     gross = int(order.get("gross_amount") or 0)
     months = int(order.get("period_months") or 1)
     agent_amount = compute_commission(ag["commission_type"], ag["commission_value"], gross, months)
+    # [B21 fix 2026-07-19] Anti-komisi-diri (§5g.9/§6 SPEC — dulu hanya tertulis, TAK ditegakkan
+    # di kode): pembayar = pemilik login agen → komisi agen 0 (tak berkomisi atas langganan sendiri).
+    # Baris ledger tetap lahir (jejak audit); hanya nominalnya yang dinolkan.
+    if ag.get("user_id") and str(ag["user_id"]) == str(order["tenant_id"]):
+        logger.warning(f"[Partner] SELF-REFERRAL agen terdeteksi order={order['order_id']} — komisi agen di-nol-kan (§5g.9)")
+        agent_amount = 0
 
     r_type = r_value = None
     r_amount = 0
     if att.get("reseller_id"):
-        rs = (sb.table("resellers").select("id,commission_type,commission_value")
+        rs = (sb.table("resellers").select("id,commission_type,commission_value,user_id")
               .eq("id", att["reseller_id"]).limit(1).execute().data or [None])[0]
         if rs:  # nilai INFORMASI utk agen (kewajiban agen, bukan kami — SPEC §1a)
             r_type, r_value = rs["commission_type"], rs["commission_value"]
             r_amount = compute_commission(r_type, r_value, gross, months)
+            # [B21 fix 2026-07-19] Anti-komisi-diri reseller: pembayar = pemilik login reseller
+            # → jatah reseller 0 (komisi agen atas transaksi ini TETAP — keputusan teknis
+            # reversible: agen tak bersalah atas self-referral reseller-nya).
+            if rs.get("user_id") and str(rs["user_id"]) == str(order["tenant_id"]):
+                logger.warning(f"[Partner] SELF-REFERRAL reseller terdeteksi order={order['order_id']} — jatah reseller di-nol-kan")
+                r_amount = 0
 
     row = {
         "order_id": order["order_id"], "tenant_id": order["tenant_id"],
