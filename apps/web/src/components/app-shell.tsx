@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
   LayoutDashboard, Tv, List, BarChart3, Calendar, ShieldCheck, Sparkles, Palette, Target,
-  CreditCard, Settings, HelpCircle,
+  CreditCard, Settings, HelpCircle, Handshake,
   Menu, Moon, Sun, ChevronRight, LogOut, AlertTriangle, Globe,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -18,6 +18,7 @@ import { createClient } from "@/lib/supabase/client";
 type NavItem = {
   id: string; icon: React.ComponentType<{ size?: number }>;
   idL: string; en: string; href: string; badge?: string; gated?: boolean;
+  linkedOnly?: boolean;  // [B21 MGM §9a.5] tampil HANYA bila akun tenant tertaut reseller
 };
 type NavEntry = { section: { id: string; en: string } } | NavItem;
 
@@ -37,6 +38,10 @@ const NAV: NavEntry[] = [
   // Grup "Konfigurasi" DIPENSIUNKAN (F2-11, §10.F): AI-Engines/API-Keys → key per-channel (vault F2-09);
   // Voice/Visual → channel (F2-05); Niche → Niche Studio + picker channel; Notifikasi → Settings.
   { section: { id: "Akun", en: "Account" } },
+  // [B21 MGM §9a.5, ketok owner 19-Jul] pintu masuk portal reseller — HANYA utk tenant tertaut
+  // (app_metadata.reseller_linked; dibaca dari sesi, nol query tambahan). Portal = wilayah lain
+  // (di luar shell ini) → Link biasa, middleware yang menjaga.
+  { id: "reseller-portal", icon: Handshake, idL: "Portal Reseller", en: "Reseller Portal", href: "/reseller", linkedOnly: true },
   { id: "billing", icon: CreditCard, idL: "Tagihan", en: "Billing", href: "/billing" },
   // nav "Tim/Team" DIHAPUS — fitur team di-take-down untuk V2 (1 user=1 tenant, no multi-user — decisions_auth_rbac). Jangan tambah lagi s/d V3.
   { id: "settings", icon: Settings, idL: "Pengaturan", en: "Settings", href: "/settings" },
@@ -66,6 +71,7 @@ export function AppShell({
   const [mounted, setMounted] = useState(false);
   const [tenant, setTenant] = useState<{ name: string; plan: string; initials: string }>({ name: "", plan: "", initials: "" });
   const [studioOK, setStudioOK] = useState(false);  // F2-10/F3-03: entitlement Niche Studio (gated nav)
+  const [resellerLinked, setResellerLinked] = useState(false);  // [B21 MGM §9a.5] nav Portal Reseller
   const [gate, setGate] = useState<{ status: string; daysLeft: number | null; videos?: number } | null>(null);  // banner billing gate (+recap nilai trial D1-F3)
 
   useEffect(() => {
@@ -74,11 +80,14 @@ export function AppShell({
     setLang(saved);
     document.documentElement.lang = saved;
     (async () => {
-      const [{ data: tc }, { count }, { data: pls }] = await Promise.all([
+      const [{ data: tc }, { count }, { data: pls }, { data: au }] = await Promise.all([
         supabase.from("tenant_configs").select("display_handle,plan_type,subscription_status,current_period_end,is_developer,discount_pct,deletion_scheduled_at,timezone,timezone_set_by_user").maybeSingle(),
         supabase.from("channels").select("id", { count: "exact", head: true }),
         supabase.from("plan_limits").select("plan_type,display_name,niche_studio"),
+        supabase.auth.getUser(),
       ]);
+      // [B21 MGM §9a.5] penanda tautan reseller dari sesi (bukan tabel — nol beban query)
+      setResellerLinked(au?.user?.app_metadata?.reseller_linked === true);
       // Zona waktu dari browser = INISIALISASI SEKALI (0125 + koreksi owner 2026-07-05): hanya saat zona
       // masih default UTC & belum pernah diset manual. Setelah terisi, zona TERKUNCI ke tempat kerja tenant —
       // bepergian (mis. Jakarta→Bali) TIDAK menggeser jadwal publish. Ubah zona = sadar, via Settings.
@@ -146,6 +155,7 @@ export function AppShell({
               return <div key={`s${i}`} className="sb-section-title">{n.section.id}</div>;
             }
             if (n.gated && !studioOK) return null;  // Niche Studio: tampil hanya bila ber-entitlement
+            if (n.linkedOnly && !resellerLinked) return null;  // [B21 MGM] Portal Reseller: hanya tenant tertaut
             const Icon = n.icon;
             const active = pathname === n.href || pathname.startsWith(n.href + "/");
             return (
