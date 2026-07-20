@@ -8,6 +8,7 @@ import "@/styles/components.css";
 import "@/styles/app-shell.css";
 import "@/styles/marketing.css";
 import { ThemeProvider } from "@/components/theme-provider";
+import { VersionWatcher } from "@/components/version-watcher";
 
 export const metadata: Metadata = {
   title: "MesinViral — Mesin produksi video YouTube otomatis",
@@ -34,7 +35,7 @@ export default function RootLayout({
             __html: `try{var l=localStorage.getItem('mv-lang');if(l==='en'||l==='id')document.documentElement.lang=l;}catch(e){}`,
           }}
         />
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>{children}<VersionWatcher /></ThemeProvider>
       </body>
     </html>
   );
