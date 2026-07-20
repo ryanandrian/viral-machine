@@ -178,7 +178,11 @@ class Pipeline:
             if not topics:
                 # Sertakan alasan vendor (kuota/kunci/model) — tenant butuh sebab yang actionable.
                 _why = (getattr(self.niche_selector, "last_error", "") or "").strip()
-                raise LLMError((f"No topics selected — {_why}" if _why else "No topics selected")[:300], step="niche")
+                # [ERROR-MGMT 2026-07-20] bawa kelas + pesan manusiawi dari selector (pola TTS :279-281)
+                # → production_runs.error_class terisi benar (dulu 'unknown' walau akar 401/404 jelas).
+                raise LLMError((f"No topics selected — {_why}" if _why else "No topics selected")[:300], step="niche",
+                               error_class=getattr(self.niche_selector, "last_error_class", ErrorClass.UNKNOWN),
+                               human_message=getattr(self.niche_selector, "last_human_error", None))
             result["steps"]["topic_selection"] = {
                 "status": "ok",
                 "topics": len(topics),

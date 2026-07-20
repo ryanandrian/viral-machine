@@ -27,6 +27,7 @@ class ErrorClass(str, Enum):
     ACCOUNT_BILLING = "account_billing"   # pembayaran/langganan gagal → non-retryable
     QUOTA_EXHAUSTED = "quota_exhausted"   # kredit/kuota habis → non-retryable
     AUTH_INVALID    = "auth_invalid"      # kunci/koneksi ditolak-permanen (mis. OAuth invalid_grant) → non-retryable
+    MODEL_UNAVAILABLE = "model_unavailable"  # model tak tersedia/dipensiunkan vendor (404 model_not_found) → non-retryable [20-Jul, sampel Groq MVT]
     RATE_LIMIT      = "rate_limit"        # throttle sesaat (429) → retryable
     TRANSIENT       = "transient"         # jaringan/5xx/timeout → retryable
     UNKNOWN         = "unknown"           # belum dikenali → retryable (DEFAULT AMAN)
@@ -37,8 +38,11 @@ class ErrorClass(str, Enum):
 # "rem segera, jangan bakar duit tenant", [B11] 3.2): AUTH_INVALID — koneksi YouTube putus permanen
 # (OAuth invalid_grant) mustahil sembuh dengan diulang → hentikan produksi/publish channel seketika.
 # Menambah/menghapus kelas = ubah SATU set ini.
+# DIPERLUAS 2026-07-20 (ketok owner "kerjakan tawaran 1", sampel nyata insiden MVT): MODEL_UNAVAILABLE —
+# model dipensiunkan/tak-ada di vendor mustahil sembuh dengan diulang → berhenti seketika + pesan manusiawi.
 FAST_FAIL: frozenset = frozenset({
     ErrorClass.ACCOUNT_BILLING, ErrorClass.QUOTA_EXHAUSTED, ErrorClass.AUTH_INVALID,
+    ErrorClass.MODEL_UNAVAILABLE,
 })
 
 

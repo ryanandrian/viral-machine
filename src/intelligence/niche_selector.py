@@ -531,14 +531,31 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
             except Exception as e:
                 last_error = e
                 logger.error(f"Attempt {attempt} failed — unexpected error: {e}")
+                # [ERROR-MGMT 2026-07-20] REM CEPAT: kelas FAST_FAIL (kunci ditolak / model
+                # dipensiunkan / billing / kuota) mustahil sembuh dengan diulang → STOP percobaan
+                # (insiden MVT: 401 di-retry 3× membuang waktu; rem membaca MAKNA, bukan teks).
+                from src.exceptions import PipelineError, FAST_FAIL
+                if isinstance(e, PipelineError) and e.error_class in FAST_FAIL:
+                    logger.error(f"error_class={e.error_class.value} ∈ FAST_FAIL — stop retry (rem cepat)")
+                    break
                 if attempt < self.MAX_RETRIES:
                     logger.info("Retrying...")
                 continue
 
-        logger.error(f"All {self.MAX_RETRIES} attempts failed. Last error: {last_error}")
+        logger.error(f"All attempts failed. Last error: {last_error}")
         # Alasan vendor TERAKHIR diteruskan ke error pipeline → Telegram tenant (no-silent:
         # "No topics selected" saja tak actionable; insiden kuota Groq habis 2026-07-08).
-        self.last_error = str(last_error)[:220]
+        # [ERROR-MGMT 2026-07-20] + propagasi TERSTRUKTUR (pola last_* tts_engine): kelas & pesan
+        # manusiawi ikut mengalir → production_runs.error_class + layar/Telegram tenant.
+        from src.exceptions import PipelineError as _PErr, ErrorClass as _ECls
+        if isinstance(last_error, _PErr):
+            self.last_error_class = last_error.error_class
+            self.last_human_error = last_error.human_message
+            self.last_error = (last_error.human_message or str(last_error))[:220]
+        else:
+            self.last_error_class = _ECls.UNKNOWN
+            self.last_human_error = None
+            self.last_error = str(last_error)[:220]
         return []
 
     def _apply_signal_factor(self, topic: dict, signals: dict) -> dict:
@@ -619,6 +636,10 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
         # LLM provider tenant (config-driven, BYOK) — model task 'utility' untuk
         # seleksi/analisis topik. Provider memegang API key + SDK client.
         self.last_error = ""   # reset per-run (dibaca pipeline saat topik kosong)
+        # [ERROR-MGMT 2026-07-20] reset propagasi terstruktur per-run (pola last_* tts_engine)
+        from src.exceptions import ErrorClass as _ECls
+        self.last_error_class = _ECls.UNKNOWN
+        self.last_human_error = None
         _llm, _model = None, ""
         try:
             from src.config.tenant_config import load_tenant_config

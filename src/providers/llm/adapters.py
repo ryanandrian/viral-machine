@@ -12,6 +12,31 @@ ADAPTERS = registry protokol (kode). Pemilihan provider/model = dari DB
 
 from src.providers.llm.base import LLMProvider, LLMError
 from src.providers.llm import catalog as _catalog
+from src.exceptions import ErrorClass
+
+
+# [ERROR-MGMT 2026-07-20] Classifier transport OpenAI-COMPATIBLE (SPEC AI_ERROR_MANAGEMENT_ARCHITECTURE.md
+# §4 registry; pola persis _classify_el_error). HANYA kode ber-BUKTI-SAMPEL nyata (worker.log 20-Jul,
+# insiden MVT via Groq): 401 `invalid_api_key` · 404 `model_not_found`. Kode lain → UNKNOWN (aman).
+_OPENAI_COMPAT_ERROR_MAP = {
+    "invalid_api_key": ErrorClass.AUTH_INVALID,
+    "model_not_found": ErrorClass.MODEL_UNAVAILABLE,
+}
+_OPENAI_COMPAT_HUMAN = {
+    ErrorClass.AUTH_INVALID: "Kunci API AI (penulis naskah) ditolak penyedia. Periksa/perbarui kunci di halaman Integrasi, lalu pastikan Akun (kunci) di setting channel sepadan dengan penyedianya.",
+    ErrorClass.MODEL_UNAVAILABLE: "Model AI ini sudah tidak tersedia di penyedianya (dipensiunkan/tak bisa diakses). Pilih model lain di setting channel.",
+}
+
+
+def _classify_openai_compat_error(exc: Exception) -> tuple[ErrorClass, str | None]:
+    """Petakan error transport OpenAI-compatible → (ErrorClass, human_message).
+    String-scan token kode PASTI di str(exc) (body vendor tercetak utuh oleh SDK).
+    Tak cocok → (UNKNOWN, None) = perilaku lama persis."""
+    blob = str(exc)
+    for tok, ec in _OPENAI_COMPAT_ERROR_MAP.items():
+        if tok in blob:
+            return ec, _OPENAI_COMPAT_HUMAN.get(ec)
+    return ErrorClass.UNKNOWN, None
 
 
 class _BaseAdapter(LLMProvider):
@@ -217,7 +242,11 @@ class OpenAIChatAdapter(_BaseAdapter):
         except LLMError:
             raise
         except Exception as e:
-            raise LLMError(f"Provider '{self.display_name}' gagal: {e}") from e
+            # [ERROR-MGMT 2026-07-20] klasifikasi ber-bukti-sampel → error_class + pesan manusiawi
+            # mengalir terstruktur (rem-cepat FAST_FAIL di hilir membaca MAKNA, bukan teks).
+            _ec, _human = _classify_openai_compat_error(e)
+            raise LLMError(f"Provider '{self.display_name}' gagal: {e}",
+                           error_class=_ec, human_message=_human) from e
 
 
 # Registry PROTOKOL transport (kode). Key = ai_providers.adapter di DB.
