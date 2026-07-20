@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
-import { Moon, Sun, LogOut } from "lucide-react";
+import { Moon, Sun, LogOut, HelpCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 // [B21] F3 — rangka PORTAL RESELLER (cermin AgentShell; satu halaman, topbar sederhana, 1-nuansa).
@@ -36,6 +36,8 @@ export function ResellerShell({ name, agent, status, children }: { name: string;
           {status !== "active" && <span className="badge badge-error"><Bi id="Ditangguhkan" en="Suspended" /></span>}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.375rem", flex: "none" }}>
+          {/* Panduan reseller — dokumen HTML di tab baru (pola persis tombol Panduan portal agen) */}
+          <a className="btn btn-outline btn-sm" href="/panduan/reseller.html" target="_blank" rel="noopener noreferrer"><HelpCircle size={13} /> <Bi id="Panduan" en="Guide" /></a>
           <button className="btn btn-outline btn-sm" onClick={() => switchLang("id")}>ID</button>
           <button className="btn btn-outline btn-sm" onClick={() => switchLang("en")}>EN</button>
           {mounted && (
