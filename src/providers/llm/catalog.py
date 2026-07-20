@@ -67,3 +67,21 @@ def get_models() -> dict:
 def invalidate() -> None:
     """Reset cache — dipanggil saat admin update katalog."""
     _CACHE.update(providers=None, models=None, ts=0.0)
+
+
+def resolve_model_id(name: str) -> str:
+    """[Fix 2026-07-20, insiden MVT] Terjemahkan `model_key` katalog → `model_id` resmi vendor
+    ("model string untuk API call" — SPEC ARSITEKTUR_AI_PROVIDER_MODEL). Jalur naskah (LLM teks)
+    dulu mengirim model_key MENTAH — tak ketahuan selama key==id; model ber-key≠id (GPT-OSS dkk.)
+    = lolos Uji admin tapi PASTI gagal produksi. Nama yang BUKAN model_key (ID mentah/legacy)
+    lolos APA ADANYA. Fail-safe: gangguan baca katalog → nama asli + log (jangan memblokir
+    produksi karena blip katalog — persis perilaku pra-fix)."""
+    if not name:
+        return name
+    try:
+        row = get_models().get(name)
+        if row and row.get("model_id"):
+            return str(row["model_id"])
+    except Exception as e:
+        logger.warning(f"[ai_catalog] resolve_model_id('{name}') gagal ({e}) — pakai nama apa adanya")
+    return name

@@ -11,6 +11,7 @@ ADAPTERS = registry protokol (kode). Pemilihan provider/model = dari DB
 """
 
 from src.providers.llm.base import LLMProvider, LLMError
+from src.providers.llm import catalog as _catalog
 
 
 class _BaseAdapter(LLMProvider):
@@ -58,6 +59,9 @@ class AnthropicMessagesAdapter(_BaseAdapter):
             raise LLMError(f"Provider '{self.display_name}' butuh API key (BYOK).")
         if not model:
             raise LLMError(f"Model untuk '{self.display_name}' tidak ditentukan.")
+        # [Fix 2026-07-20] model_key katalog → model_id resmi vendor — SATU pintu utk seluruh
+        # pemanggil produksi (menyamakan jalur produksi dgn jalur Uji admin: lolos Uji = pasti jalan).
+        model = _catalog.resolve_model_id(model)
         try:
             import anthropic
         except ImportError as e:
@@ -148,6 +152,9 @@ class OpenAIChatAdapter(_BaseAdapter):
             raise LLMError(f"Provider '{self.display_name}' butuh API key (BYOK).")
         if not model:
             raise LLMError(f"Model untuk '{self.display_name}' tidak ditentukan.")
+        # [Fix 2026-07-20] model_key katalog → model_id resmi vendor — SATU pintu utk seluruh
+        # pemanggil produksi (menyamakan jalur produksi dgn jalur Uji admin: lolos Uji = pasti jalan).
+        model = _catalog.resolve_model_id(model)
         try:
             from openai import OpenAI
         except ImportError as e:
