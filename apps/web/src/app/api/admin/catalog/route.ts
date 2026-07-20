@@ -26,7 +26,7 @@ const CATALOG: Record<string, { pk: string; cols: string[] }> = {
   niche_property_presets: { pk: "id", cols: ["property", "preset_key", "label", "label_en", "description", "description_en", "value", "apply_mode", "sort_order", "is_active"] },
   // Kendali preset durasi (owner 2026-07-06): kolom engine-critical (beats/visual_beats/render_mode)
   // SENGAJA di luar allowlist — hanya status & teks tampilan yang boleh disunting dari UI.
-  duration_presets: { pk: "seconds", cols: ["is_active", "is_default", "use_case", "use_case_en", "notes"] },
+  duration_presets: { pk: "seconds", cols: ["is_active", "is_default", "use_case", "use_case_en", "notes", "trailing_silence_override"] },
 };
 
 // Kolom jsonb: nilai string dari form di-JSON.parse agar tersimpan sbg objek (bukan string mentah).
@@ -44,6 +44,9 @@ const NUMERIC_COLS: Record<string, Record<string, [number, number]>> = {
   content_languages: { sort_order: [0, 99999] },
   niche_property_presets: { sort_order: [0, 99999] },
   tts_profiles: { delivery_wps: [1.0, 4.0] },
+  // Jeda akhir per-preset (override; NULL = default tenant 2,5s). Rentang statis 0–6s;
+  // batas relatif (≤40% durasi preset) ditegakkan tambahan di PATCH (butuh nilai PK=seconds).
+  duration_presets: { trailing_silence_override: [0, 6] },
 };
 // Error tervalidasi ber-KODE (aturan dwibahasa: API kirim kode, FE menerjemahkan ID/EN — bukan kalimat 1 bahasa).
 class ValErr extends Error {
@@ -66,7 +69,7 @@ function coerceValue(table: string, col: string, val: unknown): unknown {
   const range = NUMERIC_COLS[table]?.[col];
   if (range) {
     if (val === null || val === undefined || (typeof val === "string" && val.trim() === "")) return null;
-    const n = Number(val);
+    const n = Number(typeof val === "string" ? val.trim().replace(",", ".") : val); // terima koma desimal ID ("1,0")
     if (!Number.isFinite(n)) throw new ValErr("not_number", { col });
     if (n < range[0] || n > range[1]) throw new ValErr("out_of_range", { col, min: range[0], max: range[1] });
     return n;
@@ -148,6 +151,15 @@ export async function PATCH(req: Request) {
     for (const c of def.cols) if (patch && c in patch) { const v = coerceValue(table, c, patch[c]); if (v !== undefined) clean[c] = v; }
   } catch (e) { return valErrResponse(e); }
   if (Object.keys(clean).length === 0) return NextResponse.json({ error: "no_editable_fields" }, { status: 400 });
+  // Guard relatif jeda-akhir (anti-human-error §3.1, lapis server): override > 40% durasi preset
+  // = jendela narasi rusak → tolak jelas. (Lapis FE menolak lebih dini dgn pratinjau dampak.)
+  if (table === "duration_presets" && clean.trailing_silence_override != null) {
+    const secs = Number(key);
+    const maxRel = Number.isFinite(secs) ? Math.round(secs * 0.4 * 10) / 10 : 6;
+    if (Number(clean.trailing_silence_override) > maxRel) {
+      return valErrResponse(new ValErr("out_of_range", { col: "trailing_silence_override", min: 0, max: maxRel }));
+    }
+  }
   const a = createAdminClient();
   try { await assertEnums(a, table, clean); } catch (e) { return valErrResponse(e); }
   const { data, error } = await a.from(table).update(clean).eq(def.pk, key).select("*").single();

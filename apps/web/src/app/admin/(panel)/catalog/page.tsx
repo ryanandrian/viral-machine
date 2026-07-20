@@ -114,9 +114,57 @@ const ADD_FIELDS: Record<string, { table: string; fields: [string, string][] }> 
   moods: { table: "moods", fields: [["mood_id", "mood_id (PK, huruf kecil)"], ["keywords", 'keywords JSON — kata pemicu deteksi dari NASKAH, campur ID+EN, mis. ["misterius","mysterious"]']] },
   // entri EDIT-only (tanpa tombol Tambah): kesetaraan sunting semua tab (owner 2026-07-06)
   ttsprof: { table: "tts_profiles", fields: [["provider_key", "provider_key (PK)"], ["display_name", "display_name"], ["adapter", "adapter (elevenlabs/openai_speech/edge/gemini_speech)"], ["tts_class", "tts_class (timed/fast_fallback)"], ["delivery_wps", "delivery_wps (pace dasar engine)"], ["speed_param", "speed_param (speed/rate; kosong bila tak ada)"], ["param_schema", "param_schema JSON"]] },
-  durations: { table: "duration_presets", fields: [["seconds", "seconds (PK)"], ["use_case", "Kegunaan (ID)"], ["use_case_en", "Use case (EN)"], ["notes", "notes (catatan admin)"]] },
+  durations: { table: "duration_presets", fields: [["seconds", "seconds (PK)"], ["use_case", "Kegunaan (ID)"], ["use_case_en", "Use case (EN)"], ["notes", "notes (catatan admin)"], ["trailing_silence_override", "Jeda akhir — override detik (kosong = ikut default 2,5s)"]] },
 };
 const PK_OF: Record<string, string> = { models: "model_key", providers: "provider_key", voice: "voice_key", languages: "locale", moods: "mood_id", ttsprof: "provider_key", durations: "seconds" };
+
+// [Jeda-akhir preset] Pratinjau dampak + validasi — MIRROR rumus mesin `format_catalog.effective_overhead`:
+// jendela narasi = detik − jeda efektif (override||2,5 default) − loop bersih (±1,0s, setelan tenant umum).
+// Angka yang admin lihat = angka yang mesin pakai (insiden 20-Jul: 15s + jeda 3,5s → narasi dipadatkan 1,2×).
+function durOverridePreview(values: Record<string, string>): { node: React.ReactNode; invalid: boolean } {
+  const secs = Number(values.seconds);
+  const raw = (values.trailing_silence_override ?? "").trim().replace(",", ".");
+  const maxRel = Math.round(secs * 0.4 * 10) / 10;
+  const provided = raw !== "";
+  const n = Number(raw);
+  const invalid = provided && (!Number.isFinite(n) || n < 0 || n > maxRel);
+  const trail = provided && Number.isFinite(n) ? n : 2.5;
+  const win = Math.max(0, secs - trail - 1.0);
+  const pct = secs > 0 ? win / secs : 0;
+  const status = pct >= 0.8
+    ? { ic: "✅", id: "pace normal", en: "normal pace", color: "var(--success, #16a34a)" }
+    : pct >= 0.7
+      ? { ic: "⚠️", id: "agak padat", en: "slightly dense", color: "var(--warning, #d97706)" }
+      : { ic: "🔴", id: "narasi akan terdengar dipadatkan", en: "narration will sound compressed", color: "var(--danger, #dc2626)" };
+  return {
+    invalid,
+    node: (
+      <div className="card" style={{ padding: "0.6rem 0.75rem", background: "var(--surface-2)", fontSize: "var(--text-xs)" }}>
+        {invalid ? (
+          <div style={{ color: "var(--danger)" }}>
+            <Bi id={`Nilai tidak valid — isi angka 0 s/d ${maxRel} (maks 40% durasi preset), atau kosongkan utk default.`}
+                en={`Invalid value — enter 0 to ${maxRel} (max 40% of preset), or leave empty for default.`} />
+          </div>
+        ) : (
+          <>
+            <div style={{ marginBottom: "0.35rem" }}>
+              📐 <Bi id={`Jendela narasi: ${win.toFixed(1)}s dari ${secs}s (${Math.round(pct * 100)}%)`}
+                     en={`Narration window: ${win.toFixed(1)}s of ${secs}s (${Math.round(pct * 100)}%)`} />{" "}
+              <span style={{ color: status.color, fontWeight: 600 }}>{status.ic} <Bi id={status.id} en={status.en} /></span>
+            </div>
+            <div style={{ display: "flex", height: 8, borderRadius: 999, overflow: "hidden", background: "var(--surface-3, var(--border))" }} aria-hidden>
+              <div style={{ width: `${Math.round(pct * 100)}%`, background: status.color }} />
+            </div>
+            <div className="muted" style={{ marginTop: "0.3rem" }}>
+              <Bi id={`Narasi ${win.toFixed(1)}s │ jeda ${trail.toLocaleString("id-ID")}s + loop ±1,0s. Hitungan = rumus mesin (bukan ilustrasi).`}
+                  en={`Narration ${win.toFixed(1)}s │ pause ${trail}s + loop ±1.0s. Same formula the engine uses (not an illustration).`} />
+            </div>
+          </>
+        )}
+      </div>
+    ),
+  };
+}
 
 // [DURASI-F5] Bobot antar-adegan (content_beats.weight/weight_locked) — form di tab Durasi.
 type BeatW = { beat_key: string; sort_order: number; label_id: string; label_en: string; weight: number; weight_locked: boolean };
@@ -422,12 +470,15 @@ export default function AdminCatalogPage() {
           <h3 className="card-title" style={{ marginBottom: "0.35rem" }}><Bi id="Durasi & segmentasi konten" en="Duration & content segmentation" /></h3>
           <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}><Bi id="Kendali preset (semua, termasuk nonaktif): matikan/hidupkan durasi yang ditawarkan ke tenant. Di bawahnya = acuan segmentasi persis seperti yang dilihat tenant (hanya yang aktif)." en="Preset control (all, incl. inactive): toggle which durations are offered to tenants. Below it = the segmentation reference exactly as tenants see it (active only)." /></p>
           {data && <div className="card" style={{ marginBottom: "1.25rem" }}><div style={{ overflowX: "auto" }}><table className="tbl cat-tbl">
-            <thead><tr><th><Bi id="Detik" en="Seconds" /></th><th>Beats</th><th>render_mode</th><th><Bi id="Kegunaan" en="Use case" /></th><th>default</th><th>active</th></tr></thead>
+            <thead><tr><th><Bi id="Detik" en="Seconds" /></th><th>Beats</th><th>render_mode</th><th title="Jeda tanpa narasi di akhir video (override per-preset; kosong = default 2,5s). Menentukan jendela narasi — terlalu besar di preset pendek = narasi terdengar dipadatkan."><Bi id="Jeda akhir" en="End pause" /></th><th><Bi id="Kegunaan" en="Use case" /></th><th>default</th><th>active</th></tr></thead>
             <tbody>{data.duration_presets.map((d) => (
               <tr key={String(d.seconds)} style={{ opacity: d.is_active ? 1 : .55 }}>
                 <td className="num" style={{ fontWeight: 600 }}>{String(d.seconds)}s</td>
                 <td className="num">{String(d.visual_beats)}</td>
                 <td className="mono" style={{ fontSize: "var(--text-xs)" }}>{String(d.render_mode)}</td>
+                <td className="num" style={{ fontSize: "var(--text-xs)", whiteSpace: "nowrap" }}>{d.trailing_silence_override != null
+                  ? <>{Number(d.trailing_silence_override).toLocaleString("id-ID")}s <span className="badge badge-default" title="Nilai khusus preset ini (bukan default)">⚙ override</span></>
+                  : <span className="muted">2,5s (default)</span>}</td>
                 <td className="muted" style={{ fontSize: "var(--text-xs)", maxWidth: 260 }}>{String(d.use_case ?? "")}</td>
                 <td>{d.is_default ? <span className="badge badge-default">default</span> : "—"}</td>
                 <td><Switch table="duration_presets" k={String(d.seconds)} on={d.is_active as boolean} /> <button className="btn btn-ghost btn-sm" title="Edit kegunaan/catatan" onClick={() => openRowEdit("durations", d)}>✎</button></td>
@@ -758,8 +809,17 @@ export default function AdminCatalogPage() {
               {ADD_FIELDS[rowEdit.mapKey].fields.map(([k, label]) =>
                 fieldBlock(rowEdit.mapKey, k, label, rowEdit.values[k] ?? "", (v) => setRowEdit({ ...rowEdit, values: { ...rowEdit.values, [k]: v } }), k === PK_OF[rowEdit.mapKey], k === PK_OF[rowEdit.mapKey])
               )}
-              {formErr && !formErr.col && <div style={{ color: "var(--danger)", fontSize: "var(--text-xs)" }}>{formErr.node}</div>}
-              <button className="btn btn-primary btn-sm" style={{ justifySelf: "end", marginTop: "0.25rem" }} onClick={saveRowEdit}><Bi id="Simpan" en="Save" /></button>
+              {(() => {
+                // [Jeda-akhir] pratinjau dampak hidup + kunci Simpan saat nilai di luar rentang (§3.1)
+                const durPrev = rowEdit.mapKey === "durations" ? durOverridePreview(rowEdit.values) : null;
+                return (
+                  <>
+                    {durPrev?.node}
+                    {formErr && !formErr.col && <div style={{ color: "var(--danger)", fontSize: "var(--text-xs)" }}>{formErr.node}</div>}
+                    <button className="btn btn-primary btn-sm" style={{ justifySelf: "end", marginTop: "0.25rem" }} disabled={!!durPrev?.invalid} onClick={saveRowEdit}><Bi id="Simpan" en="Save" /></button>
+                  </>
+                );
+              })()}
             </div>
           </div>
         </>
