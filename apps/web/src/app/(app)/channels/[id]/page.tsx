@@ -235,13 +235,41 @@ export default function ChannelDetailPage() {
     setAiMsg({ el, text: error ? `Gagal: ${error.message}` : "Tersimpan", ok: !error });
     if (!error) load();
   }
-  const saveLlm = () => saveAiPart("llm", { llm_model: llmModel || null, llm_library: llmProv || null, llm_account_id: llmAcct || null });
-  const saveTts = () => saveAiPart("tts", { tts_provider: ttsProv || null, tts_model: ttsModel || null, voice_key: voiceKey || null, tts_account_id: ttsAcct || null });
+  // [Fix 20-Jul, insiden MVT] PAKET SATU SLOT WAJIB SEPADAN: akun(kunci) harus milik vendor
+  // penyedia terpilih di slot itu. Dulu ganti-penyedia tak me-reset akun → tersimpan paket campuran
+  // (kunci OpenAI dikirim ke Groq → 401 menyesatkan). Lapis-1: pill penyedia me-reset akun.
+  // Lapis-2 (di sini): Simpan MENOLAK pasangan tak sepadan — juga menyembuhkan data basi lama:
+  // akun tersimpan yang tak sepadan otomatis DIKOSONGKAN (= "auto akun tunggal vendor", perilaku sah).
+  // Hasil: {ok, acct} — mismatch + vendor ber-BANYAK akun → tolak (user wajib memilih, jangan ditebak);
+  // mismatch + vendor ber-0/1 akun → normalisasi ke "" (auto = satu-satunya akun; terlihat di pill "(otomatis)").
+  const coherentAcct = (provider: string, acct: string): { ok: boolean; acct: string } => {
+    if (!acct || !provider) return { ok: true, acct };
+    const as = acctsFor(provider);
+    if (as.some((a) => a.id === acct)) return { ok: true, acct };
+    if (as.length > 1) return { ok: false, acct: "" };
+    return { ok: true, acct: "" };
+  };
+  const MISMATCH_MSG = "Akun (kunci) yang tersimpan bukan milik penyedia ini — pilih akun di baris \"Akun (kunci)\" lalu Simpan lagi. / The saved key account doesn't belong to this provider — pick an account in the \"Account (key)\" row, then Save again.";
+  const saveLlm = () => {
+    const c = coherentAcct(llmProv, llmAcct);
+    if (c.acct !== llmAcct) setLlmAcct(c.acct);
+    if (!c.ok) { setAiMsg({ el: "llm", ok: false, text: MISMATCH_MSG }); return; }
+    return saveAiPart("llm", { llm_model: llmModel || null, llm_library: llmProv || null, llm_account_id: c.acct || null });
+  };
+  const saveTts = () => {
+    const c = coherentAcct(ttsProv, ttsAcct);
+    if (c.acct !== ttsAcct) setTtsAcct(c.acct);
+    if (!c.ok) { setAiMsg({ el: "tts", ok: false, text: MISMATCH_MSG }); return; }
+    return saveAiPart("tts", { tts_provider: ttsProv || null, tts_model: ttsModel || null, voice_key: voiceKey || null, tts_account_id: c.acct || null });
+  };
   const saveVisual = async () => {
     // Prefix generator dari component model terpilih: image → ai_image:, video → ai_video: (no footage/library).
     const vModel = imgOpts.find((m) => m.model_key === imgModel);
     const visual_mode = imgModel && vModel ? `${vModel.component === "video" ? "ai_video" : "ai_image"}:${imgModel}` : null;
-    await saveAiPart("visual", { visual_mode, image_quality: imgQuality, visual_account_id: visualAcct || null });
+    const c = coherentAcct(visualProv, visualAcct);
+    if (c.acct !== visualAcct) setVisualAcct(c.acct);
+    if (!c.ok) { setAiMsg({ el: "visual", ok: false, text: MISMATCH_MSG }); return; }
+    await saveAiPart("visual", { visual_mode, image_quality: imgQuality, visual_account_id: c.acct || null });
     // [B6] F3-rev (fix deadlock telur-ayam): SIMPAN lalu TUNTUN — pasangan belum serasi tetap
     // ditolak server (STEP 0) sebelum biaya; pesan memandu langkah berikutnya.
     const _presetMode = ch?.duration_preset != null ? presetModes[ch.duration_preset] : undefined;
@@ -890,7 +918,7 @@ export default function ChannelDetailPage() {
           <h3 className="card-title" style={{ marginBottom: "0.2rem", display: "flex", alignItems: "center", gap: 6 }}><PenLine size={15} /> <Bi id="Penulis Naskah (LLM)" en="Script Writer (LLM)" /></h3>
           <p className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "0.6rem" }}><Bi id="AI yang menulis cerita & narasi video. Makin pintar = naskah makin bagus." en="AI that writes your video's story & narration. Smarter = better script." /></p>
           <div className="fld-row"><div className="k"><Bi id="Penyedia" en="Provider" /></div>
-            <div className="radio-row">{[...new Set(llmOpts.map((m) => m.provider_key))].map((pk) => <span key={pk} className={`radio-pill${llmProv === pk ? " sel" : ""}`} onClick={() => { setLlmProv(pk); setLlmModel(""); }}>{provMap[pk]?.name ?? pk}</span>)}</div></div>
+            <div className="radio-row">{[...new Set(llmOpts.map((m) => m.provider_key))].map((pk) => <span key={pk} className={`radio-pill${llmProv === pk ? " sel" : ""}`} onClick={() => { setLlmProv(pk); setLlmModel(""); setLlmAcct(""); }}>{provMap[pk]?.name ?? pk}</span>)}</div></div>
           {llmProv && (
             <div className="fld-row"><div className="k"><Bi id="Model" en="Model" /></div>
               <div className="radio-row">{llmOpts.filter((m) => m.provider_key === llmProv).map((m) => <span key={m.model_key} title={priceTitle(m, "llm")} className={`radio-pill${llmModel === m.model_key ? " sel" : ""}`} onClick={() => setLlmModel(m.model_key)}>{m.display_name}<ModelBadges m={m} /></span>)}</div></div>
@@ -904,7 +932,7 @@ export default function ChannelDetailPage() {
           <h3 className="card-title" style={{ marginBottom: "0.2rem", display: "flex", alignItems: "center", gap: 6 }}><Mic size={15} /> <Bi id="Pengisi Suara (TTS)" en="Voice (TTS)" /></h3>
           <p className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "0.6rem" }}><Bi id="Suara narator: pilih penyedia → model → karakter suara (▶ dengar contoh)." en="Narrator voice: pick provider → model → character (▶ preview)." /></p>
           <div className="fld-row"><div className="k"><Bi id="Penyedia suara" en="Voice provider" /></div>
-            <div className="radio-row">{ttsOpts.map((p) => <span key={p.provider_key} className={`radio-pill${ttsProv === p.provider_key ? " sel" : ""}`} onClick={() => { setTtsProv(p.provider_key); setTtsModel(""); setVoiceKey(""); }}>{p.display_name}</span>)}</div></div>
+            <div className="radio-row">{ttsOpts.map((p) => <span key={p.provider_key} className={`radio-pill${ttsProv === p.provider_key ? " sel" : ""}`} onClick={() => { setTtsProv(p.provider_key); setTtsModel(""); setVoiceKey(""); setTtsAcct(""); }}>{p.display_name}</span>)}</div></div>
           {ttsProv && ttsModelOpts.filter((m) => m.provider_key === ttsProv).length > 0 && (
             <div className="fld-row"><div className="k"><Bi id="Model suara" en="Voice model" /><div className="sub"><Bi id="kualitas vs kecepatan" en="quality vs speed" /></div></div>
               <div className="radio-row">{ttsModelOpts.filter((m) => m.provider_key === ttsProv).map((m) => <span key={m.model_key} title={priceTitle(m, "tts")} className={`radio-pill${ttsModel === m.model_key ? " sel" : ""}`} onClick={() => setTtsModel(m.model_key)}>{m.display_name}<ModelBadges m={m} /></span>)}</div></div>
@@ -934,7 +962,7 @@ export default function ChannelDetailPage() {
           <h3 className="card-title" style={{ marginBottom: "0.2rem", display: "flex", alignItems: "center", gap: 6 }}><ImageIcon size={15} /> <Bi id="Pembuat Visual (gambar/video)" en="Visual Generator (image/video)" /></h3>
           <p className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "0.6rem" }}><Bi id="Tiap adegan dibuat AI: pilih penyedia → model → kualitas." en="Each scene is AI-made: pick provider → model → quality." /></p>
           <div className="fld-row"><div className="k"><Bi id="Penyedia" en="Provider" /></div>
-            <div className="radio-row">{[...new Set(imgOpts.map((m) => m.provider_key))].map((pk) => <span key={pk} className={`radio-pill${visualProv === pk ? " sel" : ""}`} onClick={() => { setVisualProv(pk); setImgModel(""); }}>{provMap[pk]?.name ?? pk}</span>)}</div></div>
+            <div className="radio-row">{[...new Set(imgOpts.map((m) => m.provider_key))].map((pk) => <span key={pk} className={`radio-pill${visualProv === pk ? " sel" : ""}`} onClick={() => { setVisualProv(pk); setImgModel(""); setVisualAcct(""); }}>{provMap[pk]?.name ?? pk}</span>)}</div></div>
           {visualProv && (
             <div className="fld-row"><div className="k"><Bi id="Model" en="Model" /><div className="sub"><Bi id="gambar atau video" en="image or video" /></div></div>
               <div className="radio-row">{imgOpts.filter((m) => m.provider_key === visualProv).map((m) => <span key={m.model_key} title={priceTitle(m, m.component || "image")} className={`radio-pill${imgModel === m.model_key ? " sel" : ""}`} onClick={() => setImgModel(m.model_key)}>{m.display_name}<ModelBadges m={m} /></span>)}</div></div>

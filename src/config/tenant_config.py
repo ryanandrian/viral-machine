@@ -541,17 +541,28 @@ class TenantConfigManager:
             return
         try:
             from src.utils.crypto import decrypt
+            # kg (vendor key-group penyedia) di-resolve DULU — dipakai utk validasi akun ditugaskan DAN auto.
+            kg = provider  # vendor key-group; openai_tts → openai
+            pr = self._supabase.table("ai_providers").select("key_group").eq("provider_key", provider).limit(1).execute()
+            if pr.data and pr.data[0].get("key_group"):
+                kg = pr.data[0]["key_group"]
             row = None
             if account_id:
-                r = (self._supabase.table("tenant_ai_accounts").select("key_enc,status")
+                r = (self._supabase.table("tenant_ai_accounts").select("key_enc,status,key_group")
                      .eq("id", account_id).eq("tenant_id", tenant_id).limit(1).execute())
                 cand = (r.data or [None])[0]
-                row = cand if (cand and cand.get("status") == "valid") else None  # ditugaskan tapi tak valid → no-fallback
+                row = cand if (cand and cand.get("status") == "valid") else None  # ditugaskan tapi tak valid → auto vendor
+                # [Fix 2026-07-20, insiden MVT] AKUN ≠ VENDOR PENYEDIA = paket campuran (kunci OpenAI
+                # terkirim ke Groq → 401 menyesatkan). Perlakukan SAMA dgn akun tak-valid: abaikan →
+                # jatuh ke auto akun-tunggal VENDOR YANG BENAR (jalur (2) yang sudah dipatri CHANNEL_LOCK),
+                # + log lantang supaya terlihat (bukan senyap).
+                if row and row.get("key_group") and row["key_group"] != kg:
+                    logger.warning(
+                        f"[TenantConfig] akun ditugaskan {account_id} vendor='{row['key_group']}' ≠ penyedia slot "
+                        f"'{provider}' (vendor '{kg}') — akun diabaikan, pakai akun-tunggal vendor yang sepadan"
+                    )
+                    row = None
             if not row:
-                kg = provider  # vendor key-group; openai_tts → openai
-                pr = self._supabase.table("ai_providers").select("key_group").eq("provider_key", provider).limit(1).execute()
-                if pr.data and pr.data[0].get("key_group"):
-                    kg = pr.data[0]["key_group"]
                 r = (self._supabase.table("tenant_ai_accounts").select("key_enc")
                      .eq("tenant_id", tenant_id).eq("key_group", kg).eq("status", "valid")
                      .order("validated_at", desc=True).limit(1).execute())
