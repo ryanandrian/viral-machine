@@ -664,13 +664,13 @@ class TenantConfigManager:
                 peak_region=row.get("peak_region", "us"),
                 tts_provider=row.get("tts_provider", "edge_tts"),
                 tts_voice=row.get("tts_voice", "en-US-GuyNeural"),
-                tts_api_key=None,     # kunci = PER-CHANNEL (channels.tts_key_enc via overlay); no-fallback
-                visual_api_key=None,  # kunci = PER-CHANNEL (channels.visual_key_enc via overlay); no-fallback
+                tts_api_key=None,     # diisi per-channel dari POOL (tenant_ai_accounts) via _apply_channel_overlay:515; no-fallback env
+                visual_api_key=None,  # diisi per-channel dari POOL (tenant_ai_accounts) via _apply_channel_overlay:516; no-fallback env
                 visual_ai_model=row.get("visual_ai_model"),
                 image_quality=row.get("image_quality", "low"),
                 llm_provider=row.get("llm_provider"),
                 llm_model=row.get("llm_model"),
-                llm_api_key=None,     # kunci = PER-CHANNEL (channels.llm_key_enc via overlay); no-fallback
+                llm_api_key=None,     # diisi per-channel dari POOL (tenant_ai_accounts) via _apply_channel_overlay:514; no-fallback env
                 llm_library=row.get("llm_library"),
                 llm_models=row.get("llm_models") if isinstance(row.get("llm_models"), dict) else None,
                 visual_mode=row.get("visual_mode", "") or "",
