@@ -15,16 +15,24 @@ from src.providers.llm import catalog as _catalog
 from src.exceptions import ErrorClass
 
 
-# [ERROR-MGMT 2026-07-20] Classifier transport OpenAI-COMPATIBLE (SPEC AI_ERROR_MANAGEMENT_ARCHITECTURE.md
-# §4 registry; pola persis _classify_el_error). HANYA kode ber-BUKTI-SAMPEL nyata (worker.log 20-Jul,
-# insiden MVT via Groq): 401 `invalid_api_key` · 404 `model_not_found`. Kode lain → UNKNOWN (aman).
+# [ERROR-MGMT] Classifier transport OpenAI-COMPATIBLE (SPEC AI_ERROR_MANAGEMENT_ARCHITECTURE.md
+# §4 registry; pola persis _classify_el_error). HANYA kode ber-BUKTI-SAMPEL nyata. Kode lain → UNKNOWN (aman).
+# Token = string PASTI muncul di str(exc) (SDK cetak body vendor utuh). Bukti sampel:
+#   • `invalid_api_key` (401) · `model_not_found` (404) — worker.log 20-Jul (insiden MVT via Groq).
+#   • `is no longer available` (Gemini 404 model dipensiunkan) — production_runs 21/22-Jul (insiden riandipantria `gemini-2.5-flash`).
+#   • `insufficient_quota` — worker.log 09-Jul (OpenAI) · `exceeded your current quota` — production_runs 21-Jul (OpenAI, insiden riandipantria).
+# CATATAN 429: HANYA token quota di atas → fast-fail; 429 rate-limit throttle (pesan "Rate limit reached") TIDAK di-map → UNKNOWN/retryable (jangan salah-rem).
 _OPENAI_COMPAT_ERROR_MAP = {
     "invalid_api_key": ErrorClass.AUTH_INVALID,
     "model_not_found": ErrorClass.MODEL_UNAVAILABLE,
+    "is no longer available": ErrorClass.MODEL_UNAVAILABLE,
+    "insufficient_quota": ErrorClass.QUOTA_EXHAUSTED,
+    "exceeded your current quota": ErrorClass.QUOTA_EXHAUSTED,
 }
 _OPENAI_COMPAT_HUMAN = {
     ErrorClass.AUTH_INVALID: "Kunci API AI (penulis naskah) ditolak penyedia. Periksa/perbarui kunci di halaman Integrasi, lalu pastikan Akun (kunci) di setting channel sepadan dengan penyedianya.",
     ErrorClass.MODEL_UNAVAILABLE: "Model AI ini sudah tidak tersedia di penyedianya (dipensiunkan/tak bisa diakses). Pilih model lain di setting channel.",
+    ErrorClass.QUOTA_EXHAUSTED: "Kuota/kredit penyedia AI (penulis naskah) sudah habis. Isi saldo/kredit di akun penyedia Anda, lalu Jalankan Ulang.",
 }
 
 
