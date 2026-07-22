@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import {
   Download, Zap, ChevronLeft, ChevronRight, Search, List,
-  Eye, X, RefreshCw, ArrowRight, Check, Loader2, Clock, Play, Trash2, type LucideIcon,
+  Eye, X, RefreshCw, ArrowRight, Check, Loader2, Clock, Play, Trash2, AlertTriangle, type LucideIcon,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import ConfirmDialog from "@/components/confirm-dialog";
@@ -33,6 +33,7 @@ type RunRow = {
   id: string; run_id: string | null; channel_id: string | null; niche: string | null; topic: string | null;
   status: string | null; elapsed_seconds: string | null; youtube_url: string | null;
   youtube_video_id: string | null; viral_score: number | null; created_at: string;
+  error_message: string | null; error_class: string | null;   // alasan gagal SEBENARNYA (jujur; bukan tebakan tahap)
   run_metadata?: { cost?: { usd?: number; unpriced?: string[] }; video_title?: string } | null;   // B2 biaya + judul akhir
 };
 // Judul AKHIR video (identik dgn yang tampil di YouTube) — bukan topik internal pemilih tema.
@@ -111,7 +112,7 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
 
   const load = useCallback(async () => {
     // scope channel (tab channel): .eq HARUS sebelum .order (builder supabase). channelId kosong = semua channel.
-    let prSel = supabase.from("production_runs").select("id,run_id,channel_id,niche,topic,status,elapsed_seconds,youtube_url,youtube_video_id,viral_score,created_at,run_metadata");
+    let prSel = supabase.from("production_runs").select("id,run_id,channel_id,niche,topic,status,elapsed_seconds,youtube_url,youtube_video_id,viral_score,created_at,error_message,error_class,run_metadata");
     if (channelId) prSel = prSel.eq("channel_id", channelId);
     // + ready_with_issues: dipakai menentukan TEMPAT tinjau run "Perlu Ditinjau" (item live → /review).
     let ciSel = supabase.from("content_inventory").select("id,status,niche,channel_id,metadata,created_at").in("status", ["ready", "ready_with_issues"]);
@@ -226,16 +227,17 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
 
   function miniSteps(st: StKey) {
     // review = produk JADI (7 langkah produksi selesai), hanya Publish belum (masih di buffer/ditinjau).
-    const activeCount = st === "completed" ? 8 : st === "review" ? 7 : st === "discarded" ? 7 : st === "failed" ? 5 : 0;
+    // CATATAN (fix 2026-07-22): status GAGAL TIDAK dirender di sini. Tahap-gagal tak dilacak per-run,
+    // maka DILARANG menebak (dulu di-hardcode "gagal di TTS" utk SEMUA kegagalan → menyesatkan). Drawer
+    // menampilkan kotak "Alasan gagal" dgn pesan SEBENARNYA (error_message). completed=8 · review/discarded=7.
+    const activeCount = st === "completed" ? 8 : st === "review" ? 7 : st === "discarded" ? 7 : 0;
     return PL_NAMES.map((name, i) => {
-      let stt = i < activeCount - 1 ? "done" : i === activeCount - 1 ? (st === "failed" ? "fail" : "done") : "pend";
-      if (st === "completed") stt = "done";
+      const stt = i < activeCount ? "done" : "pend";
       const [col, bg, Icon] = STEP_ICON[stt];
       return (
         <div className="mini-step" key={i}>
           <span className="n" style={{ background: bg, color: col }}><Icon size={13} /></span>
           <span style={{ color: "var(--text-primary)" }}>{name}</span>
-          {stt === "fail" && <span className="badge badge-error" style={{ marginLeft: "auto" }}><span className="dot" />error</span>}
         </div>
       );
     });
@@ -409,10 +411,20 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
                   <div className="kv"><span className="k">YouTube</span><span className="v">{selected.youtube_url ? <a href={selected.youtube_url} target="_blank" rel="noreferrer" className="link">buka</a> : "—"}</span></div>
                   <div className="kv"><span className="k">Mulai</span><span className="v">{fmtWhen(selected.created_at)}</span></div>
                 </div>
-                <div>
-                  <div className="sec-label">Pipeline</div>
-                  <div>{miniSteps(st)}</div>
-                </div>
+                {st === "failed" ? (
+                  <div>
+                    <div className="sec-label"><span data-id>Alasan gagal</span><span data-en>Failure reason</span></div>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "0.6rem", padding: "0.75rem 0.9rem", background: "var(--error-soft)", border: "1px solid color-mix(in srgb,var(--error) 30%,transparent)", borderRadius: "var(--r-md)" }}>
+                      <AlertTriangle size={15} style={{ color: "var(--error)", flex: "none", marginTop: 1 }} />
+                      <span style={{ fontSize: "var(--text-sm)", flex: 1, wordBreak: "break-word" }}>{selected.error_message || "Produksi gagal."}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="sec-label">Pipeline</div>
+                    <div>{miniSteps(st)}</div>
+                  </div>
+                )}
               </div>
               <div className="drawer-foot">
                 <a href={`/runs/${selected.id}`} className="btn btn-default" style={{ flex: 1 }}>
