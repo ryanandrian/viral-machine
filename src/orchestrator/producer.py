@@ -429,7 +429,10 @@ def _run_test_no_publish(sb, job: dict, ch: dict, run_id: str) -> None:
             err = None if qc_ok else (qc.get("reason") or "QC tak lolos — tonton & nilai di drawer")
         else:
             inventory.mark_failed(inv_id, result.get("error") or "produksi gagal (tanpa video)")
-            err = result.get("error") or qc.get("reason") or "produksi gagal (tanpa video)"
+            # [SSOT error] samakan dgn jalur lain (blok scheduled :206 & direct-publish :340):
+            # pesan-manusiawi (human_error) DULU → production_runs.error_message = teks yg SAMA di
+            # semua jalur & permukaan. UNKNOWN → human_error None → jatuh ke result.error (nol regresi).
+            err = result.get("human_error") or result.get("error") or qc.get("reason") or "produksi gagal (tanpa video)"
     except Exception as e:
         err = str(e)
         try:

@@ -664,11 +664,16 @@ class Pipeline:
             # ── s71: Catat pipeline failure ke Supabase ───────────────
             # Skip Supabase write jika interrupt — koneksi mungkin sudah mati
             if not is_interrupt:
+                # [SSOT error — penegakan 2026-07-22] SATU pesan kanonik: pesan-manusiawi bila ada
+                # (PipelineError.human_message), else teks mentah. NILAI SAMA dgn yg producer simpan ke
+                # production_runs.error_message (human_error or error) → Telegram, tabel `videos`, dan
+                # layar (drawer Runs / halaman detail) menampilkan teks IDENTIK. UNKNOWN → str(e) = perilaku lama (nol regresi).
+                human_err = result.get("human_error") or str(e)
                 self.supabase_writer.write_failed_run(
                     run_id    = run_id,
                     tenant_id = tenant_config.tenant_id,
                     niche     = getattr(tenant_config, "niche", "unknown"),
-                    error     = str(e),
+                    error     = human_err,
                 )
                 # s81: Notifikasi Telegram pipeline crash
                 try:
@@ -676,7 +681,7 @@ class Pipeline:
                         run_id          = run_id,
                         tenant_id       = tenant_config.tenant_id,
                         niche           = getattr(tenant_config, "niche", "unknown"),
-                        error           = str(e),
+                        error           = human_err,
                         elapsed_seconds = elapsed,
                         run_config      = run_config,
                     )
