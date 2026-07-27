@@ -193,15 +193,12 @@ class VideoRenderer:
             "enabled":          True,
             "font_name":        "Anton",
             "font_size":        58,
-            "bold":             True,
-            "italic":           False,
             "font_color":       "#FFD700",
             "border_color":     "#000000",
             "outline":          4,
             "shadow":           3,
             "position_y_pct":   15,
-            "alignment":        "center",
-            "max_chars_per_line": 25,
+            "max_chars_per_line": 25,   # bold/italic/alignment DIBUANG: drawtext tak punya kenop itu
         }
         try:
             from src.config.tenant_config import load_tenant_config
