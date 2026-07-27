@@ -331,7 +331,7 @@ export default function AdminCatalogPage() {
   // Unggah font: berkas .ttf/.otf → S3 + baris `fonts`. Skala render DIHITUNG server dari isi
   // berkas (bukan diketik), supaya pratinjau tenant selalu sama dengan hasil video.
   async function uploadFont() {
-    if (!fUp?.file || !fUp.name.trim()) { setToast("Lengkapi nama font dan berkas"); return; }
+    if (!fUp?.file || !fUp.name.trim()) { setToast("Lengkapi nama font dan berkas / Fill in the font name and file"); return; }
     setUploading(true);
     const fd = new FormData();
     fd.append("file", fUp.file); fd.append("name", fUp.name.trim());
@@ -341,8 +341,8 @@ export default function AdminCatalogPage() {
     if (r.ok) {
       setFUp(null); await load();
       setToast(j.keluarga_di_berkas && j.keluarga_di_berkas !== fUp.name.trim()
-        ? `Terunggah. PERHATIAN: nama di dalam berkas "${j.keluarga_di_berkas}" ≠ nama yang Anda isi — mesin render mencari lewat nama berkas, jadi tetap jalan.`
-        : `Font diunggah (skala render ${j.ass_scale})`);
+        ? `Terunggah. PERHATIAN: nama di dalam berkas "${j.keluarga_di_berkas}" ≠ nama yang Anda isi — mesin render mencari lewat nama berkas, jadi tetap jalan. / Uploaded. NOTE: the name inside the file differs from the one you typed — the renderer matches by file name, so it still works.`
+        : `Font diunggah (skala render ${j.ass_scale}) / Font uploaded (render scale ${j.ass_scale})`);
     } else setToast(`Gagal: ${j.error ?? r.status}`);
   }
   async function uploadMusic() {
@@ -678,28 +678,28 @@ export default function AdminCatalogPage() {
         </>)}
 
         {tab === "fonts" && (<>
-          <div className="cat-toolbar"><span className="muted" style={{ fontSize: "var(--text-sm)" }}>{data.fonts.length} font · S3 + server render</span><div className="right"><button className="btn btn-default btn-sm" onClick={() => setFUp({ name: "", file: null })}><Plus size={14} /> <Bi id="Tambah font" en="Add font" /></button></div></div>
+          <div className="cat-toolbar"><span className="muted" style={{ fontSize: "var(--text-sm)" }}>{data.fonts.length} <Bi id="font · S3 + server render" en="fonts · S3 + render server" /></span><div className="right"><button className="btn btn-default btn-sm" onClick={() => setFUp({ name: "", file: null })}><Plus size={14} /> <Bi id="Tambah font" en="Add font" /></button></div></div>
           <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl cat-tbl">
-            <thead><tr><th>nama</th><th>berkas</th><th className="num">skala render</th><th>contoh</th><th>active</th><th></th></tr></thead>
+            <thead><tr><th><Bi id="nama" en="name" /></th><th><Bi id="berkas" en="file" /></th><th className="num"><Bi id="skala render" en="render scale" /></th><th><Bi id="contoh" en="sample" /></th><th><Bi id="aktif" en="active" /></th><th></th></tr></thead>
             <tbody>
-              {data.fonts.length === 0 && <tr><td colSpan={6} className="muted" style={{ padding: "1rem", textAlign: "center" }}>Belum ada font. Unggah untuk mulai.</td></tr>}
+              {data.fonts.length === 0 && <tr><td colSpan={6} className="muted" style={{ padding: "1rem", textAlign: "center" }}><Bi id="Belum ada font. Unggah untuk mulai." en="No fonts yet. Upload one to start." /></td></tr>}
               {data.fonts.map((f) => (
                 <tr key={f.name as string}>
                   <td style={{ color: "var(--text-primary)", fontFamily: `"${f.name as string}",inherit`, fontSize: "1.15rem" }}>{f.name as string}</td>
                   <td className="muted"><code>{f.file_name as string}</code></td>
-                  <td className="num muted" title="unitsPerEm ÷ (winAscent+winDescent) — dibaca dari berkas, dipakai agar pratinjau tenant = hasil video">{f.ass_scale ? Number(f.ass_scale).toFixed(4) : "—"}</td>
+                  <td className="num muted" title="unitsPerEm ÷ (winAscent+winDescent) — dibaca dari berkas, agar pratinjau tenant = hasil video / read from the file so the tenant preview matches the rendered video">{f.ass_scale ? Number(f.ass_scale).toFixed(4) : "—"}</td>
                   <td style={{ minWidth: 300 }}>
                     {fontOk[f.name as string] === false ? (
-                      <span className="badge badge-error" title="Browser menolak berkas ini — periksa berkasnya; mesin render mungkin ikut bermasalah"><AlertTriangle size={11} /> gagal dimuat</span>
+                      <span className="badge badge-error" title="Browser menolak berkas ini — periksa berkasnya; mesin render mungkin ikut bermasalah / Browser rejected this file — check it; the render server may fail too"><AlertTriangle size={11} /> <Bi id="gagal dimuat" en="failed to load" /></span>
                     ) : (
                       <div style={{ fontFamily: `"${f.name as string}",inherit`, color: "var(--text-primary)", lineHeight: 1.25 }}>
-                        <div style={{ fontSize: "1.5rem" }}>Rahasia Alam Semesta</div>
+                        <div style={{ fontSize: "1.5rem" }}><Bi id="Rahasia Alam Semesta" en="The quick brown fox" /></div>
                         <div style={{ fontSize: "0.95rem", opacity: 0.8 }}>ABCDEFGHIJ abcdefghij 0123456789</div>
                       </div>
                     )}
                   </td>
                   <td><Switch table="fonts" k={f.name as string} on={f.is_active as boolean} /></td>
-                  <td style={{ whiteSpace: "nowrap" }}><button className="btn btn-ghost btn-sm" title="Hapus font (ditolak bila masih dipakai channel)" onClick={() => delAsset("fonts", f.name as string, f.name as string)}><Trash2 size={13} /></button></td>
+                  <td style={{ whiteSpace: "nowrap" }}><button className="btn btn-ghost btn-sm" title="Hapus font (ditolak bila masih dipakai channel) / Delete font (refused while still used by a channel)" onClick={() => delAsset("fonts", f.name as string, f.name as string)}><Trash2 size={13} /></button></td>
                 </tr>
               ))}
             </tbody></table></div></div>
@@ -928,11 +928,11 @@ export default function AdminCatalogPage() {
           <div className="card" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(440px,92vw)", maxHeight: "85vh", overflowY: "auto", zIndex: 61, padding: "1.25rem" }}>
             <div style={{ display: "flex", alignItems: "center", marginBottom: "0.75rem" }}><strong><Bi id="Unggah font (→ S3)" en="Upload font (→ S3)" /></strong><button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} disabled={uploading} onClick={() => setFUp(null)}><X size={16} /></button></div>
             <div style={{ display: "grid", gap: "0.6rem" }}>
-              <div><label className="label">Berkas (.ttf / .otf, maks 10MB)</label><input className="input" type="file" accept=".ttf,.otf,font/ttf,font/otf" onChange={(e) => setFUp({ ...fUp, file: e.target.files?.[0] ?? null })} /></div>
+              <div><label className="label"><Bi id="Berkas (.ttf / .otf, maks 10MB)" en="File (.ttf / .otf, max 10MB)" /></label><input className="input" type="file" accept=".ttf,.otf,font/ttf,font/otf" onChange={(e) => setFUp({ ...fUp, file: e.target.files?.[0] ?? null })} /></div>
               {fUp.file && <div className="muted" style={{ fontSize: "0.7rem" }}>{fUp.file.name} · {(fUp.file.size / 1024).toFixed(0)}KB</div>}
-              <div><label className="label">Nama font</label><input className="input" value={fUp.name} onChange={(e) => setFUp({ ...fUp, name: e.target.value })} placeholder="mis. Oswald" /></div>
+              <div><label className="label"><Bi id="Nama font" en="Font name" /></label><input className="input" value={fUp.name} onChange={(e) => setFUp({ ...fUp, name: e.target.value })} placeholder="mis. Oswald / e.g. Oswald" /></div>
               <div className="muted" style={{ fontSize: "0.7rem" }}><Bi id="Nama ini yang dilihat tenant di daftar pilihan. Skala render dibaca otomatis dari berkas — tidak perlu diisi." en="This name is what tenants pick from. Render scale is read from the file automatically." /></div>
-              <button className="btn btn-primary btn-sm" style={{ justifySelf: "end", marginTop: "0.25rem" }} disabled={uploading || !fUp.file || !fUp.name.trim()} onClick={uploadFont}>{uploading ? "Mengunggah…" : "Unggah ke S3"}</button>
+              <button className="btn btn-primary btn-sm" style={{ justifySelf: "end", marginTop: "0.25rem" }} disabled={uploading || !fUp.file || !fUp.name.trim()} onClick={uploadFont}>{uploading ? <Bi id="Mengunggah…" en="Uploading…" /> : <Bi id="Unggah ke S3" en="Upload to S3" />}</button>
             </div>
           </div>
         </>

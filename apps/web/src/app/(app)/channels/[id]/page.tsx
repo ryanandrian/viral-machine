@@ -1149,7 +1149,7 @@ export default function ChannelDetailPage() {
                     fontFamily: `"${hookStr("font_name", "Anton")}",Geist,sans-serif`, fontWeight: 800,
                     fontSize: hookNum("font_size", 58) * PRV_W / 1080, color: hookStr("font_color", "#FFD700"),
                     textShadow: `0 0 ${hookNum("outline", 4)}px ${hookStr("border_color", "#000000")}, ${hookNum("shadow", 3) * PRV_W / 1080}px ${hookNum("shadow", 3) * PRV_W / 1080}px 2px rgba(0,0,0,.85)` }}>
-                    Misteri Lubang Hitam yang Belum Terpecahkan
+                    <Bi id="Misteri Lubang Hitam yang Belum Terpecahkan" en="The Black Hole Mystery No One Solved" />
                   </div>
                 ) : (
                   <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
