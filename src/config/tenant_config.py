@@ -435,7 +435,7 @@ class TenantConfigManager:
     # (NULL = belum dikonfigurasi → pakai nilai tenant; transisi aman).
     _CHANNEL_OVERLAY_FIELDS = [
         "llm_model", "llm_library", "tts_provider", "tts_model",
-        "visual_mode", "image_quality", "caption_style", "niche_hashtags",
+        "visual_mode", "image_quality", "caption_style", "hook_title_style", "niche_hashtags",
         "music_enabled", "music_volume", "music_default_mood",
         "script_min_viral_score", "script_max_retry",
     ]

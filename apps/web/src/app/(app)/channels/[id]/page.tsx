@@ -35,7 +35,8 @@ type ChannelRow = {
   tts_provider: string | null; tts_model: string | null; voice_key: string | null;
   image_quality: string | null; music_enabled: boolean | null; music_volume: number | null;
   music_default_mood: string | null; script_min_viral_score: number | null; script_max_retry: number | null;
-  caption_style: Record<string, unknown> | null; niche_hashtags: Record<string, string[]> | null;
+  caption_style: Record<string, unknown> | null; hook_title_style: Record<string, unknown> | null;
+  niche_hashtags: Record<string, string[]> | null;
   cta_mode: string | null; brand_name: string | null; brand_cta_text: string | null; brand_logo: string | null;
   logo_position: string | null; logo_size: number | null; logo_opacity: number | null;
   landing_link: string | null; link_position: string | null;
@@ -49,6 +50,10 @@ const poolOf = (c: ChannelRow | null): string[] => {
 // Lebar kanvas pratinjau caption (px). Dipakai untuk menskalakan ukuran huruf & margin agar
 // pratinjau = hasil video 1080px. Ubah di SATU tempat ini bila lebar kartunya berubah.
 const PRV_W = 220;
+// Gaya judul pembuka bawaan — nilai SAMA dengan DEFAULT kolom channels.hook_title_style (migrasi 0177)
+// dan DEFAULT di mesin render. Tiga tempat wajib seangka; uji keselarasan menjaganya.
+const HOOK_DEFAULT = { enabled: true, font_name: "Anton", font_size: 58, font_color: "#FFD700",
+  border_color: "#000000", outline: 4, shadow: 3, position_y_pct: 15, max_chars_per_line: 25 };
 const CAP_DEFAULT = { font_name: "Anton", font_size: 68, bold: true, italic: false, shadow: 2, active_word_color: "#FFD700", inactive_word_color: "#FFFFFF", outline_color: "#000000", outline: 4, position_y_pct: 83, max_words_per_line: 3 };
 // Model visual tersimpan: channels.visual_mode = "ai_image:<model>" / "ai_video:<model>" → kunci model saja.
 const visualModelOf = (vm: string) => (vm.startsWith("ai_image:") || vm.startsWith("ai_video:") ? vm.slice(9) : "");
@@ -65,6 +70,7 @@ const formFrom = (c: ChannelRow | null) => ({
   ttsProv: c?.tts_provider ?? "", ttsModel: c?.tts_model ?? "", voiceKey: c?.voice_key ?? "", ttsAcct: c?.tts_account_id ?? "",
   imgModel: visualModelOf(c?.visual_mode ?? ""), imgQuality: c?.image_quality ?? "low", visualAcct: c?.visual_account_id ?? "",
   cap: { ...CAP_DEFAULT, ...(c?.caption_style && typeof c.caption_style === "object" ? c.caption_style : {}) } as Record<string, unknown>,
+  hook: { ...HOOK_DEFAULT, ...(c?.hook_title_style && typeof c.hook_title_style === "object" ? c.hook_title_style : {}) } as Record<string, unknown>,
   tags: tagsFrom(c?.niche_hashtags),
   ctaMode: c?.cta_mode ?? "implicit", brandName: c?.brand_name ?? "", ctaText: c?.brand_cta_text ?? "",
   brandLogo: c?.brand_logo ?? "", logoPos: c?.logo_position ?? "top-right", logoSize: c?.logo_size ?? 0.12,
@@ -203,6 +209,9 @@ export default function ChannelDetailPage() {
   const [opsMsg, setOpsMsg] = useState<string | null>(null);
   // F2-02: caption styling (subtitle on-screen) + hashtag per-niche → channels (brand skin)
   const [cap, setCap] = useState<Record<string, unknown>>(CAP_DEFAULT);
+  const [hook, setHook] = useState<Record<string, unknown>>(HOOK_DEFAULT);
+  const [savingHook, setSavingHook] = useState(false);
+  const [hookMsg, setHookMsg] = useState<string | null>(null);
   const [tags, setTags] = useState<Record<string, string>>({}); // niche → "#a, #b" (editing)
   const [savingBrand, setSavingBrand] = useState(false);
   const [brandMsg, setBrandMsg] = useState<string | null>(null);
@@ -245,6 +254,8 @@ export default function ChannelDetailPage() {
     setLogoUploading(false);
   }
   const capNum = (k: string, d: number) => Number((cap[k] as number) ?? d);
+  const hookNum = (k: string, d: number) => Number((hook[k] as number) ?? d);
+  const hookStr = (k: string, d: string) => String((hook[k] as string) ?? d);
   const capStr = (k: string, d: string) => String((cap[k] as string) ?? d);
 
   async function saveCaption() {
@@ -252,6 +263,13 @@ export default function ChannelDetailPage() {
     const { error } = await supabase.from("channels").update({ caption_style: cap }).eq("id", id);
     setSavingBrand(false);
     setBrandMsg(error ? `Gagal: ${error.message}` : "Tersimpan");
+    if (!error) load();
+  }
+  async function saveHook() {
+    setHookMsg(null); setSavingHook(true);
+    const { error } = await supabase.from("channels").update({ hook_title_style: hook }).eq("id", id);
+    setSavingHook(false);
+    setHookMsg(error ? `Gagal: ${error.message}` : "Tersimpan");
     if (!error) load();
   }
   async function saveHashtags() {
@@ -505,7 +523,7 @@ export default function ChannelDetailPage() {
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     const { data } = await supabase.from("channels")
-      .select("id,channel_name,platform_channel_id,youtube_account_id,subscriber_count,niche,niche_pool,niche_mode,content_language,is_active,publish_privacy,duration_preset,publish_slots,production_paused,production_paused_reason,llm_model,llm_library,visual_mode,llm_account_id,tts_account_id,visual_account_id,tts_provider,tts_model,voice_key,image_quality,music_enabled,music_volume,music_default_mood,script_min_viral_score,script_max_retry,caption_style,niche_hashtags,cta_mode,brand_name,brand_cta_text,brand_logo,logo_position,logo_size,logo_opacity,landing_link,link_position")
+      .select("id,channel_name,platform_channel_id,youtube_account_id,subscriber_count,niche,niche_pool,niche_mode,content_language,is_active,publish_privacy,duration_preset,publish_slots,production_paused,production_paused_reason,llm_model,llm_library,visual_mode,llm_account_id,tts_account_id,visual_account_id,tts_provider,tts_model,voice_key,image_quality,music_enabled,music_volume,music_default_mood,script_min_viral_score,script_max_retry,caption_style,hook_title_style,niche_hashtags,cta_mode,brand_name,brand_cta_text,brand_logo,logo_position,logo_size,logo_opacity,landing_link,link_position")
       .eq("id", id).maybeSingle();
     const c = data as ChannelRow | null;
     setCh(c);
@@ -528,7 +546,7 @@ export default function ChannelDetailPage() {
       put(setMusicOn, before.musicOn, after.musicOn); put(setMusicVol, before.musicVol, after.musicVol);
       put(setMusicMood, before.musicMood, after.musicMood);
       put(setMinScore, before.minScore, after.minScore); put(setMaxRetry, before.maxRetry, after.maxRetry);
-      put(setCap, before.cap, after.cap); put(setTags, before.tags, after.tags);
+      put(setCap, before.cap, after.cap); put(setHook, before.hook, after.hook); put(setTags, before.tags, after.tags);
       put(setCtaMode, before.ctaMode, after.ctaMode); put(setBrandName, before.brandName, after.brandName);
       put(setCtaText, before.ctaText, after.ctaText); put(setBrandLogo, before.brandLogo, after.brandLogo);
       put(setLogoPos, before.logoPos, after.logoPos); put(setLogoSize, before.logoSize, after.logoSize);
@@ -688,6 +706,7 @@ export default function ChannelDetailPage() {
     tts: chg([ttsProv, f0.ttsProv], [ttsModel, f0.ttsModel], [voiceKey, f0.voiceKey], [ttsAcct, f0.ttsAcct]),
     visual: chg([imgModel, f0.imgModel], [imgQuality, f0.imgQuality], [visualAcct, f0.visualAcct]),
     cap: chg([cap, f0.cap]),
+    hook: chg([hook, f0.hook]),
     tags: chg([hashtagsOf(tags), hashtagsOf(f0.tags)]),
     brand: chg([ctaMode, f0.ctaMode], [brandName, f0.brandName], [ctaText, f0.ctaText], [brandLogo, f0.brandLogo],
       [logoPos, f0.logoPos], [logoSize, f0.logoSize], [logoOpacity, f0.logoOpacity], [landingLink, f0.landingLink], [linkPos, f0.linkPos]),
@@ -715,12 +734,13 @@ export default function ChannelDetailPage() {
     bersihkan(nicheMsg, (m) => SINGKAT.has(m), () => setNicheMsg(null));
     bersihkan(presetMsg, (m) => SINGKAT.has(m), () => setPresetMsg(null));
     bersihkan(brandMsg, (m) => SINGKAT.has(m), () => setBrandMsg(null));
+    bersihkan(hookMsg, (m) => SINGKAT.has(m), () => setHookMsg(null));
     bersihkan(br2Msg, (m) => SINGKAT.has(m), () => setBr2Msg(null));
     bersihkan(opsMsg, (m) => SINGKAT.has(m), () => setOpsMsg(null));
     bersihkan(hashMsg, (m) => SINGKAT.has(m), () => setHashMsg(null));
     bersihkan(aiMsg, (m) => m.ok && SINGKAT.has(m.text), () => setAiMsg(null));
     return () => t.forEach(clearTimeout);
-  }, [saved, nicheMsg, presetMsg, brandMsg, br2Msg, opsMsg, hashMsg, aiMsg]);
+  }, [saved, nicheMsg, presetMsg, brandMsg, hookMsg, br2Msg, opsMsg, hashMsg, aiMsg]);
   // Batalkan perubahan = kembalikan isian kartu ke nilai tersimpan + bersihkan pesan kartu itu.
   const undo = {
     ident: () => { setName(f0.name); setClang(f0.clang); setPrivacy(f0.privacy); setTargetYt(f0.targetYt); setYtAccountId(f0.ytAccountId); setPool(f0.pool); setErr(null); setNicheMsg(null); setSaved(false); },
@@ -730,6 +750,7 @@ export default function ChannelDetailPage() {
     visual: () => { setImgModel(f0.imgModel); setImgQuality(f0.imgQuality); setVisualAcct(f0.visualAcct); setAiMsg(null);
       setVisualProv(imgOpts.find((m) => m.model_key === f0.imgModel)?.provider_key ?? ""); },
     cap: () => { setCap(f0.cap); setBrandMsg(null); },
+    hook: () => { setHook(f0.hook); setHookMsg(null); },
     tags: () => { setTags(f0.tags); setHashMsg(null); },
     brand: () => { setCtaMode(f0.ctaMode); setBrandName(f0.brandName); setCtaText(f0.ctaText); setBrandLogo(f0.brandLogo);
       setLogoPos(f0.logoPos); setLogoSize(f0.logoSize); setLogoOpacity(f0.logoOpacity); setLandingLink(f0.landingLink); setLinkPos(f0.linkPos); setBr2Msg(null); },
@@ -1107,6 +1128,60 @@ export default function ChannelDetailPage() {
           {acctPicker(visualProv, visualAcct, setVisualAcct)}
           {saveBar({ ubah: dirty.visual, sibuk: savingAi === "visual", simpan: saveVisual, batal: undo.visual,
             pesan: aiMsg?.el === "visual" ? <span style={{ color: aiMsg.ok ? "var(--success)" : "var(--danger,#ef4444)" }}>{aiMsg.text}</span> : null })}
+        </div>
+
+        {/* CARD: Judul Pembuka — kelas & pola SAMA dengan kartu Caption (fld-row/slider/switch/
+            radio-pill/save-bar). Gaya ini kini per-channel (channels.hook_title_style, migrasi 0177);
+            sebelumnya hanya ada di database tenant dan tak bisa disentuh dari layar mana pun. */}
+        <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 760 }}>
+          <h3 className="card-title" style={{ marginBottom: "0.35rem", display: "flex", alignItems: "center", gap: "0.5rem" }}><Bi id="Judul pembuka (hook)" en="Opening title (hook)" />{tanda(dirty.hook)}</h3>
+          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}><Bi id="Teks judul yang muncul di detik-detik awal video. Kata-katanya ditulis AI dari topik; di sini Anda atur tampilannya." en="Title shown in the opening seconds. The AI writes the words; here you style it." /></p>
+          <div style={{ display: "grid", gridTemplateColumns: `${PRV_W}px 1fr`, gap: "1.5rem", alignItems: "start" }}>
+            {/* Pratinjau: judul digambar FFmpeg drawtext yang memakai ukuran em LANGSUNG — tanpa
+                ass_scale seperti caption (dibuktikan render: rumus yang salah meleset ~40%).
+                Jangkar ATAS: baris pertama di position_y_pct, teks tumbuh ke bawah. */}
+            <div style={{ position: "sticky", top: 72 }}>
+              <div style={{ aspectRatio: "9/16", borderRadius: "var(--r-lg)", overflow: "hidden", position: "relative", background: "linear-gradient(170deg,#0c2233,#05101a)", border: "1px solid var(--border)" }}>
+                <div style={{ position: "absolute", inset: 0, background: "radial-gradient(120% 70% at 50% 25%,transparent,rgba(0,0,0,.55))" }} />
+                {(hook.enabled ?? true) ? (
+                  <div style={{ position: "absolute", left: 40 * PRV_W / 1080, right: 40 * PRV_W / 1080,
+                    top: `${hookNum("position_y_pct", 15)}%`, textAlign: "center", lineHeight: 1.15,
+                    fontFamily: `"${hookStr("font_name", "Anton")}",Geist,sans-serif`, fontWeight: 800,
+                    fontSize: hookNum("font_size", 58) * PRV_W / 1080, color: hookStr("font_color", "#FFD700"),
+                    textShadow: `0 0 ${hookNum("outline", 4)}px ${hookStr("border_color", "#000000")}, ${hookNum("shadow", 3) * PRV_W / 1080}px ${hookNum("shadow", 3) * PRV_W / 1080}px 2px rgba(0,0,0,.85)` }}>
+                    Misteri Lubang Hitam yang Belum Terpecahkan
+                  </div>
+                ) : (
+                  <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
+                    <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Judul pembuka dimatikan" en="Opening title is off" /></span>
+                  </div>
+                )}
+              </div>
+              <div className="muted" style={{ fontSize: "0.625rem", marginTop: "0.4rem", textAlign: "center" }}><Bi id="Contoh judul — teks asli ditulis AI" en="Sample title — real text written by AI" /></div>
+            </div>
+            <div>
+              <div className="fld-row"><div className="k"><Bi id="Tampilkan judul" en="Show title" /><div className="sub"><Bi id="matikan = video langsung mulai" en="off = video starts straight away" /></div></div>
+                <label className="switch"><input type="checkbox" checked={Boolean(hook.enabled ?? true)} onChange={(e) => setHook({ ...hook, enabled: e.target.checked })} /><span className="track" /><span className="thumb" /></label></div>
+              <div className="fld-row"><div className="k"><Bi id="Jenis huruf" en="Font" /></div>
+                <div className="radio-row">{fontOpts.map((f) => <span key={f.name} className={`radio-pill${hookStr("font_name", "Anton") === f.name ? " sel" : ""}`} style={{ fontFamily: `"${f.name}",inherit` }} onClick={() => setHook({ ...hook, font_name: f.name })}>{f.name}</span>)}</div></div>
+              <div className="fld-row"><div className="k"><Bi id="Ukuran huruf" en="Font size" /><div className="sub">{hookNum("font_size", 58)} px</div></div>
+                <input type="range" className="slider" min={36} max={120} value={hookNum("font_size", 58)} onChange={(e) => setHook({ ...hook, font_size: +e.target.value })} /></div>
+              <div className="fld-row"><div className="k"><Bi id="Posisi vertikal" en="Vertical position" /><div className="sub">{hookNum("position_y_pct", 15)}% <Bi id="dari atas" en="from top" /></div></div>
+                <input type="range" className="slider" min={5} max={80} value={hookNum("position_y_pct", 15)} onChange={(e) => setHook({ ...hook, position_y_pct: +e.target.value })} /></div>
+              <div className="fld-row"><div className="k"><Bi id="Warna teks" en="Text color" /></div>
+                <input type="color" value={hookStr("font_color", "#FFD700")} onChange={(e) => setHook({ ...hook, font_color: e.target.value })} style={{ width: 44, height: 30, padding: 2, borderRadius: "var(--r-sm)", border: "1px solid var(--border)" }} /></div>
+              <div className="fld-row"><div className="k"><Bi id="Garis tepi" en="Outline" /></div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flex: 1 }}>
+                  <input type="color" value={hookStr("border_color", "#000000")} onChange={(e) => setHook({ ...hook, border_color: e.target.value })} style={{ width: 44, height: 30, padding: 2, borderRadius: "var(--r-sm)", border: "1px solid var(--border)" }} />
+                  <input type="range" className="slider" style={{ flex: 1 }} min={0} max={10} value={hookNum("outline", 4)} onChange={(e) => setHook({ ...hook, outline: +e.target.value })} /></div></div>
+              <div className="fld-row"><div className="k"><Bi id="Bayangan teks" en="Text shadow" /><div className="sub"><Bi id="0 = tanpa bayangan" en="0 = no shadow" /></div></div>
+                <input type="range" className="slider" min={0} max={10} value={hookNum("shadow", 3)} onChange={(e) => setHook({ ...hook, shadow: +e.target.value })} /></div>
+              <div className="fld-row"><div className="k"><Bi id="Maks. huruf per baris" en="Max characters per line" /><div className="sub"><Bi id="batas atas; baris tetap dipotong agar muat layar" en="upper bound; lines still wrap to fit the screen" /></div></div>
+                <input type="range" className="slider" min={12} max={40} value={hookNum("max_chars_per_line", 25)} onChange={(e) => setHook({ ...hook, max_chars_per_line: +e.target.value })} /></div>
+            </div>
+          </div>
+          {saveBar({ ubah: dirty.hook, sibuk: savingHook, simpan: saveHook, batal: undo.hook,
+            pesan: hookMsg ? <span style={{ color: hookMsg.startsWith("Gagal") ? "var(--danger,#ef4444)" : "var(--success)" }}>{hookMsg}</span> : <Bi id="Disimpan ke channel (judul pembuka)" en="Saves to channel (opening title)" /> })}
         </div>
 
         <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 760 }}>

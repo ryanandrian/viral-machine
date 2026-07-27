@@ -23,7 +23,6 @@ load_dotenv()
 
 # Default caption style — override via tenant_configs.caption_style (partial override OK)
 # position_y_pct: % dari atas layar (83% ≈ margin_v 326px untuk 1920px height)
-# alignment: ASS alignment — 2=bottom-center, 5=mid-center, 8=top-center
 DEFAULT_CAPTION_STYLE = {
     "font_name":            "Anton",
     "font_size":            68,
@@ -35,7 +34,6 @@ DEFAULT_CAPTION_STYLE = {
     "outline":              4,           # Ketebalan border
     "shadow":               2,           # Ukuran bayangan
     "position_y_pct":       83,          # % dari atas layar
-    "alignment":            2,           # bottom-center
     "max_words_per_line":   3,
 }
 
@@ -100,6 +98,11 @@ class VideoRenderer:
     # Lebar aman satu baris caption = lebar layar dikurangi margin kiri/kanan ASS (10+10) dan
     # ruang untuk garis tepi + bayangan yang menambah lebar visual di kedua sisi.
     ASS_MARGIN_LR = 10
+    # Perataan ASS caption = KONSTANTA, bukan kenop tenant. 2 = jangkar bawah-tengah: dasar teks
+    # dipatok pada position_y_pct. Nilai lain (5 tengah / 8 atas) mengubah arah tumbuh baris dan
+    # mengembalikan gejala "baris awal melompat" yang diberantas 2026-07-27. Yang bermakna bagi
+    # tenant adalah posisi vertikal, yang sudah punya kenopnya sendiri.
+    ASS_ALIGNMENT = 2
     # Margin kiri/kanan overlay judul pembuka (drawtext) — ruang agar tak menempel tepi layar.
     HOOK_MARGIN_LR = 40
     # Cadangan 2%: pengukuran vs render libass terbukti meleset maksimal 0,4 px pada 120 kombinasi uji
@@ -393,7 +396,6 @@ class VideoRenderer:
         italic         = 1 if style.get("italic", False) else 0
         outline        = style.get("outline", 4)
         shadow         = style.get("shadow", 2)
-        alignment      = style.get("alignment", 2)
         outline_color  = _hex_to_ass_color(style.get("outline_color", "#000000"))
         pos_y_pct      = style.get("position_y_pct", 83)
         margin_v       = int(self.OUTPUT_HEIGHT * (1 - pos_y_pct / 100))
@@ -472,7 +474,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,{font_name},{font_size},&H00FFFFFF,&H000000FF,{outline_color},&H80000000,{bold},{italic},0,0,100,100,0,0,1,{outline},{shadow},{alignment},10,10,{margin_v},1
+Style: Default,{font_name},{font_size},&H00FFFFFF,&H000000FF,{outline_color},&H80000000,{bold},{italic},0,0,100,100,0,0,1,{outline},{shadow},{self.ASS_ALIGNMENT},10,10,{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
