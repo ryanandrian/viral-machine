@@ -63,6 +63,11 @@ class VideoRenderer:
     AUDIO_BITRATE = "192k"
 
     FONTS_DIR  = "/usr/local/share/fonts"
+    # Direktori font milik user proses render. /usr/local/share/fonts dimiliki root:staff dan TIDAK
+    # bisa ditulis worker (terbukti Permission denied 2026-07-28) — tanpa ini, font yang ditambahkan
+    # admin tak pernah sampai ke mesin render dan video diam-diam memakai Anton. Direktori ini standar
+    # XDG: fontconfig membacanya otomatis, jadi libass pun menemukan fontnya.
+    FONTS_DIR_USER = os.path.expanduser("~/.local/share/fonts")
 
     def _font_catalog(self) -> dict:
         """Katalog font = tabel `fonts` (SATU sumber, dibaca FE juga). Hasil di-cache per proses.
@@ -107,6 +112,7 @@ class VideoRenderer:
             if not url:
                 return False
             import urllib.request
+            os.makedirs(os.path.dirname(path), exist_ok=True)
             tmp = f"{path}.part"
             with urllib.request.urlopen(url, timeout=30) as r, open(tmp, "wb") as f:
                 if r.status != 200:
@@ -116,7 +122,7 @@ class VideoRenderer:
                 os.remove(tmp)
                 return False
             os.replace(tmp, path)                # atomik: tak ada berkas separuh yang terbaca render
-            subprocess.run(["fc-cache", "-f", self.FONTS_DIR], capture_output=True, timeout=60)
+            subprocess.run(["fc-cache", "-f", os.path.dirname(path)], capture_output=True, timeout=60)
             logger.info(f"[Font] '{file_name}' diunduh dari S3 ke server render")
             return True
         except Exception as e:
@@ -126,13 +132,16 @@ class VideoRenderer:
     def _resolve_font_path(self, font_name: str) -> str:
         """Resolve font_name ke absolute path. Fallback ke Anton jika tidak ditemukan."""
         file_name = self._font_catalog().get(font_name, f"{font_name}-Regular.ttf")
-        path = os.path.join(self.FONTS_DIR, file_name)
-        if os.path.exists(path):
-            return path
-        if self._fetch_font(file_name, path) and os.path.exists(path):
-            return path
+        for d in (self.FONTS_DIR, self.FONTS_DIR_USER):        # bawaan sistem dulu, lalu unduhan
+            p = os.path.join(d, file_name)
+            if os.path.exists(p):
+                return p
+        # Belum ada di mesin ini → jemput dari S3 ke direktori yang MEMANG bisa ditulis worker.
+        target = os.path.join(self.FONTS_DIR_USER, file_name)
+        if self._fetch_font(file_name, target) and os.path.exists(target):
+            return target
         fallback = os.path.join(self.FONTS_DIR, "Anton-Regular.ttf")
-        logger.warning(f"[Font] '{font_name}' tidak ditemukan di {path}, fallback ke Anton")
+        logger.warning(f"[Font] '{font_name}' tidak ditemukan (sistem/user/S3), fallback ke Anton")
         return fallback
 
     # Lebar aman satu baris caption = lebar layar dikurangi margin kiri/kanan ASS (10+10) dan

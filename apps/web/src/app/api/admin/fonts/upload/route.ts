@@ -100,9 +100,16 @@ export async function POST(req: Request) {
   }
   const ass_scale = Number((metrik.unitsPerEm / (metrik.winAsc + metrik.winDesc)).toFixed(6));
 
+  // NAMA KATALOG = nama keluarga DI DALAM BERKAS, bukan ketikan admin.
+  // Mesin subtitle (libass) mencari font lewat nama keluarga, BUKAN nama berkas. Kalau keduanya
+  // beda — mis. admin mengetik "Orbitron-SemiBold" padahal berkasnya "Orbitron SemiBold" — caption
+  // diam-diam jatuh ke font cadangan. Memakai nama dari berkas menutup seluruh kelas kesalahan itu.
+  const keluarga = bacaNamaKeluarga(body);
+  const nama_final = keluarga || name;
+
   // Nama file DIBAKUKAN dari nama font → mesin render mencarinya lewat kolom file_name, dan nama
   // berkas asli yang aneh (spasi/karakter unik) tak bisa merusak jalur di server.
-  const slug = name.replace(/[^A-Za-z0-9]+/g, "");
+  const slug = nama_final.replace(/[^A-Za-z0-9]+/g, "");
   const ext = lower.endsWith(".otf") ? "otf" : "ttf";
   const file_name = `${slug}-Regular.${ext}`;
   const object_key = `fonts/${file_name}`;
@@ -112,8 +119,8 @@ export async function POST(req: Request) {
   if (!endpoint || !accessKeyId || !secretAccessKey) return NextResponse.json({ error: "S3 config kurang di server" }, { status: 500 });
 
   const a = createAdminClient();
-  const { data: sudahAda } = await a.from("fonts").select("name").eq("name", name).maybeSingle();
-  if (sudahAda) return NextResponse.json({ error: `font "${name}" sudah ada — hapus dulu bila ingin mengganti` }, { status: 409 });
+  const { data: sudahAda } = await a.from("fonts").select("name").eq("name", nama_final).maybeSingle();
+  if (sudahAda) return NextResponse.json({ error: `font "${nama_final}" sudah ada — hapus dulu bila ingin mengganti` }, { status: 409 });
 
   const s3 = new S3Client({ endpoint, region: process.env.S3_REGION || "idn", credentials: { accessKeyId, secretAccessKey }, forcePathStyle: true });
   try {
@@ -128,16 +135,13 @@ export async function POST(req: Request) {
 
   const file_url = `${endpoint.replace(/\/$/, "")}/${bucket}/${object_key}`;
   const { data, error } = await a.from("fonts")
-    .insert({ name, file_name, file_url, ass_scale, is_active: true })
+    .insert({ name: nama_final, file_name, file_url, ass_scale, is_active: true })
     .select("*").single();
   if (error) return NextResponse.json({ error: `DB insert gagal: ${error.message}` }, { status: 500 });
 
   await a.from("admin_audit").insert({
     admin_uid: g.user.id, action: "fonts.upload",
-    detail: { name, file_name, ass_scale, keluarga_di_berkas: bacaNamaKeluarga(body) },
+    detail: { name: nama_final, diketik_admin: name, file_name, ass_scale },
   });
-  return NextResponse.json({
-    ok: true, row: data, file_url, ass_scale,
-    keluarga_di_berkas: bacaNamaKeluarga(body),
-  });
+  return NextResponse.json({ ok: true, row: data, file_url, ass_scale, nama_final, diketik_admin: name });
 }

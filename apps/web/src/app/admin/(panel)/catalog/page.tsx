@@ -340,8 +340,8 @@ export default function AdminCatalogPage() {
     const j = await r.json().catch(() => ({}));
     if (r.ok) {
       setFUp(null); await load();
-      setToast(j.keluarga_di_berkas && j.keluarga_di_berkas !== fUp.name.trim()
-        ? `Terunggah. PERHATIAN: nama di dalam berkas "${j.keluarga_di_berkas}" ≠ nama yang Anda isi — mesin render mencari lewat nama berkas, jadi tetap jalan. / Uploaded. NOTE: the name inside the file differs from the one you typed — the renderer matches by file name, so it still works.`
+      setToast(j.nama_final && j.nama_final !== j.diketik_admin
+        ? `Terunggah sebagai "${j.nama_final}" — nama diambil dari dalam berkas agar mesin subtitle menemukannya. / Uploaded as "${j.nama_final}" — the name comes from inside the file so the subtitle engine can find it.`
         : `Font diunggah (skala render ${j.ass_scale}) / Font uploaded (render scale ${j.ass_scale})`);
     } else setToast(`Gagal: ${j.error ?? r.status}`);
   }
@@ -931,7 +931,7 @@ export default function AdminCatalogPage() {
               <div><label className="label"><Bi id="Berkas (.ttf / .otf, maks 10MB)" en="File (.ttf / .otf, max 10MB)" /></label><input className="input" type="file" accept=".ttf,.otf,font/ttf,font/otf" onChange={(e) => setFUp({ ...fUp, file: e.target.files?.[0] ?? null })} /></div>
               {fUp.file && <div className="muted" style={{ fontSize: "0.7rem" }}>{fUp.file.name} · {(fUp.file.size / 1024).toFixed(0)}KB</div>}
               <div><label className="label"><Bi id="Nama font" en="Font name" /></label><input className="input" value={fUp.name} onChange={(e) => setFUp({ ...fUp, name: e.target.value })} placeholder="mis. Oswald / e.g. Oswald" /></div>
-              <div className="muted" style={{ fontSize: "0.7rem" }}><Bi id="Nama ini yang dilihat tenant di daftar pilihan. Skala render dibaca otomatis dari berkas — tidak perlu diisi." en="This name is what tenants pick from. Render scale is read from the file automatically." /></div>
+              <div className="muted" style={{ fontSize: "0.7rem" }}><Bi id="Nama resmi diambil dari dalam berkas font (agar mesin subtitle menemukannya); isian ini hanya cadangan bila berkas tak memuat nama. Skala render juga dibaca otomatis." en="The official name is taken from inside the font file (so the subtitle engine can find it); this field is only a fallback. Render scale is read automatically too." /></div>
               <button className="btn btn-primary btn-sm" style={{ justifySelf: "end", marginTop: "0.25rem" }} disabled={uploading || !fUp.file || !fUp.name.trim()} onClick={uploadFont}>{uploading ? <Bi id="Mengunggah…" en="Uploading…" /> : <Bi id="Unggah ke S3" en="Upload to S3" />}</button>
             </div>
           </div>
