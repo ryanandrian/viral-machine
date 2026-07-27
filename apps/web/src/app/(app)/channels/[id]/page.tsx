@@ -1163,7 +1163,7 @@ export default function ChannelDetailPage() {
               <div className="fld-row"><div className="k"><Bi id="Tampilkan judul" en="Show title" /><div className="sub"><Bi id="matikan = video langsung mulai" en="off = video starts straight away" /></div></div>
                 <label className="switch"><input type="checkbox" checked={Boolean(hook.enabled ?? true)} onChange={(e) => setHook({ ...hook, enabled: e.target.checked })} /><span className="track" /><span className="thumb" /></label></div>
               <div className="fld-row"><div className="k"><Bi id="Jenis huruf" en="Font" /></div>
-                <div className="radio-row">{fontOpts.map((f) => <span key={f.name} className={`radio-pill${hookStr("font_name", "Anton") === f.name ? " sel" : ""}`} style={{ fontFamily: `"${f.name}",inherit` }} onClick={() => setHook({ ...hook, font_name: f.name })}>{f.name}</span>)}</div></div>
+                <div className="radio-row">{fontOpts.map((f) => <span key={f.name} className={`radio-pill${hookStr("font_name", "Anton") === f.name ? " sel" : ""}`} style={{ fontFamily: `"${f.name}",Geist,sans-serif` }} onClick={() => setHook({ ...hook, font_name: f.name })}>{f.name}</span>)}</div></div>
               <div className="fld-row"><div className="k"><Bi id="Ukuran huruf" en="Font size" /><div className="sub">{hookNum("font_size", 58)} px</div></div>
                 <input type="range" className="slider" min={36} max={120} value={hookNum("font_size", 58)} onChange={(e) => setHook({ ...hook, font_size: +e.target.value })} /></div>
               <div className="fld-row"><div className="k"><Bi id="Posisi vertikal" en="Vertical position" /><div className="sub">{hookNum("position_y_pct", 15)}% <Bi id="dari atas" en="from top" /></div></div>
@@ -1217,7 +1217,7 @@ export default function ChannelDetailPage() {
             {/* Kontrol — fld-row/slider/radio-pill/swatch */}
             <div>
               <div className="fld-row"><div className="k"><Bi id="Font" en="Font" /></div>
-                <div className="radio-row">{fontOpts.map((f) => <span key={f.name} className={`radio-pill${capStr("font_name", "Anton") === f.name ? " sel" : ""}`} style={{ fontFamily: `"${f.name}",inherit` }} onClick={() => setCap({ ...cap, font_name: f.name })}>{f.name}</span>)}</div></div>
+                <div className="radio-row">{fontOpts.map((f) => <span key={f.name} className={`radio-pill${capStr("font_name", "Anton") === f.name ? " sel" : ""}`} style={{ fontFamily: `"${f.name}",Geist,sans-serif` }} onClick={() => setCap({ ...cap, font_name: f.name })}>{f.name}</span>)}</div></div>
               <div className="fld-row"><div className="k"><Bi id="Ukuran font" en="Font size" /><div className="sub">{capNum("font_size", 68)}px</div></div>
                 <input type="range" className="slider" min={36} max={120} value={capNum("font_size", 68)} onChange={(e) => setCap({ ...cap, font_size: +e.target.value })} /></div>
               <div className="fld-row"><div className="k"><Bi id="Posisi vertikal" en="Vertical position" /><div className="sub">{capNum("position_y_pct", 83)}% dari atas</div></div>

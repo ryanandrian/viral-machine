@@ -685,14 +685,14 @@ export default function AdminCatalogPage() {
               {data.fonts.length === 0 && <tr><td colSpan={6} className="muted" style={{ padding: "1rem", textAlign: "center" }}><Bi id="Belum ada font. Unggah untuk mulai." en="No fonts yet. Upload one to start." /></td></tr>}
               {data.fonts.map((f) => (
                 <tr key={f.name as string}>
-                  <td style={{ color: "var(--text-primary)", fontFamily: `"${f.name as string}",inherit`, fontSize: "1.15rem" }}>{f.name as string}</td>
+                  <td style={{ color: "var(--text-primary)", fontFamily: `"${f.name as string}",Geist,sans-serif`, fontSize: "1.15rem" }}>{f.name as string}</td>
                   <td className="muted"><code>{f.file_name as string}</code></td>
                   <td className="num muted" title="unitsPerEm ÷ (winAscent+winDescent) — dibaca dari berkas, agar pratinjau tenant = hasil video / read from the file so the tenant preview matches the rendered video">{f.ass_scale ? Number(f.ass_scale).toFixed(4) : "—"}</td>
                   <td style={{ minWidth: 300 }}>
                     {fontOk[f.name as string] === false ? (
                       <span className="badge badge-error" title="Browser menolak berkas ini — periksa berkasnya; mesin render mungkin ikut bermasalah / Browser rejected this file — check it; the render server may fail too"><AlertTriangle size={11} /> <Bi id="gagal dimuat" en="failed to load" /></span>
                     ) : (
-                      <div style={{ fontFamily: `"${f.name as string}",inherit`, color: "var(--text-primary)", lineHeight: 1.25 }}>
+                      <div style={{ fontFamily: `"${f.name as string}",Geist,sans-serif`, color: "var(--text-primary)", lineHeight: 1.25 }}>
                         <div style={{ fontSize: "1.5rem" }}><Bi id="Rahasia Alam Semesta" en="The quick brown fox" /></div>
                         <div style={{ fontSize: "0.95rem", opacity: 0.8 }}>ABCDEFGHIJ abcdefghij 0123456789</div>
                       </div>
