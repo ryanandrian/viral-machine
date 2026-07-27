@@ -18,9 +18,16 @@ Uji ini sengaja membaca SUMBER (kode BE & FE) — bukan salinan — supaya tak b
 import re
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 BE = (ROOT / "src/production/video_renderer.py").read_text(encoding="utf-8")
-FE = (ROOT / "apps/web/src/app/(app)/channels/[id]/page.tsx").read_text(encoding="utf-8")
+
+# Repo runtime di VPS sengaja TIDAK membawa folder frontend (VPS = runtime saja). Uji yang butuh
+# berkas layar dilewati dgn alasan jelas di lingkungan itu — bukan gagal palsu yang menyesatkan.
+_FE_PATH = ROOT / "apps/web/src/app/(app)/channels/[id]/page.tsx"
+FE = _FE_PATH.read_text(encoding="utf-8") if _FE_PATH.exists() else ""
+butuh_fe = pytest.mark.skipif(not FE, reason="berkas layar tidak ada di lingkungan ini (repo runtime tanpa apps/web)")
 
 
 def _blok(teks: str, pola: str) -> str:
@@ -51,6 +58,7 @@ def test_default_hook_semuanya_dibaca_mesin():
     assert not nganggur, f"kunci judul ada di DEFAULT tapi tak pernah dibaca mesin: {nganggur}"
 
 
+@butuh_fe
 def test_setiap_kenop_caption_terjangkau_tenant():
     """Properti caption yang dibaca mesin WAJIB punya kenop di layar channel."""
     capdef = set(re.findall(r"(\w+):", _blok(FE, r"const CAP_DEFAULT = \{(.*?)\};")))
@@ -61,6 +69,7 @@ def test_setiap_kenop_caption_terjangkau_tenant():
     )
 
 
+@butuh_fe
 def test_setiap_kenop_hook_terjangkau_tenant():
     """Properti judul pembuka yang dibaca mesin WAJIB punya kenop di layar channel."""
     hookdef = set(re.findall(r"(\w+):", _blok(FE, r"const HOOK_DEFAULT = \{(.*?)\};")))
@@ -68,6 +77,7 @@ def test_setiap_kenop_hook_terjangkau_tenant():
     assert not hilang, f"properti judul dibaca mesin tapi TIDAK ADA kenopnya di layar: {hilang}"
 
 
+@butuh_fe
 def test_nilai_bawaan_judul_seangka_antara_mesin_dan_layar():
     """Nilai bawaan judul pembuka tak boleh melenceng antara kode mesin dan layar."""
     be_blok = _blok(BE, r"def _load_hook_title_style.*?DEFAULT = \{(.*?)\n        \}")
