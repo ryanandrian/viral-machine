@@ -18,6 +18,7 @@ type Cat = {
   content_languages: Record<string, unknown>[]; voice_catalog: Record<string, unknown>[]; tts_profiles: Record<string, unknown>[];
   duration_presets: Record<string, unknown>[];
   moods: Record<string, unknown>[];
+  fonts: Record<string, unknown>[];
   catalog_valid_values?: { field: string; value: string; label: string }[];
 };
 
@@ -103,7 +104,7 @@ function errText(code: string, detail?: Record<string, unknown> | null): React.R
 }
 
 // Urutan hierarki (owner 2026-07-04): PROVIDER dulu → AI Models (model = DETAIL dari provider).
-const TABS: [string, string][] = [["providers", "Providers"], ["models", "AI Models"], ["music", "Music"], ["moods", "Moods"], ["voice", "Voice"], ["languages", "Languages"], ["durations", "Durasi"], ["niche", "Niche"]];
+const TABS: [string, string][] = [["providers", "Providers"], ["models", "AI Models"], ["music", "Music"], ["moods", "Moods"], ["voice", "Voice"], ["languages", "Languages"], ["durations", "Durasi"], ["fonts", "Fonts"], ["niche", "Niche"]];
 
 // field minimal untuk "Add" per tabel (PK + wajib)
 const ADD_FIELDS: Record<string, { table: string; fields: [string, string][] }> = {
@@ -172,6 +173,7 @@ type BeatW = { beat_key: string; sort_order: number; label_id: string; label_en:
 export default function AdminCatalogPage() {
   const [tab, setTab] = useState("providers");
   const [data, setData] = useState<Cat | null>(null);
+  const [fUp, setFUp] = useState<{ name: string; file: File | null } | null>(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<React.ReactNode>(null);
   // [DURASI-F5] bobot antar-adegan + preset terpilih utk pratinjau porsi narasi.
@@ -321,6 +323,23 @@ export default function AdminCatalogPage() {
     const au = new Audio(url);
     au.addEventListener("loadedmetadata", () => { setMUp((m) => m ? { ...m, duration_s: au.duration ? String(Math.round(au.duration)) : m.duration_s } : m); URL.revokeObjectURL(url); }, { once: true });
     au.addEventListener("error", () => URL.revokeObjectURL(url), { once: true });
+  }
+  // Unggah font: berkas .ttf/.otf → S3 + baris `fonts`. Skala render DIHITUNG server dari isi
+  // berkas (bukan diketik), supaya pratinjau tenant selalu sama dengan hasil video.
+  async function uploadFont() {
+    if (!fUp?.file || !fUp.name.trim()) { setToast("Lengkapi nama font dan berkas"); return; }
+    setUploading(true);
+    const fd = new FormData();
+    fd.append("file", fUp.file); fd.append("name", fUp.name.trim());
+    const r = await fetch("/api/admin/fonts/upload", { method: "POST", body: fd });
+    setUploading(false);
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) {
+      setFUp(null); await load();
+      setToast(j.keluarga_di_berkas && j.keluarga_di_berkas !== fUp.name.trim()
+        ? `Terunggah. PERHATIAN: nama di dalam berkas "${j.keluarga_di_berkas}" ≠ nama yang Anda isi — mesin render mencari lewat nama berkas, jadi tetap jalan.`
+        : `Font diunggah (skala render ${j.ass_scale})`);
+    } else setToast(`Gagal: ${j.error ?? r.status}`);
   }
   async function uploadMusic() {
     if (!mUp?.file || !mUp.name.trim() || !mUp.niche.trim() || !mUp.mood.trim()) { setToast("Lengkapi file, nama, niche, mood"); return; }
@@ -639,6 +658,30 @@ export default function AdminCatalogPage() {
           </table></div></div>
         </>)}
 
+        {tab === "fonts" && (<>
+          <div className="cat-toolbar"><span className="muted" style={{ fontSize: "var(--text-sm)" }}>{data.fonts.length} font · S3 + server render</span><div className="right"><button className="btn btn-default btn-sm" onClick={() => setFUp({ name: "", file: null })}><Plus size={14} /> <Bi id="Tambah font" en="Add font" /></button></div></div>
+          <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl cat-tbl">
+            <thead><tr><th>nama</th><th>berkas</th><th className="num">skala render</th><th>contoh</th><th>active</th><th></th></tr></thead>
+            <tbody>
+              {data.fonts.length === 0 && <tr><td colSpan={6} className="muted" style={{ padding: "1rem", textAlign: "center" }}>Belum ada font. Unggah untuk mulai.</td></tr>}
+              {data.fonts.map((f) => (
+                <tr key={f.name as string}>
+                  <td style={{ color: "var(--text-primary)" }}>{f.name as string}</td>
+                  <td className="muted"><code>{f.file_name as string}</code></td>
+                  <td className="num muted" title="unitsPerEm ÷ (winAscent+winDescent) — dibaca dari berkas, dipakai agar pratinjau tenant = hasil video">{f.ass_scale ? Number(f.ass_scale).toFixed(4) : "—"}</td>
+                  <td>{f.file_url ? <span style={{ fontFamily: `"${f.name as string}",inherit`, fontSize: "1.05rem", color: "var(--text-primary)" }}>Aa Bb 123</span> : <span className="muted">—</span>}</td>
+                  <td><Switch table="fonts" k={f.name as string} on={f.is_active as boolean} /></td>
+                  <td style={{ whiteSpace: "nowrap" }}><button className="btn btn-ghost btn-sm" title="Hapus font (ditolak bila masih dipakai channel)" onClick={() => delAsset("fonts", f.name as string, f.name as string)}><Trash2 size={13} /></button></td>
+                </tr>
+              ))}
+            </tbody></table></div></div>
+          <div className="tip" style={{ marginTop: "0.75rem", fontSize: "var(--text-xs)" }}>
+            <Bi id="Berkas font disimpan di S3 dan diunduh sendiri oleh server render saat pertama dipakai — tidak perlu menyentuh server. Skala render dibaca dari isi berkas, bukan diketik." en="Font files live in S3 and are fetched by the render server on first use — no server access needed. Render scale is read from the file, never typed." />
+          </div>
+          {/* pemuat font aktif agar kolom "contoh" memakai huruf aslinya */}
+          <style>{data.fonts.filter((f) => f.file_url).map((f) => `@font-face{font-family:"${f.name as string}";src:url("${f.file_url as string}") format("truetype");font-display:swap}`).join("")}</style>
+        </>)}
+
         {tab === "music" && (<>
           <div className="cat-toolbar"><span className="muted" style={{ fontSize: "var(--text-sm)" }}>{data.music_library.length} tracks · S3</span><div className="right"><button className="btn btn-default btn-sm" onClick={() => setMUp({ name: "", niche: "", mood: "", bpm: "", duration_s: "", file: null })}><Plus size={14} /> <Bi id="Tambah musik" en="Add music" /></button></div></div>
           <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl cat-tbl">
@@ -845,6 +888,21 @@ export default function AdminCatalogPage() {
         </>
       )}
 
+      {fUp && (
+        <>
+          <div className="cat-scrim open" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 60 }} onClick={() => { if (!uploading) setFUp(null); }} />
+          <div className="card" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(440px,92vw)", maxHeight: "85vh", overflowY: "auto", zIndex: 61, padding: "1.25rem" }}>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: "0.75rem" }}><strong><Bi id="Unggah font (→ S3)" en="Upload font (→ S3)" /></strong><button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} disabled={uploading} onClick={() => setFUp(null)}><X size={16} /></button></div>
+            <div style={{ display: "grid", gap: "0.6rem" }}>
+              <div><label className="label">Berkas (.ttf / .otf, maks 10MB)</label><input className="input" type="file" accept=".ttf,.otf,font/ttf,font/otf" onChange={(e) => setFUp({ ...fUp, file: e.target.files?.[0] ?? null })} /></div>
+              {fUp.file && <div className="muted" style={{ fontSize: "0.7rem" }}>{fUp.file.name} · {(fUp.file.size / 1024).toFixed(0)}KB</div>}
+              <div><label className="label">Nama font</label><input className="input" value={fUp.name} onChange={(e) => setFUp({ ...fUp, name: e.target.value })} placeholder="mis. Oswald" /></div>
+              <div className="muted" style={{ fontSize: "0.7rem" }}><Bi id="Nama ini yang dilihat tenant di daftar pilihan. Skala render dibaca otomatis dari berkas — tidak perlu diisi." en="This name is what tenants pick from. Render scale is read from the file automatically." /></div>
+              <button className="btn btn-primary btn-sm" style={{ justifySelf: "end", marginTop: "0.25rem" }} disabled={uploading || !fUp.file || !fUp.name.trim()} onClick={uploadFont}>{uploading ? "Mengunggah…" : "Unggah ke S3"}</button>
+            </div>
+          </div>
+        </>
+      )}
       {mUp && (
         <>
           <div className="cat-scrim open" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 60 }} onClick={() => { if (!uploading) setMUp(null); }} />

@@ -21,6 +21,7 @@ const CATALOG: Record<string, { pk: string; cols: string[] }> = {
   content_languages: { pk: "locale", cols: ["display_name", "quality_tier", "caption_font", "is_active", "sort_order", "tts_providers_supported"] },
   voice_catalog: { pk: "voice_key", cols: ["provider_key", "display_name", "locale", "language", "gender", "age", "accent", "use_case", "description", "default_settings", "niche_default", "preview_url", "delivery_wps", "pace_locked", "is_active", "sort_order"] },
   music_library: { pk: "id", cols: ["is_active", "is_default", "name", "mood", "niche", "bpm", "duration_s"] },
+  fonts: { pk: "name", cols: ["is_active"] },   // nama/berkas/ass_scale lahir dari berkas saat unggah — bukan ketikan
   tts_profiles: { pk: "provider_key", cols: ["is_active", "delivery_wps", "tts_class", "speed_param", "param_schema"] },
   moods: { pk: "mood_id", cols: ["keywords", "is_active"] },   // NICHE_DNA F4: kelola mood + keyword deteksi (dwibahasa)
   niche_property_presets: { pk: "id", cols: ["property", "preset_key", "label", "label_en", "description", "description_en", "value", "apply_mode", "sort_order", "is_active"] },
@@ -115,7 +116,7 @@ export async function GET() {
   const g = await requireSuperAdmin();
   if (g.error) return g.error;
   const a = createAdminClient();
-  const [ai_models, ai_providers, music_library, content_languages, voice_catalog, tts_profiles, moods, duration_presets, valid_values] = await Promise.all([
+  const [ai_models, ai_providers, music_library, content_languages, voice_catalog, tts_profiles, moods, fonts, duration_presets, valid_values] = await Promise.all([
     a.from("ai_models").select("*").order("component").order("sort_order"),
     a.from("ai_providers").select("*").order("provider_key"),
     a.from("music_library").select("id, name, niche, mood, duration_s, bpm, object_key, is_active, is_default, source").order("niche").order("name"),
@@ -123,6 +124,7 @@ export async function GET() {
     a.from("voice_catalog").select("*").order("sort_order"),
     a.from("tts_profiles").select("*").order("provider_key"),
     a.from("moods").select("*").order("mood_id"),
+    a.from("fonts").select("*").order("name"),
     a.from("duration_presets").select("*").order("seconds"),
     a.from("catalog_valid_values").select("field,value,label").order("field").order("value"),
   ]);
@@ -135,6 +137,7 @@ export async function GET() {
     music_library: music, content_languages: content_languages.data ?? [],
     voice_catalog: voice_catalog.data ?? [], tts_profiles: tts_profiles.data ?? [],
     moods: moods.data ?? [], duration_presets: duration_presets.data ?? [],
+    fonts: fonts.data ?? [],
     catalog_valid_values: valid_values.data ?? [],
   });
 }
@@ -196,7 +199,7 @@ export async function POST(req: Request) {
 }
 
 // DELETE: { table, key } — hapus baris ASET + objek S3-nya. HANYA tabel aset (music_library, voice_catalog).
-const DELETABLE = new Set(["music_library", "voice_catalog", "ai_models", "ai_providers", "content_languages", "tts_profiles", "moods"]);
+const DELETABLE = new Set(["music_library", "voice_catalog", "ai_models", "ai_providers", "content_languages", "tts_profiles", "moods", "fonts"]);
 
 // Guard referensi (owner 2026-07-06): entitas katalog yang SEDANG DIPAKAI tak boleh terhapus —
 // ditolak ber-alasan (409), bukan merusak channel/niche yang merujuknya.
@@ -223,6 +226,16 @@ async function refGuard(a: ReturnType<typeof createAdminClient>, table: string, 
     const v = await cnt(a.from("voice_catalog").select("voice_key", { count: "exact", head: true }).eq("provider_key", key));
     if (v > 0) return `punya ${v} voice — hapus voice-nya dulu`;
   }
+  if (table === "fonts") {
+    // Anton = jaring pengaman mesin render (_resolve_font_path jatuh ke sini bila font lain hilang).
+    if (key === "Anton") return "font cadangan sistem — tak boleh dihapus";
+    const n = await cnt(a.from("channels").select("id", { count: "exact", head: true })
+      .or(`caption_style->>font_name.eq.${key},hook_title_style->>font_name.eq.${key}`));
+    if (n > 0) return `dipakai ${n} channel — nonaktifkan saja, jangan hapus`;
+    const t = await cnt(a.from("tenant_configs").select("tenant_id", { count: "exact", head: true })
+      .or(`caption_style->>font_name.eq.${key},hook_title_style->>font_name.eq.${key}`));
+    if (t > 0) return `dipakai ${t} pengaturan tenant`;
+  }
   if (table === "moods") {
     const n = await cnt(a.from("music_library").select("id", { count: "exact", head: true }).eq("mood", key));
     if (n > 0) return `dipakai ${n} track musik`;
@@ -248,6 +261,10 @@ export async function DELETE(req: Request) {
     if (ok) await s3DeleteObject(ok);
   } else if (table === "voice_catalog") {
     await s3DeleteObject(`voice-previews/${key}.mp3`);   // key = voice_key
+  } else if (table === "fonts") {
+    const { data: row } = await a.from("fonts").select("file_name").eq("name", key).maybeSingle();
+    const fn = (row as { file_name?: string } | null)?.file_name;
+    if (fn) await s3DeleteObject(`fonts/${fn}`);
   }
   const { error } = await a.from(table).delete().eq(def.pk, key);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

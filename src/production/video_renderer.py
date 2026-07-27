@@ -8,7 +8,8 @@ Fase 6C s6c3 upgrade:
 s88:
   - Font config-driven: font_name, outline_color, border_color, position_y_pct
   - Caption & hook style property lengkap untuk branding tenant
-  - fonts table di Supabase untuk Admin Panel font management
+  - Katalog font di tabel `fonts` — dikelola admin lewat tab Fonts di layar Catalog;
+    berkas diunduh sendiri dari S3 saat pertama dipakai (tak perlu menyentuh server)
 """
 
 import json
@@ -72,24 +73,63 @@ class VideoRenderer:
         """
         if getattr(self, "_font_cache", None) is not None:
             return self._font_cache
-        catalog = {}
+        catalog, rows_by_file = {}, {}
         try:
             from supabase import create_client
             sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
-            rows = sb.table("fonts").select("name,file_name").eq("is_active", True).execute().data or []
+            rows = sb.table("fonts").select("name,file_name,file_url").eq("is_active", True).execute().data or []
             catalog = {r["name"]: r["file_name"] for r in rows if r.get("name") and r.get("file_name")}
+            rows_by_file = {r["file_name"]: r for r in rows if r.get("file_name")}
         except Exception as e:
             logger.warning(f"[Font] katalog DB tak terbaca ({e}) — pakai Anton saja")
         if not catalog:
             catalog = {"Anton": "Anton-Regular.ttf"}
-        self._font_cache = catalog
+        self._font_cache, self._font_rows_cache = catalog, rows_by_file
         return catalog
+
+    def _font_rows(self) -> dict:
+        """Baris katalog font ber-indeks nama berkas (dipakai penyelaras unduh dari S3)."""
+        if getattr(self, "_font_rows_cache", None) is None:
+            self._font_catalog()
+        return getattr(self, "_font_rows_cache", None) or {}
+
+    def _fetch_font(self, file_name: str, path: str) -> bool:
+        """Unduh font dari S3 ke server render, sekali saja, saat pertama dibutuhkan.
+
+        Admin menambah font lewat layar Catalog → berkas mendarat di S3 + baris `fonts`. Tanpa
+        penyelaras ini, berkas TAK PERNAH sampai ke server render: font terdaftar & terlihat di
+        layar tenant, tapi video diam-diam memakai huruf lain — kelas bug yang persis diberantas
+        2026-07-27. Di sini server menjemput sendiri, jadi tak ada yang perlu menyentuh mesin.
+        """
+        try:
+            row = self._font_rows().get(file_name)
+            url = (row or {}).get("file_url")
+            if not url:
+                return False
+            import urllib.request
+            tmp = f"{path}.part"
+            with urllib.request.urlopen(url, timeout=30) as r, open(tmp, "wb") as f:
+                if r.status != 200:
+                    return False
+                f.write(r.read())
+            if os.path.getsize(tmp) < 1024:      # berkas font sah tak mungkin sekecil ini
+                os.remove(tmp)
+                return False
+            os.replace(tmp, path)                # atomik: tak ada berkas separuh yang terbaca render
+            subprocess.run(["fc-cache", "-f", self.FONTS_DIR], capture_output=True, timeout=60)
+            logger.info(f"[Font] '{file_name}' diunduh dari S3 ke server render")
+            return True
+        except Exception as e:
+            logger.warning(f"[Font] gagal mengunduh '{file_name}' dari S3: {e}")
+            return False
 
     def _resolve_font_path(self, font_name: str) -> str:
         """Resolve font_name ke absolute path. Fallback ke Anton jika tidak ditemukan."""
         file_name = self._font_catalog().get(font_name, f"{font_name}-Regular.ttf")
         path = os.path.join(self.FONTS_DIR, file_name)
         if os.path.exists(path):
+            return path
+        if self._fetch_font(file_name, path) and os.path.exists(path):
             return path
         fallback = os.path.join(self.FONTS_DIR, "Anton-Regular.ttf")
         logger.warning(f"[Font] '{font_name}' tidak ditemukan di {path}, fallback ke Anton")
