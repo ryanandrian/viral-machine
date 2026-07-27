@@ -51,3 +51,7 @@ replicate==1.0.7
 # Data
 numpy==2.2.6
 pandas==2.3.3
+
+# Pengukur lebar teks caption (pemotong baris presisi — video_renderer)
+Pillow==12.3.0
+fonttools==4.63.0

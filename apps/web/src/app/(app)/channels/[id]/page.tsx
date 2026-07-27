@@ -46,6 +46,9 @@ const poolOf = (c: ChannelRow | null): string[] => {
   return Array.isArray(c.niche_pool) && c.niche_pool.length ? c.niche_pool : (c.niche ? [c.niche] : []);
 };
 // Default caption_style — match BE DEFAULT_CAPTION_STYLE (video_renderer). Partial-override OK.
+// Lebar kanvas pratinjau caption (px). Dipakai untuk menskalakan ukuran huruf & margin agar
+// pratinjau = hasil video 1080px. Ubah di SATU tempat ini bila lebar kartunya berubah.
+const PRV_W = 220;
 const CAP_DEFAULT = { font_name: "Anton", font_size: 68, bold: true, active_word_color: "#FFD700", inactive_word_color: "#FFFFFF", outline_color: "#000000", outline: 4, position_y_pct: 83, max_words_per_line: 3 };
 // Model visual tersimpan: channels.visual_mode = "ai_image:<model>" / "ai_video:<model>" → kunci model saja.
 const visualModelOf = (vm: string) => (vm.startsWith("ai_image:") || vm.startsWith("ai_video:") ? vm.slice(9) : "");
@@ -343,6 +346,9 @@ export default function ChannelDetailPage() {
   };
 
   // C3: editor niche per-channel — pilih dari ENTITLEMENT tenant (pool); mode disimpulkan dari jumlah; tulis via RPC.
+  // Katalog font = tabel `fonts` (SATU sumber, dibaca mesin render juga). Dulu 5 nama di-hardcode di
+  // sini padahal server render cuma punya 1 file → 4 pilihan diam-diam jadi font sistem yang lain.
+  const [fontOpts, setFontOpts] = useState<{ name: string; file_url: string; ass_scale: number }[]>([]);
   const [nicheOpts, setNicheOpts] = useState<{ id: string; name: string }[]>([]);
   const [nicheMsg, setNicheMsg] = useState<string | null>(null);
   const [pool, setPool] = useState<string[]>([]);                 // niche_pool channel (1=fixed, >1=random)
@@ -604,6 +610,9 @@ export default function ChannelDetailPage() {
     // Entitlement katalog publik per-tier: CONFIG-DRIVEN dari plan_limits.full_niche_catalog (0124) — no-hardcode.
     const { data: plRow } = await supabase.from("plan_limits").select("full_niche_catalog").eq("plan_type", tier).maybeSingle();
     const fullCatalog = Boolean((plRow as { full_niche_catalog?: boolean } | null)?.full_niche_catalog);
+    const { data: frows } = await supabase.from("fonts").select("name,file_url,ass_scale").eq("is_active", true).order("name");
+    setFontOpts(((frows ?? []) as { name: string; file_url: string | null; ass_scale: number | string | null }[])
+      .filter((f) => f.name).map((f) => ({ name: f.name, file_url: f.file_url ?? "", ass_scale: Number(f.ass_scale) || 0.58 })));
     const { data: nrows } = await supabase.from("niches").select("niche_id,name,is_base,access_type,exclusive_to,default_hashtags").eq("is_active", true);
     const me = user?.id ?? "";
     const entitledN = (nrows ?? []).filter((n: { access_type: string; is_base: boolean; exclusive_to: string | null }) =>
@@ -1104,13 +1113,26 @@ export default function ChannelDetailPage() {
           <h3 className="card-title" style={{ marginBottom: "0.35rem", display: "flex", alignItems: "center", gap: "0.5rem" }}><Bi id="Caption (subtitle video)" en="Caption (video subtitles)" />{tanda(dirty.cap)}</h3>
           <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}><Bi id="Tampilan teks subtitle yang muncul di dalam video (brand channel ini)." en="On-screen subtitle styling shown inside the video (this channel's brand)." /></p>
           <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: "1.5rem", alignItems: "start" }}>
+            {/* Muat file font yang SAMA dengan yang dipakai mesin render (dari katalog `fonts`).
+                Tanpa ini pratinjau selalu memakai Geist, apa pun pilihan tenant. */}
+            <style>{fontOpts.filter((f) => f.file_url).map((f) =>
+              `@font-face{font-family:"${f.name}";src:url("${f.file_url}") format("truetype");font-display:swap}`).join("")}</style>
             {/* Preview 9:16 LIVE — pakai nilai caption_style sebenarnya */}
             <div style={{ position: "sticky", top: 72 }}>
               <div style={{ aspectRatio: "9/16", borderRadius: "var(--r-lg)", overflow: "hidden", position: "relative", background: "linear-gradient(170deg,#0c2233,#05101a)", border: "1px solid var(--border)" }}>
                 <div style={{ position: "absolute", inset: 0, background: "radial-gradient(120% 70% at 50% 25%,transparent,rgba(0,0,0,.55))" }} />
-                <div style={{ position: "absolute", left: 10, right: 10, top: `${capNum("position_y_pct", 83)}%`, transform: "translateY(-50%)", textAlign: "center", lineHeight: 1.12,
-                  fontFamily: `${capStr("font_name", "Anton")},Geist,sans-serif`, fontWeight: (cap.bold ?? true) ? 800 : 500,
-                  fontSize: capNum("font_size", 68) * 0.18, color: capStr("inactive_word_color", "#FFFFFF"),
+                {/* Pratinjau HARUS setara hasil video. Empat hal yang dulu membuatnya mustahil cocok:
+                    (1) hurufnya selalu Geist — font pilihan tenant tak pernah dimuat; kini dimuat dari
+                    katalog `fonts` (@font-face di bawah). (2) skalanya 0,18 asal-asalan; kini
+                    PRV_W/1080 dikali ass_scale, karena mesin render mengecilkan huruf sesuai metrik
+                    font (lihat migrasi 0175). (3) jangkarnya di tengah, mesin render menjangkar di
+                    BAWAH → translateY(-100%). (4) marginnya 10px di kanvas 220px (=4,5%), padahal
+                    mesin render 10px di 1080px (=0,9%). */}
+                <div style={{ position: "absolute", left: 10 * PRV_W / 1080, right: 10 * PRV_W / 1080,
+                  top: `${capNum("position_y_pct", 83)}%`, transform: "translateY(-100%)", textAlign: "center", lineHeight: 1.12,
+                  fontFamily: `"${capStr("font_name", "Anton")}",Geist,sans-serif`, fontWeight: (cap.bold ?? true) ? 800 : 500,
+                  fontSize: capNum("font_size", 68) * (fontOpts.find((f) => f.name === capStr("font_name", "Anton"))?.ass_scale ?? 0.577) * PRV_W / 1080,
+                  color: capStr("inactive_word_color", "#FFFFFF"),
                   textShadow: `0 0 ${capNum("outline", 4)}px ${capStr("outline_color", "#000000")}, 0 1px 4px rgba(0,0,0,.8)` }}>
                   Suara aneh di <span style={{ color: capStr("active_word_color", "#FFD700") }}>kedalaman</span>
                 </div>
@@ -1120,7 +1142,7 @@ export default function ChannelDetailPage() {
             {/* Kontrol — fld-row/slider/radio-pill/swatch */}
             <div>
               <div className="fld-row"><div className="k"><Bi id="Font" en="Font" /></div>
-                <div className="radio-row">{["Anton", "Montserrat", "Bebas Neue", "Oswald", "Poppins"].map((f) => <span key={f} className={`radio-pill${capStr("font_name", "Anton") === f ? " sel" : ""}`} onClick={() => setCap({ ...cap, font_name: f })}>{f}</span>)}</div></div>
+                <div className="radio-row">{fontOpts.map((f) => <span key={f.name} className={`radio-pill${capStr("font_name", "Anton") === f.name ? " sel" : ""}`} style={{ fontFamily: `"${f.name}",inherit` }} onClick={() => setCap({ ...cap, font_name: f.name })}>{f.name}</span>)}</div></div>
               <div className="fld-row"><div className="k"><Bi id="Ukuran font" en="Font size" /><div className="sub">{capNum("font_size", 68)}px</div></div>
                 <input type="range" className="slider" min={36} max={120} value={capNum("font_size", 68)} onChange={(e) => setCap({ ...cap, font_size: +e.target.value })} /></div>
               <div className="fld-row"><div className="k"><Bi id="Posisi vertikal" en="Vertical position" /><div className="sub">{capNum("position_y_pct", 83)}% dari atas</div></div>

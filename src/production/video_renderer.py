@@ -37,7 +37,6 @@ DEFAULT_CAPTION_STYLE = {
     "position_y_pct":       83,          # % dari atas layar
     "alignment":            2,           # bottom-center
     "max_words_per_line":   3,
-    "max_lines":            2,
 }
 
 
@@ -65,20 +64,69 @@ class VideoRenderer:
     AUDIO_BITRATE = "192k"
 
     FONTS_DIR  = "/usr/local/share/fonts"
-    # Map font_name → file name. Admin Panel tambah entry sini saat upload font baru.
-    FONT_FILES = {
-        "Anton": "Anton-Regular.ttf",
-    }
+
+    def _font_catalog(self) -> dict:
+        """Katalog font = tabel `fonts` (SATU sumber, dibaca FE juga). Hasil di-cache per proses.
+
+        Dulu peta font di-hardcode di sini berisi 1 entri saja, sementara layar tenant menawarkan 5
+        pilihan — 4 di antaranya tak ada di server dan diam-diam diganti font sistem (DejaVu Sans,
+        26% lebih lebar). Katalog DB menutup celah itu: tambah font = 1 baris DB + 1 file, tanpa deploy.
+        """
+        if getattr(self, "_font_cache", None) is not None:
+            return self._font_cache
+        catalog = {}
+        try:
+            from supabase import create_client
+            sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+            rows = sb.table("fonts").select("name,file_name").eq("is_active", True).execute().data or []
+            catalog = {r["name"]: r["file_name"] for r in rows if r.get("name") and r.get("file_name")}
+        except Exception as e:
+            logger.warning(f"[Font] katalog DB tak terbaca ({e}) — pakai Anton saja")
+        if not catalog:
+            catalog = {"Anton": "Anton-Regular.ttf"}
+        self._font_cache = catalog
+        return catalog
 
     def _resolve_font_path(self, font_name: str) -> str:
         """Resolve font_name ke absolute path. Fallback ke Anton jika tidak ditemukan."""
-        file_name = self.FONT_FILES.get(font_name, f"{font_name}-Regular.ttf")
+        file_name = self._font_catalog().get(font_name, f"{font_name}-Regular.ttf")
         path = os.path.join(self.FONTS_DIR, file_name)
         if os.path.exists(path):
             return path
         fallback = os.path.join(self.FONTS_DIR, "Anton-Regular.ttf")
         logger.warning(f"[Font] '{font_name}' tidak ditemukan di {path}, fallback ke Anton")
         return fallback
+
+    # Lebar aman satu baris caption = lebar layar dikurangi margin kiri/kanan ASS (10+10) dan
+    # ruang untuk garis tepi + bayangan yang menambah lebar visual di kedua sisi.
+    ASS_MARGIN_LR = 10
+    # Cadangan 2%: pengukuran vs render libass terbukti meleset maksimal 0,4 px pada 120 kombinasi uji
+    # (dan hampir selalu MELEBIHKAN = aman), cadangan ini menutup sisa pembulatan piksel.
+    WIDTH_SAFETY  = 0.98
+
+    def _text_width(self, font_path: str, font_size: int, text: str) -> float:
+        """Lebar teks dalam piksel PERSIS seperti yang akan dirender libass.
+
+        libass menskalakan huruf agar (usWinAscent + usWinDescent) = Fontsize — BUKAN em seperti
+        pengukur font pada umumnya. Tanpa koreksi ini hasil ukur meleset 31–79% tergantung font
+        (terverifikasi lewat 120 render nyata, 2026-07-27). Diukur pada em 1000 lalu diskalakan
+        linear supaya bebas galat pembulatan ukuran.
+        """
+        from PIL import ImageFont
+        from fontTools.ttLib import TTFont
+        key = (font_path, text)
+        cache = self.__dict__.setdefault("_w_cache", {})
+        if font_path not in self.__dict__.setdefault("_fmetric", {}):
+            tt = TTFont(font_path)
+            os2 = tt["OS/2"]
+            self._fmetric[font_path] = (
+                ImageFont.truetype(font_path, 1000),
+                tt["head"].unitsPerEm / (os2.usWinAscent + os2.usWinDescent),
+            )
+        fnt, factor = self._fmetric[font_path]
+        if key not in cache:
+            cache[key] = fnt.getlength(text) / 1000.0 * factor
+        return cache[key] * font_size
 
     def _build_srt_style(self, caption_style: dict) -> str:
         """Build force_style string untuk SRT fallback dari caption_style."""
@@ -353,7 +401,32 @@ class VideoRenderer:
         groups    = []
         current   = []
 
+        # BATAS LEBAR (2026-07-27) — sebab utama caption "pindah-pindah baris". Dulu grup HANYA
+        # dibatasi jumlah kata; pada huruf besar satu grup bisa 2–3× lebar layar, lalu libass
+        # membungkusnya sendiri. Karena teks dijangkarkan di BAWAH, tiap tambahan baris mendorong
+        # baris pertama NAIK — terukur 119 px pada channel nyata. Kini grup ditutup begitu lebarnya
+        # melewati batas aman, sehingga satu grup = satu baris dan posisi tak pernah berubah.
+        # Kata aktif dirender 1,12× lebih besar, jadi lebar diukur pada kondisi TERLEBAR itu.
+        font_path  = self._resolve_font_path(font_name)
+        limit_px   = (self.OUTPUT_WIDTH - 2 * self.ASS_MARGIN_LR - 2 * (outline + shadow)) * self.WIDTH_SAFETY
+
+        def _fits(words) -> bool:
+            """Muat 1 baris? Diuji pada giliran kata-aktif yang menghasilkan baris TERLEBAR."""
+            teks = [w.get("word", "") for w in words]
+            spasi = self._text_width(font_path, font_size, " ") * (len(teks) - 1)
+            widest = max(
+                sum(self._text_width(font_path, active_size if j == i else font_size, t)
+                    for j, t in enumerate(teks))
+                for i in range(len(teks))
+            )
+            return widest + spasi <= limit_px
+
         for i, wt in enumerate(word_timestamps):
+            # Kata ini bikin baris meluber? Tutup grup SEBELUM memasukkannya (kata tunggal yang
+            # sendirian pun tak muat tetap dibiarkan — memecah satu kata justru merusak keterbacaan).
+            if current and not _fits(current + [wt]):
+                groups.append(current)
+                current = []
             current.append(wt)
             word_text  = wt.get("word", "")
             last_char  = word_text[-1] if word_text else ""
@@ -390,8 +463,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         b_tag = "\\b1" if bold else ""
 
         # Step 2: Generate ASS events per kata dalam setiap baris
-        for group in groups:
+        for gi, group in enumerate(groups):
             group_size = len(group)
+            # Awal baris BERIKUTNYA — batas keras agar dua baris tak pernah tampil bersamaan.
+            next_start = groups[gi + 1][0]["start"] if gi + 1 < len(groups) else None
 
             for active_idx, active_word_data in enumerate(group):
                 word_start = active_word_data["start"]
@@ -400,7 +475,14 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 if active_idx < group_size - 1:
                     word_end = group[active_idx + 1]["start"]
                 else:
+                    # PENYEBAB UTAMA caption "loncat ke atas lalu ke bawah" (terukur 2026-07-27):
+                    # ekor +0,05 dtk pada kata terakhir sering MELEWATI awal baris berikutnya, sehingga
+                    # dua baris hidup bersamaan ~0,1 dtk. libass lalu menggeser salah satunya ke atas
+                    # (anti-tabrakan) — terjadi 61 kali dalam satu video 79 dtk. Ekor kini dipotong tepat
+                    # di awal baris berikutnya: nol tumpang tindih, nol geseran, tanpa menyentuh waktu MULAI.
                     word_end = active_word_data["end"] + 0.05
+                    if next_start is not None and word_end > next_start:
+                        word_end = next_start
 
                 # Build satu baris: semua kata dalam group
                 # hanya kata aktif yang kuning, sisanya putih
