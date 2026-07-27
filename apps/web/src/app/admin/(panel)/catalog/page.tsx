@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
-import { Plus, Target, ArrowRight, X, Trash2 } from "lucide-react";
+import { Plus, Target, ArrowRight, X, Trash2, AlertTriangle } from "lucide-react";
 import PresetTables from "@/components/preset-tables";
 import "./catalog.css";
 
@@ -174,6 +174,10 @@ export default function AdminCatalogPage() {
   const [tab, setTab] = useState("providers");
   const [data, setData] = useState<Cat | null>(null);
   const [fUp, setFUp] = useState<{ name: string; file: File | null } | null>(null);
+  // Status pemuatan font di browser. Tanpa ini, font yang gagal dimuat tetap tampil "normal" dengan
+  // huruf pengganti — admin mengira beres padahal berkasnya bermasalah (kelas bug yang sama dgn
+  // "font terdaftar tapi tak ada di server"). Dicek pakai API browser, bukan diasumsikan.
+  const [fontOk, setFontOk] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<React.ReactNode>(null);
   // [DURASI-F5] bobot antar-adegan + preset terpilih utk pratinjau porsi narasi.
@@ -474,6 +478,21 @@ export default function AdminCatalogPage() {
     else { const j = await r.json().catch(() => ({})); setFormErr({ node: errText(String(j.error ?? r.status), j.detail), col: (j.detail as { col?: string } | null)?.col }); }
   }
 
+  useEffect(() => {
+    const daftar = (data?.fonts ?? []).filter((f) => f.file_url).map((f) => f.name as string);
+    if (!daftar.length || typeof document === "undefined" || !document.fonts) return;
+    let batal = false;
+    (async () => {
+      const hasil: Record<string, boolean> = {};
+      for (const nm of daftar) {
+        try { await document.fonts.load(`16px "${nm}"`); hasil[nm] = document.fonts.check(`16px "${nm}"`); }
+        catch { hasil[nm] = false; }
+      }
+      if (!batal) setFontOk(hasil);
+    })();
+    return () => { batal = true; };
+  }, [data?.fonts]);
+
   const Switch = ({ table, k, on }: { table: string; k: string; on: boolean }) => (
     <label className="switch"><input type="checkbox" checked={on} onChange={(e) => toggle(table, k, e.target.checked)} /><span className="track" /><span className="thumb" /></label>
   );
@@ -666,10 +685,19 @@ export default function AdminCatalogPage() {
               {data.fonts.length === 0 && <tr><td colSpan={6} className="muted" style={{ padding: "1rem", textAlign: "center" }}>Belum ada font. Unggah untuk mulai.</td></tr>}
               {data.fonts.map((f) => (
                 <tr key={f.name as string}>
-                  <td style={{ color: "var(--text-primary)" }}>{f.name as string}</td>
+                  <td style={{ color: "var(--text-primary)", fontFamily: `"${f.name as string}",inherit`, fontSize: "1.15rem" }}>{f.name as string}</td>
                   <td className="muted"><code>{f.file_name as string}</code></td>
                   <td className="num muted" title="unitsPerEm ÷ (winAscent+winDescent) — dibaca dari berkas, dipakai agar pratinjau tenant = hasil video">{f.ass_scale ? Number(f.ass_scale).toFixed(4) : "—"}</td>
-                  <td>{f.file_url ? <span style={{ fontFamily: `"${f.name as string}",inherit`, fontSize: "1.05rem", color: "var(--text-primary)" }}>Aa Bb 123</span> : <span className="muted">—</span>}</td>
+                  <td style={{ minWidth: 300 }}>
+                    {fontOk[f.name as string] === false ? (
+                      <span className="badge badge-error" title="Browser menolak berkas ini — periksa berkasnya; mesin render mungkin ikut bermasalah"><AlertTriangle size={11} /> gagal dimuat</span>
+                    ) : (
+                      <div style={{ fontFamily: `"${f.name as string}",inherit`, color: "var(--text-primary)", lineHeight: 1.25 }}>
+                        <div style={{ fontSize: "1.5rem" }}>Rahasia Alam Semesta</div>
+                        <div style={{ fontSize: "0.95rem", opacity: 0.8 }}>ABCDEFGHIJ abcdefghij 0123456789</div>
+                      </div>
+                    )}
+                  </td>
                   <td><Switch table="fonts" k={f.name as string} on={f.is_active as boolean} /></td>
                   <td style={{ whiteSpace: "nowrap" }}><button className="btn btn-ghost btn-sm" title="Hapus font (ditolak bila masih dipakai channel)" onClick={() => delAsset("fonts", f.name as string, f.name as string)}><Trash2 size={13} /></button></td>
                 </tr>
@@ -679,7 +707,13 @@ export default function AdminCatalogPage() {
             <Bi id="Berkas font disimpan di S3 dan diunduh sendiri oleh server render saat pertama dipakai — tidak perlu menyentuh server. Skala render dibaca dari isi berkas, bukan diketik." en="Font files live in S3 and are fetched by the render server on first use — no server access needed. Render scale is read from the file, never typed." />
           </div>
           {/* pemuat font aktif agar kolom "contoh" memakai huruf aslinya */}
-          <style>{data.fonts.filter((f) => f.file_url).map((f) => `@font-face{font-family:"${f.name as string}";src:url("${f.file_url as string}") format("truetype");font-display:swap}`).join("")}</style>
+          {/* format() WAJIB ikut ekstensi: .otf dideklarasikan "truetype" → browser menolak diam-diam,
+              contoh huruf jatuh ke font lain tanpa ada yang sadar. */}
+          <style>{data.fonts.filter((f) => f.file_url).map((f) => {
+            const url = f.file_url as string;
+            const fmt = url.toLowerCase().endsWith(".otf") ? "opentype" : "truetype";
+            return `@font-face{font-family:"${f.name as string}";src:url("${url}") format("${fmt}");font-display:swap}`;
+          }).join("")}</style>
         </>)}
 
         {tab === "music" && (<>
