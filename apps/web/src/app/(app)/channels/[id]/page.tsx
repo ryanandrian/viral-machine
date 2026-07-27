@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ExternalLink, Settings, ArrowRight, BarChart3, Calendar, Activity, Loader2, Check, Pause, Play, AlertTriangle, Mic, ShieldCheck, Sparkles, Clock, Trash2, Plus, PenLine, Image as ImageIcon, Info, Search, X, Shuffle, Upload, Lock, Video } from "lucide-react";
@@ -40,8 +40,57 @@ type ChannelRow = {
   logo_position: string | null; logo_size: number | null; logo_opacity: number | null;
   landing_link: string | null; link_position: string | null;
 };
+// Pool niche efektif channel — SATU logika dipakai load() (isi form) & save() (deteksi perubahan).
+const poolOf = (c: ChannelRow | null): string[] => {
+  if (!c) return [];
+  return Array.isArray(c.niche_pool) && c.niche_pool.length ? c.niche_pool : (c.niche ? [c.niche] : []);
+};
 // Default caption_style — match BE DEFAULT_CAPTION_STYLE (video_renderer). Partial-override OK.
 const CAP_DEFAULT = { font_name: "Anton", font_size: 68, bold: true, active_word_color: "#FFD700", inactive_word_color: "#FFFFFF", outline_color: "#000000", outline: 4, position_y_pct: 83, max_words_per_line: 3 };
+// Model visual tersimpan: channels.visual_mode = "ai_image:<model>" / "ai_video:<model>" → kunci model saja.
+const visualModelOf = (vm: string) => (vm.startsWith("ai_image:") || vm.startsWith("ai_video:") ? vm.slice(9) : "");
+// niche_hashtags DB ({niche:["#a","#b"]}) → bentuk EDIT di layar ({niche:"#a, #b"}).
+const tagsFrom = (nh: Record<string, string[]> | null | undefined): Record<string, string> =>
+  Object.fromEntries(Object.entries(nh && typeof nh === "object" ? nh : {}).map(([k, v]) => [k, Array.isArray(v) ? v.join(", ") : ""]));
+// Nilai form yang SEHARUSNYA tampil untuk satu baris channel — SATU sumber kebenaran, dipakai load()
+// (mengisi layar) DAN penghitung "belum disimpan" tiap kartu. Satu tempat = mustahil keduanya melenceng.
+const formFrom = (c: ChannelRow | null) => ({
+  name: c?.channel_name ?? "", clang: c?.content_language ?? "id-ID", privacy: c?.publish_privacy ?? "private",
+  targetYt: c?.platform_channel_id ?? "", ytAccountId: c?.youtube_account_id ?? "", pool: poolOf(c),
+  dpreset: c?.duration_preset ?? null,
+  llmProv: c?.llm_library ?? "", llmModel: c?.llm_model ?? "", llmAcct: c?.llm_account_id ?? "",
+  ttsProv: c?.tts_provider ?? "", ttsModel: c?.tts_model ?? "", voiceKey: c?.voice_key ?? "", ttsAcct: c?.tts_account_id ?? "",
+  imgModel: visualModelOf(c?.visual_mode ?? ""), imgQuality: c?.image_quality ?? "low", visualAcct: c?.visual_account_id ?? "",
+  cap: { ...CAP_DEFAULT, ...(c?.caption_style && typeof c.caption_style === "object" ? c.caption_style : {}) } as Record<string, unknown>,
+  tags: tagsFrom(c?.niche_hashtags),
+  ctaMode: c?.cta_mode ?? "implicit", brandName: c?.brand_name ?? "", ctaText: c?.brand_cta_text ?? "",
+  brandLogo: c?.brand_logo ?? "", logoPos: c?.logo_position ?? "top-right", logoSize: c?.logo_size ?? 0.12,
+  logoOpacity: c?.logo_opacity ?? 0.85, landingLink: c?.landing_link ?? "", linkPos: c?.link_position ?? "bottom",
+  musicOn: c?.music_enabled ?? false, musicVol: c?.music_volume ?? 0.1, musicMood: c?.music_default_mood ?? "",
+  minScore: c?.script_min_viral_score ?? 75, maxRetry: c?.script_max_retry ?? 3,
+});
+// Pembanding nilai form yang KEBAL beda urutan kunci (cap & tags berbentuk objek) — kalau tidak, tombol
+// Simpan bisa menyala terus tanpa sebab hanya karena kunci objek tersusun berbeda.
+const stable = (v: unknown): string => JSON.stringify(v, (_k, x) =>
+  x && typeof x === "object" && !Array.isArray(x)
+    ? Object.fromEntries(Object.entries(x as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : 1)))
+    : x) ?? "";
+const same = (a: unknown, b: unknown) => stable(a) === stable(b);
+// Hashtag: bentuk yang BENAR-BENAR tersimpan dari kotak ketik ("a, #b" → ["#a","#b"]; entri kosong dibuang).
+// SATU sumber — dipakai saat menyimpan DAN saat menilai "sudah berubah?".
+const hashtagsOf = (t: Record<string, string>): Record<string, string[]> => {
+  const nh: Record<string, string[]> = {};
+  for (const [n, s] of Object.entries(t)) {
+    const arr = s.split(",").map((x) => x.trim()).filter(Boolean).map((x) => (x.startsWith("#") ? x : `#${x}`));
+    if (arr.length) nh[n] = arr;
+  }
+  return nh;
+};
+// Pembanding "sudah berubah?" — nilai dinormalkan SAMA PERSIS seperti saat disimpan (spasi ujung dibuang).
+// Tanpa ini, mengetik "Nama " membuat tombol menyala SELAMANYA: server menyimpan "Nama", layar menahan
+// "Nama ", keduanya tak pernah cocok. Kelas bug yang sama berlaku utk semua kotak teks yang di-trim.
+const rapi = (v: unknown) => (typeof v === "string" ? v.trim() : v);
+const sameForm = (a: unknown, b: unknown) => same(rapi(a), rapi(b));
 type ModelOpt = { model_key: string; provider_key: string; display_name: string; quality_tier?: string | null; pricing?: Record<string, unknown> | null; component?: string };
 type VoiceOpt = { voice_key: string; provider_key: string; display_name: string; gender: string | null; preview_url: string | null; locale: string | null; language: string | null };
 
@@ -83,6 +132,7 @@ export default function ChannelDetailPage() {
   const [err, setErr] = useState<string | null>(null);
   const [testMsg, setTestMsg] = useState<string | null>(null);
   const wasHaltedRef = useRef(false);  // latch: channel pernah halted saat sesi ini → pesan hasil pakai "aktif kembali".
+  const chRef = useRef<ChannelRow | null>(null);  // nilai tersimpan SEBELUM penyegaran (pagar anti-timpa di load)
   // Siklus hidup kartu hasil uji (owner 2026-07-08: "sampai kapan muncul?") — hilang bila:
   // (1) tenant klik Tutup (localStorage per-test.id, persisten), (2) usang > test_result_ttl_hours
   // (app_config, admin-editable, fallback 24), (3) test baru menggantikan (test.id berubah).
@@ -186,7 +236,7 @@ export default function ChannelDetailPage() {
       const fd = new FormData(); fd.append("file", file); fd.append("channel_id", id);
       const res = await fetch("/api/channels/upload-logo", { method: "POST", body: fd });
       const j = await res.json().catch(() => ({}));
-      if (res.ok) { setBrandLogo(j.public_url); setBr2Msg(`Logo terupload (${j.width}×${j.height}px) — klik “Simpan & Terapkan”.`); }
+      if (res.ok) { setBrandLogo(j.public_url); setBr2Msg(`Logo terupload (${j.width}×${j.height}px) — klik “Simpan” untuk menerapkan.`); }
       else setBr2Msg(j.error || "Upload gagal");
     } catch (e) { setBr2Msg(`Error: ${(e as Error).message}`); }
     setLogoUploading(false);
@@ -203,12 +253,7 @@ export default function ChannelDetailPage() {
   }
   async function saveHashtags() {
     setHashMsg(null); setSavingHash(true);
-    const nh: Record<string, string[]> = {};
-    for (const [n, s] of Object.entries(tags)) {
-      const arr = s.split(",").map((t) => t.trim()).filter(Boolean).map((t) => (t.startsWith("#") ? t : `#${t}`));
-      if (arr.length) nh[n] = arr;
-    }
-    const { error } = await supabase.from("channels").update({ niche_hashtags: nh }).eq("id", id);
+    const { error } = await supabase.from("channels").update({ niche_hashtags: hashtagsOf(tags) }).eq("id", id);
     setSavingHash(false);
     setHashMsg(error ? `Gagal: ${error.message}` : "Tersimpan");
     if (!error) load();
@@ -300,7 +345,6 @@ export default function ChannelDetailPage() {
   // C3: editor niche per-channel — pilih dari ENTITLEMENT tenant (pool); mode disimpulkan dari jumlah; tulis via RPC.
   const [nicheOpts, setNicheOpts] = useState<{ id: string; name: string }[]>([]);
   const [nicheMsg, setNicheMsg] = useState<string | null>(null);
-  const [savingNiche, setSavingNiche] = useState(false);
   const [pool, setPool] = useState<string[]>([]);                 // niche_pool channel (1=fixed, >1=random)
   const [nicheSearch, setNicheSearch] = useState("");             // kotak cari (skala ratusan)
   const [nicheDefaults, setNicheDefaults] = useState<Record<string, string[]>>({}); // niches.default_hashtags (placeholder hashtag)
@@ -348,16 +392,6 @@ export default function ChannelDetailPage() {
     setSavingSlot(false);
     if (error) { setSlotMsg(`Gagal: ${error.message}`); return; }
     setSlots(sorted); setSlotMsg("Jadwal tersimpan");
-  }
-
-  async function saveNiche() {
-    setNicheMsg(null); setSavingNiche(true);
-    // Mode disimpulkan dari jumlah: 1 niche = fixed, >1 = random (otomatis). Niche utama = pool[0].
-    const mode = pool.length > 1 ? "random" : "fixed";
-    const { error } = await supabase.rpc("set_channel_niche", { p_channel_id: id, p_niche: pool[0] ?? "", p_niche_mode: mode, p_niche_pool: pool });
-    setSavingNiche(false);
-    setNicheMsg(error ? (error.message.includes("entitlement") ? "Niche itu di luar paket Anda" : `Gagal: ${error.message}`) : "Niche tersimpan");
-    if (!error) load();
   }
 
   // Hasil uji KHUSUS channel (renderResult TestNichePanel) — sopan (target tenant Indonesia), sebut model
@@ -471,26 +505,32 @@ export default function ChannelDetailPage() {
     setCh(c);
     if (c?.production_paused) wasHaltedRef.current = true;
     if (c) {
-      setName(c.channel_name ?? ""); setClang(c.content_language ?? "id-ID");
-      setPrivacy(c.publish_privacy ?? "private");
-      setPool(Array.isArray(c.niche_pool) && c.niche_pool.length ? c.niche_pool : (c.niche ? [c.niche] : []));
-      setDpreset(c.duration_preset ?? null); setSlots(c.publish_slots ?? []); setTargetYt(c.platform_channel_id ?? ""); setYtAccountId(c.youtube_account_id ?? "");
-      setLlmProv(c.llm_library ?? ""); setLlmModel(c.llm_model ?? "");
-      const vm = c.visual_mode ?? "";
-      setImgModel(vm.startsWith("ai_image:") || vm.startsWith("ai_video:") ? vm.slice(9) : "");
-      setTtsProv(c.tts_provider ?? ""); setTtsModel(c.tts_model ?? ""); setVoiceKey(c.voice_key ?? "");
-      setLlmAcct(c.llm_account_id ?? ""); setTtsAcct(c.tts_account_id ?? ""); setVisualAcct(c.visual_account_id ?? "");
-      setImgQuality(c.image_quality ?? "low"); setMusicOn(c.music_enabled ?? false);
-      setMusicVol(c.music_volume ?? 0.1); setMusicMood(c.music_default_mood ?? "");
-      setMinScore(c.script_min_viral_score ?? 75); setMaxRetry(c.script_max_retry ?? 3);
-      setCap({ ...CAP_DEFAULT, ...(c.caption_style && typeof c.caption_style === "object" ? c.caption_style : {}) });
-      const nh = (c.niche_hashtags && typeof c.niche_hashtags === "object") ? c.niche_hashtags : {};
-      setTags(Object.fromEntries(Object.entries(nh).map(([k, v]) => [k, Array.isArray(v) ? v.join(", ") : ""])));
-      setCtaMode(c.cta_mode ?? "implicit"); setBrandName(c.brand_name ?? ""); setCtaText(c.brand_cta_text ?? "");
-      setBrandLogo(c.brand_logo ?? ""); setLogoPos(c.logo_position ?? "top-right");
-      setLogoSize(c.logo_size ?? 0.12); setLogoOpacity(c.logo_opacity ?? 0.85);
-      setLandingLink(c.landing_link ?? ""); setLinkPos(c.link_position ?? "bottom");
+      // Segarkan isian dari DB TANPA membuang perubahan yang belum disimpan: sebuah kotak hanya ditimpa
+      // bila isinya MASIH SAMA dengan nilai tersimpan sebelumnya. Tanpa pagar ini, menyimpan satu kartu
+      // akan menghapus ketikan tenant di kartu lain — penyegaran menyapu seluruh form.
+      const before = formFrom(chRef.current), after = formFrom(c);
+      const put = <T,>(set: Dispatch<SetStateAction<T>>, b: T, a: T) => set((cur) => (same(cur, b) ? a : cur));
+      put(setName, before.name, after.name); put(setClang, before.clang, after.clang);
+      put(setPrivacy, before.privacy, after.privacy); put(setPool, before.pool, after.pool);
+      put(setTargetYt, before.targetYt, after.targetYt); put(setYtAccountId, before.ytAccountId, after.ytAccountId);
+      put(setDpreset, before.dpreset, after.dpreset);
+      put(setLlmProv, before.llmProv, after.llmProv); put(setLlmModel, before.llmModel, after.llmModel);
+      put(setTtsProv, before.ttsProv, after.ttsProv); put(setTtsModel, before.ttsModel, after.ttsModel);
+      put(setVoiceKey, before.voiceKey, after.voiceKey); put(setImgModel, before.imgModel, after.imgModel);
+      put(setLlmAcct, before.llmAcct, after.llmAcct); put(setTtsAcct, before.ttsAcct, after.ttsAcct);
+      put(setVisualAcct, before.visualAcct, after.visualAcct); put(setImgQuality, before.imgQuality, after.imgQuality);
+      put(setMusicOn, before.musicOn, after.musicOn); put(setMusicVol, before.musicVol, after.musicVol);
+      put(setMusicMood, before.musicMood, after.musicMood);
+      put(setMinScore, before.minScore, after.minScore); put(setMaxRetry, before.maxRetry, after.maxRetry);
+      put(setCap, before.cap, after.cap); put(setTags, before.tags, after.tags);
+      put(setCtaMode, before.ctaMode, after.ctaMode); put(setBrandName, before.brandName, after.brandName);
+      put(setCtaText, before.ctaText, after.ctaText); put(setBrandLogo, before.brandLogo, after.brandLogo);
+      put(setLogoPos, before.logoPos, after.logoPos); put(setLogoSize, before.logoSize, after.logoSize);
+      put(setLogoOpacity, before.logoOpacity, after.logoOpacity);
+      put(setLandingLink, before.landingLink, after.landingLink); put(setLinkPos, before.linkPos, after.linkPos);
+      setSlots(c.publish_slots ?? []);   // jadwal punya tombolnya sendiri (tambah/hapus langsung) — bukan form
     }
+    chRef.current = c;
     // F2-03: katalog (ai_models/tts_profiles/voice_catalog — RLS read). Voice = CHANNEL (§10.B FINAL); tanpa pre-fill niche.
     // Penyedia AKTIF dimuat DULU: opsi model/TTS wajib disaring per vendor aktif (mesin get_providers() hanya
     // kenal penyedia aktif — model dari vendor yang admin matikan TIDAK BOLEH bisa dipilih; mandat butir-3 2026-07-06).
@@ -601,7 +641,22 @@ export default function ChannelDetailPage() {
   }
 
   async function save() {
-    setErr(null); setSaved(false); setBusy(true);
+    setErr(null); setSaved(false); setNicheMsg(null); setBusy(true);
+    // Tombol "Simpan niche" dilebur ke tombol ini (owner 2026-07-27). Niche tetap WAJIB lewat gerbang
+    // server set_channel_niche (cek hak paket), jadi ia jalan lebih dulu — dan HANYA bila benar-benar
+    // berubah, supaya sekadar ganti nama channel tidak ikut ditolak gerbang itu. Pesan hasilnya tetap
+    // di tempat lama (nicheMsg, di bawah daftar niche).
+    if (pool.length > 0 && JSON.stringify(pool) !== JSON.stringify(poolOf(ch))) {
+      // Mode disimpulkan dari jumlah: 1 niche = fixed, >1 = random (otomatis). Niche utama = pool[0].
+      const mode = pool.length > 1 ? "random" : "fixed";
+      const { error: nErr } = await supabase.rpc("set_channel_niche", { p_channel_id: id, p_niche: pool[0], p_niche_mode: mode, p_niche_pool: pool });
+      if (nErr) {
+        setBusy(false);
+        setNicheMsg(nErr.message.includes("entitlement") ? "Niche itu di luar paket Anda" : `Gagal: ${nErr.message}`);
+        return;
+      }
+      setNicheMsg("Niche tersimpan");
+    }
     const { error } = await supabase.from("channels").update({
       channel_name: name.trim() || null, content_language: clang, publish_privacy: privacy,
       youtube_account_id: ytAccountId || null, platform_channel_id: targetYt.trim() || null,
@@ -611,6 +666,81 @@ export default function ChannelDetailPage() {
     if (error) { setErr(error.message.includes("ux_channels_tenant_target") ? "__dup_target__" : error.message); return; }
     setSaved(true); load();
   }
+
+  // ── "Belum disimpan" per kartu ────────────────────────────────────────────────────────────────────
+  // Nilai di layar dibandingkan dengan nilai tersimpan (formFrom = sumber yang sama dgn pengisi form),
+  // jadi mustahil keduanya melenceng. Tombol Simpan hidup HANYA bila kartunya benar-benar berubah.
+  const f0 = formFrom(ch);
+  const chg = (...pasangan: [unknown, unknown][]) => pasangan.some(([kini, tersimpan]) => !sameForm(kini, tersimpan));
+  const dirty = {
+    ident: chg([name, f0.name], [clang, f0.clang], [privacy, f0.privacy], [targetYt, f0.targetYt], [ytAccountId, f0.ytAccountId], [pool, f0.pool]),
+    preset: chg([dpreset, f0.dpreset]),
+    llm: chg([llmProv, f0.llmProv], [llmModel, f0.llmModel], [llmAcct, f0.llmAcct]),
+    tts: chg([ttsProv, f0.ttsProv], [ttsModel, f0.ttsModel], [voiceKey, f0.voiceKey], [ttsAcct, f0.ttsAcct]),
+    visual: chg([imgModel, f0.imgModel], [imgQuality, f0.imgQuality], [visualAcct, f0.visualAcct]),
+    cap: chg([cap, f0.cap]),
+    tags: chg([hashtagsOf(tags), hashtagsOf(f0.tags)]),
+    brand: chg([ctaMode, f0.ctaMode], [brandName, f0.brandName], [ctaText, f0.ctaText], [brandLogo, f0.brandLogo],
+      [logoPos, f0.logoPos], [logoSize, f0.logoSize], [logoOpacity, f0.logoOpacity], [landingLink, f0.landingLink], [linkPos, f0.linkPos]),
+    ops: chg([musicOn, f0.musicOn], [musicVol, f0.musicVol], [musicMood, f0.musicMood], [minScore, f0.minScore], [maxRetry, f0.maxRetry]),
+  };
+  const adaPerubahan = Object.values(dirty).some(Boolean);
+  // Peringatan tutup/muat-ulang tab saat masih ada perubahan belum disimpan. (Catatan jujur: berpindah
+  // lewat menu di dalam aplikasi TIDAK bisa dicegat browser — di situ penjaganya adalah tombol biru +
+  // penanda "Belum disimpan", plus pagar anti-timpa di load().)
+  useEffect(() => {
+    if (!adaPerubahan) return;
+    const h = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", h);
+    return () => window.removeEventListener("beforeunload", h);
+  }, [adaPerubahan]);
+  // Konfirmasi sukses hilang sendiri setelah 5 dtk. Pesan GAGAL & pesan ber-PETUNJUK ("LANGKAH BERIKUT")
+  // sengaja MENETAP — daftar putih eksplisit, bukan tebak-tebakan kata, supaya tak ada pesan penting hilang.
+  useEffect(() => {
+    const SINGKAT = new Set(["Tersimpan", "Niche tersimpan", "Durasi tersimpan"]);
+    const t: ReturnType<typeof setTimeout>[] = [];
+    const bersihkan = <T,>(nilai: T | null, cocok: (v: T) => boolean, clear: () => void) => {
+      if (nilai != null && cocok(nilai)) t.push(setTimeout(clear, 5000));
+    };
+    if (saved) t.push(setTimeout(() => setSaved(false), 5000));
+    bersihkan(nicheMsg, (m) => SINGKAT.has(m), () => setNicheMsg(null));
+    bersihkan(presetMsg, (m) => SINGKAT.has(m), () => setPresetMsg(null));
+    bersihkan(brandMsg, (m) => SINGKAT.has(m), () => setBrandMsg(null));
+    bersihkan(br2Msg, (m) => SINGKAT.has(m), () => setBr2Msg(null));
+    bersihkan(opsMsg, (m) => SINGKAT.has(m), () => setOpsMsg(null));
+    bersihkan(hashMsg, (m) => SINGKAT.has(m), () => setHashMsg(null));
+    bersihkan(aiMsg, (m) => m.ok && SINGKAT.has(m.text), () => setAiMsg(null));
+    return () => t.forEach(clearTimeout);
+  }, [saved, nicheMsg, presetMsg, brandMsg, br2Msg, opsMsg, hashMsg, aiMsg]);
+  // Batalkan perubahan = kembalikan isian kartu ke nilai tersimpan + bersihkan pesan kartu itu.
+  const undo = {
+    ident: () => { setName(f0.name); setClang(f0.clang); setPrivacy(f0.privacy); setTargetYt(f0.targetYt); setYtAccountId(f0.ytAccountId); setPool(f0.pool); setErr(null); setNicheMsg(null); setSaved(false); },
+    preset: () => { setDpreset(f0.dpreset); setPresetMsg(null); },
+    llm: () => { setLlmProv(f0.llmProv); setLlmModel(f0.llmModel); setLlmAcct(f0.llmAcct); setAiMsg(null); },
+    tts: () => { setTtsProv(f0.ttsProv); setTtsModel(f0.ttsModel); setVoiceKey(f0.voiceKey); setTtsAcct(f0.ttsAcct); setAiMsg(null); },
+    visual: () => { setImgModel(f0.imgModel); setImgQuality(f0.imgQuality); setVisualAcct(f0.visualAcct); setAiMsg(null);
+      setVisualProv(imgOpts.find((m) => m.model_key === f0.imgModel)?.provider_key ?? ""); },
+    cap: () => { setCap(f0.cap); setBrandMsg(null); },
+    tags: () => { setTags(f0.tags); setHashMsg(null); },
+    brand: () => { setCtaMode(f0.ctaMode); setBrandName(f0.brandName); setCtaText(f0.ctaText); setBrandLogo(f0.brandLogo);
+      setLogoPos(f0.logoPos); setLogoSize(f0.logoSize); setLogoOpacity(f0.logoOpacity); setLandingLink(f0.landingLink); setLinkPos(f0.linkPos); setBr2Msg(null); },
+    ops: () => { setMusicOn(f0.musicOn); setMusicVol(f0.musicVol); setMusicMood(f0.musicMood); setMinScore(f0.minScore); setMaxRetry(f0.maxRetry); setOpsMsg(null); },
+  };
+  // Baris simpan SERAGAM semua kartu: pesan (kiri) · [Batalkan perubahan] · [Simpan] rata kanan.
+  // Tombol Simpan mati HANYA karena dua sebab: belum ada perubahan, atau sedang menyimpan. TIDAK PERNAH
+  // mati karena isian dianggap kurang — validasi muncul setelah diklik, agar tenant tak menekan tombol
+  // mati tanpa tahu sebabnya. Bukan komponen (fungsi biasa) supaya React tidak me-remount tiap ketikan.
+  const saveBar = (p: { ubah: boolean; sibuk: boolean; simpan: () => void; batal: () => void; pesan?: React.ReactNode }) => (
+    <div className="save-bar">
+      <span className="muted">{p.pesan}</span>
+      {p.ubah && <button className="btn btn-ghost" disabled={p.sibuk} onClick={p.batal}><Bi id="Batalkan perubahan" en="Discard changes" /></button>}
+      <button className="btn btn-default" disabled={p.sibuk || !p.ubah} onClick={p.simpan}>{p.sibuk ? <Loader2 size={15} className="spin" /> : <Bi id="Simpan" en="Save" />}</button>
+    </div>
+  );
+  // Penanda di judul kartu — supaya tenant yang sudah menggulung jauh tahu ada yang tertinggal.
+  const tanda = (ubah: boolean) => ubah
+    ? <span className="badge" style={{ fontSize: "0.625rem", color: "var(--warning,#b45309)", fontWeight: 600 }}><Bi id="Belum disimpan" en="Unsaved" /></span>
+    : null;
 
   if (loading) return <div className="muted" style={{ padding: "3rem", textAlign: "center" }}><Bi id="Memuat channel…" en="Loading channel…" /></div>;
   if (!ch) return (
@@ -787,7 +917,7 @@ export default function ChannelDetailPage() {
       {tab === "settings" && (
         <>
         <div className="card card-pad" style={{ maxWidth: 560 }}>
-          <h3 className="card-title" style={{ marginBottom: "1rem" }}><Bi id="Pengaturan channel" en="Channel settings" /></h3>
+          <h3 className="card-title" style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.5rem" }}><Bi id="Pengaturan channel" en="Channel settings" />{tanda(dirty.ident)}</h3>
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
             <div><label className="label"><Bi id="Nama channel" en="Channel name" /></label><input className="input" value={name} onChange={(e) => setName(e.target.value)} /></div>
             <div><label className="label"><Bi id="Bahasa konten" en="Content language" /></label>
@@ -878,7 +1008,6 @@ export default function ChannelDetailPage() {
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginTop: "0.6rem" }}>
                 <span className="badge">{pool.length > 1 ? <><Shuffle size={12} /> <Bi id="Acak" en="Random" /></> : <Bi id="Tetap (1 niche)" en="Fixed (1 niche)" />}</span>
-                <button className="btn btn-secondary btn-sm" onClick={saveNiche} disabled={savingNiche || pool.length === 0}>{savingNiche ? <Loader2 size={14} className="spin" /> : <Bi id="Simpan niche" en="Save niche" />}</button>
               </div>
               <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.4rem" }}>
                 <Bi id="Hanya niche yang tersedia untuk paket Anda + niche khusus milik Anda." en="Only niches available to your plan + your own custom niches." />
@@ -887,24 +1016,19 @@ export default function ChannelDetailPage() {
               {nicheMsg && <div style={{ fontSize: "var(--text-sm)", marginTop: "0.4rem", color: nicheMsg.includes("tersimpan") ? "var(--success)" : "var(--danger,#ef4444)" }}>{nicheMsg}</div>}
             </div>
             {err && <div style={{ color: "var(--danger, #ef4444)", fontSize: "var(--text-sm)" }}>{err === "__dup_target__" ? <Bi id="Channel YouTube ini sudah dipakai channel lain — satu channel YouTube hanya untuk satu channel MesinViral." en="This YouTube channel is already used by another channel — one YouTube channel maps to one MesinViral channel." /> : err}</div>}
-            {saved && <div style={{ color: "var(--success)", fontSize: "var(--text-sm)", display: "flex", alignItems: "center", gap: "0.375rem" }}><Check size={14} /> <Bi id="Tersimpan" en="Saved" /></div>}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-              <Link href="/channels" className="btn btn-ghost"><Bi id="Batal" en="Cancel" /></Link>
-              <button className="btn btn-default" onClick={save} disabled={busy}>{busy ? <Loader2 size={15} className="spin" /> : <Bi id="Simpan" en="Save" />}</button>
-            </div>
           </div>
+          {saveBar({ ubah: dirty.ident, sibuk: busy, simpan: save, batal: undo.ident,
+            pesan: saved ? <span style={{ color: "var(--success)" }}><Check size={13} style={{ verticalAlign: "-2px" }} /> <Bi id="Tersimpan" en="Saved" /></span> : null })}
         </div>
 
         <div className="card card-pad" style={{ marginTop: "1rem" }}>
-          <h3 className="card-title" style={{ marginBottom: "0.35rem" }}><Bi id="Durasi & segmentasi konten" en="Duration & content segmentation" /></h3>
+          <h3 className="card-title" style={{ marginBottom: "0.35rem", display: "flex", alignItems: "center", gap: "0.5rem" }}><Bi id="Durasi & segmentasi konten" en="Duration & content segmentation" />{tanda(dirty.preset)}</h3>
           <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}>
             <Bi id="Pilih durasi video untuk channel ini. Makin panjang, makin banyak bagian cerita. Tabel di bawah menjelaskan tiap pilihan." en="Pick this channel's video duration. Longer durations add more story parts. The table below explains each option." />
           </p>
           <PresetTables selectable selectedSeconds={dpreset} onSelect={setDpreset} />
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "1rem" }}>
-            <button className="btn btn-default" onClick={savePreset} disabled={savingPreset || dpreset == null}>{savingPreset ? <Loader2 size={15} className="spin" /> : <Bi id="Simpan durasi" en="Save duration" />}</button>
-            {presetMsg && <span style={{ fontSize: "var(--text-sm)", color: presetMsg.includes("tersimpan") ? "var(--success)" : "var(--danger, #ef4444)" }}>{presetMsg}</span>}
-          </div>
+          {saveBar({ ubah: dirty.preset, sibuk: savingPreset, simpan: savePreset, batal: undo.preset,
+            pesan: presetMsg ? <span style={{ color: presetMsg.includes("tersimpan") ? "var(--success)" : "var(--danger, #ef4444)" }}>{presetMsg}</span> : null })}
         </div>
 
         {/* Catatan kunci → Kredensial (pindah dari sini ke Page Credential, tenant-wide) */}
@@ -915,7 +1039,7 @@ export default function ChannelDetailPage() {
 
         {/* CARD: Penulis Naskah (LLM) */}
         <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 560 }}>
-          <h3 className="card-title" style={{ marginBottom: "0.2rem", display: "flex", alignItems: "center", gap: 6 }}><PenLine size={15} /> <Bi id="Penulis Naskah (LLM)" en="Script Writer (LLM)" /></h3>
+          <h3 className="card-title" style={{ marginBottom: "0.2rem", display: "flex", alignItems: "center", gap: 6 }}><PenLine size={15} /> <Bi id="Penulis Naskah (LLM)" en="Script Writer (LLM)" />{tanda(dirty.llm)}</h3>
           <p className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "0.6rem" }}><Bi id="AI yang menulis cerita & narasi video. Makin pintar = naskah makin bagus." en="AI that writes your video's story & narration. Smarter = better script." /></p>
           <div className="fld-row"><div className="k"><Bi id="Penyedia" en="Provider" /></div>
             <div className="radio-row">{[...new Set(llmOpts.map((m) => m.provider_key))].map((pk) => <span key={pk} className={`radio-pill${llmProv === pk ? " sel" : ""}`} onClick={() => { setLlmProv(pk); setLlmModel(""); setLlmAcct(""); }}>{provMap[pk]?.name ?? pk}</span>)}</div></div>
@@ -924,12 +1048,13 @@ export default function ChannelDetailPage() {
               <div className="radio-row">{llmOpts.filter((m) => m.provider_key === llmProv).map((m) => <span key={m.model_key} title={priceTitle(m, "llm")} className={`radio-pill${llmModel === m.model_key ? " sel" : ""}`} onClick={() => setLlmModel(m.model_key)}>{m.display_name}<ModelBadges m={m} /></span>)}</div></div>
           )}
           {acctPicker(llmProv, llmAcct, setLlmAcct)}
-          <div className="save-bar">{aiMsg?.el === "llm" && <span style={{ color: aiMsg.ok ? "var(--success)" : "var(--danger,#ef4444)" }}>{aiMsg.text}</span>}<button className="btn btn-default btn-sm" disabled={savingAi === "llm"} onClick={saveLlm}>{savingAi === "llm" ? <Loader2 size={14} className="spin" /> : <Bi id="Simpan" en="Save" />}</button></div>
+          {saveBar({ ubah: dirty.llm, sibuk: savingAi === "llm", simpan: saveLlm, batal: undo.llm,
+            pesan: aiMsg?.el === "llm" ? <span style={{ color: aiMsg.ok ? "var(--success)" : "var(--danger,#ef4444)" }}>{aiMsg.text}</span> : null })}
         </div>
 
         {/* CARD: Pengisi Suara (TTS) */}
         <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 560 }}>
-          <h3 className="card-title" style={{ marginBottom: "0.2rem", display: "flex", alignItems: "center", gap: 6 }}><Mic size={15} /> <Bi id="Pengisi Suara (TTS)" en="Voice (TTS)" /></h3>
+          <h3 className="card-title" style={{ marginBottom: "0.2rem", display: "flex", alignItems: "center", gap: 6 }}><Mic size={15} /> <Bi id="Pengisi Suara (TTS)" en="Voice (TTS)" />{tanda(dirty.tts)}</h3>
           <p className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "0.6rem" }}><Bi id="Suara narator: pilih penyedia → model → karakter suara (▶ dengar contoh)." en="Narrator voice: pick provider → model → character (▶ preview)." /></p>
           <div className="fld-row"><div className="k"><Bi id="Penyedia suara" en="Voice provider" /></div>
             <div className="radio-row">{ttsOpts.map((p) => <span key={p.provider_key} className={`radio-pill${ttsProv === p.provider_key ? " sel" : ""}`} onClick={() => { setTtsProv(p.provider_key); setTtsModel(""); setVoiceKey(""); setTtsAcct(""); }}>{p.display_name}</span>)}</div></div>
@@ -954,12 +1079,13 @@ export default function ChannelDetailPage() {
             );
           })()}
           {acctPicker(ttsProv, ttsAcct, setTtsAcct)}
-          <div className="save-bar">{aiMsg?.el === "tts" && <span style={{ color: aiMsg.ok ? "var(--success)" : "var(--danger,#ef4444)" }}>{aiMsg.text}</span>}<button className="btn btn-default btn-sm" disabled={savingAi === "tts"} onClick={saveTts}>{savingAi === "tts" ? <Loader2 size={14} className="spin" /> : <Bi id="Simpan" en="Save" />}</button></div>
+          {saveBar({ ubah: dirty.tts, sibuk: savingAi === "tts", simpan: saveTts, batal: undo.tts,
+            pesan: aiMsg?.el === "tts" ? <span style={{ color: aiMsg.ok ? "var(--success)" : "var(--danger,#ef4444)" }}>{aiMsg.text}</span> : null })}
         </div>
 
         {/* CARD: Pembuat Visual (Image/Video Generator) */}
         <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 560 }}>
-          <h3 className="card-title" style={{ marginBottom: "0.2rem", display: "flex", alignItems: "center", gap: 6 }}><ImageIcon size={15} /> <Bi id="Pembuat Visual (gambar/video)" en="Visual Generator (image/video)" /></h3>
+          <h3 className="card-title" style={{ marginBottom: "0.2rem", display: "flex", alignItems: "center", gap: 6 }}><ImageIcon size={15} /> <Bi id="Pembuat Visual (gambar/video)" en="Visual Generator (image/video)" />{tanda(dirty.visual)}</h3>
           <p className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "0.6rem" }}><Bi id="Tiap adegan dibuat AI: pilih penyedia → model → kualitas." en="Each scene is AI-made: pick provider → model → quality." /></p>
           <div className="fld-row"><div className="k"><Bi id="Penyedia" en="Provider" /></div>
             <div className="radio-row">{[...new Set(imgOpts.map((m) => m.provider_key))].map((pk) => <span key={pk} className={`radio-pill${visualProv === pk ? " sel" : ""}`} onClick={() => { setVisualProv(pk); setImgModel(""); setVisualAcct(""); }}>{provMap[pk]?.name ?? pk}</span>)}</div></div>
@@ -970,11 +1096,12 @@ export default function ChannelDetailPage() {
           <div className="fld-row"><div className="k"><Bi id="Kualitas gambar" en="Image quality" /><div className="sub"><Bi id="makin tinggi makin bagus & makin mahal" en="higher = nicer & pricier" /></div></div>
             <div className="radio-row">{([["low", "Hemat", "Saver"], ["medium", "Seimbang", "Balanced"], ["high", "Terbaik", "Best"]] as [string, string, string][]).map(([q, idL, enL]) => <span key={q} className={`radio-pill${imgQuality === q ? " sel" : ""}`} onClick={() => setImgQuality(q)}><Bi id={idL} en={enL} /></span>)}</div></div>
           {acctPicker(visualProv, visualAcct, setVisualAcct)}
-          <div className="save-bar">{aiMsg?.el === "visual" && <span style={{ color: aiMsg.ok ? "var(--success)" : "var(--danger,#ef4444)" }}>{aiMsg.text}</span>}<button className="btn btn-default btn-sm" disabled={savingAi === "visual"} onClick={saveVisual}>{savingAi === "visual" ? <Loader2 size={14} className="spin" /> : <Bi id="Simpan" en="Save" />}</button></div>
+          {saveBar({ ubah: dirty.visual, sibuk: savingAi === "visual", simpan: saveVisual, batal: undo.visual,
+            pesan: aiMsg?.el === "visual" ? <span style={{ color: aiMsg.ok ? "var(--success)" : "var(--danger,#ef4444)" }}>{aiMsg.text}</span> : null })}
         </div>
 
         <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 760 }}>
-          <h3 className="card-title" style={{ marginBottom: "0.35rem" }}><Bi id="Caption (subtitle video)" en="Caption (video subtitles)" /></h3>
+          <h3 className="card-title" style={{ marginBottom: "0.35rem", display: "flex", alignItems: "center", gap: "0.5rem" }}><Bi id="Caption (subtitle video)" en="Caption (video subtitles)" />{tanda(dirty.cap)}</h3>
           <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}><Bi id="Tampilan teks subtitle yang muncul di dalam video (brand channel ini)." en="On-screen subtitle styling shown inside the video (this channel's brand)." /></p>
           <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: "1.5rem", alignItems: "start" }}>
             {/* Preview 9:16 LIVE — pakai nilai caption_style sebenarnya */}
@@ -1012,11 +1139,12 @@ export default function ChannelDetailPage() {
                 <label className="switch"><input type="checkbox" checked={Boolean(cap.bold ?? true)} onChange={(e) => setCap({ ...cap, bold: e.target.checked })} /><span className="track" /><span className="thumb" /></label></div>
             </div>
           </div>
-          <div className="save-bar" style={{ marginTop: "1rem" }}><span className="muted">{brandMsg ?? <Bi id="Disimpan ke channel (caption)" en="Saves to channel (caption)" />}</span><button className="btn btn-default" disabled={savingBrand} onClick={saveCaption}>{savingBrand ? "Menyimpan…" : <Bi id="Simpan caption" en="Save caption" />}</button></div>
+          {saveBar({ ubah: dirty.cap, sibuk: savingBrand, simpan: saveCaption, batal: undo.cap,
+            pesan: brandMsg ? <span style={{ color: brandMsg.startsWith("Gagal") || brandMsg.startsWith("Error") ? "var(--danger,#ef4444)" : "var(--success)" }}>{brandMsg}</span> : <Bi id="Disimpan ke channel (caption)" en="Saves to channel (caption)" /> })}
         </div>
 
         <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 560 }}>
-          <h3 className="card-title" style={{ marginBottom: "0.35rem" }}><Bi id="Branded (CTA · logo · link)" en="Branded (CTA · logo · link)" /></h3>
+          <h3 className="card-title" style={{ marginBottom: "0.35rem", display: "flex", alignItems: "center", gap: "0.5rem" }}><Bi id="Branded (CTA · logo · link)" en="Branded (CTA · logo · link)" />{tanda(dirty.brand)}</h3>
           <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1.25rem" }}><Bi id="Sentuhan brand opsional di video & deskripsi (semua boleh kosong = tanpa branding)." en="Optional brand touches in video & description (all blank = no branding)." /></p>
           <div className="fld-row"><div className="k">CTA<div className="sub"><Bi id="implicit=tanpa brand · soft-sell=sebut halus" en="implicit=no brand · soft-sell=subtle" /></div></div>
             <div className="radio-row">{[["implicit", "Implicit"], ["soft_sell", "Soft-sell"]].map(([v, l]) => <span key={v} className={`radio-pill${ctaMode === v ? " sel" : ""}`} onClick={() => setCtaMode(v)}>{l}</span>)}</div></div>
@@ -1046,11 +1174,12 @@ export default function ChannelDetailPage() {
           <div className="fld-row"><div className="k"><Bi id="Link landing (deskripsi)" en="Landing link (description)" /></div><input className="input input-mono" value={landingLink} onChange={(e) => setLandingLink(e.target.value)} placeholder="https://…" style={{ maxWidth: 320 }} /></div>
           {landingLink && <div className="fld-row"><div className="k"><Bi id="Posisi link" en="Link position" /></div>
             <div className="radio-row">{[["top", "Atas"], ["bottom", "Bawah"]].map(([v, l]) => <span key={v} className={`radio-pill${linkPos === v ? " sel" : ""}`} onClick={() => setLinkPos(v)}>{l}</span>)}</div></div>}
-          <div className="save-bar"><span className="muted">{br2Msg ?? <Bi id="Disimpan ke channel (branded)" en="Saves to channel (branded)" />}</span><button className="btn btn-default" disabled={savingBr2} onClick={saveBranded}>{savingBr2 ? "Menyimpan…" : <Bi id="Simpan & Terapkan" en="Save & Apply" />}</button></div>
+          {saveBar({ ubah: dirty.brand, sibuk: savingBr2, simpan: saveBranded, batal: undo.brand,
+            pesan: br2Msg ? <span style={{ color: br2Msg.startsWith("Gagal") || br2Msg.startsWith("Error") ? "var(--danger,#ef4444)" : "var(--success)" }}>{br2Msg}</span> : <Bi id="Disimpan ke channel (branded)" en="Saves to channel (branded)" /> })}
         </div>
 
         <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 560 }}>
-          <h3 className="card-title" style={{ marginBottom: "0.35rem" }}><Bi id="Operasional & mutu" en="Operations & quality" /></h3>
+          <h3 className="card-title" style={{ marginBottom: "0.35rem", display: "flex", alignItems: "center", gap: "0.5rem" }}><Bi id="Operasional & mutu" en="Operations & quality" />{tanda(dirty.ops)}</h3>
           <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1.25rem" }}><Bi id="Musik latar & ambang mutu (QC) per-channel." en="Background music & quality gate (QC) per-channel." /></p>
           <div className="fld-row"><div className="k"><Bi id="Aktifkan musik latar" en="Enable background music" /></div>
             <label className="switch"><input type="checkbox" checked={musicOn} onChange={(e) => setMusicOn(e.target.checked)} /><span className="track" /><span className="thumb" /></label></div>
@@ -1064,11 +1193,12 @@ export default function ChannelDetailPage() {
             <input type="range" className="slider" min={0} max={100} value={minScore} onChange={(e) => setMinScore(+e.target.value)} /></div>
           <div className="fld-row"><div className="k"><Bi id="Maks retry skrip" en="Max script retry" /></div>
             <div className="radio-row">{[1, 2, 3, 4, 5].map((n) => <span key={n} className={`radio-pill${maxRetry === n ? " sel" : ""}`} onClick={() => setMaxRetry(n)}>{n}</span>)}</div></div>
-          <div className="save-bar"><span className="muted">{opsMsg ?? <Bi id="Disimpan ke channel (operasional)" en="Saves to channel (operations)" />}</span><button className="btn btn-default" disabled={savingOps} onClick={saveOps}>{savingOps ? "Menyimpan…" : <Bi id="Simpan & Terapkan" en="Save & Apply" />}</button></div>
+          {saveBar({ ubah: dirty.ops, sibuk: savingOps, simpan: saveOps, batal: undo.ops,
+            pesan: opsMsg ? <span style={{ color: opsMsg.startsWith("Gagal") || opsMsg.startsWith("Error") ? "var(--danger,#ef4444)" : "var(--success)" }}>{opsMsg}</span> : <Bi id="Disimpan ke channel (operasional)" en="Saves to channel (operations)" /> })}
         </div>
 
         <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 560 }}>
-          <h3 className="card-title" style={{ marginBottom: "0.35rem" }}><Bi id="Hashtag" en="Hashtags" /></h3>
+          <h3 className="card-title" style={{ marginBottom: "0.35rem", display: "flex", alignItems: "center", gap: "0.5rem" }}><Bi id="Hashtag" en="Hashtags" />{tanda(dirty.tags)}</h3>
           <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}><Bi id="Hashtag postingan per niche di pool channel ini. Dikosongkan = otomatis pakai default niche." en="Post hashtags per niche in this channel's pool. Left empty = uses the niche default automatically." /></p>
           <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "0.75rem" }}><Bi id="Pisahkan dengan koma. Tanda # otomatis." en="Comma-separated. # added automatically." /></div>
           {pool.length === 0 && <div className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Pilih niche dulu di kartu Pengaturan di atas." en="Pick a niche in the Settings card above first." /></div>}
@@ -1082,7 +1212,8 @@ export default function ChannelDetailPage() {
               </div>
             );
           })}
-          <div className="save-bar"><span className="muted">{hashMsg ?? <Bi id="Disimpan ke channel (hashtag)" en="Saves to channel (hashtags)" />}</span><button className="btn btn-default" disabled={savingHash} onClick={saveHashtags}>{savingHash ? "Menyimpan…" : <Bi id="Simpan hashtag" en="Save hashtags" />}</button></div>
+          {saveBar({ ubah: dirty.tags, sibuk: savingHash, simpan: saveHashtags, batal: undo.tags,
+            pesan: hashMsg ? <span style={{ color: hashMsg.startsWith("Gagal") || hashMsg.startsWith("Error") ? "var(--danger,#ef4444)" : "var(--success)" }}>{hashMsg}</span> : <Bi id="Disimpan ke channel (hashtag)" en="Saves to channel (hashtags)" /> })}
         </div>
 
         </>
