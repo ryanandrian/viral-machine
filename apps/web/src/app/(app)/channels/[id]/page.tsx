@@ -49,7 +49,7 @@ const poolOf = (c: ChannelRow | null): string[] => {
 // Lebar kanvas pratinjau caption (px). Dipakai untuk menskalakan ukuran huruf & margin agar
 // pratinjau = hasil video 1080px. Ubah di SATU tempat ini bila lebar kartunya berubah.
 const PRV_W = 220;
-const CAP_DEFAULT = { font_name: "Anton", font_size: 68, bold: true, active_word_color: "#FFD700", inactive_word_color: "#FFFFFF", outline_color: "#000000", outline: 4, position_y_pct: 83, max_words_per_line: 3 };
+const CAP_DEFAULT = { font_name: "Anton", font_size: 68, bold: true, italic: false, shadow: 2, active_word_color: "#FFD700", inactive_word_color: "#FFFFFF", outline_color: "#000000", outline: 4, position_y_pct: 83, max_words_per_line: 3 };
 // Model visual tersimpan: channels.visual_mode = "ai_image:<model>" / "ai_video:<model>" → kunci model saja.
 const visualModelOf = (vm: string) => (vm.startsWith("ai_image:") || vm.startsWith("ai_video:") ? vm.slice(9) : "");
 // niche_hashtags DB ({niche:["#a","#b"]}) → bentuk EDIT di layar ({niche:"#a, #b"}).
@@ -1130,10 +1130,10 @@ export default function ChannelDetailPage() {
                     mesin render 10px di 1080px (=0,9%). */}
                 <div style={{ position: "absolute", left: 10 * PRV_W / 1080, right: 10 * PRV_W / 1080,
                   top: `${capNum("position_y_pct", 83)}%`, transform: "translateY(-100%)", textAlign: "center", lineHeight: 1.12,
-                  fontFamily: `"${capStr("font_name", "Anton")}",Geist,sans-serif`, fontWeight: (cap.bold ?? true) ? 800 : 500,
+                  fontFamily: `"${capStr("font_name", "Anton")}",Geist,sans-serif`, fontWeight: (cap.bold ?? true) ? 800 : 500, fontStyle: (cap.italic ?? false) ? "italic" : "normal",
                   fontSize: capNum("font_size", 68) * (fontOpts.find((f) => f.name === capStr("font_name", "Anton"))?.ass_scale ?? 0.577) * PRV_W / 1080,
                   color: capStr("inactive_word_color", "#FFFFFF"),
-                  textShadow: `0 0 ${capNum("outline", 4)}px ${capStr("outline_color", "#000000")}, 0 1px 4px rgba(0,0,0,.8)` }}>
+                  textShadow: `0 0 ${capNum("outline", 4)}px ${capStr("outline_color", "#000000")}, ${capNum("shadow", 2) * PRV_W / 1080}px ${capNum("shadow", 2) * PRV_W / 1080}px 2px rgba(0,0,0,.85)` }}>
                   Suara aneh di <span style={{ color: capStr("active_word_color", "#FFD700") }}>kedalaman</span>
                 </div>
               </div>
@@ -1157,8 +1157,14 @@ export default function ChannelDetailPage() {
                 <div style={{ display: "flex", gap: ".625rem", alignItems: "center" }}>
                   <input type="color" value={capStr("outline_color", "#000000")} onChange={(e) => setCap({ ...cap, outline_color: e.target.value })} style={{ width: 44, height: 30, padding: 2, borderRadius: "var(--r-sm)", border: "1px solid var(--border)" }} />
                   <input type="range" className="slider" style={{ flex: 1 }} min={0} max={10} value={capNum("outline", 4)} onChange={(e) => setCap({ ...cap, outline: +e.target.value })} /></div></div>
+              {/* Bayangan & miring: sudah lama dibaca mesin render dan tersimpan di DB, tapi tak pernah
+                  ada kenopnya di layar mana pun — hanya bisa diubah lewat database. Kini terjangkau tenant. */}
+              <div className="fld-row"><div className="k"><Bi id="Bayangan teks" en="Text shadow" /><div className="sub"><Bi id="0 = tanpa bayangan" en="0 = no shadow" /></div></div>
+                <input type="range" className="slider" min={0} max={10} value={capNum("shadow", 2)} onChange={(e) => setCap({ ...cap, shadow: +e.target.value })} /></div>
               <div className="fld-row"><div className="k"><Bi id="Tebal (bold)" en="Bold" /></div>
                 <label className="switch"><input type="checkbox" checked={Boolean(cap.bold ?? true)} onChange={(e) => setCap({ ...cap, bold: e.target.checked })} /><span className="track" /><span className="thumb" /></label></div>
+              <div className="fld-row"><div className="k"><Bi id="Miring (italic)" en="Italic" /></div>
+                <label className="switch"><input type="checkbox" checked={Boolean(cap.italic ?? false)} onChange={(e) => setCap({ ...cap, italic: e.target.checked })} /><span className="track" /><span className="thumb" /></label></div>
             </div>
           </div>
           {saveBar({ ubah: dirty.cap, sibuk: savingBrand, simpan: saveCaption, batal: undo.cap,

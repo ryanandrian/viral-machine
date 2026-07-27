@@ -3,7 +3,7 @@ Video Renderer — FFmpeg pipeline untuk render video final 9:16.
 Fase 6C s6c3 upgrade:
   - Karaoke ASS caption: kata aktif kuning, kata lain putih (ElevenLabs ~98%)
   - Caption style dari tenant_configs.caption_style — multi-tenant configurable
-  - Fallback SRT estimasi jika word timestamps tidak tersedia
+  - SATU mesin subtitle utk semua vendor TTS (tanpa timestamp → diestimasi, lalu mesin sama)
   - Fix: fallback full_script cover 8 section (bukan 5 section lama)
 s88:
   - Font config-driven: font_name, outline_color, border_color, position_y_pct
@@ -100,55 +100,62 @@ class VideoRenderer:
     # Lebar aman satu baris caption = lebar layar dikurangi margin kiri/kanan ASS (10+10) dan
     # ruang untuk garis tepi + bayangan yang menambah lebar visual di kedua sisi.
     ASS_MARGIN_LR = 10
+    # Margin kiri/kanan overlay judul pembuka (drawtext) — ruang agar tak menempel tepi layar.
+    HOOK_MARGIN_LR = 40
     # Cadangan 2%: pengukuran vs render libass terbukti meleset maksimal 0,4 px pada 120 kombinasi uji
     # (dan hampir selalu MELEBIHKAN = aman), cadangan ini menutup sisa pembulatan piksel.
     WIDTH_SAFETY  = 0.98
 
-    def _text_width(self, font_path: str, font_size: int, text: str) -> float:
-        """Lebar teks dalam piksel PERSIS seperti yang akan dirender libass.
+    def _text_width(self, font_path: str, font_size: int, text: str, engine: str = "ass") -> float:
+        """Lebar teks dalam piksel PERSIS seperti yang akan dirender — per mesin penggambar.
 
-        libass menskalakan huruf agar (usWinAscent + usWinDescent) = Fontsize — BUKAN em seperti
-        pengukur font pada umumnya. Tanpa koreksi ini hasil ukur meleset 31–79% tergantung font
-        (terverifikasi lewat 120 render nyata, 2026-07-27). Diukur pada em 1000 lalu diskalakan
-        linear supaya bebas galat pembulatan ukuran.
+        DUA mesin, DUA cara menafsirkan "ukuran huruf" (keduanya diverifikasi dgn render nyata):
+          engine="ass"      → libass (caption). Menskalakan agar (usWinAscent+usWinDescent)=Fontsize,
+                              BUKAN em. Tanpa koreksi, ukur meleset 31–79% tergantung font.
+          engine="drawtext" → FFmpeg drawtext (judul pembuka). Memakai em langsung, seperti pengukur
+                              font biasa — TIDAK boleh diberi koreksi di atas, atau meleset ~40%.
+        Diukur pada em 1000 lalu diskalakan linear supaya bebas galat pembulatan ukuran.
         """
         from PIL import ImageFont
         from fontTools.ttLib import TTFont
-        key = (font_path, text)
         cache = self.__dict__.setdefault("_w_cache", {})
-        if font_path not in self.__dict__.setdefault("_fmetric", {}):
+        metric = self.__dict__.setdefault("_fmetric", {})
+        if font_path not in metric:
             tt = TTFont(font_path)
             os2 = tt["OS/2"]
-            self._fmetric[font_path] = (
+            metric[font_path] = (
                 ImageFont.truetype(font_path, 1000),
                 tt["head"].unitsPerEm / (os2.usWinAscent + os2.usWinDescent),
             )
-        fnt, factor = self._fmetric[font_path]
+        fnt, factor = metric[font_path]
+        key = (font_path, text)
         if key not in cache:
-            cache[key] = fnt.getlength(text) / 1000.0 * factor
-        return cache[key] * font_size
+            cache[key] = fnt.getlength(text) / 1000.0
+        return cache[key] * font_size * (factor if engine == "ass" else 1.0)
 
-    def _build_srt_style(self, caption_style: dict) -> str:
-        """Build force_style string untuk SRT fallback dari caption_style."""
-        font_name   = caption_style.get("font_name", "Anton")
-        font_size   = caption_style.get("font_size", 68)
-        bold        = 1 if caption_style.get("bold", True) else 0
-        pos_y_pct   = caption_style.get("position_y_pct", 83)
-        margin_v    = int(self.OUTPUT_HEIGHT * (1 - pos_y_pct / 100))
-        outline_c   = _hex_to_ass_color(caption_style.get("outline_color", "#000000"))
-        return (
-            f"FontName={font_name},"
-            f"FontSize={font_size},"
-            f"Bold={bold},"
-            "PrimaryColour=&H00FFFFFF,"
-            f"OutlineColour={outline_c},"
-            "BackColour=&H80000000,"
-            "Outline=2,"
-            "Shadow=1,"
-            f"MarginV={margin_v},"
-            "Alignment=2,"
-            "WrapStyle=1"
-        )
+    def _estimate_word_timestamps(self, script: dict, audio_duration: float) -> list[dict]:
+        """Buat penanda waktu per kata untuk vendor TTS yang tidak menyediakannya.
+
+        Durasi dibagi PROPORSIONAL terhadap panjang kata (kata panjang diucapkan lebih lama) —
+        lebih dekat ke ucapan nyata daripada pembagian rata. Hasilnya berbentuk sama persis dengan
+        keluaran vendor ber-timestamp, sehingga mesin subtitle di hilir tidak perlu tahu bedanya.
+        """
+        full = script.get("full_script", "") if isinstance(script, dict) else ""
+        if not full:
+            from src.content import beats as _beats   # SATU SUMBER kosakata (0128)
+            full = " ".join(script.get(s, "").strip() for s in _beats.all_beats() if script.get(s))
+        words = full.split()
+        if not words or audio_duration <= 0:
+            return []
+        bobot = [max(len(w), 1) for w in words]
+        total = sum(bobot)
+        out, t = [], 0.0
+        for w, b in zip(words, bobot):
+            d = audio_duration * b / total
+            out.append({"word": w, "start": round(t, 3), "end": round(t + d, 3)})
+            t += d
+        return out
+
 
     def _get_audio_duration(self, audio_path: str) -> float:
         try:
@@ -219,7 +226,7 @@ class VideoRenderer:
         if not hook_text or not style.get("enabled", True):
             return clip_path
         try:
-            import textwrap, os
+            import os
             font_path    = self._resolve_font_path(style.get("font_name", "Anton"))
             font_size    = style.get("font_size", 58)
             font_color   = style.get("font_color", "#FFD700").lstrip("#")
@@ -236,7 +243,22 @@ class VideoRenderer:
             clean = clean.replace(":", " -")
             clean = clean.replace("%", " pct")
 
-            lines = textwrap.wrap(clean, width=max_chars)
+            # Potong per LEBAR NYATA, bukan per jumlah karakter. "25 karakter" menghasilkan lebar yang
+            # sangat berbeda antar font (Anton sempit vs Montserrat lebar) → judul bisa meluber keluar
+            # layar pada font tertentu. max_chars_per_line tetap dihormati sebagai batas atas.
+            # engine="drawtext": overlay judul digambar FFmpeg drawtext yang memakai em langsung —
+            # BUKAN skala libass (lihat _text_width).
+            limit_px = (self.OUTPUT_WIDTH - 2 * self.HOOK_MARGIN_LR) * self.WIDTH_SAFETY
+            lines, cur = [], ""
+            for kata in clean.split():
+                calon = f"{cur} {kata}".strip()
+                muat = self._text_width(font_path, font_size, calon, engine="drawtext") <= limit_px
+                if cur and (not muat or len(calon) > max_chars):
+                    lines.append(cur); cur = kata
+                else:
+                    cur = calon
+            if cur:
+                lines.append(cur)
             if not lines:
                 return clip_path
 
@@ -512,64 +534,6 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         )
         return ass_path
 
-    def _generate_subtitles_estimated(
-        self,
-        script: dict,
-        audio_duration: float,
-        output_dir: str,
-        words_per_segment: int = 4,
-        run_id: str = "",
-    ) -> str:
-        """
-        Fallback SRT: estimasi timing dari word count.
-        Fix: cover 8 section (bukan 5 section lama).
-        Akurasi ~60-70%.
-        """
-        fname    = f"subtitles_{run_id}.srt" if run_id else "subtitles.srt"
-        srt_path = os.path.join(output_dir, fname)
-
-        # Cover 8 section — fix dari versi lama yang hanya 5 section
-        full_script = script.get("full_script", "")
-        if not full_script:
-            from src.content import beats as _beats   # SATU SUMBER kosakata (0128)
-            sections = _beats.all_beats()
-            parts = [script.get(s, "").strip() for s in sections if script.get(s)]
-            full_script = " ".join(parts)
-
-        words = full_script.split()
-        if not words:
-            return ""
-
-        segments = []
-        for i in range(0, len(words), words_per_segment):
-            segments.append(" ".join(words[i:i + words_per_segment]))
-
-        seg_dur = audio_duration / len(segments)
-
-        def fmt_time(seconds: float) -> str:
-            h  = int(seconds // 3600)
-            m  = int((seconds % 3600) // 60)
-            s  = int(seconds % 60)
-            ms = int((seconds % 1) * 1000)
-            return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
-
-        srt_content = []
-        for i, seg in enumerate(segments):
-            start = i * seg_dur
-            end   = (i + 1) * seg_dur
-            srt_content.append(str(i + 1))
-            srt_content.append(f"{fmt_time(start)} --> {fmt_time(end)}")
-            srt_content.append(seg)
-            srt_content.append("")
-
-        with open(srt_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(srt_content))
-
-        logger.warning(
-            f"[Caption] SRT estimasi (fallback): {len(segments)} segments "
-            f"— akurasi ~60-70%. Gunakan ElevenLabs untuk karaoke akurat."
-        )
-        return srt_path
 
     def _render_preset(self) -> str:
         """Preset x264 = config-driven (no-hardcode → admin tune per-node/GPU = scale). Default veryfast (§5.5)."""
@@ -577,7 +541,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
     def _single_pass_concat(
         self, clips, clip_list_path, audio_path, output_path,
-        sub_path, use_ass, caption_style,
+        sub_path,
         audio_duration, total_duration, trailing_silence,
     ) -> bool:
         """
@@ -626,14 +590,11 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             )
             prev = out
 
-        # tpad freeze + subtitle (ASS karaoke / SRT) pada hasil xfade — sama semantik Step B
+        # tpad freeze + subtitle karaoke pada hasil xfade — sama semantik Step B
         vchain = f"[{prev}]tpad=stop_mode=clone:stop_duration={trailing_silence}"
         if sub_path and os.path.exists(sub_path):
             abs_sub = os.path.abspath(sub_path)
-            if use_ass:
-                vchain += f",ass='{abs_sub}'"
-            else:
-                vchain += f",subtitles='{abs_sub}':force_style='{self._build_srt_style(caption_style)}'"
+            vchain += f",ass='{abs_sub}'"
         vchain += "[vout]"
         parts.append(vchain)
         parts.append(f"[{audio_idx}:a]apad=pad_dur={trailing_silence}[aout]")
@@ -655,7 +616,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
     def _concat_two_pass(
         self, clips, clip_list_path, clip_list_target, audio_path, temp_path, output_path,
-        sub_path, use_ass, caption_style, audio_duration, total_duration, trailing_silence,
+        sub_path, audio_duration, total_duration, trailing_silence,
     ) -> str:
         """
         2-pass concat PROVEN (Step A xfade → temp, Step B audio+subtitle+tpad → output).
@@ -795,15 +756,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         subtitle_filter = ""
         if sub_path and os.path.exists(sub_path):
             abs_sub = os.path.abspath(sub_path)
-            if use_ass:
-                # ASS karaoke — gunakan filter 'ass='
-                subtitle_filter = f",ass='{abs_sub}'"
-            else:
-                # SRT fallback — gunakan filter 'subtitles=' dengan force_style
-                srt_style = self._build_srt_style(caption_style)
-                subtitle_filter = (
-                    f",subtitles='{abs_sub}':force_style='{srt_style}'"
-                )
+            subtitle_filter = f",ass='{abs_sub}'"
 
         # s72b: tpad freeze frame terakhir + apad silence = trailing_silence detik
         # -t explicit agar durasi tepat, bukan -shortest yang potong di video
@@ -852,7 +805,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
         Caption mode (otomatis dipilih):
           - word_timestamps tersedia (ElevenLabs) → ASS karaoke (~98% akurasi)
-          - word_timestamps kosong                → SRT estimasi (~60-70%)
+          - word_timestamps kosong                → timing diestimasi, mesin subtitle SAMA
         Caption style dibaca dari tenant_configs.caption_style — multi-tenant.
         """
         if not clips:
@@ -933,26 +886,23 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         caption_style = self._load_caption_style(tenant_config)
 
         # Generate subtitle — pilih mode berdasarkan ketersediaan timestamps
+        # SATU MESIN SUBTITLE untuk SEMUA vendor TTS (2026-07-27). Dulu ada dua jalur terpisah dengan
+        # pemotong & penempatan sendiri-sendiri: karaoke ASS (vendor ber-timestamp) dan SRT estimasi
+        # (vendor tanpa timestamp). Akibatnya perbaikan tata letak di satu jalur TIDAK menular ke jalur
+        # lain, dan tiap vendor TTS baru bisa jatuh ke cabang yang belum diperbaiki.
+        # Kini: vendor tanpa timestamp cukup DIBUATKAN estimasi per kata, lalu masuk mesin yang SAMA.
+        # Hasilnya tata letak identik untuk vendor mana pun — vendor baru = nol perubahan kode.
         logger.info("Generating captions...")
-        use_ass = False
-        if word_timestamps and len(word_timestamps) > 0:
-            logger.info(
-                f"[Caption] Mode: KARAOKE ASS "
-                f"({len(word_timestamps)} words, ~98% akurasi)"
-            )
-            sub_path = self._generate_karaoke_ass(
-                word_timestamps, output_dir, caption_style, run_id=run_id
-            )
-            use_ass = True
+        wt = word_timestamps if (word_timestamps and len(word_timestamps) > 0) else None
+        if wt:
+            logger.info(f"[Caption] Timing dari TTS: {len(wt)} kata (presisi)")
         else:
+            wt = self._estimate_word_timestamps(script, audio_duration)
             logger.warning(
-                "[Caption] Mode: SRT estimasi (~60-70%) — "
-                "aktifkan ElevenLabs untuk karaoke akurat"
+                f"[Caption] TTS ini tak memberi penanda waktu per kata → timing DIESTIMASI "
+                f"({len(wt)} kata). Tata letak tetap identik; hanya ketepatan sorot kata yang menurun."
             )
-            sub_path = self._generate_subtitles_estimated(
-                script, audio_duration, output_dir, run_id=run_id
-            )
-            use_ass = False
+        sub_path = self._generate_karaoke_ass(wt, output_dir, caption_style, run_id=run_id) if wt else ""
 
         timestamp   = int(time.time())
         os.makedirs(output_dir, exist_ok=True)
@@ -965,11 +915,11 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         #    5.5b: coba 1-encode single-pass (gabung Step A xfade + Step B audio/subtitle/tpad);
         #    gagal / precondition tak penuh → fallback ke 2-pass PROVEN (_concat_two_pass) — NOL regresi.
         if self._single_pass_concat(clips, clip_list_path, audio_path, output_path,
-                                    sub_path, use_ass, caption_style,
+                                    sub_path,
                                     audio_duration, total_duration, trailing_silence):
             logger.info("[Renderer] 5.5b single-pass concat OK — 2-pass dilewati")
         elif not self._concat_two_pass(clips, clip_list_path, clip_list_target, audio_path,
-                                       temp_path, output_path, sub_path, use_ass, caption_style,
+                                       temp_path, output_path, sub_path,
                                        audio_duration, total_duration, trailing_silence):
             return ""
 
@@ -977,7 +927,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             return ""
 
         size_mb = os.path.getsize(output_path) / (1024 * 1024)
-        caption_mode = "karaoke ASS" if use_ass else "SRT estimasi"
+        caption_mode = "karaoke ASS"
         logger.info(
             f"Video rendered: {output_path} ({size_mb:.1f} MB) "
             f"| caption: {caption_mode}"
