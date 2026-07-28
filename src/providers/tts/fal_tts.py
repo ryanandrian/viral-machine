@@ -62,34 +62,57 @@ class FalTTSProvider(TTSProvider):
 
     def __init__(self, config: dict):
         super().__init__(config)
-        self.api_key = (config.get("api_key") or "").strip()
+        # Kontrak config = SAMA dgn seluruh adaptor TTS (tts_api_key/tts_model/tts_voice yang
+        # dikirim tts_engine._get_provider_config & model_tester) — bukan nama sendiri.
+        self.api_key = (config.get("tts_api_key") or "").strip()
         # model_key katalog = endpoint fal, mis. "fal-ai/elevenlabs/tts/turbo-v2.5"
-        self.model = (config.get("model") or "").strip()
-        self.voice = (config.get("voice") or "").strip()
-        self.speed = config.get("speed")
+        self.model = (config.get("tts_model") or "").strip()
+        # voice = identitas VENDOR (voice_catalog.vendor_voice_id, sudah diterjemahkan
+        # build_tts_provider). Provider pakai apa adanya — NO map hardcode.
+        self.voice = (config.get("tts_voice") or "").strip()
         self._word_timestamps: list[dict] | None = None
+
+    def _voice_settings(self) -> dict:
+        """Delivery efektif — LAPISAN & URUTAN IDENTIK ElevenLabs langsung (src/providers/tts/elevenlabs.py),
+        sebab model di balik fal memang model ElevenLabs yang sama: suara yang sama HARUS terdengar sama
+        lewat jalur mana pun. Urutan: bawaan-suara (voice_catalog.default_settings) ⊕ ekspresi-niche
+        (niches.voice_expression; hanya style/stability, guard 0..1) ⊕ warisan-tenant (tts_voice_settings).
+        Rentang nilai dijaga generik di hulu via tts_profiles.param_schema (§10.A), bukan dipaku di sini."""
+        baseline = self.config.get("tts_voice_default_settings") or {}
+        _expr_raw = self.config.get("niche_voice_expression") or {}
+        _expr = ({k: float(v) for k, v in _expr_raw.items()
+                  if k in ("style", "stability") and isinstance(v, (int, float)) and 0.0 <= float(v) <= 1.0}
+                 if isinstance(_expr_raw, dict) else {})
+        _vs_all = self.config.get("tts_voice_settings") or {}
+        _override = _vs_all.get(self.config.get("niche") or "", {}) if isinstance(_vs_all, dict) else {}
+        return {**baseline, **_expr, **(_override if isinstance(_override, dict) else {})}
 
     async def generate(self, text: str, output_path: Path) -> Path:
         if not self.api_key:
-            raise TTSError("Suara lewat fal butuh API key fal (BYOK).")
+            raise TTSError("Suara lewat fal butuh API key fal (BYOK) — hubungkan akun fal di /integrations.")
         if not self.model:
-            raise TTSError("Model TTS fal tidak ditentukan (ai_models.model_key kosong).")
+            raise TTSError("Model TTS fal tidak ditentukan (channels.tts_model / katalog ai_models kosong).")
 
         payload: dict = {"text": text, "timestamps": True}
         if self.voice:
             payload["voice"] = self.voice
-        if self.speed is not None:
+        # Nilai bawaan = ANGKA PERSIS ElevenLabs langsung → suara identik lintas jalur.
+        vs = self._voice_settings()
+        for kunci, bawaan in (("stability", 0.30), ("similarity_boost", 0.75),
+                              ("style", 0.50), ("speed", 0.87)):
             try:
-                payload["speed"] = float(self.speed)
+                payload[kunci] = float(vs.get(kunci, bawaan))
             except (TypeError, ValueError):
-                pass
+                payload[kunci] = bawaan
 
         req = urllib.request.Request(
             _BASE + self.model.lstrip("/"),
             data=json.dumps(payload).encode(),
             headers={"Authorization": f"Key {self.api_key}", "Content-Type": "application/json"},
         )
-        logger.info(f"[falTTS] model={self.model} voice={self.voice or '(bawaan)'} chars={len(text)}")
+        logger.info(f"[falTTS] model={self.model} voice={self.voice or '(bawaan)'} chars={len(text)} "
+                    f"speed={payload['speed']} style={payload['style']} "
+                    f"stability={payload['stability']} sim={payload['similarity_boost']}")
         try:
             with urllib.request.urlopen(req, timeout=180) as r:
                 out = json.loads(r.read())

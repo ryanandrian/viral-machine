@@ -19,7 +19,10 @@ const CATALOG: Record<string, { pk: string; cols: string[] }> = {
   ai_models: { pk: "model_key", cols: ["provider_key", "component", "model_id", "display_name", "quality_tier", "is_active", "sort_order", "cost_hint", "default_params", "pricing", "pricing_locked", "pricing_pending"] },
   ai_providers: { pk: "provider_key", cols: ["display_name", "adapter", "base_url", "auth_type", "key_group", "is_active", "request_param_schema", "price_feed_prefix", "free_tier_note"] },
   content_languages: { pk: "locale", cols: ["display_name", "quality_tier", "caption_font", "is_active", "sort_order", "tts_providers_supported"] },
-  voice_catalog: { pk: "voice_key", cols: ["provider_key", "display_name", "locale", "language", "gender", "age", "accent", "use_case", "description", "default_settings", "niche_default", "preview_url", "delivery_wps", "pace_locked", "is_active", "sort_order"] },
+  // vendor_voice_id = identitas suara di sisi VENDOR (migr 0181). Kosong = sama dgn voice_key.
+  // Dipakai penyedia AGREGATOR (fal menyajikan model ElevenLabs yang sama) — voice_key tetap kunci
+  // katalog kita yang dirujuk channels & kalibrasi pace, jadi tak boleh diisi ID vendor.
+  voice_catalog: { pk: "voice_key", cols: ["provider_key", "vendor_voice_id", "display_name", "locale", "language", "gender", "age", "accent", "use_case", "description", "default_settings", "niche_default", "preview_url", "delivery_wps", "pace_locked", "is_active", "sort_order"] },
   music_library: { pk: "id", cols: ["is_active", "is_default", "name", "mood", "niche", "bpm", "duration_s"] },
   fonts: { pk: "name", cols: ["is_active"] },   // nama/berkas/ass_scale lahir dari berkas saat unggah — bukan ketikan
   tts_profiles: { pk: "provider_key", cols: ["is_active", "delivery_wps", "tts_class", "speed_param", "param_schema"] },

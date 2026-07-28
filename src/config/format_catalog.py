@@ -232,3 +232,35 @@ def tts_speed_range(tts_provider, default=(0.7, 1.2)):
     except Exception:
         pass
     return default
+
+
+# ── Identitas suara: KATALOG vs VENDOR ────────────────────────────────────────────────────────────
+# `voice_catalog.voice_key` = kunci utama GLOBAL milik katalog kita (dirujuk channels.voice_key,
+# tts_delivery_samples.voice_key, kalibrasi pace). `vendor_voice_id` = identitas suara yang sama DI
+# SISI VENDOR. Dua-duanya lama tertumpuk di satu kolom, dan itu jalan selama satu suara hanya ada di
+# satu vendor. Begitu vendor AGREGATOR masuk (fal menyajikan model ElevenLabs yang sama), suara yang
+# sama harus punya DUA baris katalog dengan identitas vendor yang IDENTIK — mustahil bila kunci utama
+# yang dipakai. Kolom terpisah memisahkan keduanya tanpa menyentuh kunci utama/kunci asing.
+# Cache SENDIRI (bukan `_load()`): kegagalan baca tabel suara tak boleh menjatuhkan katalog format.
+_VCACHE: dict = {"map": None, "ts": 0.0}
+
+
+def voice_vendor_id(voice_key, default=None):
+    """Identitas suara DI SISI VENDOR untuk `voice_key` katalog. Kosong/tak ada → `default`.
+
+    Dipakai `build_tts_provider` sebagai SATU-SATUNYA titik terjemahan, sehingga produksi, Test Lab,
+    dan tombol uji model admin ikut benar tanpa kode terpisah. Gagal baca DB → `default` → pemanggil
+    memakai voice_key apa adanya: perilaku LAMA persis (semua penyedia non-agregator memang begitu),
+    dan untuk penyedia agregator vendor menolak jujur (fal: HTTP 422 'Voice not found') — bukan
+    diam-diam memakai suara lain (§0.6 haram fallback senyap)."""
+    if not voice_key:
+        return default
+    if _VCACHE["map"] is None or (time.time() - _VCACHE["ts"]) >= _TTL:
+        try:
+            rows = _sb().table("voice_catalog").select("voice_key, vendor_voice_id").execute().data or []
+            _VCACHE.update(map={r["voice_key"]: r.get("vendor_voice_id") for r in rows}, ts=time.time())
+        except Exception as e:
+            logger.warning(f"[format_catalog] baca vendor_voice_id gagal ({e}) — pakai voice_key apa adanya")
+            if _VCACHE["map"] is None:
+                return default
+    return (_VCACHE["map"] or {}).get(voice_key) or default

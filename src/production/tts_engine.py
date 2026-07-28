@@ -49,7 +49,10 @@ def _get_provider_config(tenant_config: TenantConfig) -> dict:
     )
     return {
         "tts_provider":        rc.tts_provider,
-        "tts_voice":           rc.tts_voice,                 # sudah resolved (channel/niche) — provider pakai apa adanya
+        # voice = kunci KATALOG (channels.voice_key). Untuk penyedia AGREGATOR, build_tts_provider
+        # menerjemahkannya ke identitas vendor (voice_catalog.vendor_voice_id) di SALINAN config —
+        # nilai di sini tetap kunci katalog, sebab dipakai sampel pace & atribusi video di bawah.
+        "tts_voice":           rc.tts_voice,
         "tts_model":           rc.tts_model or "",
         "tts_api_key":         rc.tts_api_key or "",
         "tts_voice_settings":  getattr(rc, "tts_voice_settings", {}) or {},          # delivery override per-tenant (mis. ryan speed)
