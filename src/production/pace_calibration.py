@@ -25,6 +25,7 @@ Konsumsi (tenant_config → script_engine): pace (voice×niche) → (voice,'*') 
 Penjadwalan berkala + alarm drift = F5 (belum — modul ini dipanggil manual/di-wire nanti).
 """
 
+import json
 import os
 import math
 import statistics
@@ -244,6 +245,71 @@ def align_beat_weights(sb=None, dry_run: bool = False) -> dict:
         return {"error": str(e)}
 
 
+# ── Teks alarm drift: fungsi MURNI supaya bisa diuji tanpa mengirim Telegram sungguhan ──────────
+# Owner 2026-07-28: pesan lama menyebut angka TANPA arah, jadi angka yang sedang MEMBAIK
+# (12,8→12,3→11,5→10,4%) terbaca seolah macet — owner 5 hari mengira sistem rusak padahal ia sedang
+# menyembuhkan diri. Pesan lama juga menyuruh "panggil developer bila muncul lagi besok", padahal
+# muncul-lagi itu WAJAR selama angkanya turun. Dan saat akhirnya normal, tak ada kabar apa pun.
+
+def _baca_state(sb, key: str) -> dict:
+    """Status alarm drift dari app_config (JSON di value_text). Fail-soft: gagal baca → anggap kosong,
+    alarm tetap boleh berbunyi (lebih baik dering ganda daripada bisu senyap)."""
+    try:
+        row = (sb.table("app_config").select("value_text").eq("key", key).limit(1).execute().data or [])
+        if row and row[0].get("value_text"):
+            v = json.loads(row[0]["value_text"])
+            if isinstance(v, dict):
+                return v
+    except Exception as e:
+        logger.warning(f"[DriftAlarm] baca status gagal (dianggap kosong): {e}")
+    return {}
+
+
+def _simpan_state(sb, key: str, med: float, alarming: bool) -> None:
+    """Rekam median + status alarm. `last_at` HANYA diperbarui saat benar-benar mengirim alarm,
+    supaya rem 24 jam tidak ikut ter-reset oleh pemeriksaan yang diam."""
+    try:
+        from datetime import datetime, timezone
+        lama = _baca_state(sb, key)
+        state = {"median": round(float(med), 2), "alarming": bool(alarming),
+                 "last_at": datetime.now(timezone.utc).isoformat() if alarming else lama.get("last_at")}
+        sb.table("app_config").upsert({
+            "key": key, "value": 0,   # kolom NOT NULL (int); isi sebenarnya di value_text
+            "value_text": json.dumps(state),
+            "description": "OPS (otomatis, jangan diubah manual): status alarm drift durasi — median terakhir, sedang-alarm?, waktu alarm terakhir",
+        }).execute()
+    except Exception as e:
+        logger.warning(f"[DriftAlarm] tulis status gagal (non-fatal): {e}")
+
+
+def _drift_alarm_text(med: float, thresh: float, n: int, prev: float | None) -> str:
+    """Pesan saat akurasi masih di bawah standar — SELALU menyebut arah pergerakan."""
+    if prev is None:
+        arah = "Ini pemeriksaan pertama sejak mesin mulai mengoreksi."
+        saran = "Bila besok angkanya TIDAK turun, minta developer memeriksa."
+    elif med < prev - 0.05:
+        arah = f"MEMBAIK dari {prev:.1f}% pada pemeriksaan sebelumnya — mesin sedang mengoreksi diri."
+        saran = "Tidak perlu tindakan apa pun; cukup pantau sampai kembali normal."
+    elif med > prev + 0.05:
+        arah = f"MEMBURUK dari {prev:.1f}% pada pemeriksaan sebelumnya."
+        saran = "Minta developer memeriksa — biasanya ada suara/model baru yang datanya belum terkumpul."
+    else:
+        arah = f"TIDAK BERUBAH dari {prev:.1f}% pada pemeriksaan sebelumnya."
+        saran = "Bila besok masih sama, minta developer memeriksa — koreksi otomatis tampaknya mentok."
+    return (f"⚠️ Pemeriksaan otomatis MesinViral — akurasi durasi video di bawah standar: "
+            f"rata-rata meleset {med:.1f}% (batas wajar {thresh:.0f}%) pada {n} video terakhir.\n"
+            f"📉 {arah}\n"
+            f"👉 {saran}")
+
+
+def _drift_recovery_text(med: float, thresh: float, n: int, prev: float | None) -> str:
+    """Pesan SEKALI saat akurasi kembali normal — tanpa ini, diam bisa berarti 'beres' atau 'alarm rusak'."""
+    dari = f" (sebelumnya {prev:.1f}%)" if prev is not None else ""
+    return (f"✅ Akurasi durasi video sudah KEMBALI NORMAL: rata-rata meleset {med:.1f}%{dari} "
+            f"— di bawah batas wajar {thresh:.0f}%, dari {n} video terakhir.\n"
+            f"👍 Koreksi otomatis berhasil. Tidak ada tindakan yang perlu Anda lakukan.")
+
+
 def check_drift_alarm(sb=None) -> dict:
     """[F5] ALARM drift estimator: median |error| taksiran-vs-mentah pada N sampel TERBARU ber-taksiran.
     Melewati ambang → Telegram ADMIN (bukan aksi otomatis apa pun — manusia yang menindak; §0.6).
@@ -265,6 +331,8 @@ def check_drift_alarm(sb=None) -> dict:
         med = statistics.median(errs)
         alarmed = med > thresh
         suppressed = False
+        _KEY = "ops_drift_alarm_state"   # JSON: {last_at, median, alarming}
+        st = _baca_state(sb, _KEY)
         if alarmed:
             # REM JEDA-ULANG persisten (owner 2026-07-16: 6 dering sehari krn tiap deploy me-restart
             # worker → penjaga langsung periksa → alarm lagi; memori proses hilang saat restart —
@@ -272,14 +340,11 @@ def check_drift_alarm(sb=None) -> dict:
             # Maks 1 alarm per DRIFT_ALARM_COOLDOWN_H (default 24 jam). Fail-soft: gagal baca/tulis
             # jam-terakhir → alarm TETAP terkirim (lebih baik dering ganda daripada bisu senyap).
             cooldown_h = float(os.getenv("DRIFT_ALARM_COOLDOWN_H", "24"))
-            _KEY = "ops_drift_alarm_last_at"
             try:
                 from datetime import datetime, timezone
-                row = (sb.table("app_config").select("value_text").eq("key", _KEY)
-                       .limit(1).execute().data or [])
-                last = row[0].get("value_text") if row else None
+                last = st.get("last_at")
                 if last:
-                    dt_last = datetime.fromisoformat(last.replace("Z", "+00:00"))
+                    dt_last = datetime.fromisoformat(str(last).replace("Z", "+00:00"))
                     hours = (datetime.now(timezone.utc) - dt_last).total_seconds() / 3600.0
                     if 0 <= hours < cooldown_h:
                         suppressed = True
@@ -289,25 +354,22 @@ def check_drift_alarm(sb=None) -> dict:
             if not suppressed:
                 try:
                     from src.utils.telegram_notifier import TelegramNotifier
-                    # Bahasa dampak-bisnis, nol jargon (§4.1 — teguran owner 2026-07-16 atas versi teknis).
-                    TelegramNotifier().notify_admin(
-                        f"⚠️ Pemeriksaan otomatis MesinViral — akurasi durasi video sedang di bawah standar: "
-                        f"rata-rata meleset {med:.1f}% (batas wajar {thresh:.0f}%) pada {len(errs)} video terakhir.\n"
-                        f"✅ Mesin sudah mengkalibrasi diri secara otomatis — tidak perlu tindakan apa pun dari Anda.\n"
-                        f"👉 Hanya bila peringatan yang sama muncul lagi besok: minta developer memeriksa "
-                        f"(biasanya karena ada penggantian suara/model baru yang datanya belum terkumpul).")
-                    try:
-                        from datetime import datetime, timezone
-                        sb.table("app_config").upsert({
-                            "key": _KEY,
-                            "value": 0,   # kolom NOT NULL (int); nilai sebenarnya di value_text
-                            "value_text": datetime.now(timezone.utc).isoformat(),
-                            "description": "OPS (otomatis, jangan diubah manual): waktu alarm drift durasi terakhir — rem 1×/DRIFT_ALARM_COOLDOWN_H",
-                        }).execute()
-                    except Exception as we:
-                        logger.warning(f"[DriftAlarm] tulis jam-alarm gagal (non-fatal): {we}")
+                    # Bahasa dampak-bisnis, nol jargon (§4.1) + ARAH pergerakan (owner 2026-07-28).
+                    TelegramNotifier().notify_admin(_drift_alarm_text(med, thresh, len(errs), st.get("median")))
+                    _simpan_state(sb, _KEY, med, True)
                 except Exception as te:
                     logger.warning(f"[DriftAlarm] kirim telegram gagal (non-fatal): {te}")
+        elif st.get("alarming"):
+            # PULIH: sempat alarm, kini kembali normal → kabari SEKALI. Tanpa ini, diam bisa berarti
+            # "sudah beres" atau "alarmnya rusak", dan owner tak punya cara membedakannya.
+            try:
+                from src.utils.telegram_notifier import TelegramNotifier
+                TelegramNotifier().notify_admin(_drift_recovery_text(med, thresh, len(errs), st.get("median")))
+            except Exception as te:
+                logger.warning(f"[DriftAlarm] kabar pulih gagal (non-fatal): {te}")
+            _simpan_state(sb, _KEY, med, False)
+        else:
+            _simpan_state(sb, _KEY, med, False)   # rekam median agar pemeriksaan berikutnya punya pembanding
         logger.info(f"[DriftAlarm] median_err={med:.1f}% n={len(errs)} ambang={thresh}% alarm={alarmed} ditahan={suppressed}")
         return {"median_err_pct": round(med, 1), "n": len(errs), "threshold": thresh,
                 "alarmed": alarmed, "suppressed": suppressed}
