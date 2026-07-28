@@ -10,6 +10,10 @@ ADAPTERS = registry protokol (kode). Pemilihan provider/model = dari DB
 (ai_providers.adapter), bukan hardcode di business logic.
 """
 
+import json
+import urllib.error
+import urllib.request
+
 from src.providers.llm.base import LLMProvider, LLMError
 from src.providers.llm import catalog as _catalog
 from src.exceptions import ErrorClass
@@ -257,8 +261,65 @@ class OpenAIChatAdapter(_BaseAdapter):
                            error_class=_ec, human_message=_human) from e
 
 
+class FalAnyLlmAdapter(_BaseAdapter):
+    """Protokol fal.ai `any-llm` — SATU kunci fal untuk banyak model (Claude/Gemini/GPT/Llama).
+
+    Beda bentuk dari dua adapter di atas, dan itu disengaja oleh vendornya:
+      * bukan percakapan berperan — hanya `prompt` + `system_prompt`, jawaban di field `output`;
+      * TIDAK punya mode JSON asli (tak ada `response_format`). JSON diminta lewat instruksi,
+        lalu dibaca `parse_json_lenient` — cara yang sama dipakai adapter Anthropic sejak lama.
+        Terverifikasi 2026-07-28 pada gpt-4o-mini (JSON bersih) & gemini-2.5-flash + claude-haiku-4.5
+        (terbungkus pagar kode, tetap terbaca parser toleran);
+      * tarifnya PER PERMINTAAN, bukan per token.
+
+    Model dikirim apa adanya sesuai daftar fal (mis. "anthropic/claude-haiku-4.5"). Model di luar
+    daftar dijawab 404 oleh fal → GAGAL JUJUR, tidak pernah diam-diam diganti model lain.
+    """
+
+    _BASE = "https://fal.run/fal-ai/any-llm"
+
+    def complete(self, *, system, user, model, temperature=0.7, max_tokens=2000,
+                 as_json=False) -> str:
+        if not self.api_key:
+            raise LLMError(f"Provider '{self.display_name}' butuh API key (BYOK).")
+        if not model:
+            raise LLMError(f"Model untuk '{self.display_name}' tidak ditentukan.")
+        model = _catalog.resolve_model_id(model)
+        sistem = system or ""
+        if as_json:
+            # Tanpa mode JSON asli → tegaskan lewat instruksi (pola sama dgn adapter Anthropic).
+            sistem = (sistem + "\n\nJawab HANYA dengan JSON valid. Tanpa penjelasan, "
+                               "tanpa pagar kode ```.").strip()
+        body = json.dumps({"model": model, "prompt": user, "system_prompt": sistem,
+                           "temperature": temperature, "max_tokens": max_tokens}).encode()
+        req = urllib.request.Request(
+            self.base_url or self._BASE, data=body,
+            headers={"Authorization": f"Key {self.api_key}", "Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=180) as r:
+                data = json.loads(r.read())
+        except Exception as e:
+            detail = ""
+            if isinstance(e, urllib.error.HTTPError):
+                try:
+                    detail = e.read()[:300].decode("utf-8", "replace")
+                except Exception:
+                    detail = ""
+            _ec, _human = _classify_openai_compat_error(e)
+            raise LLMError(f"Provider '{self.display_name}' gagal: {e} {detail}".strip(),
+                           error_class=_ec, human_message=_human) from e
+        # fal membalas 200 dengan field `error` terisi bila model menolak → tetap GAGAL JUJUR.
+        if data.get("error"):
+            raise LLMError(f"Provider '{self.display_name}' gagal: {data['error']}")
+        teks = (data.get("output") or "").strip()
+        if not teks:
+            raise LLMError(f"Provider '{self.display_name}' mengembalikan jawaban kosong.")
+        return teks
+
+
 # Registry PROTOKOL transport (kode). Key = ai_providers.adapter di DB.
 ADAPTERS = {
     "anthropic_messages": AnthropicMessagesAdapter,
     "openai_chat":        OpenAIChatAdapter,
+    "fal_any_llm":        FalAnyLlmAdapter,
 }

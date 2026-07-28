@@ -2,7 +2,7 @@
 AI Cost (B2 BYOK cost-tracking, owner 2026-07-04) — konversi KONSUMSI (cost_meter) → USD.
 
 Harga satuan = katalog `ai_models.pricing` (jsonb):
-  {in_per_1m, out_per_1m, per_image, per_1m_chars, source, synced_at}
+  {in_per_1m, out_per_1m, per_image, per_1m_chars, per_request_usd, source, synced_at}
   video ([B6] F2): {per_second_usd} ATAU {per_video_base_usd, base_seconds, per_extra_second_usd}
 Diisi otomatis oleh price_sync (feed komunitas LiteLLM, harian) — admin bisa OVERRIDE
 (pricing_locked=true → sinkron tak menimpa; wajib utk provider di luar feed, mis. ElevenLabs).
@@ -51,7 +51,17 @@ def compute_cost_usd(ai_usage: dict, sb=None) -> dict | None:
 
     for model, u in (ai_usage.get("llm") or {}).items():
         p = prices.get(model)
-        if not p or (p.get("in_per_1m") is None and p.get("out_per_1m") is None):
+        if not p:
+            unpriced.append(model)
+            continue
+        # Tarif PER PERMINTAAN (mis. fal any-llm: $0,001 sekali panggil, berapa pun panjangnya).
+        # Dicek DULU: model semacam ini tak punya harga per-token sama sekali, dan tanpa cabang ini
+        # ia akan masuk daftar "tanpa harga" — biaya nyata tenant jadi tak terlihat.
+        if p.get("per_request_usd") is not None:
+            br["llm"] += float(u.get("calls", 0) or 0) * float(p["per_request_usd"])
+            synced = synced or p.get("synced_at")
+            continue
+        if p.get("in_per_1m") is None and p.get("out_per_1m") is None:
             unpriced.append(model)
             continue
         c = (u.get("tokens_in", 0) / 1e6) * float(p.get("in_per_1m") or 0) \

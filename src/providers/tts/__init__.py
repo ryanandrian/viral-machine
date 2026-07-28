@@ -22,7 +22,9 @@ def _adapter_registry() -> dict:
     from src.providers.tts.openai_tts import OpenAITTSProvider
     from src.providers.tts.edge_tts   import EdgeTTSProvider
     from src.providers.tts.gemini_tts import GeminiTTSProvider
+    from src.providers.tts.fal_tts    import FalTTSProvider
     return {
+        "fal_tts":       FalTTSProvider,       # protokol fal.ai (model ElevenLabs via fal; penanda per-karakter)
         "elevenlabs":    ElevenLabsProvider,   # protokol ElevenLabs convert_with_timestamps
         "openai_speech": OpenAITTSProvider,    # protokol OpenAI audio.speech (kompatibel vendor lain via base_url)
         "edge":          EdgeTTSProvider,      # protokol Microsoft Edge Communicate (gratis)
