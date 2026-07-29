@@ -4,7 +4,7 @@
 >
 > **⚠️ DUA PENOMORAN "F" BERBEDA di dokumen ini — jangan tertukar:**
 > 1. **"QC-F0…QC-F7"** (§5) = fase roadmap QC lama (2026-06-13). Status: QC-F0/F1/F2 ✅ LIVE · QC-F3 quarantine, QC-F4 self-critic, QC-F5 belajar-QC-fail (sebagian terwujud), QC-F6 dashboard, QC-F7 consent-fallback = ROADMAP.
-> 2. **"PROGRAM DURASI F1…F5"** (banner 🎯 di bawah) = program perbaikan durasi 2026-07-16. Status: **SEMUANYA ✅ LIVE.**
+> 2. **"PROGRAM DURASI F1…F5"** (banner 🎯 di bawah) = program perbaikan durasi 2026-07-16. Status: **kodenya TER-DEPLOY, tapi DONE-BILA-nya TIDAK PERNAH DIPENUHI** — lihat §2c (2026-07-29). Kata "LIVE" di sini dulu dibaca sesi-sesi berikutnya sebagai "durasi sudah beres", padahal yang terbukti hanya kodenya naik ke server, bukan akurasinya. **Jangan tandai apa pun ✅ sebelum diukur dari DURASI VIDEO JADI.**
 > 3. Kode fase lain yang ikut disebut (mis. `F1-05`, `F5-01` = fase dokumen REMEDIASI; `[B6] F0–F4` = tracker AI-video) = penomoran dokumen/tracker LAIN — selalu dibaca bersama konteks kalimatnya.
 
 > **Living document.** Tujuan: arsitektur khusus untuk *quality control* + *self-improvement* yang **terus dievaluasi & di-improve** sampai ideal. Cakupan: **dari ScriptAnalyzer → seluruh tahap produksi → file hasil (pra-submit)** + **loop self-analyzer/self-improvement** (janji landing page: "robot pintar, makin pintar tiap hari").
@@ -26,6 +26,7 @@
 > - ✅ **F4 JALUR DNA + OVERHEAD PENUH — DEPLOYED 2026-07-16 (`7dd42cd` health=200):** (a) **Ranjau overhead-loop MATI**: video final = audio + trailing + LOOP bersih (loop−0.5, verified `_add_loop_ending`) — naskah sudah menghitungnya tapi korektor STEP 5 & gerbang pra-visual hanya trailing → korektor bisa MEREGANG audio benar (8s ±12%). Kini `format_catalog.effective_overhead` = SATU rumus 4 titik (naskah pakai helper [ekuivalen, uji 2] · STEP 5 `overhead_secs` · gerbang · window `_fit_duration`); tanpa-param = jalur lama persis. (b) **DNA radiant diharmonisasi** (config, guard hanya key `style`): 'ONE single quotable sentence' → 'ONE flowing sentence that FILLS the required word budget (or two short) + ellipses sparingly' — selaras MIN/MAX F3. (c) Klip-diskrit ai_video = fakta harga vendor (Kling 5/10s · Hailuo 6/10s · Veo patok 8s), bukan bug — relevan saat owner pilih model [B6]. Uji 4/4: rumus overhead (8s=2.0 · 60s=3.5 · off/None/rusak aman) · ekuivalensi budget naskah · korektor tak meregang audio-benar · kompatibel-mundur.
 > - ✅ **F5 SWA-PEMELIHARAAN — DEPLOYED 2026-07-16 (`7dd42cd` health=200):** `pace_calibration.run_maintenance` dipanggil `self_learning.run_once` tiap cadence (fail-soft total): (1) **kalibrasi pace+α otomatis** dari sampel baru (ganti suara/niche/provider apa pun → terkalibrasi sendiri); (2) **bobot-beat dinamis-sederhana** `align_beat_weights` — ground-truth `tts_delivery_samples.beat_words` (migr 0165; hitungan SISTEM dari naskah final, bukan laporan LLM), rasio porsi-nyata÷porsi-cfg per set-beat-sampel, langkah dibatasi ±`BEAT_ALIGN_MAX_STEP_PCT` (20%), min `BEAT_ALIGN_MIN_N` (10), `content_beats.weight_locked` dihormati, bobot int ≥1; (3) **alarm drift** `check_drift_alarm` — median |error| taksiran `DRIFT_WINDOW_N` (30) sampel terbaru > `DRIFT_ALARM_PCT` (10%) → Telegram ADMIN (murni lapor, nol aksi otomatis — §0.6); anti-alarm-palsu (data tipis → diam). Uji: nyata (align nol-perubahan saat data kosong · drift 12.5% alarm NYATA terkirim [taksiran era pra-kalibrasi — ekspektasi turun <10% pasca-deploy] · pace dry 10 sel) + sintetis (langkah dibatasi 3→4 bukan →6 · lock utuh · min_n) + recorder beat_words. Form admin bobot-beat (Catalog>Durasi, tampil+lock+panduan) = item FE terpisah menyusul.
 > - **DONE-BILA:** akurasi per-niche ≥ patokan dark_history (86% dalam ±15%) DIBUKTIKAN dari render nyata pasca-kalibrasi; alarm drift hidup.
+> - 🔴 **DONE-BILA DI ATAS TIDAK TERPENUHI — diukur 2026-07-29 dari produksi nyata 30 hari:** preset 60s meleset rata **−5,5 dtk** (20% dalam ±1,5 dtk), preset 90s **−14,2 dtk** (7%), terburuk −40,6 dtk; 36 dari 110 render di luar ±15%. Preset 8/15s memang presisi (0,5 dtk · 91%) — dan **justru di situ dulu validasi dilakukan**, sehingga program ini dinyatakan selesai berdasar kasus yang kebetulan lolos. Rincian & sebab = §2c.
 >
 > **Aturan dokumen ini:** setiap perubahan QC/quality WAJIB lewat sini dulu (propose → approve → implement). Jangan ubah ambang QC di kode tanpa update dokumen ini.
 
@@ -101,11 +102,76 @@ video nyata → video_analytics (views, watch_time, avg_view_pct, ctr, subscribe
 **Akar KEDUA — LLM under-produce word budget (tervalidasi e2e ryan 2026-06-16, run `direct-0f73a253`):** kali ini ElevenLabs **berhasil** (98% timestamps, no fallback) TAPI durasi tetap pendek (**48.3s** vs 60s) karena `ScriptEngine` hanya menghasilkan **73 kata** vs budget 108 — `length-gate` (script_engine.py:629 "73w vs target 108w → retry") retry 3× lalu **pakai best-available** (78/100) yang tetap pendek. Jadi miss-durasi bisa datang dari **(a) WPS provider-mismatch saat fallback** ATAU **(b) LLM tak memenuhi word_budget** meski provider utama jalan. **Implikasi fix:** selain WPS-follow-actual (a), perlu **length-gate lebih tegas** (b) — mis. retry sampai ≥ budget×toleransi, atau prompt yang memaksa panjang, sebelum publish (masuk F3/F5 self-tune). *Advisory dinamis (§3) sudah benar menangani kedua kasus: `fallback_used=True`→saran provider; `False`→saran preset/panjang skrip.*
 **Fix benar (2 jalur):** (a) WPS budget **ikut provider yang BENAR-BENAR me-render** (termasuk fallback) — bukan provider terkonfigurasi; ATAU (b) cegah fallback senyap (re-subscribe premium / §4b stop-on-fallback). **⛔ BUKAN dengan menurunkan preset**
 
-> ✅ **AKAR SEBENARNYA = PROMPTING LLM (DIPERBAIKI 2026-06-17, keputusan owner).** Bukan WPS/TTS. Arsitektur (owner): **(1) LLM hasilkan total-kata sesuai preset** → **(2) TTS provider TERDAFTAR** (apa-adanya: premium dulu, kredit kurang → fallback edge) → **(3) durasi pas → lolos QC → publish**; bila edge (kredit kurang) → produk jadi tapi tak lolos QC → **flagged (Opsi C) + lapor tenant saat tinjau: "kredit TTS tak cukup, pakai edge default — terima/topup+re-run"**.
+> 🔴 **KLAIM DI BAWAH INI GUGUR (dibantah eksperimen 2026-07-29, §2c).** "Akar = prompting" ternyata SALAH: memperketat prompt tidak pernah bisa menyelesaikan durasi, dan justru klaim ✅ inilah yang membuat setiap sesi berikutnya berhenti mencari. Perhatikan juga akar yang BENAR sudah tertulis satu paragraf di atas ("LLM under-produce word budget", 2026-06-16) lalu ditimpa klaim ini keesokan harinya — tanpa pernah diperbaiki.
+> ~~✅~~ **AKAR SEBENARNYA = PROMPTING LLM (DIPERBAIKI 2026-06-17, keputusan owner).** Bukan WPS/TTS. Arsitektur (owner): **(1) LLM hasilkan total-kata sesuai preset** → **(2) TTS provider TERDAFTAR** (apa-adanya: premium dulu, kredit kurang → fallback edge) → **(3) durasi pas → lolos QC → publish**; bila edge (kredit kurang) → produk jadi tapi tak lolos QC → **flagged (Opsi C) + lapor tenant saat tinjau: "kredit TTS tak cukup, pakai edge default — terima/topup+re-run"**.
 > - **Fix:** word-budget pakai `delivery_wps` provider **TERDAFTAR** tenant (mis. elevenlabs 1.8 → 60s=109 kata). Prompt `_build_user_prompt` diberi **direktif TEGAS total-kata + durasi** ("MUST total N words, range lo–hi, REJECTED jika kurang") + per-seksi menjumlah ke total. **length-gate diperketat** `SCRIPT_LENGTH_TOLERANCE` 0.25→**0.12** + feedback retry tegas+spesifik (berapa kata kurang). 
 > - **Tervalidasi (LLM-only, 2026-06-17):** ryan 60s → word_count **82 → 109** (rentang 100–122, lolos quality-gate). Dengan ElevenLabs 1.8 → 60.5s lolos QC; edge → ~44s flagged (by-design, ryan kredit tipis).
 > - **TTS DIKEMBALIKAN apa-adanya** (revert "effective-provider/is_available" — itu belok yang salah). File: `script_engine.py` (prompt+gate); `tts_engine.py`/`providers/tts/{base,elevenlabs}.py` (revert bersih).
 > - ✅ **DISEMPURNAKAN per-preset 2026-06-17 (compression-mapping, MULTI_FORMAT §3):** prompt LLM kini **per-preset** — `visual_beats` → N beat narasi (=N scene), BEAT PLAN dinamis + intent naratif per-durasi + budget-kata per-beat. **Validasi LLM-only: 15/30/45/60/75/90 SEMUA word_count tepat + scene=beats + durasi-EL pas.** Bukan 1-prompt-untuk-semua lagi. Detail = `MULTI_FORMAT_STUDIO §3`. (preset 8/15/30/45/60/75/90 sudah rapat by-design; turunkan preset = output ikut lebih pendek, tetap meleset — keputusan owner 2026-06-16, no preset-hack).
+
+---
+
+## 2c. RISET DURASI 2026-07-29 — jalur PROMPT ditutup dengan bukti (BACA SEBELUM MENYENTUH DURASI)
+
+> **Kenapa bagian ini ada:** sejak 2026-06-16 dokumen ini sudah tiga kali menyatakan akar durasi
+> "ditemukan" lalu "ditangani" (17-Jun prompting · 15-Jul lapis-1 · 16-Jul program 5-fase), dan tiga
+> kali durasi tetap meleset. Pola kegagalannya SELALU sama: **validasi dilakukan pada hal yang mudah
+> diukur (jumlah kata, preset pendek, lulus-uji) — bukan pada durasi video jadi.** Bagian ini memuat
+> pengukuran, bukan kesimpulan; setiap angka menyebut n dan caranya.
+
+**Metode:** 83 naskah dibuat lewat jalur prompt PRODUKSI apa adanya (7 preset × 3 model × 3 niche,
+bujur sangkar Latin, 2 ulangan, berpasangan antar-arm), audio diukur NYATA dengan Edge TTS (gratis),
+skor mutu dinilai ScriptAnalyzer. Biaya total ±Rp 2.900.
+
+**A. TERUKUR — sisi suara bukan masalah.** `audio = 0,61 × kata^0,95` (R²=0,98, sebaran ±8%) ≈ 2,05
+kata/detik. Begitu jumlah kata diketahui, durasi audio praktis pasti.
+
+**B. TERUKUR — LLM tidak menuruti jumlah kata, dan ketidaktaatannya BERPOLA.**
+`kata = a × pesanan^b` dengan b = **0,24–0,70** (R² 0,77–0,93; gemini 0,70 · claude-haiku 0,67 ·
+gpt-4o-mini 0,24). Pangkat < 1 = **pesanan kecil dilampaui, pesanan besar tidak tercapai** — satu
+penyakit, dua gejala berlawanan. Inilah sebab tunggal mengapa memperbaiki preset panjang selalu
+merusak preset pendek, dan sebaliknya; selama ini keduanya dikejar sebagai dua masalah terpisah.
+
+**C. TERUKUR — memperbaiki prompt TIDAK BISA menyelesaikan ini.** Eksperimen berpasangan (42 vs 41
+naskah, kombinasi identik): membuang pengikat angka (BEAT PLAN MIN/MAX + SELF-CHECK dari F3)
+menaikkan skor mutu hanya **+0,7 dari 84** (praktis nol) tetapi menurunkan yang lolos batas dari
+**24% → 17%** dan melebarkan goyangan ±33% → ±38%. Artinya pengikat F3 memang membantu — hanya tidak
+akan pernah cukup. **Jangan ulangi percobaan susunan prompt; jalur ini tertutup dengan angka.**
+
+**D. TERUKUR — mengapa sekali-tulis mustahil andal.** Goyangan antar-produksi **±12–17%** sementara
+toleransi di preset panjang hanya **±8%**. Ruangnya setengah dari goyangannya. Kendali durasi WAJIB
+berupa pengukuran+koreksi di KODE, bukan instruksi di prompt.
+
+**E. TERUKUR — mutu isi TIDAK dikorbankan oleh kendali durasi.** Skor 83,9 (dengan pengikat angka) vs
+84,6 (tanpa) — selisih <1%. Kekhawatiran "mengejar detik merusak narasi" tidak terbukti.
+
+**F. TERUKUR — pilihan MODEL lebih menentukan daripada prompt.** gemini-2.5-flash unggul di mutu
+(86–87) DAN kendali (goyangan ±14–17%, pangkat 0,70) sekaligus — bukan trade-off. gpt-4o-mini praktis
+mengabaikan panjang (pangkat 0,24; pernah menulis 119 kata untuk pesanan 16 kata).
+
+**G. TERUKUR — preset 8 dtk gagal di KETIGA model, dan gagalnya karena KELEBIHAN.** Pesanan 16 kata
+dijawab 26–126 kata. Arah kegagalan preset pendek berlawanan dengan preset panjang — perbaikan yang
+"menambah panjang" akan merusaknya. Catatan: produksi nyata preset 8 dtk justru presisi, karena
+channel memakai model lain (llama/groq) yang belum diuji di riset ini.
+
+**H. TERUKUR — preset 75 dtk paling rapuh** (peluang lolos 47–66% bahkan setelah pesanan dikoreksi),
+karena terjepit antara 60 dan 90. Merampingkan tangga preset melebarkan batas tetangganya tanpa
+menyentuh kode apa pun.
+
+### 🔴 BELUM TERBUKTI — dua lubang fondasi; JANGAN bangun apa pun di atasnya
+
+1. **Pace mana yang benar: 2,585 atau 2,05?** `tts_pace_calibration` menyimpan 2,585 wps untuk
+   `id-ID-ArdiNeural` (43 sampel), pengukuran langsung 2026-07-29 memberi **2,05**. Selisih 26%, dan
+   SETIAP hitungan durasi berdiri di atas angka ini. Bila 2,05 yang benar, kalibrasi otomatis kita
+   sendiri menghasilkan angka menggelembung — bug di mesin belajar, bukan di naskah.
+2. **Apakah tuas kecepatan benar-benar sampai ke pembuat suara?** Sampel produksi: 142 kata, speed
+   tercatat 0,74, audio 71,2 dtk. Pengukuran langsung: speed 0,70 memperpanjang audio **43%**
+   (48 kata: 21,7 → 31,2 dtk, α≈1,02). Bila 0,74 sungguh diterapkan, audionya seharusnya ±94 dtk.
+   Salah satu tidak benar, dan belum diketahui yang mana. **Bila tuas ini ternyata tidak bekerja,
+   seluruh rencana "tutup selisih dengan kecepatan" gugur.**
+
+Keduanya bisa dijawab tanpa biaya (Edge TTS gratis + membaca catatan produksi). Sampai terjawab,
+tidak ada angka pace/kecepatan di dokumen ini yang boleh dipakai sebagai dasar perubahan kode.
 
 ---
 
@@ -120,7 +186,8 @@ QC menjadi **3 lapis**, semua ambang config-driven, ambang relatif diturunkan da
 - **(baru)** codec/container valid, tak ada error decode
 
 ### Lapis 2 — Konformitas ke PRESET ("sesuai NIAT produksi?")
-- `|durasi_aktual − target_preset| / target_preset ≤ QC_DURATION_TOLERANCE` (mis. 0.20)
+- 🔴 **DIGANTI keputusan owner 2026-07-29 — batas PERSEN dicabut, pakai TITIK-TENGAH antar-preset:** hasil sah selama masih lebih dekat ke preset yang dipilih daripada ke preset tetangganya. Preset 45 sah 37,5–52,5 dtk (contoh owner: 45→32 = mulai masalah karena sudah milik 30; 45→29 = masalah besar). Preset pertama tak berbatas bawah; preset terakhir dicerminkan dari jarak tetangga bawahnya. **Keunggulan: batasnya lahir dari tangga preset itu sendiri, bukan angka karangan** — dan otomatis melebar bila tangga dirampingkan (membuang preset 75 → batas 60 jadi 52,5–75 dan 90 jadi 75–105). Status: **KEPUTUSAN, belum diterapkan di kode.**
+- ~~`|durasi_aktual − target_preset| / target_preset ≤ QC_DURATION_TOLERANCE` (mis. 0.20)~~ *(nilai berjalan 0.15; inilah yang meloloskan video 90 dtk keluar 74 dtk sambil melapor "berhasil")*
   → preset 15s lolos ~12–18s; preset 60s lolos ~48–72s. **Tanpa floor absolut.**
 - **aspect ratio == target** (9:16 untuk Shorts/Reels/TikTok)
 - `clip_count == expected_beats(preset)` — semua visual beat preset berhasil (bukan hardcode 6)
@@ -268,6 +335,7 @@ Semua parameter dikontrol via ADMIN PANEL atau ENV — tidak ada nilai bisnis ya
 
 ### Changelog
 - **2026-07-16 (2) — SINKRONISASI PENUH dokumen ↔ codebase (mandat owner: single source of truth, nol ambigu).** §0.4 prinsip diluruskan (GAGAL-JUJUR/no-fallback = kondisi terpasang; "fail-soft" hanya utk komponen observasi) · §1 tabel rantai disinkron (TTS NO-FALLBACK + instrumen; clip = visual_beats; QC v2 relatif) · §2 ditulis ulang sesuai kode (dua mode QC; size sadar-durasi; gerbang pra-visual overhead-penuh; SEMUA masalah lama ✅ tertutup; root-cause 2026-06 → ARSIP) · §3 dicap TERPASANG + sumber preset dikoreksi (channels.duration_preset, bukan 'belum ada field') · §4b kondisi nyata NO-FALLBACK kedua komponen (field tts_fallback_provider sudah tiada; checkbox = opt-in masa depan QC-F7) · §5 penomoran QC-F dipertegas (catatan kepala dokumen: 3 penomoran fase berbeda) · §5b +baris kalibrasi/bobot-beat/ambang-F5; utang-F3 dicap LUNAS · §6 'perlu data' kalibrasi pace → SELESAI. Form bobot-beat admin (Catalog>Durasi) DEPLOYED FE `4bf98cf` situs 200.
+- **2026-07-29 — RISET DURASI: jalur PROMPT DITUTUP DENGAN BUKTI; klaim ✅ lama DICABUT (§2c).** 83 naskah lewat jalur prompt produksi (7 preset × 3 model × 3 niche, Latin, berpasangan), audio diukur nyata (Edge, gratis), skor mutu dinilai; biaya ±Rp 2.900. **Terukur:** (1) sisi suara bukan masalah — `audio = 0,61 × kata^0,95` R²=0,98 ±8%; (2) LLM tidak menuruti jumlah kata dan berpola `kata = a × pesanan^b`, b=0,24–0,70 → pesanan kecil dilampaui, pesanan besar tidak tercapai (SATU sebab untuk dua gejala yang selama ini dikejar terpisah); (3) **memperbaiki prompt tidak bisa menyelesaikan** — membuang pengikat angka F3 menaikkan mutu hanya +0,7 dari 84 tapi menurunkan yang lolos 24%→17%; (4) goyangan model ±12–17% > toleransi preset panjang ±8% → sekali-tulis mustahil andal; (5) mutu isi TIDAK dikorbankan kendali durasi (83,9 vs 84,6); (6) pilihan MODEL lebih menentukan daripada prompt (gemini-2.5-flash unggul mutu DAN kendali); (7) preset 8 dtk gagal di ketiga model karena KELEBIHAN; (8) preset 75 dtk paling rapuh. **Dicabut:** klaim 17-Jun 'akar = prompting' (akar benar sudah tertulis 16-Jun lalu ditimpa, tak pernah diperbaiki); status 'PROGRAM DURASI SEMUANYA ✅ LIVE' (kodenya ter-deploy, DONE-BILA-nya tidak pernah dipenuhi — produksi 30 hari: 60s −5,5 dtk · 90s −14,2 dtk · 36 dari 110 di luar ±15%); toleransi persen (diganti aturan TITIK-TENGAH antar-preset, keputusan owner). **BELUM TERBUKTI (jangan bangun di atasnya):** pace 2,585 vs 2,05 hasil ukur, dan apakah tuas kecepatan benar-benar sampai ke pembuat suara. **Nol kode produksi disentuh.**
 - **2026-07-16 — PROGRAM DURASI 5-FASE dimulai; F1+korektor DEPLOYED (`fe83d28`+`a4ea83e`, deploy_be OK health=200; izin eksplisit owner).** (1) **F1 instrumen**: migr 0162 +5 kolom nullable `tts_delivery_samples` (taksiran vs aktual + jeda + mentah-pra-atempo); nol ffprobe/waktu tambahan (durasi mentah diukur 1×, dipakai-ulang `_fit_duration`). (2) **Backfill mining `worker.log`** (16-Jun→16-Jul): 78/112 baris lama terisi (0 ambigu; md5 kolom lama identik) → error taksiran per-niche kini TERUKUR (ocean 3% · dark 6% · legenda ~10% · radiant ~12% · fun_facts ~20%). (3) **DURASI-3 korektor**: trailing atempo SATU rumus per-preset dgn naskah/gerbang/renderer (dulu env global → 8s diperas 7.0→6.5s). (4) **Root-cause DISEMPURNAKAN** dari data: biang dominan = pace per (voice×gaya-DNA-niche), bukan estimator global (delivery_wps provider akurat <1%); dark_history (pace pas) = 86% dalam ±15% = patokan DONE. (5) Batch `d27273b` 2026-07-15 ikut terangkat (near-miss→review · pesan manusiawi · prompt Lapis-1). Sisa: F2 kalibrasi → F3 prompt+toleransi-1-sumber → F4 jalur DNA → F5 swa-kalibrasi+alarm (tracker `SISA_KERJA [C1]`). **Insiden dihindari**: `SUPABASE-CONNECTION.md` berisi URI v1+v2 → nyaris ALTER di DB v1; kini guard identitas DB wajib sebelum tulis.
 - **2026-07-15 — perbaikan durasi 3-serangkai (commit `d27273b`; keputusan owner; lokal-teruji; ✅ DEPLOYED 2026-07-16).** (1) Gerbang durasi pra-visual: near-miss TIDAK lagi dibunuh → lanjut produksi → OPSI C review; hanya meleset PARAH (`QC_DURATION_GROSS_FACTOR` ±30%) di-stop (hemat render naskah rusak). (2) `notify_qc_fail` dimanusiakan (`_humanize_qc_reason`; nada "menunggu keputusan Anda", nol jargon/"GAGAL"). (3) Prompt `_build_user_prompt`: cabut pintu-kabur speed + target STRUKTUR (kalimat) + preset-aware (Lapis-1 root-cause). Param baru `QC_DURATION_GROSS_FACTOR` di `.env` berkomentar. Uji lokal lulus; bukti runtime durasi = pending.
 - 2026-07-10 (3) — **Notif Telegram jalur terjadwal + header circuit-break** (mandat owner; commit `c6f3161`, 2 pesan uji nyata terkirim ✓): (a) `notify_review_pending` — video masuk antrean Review kini MEMBERI TAHU tenant (judul + catatan QC + saran + arahan Pakai/Buang + peringatan TTL hangus + link /review; chat/toggle per-tenant, TTL & URL config-driven) — menutup celah "video menunggu senyap → TTL → biaya hangus tanpa tenant tahu"; (b) header `notify_circuit_break` seragam `[nama channel]` (dulu UUID mentah).
