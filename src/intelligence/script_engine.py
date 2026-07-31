@@ -1229,8 +1229,8 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                     format_wps = float(_vw)
                     logger.info(f"[ScriptEngine] F5-01 pace voice-first: {format_wps} wps "
                                 f"(voice={getattr(run_config,'tts_voice',None)}) — override pace provider")
-            except Exception:
-                pass
+            except (TypeError, ValueError) as _pe1:
+                logger.warning(f"[ScriptEngine] pace per-voice tak terpakai (nilai tak sah: {_pe1})")
             # [DURASI-F2] lapis TERTINGGI: pace TERKALIBRASI (voice×niche) dari render nyata
             # (tts_pace_calibration via tenant_config; bukti replay: error taksiran 9.3%→4.7%).
             # None (belum ada data/di luar guard) → lapis di atas tetap berlaku = perilaku lama persis.
@@ -1240,8 +1240,8 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                     format_wps = float(_pcal)
                     logger.info(f"[ScriptEngine] F2 pace TERKALIBRASI: {format_wps} wps "
                                 f"(voice={getattr(run_config,'tts_voice',None)}×niche) — override lapis lama")
-            except Exception:
-                pass
+            except (TypeError, ValueError) as _pe2:
+                logger.warning(f"[ScriptEngine] pace terkalibrasi tak terpakai (nilai tak sah: {_pe2})")
         # `_base_p` = pace kata/detik lapis-lama. Sejak 2026-07-31 hanya dipakai jalur CADANGAN
         # (preset di luar tangga aktif → resep tak bisa dihitung); jalur utama memakai `duration_model`.
         _base_p = float(format_wps) if format_wps else None
@@ -1615,8 +1615,12 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                                                 "words": _r2["words"], "chars": _r2["chars"],
                                                 "sentences": _r2["sentence"]}
                 best_script["word_count"] = _r2["words"]      # laporan LLM bisa basi; ini hitungan sistem
-            except Exception:
-                pass
+            except Exception as _re2:
+                # JANGAN diam: angka pelaporan yang tertinggal di teks lama akan mencemari sampel
+                # kalibrasi & log. Naskahnya tetap dipakai (ini hanya pelaporan), tapi kegagalannya
+                # WAJIB terlihat — `except: pass` adalah kelas cacat yang paling sulit dilacak.
+                logger.warning(f"[ScriptEngine] selaraskan angka pelaporan ke naskah akhir gagal "
+                               f"({_re2}) — angka di log/sampel bisa merujuk teks sebelumnya")
 
         if best_score < min_score:
             logger.warning(
