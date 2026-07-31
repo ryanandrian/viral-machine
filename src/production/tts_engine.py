@@ -82,6 +82,17 @@ def _run_provider(provider_name: str, text: str, config: dict, output_dir: str) 
     return str(audio), timestamps
 
 
+def _chars_of(text: str | None):
+    """[0182] Jumlah huruf/angka naskah (tanpa spasi & tanda baca) — satuan bicara model durasi.
+    SATU sumber: `duration_model.ciri_teks`, supaya angka di sampel identik dengan yang dipakai
+    meramal. Gagal apa pun → None (kolom nullable; kalibrasi melewati baris tanpa huruf)."""
+    try:
+        from src.production.duration_model import ciri_teks
+        return int(ciri_teks(text or "")["chars"]) or None
+    except Exception:
+        return None
+
+
 def _log_delivery_sample(tenant_config, config: dict, provider_name: str, word_count: int, audio_path: str,
                          script: dict | None = None, target_audio_secs: float | None = None,
                          text: str | None = None, raw_audio_secs: float | None = None) -> None:
@@ -91,7 +102,7 @@ def _log_delivery_sample(tenant_config, config: dict, provider_name: str, word_c
 
     DURASI-F1 (instrumentasi): rekam TAKSIRAN model vs AKTUAL + rincian jeda → error estimator TERUKUR (kalibrasi F2).
       • predicted_secs/pause_secs = dari script["_duration_est"] (diisi script_engine utk run ber-preset; None → NULL)
-      • raw_audio_secs            = durasi MENTAH sebelum atempo (pembanding sah; None → pakai audio_secs = tanpa closed-loop)
+      • raw_audio_secs            = durasi audio apa adanya (sejak 2026-07-31 = audio_secs; peregangan atempo dihapus)
       • target_secs               = target audio (preset − trailing)
       • pause_counts              = _count_pauses(text) — rincian tanda-jeda dari naskah
     Semua field F1 di-guard; gagal hitung salah satu TIDAK menggagalkan insert (nullable). NOL ffprobe tambahan."""
@@ -133,6 +144,9 @@ def _log_delivery_sample(tenant_config, config: dict, provider_name: str, word_c
             "voice_key":  config.get("tts_voice"),
             "speed":      round(float(speed), 4),
             "words":      int(word_count),
+            # [0182] huruf naskah = satuan bicara model durasi per-huruf. Tanpa kolom ini model tak bisa
+            # dikalibrasi dari data produksi. Fail-soft: gagal hitung → NULL (baris tetap masuk).
+            "chars":      _chars_of(text),
             "audio_secs": round(float(audio_secs), 2),
             "preset":     getattr(tenant_config, "duration_preset", None),
             # DURASI-F1
@@ -178,13 +192,13 @@ class TTSEngine:
         overhead_secs: float | None = None,
     ) -> tuple[str, list[dict]]:
         """
-        Generate audio dari script.
-        target_audio_secs: target durasi AUDIO (preset − overhead). Bila di-set → closed-loop
-        durasi: ukur audio, kalau di luar window QC → atempo (time-stretch, NOL biaya TTS) ke target +
-        skala word_timestamps. None → perilaku lama (open-loop, non-breaking).
-        overhead_secs [DURASI-3+F4]: overhead render PENUH (trailing efektif + loop bersih;
-        format_catalog.effective_overhead — rumus SAMA dgn naskah/gerbang/renderer) utk window
-        _fit_duration. None → env RENDER_TRAILING_SILENCE (perilaku lama, non-breaking).
+        Generate audio dari script. Suara TIDAK PERNAH dimodifikasi demi durasi (owner 2026-07-29):
+        tak ada modulasi pace, tak ada peregangan audio. Durasi ditentukan di HULU oleh jumlah kata +
+        jumlah kalimat (`duration_model`), dan gerbang pipeline yang memutuskan bila tetap meleset.
+
+        target_audio_secs / overhead_secs: dipakai untuk PELAPORAN & sampel kalibrasi saja — selisih
+        di atas 2 dtk dicatat sebagai peringatan, TIDAK dikoreksi. (Dulu keduanya memberi window
+        koreksi atempo; itu dihapus 2026-07-31.)
         Returns: (audio_path, word_timestamps)
         """
         os.makedirs(output_dir, exist_ok=True)
@@ -200,25 +214,19 @@ class TTSEngine:
 
         # Load config CHANNEL-AWARE (F1-05)
         config   = _get_provider_config(tenant_config)
-        # F4-03 (§10.A DURASI-VIA-SPEED): pakai SPEED pilihan LLM (script.tts_params.speed) — override
-        # speed-niche statik. Speed inilah yg membuat durasi mendarat (LLM sudah nudge W÷(P×speed)≈target).
-        # Clamp [0.7,1.2] (= param_schema EL; openai lebih lebar; edge pakai rate → speed diabaikan). Per-call.
-        try:
-            _llm_speed = (script.get("tts_params") or {}).get("speed")
-            if _llm_speed is not None:
-                # Clamp PROVIDER-AWARE (multi-provider, no-hardcode): rentang dari tts_profiles per provider
-                # (EL speed[0.7,1.2] · openai[0.25,4.0] · edge rate→pengali). Gate sudah clamp ke comfort;
-                # ini jaring defensif. Ganti hardcode EL-spesifik [0.7,1.2] lama.
-                from src.config.format_catalog import tts_speed_range as _tsr
-                _plo, _phi = _tsr(config.get("tts_provider"))
-                _llm_speed = round(min(_phi, max(_plo, float(_llm_speed))), 3)
-                _niche_k = config.get("niche")
-                _vs = dict(config.get("tts_voice_settings") or {})
-                _vs[_niche_k] = {**(_vs.get(_niche_k) or {}), "speed": _llm_speed}
-                config["tts_voice_settings"] = _vs
-                logger.info(f"[TTSEngine] §10.A speed dari LLM = {_llm_speed} (niche={_niche_k}) — override speed statik")
-        except Exception as _se:
-            logger.warning(f"[TTSEngine] inject LLM speed gagal (pakai speed config): {_se}")
+        # ⛔ KECEPATAN SUARA BUKAN TUAS DURASI (keputusan owner 2026-07-29; ditegakkan 2026-07-31).
+        # DULU: `script.tts_params.speed` hasil solver §10.A disuntik ke tts_voice_settings → pace suara
+        # dimodulasi demi mengejar preset. Terukur dari 59 render produksi terbaru: 41% mentok di batas
+        # paling lambat (0,70) dan NOL render berjalan di kecepatan normal — median 0,81. Artinya lebih
+        # dari separuh video dibacakan ~20% lebih lambat dari semestinya, DAN durasinya tetap meleset
+        # (median −4,7 dtk dari target). Mood narasi = barang yang produk ini jual; membakarnya untuk
+        # durasi adalah tukar-tambah yang salah, dan ternyata tidak menghasilkan durasi juga.
+        # SEKARANG: durasi ditentukan di HULU oleh jumlah kata + jumlah kalimat (duration_model), dan
+        # suara selalu memakai baseline voice-nya sendiri (voice_catalog.default_settings). Bila naskah
+        # masih membawa `tts_params.speed` (mis. dari model), nilainya DIABAIKAN — bukan diterapkan.
+        if isinstance(script.get("tts_params"), dict) and script["tts_params"].get("speed") is not None:
+            logger.info(f"[TTSEngine] speed dari naskah ({script['tts_params'].get('speed')}) DIABAIKAN — "
+                        f"kecepatan suara bukan tuas durasi; pakai baseline voice")
         primary  = config.get("tts_provider")
         # F1-05 NO-FALLBACK (§3.8/§10.E): produksi pakai HANYA provider terkonfigurasi channel.
         # Provider tak terkonfigurasi / gagal → GAGAL JUJUR (tak pindah diam-diam ke edge).
@@ -246,19 +254,23 @@ class TTSEngine:
                              "tidak tersedia" if primary == "openai_tts" else \
                              "~80% estimasi"
                 logger.info(f"[TTSEngine] ✅ {primary}: {size_kb:.1f}KB | {ts_count} word timestamps ({ts_quality})")
-                # Closed-loop durasi (opsional, NOL biaya TTS): rapikan via atempo bila di luar window.
-                # DURASI-F1: ukur durasi MENTAH SEKALI di sini → dipakai-ulang oleh _fit_duration (lewati
-                # ffprobe internalnya) + direkam ke sampel (raw_audio_secs). Jumlah ffprobe = SAMA dgn
-                # sebelumnya → NOL penambahan waktu pipeline.
-                _raw_secs = None
+                # ⛔ PEREGANGAN AUDIO (atempo) DIHAPUS — lapis kedua tuas kecepatan yang sama-sama
+                # dilarang owner. DULU: audio di luar window ±15% di-time-stretch 0,80–1,35× "tanpa biaya
+                # TTS". Terukur: 17 dari 140 render produksi audionya diubah setelah selesai, faktor median
+                # 0,832 — yaitu memperlambat 17%, di ATAS pelambatan yang sudah terjadi di pace suara.
+                # Dua lapis pelambatan bertumpuk pada video yang sama.
+                # SEKARANG: audio dipakai apa adanya. Durasi diurus di hulu (jumlah kata + kalimat);
+                # bila tetap meleset, gerbang pipeline melaporkannya JUJUR (bukan menutupinya dengan
+                # merusak suara). Pengukuran mentah tetap diambil untuk sampel kalibrasi + laporan selisih.
+                _raw_secs = TTSEngine.get_duration(audio_path)
                 if target_audio_secs and target_audio_secs > 0:
-                    _raw_secs = TTSEngine.get_duration(audio_path)
-                    audio_path, word_timestamps = self._fit_duration(
-                        audio_path, word_timestamps, float(target_audio_secs), output_dir,
-                        precomputed_actual=_raw_secs, overhead_secs=overhead_secs,
-                    )
+                    _selisih = _raw_secs - float(target_audio_secs)
+                    if abs(_selisih) > 2.0:
+                        logger.warning(f"[TTSEngine] audio {_raw_secs:.1f}s vs target {target_audio_secs:.1f}s "
+                                       f"(selisih {_selisih:+.1f}s) — TIDAK dikoreksi (suara tak disentuh); "
+                                       f"gerbang durasi pipeline yang memutuskan")
                 # F4-01 observability: catat delivery NYATA (best-effort) → kalibrasi pace F5-01 + verifikasi P §10.D.
-                # DURASI-F1: + taksiran vs aktual + jeda (script["_duration_est"], target, teks, raw pra-atempo).
+                # DURASI-F1: + taksiran vs aktual + jeda (script["_duration_est"], target, teks) + huruf [0182].
                 _log_delivery_sample(tenant_config, config, primary, word_count, audio_path,
                                      script=script, target_audio_secs=target_audio_secs,
                                      text=text, raw_audio_secs=_raw_secs)
@@ -312,54 +324,3 @@ class TTSEngine:
         except Exception:
             return 0.0
 
-    @staticmethod
-    def _fit_duration(audio_path: str, word_timestamps: list, target_secs: float, output_dir: str,
-                      precomputed_actual: float | None = None, overhead_secs: float | None = None):
-        """Closed-loop durasi TANPA biaya TTS ekstra (akar: kecepatan bicara EL bervariasi ±15%).
-        SYARAT (kesepakatan owner): hanya dipakai pada audio dari naskah yg SUDAH lulus gate mutu;
-        koreksi HANYA bila hasil di luar window QC; HANYA bila faktor dalam batas aman (suara tak rusak);
-        kalau di luar batas → biarkan apa adanya (→ ready_with_issues, mutu suara > paksa durasi).
-        Caption: word_timestamps diskala dgn faktor yg sama → tetap sinkron.
-        atempo: out_dur = in_dur / factor (pitch tetap).
-        DURASI-F1: precomputed_actual = durasi mentah yg SUDAH diukur pemanggil → dipakai-ulang
-        (hemat 1 ffprobe, nol tambah waktu). None → ukur sendiri (perilaku lama persis)."""
-        try:
-            actual = float(precomputed_actual) if precomputed_actual is not None else TTSEngine.get_duration(audio_path)
-            if actual <= 0:
-                return audio_path, word_timestamps
-            # [DURASI-3+F4] overhead dari pemanggil = PENUH per-preset (trailing efektif + loop bersih;
-            # rumus sama dgn naskah/gerbang/renderer). None → env trailing (perilaku lama, non-breaking).
-            trailing = float(overhead_secs) if overhead_secs is not None else float(os.getenv("RENDER_TRAILING_SILENCE", "1.5"))
-            tol      = float(os.getenv("QC_DURATION_TOLERANCE", "0.15"))
-            preset   = target_secs + trailing            # target FINAL ≈ preset (audio + overhead penuh)
-            final_est = actual + trailing
-            lo, hi   = preset * (1 - tol), preset * (1 + tol)
-            if lo <= final_est <= hi:
-                return audio_path, word_timestamps        # sudah dalam window → JANGAN sentuh suara
-            factor = actual / target_secs                 # atempo value
-            amin = float(os.getenv("TTS_ATEMPO_MIN", "0.80"))
-            amax = float(os.getenv("TTS_ATEMPO_MAX", "1.35"))  # §10.A lebarkan: tangkap sisa overshoot jeda (1.35=mutu masih oke)
-            if not (amin <= factor <= amax):
-                logger.warning(
-                    f"[TTSEngine] durasi {actual:.1f}s vs target {target_secs:.1f}s — faktor {factor:.2f} "
-                    f"di luar batas aman [{amin},{amax}] → TIDAK di-atempo (jaga mutu suara) → ready_with_issues"
-                )
-                return audio_path, word_timestamps
-            import subprocess
-            out = os.path.join(output_dir, "fit_" + os.path.basename(audio_path))
-            subprocess.run(
-                ["ffmpeg", "-y", "-i", audio_path, "-filter:a", f"atempo={factor:.4f}", "-vn", out],
-                check=True, capture_output=True,
-            )
-            scale  = 1.0 / factor                          # new_dur/old_dur → skala timestamp
-            scaled = [{**w, "start": float(w.get("start", 0)) * scale, "end": float(w.get("end", 0)) * scale}
-                      for w in (word_timestamps or [])]
-            new = TTSEngine.get_duration(out)
-            logger.info(
-                f"[TTSEngine] ⏱ atempo fit: {actual:.1f}s → {new:.1f}s (target {target_secs:.1f}s, "
-                f"factor {factor:.3f}) — caption diskala, biaya EL=0"
-            )
-            return out, scaled
-        except Exception as e:
-            logger.warning(f"[TTSEngine] fit durasi gagal ({e}) — pakai audio asli")
-            return audio_path, word_timestamps

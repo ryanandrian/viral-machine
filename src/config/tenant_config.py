@@ -178,8 +178,11 @@ class TenantRunConfig:
     voice_delivery_wps: Optional[float] = None          # F5-01: pace PER-VOICE (voice_catalog.delivery_wps). None → fallback tts_profiles[provider]. Guard [1.0,4.0].
     # [DURASI-F2] kalibrasi dari render NYATA (tabel tts_pace_calibration / tts_speed_response, migr 0163/0164).
     # None = belum ada data → estimator jatuh ke lapis lama persis (nol regresi). Diisi _load_pace_calibration.
-    pace_calibrated:   Optional[float] = None           # pace (voice×niche EFEKTIF) → ('*') — prioritas TERTINGGI. Guard [1.0,4.0].
-    tts_speed_alpha:   Optional[float] = None           # α respons-speed provider (EL≈1.32). None/invalid → 1.0 (patuh penuh, perilaku lama).
+    pace_calibrated:   Optional[float] = None           # pace (voice×niche EFEKTIF) → ('*') — LAPIS CADANGAN sejak 0182. Guard [1.0,4.0].
+    # [0182] Koefisien MODEL DURASI per-suara (huruf + jeda per tanda baca) dari `tts_pace_calibration`.
+    # None/kosong → `duration_model` memakai angka BAWAAN terukur (jadi tenant/suara baru tetap jalan).
+    # Inilah alat ukur yang menggantikan estimator lama (salah 7,01 dtk → 0,96 dtk luar-sampel).
+    duration_calibration: Optional[dict] = None
     tts_api_key:       Optional[str] = None
 
     visual_api_key:    Optional[str] = None
@@ -388,13 +391,41 @@ class TenantConfigManager:
             if vkey:
                 wanted = [n for n in (eff_niche, "*") if n]
                 pc = (self._supabase.table("tts_pace_calibration")
-                      .select("niche, delivery_wps").eq("voice_key", vkey)
+                      .select("niche, delivery_wps, sec_per_char, sec_per_sentence, sec_per_ellipsis, sec_per_comma, sec_per_em_dash, chars_per_word, words_per_sentence, calib_error_secs").eq("voice_key", vkey)
                       .in_("niche", wanted).execute())
-                by = {r["niche"]: r.get("delivery_wps") for r in (pc.data or [])}
-                val = by.get(eff_niche) if eff_niche in by else by.get("*")
+                by = {r["niche"]: r for r in (pc.data or [])}
+                row = by.get(eff_niche) if eff_niche in by else by.get("*")
+                val = (row or {}).get("delivery_wps")
                 if val is not None and 1.0 <= float(val) <= 4.0:
                     config.pace_calibrated = float(val)
-                    logger.debug(f"[TenantConfig] F2 pace terkalibrasi {vkey}×{eff_niche or '*'} = {val}")
+                    logger.debug(f"[TenantConfig] pace cadangan {vkey}×{eff_niche or '*'} = {val}")
+                # [0182] koefisien model durasi (huruf + jeda). Diserahkan APA ADANYA ke duration_model,
+                # yang punya pagar kewajarannya sendiri — di sini tidak menyaring supaya hanya ada SATU
+                # tempat yang memutuskan angka sah/tidak (dulu penyaringan ganda = sumber drift senyap).
+                # [0182] Koefisien model durasi. PENTING: baris per-niche warisan sistem lama hanya
+                # berisi `delivery_wps` (tanpa koefisien) — kalau ia dipakai membuta, baris '*' yang
+                # BERISI koefisien tertutup dan produksi jatuh ke angka bawaan. Cacat itu nyata dan
+                # terukur: ramalan naskah 239 kata suara Gadis meleset 42 dtk (88,6 vs 130,8) hanya
+                # karena baris ('id-ID-GadisNeural','dark_history') menutup baris '*'.
+                # Aturan: ambil baris yang PUNYA koefisien — per-niche lebih diutamakan, tapi hanya
+                # bila ia benar-benar terisi.
+                _KUNCI_KAL = ("sec_per_char", "sec_per_digit", "sec_per_sentence", "sec_per_ellipsis",
+                              "sec_per_comma", "sec_per_em_dash", "chars_per_word", "words_per_sentence")
+
+                def _koef(r):
+                    return {k: r.get(k) for k in _KUNCI_KAL if r.get(k) is not None} if r else {}
+
+                _kal = _koef(by.get(eff_niche)) or _koef(by.get("*"))
+                if _kal:
+                    _asal = by.get(eff_niche) if _koef(by.get(eff_niche)) else by.get("*")
+                    config.duration_calibration = _kal
+                    logger.debug(f"[TenantConfig] 0182 kalibrasi durasi {vkey}×{(_asal or {}).get('niche')}: "
+                                 f"{len(_kal)} koefisien (salah luar-sampel "
+                                 f"{(_asal or {}).get('calib_error_secs')}s)")
+                else:
+                    logger.warning(f"[TenantConfig] suara {vkey} BELUM punya koefisien durasi — "
+                                   f"ramalan memakai angka bawaan (bisa meleset di suara yang "
+                                   f"pace-nya berbeda; jalankan kalibrasi)")
         except Exception as e:
             logger.debug(f"[TenantConfig] F2 pace calibration skip (non-fatal): {e}")
         try:

@@ -209,6 +209,9 @@ def _build_insights_block(insights: dict) -> str:
 # Dulu 5 dict tersebar di sini + core_facts_2 mati. Nilai turunan IDENTIK (bukti derive==current).
 _BEAT_WEIGHT   = _beats.weights()
 _ROLE_LABEL    = _beats.labels_upper()
+# kata per kalimat alami (median naskah nyata) — satu sumber: duration_model.BAWAAN
+from src.production.duration_model import BAWAAN as _DUR_BAWAAN
+_WPS_KAL_BAWAAN = _DUR_BAWAAN["words_per_sentence"]
 _ALL_SECTIONS  = _beats.all_beats()
 
 
@@ -251,68 +254,249 @@ def _script_len_tol() -> float:
     return max(0.02, min(s, q))
 
 
-# ── §10.A PAUSE-AWARE DURATION ESTIMATOR (provider-AGNOSTIK) ────────────────────────
-# Durasi-ucap = waktu-BICARA + waktu-JEDA. Jeda (em-dash/elipsis/akhir-kalimat) = sumber variansi
-# utama (data NYATA: P_base 1.37–2.20 → seed pace TUNGGAL salah ~½ kasus; 75s pernah meledak 105s).
-# Estimator ini BERLAKU UMUM utk SEMUA TTS provider:
-#   • pace dasar  = `tts_profiles.delivery_wps` per provider (DB) — beda provider mengalir dari sini
-#   • speech_wps  = delivery_wps × _PAUSE_INFLATION (bicara MURNI; delivery_wps sudah meng-include jeda rata-rata)
-#   • jeda dihitung dari TEKS (tanda baca) → bebas-provider & bebas-bahasa
-# Seed di bawah = AWAL; F5-01 kalibrasi PER PROVIDER dari tts_delivery_samples (EL presisi via
-# word_timestamps; provider tanpa word-timeframe via agregat) → pindah ke kolom DB. Tak ada angka 1-vendor.
-_PAUSE_INFLATION = 1.10   # SEED universal: speech_wps = delivery_wps × ini (F5-01 kalibrasi per provider)
-_PAUSE_SECONDS = {        # SEED hening/token (detik) — universal; F5-01 kalibrasi per provider → DB
-    "em_dash": 0.55, "ellipsis": 0.75, "sentence": 0.35, "comma": 0.12, "linebreak": 0.45,
-}
+# ── Rincian tanda-jeda dari TEKS (satu sumber: duration_model) ────────────────────────────────────
+# Estimator lama beserta benih jedanya DIBUANG 2026-07-31. Isinya: `kata ÷ (delivery_wps × 1,10) +
+# Σ jeda_benih` dengan benih em_dash 0,55 · ellipsis 0,75 · sentence 0,35 · comma 0,12 — angka yang
+# komentar aslinya sendiri tandai "SEED ... kalibrasi per provider → DB", dan kalibrasi itu hanya
+# pernah dikerjakan untuk `delivery_wps`, TIDAK untuk angka jedanya. Diuji pada 60 render naskah
+# produksi: salah rata-rata 7,01 dtk (10% akurat ±2 dtk). Terukur, jeda akhir-kalimat yang benar
+# 0,60–1,31 dtk dan elipsis 0,80–1,38 dtk — benihnya ~3x terlalu kecil, dan selisih itu ditambal
+# dengan MEMPERLAMBAT SUARA (41% render mentok di batas 0,70). Penggantinya `duration_model`.
+#
+# `solve_speed_for_duration` juga dibuang bersamanya: fungsinya menghitung pengali kecepatan suara
+# agar taksiran mendarat — tuas yang dilarang owner 2026-07-29.
+
 
 def _count_pauses(text: str) -> dict:
-    """Hitung token-jeda dari TEKS (bebas-provider/bahasa). Elipsis tak dihitung ulang sbg akhir-kalimat."""
-    import re
-    t = text or ""
-    ell = t.count("…") + t.count("...")
-    t2 = t.replace("…", "  ").replace("...", "  ")
-    return {
-        "em_dash":   t.count("—"),
-        "ellipsis":  ell,
-        "sentence":  len(re.findall(r"[.!?]+", t2)),
-        "comma":     t2.count(",") + t2.count(";") + t2.count(":"),
-        "linebreak": t.count("\n"),
-    }
+    """Hitung token-jeda dari TEKS. Delegasi ke `duration_model.ciri_teks` agar angka di sini IDENTIK
+    dengan yang dipakai meramal durasi (dulu dua implementasi terpisah = risiko drift senyap).
+    Bentuk keluarannya dipertahankan (dipakai kolom `tts_delivery_samples.pause_counts`)."""
+    from src.production.duration_model import ciri_teks
+    f = ciri_teks(text)
+    return {"em_dash": f["em_dash"], "ellipsis": f["ellipsis"], "sentence": f["sentence"],
+            "comma": f["comma"], "digits": f["digits"], "linebreak": (text or "").count("\n")}
 
-def pause_seconds(text: str, model: dict | None = None) -> float:
-    m = model or _PAUSE_SECONDS
-    c = _count_pauses(text)
-    return round(sum(c.get(k, 0) * float(m.get(k, 0)) for k in c), 3)
 
-def estimate_spoken_seconds(text: str, speed: float, delivery_wps: float,
-                            pause_model: dict | None = None, speed_alpha: float = 1.0) -> tuple:
-    """(est_detik, jeda_detik, speech_wps) — sadar-jeda, GENERIK lintas provider.
-    [DURASI-F2] speed_alpha = faktor respons-speed provider TERUKUR (tts_speed_response; EL≈1.32 =
-    melebih-lebihkan perintah speed). Laju efektif = swps × speed^α. Default 1.0 = patuh penuh
-    (perilaku lama persis — pemanggil tanpa data kalibrasi tak berubah)."""
-    swps = max(0.1, float(delivery_wps) * _PAUSE_INFLATION)
-    a = float(speed_alpha) if speed_alpha and 0.5 <= float(speed_alpha) <= 2.0 else 1.0
-    wc = len((text or "").split())
-    pause = pause_seconds(text, pause_model)
-    speech = wc / (swps * (max(0.1, float(speed or 1.0)) ** a))
-    return round(speech + pause, 2), pause, round(swps, 3)
+# ── PUTARAN PERBAIKAN NASKAH ("refit") ────────────────────────────────────────────────────────────
+# Kenapa ini ada: terukur, LLM hanya memenuhi 63–75% anggaran kata (preset 60s: diminta 149, ditulis
+# 111 · preset 90s: diminta 228, ditulis 144), dan mengulang generate dari nol tidak memperbaikinya —
+# goyangan antar-produksi ±12–39%. Yang berhasil: menyuruh model MEMPERBAIKI naskahnya sendiri dengan
+# selisih yang PERSIS, sambil KODE memverifikasi tak ada fakta yang hilang.
+#
+# Terbukti (14 naskah, 7 preset × 2 niche): tanpa langkah ini 5/6 mendarat; dengan langkah ini 14/14
+# mendarat, fakta utuh 14/14, rata-rata 1,0 putaran. Bukti: QC_CONTENT_ARCHITECTURE.md §2c.
+#
+# Kenapa MODEL yang memangkas, bukan kode: diuji dan GAGAL — aturan buatan-tangan tidak bisa
+# membedakan fakta terkuat dari kalimat hiasan (kalimat terkuat sebuah naskah bernilai 0 di semua
+# penanda permukaan, sama dengan kalimat berbunga). Kode yang memangkas pernah membuang fakta paling
+# mengejutkan sebuah naskah. Jadi: model memilih kata, KODE memverifikasi fakta & durasi.
 
-def solve_speed_for_duration(text: str, t_spoken: float, delivery_wps: float,
-                             speed_range=(0.7, 1.2), pause_model: dict | None = None,
-                             speed_alpha: float = 1.0) -> tuple:
-    """SOLVE pengali-kecepatan agar (bicara + jeda) = t_spoken; clamp ke rentang provider (generik).
-    [DURASI-F2] sadar-α: laju efektif = swps × speed^α → speed-diminta = (wc/(swps×budget))^(1/α).
-    α=1.0 (default/tanpa data kalibrasi) = rumus lama persis. Returns (speed, est_detik, jeda_detik, speech_wps)."""
-    swps = max(0.1, float(delivery_wps) * _PAUSE_INFLATION)
-    a = float(speed_alpha) if speed_alpha and 0.5 <= float(speed_alpha) <= 2.0 else 1.0
-    wc = len((text or "").split())
-    pause = pause_seconds(text, pause_model)
-    budget = max(0.4, float(t_spoken) - pause)          # detik tersisa utk bicara setelah jeda
-    lo, hi = speed_range
-    need = (wc / (swps * budget)) ** (1.0 / a) if budget else hi
-    speed = round(min(hi, max(lo, need)), 3)
-    est = round(wc / (swps * (speed ** a)) + pause, 2)
-    return speed, est, pause, round(swps, 3)
+_RX_ANGKA_FAKTA = re.compile(r"\d[\d.,]*")
+
+
+def _nama_diri(teks: str) -> set:
+    """Nama diri = kata berhuruf-besar yang BUKAN kata pertama kalimat (kata pertama selalu besar)."""
+    out = set()
+    for kal in re.split(r"(?<=[.!?…])\s+", teks or ""):
+        for i, w in enumerate(kal.split()):
+            b = w.strip("\"'“”‘’()[].,;:!?…—–-")
+            if i and len(b) >= 3 and b[0].isupper() and any(ch.islower() for ch in b[1:]):
+                out.add(b)
+    return out
+
+
+# Panjang minimum sebuah kata berhuruf-besar untuk dianggap NAMA DIRI. Ada karena terukur: kata biasa
+# yang kebetulan berhuruf besar ("Tires") memblokir perbaikan yang sebenarnya sah — satu putaran refit
+# terbuang. Nama diri sungguhan cenderung lebih panjang (Neuschwanstein, Mariana, Pajajaran).
+_MIN_HURUF_NAMA = 6
+
+
+def _fakta_hilang(asal: str, baru: str) -> list:
+    """Angka/tahun & nama diri yang ADA di naskah asal tapi HILANG di hasil perbaikan.
+    Non-kosong = perbaikan DITOLAK: durasi tidak pernah dibeli dengan membuang fakta.
+
+    ANGKA dijaga ketat (satu pun hilang = tolak) — tahun & jumlah adalah fakta yang paling mudah
+    diverifikasi dan paling sering menjadi inti naskah. NAMA hanya dijaga bila cukup panjang untuk
+    memang berupa nama (lihat `_MIN_HURUF_NAMA`)."""
+    hilang = sorted(set(_RX_ANGKA_FAKTA.findall(asal)) - set(_RX_ANGKA_FAKTA.findall(baru)))
+    hilang += sorted(n for n in (_nama_diri(asal) - _nama_diri(baru)) if len(n) >= _MIN_HURUF_NAMA)
+    return hilang
+
+
+def _refit_naskah(provider, model, script: dict, beats: list, resep: dict, vonis_awal: dict,
+                  maks_putaran: int = 2) -> tuple[dict, list]:
+    """Suruh MODEL merapatkan/melengkapi naskahnya sendiri sampai vonis durasi OK.
+
+    Mengembalikan (script, jejak). Script hanya diganti bila perbaikan LULUS verifikasi:
+      • semua beat aktif terisi (struktur utuh → prompt gambar & durasi per-beat tetap konsisten)
+      • NOL fakta hilang (angka/tahun/nama diri)
+      • vonis durasi membaik
+    Gagal verifikasi / gagal teknis → naskah ASAL dikembalikan apa adanya (gerbang pipeline yang
+    melaporkan jujur). Tidak pernah memaksa.
+    """
+    from src.production.duration_model import vonis as _vonis_fn
+    jejak = []
+    kini = dict(script)
+    v = vonis_awal
+    for putaran in range(1, max(1, int(maks_putaran)) + 1):
+        if v["status"] == "ok":
+            break
+        kurang = v["status"] == "terlalu_pendek"
+        cara = ("EXPAND the facts already present — more concrete detail, more specifics. Do NOT add new "
+                f"facts you have not already stated, do NOT repeat, do NOT pad with filler. KEEP AT LEAST "
+                f"{resep['kalimat']} separate sentences — do NOT merge sentences while lengthening "
+                "(merging removes the natural pauses and the video stays too short)."
+                if kurang else
+                "TIGHTEN: cut redundant words, MERGE sentences that say the same thing (fewer sentence "
+                "ends = less silence), delete decoration that adds no information. Never delete a "
+                "sentence that carries a fact.")
+        isi = {b: (kini.get(b) or "").strip() for b in beats if (kini.get(b) or "").strip()}
+        user = (
+            f"This video narration must be EXACTLY the right length. It is now "
+            f"{len((kini.get('full_script') or '').split())} words in "
+            f"{_count_pauses(kini.get('full_script') or '')['sentence']} sentences; it must be "
+            f"{resep['kata_min']}–{resep['kata_maks']} words in about {resep['kalimat']} sentences → "
+            f"{'ADD' if kurang else 'REMOVE'} about {v['kata_selisih']} words.\n"
+            "ABSOLUTE RULES:\n"
+            "1. Do NOT lose any FACT: every number, year, person/place name and every event stated must "
+            "still be there.\n"
+            f"2. How: {cara}\n"
+            "3. Do NOT change the first sentence.\n"
+            "4. Keep the same language, tone and style. Whole sentences only. NEVER use '...'. "
+            "Commas sparingly.\n"
+            "5. Return the SAME section keys, nothing else.\n\n"
+            f"SCRIPT (JSON):\n{json.dumps(isi, ensure_ascii=False, indent=1)}\n\n"
+            "Reply with JSON only, exactly these keys: " + ", ".join(isi)
+        )
+        try:
+            raw = provider.complete(system="You are a professional video-script editor. Reply with JSON only.",
+                                    user=user, model=model, temperature=0.4, max_tokens=2000, as_json=True)
+            hasil = json.loads(ScriptEngine._clean_json(ScriptEngine.__new__(ScriptEngine), raw))
+        except Exception as e:
+            jejak.append(f"putaran {putaran}: gagal teknis ({str(e)[:60]})")
+            break
+        baru = {b: (hasil.get(b) or "").strip() for b in isi}
+        if any(not baru[b] for b in baru):
+            jejak.append(f"putaran {putaran}: DITOLAK — ada bagian yang dikosongkan")
+            break
+        teks_baru = " ".join(baru[b] for b in beats if b in baru)
+        hilang = _fakta_hilang(kini.get("full_script") or "", teks_baru)
+        if hilang:
+            jejak.append(f"putaran {putaran}: DITOLAK — fakta hilang: {', '.join(hilang[:5])}")
+            break
+        v_baru = _vonis_fn(teks_baru, resep["_preset"], resep["_tangga"], resep["_overhead"],
+                           resep.get("_kalibrasi"))
+        jejak.append(f"putaran {putaran}: {v['video_prediksi']:.0f}s → {v_baru['video_prediksi']:.0f}s "
+                     f"({v_baru['status']})")
+        kini = {**kini, **baru, "full_script": teks_baru}
+        v = v_baru
+    return kini, jejak
+
+
+# ── TULIS PER-BAGIAN ("per-beat") ─────────────────────────────────────────────────────────────────
+# Kenapa ini ada: terukur, satu panggilan TIDAK sanggup menulis naskah panjang. Plafon satu panggilan
+# 372–832 kata di 5 model — tapi yang jauh lebih menentukan: model yang dipakai channel tenant nyata
+# menulis JAUH di bawah pesanan (uji rantai penuh 2026-07-31: llama-3.1-8b menulis 37 kata untuk
+# preset 90 dtk yang butuh ±206; llama-3.3-70b menulis 62–91 kata untuk preset 60 dtk yang butuh
+# 128–166). Meminta ulang dari nol tidak menutupnya — goyangan antar-produksi ±12–39%.
+#
+# Yang menutupnya: memecah pekerjaan jadi sepotong-sepotong yang setiap model SANGGUP. Satu bagian
+# preset 90 dtk hanya ±30 kata — di bawah kemampuan model mana pun. Terbukti di preset 75 & 90:
+# naskah per-bagian mendarat di band pada uji 14/14 (QC_CONTENT_ARCHITECTURE.md §2c).
+#
+# Bagian ditulis BERURUTAN dan tiap bagian melihat bagian sebelumnya, supaya tidak mengulang fakta dan
+# alurnya menyambung — dua cacat yang muncul saat bagian ditulis buta satu sama lain.
+
+def _generate_per_beat(provider, model, topic, niche, beats: list, resep: dict,
+                       niche_profile: dict | None, content_language: str | None,
+                       insights_block: str | None = None) -> dict:
+    """Tulis naskah BAGIAN PER BAGIAN. Mengembalikan dict beat→teks + full_script, atau {} bila gagal.
+
+    Dipakai saat satu panggilan terbukti tak sanggup memenuhi panjang (lihat catatan di atas).
+    Tiap bagian: target kata & kalimat sendiri (dari BEAT PLAN yang sama), peran yang jelas, DNA niche,
+    dan larangan yang sudah terukur mahal (elipsis, mengulang, menyimpulkan sebelum waktunya).
+    """
+    # Kuota per-bagian dinaikkan sesuai KEPATUHAN TERUKUR: pada uji rantai penuh model mengirim
+    # ±65% dari yang diminta di tiap bagian (8w dari 11 · 24w dari 37 · 29w dari 40 · 19w dari 37).
+    # Meminta lebih banyak per bagian membuat hasilnya mendarat; kelebihan (bila ada) dirapatkan oleh
+    # putaran perbaikan — dan merapatkan JAUH lebih mudah daripada memanjangkan.
+    _mk = float(os.getenv("SCRIPT_PERBEAT_MARKUP", "1.45"))
+    kuota = _distribute_words(beats, max(1, round(resep["kata_bidik"] * _mk)))
+    wpk = max(6.0, float((resep.get("_kalibrasi") or {}).get("words_per_sentence")
+                         or _WPS_KAL_BAWAAN))
+    dna = ""
+    if niche_profile:
+        _np = niche_profile.get("narration_persona") or {}
+        dna = (f"TONE: {_np.get('tone','')} | STYLE: {_np.get('style','')} | "
+               f"AVOID (never use these): {_np.get('avoid','')}")
+    lokal = (_content_language_block(content_language) if content_language
+             and not str(content_language).lower().startswith("en") else "")
+    # blok bahasa produksi menyebut nama-nama kunci JSON naskah utuh → baris itu dibuang di sini,
+    # sebab bagian ini membalas kunci lain ({"text": ...}). (Cacat terukur: 3 niche gagal parse.)
+    if lokal:
+        lokal = "\n".join(l for l in lokal.split("\n")
+                          if "JSON KEYS" not in l and "hashtags" not in l and "full_script" not in l
+                          and "background_music_mood" not in l and '"title"' not in l)
+
+    hasil, terpakai = {}, []
+    for i, b in enumerate(beats):
+        w = max(8, int(kuota.get(b, 0)))
+        s_t = max(1, round(w / wpk))
+        peran = _ROLE_LABEL.get(b, b)
+        konteks = ""
+        if terpakai:
+            konteks = ("ALREADY WRITTEN (do NOT repeat these facts; continue naturally from here):\n"
+                       + "\n".join(f"- [{_ROLE_LABEL.get(k, k)}] {v}" for k, v in terpakai) + "\n\n")
+        terakhir = (i == len(beats) - 1)
+        user = (
+            f"NICHE: {niche}\nTOPIC: {topic.get('topic','')}\n"
+            + (f"ANGLE: {topic.get('angle','')}\n" if topic.get("angle") else "")
+            + (f"{dna}\n" if dna else "")
+            + (f"{lokal}\n" if lokal else "")
+            + f"\n{konteks}"
+            f"Write ONLY the [{peran}] part of this video narration ({i+1} of {len(beats)}).\n"
+            f"Length: about {w} words in about {s_t} sentence(s). Count before answering.\n"
+            "RULES: whole sentences only · NEVER use '...' (it burns over a second of silence) · "
+            "commas sparingly · do not name or number the section · "
+            + ("this is the FINAL part: close it in a way that leaves curiosity, no new facts.\n"
+               if terakhir else "do NOT conclude or summarise — that belongs to a later part.\n")
+            + (f"\n{insights_block}\n" if insights_block else "")
+            + '\nReply with JSON only: {"text": "..."}'
+        )
+        # Jalur ini memakai BANYAK panggilan kecil (satu per bagian) alih-alih satu panggilan besar —
+        # dan itu membuatnya rentan THROTTLE penyedia. Terukur pada uji rantai penuh: satu 429/503 dari
+        # Groq membatalkan SELURUH naskah. Karena itu throttle & gangguan sesaat DITUNGGU lalu diulang;
+        # error non-retryable (kredit habis, kunci ditolak, model dipensiunkan) langsung berhenti —
+        # menunggu tak akan menolongnya.
+        from src.exceptions import ErrorClass as _EC
+        _RETRYABLE = {_EC.RATE_LIMIT, _EC.TRANSIENT, _EC.UNKNOWN}
+        teks = ""
+        for _coba in range(1, int(os.getenv("SCRIPT_PERBEAT_RETRY", "3")) + 1):
+            try:
+                raw = provider.complete(system="You are a professional viral video scriptwriter. Reply with JSON only.",
+                                        user=user, model=model, temperature=1.0, max_tokens=1200, as_json=True)
+                teks = (json.loads(ScriptEngine._clean_json(ScriptEngine.__new__(ScriptEngine), raw)).get("text")
+                        or "").strip()
+                if teks:
+                    break
+            except Exception as e:
+                _kelas = getattr(e, "error_class", _EC.UNKNOWN)
+                if _kelas not in _RETRYABLE:
+                    logger.warning(f"[ScriptEngine] per-bagian '{b}' berhenti ({_kelas}): {str(e)[:90]}")
+                    return {}
+                _jeda = 2 ** _coba
+                logger.warning(f"[ScriptEngine] per-bagian '{b}' {_kelas} (coba {_coba}) — tunggu {_jeda}s: "
+                               f"{str(e)[:70]}")
+                time.sleep(_jeda)
+        if not teks:
+            logger.warning(f"[ScriptEngine] per-bagian '{b}' balasan kosong")
+            return {}
+        hasil[b] = teks
+        terpakai.append((b, teks))
+        logger.info(f"[ScriptEngine] per-bagian {i+1}/{len(beats)} [{peran}]: {len(teks.split())}w "
+                    f"(target {w}w)")
+    hasil["full_script"] = " ".join(hasil[b] for b in beats if hasil.get(b))
+    return hasil
 
 
 def _narrative_intent(target_duration, n_beats) -> str:
@@ -374,8 +558,8 @@ Write EVERY output value in {name} ({locale}): all narration beats, "title", "fu
 def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, insights_block=None,
                        preset_seconds=None, format_wps=None, render_overhead_sec=0.0,
                        cta_mode="implicit", brand_name=None, brand_cta_text=None,
-                       delivery_p=None, voice_name=None, tts_provider=None, base_speed=None,
-                       content_language=None):
+                       delivery_p=None, voice_name=None, tts_provider=None,
+                       content_language=None, resep_durasi=None):
     """
     Build prompt. Jika feedback ada (dari retry), sisipkan sebagai instruksi perbaikan.
     niche_visual_style: dict dari tabel niches (base_style, color_palette, atmosphere).
@@ -475,37 +659,38 @@ Maksimal SATU sebutan brand di seluruh script.{(' Arahan brand: ' + brand_cta_te
     # & 60s UNDERSHOOT (dorongan floor kurang). Preset PENDEK: density=quality, batas-ATAS galak,
     # "bukan asal-pendek". Preset PANJANG/legacy: capai budget dgn fakta spesifik (bukan filler) +
     # batas-atas tetap ada. Terukur: 15s 30w(budget24), 60s 70w(budget97), skor <80 (lihat journal 2026-06-18).
-    if preset_seconds and delivery_p:
-        # §10.A DURASI-VIA-SPEED: LLM kontrol KATA + SPEED. Speed menyerap variansi hitung-kata →
-        # durasi mendarat di window QC. Ganti pemaksaan word-count kaku (akar 15s-overshoot/60s-undershoot).
-        _P = float(delivery_p); _bspeed = float(base_speed) if base_speed else 0.95
-        _Tspoken = max(1.0, float(preset_seconds) - float(render_overhead_sec or 0))
-        # [DURASI-F3] PROMPT FINAL (supersede versi 2026-07-15): (1) SERAGAM INGGRIS — blok ID di tengah
-        # kerangka EN terbukti kelas penurun-kepatuhan; bahasa NARASI output tetap diatur
-        # _content_language_block (jalur terpisah, tak tersentuh). (2) Angka HANYA di BEAT PLAN
-        # (satu otoritas; dulu 3 tempat beda nilai). (3) Hardcode ~14 kata/kalimat DIBUANG (angka
-        # karangan, bias-bahasa). (4) Pintu-kabur speed tetap TERCABUT (speed = mood saja; sistem
-        # yang menyetel speed final di generate()). (5) Preset-aware emphasis dipertahankan.
-        _target_w = round(_P * _Tspoken)
+    if preset_seconds and resep_durasi:
+        # ── PERINTAH PANJANG BERBASIS ALAT UKUR TERKALIBRASI (2026-07-31) ──────────────────────────
+        # Menggantikan blok §10.A "durasi-via-speed". Yang dicabut & sebabnya (terukur, 294 produksi):
+        #   • Instruksi `speed` untuk mood → dipakai sistem sebagai TUAS DURASI: 41% render mentok di
+        #     batas paling lambat (0,70), NOL render berjalan normal, median 0,81. Mood narasi rusak
+        #     DAN durasi tetap meleset (median −4,7 dtk). Owner melarang tuas ini.
+        #   • "≈P kata/detik" → angka itu buta-jeda; jeda per kalimat terukur 0,6–1,3 dtk, bukan 0,35.
+        # Yang menggantikan: DUA angka dari `duration_model.resep` — jumlah kata DAN jumlah kalimat.
+        # Jumlah kalimat wajib ikut diperintahkan karena (a) tiap kalimat memakan jeda nyata, dan
+        # (b) terukur model MENAATI perintah jumlah kalimat jauh lebih baik daripada jumlah kata
+        # (kalimat bisa dihitung sendiri oleh model; kata tidak).
+        # Terbukti: 14/14 naskah lintas 7 preset × 2 niche mendarat di band, fakta utuh 14/14,
+        # kecepatan suara 1,0 sepanjang uji (bukti: QC_CONTENT_ARCHITECTURE.md §2c).
+        _r = resep_durasi
         if len(active) <= 2:
-            _emph = ("⚠️ ULTRA-SHORT format: every word must earn its place. Exceeding a beat MAX makes the "
-                     "video overrun and be rejected. Deliver ONE razor-sharp idea, densely.")
+            _emph = ("⚠️ ULTRA-SHORT: every word must earn its place. ONE razor-sharp idea, densely. "
+                     "Going over the word range makes the video overrun and be rejected.")
         else:
             _emph = ("⚠️ UNDER-writing is the #1 cause of failure here: when a beat feels thin, ADD concrete "
                      "substance (a fact, a number, a name) — never stop early, never pad with filler.")
         length_block = (
-            "🎙️ THIS SCRIPT WILL BE SPOKEN ALOUD — its LENGTH IS the video's duration. Length is a hard "
-            "requirement, met through RICHNESS of content, never filler.\n"
-            f"VOICE: {voice_name or 'the narrator'} speaks ≈{_P} words/sec, so ≈{round(_Tspoken,1)}s of audio "
-            f"needs ≈{_target_w} words total — but do NOT chase the total: hit each beat's MIN–MAX in the "
-            "BEAT PLAN above and the total lands automatically. The BEAT PLAN is the only word-count "
-            "authority.\n"
+            "🎙️ THIS SCRIPT WILL BE SPOKEN ALOUD — its LENGTH IS the video's duration.\n"
+            f"HARD SHAPE (overrides any other length hint above):\n"
+            f"  1. TOTAL {_r['kata_min']}–{_r['kata_maks']} words (aim {_r['kata_bidik']}). Count them yourself "
+            f"before answering.\n"
+            f"  2. About {_r['kalimat']} sentences — do NOT exceed. Every sentence end adds real SILENCE to the "
+            f"video; flowing sentences beat many short ones.\n"
+            f"  3. NEVER use '...' (ellipsis): one ellipsis burns >1 second of silence.\n"
+            f"  4. Commas sparingly — each one adds a short pause.\n"
             f"{_emph}\n"
-            f"⏱ PAUSES: at most ~{len(active)} deliberate pauses total (≈1 per beat). Each em-dash (—) or "
-            "ellipsis (…) adds ≈0.6s of silence that eats runtime — keep pacing tight.\n"
-            f"Set `speed` to match the mood of {niche_data.get('name', niche)} (somber→~0.85, punchy→~1.05, "
-            "neutral→~0.95) — speed is for MOOD only; the system fine-tunes final timing. "
-            "Report word_count in `_duration_check` and real per-beat counts in `_beat_words`."
+            "The BEAT PLAN above splits these words across beats; the two numbers here are the authority "
+            "for the TOTAL. Report word_count in `_duration_check` and real per-beat counts in `_beat_words`."
         )
     elif preset_seconds and len(active) <= 5:
         length_block = (
@@ -639,7 +824,7 @@ Return ONLY valid JSON — no markdown, no preamble, no explanation:
   "word_count": 140,
   "estimated_duration_seconds": {target_duration},
   "section_durations": {json.dumps(section_timing)},
-  "tts_params": {{"speed": 0.95, "stability": 0.5, "style": 0.3}},
+  "tts_params": {{"stability": 0.5, "style": 0.3}},
   "_duration_check": {{"word_count": 95, "est_seconds": 56.5}},
   "_beat_words": {{"hook": 12, "core_facts": 45}},
   "background_music_mood": "specific mood, instrumentation, and emotional arc — not just one word",
@@ -702,8 +887,8 @@ class ScriptEngine:
                       niche_visual_style=None, feedback=None, insights_block=None,
                       preset_seconds=None, format_wps=None, render_overhead_sec=0.0,
                       cta_mode="implicit", brand_name=None, brand_cta_text=None,
-                      delivery_p=None, voice_name=None, tts_provider=None, base_speed=None,
-                      content_language=None):
+                      delivery_p=None, voice_name=None, tts_provider=None,
+                      content_language=None, resep_durasi=None):
         """Satu attempt generate script via LLMProvider (config-driven).
 
         Provider memegang SDK client + format API spesifik vendor — di sini tak
@@ -726,8 +911,8 @@ class ScriptEngine:
                     preset_seconds=preset_seconds, format_wps=format_wps,
                     render_overhead_sec=render_overhead_sec,
                     cta_mode=cta_mode, brand_name=brand_name, brand_cta_text=brand_cta_text,
-                    delivery_p=delivery_p, voice_name=voice_name, tts_provider=tts_provider, base_speed=base_speed,
-                    content_language=content_language,
+                    delivery_p=delivery_p, voice_name=voice_name, tts_provider=tts_provider,
+                    content_language=content_language, resep_durasi=resep_durasi,
                 ),
                 model=model,
                 temperature=1.0,
@@ -991,38 +1176,10 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                                 f"(voice={getattr(run_config,'tts_voice',None)}×niche) — override lapis lama")
             except Exception:
                 pass
-        # [DURASI-F2] α respons-speed provider (tts_speed_response; EL≈1.32). None/invalid → 1.0 (lama).
-        _speed_alpha = 1.0
-        if run_config:
-            try:
-                _sa = getattr(run_config, "tts_speed_alpha", None)
-                if _sa is not None and 0.5 <= float(_sa) <= 2.0:
-                    _speed_alpha = float(_sa)
-            except Exception:
-                _speed_alpha = 1.0
-        # §10.A DURASI-VIA-SPEED: P = pace DASAR (delivery_wps @speed 1.0), DITANGKAP SEBELUM B1 → dipakai
-        # di speed-block LLM. base_speed = speed-mood niche (hint awal; LLM nudge ∈[0.7,1.2] dari sini).
-        # Speed jadi TUAS LLM (menyerap variansi kata), bukan dibakar ke word-budget. Gate = DURASI (bukan kata).
+        # `_base_p` = pace kata/detik lapis-lama. Sejak 2026-07-31 hanya dipakai jalur CADANGAN
+        # (preset di luar tangga aktif → resep tak bisa dihitung); jalur utama memakai `duration_model`.
         _base_p = float(format_wps) if format_wps else None
-        _base_speed = 1.0
-        if run_config:
-            _vs0 = (getattr(run_config, "tts_voice_settings", {}) or {})
-            try:
-                _base_speed = min(1.2, max(0.7, float((_vs0.get(tenant_config.niche) or {}).get("speed", 1.0) or 1.0)))
-            except Exception:
-                _base_speed = 1.0
         _voice_name = (getattr(run_config, "tts_voice", None) if run_config else None) or None
-        # Cacat B (B1) — BUDGET SADAR-SPEED: delivery EL diperlambat oleh voice `speed` per-niche
-        # (tts_voice_settings DB). audio = kata / (delivery_wps × speed) → kata = detik × delivery_wps × speed.
-        # Tanpa ini budget kebanyakan kata → audio molor → QC durasi gagal (terbukti 30s→34.9s @ speed 0.9).
-        # Hanya provider ber-setting speed (elevenlabs); edge sudah benar di delivery_wps-nya. No-hardcode:
-        # speed dari DB. (B2 closed-loop kalibrasi delivery_wps base dari data NYATA — menyusul.)
-        if format_wps and preset_seconds and (_tts_provider or "").lower().startswith("eleven"):
-            _vs    = (getattr(run_config, "tts_voice_settings", {}) or {}) if run_config else {}
-            _speed = float((_vs.get(tenant_config.niche) or {}).get("speed", 1.0) or 1.0)
-            if 0.5 <= _speed <= 1.5 and _speed != 1.0:
-                format_wps = round(format_wps * _speed, 4)
-                logger.info(f"[ScriptEngine] B1 budget speed-adjust: × speed({_speed}) → {format_wps} wps (niche={tenant_config.niche})")
         # Cacat B (#3) — BUDGET SADAR-OVERHEAD RENDER: QC mengukur VIDEO FINAL = audio + trailing_silence
         # (+ loop net = loop_dur−0.5 xfade). Target AUDIO = preset − overhead agar video JADI ≈ preset.
         # Tanpa ini kata in-range pun overshoot di preset pendek (terbukti: 15s 27 kata → video 18.2s > 17.2).
@@ -1036,6 +1193,34 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
             render_overhead_sec = _eff_ovh(preset_seconds, run_config)
             logger.info(f"[ScriptEngine] #3 budget overhead-aware: preset {preset_seconds}s − overhead {render_overhead_sec}s "
                         f"= audio-target {max(1.0, preset_seconds-render_overhead_sec)}s")
+        # ── RESEP DURASI (2026-07-31): dua angka — KATA & KALIMAT — dari alat ukur terkalibrasi ────
+        # `_kalib` = koefisien per-suara dari `tts_pace_calibration` (ditulis pace_calibration.py dari
+        # render nyata). None/kosong → duration_model memakai angka BAWAAN terukur, jadi jalur ini
+        # tetap hidup pada tenant/suara yang belum punya sampel.
+        # `_tangga` = preset AKTIF dari DB → menentukan batas titik-tengah. Kosong → resep None →
+        # gerbang durasi TIDAK menilai apa pun (gagal-aman: tak mengarang batas).
+        _kalib, _resep, _tangga = None, None, []
+        if preset_seconds:
+            from src.config.format_catalog import active_presets as _act_presets
+            from src.production.duration_model import resep as _resep_durasi
+            _kalib = (getattr(run_config, "duration_calibration", None) or None) if run_config else None
+            _tangga = _act_presets()
+            if _tangga and int(preset_seconds) in _tangga:
+                try:
+                    _resep = _resep_durasi(preset_seconds, _tangga, render_overhead_sec, _kalib)
+                    _resep.update({"_preset": preset_seconds, "_tangga": _tangga,
+                                   "_overhead": render_overhead_sec, "_kalibrasi": _kalib})
+                    logger.info(f"[ScriptEngine] resep durasi preset {preset_seconds}s: "
+                                f"{_resep['kata_min']}-{_resep['kata_maks']} kata (bidik {_resep['kata_bidik']}) / "
+                                f"{_resep['kalimat']} kalimat · band video "
+                                f"{_resep['band_video'][0]:.0f}-{_resep['band_video'][1]:.0f}s"
+                                f"{' · kalibrasi suara AKTIF' if _kalib else ' · angka bawaan (suara belum dikalibrasi)'}")
+                except ValueError as _pe:
+                    logger.warning(f"[ScriptEngine] resep durasi tak bisa dihitung ({_pe}) — gerbang durasi PASIF")
+            else:
+                logger.warning(f"[ScriptEngine] preset {preset_seconds}s tak ada di tangga aktif {_tangga} — "
+                               f"gerbang durasi PASIF (tak mengarang batas)")
+
         # Branded Content §6 — soft-sell (opsional; implicit → tanpa brand)
         _cta_mode  = getattr(tenant_config, "cta_mode", "implicit") or "implicit"
         _brand     = getattr(tenant_config, "brand_name", None)
@@ -1087,7 +1272,11 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
         actual_provider = llm_provider
         feedback        = None  # Feedback dari attempt sebelumnya
         # F2d — target word-budget (LLM-QC length gate). Aktif hanya bila preset di-set.
-        word_budget = round(max(1.0, preset_seconds - render_overhead_sec) * float(format_wps)) if (preset_seconds and format_wps) else None
+        # Anggaran kata = dari RESEP terkalibrasi bila ada (sadar-jeda); jatuh ke rumus lama hanya bila
+        # resep tak bisa dihitung (preset tak di tangga aktif) — supaya jalur lama tak mati mendadak.
+        word_budget = (_resep["kata_bidik"] if _resep else
+                       (round(max(1.0, preset_seconds - render_overhead_sec) * float(format_wps))
+                        if (preset_seconds and format_wps) else None))
         # [DURASI-F3] toleransi SATU-SUMBER utk gerbang durasi internal (dulu: _LEN_TOL dibaca tapi TAK
         # PERNAH dipakai = config-mati, gerbang malah hardcode ±10% — insiden 'tiga penggaris' 2026-07-15).
         _len_tol = _script_len_tol()
@@ -1101,8 +1290,8 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                 preset_seconds=preset_seconds, format_wps=format_wps,
                 render_overhead_sec=render_overhead_sec,
                 cta_mode=_cta_mode, brand_name=_brand, brand_cta_text=_brand_cta,
-                delivery_p=_base_p, voice_name=_voice_name, tts_provider=_tts_provider, base_speed=_base_speed,
-                content_language=_clang,
+                delivery_p=_base_p, voice_name=_voice_name, tts_provider=_tts_provider,
+                content_language=_clang, resep_durasi=_resep,
             )
 
             if not script:
@@ -1118,6 +1307,17 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                                             content_language=_clang)
                 score    = analysis.get("viral_score", 0)
                 script["viral_analysis"] = analysis
+                # ⚠️ SKOR BERTANDA = BUKAN PENILAIAN MUTU (2026-07-31). Bila penilai LLM gagal,
+                # analyzer mengembalikan taksiran lokal yang terukur ±20 poin lebih rendah. Dulu skor
+                # itu dipakai apa adanya sebagai gerbang `script_min_viral_score` → naskah bagus
+                # ditolak & data mesin belajar keracunan, tanpa jejak. Sekarang: skor bertanda tidak
+                # boleh menjatuhkan naskah — dianggap "lulus mutu" agar gerbang DURASI tetap yang
+                # memutuskan, dan kegagalan penilai dicatat keras di log + menempel di naskah.
+                if analysis.get("estimated"):
+                    logger.error(f"[ScriptEngine] penilai mutu TIDAK BEKERJA ({analysis.get('estimate_reason')}) — "
+                                 f"skor {score} DIABAIKAN sebagai gerbang mutu (bukan penilaian sah)")
+                    score = max(int(min_score or 0), int(score or 0))
+                    script["quality_gate_skipped"] = analysis.get("estimate_reason") or "penilai mutu gagal"
 
                 # Siapkan feedback untuk retry berikutnya.
                 # Sertakan skor aktual + teknik konkret per dimensi lemah
@@ -1153,54 +1353,80 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                 script["viral_analysis"] = {}
                 feedback = None
 
-            # §3.1 JARING DETERMINISTIK TIPIS + §10.A: durasi = DITENTUKAN, bukan ditebak. Setelah LLM tulis
-            # W kata, SISTEM SOLVE speed = W ÷ (P × T_spoken) lalu clamp [0.7,1.2] (param_schema EL) → est
-            # mendarat di window TANPA bergantung tebakan-speed LLM (yg terbukti tak andal: 9/12). Speed =
-            # tuas matematis (§10.A "speed menyerap variansi"). Hanya bila W di luar JANGKAUAN speed (kata
-            # ekstrem) → retry sesuaikan KATA. Speed resolved → script.tts_params → TTS (F4-03).
+            # ── GERBANG DURASI = VONIS ALAT UKUR TERKALIBRASI (2026-07-31) ────────────────────────
+            # Menggantikan jaring §10.A yang MENYOLVE KECEPATAN SUARA agar taksiran mendarat. Yang
+            # dicabut & sebabnya (terukur dari 294 produksi): solver itu memperlambat suara sampai
+            # batas bawah pada 41% render (NOL render normal, median 0,81) — mood narasi rusak DAN
+            # durasi tetap meleset median −4,7 dtk. Kecepatan suara bukan tuas (owner 2026-07-29).
+            #
+            # SEKARANG: durasi diputuskan dari TEKS saja, oleh alat ukur yang dikalibrasi dari render
+            # nyata (duration_model; salah luar-sampel 0,96–1,09 dtk vs 2,76–7,01 dtk estimator lama).
+            # Di luar band titik-tengah → naskah diperbaiki PENULISNYA (retry ber-umpan-balik angka
+            # persis), bukan ditambal di sisi suara.
             length_ok = True
-            if preset_seconds and _base_p:
-                # §10.A JARING SADAR-JEDA (provider-agnostik). Akar Cacat-B = jeda (em-dash/elipsis/akhir-
-                # kalimat) jadi hening tak-terduga → est `kata÷(P×speed)` BUTA-JEDA meleset (75s nyata 105s).
-                # Kini est = bicara + Σjeda(dari teks); SISTEM solve speed agar mendarat; clamp = rentang
-                # speed PROVIDER (tts_profiles.param_schema, bukan EL-hardcode). Speed resolved → TTS (F4-03).
-                from src.config.format_catalog import tts_speed_range as _tsr
+            if preset_seconds and _resep:
+                from src.production.duration_model import (ciri_teks as _ciri, rincian_audio as _rincian,
+                                                          vonis as _vonis)
                 _txt = script.get("full_script") or ""
-                wc   = len(_txt.split())
-                _tp  = script.get("tts_params") if isinstance(script.get("tts_params"), dict) else {}
-                _Tspoken   = max(1.0, float(preset_seconds) - float(render_overhead_sec or 0))
-                _plo, _phi = _tsr(_tts_provider)                       # rentang speed provider (GENERIK, DB)
-                _rng       = (max(_plo, 0.7), min(_phi, 1.3))          # comfort-band: jaga MUTU suara lintas provider
-                _speed, _est, _pause, _swps = solve_speed_for_duration(_txt, _Tspoken, _base_p, speed_range=_rng,
-                                                                       speed_alpha=_speed_alpha)  # [DURASI-F2]
-                _Tlo, _Thi = _Tspoken * (1 - _len_tol), _Tspoken * (1 + _len_tol)   # [DURASI-F3] satu-sumber
-                script["tts_params"] = {**_tp, "speed": _speed}        # SPEED RESOLVED (sadar-jeda) → TTS
-                script["_duration_est"] = {"est_seconds": _est, "pause_seconds": _pause,   # observability
-                                           "speed": _speed, "speech_wps": _swps, "words": wc}
-                if not (_Tlo <= _est <= _Thi):
+                _v   = _vonis(_txt, preset_seconds, _tangga, render_overhead_sec, _kalib)
+                _f   = _ciri(_txt)
+                _rinci = _rincian(_txt, _kalib)
+                script["_duration_est"] = {                      # observability → tts_delivery_samples
+                    "est_seconds": _v["audio_prediksi"], "video_seconds": _v["video_prediksi"],
+                    "pause_seconds": _rinci["jeda"], "speech_seconds": _rinci["bicara"],
+                    "words": _f["words"], "chars": _f["chars"], "sentences": _f["sentence"],
+                    "band_video": list(_v["band_video"]), "status": _v["status"],
+                }
+                if _v["status"] != "ok":
                     length_ok = False
-                    _np  = sum(_count_pauses(_txt).values())
-                    _act = (f"SHORTEN the script / cut pauses (speed already {_speed})" if _est > _Thi
-                            else f"LENGTHEN the script with concrete substance (speed already {_speed})")
-                    # [DURASI-F3] ground-truth PER-BEAT: sistem hitung kata NYATA tiap beat (bukan cuma
-                    # laporan model) → retry tahu persis beat mana yang tipis/gemuk (dulu cuma total).
+                    _lo, _hi = _v["band_video"]
+                    _arah = ("SHORTEN" if _v["status"] == "terlalu_panjang" else "LENGTHEN with concrete substance")
+                    # ground-truth PER-BEAT: sistem hitung kata NYATA tiap beat (bukan laporan model)
                     _beats_now = _beats_for_preset(preset_seconds)
-                    _quota     = _distribute_words(_beats_now, round(_swps * _Tspoken)) if _beats_now else {}
+                    _quota     = _distribute_words(_beats_now, _resep["kata_bidik"]) if _beats_now else {}
                     _actual    = {b: len((script.get(b) or "").split()) for b in _beats_now}
-                    _offb      = [f"{b}: {_actual[b]}w vs target {_quota.get(b,0)}w"
-                                  for b in _beats_now
+                    _offb      = [f"{b}: {_actual[b]}w vs target {_quota.get(b,0)}w" for b in _beats_now
                                   if _quota.get(b) and abs(_actual[b] - _quota[b]) / _quota[b] > _len_tol]
                     feedback = (feedback or []) + [
-                        f"DURATION FAIL: {wc} words + {_pause:.1f}s of pauses ({_np} pause marks) → speed {_speed} → "
-                        f"est {_est:.1f}s outside {_Tlo:.1f}–{_Thi:.1f}s (target {_Tspoken:.1f}s). {_act}. "
-                        f"Each em-dash/ellipsis ≈0.6s of silence — trim excess; aim ≈{round(_swps*_Tspoken)} words "
-                        f"with minimal pauses (≈1/beat)."
+                        f"DURATION FAIL: {_f['words']} words in {_f['sentence']} sentences "
+                        f"({_f['ellipsis']} ellipses, {_f['comma']} commas) → video would be "
+                        f"{_v['video_prediksi']:.1f}s, outside the valid {_lo:.0f}–{_hi:.0f}s. "
+                        f"{_arah} by ≈{_v['kata_selisih']} words. Target: {_resep['kata_min']}–"
+                        f"{_resep['kata_maks']} words in ≈{_resep['kalimat']} sentences. "
+                        f"Every sentence end and every ellipsis costs real silence — merge sentences "
+                        f"instead of adding them, and never use '...'."
                         + (f" OFF-BUDGET BEATS (fix exactly these): {'; '.join(_offb)}." if _offb else "")]
-                    logger.info(f"[ScriptEngine] §10.A jeda-aware: {wc}w +{_pause:.1f}s jeda → speed {_speed} → "
-                                f"est {_est:.1f}s vs {_Tlo:.1f}-{_Thi:.1f}s → retry")
+                    logger.info(f"[ScriptEngine] durasi: {_f['words']}w/{_f['sentence']}kal → "
+                                f"{_v['video_prediksi']:.1f}s di luar {_lo:.0f}-{_hi:.0f}s → retry")
                 else:
-                    logger.info(f"[ScriptEngine] §10.A jeda-aware: {wc}w +{_pause:.1f}s jeda (swps {_swps}) → "
-                                f"speed {_speed} → est {_est:.1f}s ∈ band ✓")
+                    logger.info(f"[ScriptEngine] durasi: {_f['words']}w/{_f['sentence']}kal → "
+                                f"{_v['video_prediksi']:.1f}s ∈ band ✓")
+
+            # ── PEMERIKSA CACAT MEKANIS (2026-07-31) ──────────────────────────────────────────
+            # Terukur: KODE menangkap lebih banyak cacat daripada penilai AI (kalimat menggantung,
+            # kata bahasa asing menyelinap, kata yang DILARANG niche, frasa berulang, artefak
+            # sambungan), dan AI justru MELEWATKAN pelanggaran register walau DNA niche diberikan.
+            # Aturannya datang dari baris NICHE di DB — nol daftar per-niche di kode (ratusan niche
+            # akan datang). Cacat PARAH → naskah ditolak & sebabnya jadi umpan-balik retry yang persis.
+            _cacat = []
+            try:
+                from src.intelligence.script_checker import (ada_cacat_parah as _parah,
+                                                             periksa_naskah as _periksa,
+                                                             ringkas_temuan as _ringkas)
+                _cacat = _periksa(script.get("full_script") or "", niche_profile=niche_profile,
+                                  content_language=_clang, beat_keys=active_beats)
+                script["mechanical_issues"] = _cacat
+                if _cacat:
+                    logger.info(f"[ScriptEngine] pemeriksa mekanis: {_ringkas(_cacat)}")
+                if _parah(_cacat):
+                    length_ok = False       # pakai jalur retry yang sama dgn gerbang durasi
+                    feedback = (feedback or []) + [
+                        "MECHANICAL DEFECTS (must fix, these are certain — not opinions): "
+                        + "; ".join(f"{c['jenis']}: {c['pesan']}"
+                                    + (f" [{c['bukti']}]" if c["bukti"] else "")
+                                    for c in _cacat if c["parah"])]
+            except Exception as _ce:
+                logger.warning(f"[ScriptEngine] pemeriksa mekanis gagal (naskah tak dihukum): {_ce}")
 
             if score > best_score:
                 best_score  = score
@@ -1236,6 +1462,61 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                         f"skor-tertinggi {best_score} (salah-durasi) — agar lolos QC durasi")
             best_script = best_len_ok_script
             best_score  = best_len_ok_score
+
+        # ── JALUR PER-BAGIAN: dipakai bila satu panggilan terbukti tak sanggup memenuhi panjang ────
+        # Pemicunya BUKTI, bukan tebakan: naskah terbaik dari seluruh attempt masih di bawah
+        # SCRIPT_PERBEAT_TRIGGER × batas bawah resep. Terukur pada channel nyata (2026-07-31):
+        # llama-3.1-8b menulis 37 kata untuk preset 90 dtk (butuh ±206), llama-3.3-70b 62–91 kata
+        # untuk preset 60 dtk (butuh 128–166) — selisih sebesar itu tak bisa ditutup dengan meminta
+        # ulang. Memecah jadi bagian ±30 kata membuatnya berada di dalam kemampuan model mana pun.
+        if preset_seconds and _resep and best_script:
+            _amb = float(os.getenv("SCRIPT_PERBEAT_TRIGGER", "0.80"))
+            _w_now = len((best_script.get("full_script") or "").split())
+            if _w_now < _amb * _resep["kata_min"]:
+                logger.warning(f"[ScriptEngine] naskah {_w_now} kata << batas bawah {_resep['kata_min']} "
+                               f"— satu panggilan tak sanggup; beralih ke TULIS PER-BAGIAN")
+                _pb = _generate_per_beat(llm, script_model, topic, tenant_config.niche,
+                                         _beats_for_preset(preset_seconds), _resep, niche_profile,
+                                         _clang, insights_block)
+                if _pb.get("full_script"):
+                    _w_pb = len(_pb["full_script"].split())
+                    if _w_pb > _w_now:
+                        best_script = {**best_script, **_pb}
+                        best_script["_written_per_beat"] = True
+                        logger.info(f"[ScriptEngine] per-bagian menghasilkan {_w_pb} kata "
+                                    f"(sebelumnya {_w_now}) — dipakai")
+                    else:
+                        logger.warning(f"[ScriptEngine] per-bagian {_w_pb} kata tidak lebih baik dari "
+                                       f"{_w_now} — naskah asal dipertahankan")
+
+        # ── PERBAIKAN AKHIR: suruh MODEL merapatkan/melengkapi bila durasi masih di luar band ──────
+        # Retry biasa mengulang dari nol dan itu TIDAK menutup selisih (goyangan antar-produksi
+        # ±12–39%). Yang menutup: memberi model selisih yang PERSIS atas naskahnya sendiri.
+        # Terukur: tanpa langkah ini 5/6 mendarat; dengan langkah ini 14/14 (7 preset × 2 niche),
+        # fakta utuh 14/14, rata-rata 1,0 putaran. Kode memverifikasi fakta & durasi; model memilih kata.
+        if preset_seconds and _resep and best_script:
+            from src.production.duration_model import vonis as _vonis_akhir
+            _v_akhir = _vonis_akhir(best_script.get("full_script") or "", preset_seconds, _tangga,
+                                    render_overhead_sec, _kalib)
+            if _v_akhir["status"] != "ok":
+                _maks = int(os.getenv("SCRIPT_REFIT_ROUNDS", "3"))
+                best_script, _jejak = _refit_naskah(
+                    llm, script_model, best_script, _beats_for_preset(preset_seconds), _resep,
+                    _v_akhir, maks_putaran=_maks)
+                _v2 = _vonis_akhir(best_script.get("full_script") or "", preset_seconds, _tangga,
+                                   render_overhead_sec, _kalib)
+                best_script["_duration_est"] = {**(best_script.get("_duration_est") or {}),
+                                                "est_seconds": _v2["audio_prediksi"],
+                                                "video_seconds": _v2["video_prediksi"],
+                                                "status": _v2["status"], "refit": _jejak}
+                if _v2["status"] == "ok":
+                    logger.info(f"[ScriptEngine] refit BERHASIL: {_jejak} → video {_v2['video_prediksi']:.1f}s "
+                                f"∈ band {_v2['band_video'][0]:.0f}-{_v2['band_video'][1]:.0f}s")
+                else:
+                    logger.warning(f"[ScriptEngine] refit belum cukup: {_jejak} → video "
+                                   f"{_v2['video_prediksi']:.1f}s masih di luar band "
+                                   f"{_v2['band_video'][0]:.0f}-{_v2['band_video'][1]:.0f}s — "
+                                   f"gerbang pipeline yang memutuskan (gagal JUJUR, tidak diakali)")
 
         if best_score < min_score:
             logger.warning(

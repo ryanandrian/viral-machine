@@ -78,6 +78,19 @@ def preset_visual_beats(seconds, default: int = 6) -> int:
         return default
 
 
+def active_presets() -> list:
+    """Tangga preset AKTIF (detik, terurut) = `duration_presets` yang is_active.
+
+    Dipakai aturan batas TITIK-TENGAH (owner 2026-07-29): batas sah sebuah preset ditentukan jarak ke
+    TETANGGANYA, jadi batas itu tidak bisa dihitung tanpa tangga penuh. Efek yang disengaja:
+    menonaktifkan satu preset di admin otomatis MELEBARKAN batas tetangganya — tanpa sentuh kode.
+    Kosong (DB gagal/tabel kosong) → [] → pemanggil wajib memperlakukan sebagai "tak bisa dinilai"
+    dan TIDAK mengarang batas sendiri.
+    """
+    _load()
+    return sorted(int(s) for s, row in (_CACHE["presets"] or {}).items() if row.get("is_active"))
+
+
 def preset_beats(seconds) -> list | None:
     """Urutan beat (SEGMENTASI) per preset = SINGLE-SOURCE dari `duration_presets.beats` (jsonb) —
     dibaca mesin + panel tenant + panel admin agar konsisten (anti-drift). None bila kolom belum ada

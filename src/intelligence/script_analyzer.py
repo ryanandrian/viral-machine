@@ -226,8 +226,8 @@ class ScriptAnalyzer:
         Tidak pernah crash — fallback ke local estimate jika LLM gagal/absen.
         """
         if not self.provider:
-            logger.warning("[ScriptAnalyzer] tanpa LLM provider — local estimate")
-            return self._local_estimate(script, active_beats)
+            logger.warning("[ScriptAnalyzer] tanpa LLM provider — taksiran lokal (DITANDAI)")
+            return self._local_estimate(script, active_beats, sebab="tanpa provider LLM")
         try:
             raw = self.provider.complete(
                 system=(
@@ -270,12 +270,25 @@ class ScriptAnalyzer:
             return analysis
 
         except Exception as e:
-            logger.warning(f"[ScriptAnalyzer] LLM failed ({e}) — local estimate")
-            return self._local_estimate(script, active_beats)
+            # ⚠️ JATUH KE TAKSIRAN LOKAL — kini SELALU BERTANDA (2026-07-31).
+            # Cacat produksi yang ditemukan: kegagalan di sini diam-diam mengembalikan skor
+            # `_local_estimate` yang terukur ±20 poin LEBIH RENDAH, tanpa penanda apa pun. Skor itu
+            # dipakai gerbang mutu `script_min_viral_score` (ambang 70–80 per channel) DAN masuk data
+            # mesin belajar — jadi naskah bagus bisa ditolak, dan data belajar keracunan, tanpa satu
+            # pun jejak. Sekarang: `estimated=True` + `estimate_reason` ikut di hasil, dan pemanggil
+            # (script_engine) TIDAK memakai skor bertanda ini untuk menjatuhkan naskah.
+            logger.error(f"[ScriptAnalyzer] LLM GAGAL ({e}) — jatuh ke taksiran lokal (DITANDAI; "
+                         f"skor ini TIDAK dipakai menjatuhkan naskah)")
+            return self._local_estimate(script, active_beats, sebab=f"LLM gagal: {str(e)[:120]}")
 
-    def _local_estimate(self, script: dict, active_beats: list | None = None) -> dict:
-        """Fallback estimasi lokal tanpa LLM — pipeline tidak crash. Preset-aware: denominator
-        & skor hanya atas beat/dimensi yang AKTIF (preset pendek tak dihukum bagian absen)."""
+    def _local_estimate(self, script: dict, active_beats: list | None = None,
+                        sebab: str = "tidak diketahui") -> dict:
+        """Taksiran lokal tanpa LLM — pipeline tidak crash. Preset-aware: denominator & skor hanya
+        atas beat/dimensi yang AKTIF (preset pendek tak dihukum bagian absen).
+
+        SELALU menandai dirinya (`estimated=True` + `estimate_reason`): angkanya terukur ±20 poin
+        lebih rendah dari penilaian LLM, jadi memperlakukannya sebagai skor mutu yang sah = menolak
+        naskah bagus dan mencemari data mesin belajar (cacat produksi, ditutup 2026-07-31)."""
         hook        = script.get("hook", "")
         power_words = ["secret", "never", "impossible", "discovered", "truth",
                        "nobody", "scientists", "actually", "shocking", "reveals",
@@ -304,10 +317,13 @@ class ScriptAnalyzer:
         return {
             "dimension_scores":  dim_scores,
             "viral_score":       viral_score,
-            "summary":           "Local estimate (LLM unavailable)",
-            "weak_areas":        ["LLM analysis unavailable"],
+            "summary":           f"Taksiran lokal (penilai LLM tak tersedia: {sebab})",
+            "weak_areas":        [],          # kosong: bukan penilaian mutu, jadi jangan memicu retry palsu
             "strengths":         [],
             "retry_suggestion":  "",
+            # PENANDA WAJIB — pemanggil memeriksa ini sebelum memakai skor sebagai gerbang mutu.
+            "estimated":         True,
+            "estimate_reason":   sebab,
         }
 
 

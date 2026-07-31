@@ -318,36 +318,52 @@ class Pipeline:
                                getattr(tenant_config, "niche", None))
                 except Exception:
                     _rc = None
+                from src.config.format_catalog import active_presets as _act_p
                 from src.config.format_catalog import effective_overhead as _eff_ovh
+                from src.production.duration_model import band_video as _band
                 _gate_trail = _eff_ovh(_gate_preset, _rc)
-                _gate_tol = float(os.getenv("QC_DURATION_TOLERANCE", "0.15"))
-                _gate_lo  = float(_gate_preset) * (1 - _gate_tol)
-                _gate_hi  = float(_gate_preset) * (1 + _gate_tol)
                 _gate_proj = audio_duration + _gate_trail
-                # KEPUTUSAN OWNER 2026-07-15: gerbang pra-visual TIDAK lagi membunuh near-miss.
-                # Near-miss (di luar ±tol tapi masih dalam PAGAR PENGAMAN) → LANJUT diproduksi →
-                # QC pasca-render (OPSI C) merutekannya ke `ready_with_issues` (tenant tinjau: publish/buang).
-                # HANYA meleset PARAH (naskah rusak, > factor×tol) yang di-stop pra-visual — hemat biaya
-                # render BYOK utk video yg pasti tak layak. Config-driven (§3.3), nol hardcode.
-                _gross_factor = float(os.getenv("QC_DURATION_GROSS_FACTOR", "2.0"))   # pagar = factor × toleransi
-                _gross_tol = _gate_tol * _gross_factor
-                _gross_lo  = float(_gate_preset) * (1 - _gross_tol)
-                _gross_hi  = float(_gate_preset) * (1 + _gross_tol)
-                if not (_gross_lo <= _gate_proj <= _gross_hi):
-                    raise TTSError(
-                        f"Durasi proyeksi {_gate_proj:.1f}s meleset PARAH dari preset {_gate_preset}s "
-                        f"(pagar {_gross_lo:.0f}–{_gross_hi:.0f}s) — naskah tak layak, dihentikan sebelum "
-                        f"biaya render terpakai; diproduksi ulang otomatis siklus berikutnya.", step="tts")
-                _within = _gate_lo <= _gate_proj <= _gate_hi
-                result["steps"]["duration_gate"] = {
-                    "status": "ok" if _within else "near_miss",
-                    "projected": round(_gate_proj, 1), "window": [round(_gate_lo), round(_gate_hi)]}
-                if _within:
-                    logger.info(f"[Pipeline] Gerbang durasi pra-visual LOLOS: proyeksi {_gate_proj:.1f}s "
-                                f"dalam window {_gate_lo:.0f}–{_gate_hi:.0f}s")
-                else:
-                    logger.info(f"[Pipeline] Durasi NEAR-MISS {_gate_proj:.1f}s (window {_gate_lo:.0f}–{_gate_hi:.0f}s, "
-                                f"pagar {_gross_lo:.0f}–{_gross_hi:.0f}s) — LANJUT produksi → review pasca-render (bukan dibuang)")
+                # ── BATAS SAH = ATURAN TITIK-TENGAH OWNER (2026-07-29), bukan persen ─────────────
+                # Dulu: ±QC_DURATION_TOLERANCE (15%) + pagar 2× (30%). Angka karangan, dan terbukti
+                # salah arah: di preset 90s ±15% = ±13,5s (lebih longgar dari jarak ke tetangga 75s),
+                # sementara di preset 8s ±15% = ±1,2s (lebih ketat dari yang perlu). Aturan owner:
+                # hasil sah selama lebih dekat ke preset yang dipilih daripada ke preset tetangganya
+                # → batas = titik tengah antar-preset, MELEBAR/MENYEMPIT sendiri mengikuti tangga
+                # preset aktif di DB (menonaktifkan satu preset otomatis melebarkan tetangganya).
+                # Tangga kosong / preset tak aktif → gerbang PASIF (tak mengarang batas sendiri).
+                _tangga_g = _act_p()
+                _gate_lo = _gate_hi = None
+                if _tangga_g and int(_gate_preset) in _tangga_g:
+                    _gate_lo, _gate_hi = _band(_gate_preset, _tangga_g)
+                if _gate_lo is None:
+                    logger.warning(f"[Pipeline] preset {_gate_preset}s tak ada di tangga aktif {_tangga_g} — "
+                                   f"gerbang durasi pra-visual DILEWATI (tak mengarang batas)")
+                    result["steps"]["duration_gate"] = {"status": "pasif", "projected": round(_gate_proj, 1)}
+                    _gate_lo = _gate_hi = None
+                # PAGAR PENGAMAN (owner 2026-07-15, dipertahankan): near-miss TIDAK dibunuh — lanjut
+                # produksi → QC pasca-render merutekannya ke `ready_with_issues` (tenant tinjau).
+                # Yang di-stop pra-visual hanya meleset PARAH: naskah rusak, hemat biaya render BYOK.
+                # Pagar dihitung dari LEBAR BAND (bukan persen preset): satu lebar band di luar batas.
+                if _gate_lo is not None:
+                    _lebar = max(1.0, _gate_hi - _gate_lo)
+                    _gross_lo, _gross_hi = _gate_lo - _lebar, _gate_hi + _lebar
+                    if not (_gross_lo <= _gate_proj <= _gross_hi):
+                        raise TTSError(
+                            f"Durasi proyeksi {_gate_proj:.1f}s meleset PARAH dari preset {_gate_preset}s "
+                            f"(batas sah {_gate_lo:.0f}–{_gate_hi:.0f}s, pagar {_gross_lo:.0f}–{_gross_hi:.0f}s) — "
+                            f"naskah tak layak, dihentikan sebelum biaya render terpakai; diproduksi ulang "
+                            f"otomatis siklus berikutnya.", step="tts")
+                _within = (_gate_lo is None) or (_gate_lo <= _gate_proj <= _gate_hi)
+                if _gate_lo is not None:
+                    result["steps"]["duration_gate"] = {
+                        "status": "ok" if _within else "near_miss",
+                        "projected": round(_gate_proj, 1), "window": [round(_gate_lo), round(_gate_hi)]}
+                    if _within:
+                        logger.info(f"[Pipeline] Gerbang durasi pra-visual LOLOS: proyeksi {_gate_proj:.1f}s "
+                                    f"dalam batas sah {_gate_lo:.0f}–{_gate_hi:.0f}s (aturan titik-tengah)")
+                    else:
+                        logger.info(f"[Pipeline] Durasi NEAR-MISS {_gate_proj:.1f}s (batas sah {_gate_lo:.0f}–"
+                                    f"{_gate_hi:.0f}s) — LANJUT produksi → review pasca-render (bukan dibuang)")
             # Image-gen per-preset (MULTI_FORMAT §3): durasi per-beat (1 image/beat) dari word_timestamps
             # NYATA → sinkron TTS. SUMBER TUNGGAL: dikonsumsi visual_assembler (bake) & video_renderer (concat).
             from src.intelligence.script_engine import compute_beat_durations
@@ -779,18 +795,28 @@ class Pipeline:
         # Check 2 & 3: Durasi
         if duration_secs is not None:
             if target_seconds:
-                # QC RELATIF ke Duration Preset (§8) — bukan floor absolut
-                tol    = float(os.getenv("QC_DURATION_TOLERANCE", "0.15"))
-                lo, hi = target_seconds * (1 - tol), target_seconds * (1 + tol)
-                if not (lo <= duration_secs <= hi):
-                    return False, (f"Durasi {duration_secs:.1f}s di luar ±{int(tol*100)}% target preset "
-                                   f"{target_seconds}s (boleh {lo:.0f}–{hi:.0f}s)")
+                # QC RELATIF ke preset = ATURAN TITIK-TENGAH OWNER (2026-07-29), bukan persen. SATU
+                # sumber dengan gerbang pra-visual & resep naskah (`duration_model.band_video`) —
+                # dulu tiga tempat memakai angka berbeda. Preset tak ada di tangga aktif → cek durasi
+                # dilewati (jangan mengarang batas); integritas render tetap dijaga cek lain.
+                from src.config.format_catalog import active_presets as _act_p
+                from src.production.duration_model import band_video as _band
+                _tangga = _act_p()
+                if _tangga and int(target_seconds) in _tangga:
+                    lo, hi = _band(target_seconds, _tangga)
+                    if not (lo <= duration_secs <= hi):
+                        _arah = "kepanjangan" if duration_secs > hi else "kependekan"
+                        return False, (f"Durasi {duration_secs:.1f}s {_arah} untuk preset {target_seconds}s "
+                                       f"(masih sah {lo:.0f}–{hi:.0f}s — di luar itu lebih dekat ke preset lain)")
             else:
                 # Interim (tanpa preset): floor integritas (deteksi render terpotong-total)
                 min_dur = float(os.getenv("QC_MIN_DURATION", "3"))
                 if duration_secs < min_dur:
                     return False, f"Durasi tak wajar (render terpotong?): {duration_secs:.1f}s < {min_dur}s"
-            if duration_secs > max_dur:
+            # Batas atas PLATFORM (bukan batas preset): hanya berlaku bila preset TIDAK di-set, atau
+            # bila preset itu sendiri di bawah batas. Dulu 180s rata → preset panjang (Regular, 2–12
+            # menit) akan SELALU ditolak di sini sebelum apa pun sempat dinilai.
+            if duration_secs > max_dur and (not target_seconds or float(target_seconds) <= max_dur):
                 return False, f"Durasi terlalu panjang: {duration_secs:.1f}s > {max_dur}s (bukan Shorts)"
 
         # Check 4: Jumlah clips — semua scene berhasil (relatif preset visual_beats bila ada)

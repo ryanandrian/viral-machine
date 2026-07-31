@@ -1,41 +1,61 @@
 """
-[DURASI-F2] Kalibrasi durasi dari render NYATA — dua besaran, SATU sumber data (tts_delivery_samples):
-  1. α respons-speed per PROVIDER  → tts_speed_response   (regresi log-log; EL terukur α≈1.32 R²=0.80)
-  2. pace per (VOICE × NICHE)      → tts_pace_calibration (median tahan-outlier; inversi SADAR-α)
+[DURASI] Kalibrasi durasi dari render NYATA — mesin mengukur dirinya sendiri.
 
-AKAR (data 110 render + backfill log 2026-07-15/16): estimator menebak pace 1-angka & menganggap provider
-patuh-penuh pada speed; kenyataan pace berubah per (voice × gaya-DNA-niche) s/d 25% DAN ElevenLabs
-melebih-lebihkan speed → taksiran salah → 85% video PENDEK. Bukti replay leave-one-out (2026-07-16):
-error taksiran 9.3% → 4.7% (median), dalam-±10% 54% → 74%, SEMUA 8 niche membaik.
+APA YANG DIHITUNG (satu sumber data: `tts_delivery_samples`)
+  Koefisien model durasi per SUARA → `tts_pace_calibration`:
+      detik_audio = a·huruf + b·ANGKA + c·kalimat + d·elipsis + e·koma + f·em_dash
+  plus dua angka bentuk naskah (`chars_per_word`, `words_per_sentence`) yang dipakai menerjemahkan
+  target detik menjadi perintah JUMLAH KATA & JUMLAH KALIMAT ke penulis, dan `calib_error_secs` =
+  kesalahan LUAR-SAMPEL angka itu sendiri.
 
-MODEL (identik estimator script_engine §10.A — konstanta di-IMPORT, bukan disalin):
-    est = words / (delivery_wps × _PAUSE_INFLATION × speed^α) + pause
-Inversi pace per sampel (raw_audio_secs = durasi MENTAH pra-atempo, pembanding sah):
-    delivery_wps_i = words / ((raw_audio − pause) × speed^α × _PAUSE_INFLATION)
+AKAR (diukur 2026-07-31 dari 294 produksi nyata; rincian: QC_CONTENT_ARCHITECTURE.md §2c)
+  Hanya 22% video mendarat di batas titik-tengah owner. Estimator lama meramal `kata ÷ (wps × 1,10)
+  + Σ jeda_BENIH`; angka jedanya tak pernah dikalibrasi (benih akhir-kalimat 0,35 dtk vs terukur
+  0,60–1,31). Salah rata-rata 7,01 dtk pada 60 render naskah produksi — dan selisihnya ditambal
+  dengan MEMPERLAMBAT SUARA (41% render mentok di batas 0,70; NOL render normal). Owner melarang
+  tuas kecepatan; maka alat ukurnya yang harus benar.
 
-PAGAR ANTI-RANJAU:
-  • HANYA menulis 2 tabel BARU (additif; kosong = perilaku lama persis — α default 1.0, pace fallback lapis lama).
-  • `voice_catalog.pace_locked=true` → voice TIDAK ditulis + baris kalibrasi lamanya DIHAPUS (admin berdaulat).
-  • Sel < PACE_CALIB_MIN_N sampel tidak ditulis; α butuh ≥ PACE_CALIB_ALPHA_MIN_N (kurang bukti ≠ menebak).
-  • Nilai di luar pagar (pace [1.0,4.0] · α [0.5,2.0]) → DILEWATI + warning (gagal jujur, TIDAK di-clamp senyap).
-  • Sampel tak layak dibuang eksplisit (kata < PACE_CALIB_MIN_WORDS · raw≤0 · speed≤0 · pause_secs NULL ·
-    speech < 30% raw → model-jeda tak bisa dipercaya utk sampel itu).
-Konsumsi (tenant_config → script_engine): pace (voice×niche) → (voice,'*') → voice_catalog → tts_profiles;
-α per provider → estimator+solver (tanpa baris → 1.0).
-Penjadwalan berkala + alarm drift = F5 (belum — modul ini dipanggil manual/di-wire nanti).
+  Modul ini juga TIDAK LAGI menginversi pace lewat model jeda (cara lama), yang berputar di dalam
+  kesalahannya sendiri: `wps = kata ÷ ((audio − jeda_benih) × speed^α × 1,10)` — jeda yang salah
+  berpindah jadi pace yang salah, lalu pace itu dipakai lagi menghitung anggaran kata. Sekarang
+  seluruh koefisien di-fit SEKALIGUS dari (huruf, angka, tanda baca) → audio, tanpa asumsi apa pun.
+  Suku ANGKA ada karena terukur: satu tahun empat-angka menambah 1,70 dtk padahal hanya 4 huruf
+  ("1348" dibacakan "seribu tiga ratus empat puluh delapan"). Menambahnya menurunkan kesalahan
+  luar-sampel di 4 dari 5 suara produksi.
+
+KEJUJURAN ANGKA
+  `calib_error_secs` dihitung LEAVE-ONE-OUT: tiap sampel diramal oleh koefisien yang di-fit TANPA
+  sampel itu. Jadi angka yang dilaporkan adalah kesalahan pada data yang BELUM pernah dilihat —
+  bukan angka yang dipoles oleh datanya sendiri. Terbukti membedakan: model per-KATA 1,55 dtk vs
+  per-HURUF 0,96 dtk (n=60); tanpa leave-one-out keduanya tampak jauh lebih bagus.
+
+PAGAR ANTI-RANJAU
+  • HANYA menulis kolom yang ditambahkan migrasi 0182 (+ `delivery_wps` lapis lama, tetap diisi
+    supaya jalur cadangan tidak mati). Tabel kosong = perilaku bawaan `duration_model` (terukur).
+  • Sampel dipakai HANYA bila kecepatan suara ≈1,0 — sejak tuas kecepatan dicabut itulah satu-satunya
+    keadaan yang sah. Sampel lama ber-speed 0,7–1,3 DIBUANG eksplisit (dilaporkan jumlahnya), sebab
+    memasukkannya berarti mengkalibrasi dunia yang sudah tidak ada.
+  • `voice_catalog.pace_locked=true` → suara TIDAK ditulis + baris kalibrasi lamanya DIHAPUS (admin berdaulat).
+  • Sel < PACE_CALIB_MIN_N sampel tidak ditulis (kurang bukti ≠ menebak).
+  • Koefisien di luar pagar `duration_model.PAGAR` → seluruh sel DILEWATI + warning. Tidak di-clamp
+    diam-diam: data rusak tidak boleh menyelinap jadi angka yang tampak masuk akal.
+  • Kesalahan luar-sampel di atas PACE_CALIB_MAX_ERR → sel DILEWATI (angka yang tak lebih baik dari
+    bawaan tidak dipasang).
+
+Penjadwalan berkala + alarm drift = `run_maintenance` (dipanggil self_learning tiap cadence).
 """
 
 import json
 import os
-import math
 import statistics
 from loguru import logger
 
-# Pagar nilai: pace = rentang admin voice_catalog; α = pagar teknis (0.5–2.0; di luar itu data rusak).
-_WPS_LO, _WPS_HI     = 1.0, 4.0
-_ALPHA_LO, _ALPHA_HI = 0.5, 2.0
-# Porsi minimal waktu-bicara dari durasi mentah; di bawah ini model-jeda mendominasi → sampel tak layak.
-_MIN_SPEECH_FRACTION = 0.30
+# Kolom fit: satuan bicara + empat tanda jeda. Urutan ini mengikat nama kolom DB di bawah.
+_FIT_KOL = ["chars", "digits", "sentence", "ellipsis", "comma", "em_dash"]
+_KOL_DB = {"chars": "sec_per_char", "digits": "sec_per_digit", "sentence": "sec_per_sentence",
+           "ellipsis": "sec_per_ellipsis", "comma": "sec_per_comma", "em_dash": "sec_per_em_dash"}
+# Rentang kecepatan yang dianggap "normal" (tuas kecepatan sudah dicabut → produksi selalu di sini).
+_SPEED_LO, _SPEED_HI = 0.98, 1.02
 
 
 def _env_int(name: str, default: int) -> int:
@@ -45,35 +65,67 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-def _fit_alpha(points: list) -> tuple:
-    """Regresi linear ln(rate) = ln(swps) + α·ln(speed). points = [(speed, rate_obs)]. Return (α, r²)."""
-    xs = [math.log(s) for s, _ in points]
-    ys = [math.log(r) for _, r in points]
-    n  = len(points)
-    mx, my = sum(xs) / n, sum(ys) / n
-    sxx = sum((x - mx) ** 2 for x in xs)
-    if sxx <= 0:  # semua speed identik → α tak teridentifikasi (bukan 1.0 palsu — jangan tulis)
-        return None, 0.0
-    a = sum((xs[i] - mx) * (ys[i] - my) for i in range(n)) / sxx
-    c = my - a * mx
-    ss_res = sum((ys[i] - (a * xs[i] + c)) ** 2 for i in range(n))
-    ss_tot = sum((y - my) ** 2 for y in ys)
-    return a, (1 - ss_res / ss_tot if ss_tot else 0.0)
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.getenv(name, str(default)))
+    except Exception:
+        return default
+
+
+def _fit(rows: list) -> list | None:
+    """Kuadrat terkecil untuk detik = Σ x_j · ciri_j. Kolom yang seluruhnya nol dilewati (tak
+    teridentifikasi) dan koefisiennya 0 — bukan angka karangan. None bila sistem tak terpecahkan."""
+    aktif = [j for j, k in enumerate(_FIT_KOL) if any(r[k] for r in rows)]
+    if not aktif:
+        return None
+    n = len(aktif)
+    N = [[sum(r[_FIT_KOL[a]] * r[_FIT_KOL[b]] for r in rows) for b in aktif]
+         + [sum(r[_FIT_KOL[a]] * r["audio"] for r in rows)] for a in aktif]
+    for i in range(n):
+        pv = max(range(i, n), key=lambda x: abs(N[x][i]))
+        if abs(N[pv][i]) < 1e-12:
+            return None
+        N[i], N[pv] = N[pv], N[i]
+        for r in range(n):
+            if r != i:
+                f = N[r][i] / N[i][i]
+                for cc in range(i, n + 1):
+                    N[r][cc] -= f * N[i][cc]
+    x = [0.0] * len(_FIT_KOL)
+    for i, j in enumerate(aktif):
+        x[j] = N[i][n] / N[i][i]
+    return x
+
+
+def _ramal(x: list, r: dict) -> float:
+    return sum(x[j] * r[_FIT_KOL[j]] for j in range(len(_FIT_KOL)))
+
+
+def _error_luar_sampel(rows: list) -> float | None:
+    """Leave-one-out: tiap sampel diramal oleh fit TANPA sampel itu. Inilah satu-satunya angka
+    kesalahan yang boleh dipercaya (fit pada datanya sendiri selalu tampak lebih bagus)."""
+    errs = []
+    for i in range(len(rows)):
+        x = _fit(rows[:i] + rows[i + 1:])
+        if x is None:
+            return None
+        errs.append(abs(_ramal(x, rows[i]) - rows[i]["audio"]))
+    return statistics.mean(errs) if errs else None
 
 
 def compute_pace_calibration(sb=None, dry_run: bool = False) -> dict:
-    """Hitung α per provider + pace per (voice×niche & voice,'*') dari tts_delivery_samples → upsert
-    tts_speed_response + tts_pace_calibration. dry_run=True → hitung saja, NOL tulis.
-    Fail-soft total: exception → log + return {"error": ...} — TIDAK pernah mengganggu produksi."""
+    """Fit koefisien durasi per SUARA dari `tts_delivery_samples` → `tts_pace_calibration`.
+    dry_run=True → hitung saja, NOL tulis. Fail-soft total: exception → log + {"error": ...};
+    TIDAK pernah mengganggu produksi."""
     try:
-        from src.intelligence.script_engine import _PAUSE_INFLATION  # SATU sumber konstanta (no-copy)
+        from src.production.duration_model import PAGAR
         if sb is None:
             from supabase import create_client
             sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
 
-        min_n       = _env_int("PACE_CALIB_MIN_N", 5)        # bukti minimal per sel pace
-        min_words   = _env_int("PACE_CALIB_MIN_WORDS", 5)    # naskah super-pendek = rasio jeda liar
-        alpha_min_n = _env_int("PACE_CALIB_ALPHA_MIN_N", 10) # α = regresi; butuh lebih banyak titik
+        min_n = _env_int("PACE_CALIB_MIN_N", 14)             # fit 6 koefisien butuh cukup titik
+        min_chars = _env_int("PACE_CALIB_MIN_CHARS", 60)     # naskah super-pendek = rasio jeda liar
+        max_err = _env_float("PACE_CALIB_MAX_ERR", 2.5)      # angka yang tak lebih baik dari bawaan: buang
 
         locked = {r["voice_key"] for r in
                   (sb.table("voice_catalog").select("voice_key,pace_locked")
@@ -82,90 +134,88 @@ def compute_pace_calibration(sb=None, dry_run: bool = False) -> dict:
         rows, off = [], 0
         while True:  # paginasi manual — jangan percaya cap default (pelajaran undercount 7.220-vs-1000)
             b = (sb.table("tts_delivery_samples")
-                   .select("provider,voice_key,niche,speed,words,raw_audio_secs,pause_secs")
+                   .select("voice_key,niche,speed,words,chars,raw_audio_secs,audio_secs,pause_counts")
                    .range(off, off + 999).execute().data or [])
             rows += b
             if len(b) < 1000:
                 break
             off += 1000
 
-        # ── saring sampel layak ──
-        ok, skipped = [], 0
+        ok, buang = [], {"tanpa_huruf": 0, "speed_bukan_1": 0, "tak_lengkap": 0, "terlalu_pendek": 0}
         for r in rows:
             try:
-                w  = float(r.get("words") or 0)
-                ra = float(r.get("raw_audio_secs") or 0)
+                vk, pc = r.get("voice_key"), r.get("pause_counts") or {}
+                ch = r.get("chars")
                 sp = float(r.get("speed") or 0)
-                pa = r.get("pause_secs")
-                if (not r.get("voice_key")) or (not r.get("niche")) or (not r.get("provider")) \
-                   or w < min_words or ra <= 0 or sp <= 0 or pa is None:
-                    skipped += 1; continue
-                speech = ra - float(pa)
-                if speech < _MIN_SPEECH_FRACTION * ra:
-                    skipped += 1; continue
-                ok.append(dict(pv=r["provider"], vk=r["voice_key"], niche=r["niche"],
-                               w=w, sp=sp, speech=speech))
+                au = float(r.get("raw_audio_secs") or r.get("audio_secs") or 0)
+                if not vk or not pc or au <= 0:
+                    buang["tak_lengkap"] += 1; continue
+                if ch is None:
+                    buang["tanpa_huruf"] += 1; continue      # sampel pra-0182 → tak bisa dipakai model huruf
+                if not (_SPEED_LO <= sp <= _SPEED_HI):
+                    buang["speed_bukan_1"] += 1; continue    # dunia lama (suara dimodulasi) — tak sah lagi
+                if int(ch) < min_chars:
+                    buang["terlalu_pendek"] += 1; continue
+                ok.append({"vk": vk, "niche": r.get("niche") or "*", "audio": au, "chars": int(ch),
+                           "digits": int(pc.get("digits") or 0), "words": int(r.get("words") or 0),
+                           "sentence": int(pc.get("sentence") or 0), "ellipsis": int(pc.get("ellipsis") or 0),
+                           "comma": int(pc.get("comma") or 0), "em_dash": int(pc.get("em_dash") or 0)})
             except Exception:
-                skipped += 1
+                buang["tak_lengkap"] += 1
 
-        # ── LANGKAH 1: α per provider (dipakai inversi pace di langkah 2) ──
-        alphas, alpha_rows, alpha_rejected = {}, [], []
-        byprov = {}
-        for s in ok:
-            byprov.setdefault(s["pv"], []).append((s["sp"], s["w"] / s["speech"]))
-        for pv, pts in sorted(byprov.items()):
-            if len(pts) < alpha_min_n:
-                continue                                   # tanpa baris → konsumen pakai 1.0 (perilaku lama)
-            a, r2 = _fit_alpha(pts)
-            if a is None or not (_ALPHA_LO <= a <= _ALPHA_HI):
-                alpha_rejected.append((pv, a, len(pts)))
-                logger.warning(f"[PaceCalib] α {pv}={a} di luar pagar [{_ALPHA_LO},{_ALPHA_HI}] "
-                               f"atau tak teridentifikasi — DILEWATI (konsumen tetap 1.0)")
-                continue
-            alphas[pv] = round(a, 3)
-            alpha_rows.append({"provider": pv, "alpha": round(a, 3), "sample_n": len(pts)})
-            logger.info(f"[PaceCalib] α {pv} = {a:.3f} (n={len(pts)}, R²={r2:.2f})")
-
-        # ── LANGKAH 2: pace per sel, inversi SADAR-α (provider tanpa α → 1.0) ──
-        cells = {}
-        used = 0
+        ditulis, dilewati = [], []
+        per_suara = {}
         for s in ok:
             if s["vk"] in locked:
                 continue
-            a = alphas.get(s["pv"], 1.0)
-            wps = s["w"] / (s["speech"] * (s["sp"] ** a) * float(_PAUSE_INFLATION))
-            cells.setdefault((s["vk"], s["niche"]), []).append(wps)
-            cells.setdefault((s["vk"], "*"), []).append(wps)
-            used += 1
+            per_suara.setdefault(s["vk"], []).append(s)
 
-        written, rejected_range, below_min = [], [], 0
-        for (vk, niche), vals in sorted(cells.items()):
-            if len(vals) < min_n:
-                below_min += 1; continue
-            med = round(statistics.median(vals), 3)
-            if not (_WPS_LO <= med <= _WPS_HI):
-                rejected_range.append((vk, niche, med, len(vals)))
-                logger.warning(f"[PaceCalib] sel ({vk},{niche}) median {med} di luar pagar "
-                               f"[{_WPS_LO},{_WPS_HI}] — DILEWATI (data dicurigai, tidak di-clamp)")
+        for vk, g in sorted(per_suara.items()):
+            if len(g) < min_n:
+                dilewati.append((vk, f"sampel {len(g)} < {min_n}")); continue
+            x = _fit(g)
+            if x is None:
+                dilewati.append((vk, "sistem tak terpecahkan")); continue
+            nilai = {_KOL_DB[k]: round(x[j], 5) for j, k in enumerate(_FIT_KOL)}
+            luar = [f"{k}={v}" for k, v in nilai.items()
+                    if not (PAGAR[k][0] <= v <= PAGAR[k][1])]
+            if luar:
+                dilewati.append((vk, f"koefisien di luar pagar: {', '.join(luar)}"))
+                logger.warning(f"[PaceCalib] {vk} DILEWATI — {luar} (tidak di-clamp; data dicurigai)")
                 continue
-            written.append({"voice_key": vk, "niche": niche, "delivery_wps": med, "sample_n": len(vals)})
+            err = _error_luar_sampel(g)
+            if err is None or err > max_err:
+                dilewati.append((vk, f"kesalahan luar-sampel {err} > {max_err}"))
+                logger.warning(f"[PaceCalib] {vk} DILEWATI — kesalahan luar-sampel {err} dtk "
+                               f"tidak lebih baik dari angka bawaan")
+                continue
+            hpk = statistics.median([r["chars"] / max(1, r["words"]) for r in g if r["words"]])
+            wpk = statistics.median([r["words"] / max(1, r["sentence"]) for r in g if r["sentence"]])
+            baris = {"voice_key": vk, "niche": "*", "sample_n": len(g),
+                     **nilai,
+                     "chars_per_word": round(hpk, 3), "words_per_sentence": round(wpk, 3),
+                     "calib_error_secs": round(err, 3),
+                     # lapis lama tetap diisi supaya jalur cadangan (preset di luar tangga) tak mati
+                     "delivery_wps": round(statistics.median([r["words"] / r["audio"] for r in g]), 3)}
+            for k in ("chars_per_word", "words_per_sentence"):
+                if not (PAGAR[k][0] <= baris[k] <= PAGAR[k][1]):
+                    baris[k] = None                      # di luar pagar → biarkan bawaan yang dipakai
+            ditulis.append(baris)
+            logger.info(f"[PaceCalib] {vk}: n={len(g)} · {nilai['sec_per_char']:.5f}/huruf · "
+                        f"jeda-kalimat {nilai['sec_per_sentence']:.2f}s · salah luar-sampel {err:.2f}s")
 
         if not dry_run:
-            if alpha_rows:
-                sb.table("tts_speed_response").upsert(alpha_rows).execute()
-            if written:
-                sb.table("tts_pace_calibration").upsert(written).execute()
-            for vk in locked:  # admin lock → bersihkan jejak kalibrasi voice itu
+            if ditulis:
+                sb.table("tts_pace_calibration").upsert(ditulis).execute()
+            for vk in locked:
                 sb.table("tts_pace_calibration").delete().eq("voice_key", vk).execute()
 
-        summary = {"samples_used": used, "samples_skipped": skipped,
-                   "alphas": alphas, "alpha_rejected": alpha_rejected,
-                   "cells_written": len(written), "cells_below_min_n": below_min,
-                   "cells_rejected_range": rejected_range, "locked_voices": sorted(locked),
-                   "min_n": min_n, "dry_run": dry_run, "rows": written}
-        logger.info(f"[PaceCalib] used={used} skipped={skipped} α={alphas} cells={len(written)} "
-                    f"below_min={below_min} rejected={len(rejected_range)} locked={len(locked)} dry_run={dry_run}")
-        return summary
+        ringkas = {"sampel_total": len(rows), "sampel_dipakai": len(ok), "dibuang": buang,
+                   "suara_ditulis": len(ditulis), "dilewati": dilewati,
+                   "locked": sorted(locked), "min_n": min_n, "dry_run": dry_run, "rows": ditulis}
+        logger.info(f"[PaceCalib] total={len(rows)} dipakai={len(ok)} dibuang={buang} "
+                    f"ditulis={len(ditulis)} dilewati={len(dilewati)} dry_run={dry_run}")
+        return ringkas
     except Exception as e:
         logger.error(f"[PaceCalib] gagal (fail-soft, produksi tak terganggu): {e}")
         return {"error": str(e)}
@@ -311,7 +361,7 @@ def _drift_recovery_text(med: float, thresh: float, n: int, prev: float | None) 
 
 
 def check_drift_alarm(sb=None) -> dict:
-    """[F5] ALARM drift estimator: median |error| taksiran-vs-mentah pada N sampel TERBARU ber-taksiran.
+    """[F5] ALARM drift estimator: median |error| taksiran-vs-nyata pada N sampel TERBARU ber-taksiran.
     Melewati ambang → Telegram ADMIN (bukan aksi otomatis apa pun — manusia yang menindak; §0.6).
     Ambang & jendela config-driven (DRIFT_ALARM_PCT / DRIFT_WINDOW_N)."""
     try:
@@ -380,8 +430,9 @@ def check_drift_alarm(sb=None) -> dict:
 
 def run_maintenance(sb=None) -> dict:
     """[F5] Satu pintu swa-pemeliharaan berkala (dipanggil self_learning tiap cadence):
-    (1) kalibrasi pace+α dari sampel baru → (2) selaraskan bobot-beat (dibatasi+terkunci-hormat) →
-    (3) alarm drift ke admin. Semua fail-soft — kegagalan di sini TIDAK pernah mengganggu produksi."""
+    (1) kalibrasi koefisien durasi dari sampel baru → (2) selaraskan bobot-beat (dibatasi+terkunci-
+    hormat) → (3) alarm drift ke admin. Semua fail-soft — kegagalan di sini TIDAK pernah mengganggu
+    produksi."""
     out = {}
     out["pace"]  = compute_pace_calibration(sb=sb)
     out["beats"] = align_beat_weights(sb=sb)

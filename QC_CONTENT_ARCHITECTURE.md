@@ -272,8 +272,80 @@ batas ATAS, berhenti begitu masuk. Bantalan sebaran dipindah ke JENDELA (`word_w
 jaminan lebar ≥30% band — jaminan itu lahir dari bug yang tertangkap uji nyata: tanpanya jendela aman
 preset 90 dtk menyempit jadi **3 kata**.
 
-**Status kode:** `src/production/duration_solver.py` + `tests/test_duration_solver.py` (39 uji lulus)
-— **belum tersambung ke apa pun**, menunggu ketok owner. Nol berkas produksi disentuh.
+### 🔧 2026-07-31 — DIPASANG KE PRODUKSI (mandat owner "kerja saja yang benar dan tuntas")
+
+**Peta rantai durasi lengkap** (hasil pembacaan kode+DB, 13 titik) → lihat ringkasan di bawah; anchor
+kode disebut per-butir supaya bisa di-grep ulang.
+
+**Yang DICABUT dan sebabnya (angka dari 294 produksi nyata):**
+
+| Yang dicabut | Bukti kenapa |
+|---|---|
+| `script_engine.solve_speed_for_duration` (menyolve kecepatan suara agar taksiran mendarat) | 41% render mentok di batas paling lambat 0,70 · NOL render berjalan normal · median 0,81 → narasi dibacakan ~20% lebih lambat, mood rusak, durasi TETAP meleset median −4,7 dtk |
+| `tts_engine._fit_duration` (meregangkan audio jadi, atempo 0,80–1,35×) | 17 dari 140 render diubah setelah selesai, faktor median 0,832 — pelambatan LAPIS KEDUA di atas yang pertama |
+| `estimate_spoken_seconds` + benih jeda (`_PAUSE_SECONDS`) | benih akhir-kalimat 0,35 dtk vs terukur 0,60–1,31 · salah 7,01 dtk pada 60 render naskah produksi (10% akurat ±2 dtk) |
+| Toleransi persen ±12%/±15% + pagar 2× di tiga tempat berbeda | arah salah: preset 90s ±15% LEBIH LONGGAR daripada jarak ke tetangga (lulus padahal sudah milik preset lain); preset 8s ±15% lebih ketat dari perlu |
+| Batas platform 180 dtk rata | menolak SEMUA video Regular (2–12 menit) sebelum apa pun dinilai |
+
+**Yang DIPASANG (7 berkas + 1 migrasi):**
+1. `src/production/duration_model.py` (BARU) — alat ukur: `detik = a·huruf + b·kalimat + c·elipsis +
+   d·koma + e·em_dash`, per SUARA; `band_video` (aturan titik-tengah owner, satu sumber untuk naskah +
+   gerbang + QC); `resep` (perintah KATA & KALIMAT); `vonis` (gerbang sebelum belanja).
+2. `migrations/0182` — 7 koefisien + `calib_error_secs` di `tts_pace_calibration`; `chars` di
+   `tts_delivery_samples`. Kosong = angka bawaan terukur (jalur lama tak mati).
+3. `src/production/pace_calibration.py` — fit 5 koefisien sekaligus dari render nyata, hanya sampel
+   ber-kecepatan ≈1,0, dengan **leave-one-out** sebagai angka kesalahan resmi; sel di luar pagar atau
+   yang tak lebih baik dari bawaan DILEWATI (tidak di-clamp senyap). Inversi lama yang berputar di
+   dalam kesalahannya sendiri dibuang.
+4. `src/intelligence/script_engine.py` — prompt memberi DUA angka (kata + kalimat) & melarang `...`;
+   gerbang memakai `vonis`; **tulis per-bagian** bila satu panggilan tak sanggup (dipicu bukti, bukan
+   tebakan) dengan retry sadar-throttle; **putaran perbaikan** (model merapatkan/melengkapi, KODE
+   memverifikasi tiap angka & nama masih ada); skor mutu bertanda `estimated` tidak boleh menjatuhkan naskah.
+5. `src/intelligence/script_checker.py` (BARU) — cacat mekanis pasti: kalimat menggantung · elipsis ·
+   frasa berulang · kata terlarang **dari baris niche di DB** · bahasa asing menyelinap · label beat
+   bocor · artefak sambungan. Nol daftar per-niche di kode (ratusan niche akan datang).
+6. `src/intelligence/script_analyzer.py` — taksiran lokal SELALU bertanda (`estimated`,
+   `estimate_reason`); dulu diam-diam dipakai sebagai gerbang mutu & masuk data mesin belajar.
+7. `src/config/tenant_config.py` + `src/config/format_catalog.py` — muat koefisien; `active_presets()`
+   (menonaktifkan preset di admin otomatis melebarkan batas tetangganya, tanpa sentuh kode).
+8. `src/orchestrator/pipeline.py` — gerbang pra-visual & QC pasca-render memakai band titik-tengah;
+   pagar "meleset PARAH" dihitung dari LEBAR BAND; batas platform hanya berlaku bila preset ≤ batas.
+
+**Bukti runtime:** 14/14 naskah mendarat di band (7 preset × 2 niche, audio diukur nyata, kecepatan
+1,0), fakta utuh 14/14, ramalan salah rata 1,05 dtk. Uji otomatis: **159 lulus** (termasuk penjaga
+"tuas kecepatan tak boleh kembali" & contoh 45→32 milik owner).
+
+**Cacat yang ditemukan & ditutup lewat uji rantai penuh pada channel tenant NYATA (bukan harness):**
+
+| Cacat | Bukti | Penutup |
+|---|---|---|
+| Model llama menulis 37–93 kata untuk preset yang butuh 128–206 | uji 3 channel | jalur **tulis per-bagian** (dipicu bukti: naskah < 0,8 × batas bawah) + kuota per-bagian ×1,45 (kepatuhan terukur ±65%) |
+| Refit memanjangkan naskah tapi MENGGABUNG kalimat → kata naik, durasi tidak | 136 kata/2 kalimat = 45,9 dtk | refit "terlalu pendek" WAJIB menjaga jumlah kalimat |
+| Refit menolak perbaikan sah karena kata biasa ber-huruf-besar ("Tires") dianggap nama diri | 1 putaran terbuang | ambang nama diri ≥6 huruf; ANGKA tetap ketat |
+| Satu 429 dari penyedia membatalkan SELURUH naskah per-bagian | Groq 429/503 | retry sadar-throttle (tunggu berlipat); error non-retryable tetap berhenti |
+| Suara belum terkalibrasi memakai angka suara LAIN | Gadis: ramal 88,6 vs nyata 130,8 (**meleset 42 dtk**) | kelima suara Edge produksi dikalibrasi (salah luar-sampel 0,84–1,10 dtk) |
+| **Baris kalibrasi warisan per-niche MENUTUP baris '*' yang berisi koefisien** | `(Gadis,dark_history)` hanya punya `delivery_wps` → koefisien tak terpakai → inilah sebab 42 dtk di atas | pilih baris yang PUNYA koefisien; uji regresi mengunci |
+| Angka diucapkan jauh lebih panjang dari hurufnya | "1348" = +1,70 dtk padahal 4 huruf | suku ANGKA (migrasi 0183); 4 dari 5 suara membaik |
+
+**Bukti runtime akhir:**
+- Alat ukur pada **naskah panjang 190–383 kata** (rentang preset 75/90, di LUAR data kalibrasi):
+  salah rata-rata **1,42 dtk** (Gadis) & **2,02 dtk** (Ardi) — jadi tidak jatuh saat diekstrapolasi.
+- Rantai penuh lewat **kode produksi** pada channel nyata: RETRO REWIND GARAGE (Jenny + llama-3.3-70b)
+  → per-bagian → refit 2 putaran → **video 56,2 dtk MASUK band 52–68**, ramalan salah 2,0 dtk.
+- Mekanisme lengkap (model patuh): **14/14 mendarat** lintas 7 preset × 2 niche, fakta utuh 14/14.
+- Uji otomatis **160 lulus**, termasuk penjaga "tuas kecepatan tak boleh kembali", contoh 45→32 milik
+  owner, dan regresi baris-kalibrasi-tertutup.
+
+**Belum tuntas — jujur:**
+1. Verifikasi ulang penuh pada channel llama **terhalang kuota harian Groq** (TPD 100.000 terpakai
+   99.035) — bukan cacat desain, tapi konsekuensi nyata: jalur baru memakai ±10 panggilan kecil
+   (per-bagian + refit) alih-alih 1–3 panggilan besar. Tenant di tingkat gratis akan menabrak batas.
+2. Suara ElevenLabs `pNInz6obpgDQGcFmaJgB` belum terkalibrasi (tak bisa di-render gratis) → memakai
+   angka bawaan sampai sampel produksinya terkumpul; `chars` kini direkam tiap render, jadi kalibrasi
+   berjalan sendiri.
+3. Channel `Abyss ID` tak bisa produksi sama sekali: model `gemini-2.5-flash` ditolak vendor
+   (404 "no longer available to new users") — **temuan terpisah, bukan bagian pekerjaan ini**.
+4. Video Regular (2–12 menit) tetap di luar lingkup: butuh pemotongan suara untuk naskah 1.000+ kata.
 
 ### 🔴 BELUM TERBUKTI — dua lubang fondasi; JANGAN bangun apa pun di atasnya
 
