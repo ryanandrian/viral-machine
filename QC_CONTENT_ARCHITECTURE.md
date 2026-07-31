@@ -178,6 +178,33 @@ Rantai sebabnya (tiap mata rantai terukur):
 | Kode memangkas kalimat untuk memendekkan | membuang fakta terkuat naskah (kalimat terkuat bernilai 0 di semua penanda permukaan) |
 | `tts_speed_alpha` | ditulis tapi tak pernah dibaca setelah solver dicabut |
 
+### ⛔ CACAT PALING BERBAHAYA YANG DITEMUKAN (2026-08-01) — AUDIO TERPOTONG DITERIMA DIAM-DIAM
+
+Ditemukan saat mengejar satu kesalahan kalibrasi 13,1 detik yang tak wajar:
+
+    teks 581 huruf  → berkas audio 27,0 detik
+    teks SAMA di-render ulang 2× → 40,8 detik (konsisten)
+    → audio TERPOTONG 13,8 detik
+
+**Sebabnya:** adaptor menulis potongan audio sambil menerima aliran dari vendor. Bila aliran berhenti
+di tengah, loop-nya hanya BERHENTI MENULIS — tanpa error. Berkasnya ada, tidak kosong, durasinya
+tampak wajar → seluruh pipeline menerimanya.
+
+**Kenapa ini yang paling berbahaya:** korektor atempo (yang dicabut 31-Jul) MEREGANGKAN audio pendek
+itu supaya pas durasi preset. Jadi narasi yang terputus **tersembunyi sempurna** dari setiap
+pemeriksaan — penonton mendengar cerita berhenti mendadak, dan tak satu pun log menyebut apa pun.
+Cacat ini kemungkinan sudah tayang ke tenant. Baru bisa dideteksi setelah ada alat ukur akurat
+(~1 dtk): bila audio jauh lebih pendek daripada ramalan dari TEKSNYA, yang hilang adalah suaranya.
+
+**Laju kejadian terukur:** 1 dari 73 render (**1,4%**) — kira-kira 1 dari 70 video tenant.
+
+**DUA LAPIS PENJAGA:**
+1. Adaptor Edge — penanda kalimat dari vendor menunjukkan seberapa jauh sintesis sampai; cakupan di
+   bawah `TTS_CAKUPAN_MIN` (85%) = gagal. Tak menuduh bila vendor tak mengirim penanda.
+2. Mesin suara (SEMUA penyedia) — audio < `TTS_POTONG_AMBANG` (75%) dari ramalan = gagal jujur, berkas
+   cacat dibuang, dikelaskan TRANSIENT supaya produksi DIULANG (bukan mematikan channel karena satu
+   gangguan jaringan).
+
 ### BUKTI RUNTIME
 
 | Uji | Hasil |
@@ -185,7 +212,9 @@ Rantai sebabnya (tiap mata rantai terukur):
 | Mekanisme lengkap, 7 preset × 2 niche, audio nyata | **14/14 mendarat** · fakta utuh 14/14 |
 | **Kasus terburuk**: model dilumpuhkan sengaja jadi 45% (lebih buruk dari llama 65%) | **12/12 mendarat** · fakta utuh 12/12 · ramalan ±1 dtk · 8,1 panggilan/naskah |
 | Rantai penuh lewat kode produksi, channel nyata | RETRO REWIND: **56,2 dtk masuk band 52–68** |
-| Alat ukur pada naskah panjang 190–383 kata | salah 1,42 dtk (Gadis) · 2,02 dtk (Ardi) |
+| Alat ukur di RENTANG PRESET PRODUKSI (≤100 dtk), pasca-bersih | salah rata **1,19 dtk** (Ardi) · **1,36 dtk** (Gadis) · terburuk 3,47 / 4,93 dtk — band tersempit 15 dtk |
+| Alat ukur pada naskah 140+ dtk (di luar preset short) | salah rata 2,0% relatif · terburuk 6,7 dtk |
+| Kalibrasi diukur ulang di **ratio 1 (+0%)** setelah baseline dibetulkan | Ardi & Gadis, 36 naskah 61–384 kata |
 | Uji otomatis | **166 lulus** (termasuk penjaga anti-kembalinya tuas kecepatan & contoh 45→32 milik owner) |
 | Audit regresi 5 permukaan | 7 simbol dihapus: nol pemakai · 86 modul impor lolos · **layar admin & tenant: nol perubahan** · Telegram utuh |
 
