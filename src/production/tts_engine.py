@@ -273,6 +273,35 @@ class TTSEngine:
                 # bila tetap meleset, gerbang pipeline melaporkannya JUJUR (bukan menutupinya dengan
                 # merusak suara). Pengukuran mentah tetap diambil untuk sampel kalibrasi + laporan selisih.
                 _raw_secs = TTSEngine.get_duration(audio_path)
+                # ── LAPIS 2: AUDIO JAUH LEBIH PENDEK DARI RAMALAN = TIDAK LENGKAP ─────────────────
+                # Berlaku untuk SEMUA penyedia suara, bukan cuma Edge. Terbukti nyata 2026-08-01:
+                # audio terpotong 13,8 dtk lolos seluruh pipeline karena berkasnya ada, tak kosong,
+                # dan durasinya "wajar" — lalu korektor atempo (dulu) meregangkannya agar pas durasi,
+                # sehingga narasi yang terputus tersembunyi sempurna dari semua pemeriksaan.
+                # Baru bisa dideteksi sejak ada alat ukur yang akurat (~1 dtk): kalau audio jauh lebih
+                # pendek daripada yang diramal dari TEKSNYA, yang hilang adalah suaranya, bukan
+                # ramalannya. GAGAL JUJUR — video dengan narasi terputus lebih buruk daripada gagal.
+                _est = ((script or {}).get("_duration_est") or {}).get("est_seconds")
+                if _est and _raw_secs > 0:
+                    _rasio = _raw_secs / float(_est)
+                    _amb_potong = float(os.getenv("TTS_POTONG_AMBANG", "0.75"))
+                    if _rasio < _amb_potong:
+                        _msg = (f"Suara tidak lengkap: audio {_raw_secs:.1f} dtk padahal naskahnya "
+                                f"seharusnya ±{float(_est):.1f} dtk ({_rasio:.0%}). Narasi terputus — "
+                                f"produksi dihentikan, akan diulang.")
+                        logger.error(f"[TTSEngine] {_msg}")
+                        self.last_error = _msg
+                        self.last_error_class = ErrorClass.TRANSIENT
+                        self.last_human_error = ("Suara tidak selesai dibuat sehingga narasinya "
+                                                 "terputus. Produksi diulang otomatis.")
+                        try:
+                            os.remove(audio_path)
+                        except OSError:
+                            pass
+                        return "", []
+                    if _rasio < 0.9:
+                        logger.warning(f"[TTSEngine] audio {_raw_secs:.1f}s vs ramalan {float(_est):.1f}s "
+                                       f"({_rasio:.0%}) — masih di atas ambang, tapi dicatat")
                 if target_audio_secs and target_audio_secs > 0:
                     _selisih = _raw_secs - float(target_audio_secs)
                     if abs(_selisih) > 2.0:

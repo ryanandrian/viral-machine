@@ -10,11 +10,13 @@ Fix v0.2:
 import asyncio
 import json
 import os
+import re
 import time
 from pathlib import Path
 
 from loguru import logger
 
+from src.exceptions import ErrorClass
 from src.providers.tts.base import TTSProvider, TTSError
 
 
@@ -120,6 +122,31 @@ class EdgeTTSProvider(TTSProvider):
 
             # Konversi sentence boundaries ke word-level timestamps
             self._word_timestamps = self._parse_sentence_boundaries(sentence_boundaries)
+
+            # ── AUDIO TIDAK LENGKAP = GAGAL JUJUR (2026-08-01) ────────────────────────────────────
+            # Terbukti nyata: teks 581 huruf menghasilkan audio 27,0 dtk, sementara render ulang teks
+            # yang SAMA (dua kali, konsisten) menghasilkan 40,8 dtk — audionya TERPOTONG 13,8 dtk.
+            # Sebabnya: aliran dari vendor bisa berhenti di tengah, dan loop di atas hanya berhenti
+            # menulis — tanpa error. Berkasnya ada, tak kosong, durasinya "wajar", jadi seluruh
+            # pipeline menerimanya. Akibat di produksi: video dengan NARASI TERPUTUS di tengah — dan
+            # dulu korektor atempo malah MEREGANGKANNYA agar pas durasi, sehingga cacatnya tersembunyi
+            # sempurna. Penonton mendengar cerita yang berhenti mendadak.
+            #
+            # Pemeriksaan memakai data yang SUDAH ada: penanda kalimat dari vendor. Bila penanda hanya
+            # mencakup sebagian teks, sintesis memang tak sampai habis. Tanpa penanda (vendor tak
+            # mengirimnya) → tak menuduh apa pun; lapis kedua di `tts_engine` yang menjaga.
+            _amb = float(os.getenv("TTS_CAKUPAN_MIN", "0.85"))
+            _huruf_teks = len(re.sub(r"\s+", "", text or ""))
+            _huruf_penanda = sum(len(re.sub(r"\s+", "", b.get("text") or "")) for b in sentence_boundaries)
+            if sentence_boundaries and _huruf_teks > 0:
+                _cakupan = _huruf_penanda / _huruf_teks
+                if _cakupan < _amb:
+                    raise TTSError(
+                        f"Suara tidak selesai dibuat: hanya {_cakupan:.0%} naskah yang terucap "
+                        f"({_huruf_penanda} dari {_huruf_teks} huruf). Audio tidak lengkap TIDAK "
+                        f"dipakai — lebih baik produksi diulang daripada video dengan narasi terputus.",
+                        error_class=ErrorClass.TRANSIENT)
+                logger.info(f"[EdgeTTS] cakupan naskah {_cakupan:.0%} (ambang {_amb:.0%})")
 
             size_kb = output_path.stat().st_size / 1024
             logger.info(
