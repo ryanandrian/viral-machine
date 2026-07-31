@@ -201,6 +201,80 @@ dan tidak boleh menyentuh hook hasil langkah 4.
 bisa dipercaya (satu-satunya penilai yang ikut tumbuh bersama ratusan niche = RETENSI penonton;
 222 kurva + 11.261 baris analitik BELUM tersambung ke pembuatan naskah).
 
+### ⭐ 31-Jul MALAM — AKAR DURASI DITEMUKAN: rumus kehilangan BIAYA JEDA PER KALIMAT
+
+> Bagian ini menutup pencarian yang sudah tiga kali salah sasaran (17-Jun prompting · 15-Jul lapis-1 ·
+> 16-Jul program 5-fase). Bukan kesimpulan baru dari logika — 21 render suara NYATA, diukur ffprobe.
+
+**Rumus yang dipakai sistem selama ini — `detik = kata ÷ kecepatan` — kurang satu suku.** Setiap
+kalimat memakan **±1,2–1,9 dtk keheningan** (jeda + tarikan napas) DI LUAR waktu mengucapkan katanya.
+Diuji berdampingan pada 21 render yang sama:
+
+| cara menghitung | salah rata-rata | terburuk | ≤1 dtk |
+|---|---|---|---|
+| A. `detik = kata / wps` (yang dipakai sekarang) | **2,52 dtk** | 5,23 dtk | 5/21 |
+| B. `detik = 0,383·kata + 1,179·kalimat` (global) | 1,98 dtk | 3,71 dtk | — |
+| C. rumus B **dikalibrasi per niche** | **0,52 dtk** (dark_history n=10) · **0,92** (ocean n=8) | 1,59 dtk | 12/21 |
+
+Angka terfit: `dark_history = 0,3487·kata + 1,938·kalimat` · `ocean_mysteries = 0,3187·kata +
+1,783·kalimat`. Kecepatan bicara BERSIH 2,61–3,14 kata/dtk; yang membuat wps "tampak" 1,76–2,29 itu
+jeda. **Karena itu satu angka wps tak akan pernah benar di dua ujung sekaligus** — naskah 42 kata/5
+kalimat = 1,76 kata/dtk efektif, naskah 161 kata/15 kalimat = 2,13.
+
+**Konsekuensi #1 — preset 8 & 15 dtk selalu salah karena mesin tak pernah mengendalikan jumlah
+KALIMAT.** Resep yang keluar dari rumus: preset 8 dtk = **1 kalimat ±23 kata** (preset 8 memang 1
+beat: `core_facts`); preset 15 dtk = **2 kalimat ±35–46 kata** (2 beat: `hook`+`core_facts`). Bukti
+kebalikannya: naskah 42 kata yang dipecah 5 kalimat keluar **26,0 dtk** — band 15 dtk hanya
+11,5–22,5. Jeda video terukur (`tts_delivery_samples`): 8 dtk = 1,50 (n=11) · 15 dtk = 2,25 (n=2) ·
+60 dtk = 2,20 (n=100) · 90 dtk = 3,50 (n=22); preset 30/45/75 **belum punya sampel**.
+
+**✅ RESEP ITU DIUJI 31-Jul DAN BERHASIL — preset 8 & 15 dtk MENDARAT untuk pertama kalinya.**
+8 naskah (2 preset × 2 niche × 2 ulangan), jalur prompt produksi + satu blok "BATAS KERAS BENTUK"
+(jumlah kalimat + rentang kata + sebab jedanya), audio diukur nyata:
+
+| ukuran | hasil |
+|---|---|
+| mendarat di band sah | **8/8** |
+| taat jumlah KALIMAT | **7/8** |
+| ramalan durasi salah | rata **0,66 dtk** · terburuk 2,19 dtk (di luar data fit) |
+
+Contoh preset 8 dtk (1 kalimat, 19 kata → 9,6 dtk): *"Di Palung Mariana, terdapat makhluk yang mampu
+menahan tekanan 1.000 kali lebih besar dari permukaan, hidup dalam kegelapan abadi."*
+
+**Temuan sampingan yang penting: jumlah KALIMAT jauh lebih dipatuhi model daripada jumlah KATA**
+(7/8 vs goyangan ±12–39% pada kata). Kalimat = perintah bentuk yang bisa dihitung model sendiri;
+jumlah kata tidak. **Dan sisa kesalahan ramalan terbesar (1,9–2,2 dtk) SELALU pada naskah ber-`...`**
+— artefak elipsis yang sudah tercatat sebagai cacat long-form: kode menghitungnya sebagai akhir
+kalimat (jeda penuh) padahal TTS menjedanya lebih pendek. Membereskan `...` sekaligus merapatkan
+ramalan durasi.
+
+**Konsekuensi #2 — kalibrasi harus menyimpan DUA angka, bukan satu.** Kunci `tts_pace_calibration`
+(voice×niche) sudah tepat; isinya yang kurang. Baru 2 niche punya n≥8; sisanya masih angka global
+(salah 2,0–3,7 dtk) — harus dikumpulkan, bukan ditebak.
+
+### ⛔ 31-Jul — PEMANGKASAN-DENGAN-MEMBUANG-KALIMAT DICABUT sebagai mekanisme rutin
+
+Perbaikan yang direncanakan (lindungi kalimat ber-angka/tahun/nama diri) **DIUJI DAN GAGAL**: kalimat
+terkuat naskah dark_history (*"…manusia dikubur hidup-hidup sebagai persembahan"*) bernilai **0** di
+semua penanda permukaan — identik dengan kalimat hiasan (*"Mereka adalah bisikan-bisikan abadi…"*).
+Uji lanjutan pada 6 naskah membuang 7 kalimat, **≥4 di antaranya isi sungguhan**. **Vonis: aturan
+buatan-tangan tidak bisa membedakan fakta terkuat dari hiasan — jangan coba lagi.**
+
+**Penggantinya = REFIT: model merapatkan, KODE memverifikasi.** Kode menghitung selisih & memeriksa
+hasil (jumlah kata + SEMUA angka/nama diri masih ada); model yang memilih kata mubazir; gagal 2
+putaran = GAGAL JUJUR. Terukur pada 6 naskah × 5 preset: **fakta utuh 6/6 · mendarat 5/6 · rata-rata
+1,0 putaran**. Naskah 148→142 kata memendek **8,6 dtk** karena yang hilang JEDA (kalimat digabung),
+bukan isi — versi rapatnya justru lebih mengalir. Satu-satunya yang gagal = preset 15 dtk, sebabnya
+jumlah kalimat (di atas), bukan mekanismenya.
+
+**Cacat #2 (memangkas naskah yang sudah benar) ✅ DIPERBAIKI & TERUJI:** pangkas hanya bila melebihi
+batas ATAS, berhenti begitu masuk. Bantalan sebaran dipindah ke JENDELA (`word_window_aman`) dengan
+jaminan lebar ≥30% band — jaminan itu lahir dari bug yang tertangkap uji nyata: tanpanya jendela aman
+preset 90 dtk menyempit jadi **3 kata**.
+
+**Status kode:** `src/production/duration_solver.py` + `tests/test_duration_solver.py` (39 uji lulus)
+— **belum tersambung ke apa pun**, menunggu ketok owner. Nol berkas produksi disentuh.
+
 ### 🔴 BELUM TERBUKTI — dua lubang fondasi; JANGAN bangun apa pun di atasnya
 
 1. **Pace mana yang benar: 2,585 atau 2,05?** `tts_pace_calibration` menyimpan 2,585 wps untuk
