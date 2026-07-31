@@ -137,10 +137,9 @@ def effective_overhead(seconds, run_config, trailing_fallback: float = 2.5) -> f
     """[DURASI-F4] Overhead render TOTAL (detik non-suara di video final) = trailing efektif
     (override preset > setelan tenant) + loop-ending BERSIH (loop_duration − 0.5 xfade, bila enabled —
     identik `_add_loop_ending` renderer: new = main + loop − 0.5).
-    SATU rumus utk EMPAT pemakai: naskah (script_engine budget) · korektor atempo (pipeline STEP 5) ·
-    gerbang durasi pra-visual · window `_fit_duration`. Kelanjutan DURASI-3: dulu hanya TRAILING yang
-    disatukan; komponen LOOP terlewat di korektor+gerbang → korektor bisa meregang audio yang sudah
-    benar (terparah di preset 8s: ±12%). `run_config` None → trailing saja (fail-safe, tanpa loop)."""
+    SATU rumus utk TIGA pemakai: resep naskah (`duration_model.resep`) · gerbang durasi pra-visual ·
+    QC pasca-render. (Pemakai keempat — korektor atempo — DIHAPUS 2026-07-31 bersama tuas kecepatan.)
+    `run_config` None → trailing saja (fail-safe, tanpa loop)."""
     trail = effective_trailing(seconds, float(getattr(run_config, "trailing_silence", trailing_fallback) or trailing_fallback) if run_config else trailing_fallback)
     loopn = 0.0
     if run_config is not None and getattr(run_config, "loop_ending_enabled", True):

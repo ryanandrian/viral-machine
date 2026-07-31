@@ -1188,7 +1188,7 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
         if preset_seconds and run_config:
             # [DURASI-F4] overhead PENUH (trailing efektif + loop bersih) via SATU helper
             # format_catalog.effective_overhead — nilai identik rumus inline lama (trail + loopn),
-            # kini satu sumber dgn korektor STEP 5 + gerbang pra-visual + window _fit_duration.
+            # kini satu sumber dgn resep durasi + gerbang pra-visual + QC pasca-render.
             from src.config.format_catalog import effective_overhead as _eff_ovh
             render_overhead_sec = _eff_ovh(preset_seconds, run_config)
             logger.info(f"[ScriptEngine] #3 budget overhead-aware: preset {preset_seconds}s − overhead {render_overhead_sec}s "
