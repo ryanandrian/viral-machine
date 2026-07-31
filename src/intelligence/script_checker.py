@@ -53,6 +53,10 @@ _KATA_INGGRIS_UMUM = {
     "imagine", "discovered", "actually", "literally", "basically",
 }
 _TANDA_AKHIR = ".!?…\"'”’)"
+# Satu kata asing nyasar bukan bukti "model lupa bahasa" (bisa nama diri/istilah);
+# dua kata berbeda baru pola. Ambang ini menutup salah-tuduh yang terukur saat uji sendiri.
+_MIN_KATA_ASING = 2
+_PISAH = "\"'“”‘’«»()[]{}.,;:!?…—–-"
 _RX_KATA = re.compile(r"[A-Za-zÀ-ÿ']+")
 
 
@@ -107,8 +111,12 @@ def periksa_naskah(teks: str, niche_profile: dict | None = None,
     avoid_raw = ((niche_profile or {}).get("narration_persona") or {}).get("avoid") if niche_profile else None
     if avoid_raw:
         frasa = [x.strip().lower() for x in re.split(r"[,;·|]|\band\b", str(avoid_raw)) if len(x.strip()) >= 4]
+        # Cocok per-KATA (batas kata), BUKAN potongan kata. Terukur saat uji sendiri: avoid "keras"
+        # menandai "Kekerasan itu tercatat pada tahun 1965." sebagai pelanggaran → naskah sah DITOLAK
+        # dan satu putaran retry terbuang. Cacat ini ditanam hari yang sama saat modul dibuat.
         rendah = t.lower()
-        kena = [f for f in frasa if f in rendah]
+        kena = [f for f in frasa
+                if re.search(rf"(?<![0-9a-zà-ÿ]){re.escape(f)}(?![0-9a-zà-ÿ])", rendah)]
         if kena:
             out.append(_temuan("kata_terlarang_niche", True,
                                f"{len(kena)} kata/frasa yang DILARANG niche ini masih dipakai.",
@@ -116,11 +124,25 @@ def periksa_naskah(teks: str, niche_profile: dict | None = None,
 
     # 5. bahasa asing menyelinap (hanya untuk konten non-Inggris)
     if content_language and not str(content_language).lower().startswith("en"):
-        asing = sorted({w for w in kata if w in _KATA_INGGRIS_UMUM})
-        if asing:
+        # Kata asing di dalam NAMA DIRI itu SAH ("Kanal The Explorer", "Discovery Channel"). Terukur
+        # saat uji sendiri: kalimat sah "Kanal The Explorer membahas Palung Mariana sejak 2019."
+        # ditandai pelanggaran PARAH → naskah ditolak. Karena itu: token yang berada dalam rangkaian
+        # ber-huruf-besar DILEWATI, dan satu kata nyasar saja belum dianggap "model lupa bahasa" —
+        # butuh minimal dua kata berbeda. Cacat ini ditanam hari yang sama saat modul dibuat.
+        token = re.findall(r"\S+", t)
+        asing = set()
+        for i, w in enumerate(token):
+            b = w.strip(_PISAH)
+            if b.lower() not in _KATA_INGGRIS_UMUM:
+                continue
+            tetangga = [token[j].strip(_PISAH) for j in (i - 1, i + 1) if 0 <= j < len(token)]
+            if any(x[:1].isupper() for x in tetangga if x):
+                continue                      # dalam rangkaian nama diri → sah
+            asing.add(b.lower())
+        if len(asing) >= _MIN_KATA_ASING:
             out.append(_temuan("bahasa_asing", True,
                                f"{len(asing)} kata bahasa Inggris menyelinap ke narasi non-Inggris.",
-                               ", ".join(asing[:8])))
+                               ", ".join(sorted(asing)[:8])))
 
     # 6. label beat bocor jadi ucapan narator
     for b in (beat_keys or []):

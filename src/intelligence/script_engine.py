@@ -1518,6 +1518,36 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                                    f"{_v2['band_video'][0]:.0f}-{_v2['band_video'][1]:.0f}s — "
                                    f"gerbang pipeline yang memutuskan (gagal JUJUR, tidak diakali)")
 
+        # ── PERIKSA ULANG setelah teks berubah (per-bagian / perbaikan) ────────────────────────────
+        # Lubang yang sempat ada: pemeriksa cacat mekanis & rincian durasi dijalankan DI DALAM loop
+        # attempt, sehingga hasilnya menempel pada teks LAMA — padahal jalur per-bagian & perbaikan
+        # mengganti naskah SEPENUHNYA. Tanpa ini, `mechanical_issues` di naskah akhir menyesatkan
+        # (melaporkan teks yang sudah tidak dipakai) dan cacat baru dari penggabungan per-bagian
+        # (artefak sambungan, frasa berulang) lolos tanpa terlihat.
+        if best_script and (best_script.get("_written_per_beat")
+                            or (best_script.get("_duration_est") or {}).get("refit")):
+            try:
+                from src.intelligence.script_checker import periksa_naskah as _periksa2
+                from src.intelligence.script_checker import ringkas_temuan as _ringkas2
+                _c2 = _periksa2(best_script.get("full_script") or "", niche_profile=niche_profile,
+                                content_language=_clang, beat_keys=active_beats)
+                best_script["mechanical_issues"] = _c2
+                logger.info(f"[ScriptEngine] periksa ulang naskah akhir: {_ringkas2(_c2)}")
+            except Exception as _ce2:
+                logger.warning(f"[ScriptEngine] periksa ulang gagal (naskah tetap dipakai): {_ce2}")
+            # angka pelaporan diselaraskan ke teks AKHIR (dulu tertinggal di teks lama → sampel
+            # kalibrasi & log menyebut jeda/kata yang tidak sesuai naskah yang benar-benar dirender)
+            try:
+                from src.production.duration_model import rincian_audio as _rinci2
+                _r2 = _rinci2(best_script.get("full_script") or "", _kalib)
+                best_script["_duration_est"] = {**(best_script.get("_duration_est") or {}),
+                                                "pause_seconds": _r2["jeda"], "speech_seconds": _r2["bicara"],
+                                                "words": _r2["words"], "chars": _r2["chars"],
+                                                "sentences": _r2["sentence"]}
+                best_script["word_count"] = _r2["words"]      # laporan LLM bisa basi; ini hitungan sistem
+            except Exception:
+                pass
+
         if best_score < min_score:
             logger.warning(
                 f"[ScriptEngine] Best score {best_score}/100 below "

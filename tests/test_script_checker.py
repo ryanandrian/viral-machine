@@ -111,3 +111,37 @@ def test_pemeriksa_tak_pernah_memberi_skor_mutu():
     sumber = inspect.getsource(sc)
     for terlarang in ("viral_score", "def skor", "def score"):
         assert terlarang not in sumber
+
+
+# ── CACAT YANG DITANAM & DITUTUP DI SESI YANG SAMA (2026-07-31) ────────────────────────────────────
+# Ketiganya lahir dari modul ini sendiri, ditemukan saat mengaudit perubahan sendiri, ditutup hari itu.
+# Uji di bawah ada supaya tidak bisa kembali — bukan sekadar catatan bahwa pernah salah.
+
+def test_kata_terlarang_cocok_per_KATA_bukan_potongan_kata():
+    """Ditanam: pencocokan substring. Akibat: avoid "keras" menandai "Kekerasan itu tercatat pada
+    tahun 1965." sebagai pelanggaran PARAH → naskah SAH ditolak & satu putaran retry terbuang."""
+    prof = {"narration_persona": {"avoid": "keras, klise"}}
+    assert "kata_terlarang_niche" not in _jenis(
+        periksa_naskah("Kekerasan itu tercatat pada tahun 1965.", niche_profile=prof,
+                       content_language="id-ID"))
+    # kata UTUH tetap tertangkap — perbaikannya tidak boleh melumpuhkan pemeriksanya
+    assert "kata_terlarang_niche" in _jenis(
+        periksa_naskah("Suaranya keras sekali malam itu.", niche_profile=prof, content_language="id-ID"))
+
+
+def test_kata_asing_di_dalam_NAMA_DIRI_tidak_dihukum():
+    """Ditanam: setiap kata Inggris dianggap slip bahasa. Akibat: kalimat sah "Kanal The Explorer
+    membahas Palung Mariana sejak 2019." ditandai PARAH → naskah ditolak."""
+    assert "bahasa_asing" not in _jenis(
+        periksa_naskah("Kanal The Explorer membahas Palung Mariana sejak 2019.",
+                       content_language="id-ID"))
+
+
+def test_satu_kata_asing_nyasar_belum_dianggap_slip_bahasa():
+    """Satu kata bisa nama/istilah; dua kata berbeda baru pola "model lupa bahasa"."""
+    from src.intelligence.script_checker import _MIN_KATA_ASING
+    assert _MIN_KATA_ASING >= 2
+    assert "bahasa_asing" not in _jenis(
+        periksa_naskah("Kota itu jatuh karena wabah that tercatat rapi.", content_language="id-ID"))
+    assert "bahasa_asing" in _jenis(
+        periksa_naskah("Kota itu jatuh, and the penduduk melarikan diri.", content_language="id-ID"))
