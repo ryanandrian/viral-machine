@@ -635,9 +635,23 @@ def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, ins
         # Budget = (detik − overhead render) × WPS. QC mengukur VIDEO FINAL = audio + trailing_silence
         # (+ loop net), jadi target AUDIO = preset − overhead agar video JADI ≈ preset. Tanpa ini, kata
         # in-range pun bisa overshoot di preset pendek (terbukti: 15s 27 kata → 18.2s > window 17.2).
-        _spoken = max(1.0, float(preset_seconds) - float(render_overhead_sec or 0))
-        total_words = round(_spoken * WPS)
-        _lo, _hi    = round(total_words * (1 - _tol)), round(total_words * (1 + _tol))   # [DURASI-F3] satu-sumber
+        # ── SATU PENGGARIS (2026-07-31) ────────────────────────────────────────────────────────────
+        # Bila resep terkalibrasi ada, ANGKA RENCANA ADEGAN diambil DARI RESEP ITU — bukan dihitung
+        # ulang dengan rumus lama `(detik − overhead) × wps` yang BUTA JEDA. Tanpa ini prompt membawa
+        # DUA total kata yang bertentangan: rencana adegan bilang satu angka ("MIN dan MAX keduanya
+        # batas keras"), blok bentuk bilang angka lain — persis cacat "tiga penggaris" yang pernah
+        # melahirkan insiden 2026-07-15. Batas per-adegan pun diturunkan dari BAND SAH (titik-tengah
+        # owner), bukan dari toleransi persen.
+        # Bobot antar-adegan (`content_beats.weight`) tetap yang membagi total ini ke tiap adegan —
+        # jadi kenop admin di Catalog > Durasi tetap berlaku, dan kini justru lebih menentukan karena
+        # ia juga menetapkan ukuran tiap panggilan pada jalur tulis-per-bagian.
+        if resep_durasi:
+            total_words = int(resep_durasi["kata_bidik"])
+            _lo, _hi    = int(resep_durasi["kata_min"]), int(resep_durasi["kata_maks"])
+        else:
+            _spoken = max(1.0, float(preset_seconds) - float(render_overhead_sec or 0))
+            total_words = round(_spoken * WPS)
+            _lo, _hi    = round(total_words * (1 - _tol)), round(total_words * (1 + _tol))
         active  = _beats_for_preset(preset_seconds)  # SEGMENTASI dari DB (single-source) / fallback _BEATS_FOR_N
         n_beats = len(active)
         words   = _distribute_words(active, total_words)   # konsentrasi budget ke beat aktif (bukan sebar 8)
@@ -649,8 +663,12 @@ def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, ins
         # MIN per-beat = lantai anti-KEPENDEKAN (akar 85% video pendek — dulu hanya ada plafon +15%).
         # Plafon konkret per-beat jauh lebih dipatuhi LLM daripada total agregat (terbukti preset pendek).
         # + Protokol swa-verifikasi: draft → hitung per-beat → revisi yang meleset → output `_beat_words`.
-        _bmin = lambda w: max(3, round(w * (1 - _tol)))
-        _bmax = lambda w: round(w * (1 + _tol)) + 1
+        # MIN/MAX per-adegan = proporsi BAND SAH (bukan ±persen): rasio band ke total, supaya bila tiap
+        # adegan mendarat di rentangnya, TOTALNYA otomatis mendarat di band. Satu penggaris, bukan dua.
+        _r_lo = (_lo / total_words) if total_words else (1 - _tol)
+        _r_hi = (_hi / total_words) if total_words else (1 + _tol)
+        _bmin = lambda w: max(3, round(w * _r_lo))
+        _bmax = lambda w: max(_bmin(w) + 1, round(w * _r_hi))
         _plan_lines = "\n".join(
             f"   beat {i+1} — {_ROLE_LABEL.get(b, b)}: target {words.get(b,0)} words (MIN {_bmin(words.get(b,0))} / MAX {_bmax(words.get(b,0))}) — {round(100*words.get(b,0)/_wsum)}%"
             for i, b in enumerate(active))
