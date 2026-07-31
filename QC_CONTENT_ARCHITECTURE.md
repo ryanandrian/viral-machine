@@ -158,6 +158,49 @@ channel memakai model lain (llama/groq) yang belum diuji di riset ini.
 karena terjepit antara 60 dan 90. Merampingkan tangga preset melebarkan batas tetangganya tanpa
 menyentuh kode apa pun.
 
+### 📋 LANJUTAN RISET 31-Jul — angka & cacat baru (ringkas; detail = memory project_durasi_qc_riset)
+
+**Pemangkasan (trim) — DUA CACAT NYARIS NAIK PRODUKSI, keduanya terbukti dengan membaca hasilnya:**
+1. Aturan posisional ("buang kalimat terakhir dari bagian tergemuk") membuang **fakta terkuat** —
+   pernah menghapus *"hewan bahkan manusia dikubur hidup-hidup sebagai persembahan"* dari naskah
+   dark_history. Perbaikan: kalimat ber-angka/tahun/nama diri DILINDUNGI.
+2. Pemangkasan **menggagalkan naskah yang sudah benar**: ocean_mysteries utuh 57,1 dtk (MASUK band
+   52–68) → dipangkas 51,7 dtk (DI LUAR), karena mesin selalu membidik tengah jendela walau sudah
+   di dalam. Perbaikan: pangkas HANYA bila melebihi batas ATAS; pemusatan lewat jumlah permintaan.
+
+**Markup permintaan harus PER-PRESET dari yield terukur**, bukan +40% datar:
+`{8:1.94, 15:1.24, 30:0.73, 45:1.02, 60:0.69, 75:0.58, 90:0.63}` × sasaran 1,15 tengah jendela.
+Memperbaiki preset 30 dari 1,0 dtk → 5,6 dtk dari tepi band.
+
+**wps NYATA ≈1,9** (bukan 2,05); pada naskah sangat pendek 1,1–1,7 karena tarikan napas & jeda
+mendominasi. WAJIB dikalibrasi dari render nyata — haram dipaku sebagai konstanta.
+
+**Status preset (audio nyata):** 30·45·60·90 mendarat margin 5–9 dtk · 8·15 mendarat tapi buang
+53–74% (mutu belum terbukti) · 75 pernah 0,2 dtk dari plafon · **120–720 belum pernah ada audio**.
+
+**Long-form (Regular):** plafon satu panggilan 372–832 kata di 5 model → per-segmen wajib. Alur
+terbukti: jangkar (10/10 niche, kepadatan spesifik 2,75×) → kerangka poin dibagi → 8 bagian
+sadar-posisi → DNA niche → kalibrasi → pangkas. **Sembuh:** pengulangan fakta, tanggal bertabrakan,
+pembuka menyimpulkan, label bocor, kata Inggris, kalimat menggantung, volume (3/4 masuk di 300 & 480).
+**Masih cacat:** pengulangan FRASA, artefak `....` di sambungan, naskah generik & lambat.
+**Penghalang keras:** TTS satu-panggilan tak sanggup naskah 1.000+ kata (potong+sambung+gabung
+penanda-waktu BELUM ADA) · overhead preset panjang belum terukur · belum ada video Regular utuh.
+
+**Cacat produksi hidup yang ditemukan:** `ScriptAnalyzer` diam-diam jatuh ke `_local_estimate`
+(±20 poin lebih rendah, tanpa penanda) saat balasan LLM rusak → mencemari gerbang
+`script_min_viral_score` DAN data mesin belajar.
+
+**Pemeriksa mutu:** kode menangkap LEBIH BANYAK dari AI (kalimat utuh · kata Inggris · kata AVOID ·
+frasa berulang · artefak sambungan). AI hanya untuk frasa kacau & register — dan AI MELEWATKAN
+register walau DNA diberikan; AVOID harus jadi daftar periksa eksplisit.
+
+**Pemangkasan WAJIB terjadi sebelum langkah 4.5 pipeline** (prompt gambar lahir dari narasi FINAL)
+dan tidak boleh menyentuh hook hasil langkah 4.
+
+**BELUM SELESAI:** pemangkasan pelindung-fakta belum diuji · mutu naskah tak punya alat ukur yang
+bisa dipercaya (satu-satunya penilai yang ikut tumbuh bersama ratusan niche = RETENSI penonton;
+222 kurva + 11.261 baris analitik BELUM tersambung ke pembuatan naskah).
+
 ### 🔴 BELUM TERBUKTI — dua lubang fondasi; JANGAN bangun apa pun di atasnya
 
 1. **Pace mana yang benar: 2,585 atau 2,05?** `tts_pace_calibration` menyimpan 2,585 wps untuk
