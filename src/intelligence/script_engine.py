@@ -659,7 +659,7 @@ def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, ins
         inactive = [s for s in _ALL_SECTIONS if s not in active]
         _wsum = sum(words.get(b, 0) for b in active) or 1
         # [DURASI-F3] BEAT PLAN = SATU-SATUNYA otoritas angka (dulu 3 tempat beda nilai → LLM disodori
-        # mistar bertentangan). Tiap beat: target + MIN + MAX dari toleransi TUNGGAL (_script_len_tol).
+        # mistar bertentangan). Tiap beat: target + MIN + MAX dari proporsi BAND SAH (satu penggaris).
         # MIN per-beat = lantai anti-KEPENDEKAN (akar 85% video pendek — dulu hanya ada plafon +15%).
         # Plafon konkret per-beat jauh lebih dipatuhi LLM daripada total agregat (terbukti preset pendek).
         # + Protokol swa-verifikasi: draft → hitung per-beat → revisi yang meleset → output `_beat_words`.
@@ -1345,7 +1345,6 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                         if (preset_seconds and format_wps) else None))
         # [DURASI-F3] toleransi SATU-SUMBER utk gerbang durasi internal (dulu: _LEN_TOL dibaca tapi TAK
         # PERNAH dipakai = config-mati, gerbang malah hardcode ±10% — insiden 'tiga penggaris' 2026-07-15).
-        _len_tol = _script_len_tol()
 
         for attempt in range(1, max_retry + 1):
             logger.info(f"[ScriptEngine] Attempt {attempt}/{max_retry} via {llm_provider}")
@@ -1451,8 +1450,13 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                     _beats_now = _beats_for_preset(preset_seconds)
                     _quota     = _distribute_words(_beats_now, _resep["kata_bidik"]) if _beats_now else {}
                     _actual    = {b: len((script.get(b) or "").split()) for b in _beats_now}
-                    _offb      = [f"{b}: {_actual[b]}w vs target {_quota.get(b,0)}w" for b in _beats_now
-                                  if _quota.get(b) and abs(_actual[b] - _quota[b]) / _quota[b] > _len_tol]
+                    # Adegan disebut "di luar jatah" bila keluar proporsi BAND SAH — penggaris yang SAMA
+                    # dengan resep, rencana adegan, gerbang, dan QC. Sebelumnya di sini masih memakai
+                    # toleransi persen, jadi masih ada penggaris keempat yang tersisa hidup.
+                    _pl = _resep["kata_min"] / max(1, _resep["kata_bidik"])
+                    _ph = _resep["kata_maks"] / max(1, _resep["kata_bidik"])
+                    _offb      = [f"{b}: {_actual[b]}w vs jatah {_quota.get(b,0)}w" for b in _beats_now
+                                  if _quota.get(b) and not (_quota[b] * _pl <= _actual[b] <= _quota[b] * _ph)]
                     feedback = (feedback or []) + [
                         f"DURATION FAIL: {_f['words']} words in {_f['sentence']} sentences "
                         f"({_f['ellipsis']} ellipses, {_f['comma']} commas) → video would be "

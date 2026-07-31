@@ -332,7 +332,7 @@ class Pipeline:
             # ── GERBANG DURASI PRA-VISUAL (owner 2026-07-10) ─────────
             # Di titik ini durasi audio SUDAH PASTI; durasi video final = audio + trailing_silence
             # (rumus renderer s72b, sumber trailing SAMA: run-config). Bila proyeksi di luar window
-            # QC relatif (env QC_DURATION_TOLERANCE — identik _pre_publish_qc) → STOP SEKARANG,
+            # batas sah = aturan titik-tengah (identik _pre_publish_qc) → STOP SEKARANG,
             # SEBELUM biaya gambar AI + render terbakar untuk video yang PASTI gagal QC
             # (salah sistem tidak boleh jadi rugi tenant). Tanpa preset → lewat (paritas QC interim).
             _gate_preset = getattr(tenant_config, "duration_preset", None)
@@ -802,7 +802,7 @@ class Pipeline:
         Returns: (passed, reason). passed=False → tidak dipublish, dicatat qc_failed (no crash).
         """
         # Ambang config-driven. Bila Duration Preset di-set (target_seconds) → QC RELATIF (§8):
-        # durasi |aktual−target| ≤ ±QC_DURATION_TOLERANCE + clip_count = visual_beats preset.
+        # durasi di dalam BAND titik-tengah (duration_model.band_video) + clip_count = visual_beats preset.
         # Tanpa preset → interim: floor integritas (deteksi render terpotong) + clips env default.
         min_size_mb = float(os.getenv("QC_MIN_SIZE_MB", "5"))
         # [B6] F4 fix (mandat owner 2026-07-14): ambang ukuran SADAR-DURASI — basis env = per-60s
