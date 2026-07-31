@@ -1,5 +1,16 @@
 # Multi-Format Short Studio — Spec Teknis Tervalidasi (Epic)
 
+> ⛔⛔ **KOREKSI MENYELURUH 2026-07-31 — BACA SEBELUM APA PUN DI BERKAS INI.**
+> Setiap klaim di berkas ini tentang **durasi video** yang menyebut *durasi-via-speed · atempo ·
+> toleransi persen (±12%/±15%) · `_fit_duration` · `TTS_ATEMPO_*` · "speed menyerap variansi"*
+> **SUDAH TIDAK BERLAKU.** Mekanismenya DICABUT dari kode: tuas kecepatan suara dilarang owner
+> (29-Jul) dan terbukti tidak menghasilkan durasi — terukur dari 294 produksi nyata: 41% render
+> mentok di batas paling lambat, NOL render normal, dan hanya **22% dari 243 video mendarat**.
+> Penggantinya: alat ukur durasi terkalibrasi + kendali **jumlah kata & jumlah kalimat**.
+> **SATU-SATUNYA ACUAN: `QC_CONTENT_ARCHITECTURE.md §2c`.** Titik-titik yang terdampak di berkas ini
+> ditandai `⛔[dicabut 31-Jul → §2c]`. Jangan membangun atau memasang ulang apa pun dari klaim itu.
+
+
 > ✅🔒 **CLOSED sbg backlog aktif (2026-07-01).** Mayoritas LIVE (durasi/QC/logo/link/visual-beats/adapter/compression-mapping). Sisa (**ai_video 8s** + **multi-platform Reels/TikTok**) = tercatat di **[`SISA_KERJA_GO_LIVE.md`](SISA_KERJA_GO_LIVE.md)** (B6/D2). **Dokumen ini = SPEC teknis (rujukan).**
 
 > **Status:** 📋 PROPOSAL TERVALIDASI · 2026-06-11 · **Lampiran teknis** dari konsep di `DESAIN_PRODUK_SAAS.md` (induk). Tracker status A-to-Z di `PROGRESS.md`. Ringkasan + cross-link di memory [[plan_multi_format_studio]].
@@ -7,7 +18,7 @@
 
 ---
 
-> **🔄 REKONSILIASI AUDIT 2026-07-01 (verified DB/BE/git):** SEBAGIAN verdict §0 di bawah sudah USANG (diselesaikan): **durasi 30-90s + Cacat-B akurasi = TUNTAS** (F4 durasi-via-speed `8670fc3`) · **QC relatif** LIVE · **logo overlay + link deskripsi + soft-sell** LIVE · **variable visual beats** (N=`visual_beats` per preset) LIVE · **katalog `ai_models` DB-driven + adapter registry TTS/visual** LIVE (F5-06) · **compression-mapping per-preset** LIVE. **Masih BELUM:** `ai_video`/8s (file `ai_video.py` **tak ada** — belum dibangun) · **multi-platform Reels/TikTok** (belum ada abstraksi publisher; butuh audit eksternal 2-4 mgg — fitur tier). **Sisa DEFINITIF = `PROGRESS.md` blok AUDIT REKONSILIASI.**
+> **🔄 REKONSILIASI AUDIT 2026-07-01 (verified DB/BE/git):** SEBAGIAN verdict §0 di bawah sudah USANG (diselesaikan): **durasi 30-90s + Cacat-B akurasi = TUNTAS** (F4 durasi-via-speed `8670fc3`) · **QC relatif** LIVE · **logo overlay + link deskripsi + soft-sell** LIVE · **variable visual beats** (N=`visual_beats` per preset) LIVE · **katalog `ai_models` DB-driven + adapter registry TTS/visual** LIVE (F5-06) · **compression-mapping per-preset** LIVE. **Masih BELUM:** `ai_video`/8s (file `ai_video.py` **tak ada** — belum dibangun) · **multi-platform Reels/TikTok** (belum ada abstraksi publisher; butuh audit eksternal 2-4 mgg — fitur tier). **Sisa DEFINITIF = `PROGRESS.md` blok AUDIT REKONSILIASI.** ⛔[dicabut 31-Jul → §2c]
 
 ## 0. ⚠️ VALIDASI TEKNIS TERVALIDASI (2026-06-11) — PEGANGAN, JANGAN ANALISA ULANG
 

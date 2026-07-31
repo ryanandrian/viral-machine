@@ -1,5 +1,16 @@
 # [B6] PRESET 8 DETIK — RENCANA IMPLEMENTASI ai_video (text-to-video)
 
+> ⛔⛔ **KOREKSI MENYELURUH 2026-07-31 — BACA SEBELUM APA PUN DI BERKAS INI.**
+> Setiap klaim di berkas ini tentang **durasi video** yang menyebut *durasi-via-speed · atempo ·
+> toleransi persen (±12%/±15%) · `_fit_duration` · `TTS_ATEMPO_*` · "speed menyerap variansi"*
+> **SUDAH TIDAK BERLAKU.** Mekanismenya DICABUT dari kode: tuas kecepatan suara dilarang owner
+> (29-Jul) dan terbukti tidak menghasilkan durasi — terukur dari 294 produksi nyata: 41% render
+> mentok di batas paling lambat, NOL render normal, dan hanya **22% dari 243 video mendarat**.
+> Penggantinya: alat ukur durasi terkalibrasi + kendali **jumlah kata & jumlah kalimat**.
+> **SATU-SATUNYA ACUAN: `QC_CONTENT_ARCHITECTURE.md §2c`.** Titik-titik yang terdampak di berkas ini
+> ditandai `⛔[dicabut 31-Jul → §2c]`. Jangan membangun atau memasang ulang apa pun dari klaim itu.
+
+
 > **Status:** 🟢 **FITUR LIVE DI PRODUKSI** (sejak 2026-07-14 malam — F0–F4 tuntas + deployed; preset 8s + model video + DNA radiant jalan). **Sisa HANYA di tangan owner: turnamen model** (Test 5 kandidat via tombol Test → pilih pemenang → 1 run e2e final → [B6] ditutup). Detail terkini = baris POSISI di bawah + header [B6] `SISA_KERJA_GO_LIVE.md`. *(Header lama "menunggu ketok F0" = basi; dikoreksi 2026-07-16 sapu status total.)*
 > **Kaitan:** backlog tunggal = `SISA_KERJA_GO_LIVE.md` **[B6]** (dokumen ini = SPEC+tracker-nya, pola `PROGRAM_BUKTI_KECERDASAN.md`). Spec teknis induk = `MULTI_FORMAT_STUDIO.md §3/§5`. Prioritas jujur (§7 kompas): TIDAK memblok tenant berbayar pertama.
 
@@ -30,12 +41,12 @@
 | Glossary beat | `beat_glossary.core_facts` ada (label "Inti"/"Core", dwibahasa) |
 | Naskah 8s | `script_engine._beats_for_preset` (DB single-source, migr 0053) · `_validate_and_fix` required dinamis = {hook,core,cta}∩aktif → 8s core-saja LOLOS (`script_engine.py:639-647`, hook di-setdefault `""`) · word budget overhead-aware · intent ultra-short (`script_engine.py:296`) |
 | Skor viral 8s | `script_analyzer._active_dimensions` — dimensi ternormalisasi ke beat aktif; hook_power TIDAK menghukum 8s (`script_analyzer.py:29-48,140`) |
-| Gerbang durasi pra-visual | `pipeline.py:245-267` — proyeksi audio+trailing vs window preset ±`QC_DURATION_TOLERANCE` (0.15) SEBELUM biaya visual → otomatis melindungi biaya video-gen |
+| Gerbang durasi pra-visual | `pipeline.py:245-267` — proyeksi audio+trailing vs window preset ±`QC_DURATION_TOLERANCE` (0.15) SEBELUM biaya visual → otomatis melindungi biaya video-gen | ⛔[dicabut 31-Jul → §2c]
 | QC pre-publish | relatif preset ±15% → 8s = 6.8–9.2s (jalur existing) |
 | Registry visual | `build_visual_provider` family `ai_video:` sudah dispatch (`src/providers/visual/__init__.py:34-46`) — tinggal isi kelasnya |
 | Validasi kredensial | STEP 0 fail-loud: `visual_mode` `ai_video:*` tanpa key → stop (`tenant_config.py:273` + `pipeline.py:136-141`) |
 | Renderer 1-klip | fallback simple concat utk <2 clip (`video_renderer.py:603-620`; strip audio klip `-an`; Step B audio+subtitle+tpad) — jalur ADA, belum pernah diuji dgn video-gen nyata |
-| TTS presisi | F4 durasi-via-speed (LLM speed + clamp; sampel delivery `tts_delivery_samples`) — preset-aware |
+| TTS presisi | F4 durasi-via-speed (LLM speed + clamp; sampel delivery `tts_delivery_samples`) — preset-aware | ⛔[dicabut 31-Jul → §2c]
 | FE tenant | picker preset baca `is_active` (8s muncul otomatis saat diaktifkan; `components/preset-tables.tsx:38-41`) · picker model visual SUDAH siap component `video` → prefix `ai_video:` (`channels/[id]/page.tsx:110,241`) |
 | Skema channels | `duration_preset`/`visual_mode`/`visual_account_id` per-channel SUDAH ada — **nol kolom baru** |
 | Model kredensial | pool `tenant_ai_accounts(key_group)` + `ai_providers.key_group` (pola CHANNEL_LOCK final 2026-06-25) — vendor video tinggal tambah baris provider |
