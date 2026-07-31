@@ -167,3 +167,23 @@ def test_adaptor_suara_mengekspos_setelan_yang_BENAR_dipakai():
     p2 = EdgeTTSProvider({"tts_voice": "id-ID-ArdiNeural", "niche": "x",
                           "tts_voice_default_settings": {}, "tts_voice_settings": {}})
     assert p2.effective_rate == "+0%", "baseline kosong harus ratio 1, bukan angka karangan"
+
+
+def test_kalibrasi_MENYAPU_baris_warisan_hanya_setelah_ada_baris_sah():
+    """Ranjau nyata di DB (terhitung 2026-08-01): 11 dari 18 baris kalibrasi hanya berisi
+    `delivery_wps` dari algoritma LAMA — dihitung lewat model jeda yang salah, dari sampel
+    ber-kecepatan 0,7–1,3 (dunia yang sudah tidak ada). Tak bisa dipakai model baru, tak bisa
+    diverifikasi asalnya, dan menunggu dipakai jalur cadangan.
+
+    Yang dikunci di sini: penyapuan hanya menyasar baris TANPA koefisien, hanya untuk suara yang
+    SUDAH punya baris sah, dan tidak menyentuh suara yang dikunci admin — supaya tak pernah ada
+    keadaan 'kalibrasi hilang'."""
+    import inspect
+
+    import src.production.pace_calibration as pc
+    src = inspect.getsource(pc.compute_pace_calibration)
+    assert 'is_("sec_per_char", "null")' in src, "penyapuan tidak dibatasi ke baris tanpa koefisien"
+    assert 'neq("niche", "*")' in src, "penyapuan bisa menghapus baris bintang yang berisi koefisien"
+    assert "if vk in locked:" in src, "suara yang dikunci admin bisa tersapu"
+    assert "sapu = [b[\"voice_key\"] for b in ditulis]" in src, \
+        "penyapuan tidak dibatasi ke suara yang sudah punya baris sah"

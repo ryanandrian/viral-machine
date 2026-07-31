@@ -217,13 +217,27 @@ def compute_pace_calibration(sb=None, dry_run: bool = False) -> dict:
             logger.info(f"[PaceCalib] {vk}: n={len(g)} · {nilai['sec_per_char']:.5f}/huruf · "
                         f"jeda-kalimat {nilai['sec_per_sentence']:.2f}s · salah luar-sampel {err:.2f}s")
 
+        # ── SAPU BARIS WARISAN yang tak bisa diverifikasi (§3.2 nol fosil) ────────────────────────
+        # Terhitung di DB 2026-08-01: 11 dari 18 baris hanya berisi `delivery_wps` dari algoritma LAMA
+        # (inversi lewat model jeda yang salah, disaring dari sampel ber-kecepatan 0,7–1,3 — dunia yang
+        # sudah tidak ada). Baris seperti itu tidak bisa dipakai model baru DAN tidak bisa diverifikasi
+        # asalnya. Membiarkannya = angka basi yang menunggu dipakai jalur cadangan, dan itu ranjau.
+        # Dibuang HANYA setelah suara itu punya baris ber-koefisien yang sah — jadi tak pernah ada
+        # keadaan "kalibrasi hilang". Suara yang dikunci admin tidak disentuh.
+        sapu = [b["voice_key"] for b in ditulis]
         if not dry_run:
             if ditulis:
                 sb.table("tts_pace_calibration").upsert(ditulis).execute()
+            for vk in sapu:
+                if vk in locked:
+                    continue
+                sb.table("tts_pace_calibration").delete().eq("voice_key", vk) \
+                  .neq("niche", "*").is_("sec_per_char", "null").execute()
             for vk in locked:
                 sb.table("tts_pace_calibration").delete().eq("voice_key", vk).execute()
 
         ringkas = {"sampel_total": len(rows), "sampel_dipakai": len(ok), "dibuang": buang,
+                   "baris_warisan_disapu_utk": sapu,
                    "suara_ditulis": len(ditulis), "dilewati": dilewati,
                    "locked": sorted(locked), "min_n": min_n, "dry_run": dry_run, "rows": ditulis}
         logger.info(f"[PaceCalib] total={len(rows)} dipakai={len(ok)} dibuang={buang} "
