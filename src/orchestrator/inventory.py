@@ -116,12 +116,19 @@ def mark_failed(inv_id: int, reason: str = "") -> None:
 
 
 def mark_ready_with_issues(inv_id: int, s3_key: str, reason: str = "",
-                           recommendation: str = "", metadata: dict | None = None) -> None:
+                           recommendation: str = "", metadata: dict | None = None,
+                           reason_code: str | None = None,
+                           reason_params: dict | None = None) -> None:
     """OPSI C: QC-fail TAPI video JADI → STOK untuk DITINJAU tenant (bukan dibuang, bukan auto-upload
     YouTube). Dihitung sebagai stok (rem alami). TTL ISSUE_REVIEW_TTL_HOURS → janitor auto-buang bila
     tak ditinjau. Aset video tetap di S3; tenant tinjau dari dashboard, approve→publish / buang."""
     md = dict(metadata or {})
     md["qc_reason"] = reason
+    # KODE + PARAMETER agar layar tenant bisa menampilkan alasan DWIBAHASA (§3.5). Teks `qc_reason`
+    # tetap ditulis sebagai cadangan → baris lama & kode lama berperilaku persis sama (nol regresi).
+    if reason_code:
+        md["qc_reason_code"] = reason_code
+        md["qc_reason_params"] = reason_params or {}
     if recommendation:
         md["recommendation"] = recommendation
     _sb().table("content_inventory").update({

@@ -456,6 +456,9 @@ class Pipeline:
             result["steps"]["qc"] = {
                 "passed":   qc_passed,
                 "reason":   qc_reason,
+                # kode+parameter → layar tenant menampilkan DWIBAHASA; teks di atas tetap jadi cadangan
+                "reason_code":   getattr(self, "_qc_kode", None),
+                "reason_params": getattr(self, "_qc_param", None),
                 "duration": video_duration,
                 "size_mb":  file_size_mb,
             }
@@ -804,6 +807,7 @@ class Pipeline:
         # Ambang config-driven. Bila Duration Preset di-set (target_seconds) → QC RELATIF (§8):
         # durasi di dalam BAND titik-tengah (duration_model.band_video) + clip_count = visual_beats preset.
         # Tanpa preset → interim: floor integritas (deteksi render terpotong) + clips env default.
+        self._qc_kode, self._qc_param = None, None      # kode dwibahasa (§3.5); None = tak ada
         min_size_mb = float(os.getenv("QC_MIN_SIZE_MB", "5"))
         # [B6] F4 fix (mandat owner 2026-07-14): ambang ukuran SADAR-DURASI — basis env = per-60s
         # (60s→5MB tak berubah; 8s→0.67MB). Video 8s sehat (3.3MB) sempat dicap "render gagal?" oleh
@@ -835,6 +839,15 @@ class Pipeline:
                     lo, hi = _band(target_seconds, _tangga)
                     if not (lo <= duration_secs <= hi):
                         _arah = "kepanjangan" if duration_secs > hi else "kependekan"
+                        # KODE + PARAMETER supaya layar tenant bisa menampilkannya DWIBAHASA (§3.5):
+                        # sebelumnya hanya teks Indonesia yang dikirim, dan layar Review menampilkannya
+                        # apa adanya → tenant berbahasa Inggris (3 dari 6 channel aktif) membaca bahasa
+                        # yang tidak ia pakai. Teks Indonesia tetap dikirim sebagai cadangan, jadi data
+                        # lama & pemanggil lama tidak berubah perilakunya (nol regresi).
+                        self._qc_kode = ("durasi_kepanjangan" if duration_secs > hi else "durasi_kependekan")
+                        self._qc_param = {"durasi": round(float(duration_secs), 1),
+                                          "preset": int(target_seconds),
+                                          "min": round(lo), "maks": round(hi)}
                         return False, (f"Durasi {duration_secs:.1f}s {_arah} untuk preset {target_seconds}s "
                                        f"(masih sah {lo:.0f}–{hi:.0f}s — di luar itu lebih dekat ke preset lain)")
             else:

@@ -254,7 +254,8 @@ def produce_one(channel_row: dict) -> int | None:
         if not qc.get("passed"):
             inventory.mark_ready_with_issues(
                 inv_id, vkey, reason=qc.get("reason", ""),
-                recommendation=qc.get("recommendation", ""), metadata=_meta)
+                recommendation=qc.get("recommendation", ""), metadata=_meta,
+                reason_code=qc.get("reason_code"), reason_params=qc.get("reason_params"))
             _cleanup_local()
             _record_production_run(channel_row, result, "qc_failed", False, qc.get("reason"))
             logger.warning(f"[Producer] ready_with_issues (tinjau): {vkey} (inv {inv_id}) — {qc.get('reason','')}")

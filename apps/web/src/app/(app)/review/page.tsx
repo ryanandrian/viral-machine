@@ -6,6 +6,26 @@ import { createClient } from "@/lib/supabase/client";
 import { PageHeader } from "@/components/page-header";
 import ConfirmDialog from "@/components/confirm-dialog";
 
+
+/** Alasan QC DWIBAHASA dari kode+parameter BE. Kode tak dikenal / data lama → teks apa adanya
+ *  (cadangan), supaya tak ada baris yang berubah jadi kosong. Tenant berbahasa Inggris sebelumnya
+ *  membaca alasan berbahasa Indonesia — 3 dari 6 channel aktif memakai en-US. */
+function alasanQC(m: NonNullable<Item["metadata"]>): ReactNode {
+  const p = m.qc_reason_params ?? {};
+  const d = p.durasi != null ? `${p.durasi}s` : "";
+  const rentang = p.min != null && p.maks != null ? `${p.min}-${p.maks}s` : "";
+  switch (m.qc_reason_code) {
+    case "durasi_kepanjangan":
+      return <Bi id={`Videonya lebih panjang dari durasi yang Anda pilih (${d}, seharusnya ${rentang}).`}
+                 en={`The video is longer than the duration you picked (${d}; it should be ${rentang}).`} />;
+    case "durasi_kependekan":
+      return <Bi id={`Videonya lebih pendek dari durasi yang Anda pilih (${d}, seharusnya ${rentang}).`}
+                 en={`The video is shorter than the duration you picked (${d}; it should be ${rentang}).`} />;
+    default:
+      return <>{m.qc_reason || <Bi id="Video ini perlu Anda tinjau sebelum tayang." en="This video needs your review before publishing." />}</>;
+  }
+}
+
 // OPSI C (QC_CONTENT_ARCHITECTURE §3 / DESAIN §12d.F) — tinjau video 'ready_with_issues':
 // lolos render tapi ada catatan QC (mis. durasi meleset). DI DOMAIN KITA (bukan auto-upload YouTube).
 // Pakai  → RPC approve_inventory_item → promote ke 'ready' → Publisher publish saat SLOT (KUOTA berkurang
@@ -23,6 +43,10 @@ type Item = {
   created_at: string;
   metadata: {
     qc_reason?: string;
+    // Kode + parameter alasan QC dari BE (§3.5): layar yang menerjemahkan, bukan BE yang mengirim
+    // satu bahasa. `qc_reason` tetap dipakai sebagai CADANGAN untuk data lama / kode yang belum dikenal.
+    qc_reason_code?: string;
+    qc_reason_params?: { durasi?: number; preset?: number; min?: number; maks?: number };
     recommendation?: string;
     duration_secs?: number;
     size_mb?: number;
@@ -128,7 +152,7 @@ export default function ReviewPage() {
                 {it.niche && <span className="muted" style={{ fontSize: "var(--text-sm)" }}>· {it.niche}</span>}
               </div>
               <div className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: 4 }}>
-                ❌ {m.qc_reason || "QC tak lolos"}
+                ❌ {alasanQC(m)}
               </div>
               {m.recommendation && (
                 <div style={{ fontSize: "var(--text-sm)", marginBottom: 8 }}>💡 {m.recommendation}</div>
