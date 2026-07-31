@@ -223,6 +223,35 @@ class Pipeline:
                 if not optimized:
                     raise LLMError("Hook optimization failed", step="hook")
                 script       = optimized[0]
+                # ── PAGAR: hook baru TIDAK boleh merusak durasi yang sudah pas (2026-07-31) ────────
+                # Sejak hook hasil optimasi ikut terbaca narator (perbaikan hari ini), panjangnya
+                # mengubah durasi — dan gerbang durasi sudah lewat di STEP 3. Kalau hook baru membuat
+                # durasi keluar dari batas sah, hook ASLI dipulihkan: durasi yang benar lebih penting
+                # daripada hook yang lebih tajam, dan tenant tidak boleh dapat video salah durasi
+                # karena pertukaran yang tak pernah ia setujui.
+                _hp = getattr(tenant_config, "duration_preset", None)
+                if _hp and script.get("original_hook"):
+                    try:
+                        from src.config.format_catalog import active_presets as _apr
+                        from src.config.format_catalog import effective_overhead as _eoh
+                        from src.production.duration_model import vonis as _vh
+                        _tg = _apr()
+                        if _tg and int(_hp) in _tg:
+                            _kalh = (getattr(run_config, "duration_calibration", None) or None) if run_config else None
+                            _ovh4 = _eoh(_hp, run_config)
+                            _vv = _vh(script.get("full_script") or "", _hp, _tg, _ovh4, _kalh)
+                            if _vv["status"] != "ok":
+                                _fs_now = script.get("full_script") or ""
+                                script["full_script"] = _fs_now.replace(script["hook"],
+                                                                        script["original_hook"], 1)
+                                script["hook"] = script["original_hook"]
+                                script["hook_reverted_reason"] = (
+                                    f"hook baru membuat durasi {_vv['video_prediksi']:.1f}s di luar batas "
+                                    f"{_vv['band_video'][0]:.0f}-{_vv['band_video'][1]:.0f}s")
+                                logger.warning(f"[Pipeline] hook optimasi DIPULIHKAN ke asal — "
+                                               f"{script['hook_reverted_reason']}")
+                    except Exception as _he:
+                        logger.warning(f"[Pipeline] pagar durasi hook gagal (hook baru dipakai): {_he}")
                 result["script"] = script  # Phase 5.3: ekspos full script dict (producer simpan utk publisher)
                 winner_score = script.get("hook_data", {}).get("winner", {}).get("scroll_stop_power", 0)
                 result["steps"]["hook"] = {

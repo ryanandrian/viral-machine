@@ -282,9 +282,30 @@ IMPORTANT: Return ONLY the JSON object. No markdown, no explanation, no extra te
 
         winner = self._select_winner(tenant_config, hook_data)
         hook_data["winner"] = winner   # rekam pilihan final (formula → videos.hook_pattern)
-        script["original_hook"]  = script.get("hook", "")
-        script["optimized_hook"] = winner["text"]
-        script["hook"]           = winner["text"]
+        # ── HOOK HASIL OPTIMASI WAJIB IKUT TERBACA NARATOR (2026-07-31) ────────────────────────────
+        # Cacat NYATA yang terbukti dari data produksi: 4 dari 4 video yang diperiksa, hook hasil
+        # optimasi TIDAK ada di `full_script` — yang dibacakan narator tetap hook ASLI. Sebabnya hanya
+        # `script["hook"]` yang diganti, sementara pembuat suara memakai `full_script`. Akibatnya
+        # optimasi hook selama ini hanya menghias JUDUL di layar, dan bagian paling menentukan retensi
+        # (detik-detik pertama) tak pernah ikut membaik. Kini teksnya diganti di KEDUANYA.
+        _hook_lama = script.get("hook", "") or ""
+        _hook_baru = winner["text"]
+        script["original_hook"]  = _hook_lama
+        script["optimized_hook"] = _hook_baru
+        script["hook"]           = _hook_baru
+        _fs = script.get("full_script") or ""
+        if _hook_lama and _hook_lama in _fs:
+            script["full_script"] = _fs.replace(_hook_lama, _hook_baru, 1)
+        elif _fs:
+            # hook asli tak ditemukan utuh (naskah sudah diedit alur lain) → susun ulang dari beat,
+            # sumber yang sama dipakai TTS bila full_script kosong. Lebih baik menyusun ulang secara
+            # sah daripada membiarkan naskah dan hook berbeda diam-diam.
+            from src.content import beats as _cbeats
+            _urut = [b for b in _cbeats.all_beats() if (script.get(b) or "").strip()]
+            if _urut:
+                script["full_script"] = " ".join((script.get(b) or "").strip() for b in _urut)
+                logger.warning("[HookOptimizer] hook asli tak ditemukan utuh di naskah — full_script "
+                               "disusun ulang dari beat agar hook baru ikut terbaca")
         script["hook_data"]      = {
             "winner":       winner,
             "all_hooks":    hook_data.get("hooks", []),
