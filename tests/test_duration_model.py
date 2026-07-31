@@ -204,3 +204,34 @@ def test_modul_tak_punya_jalan_masuk_untuk_kecepatan_suara():
         assert f"def {terlarang}" not in sumber
     for f in (resep, vonis, prediksi_audio, band_video):
         assert not any("speed" in p for p in inspect.signature(f).parameters)
+
+
+def test_koefisien_KOSONG_memakai_bawaan_bukan_dianggap_nol():
+    """Bug NYATA yang tertangkap 2026-08-01: naskah kalibrasi tak memuat satu pun elipsis, sehingga
+    `sec_per_ellipsis` ter-fit **0,0** dan tertulis ke DB. Artinya mesin diberi tahu "tanda '...' itu
+    GRATIS" — padahal biaya terukurnya >1 detik per tanda. Naskah produksi ber-elipsis akan diramal
+    terlalu pendek dan tak ada yang tahu sebabnya.
+
+    Aturan: koefisien yang TIDAK ADA di data harus kosong (None) → dipakai angka BAWAAN terukur.
+    Nol hanya sah bila memang TERUKUR nol."""
+    kal = {"sec_per_char": 0.05, "sec_per_ellipsis": None}
+    a = angka_efektif(kal)
+    assert a["sec_per_char"] == 0.05
+    assert a["sec_per_ellipsis"] == BAWAAN["sec_per_ellipsis"] > 0, \
+        "koefisien kosong tidak jatuh ke bawaan — elipsis dianggap gratis"
+    # elipsis WAJIB menambah durasi meski kalibrasi tak punya datanya
+    tanpa = prediksi_audio("Kota itu jatuh pada tahun 1348.", kal)
+    dengan = prediksi_audio("Kota itu jatuh... pada tahun 1348.", kal)
+    assert dengan - tanpa > 1.0, "elipsis tidak berbiaya padahal kalibrasi kosong"
+
+
+def test_penulis_kalibrasi_tidak_menulis_nol_untuk_ciri_yang_TIDAK_ADA_di_data():
+    """Sisi penulisnya: `_fit` mengembalikan None untuk kolom yang seluruhnya nol, dan `_ramal`
+    memakai bawaan untuk kolom itu — supaya angka kesalahan yang dilaporkan juga jujur."""
+    import inspect
+
+    import src.production.pace_calibration as pc
+    assert "x = [None] * len(_FIT_KOL)" in inspect.getsource(pc._fit), \
+        "_fit masih menulis 0 untuk ciri yang tak teridentifikasi"
+    assert "BAWAAN[_KOL_DB[k]]" in inspect.getsource(pc._ramal), \
+        "_ramal masih menganggap ciri tak teridentifikasi bernilai nol"

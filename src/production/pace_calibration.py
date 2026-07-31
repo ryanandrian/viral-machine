@@ -73,8 +73,14 @@ def _env_float(name: str, default: float) -> float:
 
 
 def _fit(rows: list) -> list | None:
-    """Kuadrat terkecil untuk detik = Σ x_j · ciri_j. Kolom yang seluruhnya nol dilewati (tak
-    teridentifikasi) dan koefisiennya 0 — bukan angka karangan. None bila sistem tak terpecahkan."""
+    """Kuadrat terkecil untuk detik = Σ x_j · ciri_j.
+
+    Kolom yang seluruhnya NOL di data tak bisa diidentifikasi. Nilai kembaliannya `None` untuk kolom
+    itu — BUKAN 0. Bedanya menentukan: menulis 0 berarti memberi tahu mesin "tanda ini GRATIS", dan itu
+    salah. Terukur 2026-08-01: naskah kalibrasi tak memuat satu pun elipsis, sehingga
+    `sec_per_ellipsis` ter-fit 0,0 — padahal biaya nyatanya >1 detik per tanda. Naskah produksi yang
+    memakai "..." akan diramal terlalu pendek, dan tak ada yang tahu sebabnya.
+    `None` membuat `duration_model.angka_efektif` memakai angka BAWAAN terukur untuk kunci itu."""
     aktif = [j for j, k in enumerate(_FIT_KOL) if any(r[k] for r in rows)]
     if not aktif:
         return None
@@ -91,14 +97,20 @@ def _fit(rows: list) -> list | None:
                 f = N[r][i] / N[i][i]
                 for cc in range(i, n + 1):
                     N[r][cc] -= f * N[i][cc]
-    x = [0.0] * len(_FIT_KOL)
+    x = [None] * len(_FIT_KOL)          # None = tak teridentifikasi (bukan "gratis")
     for i, j in enumerate(aktif):
         x[j] = N[i][n] / N[i][i]
     return x
 
 
 def _ramal(x: list, r: dict) -> float:
-    return sum(x[j] * r[_FIT_KOL[j]] for j in range(len(_FIT_KOL)))
+    """Kolom tak teridentifikasi (None) memakai angka BAWAAN terukur, bukan dianggap nol."""
+    from src.production.duration_model import BAWAAN
+    tot = 0.0
+    for j, k in enumerate(_FIT_KOL):
+        koef = x[j] if x[j] is not None else BAWAAN[_KOL_DB[k]]
+        tot += koef * r[k]
+    return tot
 
 
 def _error_luar_sampel(rows: list) -> float | None:
@@ -189,9 +201,11 @@ def compute_pace_calibration(sb=None, dry_run: bool = False) -> dict:
             x = _fit(g)
             if x is None:
                 dilewati.append((vk, "sistem tak terpecahkan")); continue
-            nilai = {_KOL_DB[k]: round(x[j], 5) for j, k in enumerate(_FIT_KOL)}
+            # Kolom tak teridentifikasi TIDAK ditulis (None) → `angka_efektif` memakai bawaan terukur.
+            nilai = {_KOL_DB[k]: (round(x[j], 5) if x[j] is not None else None)
+                     for j, k in enumerate(_FIT_KOL)}
             luar = [f"{k}={v}" for k, v in nilai.items()
-                    if not (PAGAR[k][0] <= v <= PAGAR[k][1])]
+                    if v is not None and not (PAGAR[k][0] <= v <= PAGAR[k][1])]
             if luar:
                 dilewati.append((vk, f"koefisien di luar pagar: {', '.join(luar)}"))
                 logger.warning(f"[PaceCalib] {vk} DILEWATI — {luar} (tidak di-clamp; data dicurigai)")
