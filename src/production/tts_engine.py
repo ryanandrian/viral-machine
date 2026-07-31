@@ -64,6 +64,13 @@ def _get_provider_config(tenant_config: TenantConfig) -> dict:
     }
 
 
+def _voice_rate_of(provider) -> str | None:
+    """[0184] Setelan laju yang BENAR-BENAR dipakai adaptor (bukan dihitung ulang di sini).
+    Adaptor yang tak punya konsep ini → None → sampel tidak dipakai kalibrasi (gagal-aman)."""
+    v = getattr(provider, "effective_rate", None)
+    return str(v) if v else None
+
+
 def _run_provider(provider_name: str, text: str, config: dict, output_dir: str) -> tuple[str, list[dict]]:
     """
     Jalankan satu TTS provider.
@@ -79,7 +86,7 @@ def _run_provider(provider_name: str, text: str, config: dict, output_dir: str) 
 
     audio = asyncio.run(provider.generate(text, output_path))
     timestamps = provider.get_word_timestamps() or []
-    return str(audio), timestamps
+    return str(audio), timestamps, _voice_rate_of(provider)
 
 
 def _chars_of(text: str | None):
@@ -95,7 +102,8 @@ def _chars_of(text: str | None):
 
 def _log_delivery_sample(tenant_config, config: dict, provider_name: str, word_count: int, audio_path: str,
                          script: dict | None = None, target_audio_secs: float | None = None,
-                         text: str | None = None, raw_audio_secs: float | None = None) -> None:
+                         text: str | None = None, raw_audio_secs: float | None = None,
+                         voice_rate: str | None = None) -> None:
     """F4-01: 1 baris per render TTS SUKSES → tts_delivery_samples (delivery NYATA per voice×speed).
     Dipakai F5-01 (kalibrasi pace EWMA → ganti seed P) + verifikasi akurasi P §10.D. Best-effort/fail-soft,
     NOL pengaruh produksi. speed = yg BENAR-BENAR dipakai provider (incl. override LLM §10.A).
@@ -147,6 +155,8 @@ def _log_delivery_sample(tenant_config, config: dict, provider_name: str, word_c
             # [0182] huruf naskah = satuan bicara model durasi per-huruf. Tanpa kolom ini model tak bisa
             # dikalibrasi dari data produksi. Fail-soft: gagal hitung → NULL (baris tetap masuk).
             "chars":      _chars_of(text),
+            # [0184] setelan laju NYATA render ini → kalibrasi menolak sampel dari baseline berbeda
+            "voice_rate": voice_rate,
             "audio_secs": round(float(audio_secs), 2),
             "preset":     getattr(tenant_config, "duration_preset", None),
             # DURASI-F1
@@ -243,7 +253,7 @@ class TTSEngine:
         # NO-FALLBACK (F1-05/§3.8): HANYA provider terkonfigurasi channel — gagal = GAGAL JUJUR (tak pindah diam-diam).
         try:
             logger.info(f"[TTSEngine] Generating with: {primary}")
-            audio_path, word_timestamps = _run_provider(primary, text, config, output_dir)
+            audio_path, word_timestamps, _vrate = _run_provider(primary, text, config, output_dir)
 
             if audio_path and os.path.exists(audio_path):
                 self.last_provider = primary           # transparansi pipeline (§4b)
@@ -273,7 +283,7 @@ class TTSEngine:
                 # DURASI-F1: + taksiran vs aktual + jeda (script["_duration_est"], target, teks) + huruf [0182].
                 _log_delivery_sample(tenant_config, config, primary, word_count, audio_path,
                                      script=script, target_audio_secs=target_audio_secs,
-                                     text=text, raw_audio_secs=_raw_secs)
+                                     text=text, raw_audio_secs=_raw_secs, voice_rate=_vrate)
                 # B2 cost-tracking: TTS ditagih per KARAKTER teks (fakta billing ElevenLabs/OpenAI;
                 # edge gratis → harga 0 di katalog). Dicatat per model TTS channel. Fail-soft.
                 try:

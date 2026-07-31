@@ -140,3 +140,30 @@ def test_baris_per_niche_tanpa_koefisien_tidak_menutup_baris_bintang(monkeypatch
     m._load_pace_calibration(cfg, "dark_history")
     assert cfg.duration_calibration, "koefisien tertutup oleh baris warisan — cacat 42 detik kembali"
     assert cfg.duration_calibration["sec_per_char"] == 0.06299
+
+
+# ── KESALAHAN PALING MAHAL 2026-07-31: mengukur pada setelan suara yang BEDA dari produksi ─────────
+
+def test_kalibrasi_MENOLAK_sampel_dari_setelan_suara_berbeda():
+    """Dua hari pengukuran terbuang karena diukur pada baseline `-5%` sementara produksi memakai
+    baseline lain — selisih 15% pada laju bicara, dan TIDAK ADA apa pun di sistem yang memberi tahu
+    (kolom `speed` bernilai 1,0 di kedua dunia, karena speed hanya PENGALI di atas baseline).
+    Koefisien dari sampel campur-baseline akan tampak terkalibrasi padahal salah untuk produksi.
+    Sejak 0184: sampel wajib merekam setelan laju NYATA, dan yang berbeda DIBUANG eksplisit."""
+    import inspect
+
+    import src.production.pace_calibration as pc
+    src = inspect.getsource(pc.compute_pace_calibration)
+    assert "voice_rate" in src, "kalibrasi tidak lagi memeriksa setelan suara sampel"
+    assert "setelan_suara_beda" in src, "sampel dari baseline berbeda tidak dilaporkan"
+
+
+def test_adaptor_suara_mengekspos_setelan_yang_BENAR_dipakai():
+    """Nilainya harus datang dari adaptor, bukan dihitung ulang di tempat lain (dua sumber = drift)."""
+    from src.providers.tts.edge_tts import EdgeTTSProvider
+    p = EdgeTTSProvider({"tts_voice": "id-ID-ArdiNeural", "niche": "x",
+                         "tts_voice_default_settings": {"rate": "+15%"}, "tts_voice_settings": {}})
+    assert p.effective_rate == "+15%"
+    p2 = EdgeTTSProvider({"tts_voice": "id-ID-ArdiNeural", "niche": "x",
+                          "tts_voice_default_settings": {}, "tts_voice_settings": {}})
+    assert p2.effective_rate == "+0%", "baseline kosong harus ratio 1, bukan angka karangan"

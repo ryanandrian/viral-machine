@@ -20,16 +20,26 @@ from src.providers.tts.base import TTSProvider, TTSError
 
 # Voice mapping per niche — bisa di-override via tenant_configs.tts_voice
 # F1-05: NICHE_VOICES (map niche→voice hardcode) DIHAPUS — voice kini single-source
-# (channels.voice_key → voice_catalog; niches.voice_* dibuang migr 0083). rate baseline = voice_catalog.default_settings.
-DEFAULT_RATE  = "+10%"
+# (channels.voice_key → voice_catalog; niches.voice_* dibuang migr 0083). rate baseline = voice_catalog.default_settings;
+# kosong → RATIO 1 (+0%), bukan angka karangan di kode.
+# ── BASELINE = RATIO 1 (keputusan owner: "setiap voice sudah dirancang ideal di ratio 1") ─────────
+# DULU nilai ini "+10%", ditanam di kode. Akibatnya, untuk kedua suara Indonesia yang
+# `voice_catalog.default_settings`-nya KOSONG, setiap video dibacakan 10% LEBIH CEPAT dari rancangan
+# suaranya — tanpa terlihat di layar admin, dan tanpa pernah diputuskan siapa pun. Terukur pada satu
+# naskah produksi: +0% = 70,3 dtk · +10% = 64,0 dtk · −10% = 78,2 dtk.
+# Jadi aturan owner dilanggar DUA kali: tuas kecepatan menggeser suara (sudah dicabut 2026-07-31),
+# DAN baselinenya sendiri bukan 1. Nilai netral sekarang +0% = ratio 1; suara yang memang perlu beda
+# WAJIB menuliskannya di `voice_catalog.default_settings.rate` supaya terlihat & bisa diubah admin
+# (§3.3 config-driven: nol nilai bisnis di kode).
+DEFAULT_RATE  = "+0%"
 
 
 def _rate_to_factor(rate_str) -> float:
-    """Edge rate '+10%' → pengali 1.10. Tak valid → 1.10 (DEFAULT_RATE)."""
+    """Edge rate '+10%' → pengali 1.10. Tak valid/kosong → 1.0 (ratio 1, netral)."""
     try:
         return 1.0 + float(str(rate_str).strip().replace("%", "")) / 100.0
     except Exception:
-        return 1.10
+        return 1.0
 
 
 def _apply_speed_to_rate(base_rate, speed: float) -> str:
@@ -64,6 +74,10 @@ class EdgeTTSProvider(TTSProvider):
         _override  = _vs.get(_niche, {}) if isinstance(_vs, dict) else {}
         _S         = float(_override.get("speed", 1.0) or 1.0)
         self.rate  = _apply_speed_to_rate(_base_rate, _S)
+        # Setelan laju YANG BENAR-BENAR dikirim ke vendor — direkam ke sampel kalibrasi (0184).
+        # Tanpa ini, sampel dari baseline berbeda tercampur diam-diam dan kalibrasi jadi
+        # 'percaya diri tapi salah' (kesalahan paling mahal 2026-07-31: dua hari terbuang).
+        self.effective_rate = self.rate
         self._word_timestamps: list[dict] | None = None
 
     # ──────────────────────────────────────────────

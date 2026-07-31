@@ -127,21 +127,30 @@ def compute_pace_calibration(sb=None, dry_run: bool = False) -> dict:
         min_chars = _env_int("PACE_CALIB_MIN_CHARS", 60)     # naskah super-pendek = rasio jeda liar
         max_err = _env_float("PACE_CALIB_MAX_ERR", 2.5)      # angka yang tak lebih baik dari bawaan: buang
 
-        locked = {r["voice_key"] for r in
-                  (sb.table("voice_catalog").select("voice_key,pace_locked")
-                     .eq("pace_locked", True).execute().data or [])}
+        _vc = (sb.table("voice_catalog").select("voice_key,pace_locked,default_settings")
+                 .execute().data or [])
+        locked = {r["voice_key"] for r in _vc if r.get("pace_locked")}
+        # [0184] Baseline laju suara SAAT INI. Sampel yang direkam pada baseline BERBEDA tidak boleh
+        # ikut di-fit: kesalahan paling mahal 2026-07-31 adalah mengukur pada baseline lain dari
+        # produksi (selisih 15% pada laju bicara) tanpa apa pun di sistem yang memberi tahu — dua hari
+        # pengukuran terbuang, dan koefisiennya akan tampak "terkalibrasi" padahal salah.
+        # Kosong di katalog = ratio 1 (+0%), sama dengan yang dipakai adaptor.
+        BASELINE = {r["voice_key"]: str(((r.get("default_settings") or {}).get("rate") or "+0%"))
+                    for r in _vc}
 
         rows, off = [], 0
         while True:  # paginasi manual — jangan percaya cap default (pelajaran undercount 7.220-vs-1000)
             b = (sb.table("tts_delivery_samples")
-                   .select("voice_key,niche,speed,words,chars,raw_audio_secs,audio_secs,pause_counts")
+                   .select("voice_key,niche,speed,words,chars,raw_audio_secs,audio_secs,"
+                           "pause_counts,voice_rate")
                    .range(off, off + 999).execute().data or [])
             rows += b
             if len(b) < 1000:
                 break
             off += 1000
 
-        ok, buang = [], {"tanpa_huruf": 0, "speed_bukan_1": 0, "tak_lengkap": 0, "terlalu_pendek": 0}
+        ok, buang = [], {"tanpa_huruf": 0, "speed_bukan_1": 0, "tak_lengkap": 0,
+                         "terlalu_pendek": 0, "setelan_suara_beda": 0}
         for r in rows:
             try:
                 vk, pc = r.get("voice_key"), r.get("pause_counts") or {}
@@ -156,6 +165,10 @@ def compute_pace_calibration(sb=None, dry_run: bool = False) -> dict:
                     buang["speed_bukan_1"] += 1; continue    # dunia lama (suara dimodulasi) — tak sah lagi
                 if int(ch) < min_chars:
                     buang["terlalu_pendek"] += 1; continue
+                # [0184] setelan laju harus SAMA dengan baseline suara saat ini; kosong = tak bisa
+                # diverifikasi asalnya → dibuang (lebih baik menolak daripada mengarang keyakinan)
+                if str(r.get("voice_rate") or "") != BASELINE.get(vk, "+0%"):
+                    buang["setelan_suara_beda"] += 1; continue
                 ok.append({"vk": vk, "niche": r.get("niche") or "*", "audio": au, "chars": int(ch),
                            "digits": int(pc.get("digits") or 0), "words": int(r.get("words") or 0),
                            "sentence": int(pc.get("sentence") or 0), "ellipsis": int(pc.get("ellipsis") or 0),
