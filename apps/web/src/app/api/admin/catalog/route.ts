@@ -119,7 +119,7 @@ export async function GET() {
   const g = await requireSuperAdmin();
   if (g.error) return g.error;
   const a = createAdminClient();
-  const [ai_models, ai_providers, music_library, content_languages, voice_catalog, tts_profiles, moods, fonts, duration_presets, valid_values] = await Promise.all([
+  const [ai_models, ai_providers, music_library, content_languages, voice_catalog, tts_profiles, moods, fonts, duration_presets, valid_values, pace_calib] = await Promise.all([
     a.from("ai_models").select("*").order("component").order("sort_order"),
     a.from("ai_providers").select("*").order("provider_key"),
     a.from("music_library").select("id, name, niche, mood, duration_s, bpm, object_key, is_active, is_default, source").order("niche").order("name"),
@@ -130,6 +130,12 @@ export async function GET() {
     a.from("fonts").select("*").order("name"),
     a.from("duration_presets").select("*").order("seconds"),
     a.from("catalog_valid_values").select("field,value,label").order("field").order("value"),
+    // Kalibrasi durasi per-suara (DITULIS MESIN, read-only di layar). Ada karena "config yang bohong":
+    // admin mengisi Tempo voice di layar ini, tapi mesin memakai angka HASIL KALIBRASI yang menimpanya —
+    // dan angka yang BERLAKU itu tak terlihat di mana pun. Admin jadi menyetel sesuatu yang tak berefek.
+    a.from("tts_pace_calibration").select("voice_key,niche,delivery_wps,sec_per_char,sec_per_digit,"
+      + "sec_per_sentence,chars_per_word,words_per_sentence,calib_error_secs,sample_n,updated_at")
+      .eq("niche", "*").order("voice_key"),
   ]);
   // public_url musik (S3) untuk tombol Play di catalog. voice_catalog sudah simpan preview_url.
   const music = (music_library.data ?? []).map((m) => ({
@@ -142,6 +148,7 @@ export async function GET() {
     moods: moods.data ?? [], duration_presets: duration_presets.data ?? [],
     fonts: fonts.data ?? [],
     catalog_valid_values: valid_values.data ?? [],
+    tts_pace_calibration: pace_calib.data ?? [],
   });
 }
 

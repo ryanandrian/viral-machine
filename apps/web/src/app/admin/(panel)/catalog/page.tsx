@@ -20,6 +20,12 @@ type Cat = {
   moods: Record<string, unknown>[];
   fonts: Record<string, unknown>[];
   catalog_valid_values?: { field: string; value: string; label: string }[];
+  // Kalibrasi durasi per-suara — DITULIS MESIN, read-only di sini. Ada karena "config yang bohong":
+  // admin mengisi "Pace voice" tapi mesin memakai angka kalibrasi yang MENIMPANYA, dan angka yang
+  // BERLAKU tak terlihat di mana pun → admin menyetel sesuatu yang tak berefek tanpa tahu.
+  tts_pace_calibration?: { voice_key: string; delivery_wps: number | null; sec_per_char: number | null;
+    sec_per_sentence: number | null; chars_per_word: number | null; words_per_sentence: number | null;
+    calib_error_secs: number | null; sample_n: number | null; updated_at?: string }[];
 };
 
 // Kolom yang WAJIB dropdown (nilai-sah dari registry KODE via catalog_valid_values) — anti-typo.
@@ -759,13 +765,24 @@ export default function AdminCatalogPage() {
         {tab === "voice" && (<>
           <div className="cat-toolbar"><span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Voice catalog + kelas TTS provider" en="Voice catalog + TTS provider classes" /></span><div className="right"><button className="btn btn-default btn-sm" onClick={() => setAdd({})}><Plus size={14} /> <Bi id="Tambah voice" en="Add voice" /></button></div></div>
           <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl cat-tbl">
-            <thead><tr><th>voice_key</th><th>provider</th><th>display</th><th>locale</th><th>gender</th><th title="Pace voice (kata/detik @speed 1.0). Kosong = ikut pace DASAR engine di bawah. Override per-voice (mis. voice lebih cepat).">Pace voice</th><th>Contoh suara</th><th>active</th><th></th></tr></thead>
+            <thead><tr><th>voice_key</th><th>provider</th><th>display</th><th>locale</th><th>gender</th><th title="Pace voice (kata/detik @speed 1.0). Kosong = ikut pace DASAR engine di bawah. Override per-voice (mis. voice lebih cepat).">Pace voice</th><th title="Angka yang BENAR-BENAR dipakai mesin untuk meramal durasi, hasil kalibrasi otomatis dari suara nyata. MENIMPA kolom di sebelah kiri. Ditulis mesin — tak bisa diedit di sini; kunci lewat pace_locked bila ingin angka Anda yang menang.">Dipakai mesin (kalibrasi)</th><th>Contoh suara</th><th>active</th><th></th></tr></thead>
             <tbody>
-              {data.voice_catalog.length === 0 && <tr><td colSpan={9} className="muted" style={{ padding: "1rem", textAlign: "center" }}>Belum ada voice. Tambah untuk mulai.</td></tr>}
+              {data.voice_catalog.length === 0 && <tr><td colSpan={10} className="muted" style={{ padding: "1rem", textAlign: "center" }}>Belum ada voice. Tambah untuk mulai.</td></tr>}
               {data.voice_catalog.map((v) => (
                 <tr key={v.voice_key as string}>
                   <td className="mono" style={{ color: "var(--text-primary)" }}>{v.voice_key as string}</td><td>{v.provider_key as string}</td>
                   <td>{v.display_name as string}</td><td className="muted">{(v.locale as string) || "—"}</td><td className="muted">{(v.gender as string) || "—"}</td>
+                  <td className="muted" style={{ fontSize: "var(--text-xs)", whiteSpace: "nowrap" }}>
+                    {(() => {
+                      const k = (data.tts_pace_calibration ?? []).find((c) => c.voice_key === v.voice_key);
+                      if (!k || k.sec_per_char == null) return <Bi id="belum dikalibrasi" en="not calibrated yet" />;
+                      const err = k.calib_error_secs != null ? `±${Number(k.calib_error_secs).toFixed(2)}s` : "";
+                      return (<span title={`detik = ${k.sec_per_char}/huruf + ${k.sec_per_sentence}/kalimat · ${k.chars_per_word} huruf/kata · ${k.words_per_sentence} kata/kalimat · dari ${k.sample_n} render`}>
+                        <b style={{ color: "var(--text-primary)" }}>{Number(k.delivery_wps ?? 0).toFixed(2)}</b> kata/dtk<br />
+                        <span style={{ opacity: 0.75 }}>{err} · n={k.sample_n ?? 0}</span>
+                      </span>);
+                    })()}
+                  </td>
                   <td>
                     {paceEdit && paceEdit.key === v.voice_key
                       ? <span style={{ display: "inline-flex", gap: "0.25rem", alignItems: "center" }}>
