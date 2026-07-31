@@ -436,11 +436,25 @@ def _generate_per_beat(provider, model, topic, niche, beats: list, resep: dict,
     kuota = _distribute_words(beats, _total)
     wpk = max(6.0, float((resep.get("_kalibrasi") or {}).get("words_per_sentence")
                          or _WPS_KAL_BAWAAN))
+    # DNA NICHE LENGKAP — bukan sebagian. Versi pertama jalur ini hanya mengirim tone/style/avoid,
+    # sehingga naskah per-bagian kehilangan busur emosi, formula hook, ambang mutu emosional, kata
+    # kunci, dan suara khas niche: penurunan mutu yang tak terlihat karena durasinya tetap benar.
+    # Mandat owner: SELURUH properti niche harus jadi inspirasi penulis, di JALUR MANA PUN.
     dna = ""
     if niche_profile:
-        _np = niche_profile.get("narration_persona") or {}
-        dna = (f"TONE: {_np.get('tone','')} | STYLE: {_np.get('style','')} | "
-               f"AVOID (never use these): {_np.get('avoid','')}")
+        _np = _get_profile(niche) or (niche_profile.get("narration_persona") or {})
+        _bagian = [
+            ("TONE", _np.get("tone")),
+            ("STYLE", _np.get("style")),
+            ("AVOID (never use these)", _np.get("avoid")),
+            ("EMOTION ARC", _np.get("emotion_arc")),
+            ("HOOK FORMULA", _np.get("hook_style")),
+            ("NICHE VOICE", niche_profile.get("style")),
+            ("FEELING TO LEAVE THE VIEWER WITH", niche_profile.get("target_emotion")),
+            ("EMOTIONAL QUALITY BAR", niche_profile.get("emotion_scoring_criteria")),
+            ("THIS NICHE LIVES AROUND", ", ".join(str(k) for k in (niche_profile.get("keywords") or [])[:8])),
+        ]
+        dna = "\n".join(f"{nama}: {nilai}" for nama, nilai in _bagian if nilai)
     lokal = (_content_language_block(content_language) if content_language
              and not str(content_language).lower().startswith("en") else "")
     # blok bahasa produksi menyebut nama-nama kunci JSON naskah utuh → baris itu dibuang di sini,
@@ -791,6 +805,9 @@ STYLE: {profile['style']}
 AVOID: {profile['avoid']}
 EMOTION ARC: {profile['emotion_arc']}
 HOOK FORMULA: {profile['hook_style']}
+{("NICHE VOICE: " + str(niche_data.get('style'))) if niche_data.get('style') else ""}
+{("FEELING TO LEAVE THE VIEWER WITH: " + str(niche_data.get('target_emotion'))) if niche_data.get('target_emotion') else ""}
+{("THIS NICHE LIVES AROUND: " + ", ".join(str(k) for k in (niche_data.get('keywords') or [])[:8])) if niche_data.get('keywords') else ""}
 {("🎯 NICHE EMOTIONAL QUALITY BAR (aim for this from the first draft — it is how this script is scored): " + niche_data.get('emotion_scoring_criteria','')) if niche_data.get('emotion_scoring_criteria') else ""}
 {insights_section}{soft_sell_block}{feedback_block}{beat_plan}
 Follow the BEAT PLAN above — write ONLY the active beats (others = empty ""). The numbered guide below is craft reference per section:

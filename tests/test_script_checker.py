@@ -145,3 +145,50 @@ def test_satu_kata_asing_nyasar_belum_dianggap_slip_bahasa():
         periksa_naskah("Kota itu jatuh karena wabah that tercatat rapi.", content_language="id-ID"))
     assert "bahasa_asing" in _jenis(
         periksa_naskah("Kota itu jatuh, and the penduduk melarikan diri.", content_language="id-ID"))
+
+
+# ── DNA NICHE WAJIB LENGKAP DI SETIAP JALUR PENULISAN (mandat owner 2026-08-01) ────────────────────
+
+def test_dna_niche_lengkap_sampai_ke_prompt_penulis():
+    """Mandat owner: SELURUH properti niche harus jadi inspirasi LLM. Sebelumnya `style` niche dan
+    `target_emotion` hanya dipakai sebagai CADANGAN bila `narration_persona` kosong — untuk 47 niche
+    yang personanya sudah ditulis tangan, dua properti itu tak pernah sampai ke penulis."""
+    from src.config.format_catalog import active_presets
+    from src.intelligence.config import get_niches
+    from src.intelligence.script_engine import _build_user_prompt, _get_profile
+    from src.production.duration_model import resep
+
+    P = active_presets()
+    if not P:
+        import pytest
+        pytest.skip("tangga preset kosong (DB tak tersedia)")
+    r = resep(60, P, 3.5)
+    p = _build_user_prompt({"topic": "X", "angle": ""}, "dark_history", None, None, None,
+                           preset_seconds=60, format_wps=2.4, render_overhead_sec=3.5,
+                           cta_mode="implicit", brand_name=None, brand_cta_text=None,
+                           delivery_p=2.4, voice_name="v", tts_provider="edge_tts",
+                           content_language="id-ID", resep_durasi=r)
+    n = get_niches().get("dark_history") or {}
+    persona = _get_profile("dark_history")
+    wajib = {
+        "tone": persona.get("tone"), "style_persona": persona.get("style"),
+        "avoid": persona.get("avoid"), "emotion_arc": persona.get("emotion_arc"),
+        "hook_style": persona.get("hook_style"), "niche_style": n.get("style"),
+        "target_emotion": n.get("target_emotion"),
+        "emotion_scoring": n.get("emotion_scoring_criteria"),
+    }
+    kurang = [k for k, v in wajib.items() if v and str(v)[:40] not in p]
+    assert not kurang, f"DNA niche tidak sampai ke penulis: {kurang}"
+
+
+def test_jalur_per_bagian_mengirim_DNA_yang_SAMA_lengkapnya():
+    """Versi pertama jalur tulis-per-bagian hanya mengirim tone/style/avoid — naskahnya kehilangan
+    busur emosi, formula hook, ambang mutu emosional, kata kunci, dan suara khas niche. Penurunan
+    mutu yang TIDAK terlihat karena durasinya tetap benar. Dijaga di sini per-sumber, tanpa LLM."""
+    import inspect
+
+    from src.intelligence.script_engine import _generate_per_beat
+    src = inspect.getsource(_generate_per_beat)
+    for wajib in ("emotion_arc", "hook_style", "target_emotion", "emotion_scoring_criteria",
+                  "keywords", "tone", "avoid"):
+        assert wajib in src, f"jalur per-bagian tidak mengirim '{wajib}' — DNA niche tidak lengkap"
