@@ -176,7 +176,7 @@ class TenantRunConfig:
     tts_model:         Optional[str] = None   # F1-05: model TTS opsional (mis. openai tts-1/tts-1-hd); None → default engine
     tts_voice_default_settings: Optional[dict] = None   # F1-05: default_settings voice dari voice_catalog (baseline delivery; no-hardcode)
     voice_delivery_wps: Optional[float] = None          # F5-01: pace PER-VOICE (voice_catalog.delivery_wps). None → fallback tts_profiles[provider]. Guard [1.0,4.0].
-    # [DURASI-F2] kalibrasi dari render NYATA (tabel tts_pace_calibration / tts_speed_response, migr 0163/0164).
+    # Kalibrasi dari render NYATA (tabel tts_pace_calibration; migr 0163/0182/0183).
     # None = belum ada data → estimator jatuh ke lapis lama persis (nol regresi). Diisi _load_pace_calibration.
     pace_calibrated:   Optional[float] = None           # pace (voice×niche EFEKTIF) → ('*') — LAPIS CADANGAN sejak 0182. Guard [1.0,4.0].
     # [0182] Koefisien MODEL DURASI per-suara (huruf + jeda per tanda baca) dari `tts_pace_calibration`.
@@ -428,17 +428,8 @@ class TenantConfigManager:
                                    f"pace-nya berbeda; jalankan kalibrasi)")
         except Exception as e:
             logger.debug(f"[TenantConfig] F2 pace calibration skip (non-fatal): {e}")
-        try:
-            prov = getattr(config, "tts_provider", None)
-            if prov:
-                sr = (self._supabase.table("tts_speed_response")
-                      .select("alpha").eq("provider", prov).limit(1).execute())
-                if sr.data:
-                    a = sr.data[0].get("alpha")
-                    if a is not None and 0.5 <= float(a) <= 2.0:
-                        config.tts_speed_alpha = float(a)
-        except Exception as e:
-            logger.debug(f"[TenantConfig] F2 speed-response skip (non-fatal): {e}")
+        # (α respons-speed provider DIHAPUS 2026-07-31 bersama solver kecepatan — tak ada lagi
+        #  konsumennya; menyimpan field yang tak pernah dibaca = fosil yang menyesatkan.)
 
     def _reload_niche_visual(self, config: "TenantRunConfig", eff_niche: str) -> None:
         """Muat visual_style + visual_fallbacks utk niche EFEKTIF (semantik kegagalan = IDENTIK blok

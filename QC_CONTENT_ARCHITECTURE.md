@@ -336,8 +336,26 @@ kode disebut per-butir supaya bisa di-grep ulang.
 - Uji otomatis **160 lulus**, termasuk penjaga "tuas kecepatan tak boleh kembali", contoh 45→32 milik
   owner, dan regresi baris-kalibrasi-tertutup.
 
+### ✅ UJI KASUS TERBURUK — model dilumpuhkan sengaja (menutup celah verifikasi)
+
+Verifikasi lewat channel llama terhalang kuota harian penyedia. Karena itu kekurangannya DIPAKSA pada
+model yang kuotanya ada: balasan dipangkas jadi **45% dari seharusnya** — LEBIH BURUK daripada llama
+(±65%). Hasil: **12/12 mendarat di band · fakta utuh 12/12 · ramalan salah ±1 dtk** (7 preset × 2 niche,
+audio diukur nyata, kecepatan suara 1,0). Biaya: rata-rata **8,1 panggilan kecil** per naskah.
+
+Tiga cacat ditemukan & ditutup di uji itu:
+1. Kuota per-bagian ×1,45 jadi DOBEL setelah tiap bagian mengoreksi diri → naskah 295 kata untuk
+   preset 75 dtk yang butuh ±180, lalu perbaikan mentok (114→94→92→91 dtk). Kuota kini membidik target
+   sebenarnya, dengan batas atas band sebagai plafon keras.
+2. Pola angka lama menyeret tanda baca ("747,") → "747" dianggap hilang → perbaikan SAH ditolak.
+3. Balasan JSON rusak menghabiskan putaran perbaikan → kini dicoba ulang.
+
+**Kunci yang membuatnya mendarat:** tiap bagian **dibetulkan seketika** saat ditulis (mis. 20→55 kata,
+15→65, 9→34), bukan menunggu seluruh naskah selesai. Menyuruh model menambah 15 kata jadi 30 pada satu
+bagian adalah pekerjaan kecil yang pasti bisa; menutup selisih besar pada naskah panjang tidak.
+
 **Belum tuntas — jujur:**
-1. Verifikasi ulang penuh pada channel llama **terhalang kuota harian Groq** (TPD 100.000 terpakai
+1. Verifikasi pada channel llama SENDIRI masih **terhalang kuota harian Groq** (TPD 100.000 terpakai
    99.035) — bukan cacat desain, tapi konsekuensi nyata: jalur baru memakai ±10 panggilan kecil
    (per-bagian + refit) alih-alih 1–3 panggilan besar. Tenant di tingkat gratis akan menabrak batas.
 2. Suara ElevenLabs `pNInz6obpgDQGcFmaJgB` belum terkalibrasi (tak bisa di-render gratis) → memakai

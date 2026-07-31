@@ -291,7 +291,9 @@ def _count_pauses(text: str) -> dict:
 # penanda permukaan, sama dengan kalimat berbunga). Kode yang memangkas pernah membuang fakta paling
 # mengejutkan sebuah naskah. Jadi: model memilih kata, KODE memverifikasi fakta & durasi.
 
-_RX_ANGKA_FAKTA = re.compile(r"\d[\d.,]*")
+# Angka TANPA tanda baca yang menempel: pola lama `\d[\d.,]*` menangkap "747," sehingga
+# "747" di hasil perbaikan dianggap HILANG → perbaikan sah ditolak (terukur 2026-07-31).
+_RX_ANGKA_FAKTA = re.compile(r"\d+(?:[.,]\d+)*")
 
 
 def _nama_diri(teks: str) -> set:
@@ -368,12 +370,19 @@ def _refit_naskah(provider, model, script: dict, beats: list, resep: dict, vonis
             f"SCRIPT (JSON):\n{json.dumps(isi, ensure_ascii=False, indent=1)}\n\n"
             "Reply with JSON only, exactly these keys: " + ", ".join(isi)
         )
-        try:
-            raw = provider.complete(system="You are a professional video-script editor. Reply with JSON only.",
-                                    user=user, model=model, temperature=0.4, max_tokens=2000, as_json=True)
-            hasil = json.loads(ScriptEngine._clean_json(ScriptEngine.__new__(ScriptEngine), raw))
-        except Exception as e:
-            jejak.append(f"putaran {putaran}: gagal teknis ({str(e)[:60]})")
+        # Balasan JSON rusak = coba lagi, JANGAN menghabiskan putaran (terukur: satu "Unterminated
+        # string" menghabiskan putaran satu-satunya dan naskah preset 15 dtk tetap kepanjangan).
+        hasil = None
+        for _c in range(1, int(os.getenv("SCRIPT_REFIT_PARSE_RETRY", "2")) + 1):
+            try:
+                raw = provider.complete(system="You are a professional video-script editor. Reply with JSON only.",
+                                        user=user, model=model, temperature=0.4, max_tokens=2000, as_json=True)
+                hasil = json.loads(ScriptEngine._clean_json(ScriptEngine.__new__(ScriptEngine), raw))
+                break
+            except Exception as e:
+                jejak.append(f"putaran {putaran} coba {_c}: balasan rusak ({str(e)[:45]})")
+                time.sleep(1)
+        if hasil is None:
             break
         baru = {b: (hasil.get(b) or "").strip() for b in isi}
         if any(not baru[b] for b in baru):
@@ -416,12 +425,15 @@ def _generate_per_beat(provider, model, topic, niche, beats: list, resep: dict,
     Tiap bagian: target kata & kalimat sendiri (dari BEAT PLAN yang sama), peran yang jelas, DNA niche,
     dan larangan yang sudah terukur mahal (elipsis, mengulang, menyimpulkan sebelum waktunya).
     """
-    # Kuota per-bagian dinaikkan sesuai KEPATUHAN TERUKUR: pada uji rantai penuh model mengirim
-    # ±65% dari yang diminta di tiap bagian (8w dari 11 · 24w dari 37 · 29w dari 40 · 19w dari 37).
-    # Meminta lebih banyak per bagian membuat hasilnya mendarat; kelebihan (bila ada) dirapatkan oleh
-    # putaran perbaikan — dan merapatkan JAUH lebih mudah daripada memanjangkan.
-    _mk = float(os.getenv("SCRIPT_PERBEAT_MARKUP", "1.45"))
-    kuota = _distribute_words(beats, max(1, round(resep["kata_bidik"] * _mk)))
+    # Kuota per-bagian membidik TARGET SEBENARNYA (tengah band), TANPA markup.
+    # Kenapa tanpa markup: markup pernah dipasang ×1,45 karena tiap bagian under-write ±65%. Begitu
+    # tiap bagian MENGOREKSI DIRI ke kuotanya (lihat di bawah), markup jadi DOBEL — terukur: naskah
+    # 295 kata untuk preset 75 dtk yang butuh ±180, lalu putaran perbaikan mentok (114→94→92→91 dtk,
+    # band 68–82). Memanjangkan itu yang sulit bagi model, dan itu sudah ditangani per-bagian; jadi
+    # tak ada lagi alasan meminta lebih dari yang dibutuhkan. Batas atas band tetap jadi plafon keras.
+    _mk = float(os.getenv("SCRIPT_PERBEAT_MARKUP", "1.0"))
+    _total = min(resep["kata_maks"], max(1, round(resep["kata_bidik"] * _mk)))
+    kuota = _distribute_words(beats, _total)
     wpk = max(6.0, float((resep.get("_kalibrasi") or {}).get("words_per_sentence")
                          or _WPS_KAL_BAWAAN))
     dna = ""
@@ -491,6 +503,42 @@ def _generate_per_beat(provider, model, topic, niche, beats: list, resep: dict,
         if not teks:
             logger.warning(f"[ScriptEngine] per-bagian '{b}' balasan kosong")
             return {}
+        # ── BETULKAN BAGIAN ITU SEKETIKA, bukan menunggu seluruh naskah selesai ───────────────────
+        # Kenapa: terukur, model mengirim ±65% dari pesanan TIAP BAGIAN (8w dari 11 · 24w dari 37 ·
+        # 29w dari 40 · 19w dari 37). Memperbaiki setelah semua bagian jadi berarti meminta model
+        # menutup selisih BESAR pada naskah panjang — hal yang justru tidak ia sanggupi. Sebaliknya
+        # menyuruhnya menambah 15 kata menjadi 30 pada SATU bagian adalah pekerjaan kecil yang pasti
+        # bisa. Jadi kekurangan ditutup di tempat ia lahir, sementara masih murah.
+        _amb_bagian = float(os.getenv("SCRIPT_PERBEAT_MIN_RASIO", "0.85"))
+        if len(teks.split()) < _amb_bagian * w:
+            _kurang = w - len(teks.split())
+            _up2 = (
+                f"{(dna + chr(10)) if dna else ''}"
+                f"Perluas naskah bagian [{peran}] berikut menjadi sekitar {w} kata "
+                f"(sekarang {len(teks.split())} — tambah ±{_kurang} kata).\n"
+                "ATURAN MUTLAK: jangan hilangkan satu fakta pun (angka, tahun, nama, peristiwa) · "
+                "perinci fakta yang SUDAH ada, jangan menambah fakta baru · jangan mengulang · "
+                f"bahasa & nada persis sama · sekitar {s_t} kalimat · kalimat utuh · TANPA tanda '...'.\n\n"
+                f"NASKAH:\n{teks}\n\nBalas JSON saja: {{\"text\": \"...\"}}"
+            )
+            try:
+                _raw2 = provider.complete(system="Kamu editor naskah video profesional. Balas JSON saja.",
+                                          user=_up2, model=model, temperature=0.4, max_tokens=1200,
+                                          as_json=True)
+                _t2 = (json.loads(ScriptEngine._clean_json(ScriptEngine.__new__(ScriptEngine),
+                                                           _raw2)).get("text") or "").strip()
+                # terima HANYA bila lebih panjang DAN nol fakta hilang — perbaikan tak boleh
+                # dibayar dengan isi (pelajaran: kode yang memangkas pernah membuang fakta terkuat)
+                if _t2 and len(_t2.split()) > len(teks.split()) and not _fakta_hilang(teks, _t2):
+                    logger.info(f"[ScriptEngine] bagian '{b}' dilengkapi {len(teks.split())}→"
+                                f"{len(_t2.split())}w (target {w}w)")
+                    teks = _t2
+                else:
+                    logger.info(f"[ScriptEngine] pelengkapan bagian '{b}' DITOLAK "
+                                f"(tak lebih panjang / ada fakta hilang) — pakai versi asal")
+            except Exception as _e2:
+                logger.warning(f"[ScriptEngine] pelengkapan bagian '{b}' gagal: {str(_e2)[:70]}")
+
         hasil[b] = teks
         terpakai.append((b, teks))
         logger.info(f"[ScriptEngine] per-bagian {i+1}/{len(beats)} [{peran}]: {len(teks.split())}w "
