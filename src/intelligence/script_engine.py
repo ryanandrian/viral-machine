@@ -1880,8 +1880,13 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                         f"{_v['video_prediksi']:.1f}s, outside the valid {_lo:.0f}–{_hi:.0f}s. "
                         f"{_arah} by ≈{_v['kata_selisih']} words. Target: {_resep['kata_min']}–"
                         f"{_resep['kata_maks']} words in ≈{_resep['kalimat']} sentences. "
-                        f"Every sentence end and every ellipsis costs real silence — merge sentences "
-                        f"instead of adding them, and never use '...'."
+                        # Batas bawah WAJIB disebut. Tanpa itu, "merge sentences" ditelan mentah oleh
+                        # model lemah: terukur 2026-08-02 llama-3.3 mengirim 76 kata dengan NOL titik
+                        # — narator membaca tanpa jeda sampai kehabisan napas.
+                        f"Every sentence end and every ellipsis costs real silence, so prefer FEWER, "
+                        f"FULLER sentences over many short ones — but every sentence must still END "
+                        f"with a period, and none may run past ~{_ambang.angka('script_maks_kata_per_kalimat', 32)} "
+                        f"words. A wall of text with no periods is unusable. Never use '...'."
                         + (f" OFF-BUDGET BEATS (fix exactly these): {'; '.join(_offb)}." if _offb else "")]
                     logger.info(f"[ScriptEngine] durasi: {_f['words']}w/{_f['sentence']}kal → "
                                 f"{_v['video_prediksi']:.1f}s di luar {_lo:.0f}-{_hi:.0f}s → retry")

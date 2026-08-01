@@ -58,6 +58,9 @@ _TANDA_AKHIR = ".!?…\"'”’)"
 _MIN_KATA_ASING = 2
 _PISAH = "\"'“”‘’«»()[]{}.,;:!?…—–-"
 _RX_KATA = re.compile(r"[A-Za-zÀ-ÿ']+")
+# Penutup KALIMAT sebenarnya — sengaja BUKAN `_TANDA_AKHIR` (yang juga memuat kutip & kurung untuk
+# memeriksa akhir naskah). Menghitung kalimat dengan tanda kutip akan melipatgandakan hitungannya.
+_TANDA_KALIMAT = ".!?…"
 
 
 def _temuan(jenis: str, parah: bool, pesan: str, bukti: str = "") -> dict:
@@ -84,6 +87,31 @@ def periksa_naskah(teks: str, niche_profile: dict | None = None,
         out.append(_temuan("kalimat_menggantung", True,
                            "Naskah tidak berakhir dengan tanda baca akhir — penonton akan mendengar "
                            "kalimat terputus.", t[-60:]))
+
+    # 1b. NARASI SATU TARIKAN NAPAS — kalimat kepanjangan / nyaris tanpa titik.
+    #
+    # Terukur pada pipeline SUNGGUHAN (BISIK NUSANTARA, 2026-08-02 03:01): llama-3.3 mengirim naskah
+    # 76 kata dengan **NOL kalimat** — tak satu pun titik. Penyebabnya umpan balik durasi kita
+    # sendiri: "Every sentence end costs real silence — merge sentences instead of adding them."
+    # Benar secara durasi, tapi model lemah menelannya mentah dan membuang SELURUH titik. Hasilnya
+    # narator membaca tanpa jeda sampai kehabisan napas — persis "potongan yang merusak narasi".
+    #
+    # Ambangnya sengaja bukan "jumlah kalimat" (itu bergantung panjang naskah/preset) melainkan
+    # KEPADATAN: rata-rata kata per kalimat. Naskah nyata bermedian ±13 kata/kalimat; di atas 2,5×
+    # itu bukan gaya, melainkan kalimat yang tak pernah ditutup.
+    _kata = _RX_KATA.findall(t)
+    _n_kal = sum(t.count(x) for x in _TANDA_KALIMAT)
+    if len(_kata) >= 25:
+        from src.config import ambang as _amb
+        from src.production.duration_model import BAWAAN as _DUR
+        _maks = _amb.angka("script_maks_kata_per_kalimat", 32)
+        _wpk = len(_kata) / max(1, _n_kal)
+        if _n_kal == 0 or _wpk > _maks:
+            out.append(_temuan(
+                "narasi_tanpa_jeda", True,
+                f"{len(_kata)} kata hanya dalam {_n_kal} kalimat ({_wpk:.0f} kata/kalimat; wajar "
+                f"±{_DUR['words_per_sentence']:.0f}, batas {_maks}) — narator membaca tanpa jeda "
+                f"sampai kehabisan napas. Pecah jadi kalimat-kalimat utuh.", t[:120]))
 
     # 2. elipsis (biaya hening TERUKUR >1 detik per tanda)
     n_ell = t.count("…") + t.count("...")
