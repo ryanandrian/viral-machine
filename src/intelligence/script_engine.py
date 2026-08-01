@@ -2114,6 +2114,31 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                 logger.warning(f"[ScriptEngine] perbaikan cacat mekanis gagal (naskah tetap dipakai): "
                                f"{str(_ce3)[:90]}")
 
+        # ── JARING TERAKHIR: titik penutup yang HILANG dipasang sendiri ───────────────────────────
+        # `kalimat_menggantung` adalah cacat PARAH yang paling sering lolos ke produksi: 7 dari 82
+        # naskah nyata (2026-08-02) berakhir tanpa tanda baca akhir, dan penonton mendengarnya sebagai
+        # kalimat terpotong di detik terakhir video. Penulis sudah diminta memperbaikinya di atas;
+        # bila permintaan itu gagal (kuota habis, jawaban ditolak pagar), naskah TETAP dipakai — dan
+        # cacatnya ikut terbawa.
+        #
+        # Untuk kasus SATU ini perbaikannya deterministik dan tak menyentuh isi: tambahkan titik.
+        # Nol kata ditambah, nol kata dibuang, nol panggilan model. Sengaja TIDAK diperlakukan sebagai
+        # "sudah beres" — temuannya tetap dicatat di `mechanical_issues` supaya terlihat di laporan,
+        # dan yang berubah hanya nasib penontonnya.
+        _fs_akhir = (best_script.get("full_script") or "").strip() if best_script else ""
+        if _fs_akhir and _fs_akhir[-1] not in ".!?…\"'”’)":
+            best_script["full_script"] = _fs_akhir + "."
+            # beat terakhir yang berisi ikut ditutup — kalau tidak, teks beat dan naskah akhir beda
+            # (dan pemetaan adegan mencocokkan teks beat ke kata audio).
+            for _b in reversed(best_script.get("beats") or _all_sections()):
+                if (best_script.get(_b) or "").strip():
+                    _t = best_script[_b].rstrip()
+                    if _t and _t[-1] not in ".!?…\"'”’)":
+                        best_script[_b] = _t + "."
+                    break
+            logger.warning("[ScriptEngine] naskah berakhir tanpa tanda baca — titik penutup dipasang "
+                           "sendiri (nol kata berubah). Penulis sudah diminta memperbaikinya lebih dulu.")
+
         # ── SATU PERHITUNGAN AKHIR untuk SELURUH angka durasi (2026-08-01) ─────────────────────────
         # Cacat yang tertangkap uji rantai-penuh: `_duration_est` DITAMBAL di tiga tempat dengan
         # bagian yang berbeda-beda, masing-masing dengan syaratnya sendiri. Akibatnya isinya bisa
