@@ -281,8 +281,24 @@ def test_lama_tunggu_dibaca_dari_pesan_penyedia(pesan, harap):
 
 
 def test_pekerjaan_yang_DIBUANG_harus_terlihat_di_log():
-    """Membuang empat bagian yang sudah jadi tanpa menyebutkannya = kegagalan yang tak bisa dilacak."""
+    """Membuang bagian yang sudah jadi tanpa menyebutkannya = kegagalan yang tak bisa dilacak.
+
+    DIPERBARUI 2026-08-02. Versi pertama uji ini mengunci perilaku "buang semuanya lalu catat
+    error" — dan itu memang perilaku saat itu. Pipeline SUNGGUHAN lalu menunjukkan harganya: enam
+    dari tujuh bagian berhasil (76→149 kata), bagian ke-7 kena kuota, semuanya hangus, naskah kembali
+    29 dtk untuk preset 90.
+
+    Sekarang jalur normalnya TIDAK membuang: bagian yang gagal ditambal teks ASAL-nya (naskah asal
+    dijamin punya teks tiap adegan — syarat A2). Membuang hanya tersisa untuk kasus benar-benar
+    buntu (asal pun tak punya bagian itu) — dan di situ ia tetap wajib `logger.error`.
+
+    Jadi yang dijaga kini DUA hal sekaligus: penambalan itu ADA, dan pembuangan yang tersisa tetap
+    keras terdengar. Uji perilakunya sendiri = `tests/test_perbagian_tak_hangus.py`.
+    """
     src = inspect.getsource(se._generate_per_beat)
-    assert "ikut dibuang" in src, "pekerjaan yang dibuang tidak dilaporkan"
-    blok = src[src.index("ikut dibuang") - 300:src.index("ikut dibuang")]
+    assert "_teks_asal" in src, (
+        "tak ada penambalan dari naskah asal — kegagalan satu bagian akan menghanguskan semuanya lagi"
+    )
+    assert "terpaksa dibuang" in src, "jalur buntu tidak menyebut bahwa pekerjaan dibuang"
+    blok = src[src.index("terpaksa dibuang") - 400:src.index("terpaksa dibuang")]
     assert "logger.error" in blok, "dibuangnya pekerjaan hanya dicatat sebagai peringatan biasa"

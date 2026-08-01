@@ -578,8 +578,11 @@ def _refit_naskah(provider, model, script: dict, beats: list, resep: dict, vonis
 
 def _generate_per_beat(provider, model, topic, niche, beats: list, resep: dict,
                        niche_profile: dict | None, content_language: str | None,
-                       insights_block: str | None = None) -> dict:
+                       insights_block: str | None = None, asal: dict | None = None) -> dict:
     """Tulis naskah BAGIAN PER BAGIAN. Mengembalikan dict beat→teks + full_script, atau {} bila gagal.
+
+    `asal` = naskah yang SEDANG dipegang (setiap adegan aktifnya dijamin berisi — syarat A2). Dipakai
+    sebagai penambal bila satu bagian gagal ditulis ulang; lihat catatan pada `_teks_asal` di bawah.
 
     Dipakai saat satu panggilan terbukti tak sanggup memenuhi panjang (lihat catatan di atas).
     Tiap bagian: target kata & kalimat sendiri (dari BEAT PLAN yang sama), peran yang jelas, DNA niche,
@@ -665,6 +668,27 @@ def _generate_per_beat(provider, model, topic, niche, beats: list, resep: dict,
         # menunggu tak akan menolongnya.
         from src.exceptions import ErrorClass as _EC
         _RETRYABLE = {_EC.RATE_LIMIT, _EC.TRANSIENT, _EC.UNKNOWN}
+
+        def _teks_asal() -> str:
+            """Teks bagian ini dari naskah yang sedang dipegang — penambal bila penulisan ulang gagal.
+
+            KENAPA ADA (terukur pada pipeline SUNGGUHAN, BISIK NUSANTARA 2026-08-02 03:02): enam dari
+            tujuh bagian SUDAH berhasil ditulis ulang (76 → 149 kata), lalu bagian ke-7 kena batas
+            kuota harian Groq — dan SELURUH hasilnya dibuang, naskah kembali ke 76 kata. Lima
+            panggilan model yang sudah dibayar dan berhasil, hangus.
+
+            Alasan lama ("struktur naskah harus utuh: bagian yang hilang membuat narasi berhenti
+            tanpa penutup") memang benar, tapi melewatkan satu fakta: naskah ASAL sudah punya teks
+            untuk SETIAP adegan aktif — itu syarat A2 yang dijaga `_validate_and_fix`. Jadi pilihannya
+            bukan "naskah baru utuh" lawan "tidak ada"; ada pilihan ketiga yang jelas lebih baik:
+            pakai bagian baru yang berhasil, tambal yang gagal dengan teks ASALNYA. Struktur tetap
+            utuh, nol bagian hilang, dan kerja yang sudah dibayar tidak hangus.
+
+            Bila naskah asal pun tak punya teks untuk bagian ini, barulah menyerah — di situ
+            struktur benar-benar akan bolong.
+            """
+            return ((asal or {}).get(b) or "").strip()
+
         teks = ""
         for _coba in range(1, _ambang.angka("script_perbeat_retry", 3) + 1):
             try:
@@ -676,25 +700,37 @@ def _generate_per_beat(provider, model, topic, niche, beats: list, resep: dict,
                     break
             except Exception as e:
                 _kelas = getattr(e, "error_class", _EC.UNKNOWN)
-                if _kelas not in _RETRYABLE:
-                    logger.warning(f"[ScriptEngine] per-bagian '{b}' berhenti ({_kelas}): {str(e)[:90]}")
-                    return {}
-                _jeda = _tunggu_dari_pesan(e, 2 ** _coba)
-                if _jeda is None:
-                    logger.warning(f"[ScriptEngine] per-bagian '{b}' berhenti: penyedia meminta "
-                                   f"ditunggu jauh lebih lama dari yang pantas ditahan (kuota harian). "
-                                   f"Produksi diulang pada jadwal berikutnya.")
+                _berhenti = _kelas not in _RETRYABLE
+                _jeda = None if _berhenti else _tunggu_dari_pesan(e, 2 ** _coba)
+                if _berhenti or _jeda is None:
+                    _sebab = (f"berhenti ({_kelas}): {str(e)[:80]}" if _berhenti else
+                              "penyedia meminta ditunggu jauh lebih lama dari yang pantas ditahan "
+                              "(kuota harian)")
+                    _tambal = _teks_asal()
+                    if _tambal:
+                        logger.warning(f"[ScriptEngine] per-bagian '{b}' {_sebab} — memakai teks ASAL "
+                                       f"bagian ini ({len(_tambal.split())}w); {len(hasil)} bagian yang "
+                                       f"sudah jadi TETAP DIPAKAI")
+                        teks = _tambal
+                        break
+                    logger.warning(f"[ScriptEngine] per-bagian '{b}' {_sebab} — dan naskah asal pun "
+                                   f"tak punya teks bagian ini; struktur akan bolong → dibatalkan")
                     return {}
                 logger.warning(f"[ScriptEngine] per-bagian '{b}' {_kelas} (coba {_coba}) — tunggu "
                                f"{_jeda:.0f}s (menurut penyedianya): {str(e)[:70]}")
                 time.sleep(_jeda)
         if not teks:
-            _sudah = sum(len(v.split()) for v in hasil.values())
-            logger.error(f"[ScriptEngine] per-bagian '{b}' gagal setelah semua percobaan — "
-                         f"{len(hasil)} bagian yang SUDAH jadi ({_sudah} kata) ikut dibuang, naskah "
-                         f"kembali ke versi sebelumnya. Struktur naskah harus utuh: bagian yang hilang "
-                         f"membuat narasi berhenti tanpa penutup.")
-            return {}
+            teks = _teks_asal()
+            if teks:
+                logger.warning(f"[ScriptEngine] per-bagian '{b}' gagal setelah semua percobaan — "
+                               f"memakai teks ASAL bagian ini ({len(teks.split())}w); "
+                               f"{len(hasil)} bagian yang sudah jadi TETAP DIPAKAI")
+            else:
+                _sudah = sum(len(v.split()) for v in hasil.values())
+                logger.error(f"[ScriptEngine] per-bagian '{b}' gagal dan naskah asal tak punya teks "
+                             f"bagian ini — {len(hasil)} bagian ({_sudah} kata) terpaksa dibuang; "
+                             f"struktur naskah akan bolong tanpa bagian ini.")
+                return {}
         # ── BETULKAN BAGIAN ITU SEKETIKA, bukan menunggu seluruh naskah selesai ───────────────────
         # Kenapa: terukur, model mengirim ±65% dari pesanan TIAP BAGIAN (8w dari 11 · 24w dari 37 ·
         # 29w dari 40 · 19w dari 37). Memperbaiki setelah semua bagian jadi berarti meminta model
@@ -1943,7 +1979,7 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                                f"— satu panggilan tak sanggup; beralih ke TULIS PER-BAGIAN")
                 _pb = _generate_per_beat(llm, script_model, topic, tenant_config.niche,
                                          _beats_for_preset(preset_seconds), _resep, niche_profile,
-                                         _clang, insights_block)
+                                         _clang, insights_block, asal=best_script)
                 if _pb.get("full_script"):
                     _w_pb = len(_pb["full_script"].split())
                     # "Lebih baik" = lebih DEKAT ke jatah, bukan sekadar lebih panjang. Aturan lama
