@@ -247,8 +247,40 @@ bukan membaca kode.
    Keduanya menyala bersama deploy. 0185/0186 sudah diterapkan (tak terlihat kode server).
 3. **Video Regular (2–12 menit)**: butuh pemotongan+penyambungan suara untuk naskah 1.000+ kata.
 4. **Mutu naskah belum punya alat ukur** yang tumbuh bersama ratusan niche. Kandidat satu-satunya =
-   retensi penonton (222 kurva + 11.261 baris), belum tersambung ke pembuatan naskah. **Ini MOAT
-   produk** (DESAIN §8 killer feature #1), bukan pekerjaan sisa.
+   retensi penonton. **Ini MOAT produk** (DESAIN §8 killer feature #1), bukan pekerjaan sisa.
+
+   **Bahannya SUDAH ADA dan sudah dibaca (analisis BACA-SAJA 2026-08-01, nol perubahan produksi):**
+   170 kurva berisi (100 titik/video), **41 di antaranya bisa disambungkan ke naskah yang
+   menghasilkannya** lewat `content_inventory.metadata->>'run_id'` → `videos.run_id`. Metadata
+   inventory juga menyimpan pilihan produksi tiap video (`hook_pattern`, `tts_voice`, `music_mood`,
+   `visual_seed`, `viral_score`) — jadi pilihan mesin bisa dikorelasikan dengan hasilnya.
+
+   Yang sudah terbaca dari 41 video itu:
+
+   | bagian naskah | video | penonton hilang (median) |
+   |---|---|---|
+   | **hook** | 41 | **24%** |
+   | mystery_drop | 18 | 3% |
+   | bagian lain | 41 | ±0% (naik-turun kecil = efek loop Shorts) |
+
+   | pola hook | dipakai | daya tahan hook (median) |
+   |---|---|---|
+   | question | 11 | **1,32** |
+   | you_dont_know | 7 | **1,32** |
+   | story_open | 3 | 1,29 |
+   | number_shock | 6 | 1,17 |
+   | **impossible_claim** | **14 (TERBANYAK)** | **1,14 (TERBURUK)** |
+
+   Artinya: seperempat penonton pergi di HOOK — jauh melampaui bagian lain — dan mesin paling sering
+   memakai pola hook yang paling buruk menahan mereka. Rotasi hook saat ini round-robin (Diversity
+   §9.1), bukan berdasarkan hasil.
+
+   **JUJUR SOAL BATASNYA:** 3–14 video per pola. Ini SINYAL, bukan kesimpulan — cukup untuk
+   memutuskan bahwa mekanismenya layak dibangun, TIDAK cukup untuk langsung dipakai memilih hook.
+   Rancangan yang benar = biarkan mesin mengumpulkan sendiri lalu memutuskan saat buktinya cukup,
+   dengan ambang minimum sampel seperti pada kalibrasi durasi.
+
+   **GERBANG: JANGAN diwiring ke produksi sebelum A2 diketok owner** (PROGRAM_BUKTI_KECERDASAN §6).
 5. **5 dari 6 kunci OpenAI habis kredit tapi berstatus 'valid'** di layar — validasi hanya terjadi
    saat kunci dipasang.
 6. 20 suara ElevenLabs/fal lain belum diukur (biaya vendor); memakai angka bawaan sampai dipakai.
