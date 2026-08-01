@@ -39,6 +39,7 @@ INSERT INTO app_config (key, value, description) VALUES
  ('script_refit_rounds',       3,   'Berapa putaran maksimum model diminta merapatkan sendiri panjang naskahnya sebelum produksi berhenti jujur.'),
  ('script_refit_parse_retry',  2,   'Berapa kali jawaban AI yang formatnya rusak diminta ulang.'),
  ('script_length_tolerance_pct', 12, 'Toleransi panjang naskah (%) untuk channel TANPA preset durasi. Channel ber-preset memakai batas titik-tengah antar-preset, bukan persen.'),
+ ('script_margin_band_pct',      10, 'Jarak aman dari TEPI rentang preset saat menulis (% lebar rentang). Mesin berhenti memperbaiki hanya bila ramalannya cukup jauh dari tepi — ramalan sendiri punya galat 1–2 detik. Gerbang penilai TIDAK memakai margin ini, jadi nol video sah yang ditolak.'),
  ('script_maks_kata_per_kalimat', 32, 'Kalimat terpanjang yang masih wajar (kata). Di atas ini narator membaca tanpa jeda sampai kehabisan napas — naskah ditandai cacat dan diminta diperbaiki. Lahir dari kejadian nyata: model menulis 76 kata TANPA satu pun titik.'),
 -- ── Kalibrasi otomatis (mesin mengukur dirinya) ──────────────────────────────────────────────────
  ('pace_calib_min_n',          14,  'Berapa render nyata minimum sebelum sebuah suara boleh punya angka kalibrasi sendiri. Kurang dari ini = menebak.'),

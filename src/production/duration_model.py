@@ -210,7 +210,27 @@ def band_video(seconds: float, presets: list) -> tuple[float, float]:
     return lo, hi
 
 
-def resep(seconds: float, presets: list, overhead: float, kalibrasi: dict | None = None) -> dict:
+def _margin_aman(lo: float, hi: float, margin: float | None) -> float:
+    """Jarak aman dari TEPI band untuk target PENULIS — bukan untuk gerbang.
+
+    KENAPA ADA (terukur 2026-08-02, uji rantai 6 channel): BJ Yusroon mendarat **82,1 dtk** pada band
+    82,5–97,5 — meleset 0,4 detik. Bukan karena mesinnya salah hitung, melainkan karena ia BERHENTI
+    memperbaiki begitu ramalannya nyaris di tepi, padahal ramalan itu sendiri punya galat ±1–2 dtk
+    (leave-one-out: 0,89–2,34 dtk per suara). Menyatakan menang di dalam derau sendiri = menyerahkan
+    hasilnya pada undian.
+
+    Maka target penulis dijauhkan dari tepi; GERBANG tetap memakai band yang SEBENARNYA (margin=0)
+    supaya tak ada video sah yang ditolak. Dibatasi 30% setengah-lebar band agar target tak pernah
+    mengerut jadi titik pada preset yang bandnya sempit.
+    """
+    if not margin:
+        return 0.0
+    lebar = max(0.0, float(hi) - float(lo))
+    return max(0.0, min(float(margin), 0.30 * lebar / 2))
+
+
+def resep(seconds: float, presets: list, overhead: float, kalibrasi: dict | None = None,
+          margin: float = 0.0) -> dict:
     """Perintah yang diberikan ke penulis: berapa KATA dan berapa KALIMAT.
 
     Dua-duanya lahir dari satu perhitungan, karena keduanya saling menentukan: tiap kalimat memakan
@@ -226,7 +246,8 @@ def resep(seconds: float, presets: list, overhead: float, kalibrasi: dict | None
     a = angka_efektif(kalibrasi)
     lo, hi = band_video(seconds, presets)
     o = max(0.0, float(overhead))
-    audio_lo, audio_hi = max(0.5, lo - o), max(0.5, hi - o)
+    m = _margin_aman(lo, hi, margin)
+    audio_lo, audio_hi = max(0.5, lo + m - o), max(0.5, hi - m - o)
 
     # tanda baca per kalimat = kebiasaan naskah nyata (median terukur), dipakai memperkirakan jeda
     jeda_per_kalimat = (a["sec_per_sentence"] + a["sec_per_comma"] * 1.0 + a["sec_per_em_dash"] * 0.2)
@@ -244,7 +265,7 @@ def resep(seconds: float, presets: list, overhead: float, kalibrasi: dict | None
 
 
 def vonis(teks: str, seconds: float, presets: list, overhead: float,
-          kalibrasi: dict | None = None) -> dict:
+          kalibrasi: dict | None = None, margin: float = 0.0) -> dict:
     """Vonis SEBELUM sepeser pun dibelanjakan ke suara/gambar.
 
     status: 'ok' | 'terlalu_panjang' | 'terlalu_pendek'
@@ -252,14 +273,17 @@ def vonis(teks: str, seconds: float, presets: list, overhead: float,
     diberikan ke penulis untuk memperbaiki naskahnya sendiri (bukan mesin yang membuang kalimat:
     terbukti 2026-07-31 aturan buatan-tangan membuang fakta terkuat naskah).
     """
-    r = resep(seconds, presets, overhead, kalibrasi)
+    r = resep(seconds, presets, overhead, kalibrasi, margin)
     audio = prediksi_audio(teks, kalibrasi)
     video = round(audio + max(0.0, float(overhead)), 2)
     lo, hi = r["band_video"]
+    # `margin` mempersempit sasaran PENULIS saja (lihat `_margin_aman`). Gerbang memanggil tanpa
+    # margin, jadi ia tetap menilai dengan band yang sebenarnya — nol video sah yang ditolak.
+    m = _margin_aman(lo, hi, margin)
     n = ciri_teks(teks)["words"]
-    if video > hi:
+    if video > hi - m:
         status, selisih = "terlalu_panjang", max(1, n - r["kata_maks"])
-    elif video < lo:
+    elif video < lo + m:
         status, selisih = "terlalu_pendek", max(1, r["kata_min"] - n)
     else:
         status, selisih = "ok", 0

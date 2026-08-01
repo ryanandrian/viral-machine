@@ -536,7 +536,7 @@ def _refit_naskah(provider, model, script: dict, beats: list, resep: dict, vonis
             wajib_pertahankan = hilang[:8]
             continue
         v_baru = _vonis_fn(teks_baru, resep["_preset"], resep["_tangga"], resep["_overhead"],
-                           resep.get("_kalibrasi"))
+                           resep.get("_kalibrasi"), margin=resep.get("_margin", 0.0))
 
         # ── PUTARAN YANG MENJAUH DARI BAND TIDAK BOLEH DITERIMA ───────────────────────────────────
         # Docstring modul ini sudah lama menjanjikan "vonis durasi membaik", tapi kodenya tidak pernah
@@ -825,6 +825,26 @@ def _narrative_intent(target_duration, n_beats) -> str:
     if n_beats <= 7:
         return (f"{target_duration}s: a full short-form arc — build-up, surprising facts, emotional climax. Develop but stay tight.")
     return (f"LONG {target_duration}s: the complete arc — layered mystery, multiple distinct facts, build and release with depth. Zero filler.")
+
+
+def _margin_penulis(preset_seconds, tangga: list) -> float:
+    """Jarak aman (detik) dari tepi band untuk SASARAN PENULIS. Gerbang TIDAK memakainya.
+
+    Terukur 2026-08-02 (uji rantai 6 channel): BJ Yusroon mendarat 82,1 dtk pada band 82,5–97,5 —
+    meleset 0,4 dtk. Mesinnya tidak salah hitung; ia BERHENTI memperbaiki begitu ramalannya nyaris
+    menyentuh tepi, padahal ramalan itu punya galat ±1–2 dtk (leave-one-out per suara 0,89–2,34).
+    Menyatakan menang di dalam derau sendiri = menyerahkan hasil pada undian.
+
+    Besarnya = persen dari LEBAR band (kenop `script_margin_band_pct`), bukan angka mati: band preset
+    pendek jauh lebih sempit daripada band preset panjang.
+    """
+    try:
+        from src.production.duration_model import band_video as _bv
+        lo, hi = _bv(preset_seconds, tangga)
+        return max(0.0, (hi - lo) * _ambang.pct("script_margin_band_pct", 10))
+    except Exception as e:                      # fail-soft: tanpa margin = perilaku lama persis
+        logger.debug(f"[ScriptEngine] margin penulis dilewati ({e})")
+        return 0.0
 
 
 def _lipat_beat_liar(script: dict, active_beats: list | None) -> None:
@@ -1690,9 +1710,13 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
             _tangga = _act_presets()
             if _tangga and int(preset_seconds) in _tangga:
                 try:
-                    _resep = _resep_durasi(preset_seconds, _tangga, render_overhead_sec, _kalib)
+                    # MARGIN AMAN hanya untuk SASARAN PENULIS — gerbang tetap memakai band asli.
+                    _mgn = _margin_penulis(preset_seconds, _tangga)
+                    _resep = _resep_durasi(preset_seconds, _tangga, render_overhead_sec, _kalib,
+                                           margin=_mgn)
                     _resep.update({"_preset": preset_seconds, "_tangga": _tangga,
-                                   "_overhead": render_overhead_sec, "_kalibrasi": _kalib})
+                                   "_overhead": render_overhead_sec, "_kalibrasi": _kalib,
+                                   "_margin": _mgn})
                     logger.info(f"[ScriptEngine] resep durasi preset {preset_seconds}s: "
                                 f"{_resep['kata_min']}-{_resep['kata_maks']} kata (bidik {_resep['kata_bidik']}) / "
                                 f"{_resep['kalimat']} kalimat · band video "
@@ -1850,7 +1874,8 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                 from src.production.duration_model import (ciri_teks as _ciri, rincian_audio as _rincian,
                                                           vonis as _vonis)
                 _txt = script.get("full_script") or ""
-                _v   = _vonis(_txt, preset_seconds, _tangga, render_overhead_sec, _kalib)
+                _v   = _vonis(_txt, preset_seconds, _tangga, render_overhead_sec, _kalib,
+                              margin=_margin_penulis(preset_seconds, _tangga))
                 _f   = _ciri(_txt)
                 _rinci = _rincian(_txt, _kalib)
                 script["_duration_est"] = {                      # observability → tts_delivery_samples
