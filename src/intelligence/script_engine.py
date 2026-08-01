@@ -101,18 +101,24 @@ def _build_emotional_peak_guidance(niche_profile: dict) -> str:
 
 load_dotenv()
 
-_DEFAULT_SECTION_TIMING = _beats.timing_defaults()   # SATU SUMBER (0128) — identik nilai lama
+def _default_section_timing() -> dict:
+    """Durasi bawaan per-adegan dari `content_beats` (SATU SUMBER 0128).
+
+    DIBACA SAAT DIPAKAI, bukan sekali saat modul dimuat — lihat catatan pada `_beat_weight()`."""
+    return _beats.timing_defaults()
+
 
 def _get_section_timing(niche: str) -> dict:
     """Load section timing dari tabel niches (Supabase). Fallback ke default jika tidak ada."""
+    bawaan = _default_section_timing()
     try:
         niches = get_niches()
         timing = (niches.get(niche) or {}).get("section_timing") or {}
-        if timing and all(k in timing for k in _DEFAULT_SECTION_TIMING):
+        if timing and all(k in timing for k in bawaan):
             return timing
     except Exception:
         pass
-    return _DEFAULT_SECTION_TIMING.copy()
+    return bawaan.copy()
 
 
 def _scale_section_timing(section_timing: dict, target_seconds: float) -> dict:
@@ -220,12 +226,39 @@ def _build_insights_block(insights: dict) -> str:
 # 8s=1 (ai_video, di luar image-sequence). Image-sequence: 3..9 beat. Tiap beat = 1 seksi narasi + 1 scene.
 # SATU SUMBER (0128): kosakata beat dari src.content.beats (DB content_beats + fallback konstanta identik).
 # Dulu 5 dict tersebar di sini + core_facts_2 mati. Nilai turunan IDENTIK (bukti derive==current).
-_BEAT_WEIGHT   = _beats.weights()
-_ROLE_LABEL    = _beats.labels_upper()
+# DIBACA SAAT DIPAKAI, BUKAN SEKALI SAAT MODUL DIMUAT.
+#
+# Cacat yang diperbaiki 2026-08-02: keempat nilai ini dulu konstanta modul, jadi pekerja memotret
+# `content_beats` satu kali saat dinyalakan lalu memegang foto itu sampai di-restart. Akibatnya
+# rantai belajar putus di mata rantai TERAKHIR: `align_beat_weights` menulis bobot baru ke DB tiap
+# hari (bukti log produksi: core_facts 12→11 pada 29-Jul, climax 10→9 pada 1-Agu 10:23:23) tapi
+# pekerja yang menyala 10:22:04 tetap membagi kata dengan angka lama — dan layar admin "Bobot
+# antar-adegan" menjanjikan penyetelan harian yang tak pernah sampai ke produksi. Perubahan MANUAL
+# admin pun sama: tersimpan benar, tak pernah berlaku.
+#
+# Membaca saat dipakai TIDAK menambah beban DB: `src.content.beats._load()` punya cache TTL 300 dtk
+# + fallback konstanta, jadi pemanggilan berulang hanya menyusun ulang dict dari memori.
+#
+# Fungsi (bukan konstanta) juga menghindari ranjau bayangan: di dua tempat variabel lokal bernama
+# `_beats` menutupi modul `_beats` — helper ini mengurainya di lingkup modul, jadi kebal.
+def _beat_weight() -> dict:
+    """Bobot per-adegan (`content_beats.weight`) — porsi kata tiap adegan. Disetel mesin tiap hari."""
+    return _beats.weights()
+
+
+def _role_label() -> dict:
+    """Label peran adegan untuk prompt (mis. `hook` → HOOK)."""
+    return _beats.labels_upper()
+
+
+def _all_sections() -> list:
+    """Seluruh peran adegan yang aktif, terurut."""
+    return _beats.all_beats()
+
+
 # kata per kalimat alami (median naskah nyata) — satu sumber: duration_model.BAWAAN
 from src.production.duration_model import BAWAAN as _DUR_BAWAAN
 _WPS_KAL_BAWAAN = _DUR_BAWAAN["words_per_sentence"]
-_ALL_SECTIONS  = _beats.all_beats()
 
 
 def _active_beats(n_beats: int) -> list:
@@ -235,19 +268,21 @@ def _active_beats(n_beats: int) -> list:
 def _beats_for_preset(preset_seconds) -> list:
     """Beat aktif (SEGMENTASI) preset = SINGLE-SOURCE dari DB `duration_presets.beats`
     (konsisten dgn panel tenant/admin); fallback `_BEATS_FOR_N` bila DB kosong (pra-migrasi/legacy).
-    Validasi: hanya key beat dikenal (_BEAT_WEIGHT)."""
+    Validasi: hanya key beat dikenal (`_beat_weight()`)."""
     from src.config.format_catalog import preset_beats, preset_visual_beats
     db = preset_beats(preset_seconds)
     if db:
-        known = [b for b in db if b in _BEAT_WEIGHT]
+        dikenal = _beat_weight()
+        known = [b for b in db if b in dikenal]
         if known:
             return known
     return _active_beats(int(preset_visual_beats(preset_seconds)))
 
 
 def _distribute_words(active: list, total_words: int) -> dict:
-    tot = sum(_BEAT_WEIGHT.get(b, 5) for b in active) or 1
-    return {b: max(5, round(total_words * _BEAT_WEIGHT.get(b, 5) / tot)) for b in active}
+    bobot = _beat_weight()
+    tot = sum(bobot.get(b, 5) for b in active) or 1
+    return {b: max(5, round(total_words * bobot.get(b, 5) / tot)) for b in active}
 
 
 def _script_len_tol() -> float:
@@ -597,14 +632,15 @@ def _generate_per_beat(provider, model, topic, niche, beats: list, resep: dict,
                           and "background_music_mood" not in l and '"title"' not in l)
 
     hasil, terpakai = {}, []
+    _label = _role_label()
     for i, b in enumerate(beats):
         w = max(8, int(kuota.get(b, 0)))
         s_t = max(1, round(w / wpk))
-        peran = _ROLE_LABEL.get(b, b)
+        peran = _label.get(b, b)
         konteks = ""
         if terpakai:
             konteks = ("ALREADY WRITTEN (do NOT repeat these facts; continue naturally from here):\n"
-                       + "\n".join(f"- [{_ROLE_LABEL.get(k, k)}] {v}" for k, v in terpakai) + "\n\n")
+                       + "\n".join(f"- [{_label.get(k, k)}] {v}" for k, v in terpakai) + "\n\n")
         terakhir = (i == len(beats) - 1)
         user = (
             f"NICHE: {niche}\nTOPIC: {topic.get('topic','')}\n"
@@ -760,7 +796,7 @@ def compute_beat_durations(script: dict, word_timestamps: list | None, audio_dur
     pipeline) → dikonsumsi visual_assembler (bake Ken-Burns) DAN renderer (concat) = bake==display=exact
     → sinkron TTS, nol glitch. Dari word_timestamps NYATA (presisi per-beat) bila ada+andal; else proporsi
     jumlah-kata. Total dinormalisasi = audio_duration."""
-    beats  = script.get("beats") or _ALL_SECTIONS
+    beats  = script.get("beats") or _all_sections()
     counts = [max(1, len((script.get(b) or "").split())) for b in beats]
     total_w = sum(counts) or 1
     wt = word_timestamps or []
@@ -853,7 +889,8 @@ def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, ins
         n_beats = len(active)
         words   = _distribute_words(active, total_words)   # konsentrasi budget ke beat aktif (bukan sebar 8)
         n_scenes = len(active)
-        inactive = [s for s in _ALL_SECTIONS if s not in active]
+        _semua_beat = _all_sections()
+        inactive = [s for s in _semua_beat if s not in active]
         _wsum = sum(words.get(b, 0) for b in active) or 1
         # [DURASI-F3] BEAT PLAN = SATU-SATUNYA otoritas angka (dulu 3 tempat beda nilai → LLM disodori
         # mistar bertentangan). Tiap beat: target + MIN + MAX dari proporsi BAND SAH (satu penggaris).
@@ -871,8 +908,9 @@ def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, ins
         # menentukan mutu narasi ("Detik pertama yang menahan jempol penonton"), dan ia tuas yang KITA
         # kuasai — bukan bergantung pada model apa yang dipilih tenant. Kosong di DB = tak ada tambahan.
         _hint = _beats.hints(content_language)
+        _label_beat = _role_label()
         _plan_lines = "\n".join(
-            f"   beat {i+1} — {_ROLE_LABEL.get(b, b)}: target {words.get(b,0)} words (MIN {_bmin(words.get(b,0))} / MAX {_bmax(words.get(b,0))}) — {round(100*words.get(b,0)/_wsum)}%"
+            f"   beat {i+1} — {_label_beat.get(b, b)}: target {words.get(b,0)} words (MIN {_bmin(words.get(b,0))} / MAX {_bmax(words.get(b,0))}) — {round(100*words.get(b,0)/_wsum)}%"
             + (f"  → {_hint[b]}" if _hint.get(b) else "")
             for i, b in enumerate(active))
         beat_plan = (
@@ -890,7 +928,7 @@ def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, ins
             + (f"Also output field \"core_facts_2\" (a SECOND distinct fact).\n" if "core_facts_2" in active else "")
             + f"The numbered section guide below is your CRAFT TOOLBOX — apply only the active beats' techniques.\n"
         )
-        words = {s: words.get(s, 0) for s in _ALL_SECTIONS}   # panduan ber-nomor (1-8) refs semua 8; inactive→0
+        words = {s: words.get(s, 0) for s in _semua_beat}   # panduan ber-nomor (1-8) refs semua 8; inactive→0
     else:
         active, n_scenes, beat_plan = list(words.keys()), 6, ""
 
@@ -1150,7 +1188,7 @@ class ScriptEngine:
             if empty:
                 logger.warning(f"[ScriptEngine] Beat aktif kosong (tolak→retry): {empty}")
                 return None
-        script.setdefault("section_durations", section_timing or _DEFAULT_SECTION_TIMING)
+        script.setdefault("section_durations", section_timing or _default_section_timing())
         if not script.get("full_script"):
             parts = [script.get(s, "") for s in _beats.all_beats()]
             script["full_script"] = " ".join(p for p in parts if p)
@@ -1231,7 +1269,7 @@ class ScriptEngine:
         Set script['thumbnail_concept'] + script['visual_suggestions'] (index0 = thumbnail = scene hook).
         Sanitize tiap prompt + fallback EKSTRAKTIF (robust): tak pernah "N/A"/instruksi/kosong → tahan
         model image murah (flux/SD). visual_suggestions panjang = jumlah beat (= visual_beats preset)."""
-        beats      = script.get("beats") or list(_ALL_SECTIONS)
+        beats      = script.get("beats") or _all_sections()
         run_config = self._get_run_config(tenant_config)
         # VISUAL DNA niche (owner: SELURUH property niche = sumber prompting; NO-HARDCODE).
         # Inject SELURUH key visual_style apa adanya → admin tambah key (lighting/camera/composition/
@@ -1270,8 +1308,9 @@ class ScriptEngine:
         model     = run_config.llm_model_for("utility") if run_config else ""
         if llm:
             try:
+                _label_visual = _role_label()
                 beat_lines = "\n".join(
-                    f"- BEAT {i+2} [{_ROLE_LABEL.get(b, b)}]: {(script.get(b) or '').strip()[:400]}"
+                    f"- BEAT {i+2} [{_label_visual.get(b, b)}]: {(script.get(b) or '').strip()[:400]}"
                     for i, b in enumerate(non_hook)
                 )
                 system = (
@@ -1850,7 +1889,7 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                                         for t in _cacat[:6])
                     _teks_lama = best_script.get("full_script") or ""
                     _isi = {b: (best_script.get(b) or "").strip()
-                            for b in (_beats_for_preset(preset_seconds) if preset_seconds else _ALL_SECTIONS)
+                            for b in (_beats_for_preset(preset_seconds) if preset_seconds else _all_sections())
                             if (best_script.get(b) or "").strip()}
                     _up = (
                         "Fix ONLY these mechanical defects in the narration below. They are certain, "
@@ -1950,14 +1989,18 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                 f"threshold {min_score} — using best available"
             )
 
-        _beats = _beats_for_preset(preset_seconds) if preset_seconds else list(_ALL_SECTIONS)
+        # NAMA lokal sengaja BUKAN `_beats`: nama itu milik modul `src.content.beats` di lingkup file
+        # ini. Variabel lokal bernama sama membuat SELURUH fungsi ini memperlakukan `_beats` sebagai
+        # lokal — satu pemanggilan `_beats.xxx()` yang ditambahkan kelak akan meledak UnboundLocalError,
+        # jauh dari baris ini dan sulit dilacak. Ranjau itu dicabut, bukan dihindari.
+        _beat_aktif = _beats_for_preset(preset_seconds) if preset_seconds else _all_sections()
         best_script.update({
             "topic":                   topic.get("topic", ""),
             "viral_score":             topic.get("viral_score", 0),
             "script_viral_score":      best_score,
             "tenant_id":               tenant_config.tenant_id,
             "niche":                   tenant_config.niche,
-            "beats":                   _beats,   # urutan beat aktif (compression-mapping) → image-gen + render per-preset
+            "beats":                   _beat_aktif,   # urutan beat aktif (compression-mapping) → image-gen + render per-preset
 
             "generated_at":            datetime.now().isoformat(),
             "llm_provider_used":       actual_provider,

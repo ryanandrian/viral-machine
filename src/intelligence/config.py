@@ -1,5 +1,6 @@
 import os
 import json
+import time
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
@@ -111,6 +112,19 @@ system_config = SystemConfig()
 # ────────────────────────────────────────────────────────────────────────────
 
 _NICHES_CACHE: dict | None = None
+_NICHES_TS: float = 0.0
+# Masa berlaku cache — SAMA dengan empat cache konfigurasi lain (`app_config`, `content_beats`,
+# `format_catalog`, katalog LLM) supaya seluruh konfigurasi bernapas dalam irama yang sama.
+#
+# CACAT YANG DITUTUP 2026-08-02: sebelum ini cache niche TIDAK punya masa berlaku sama sekali —
+# sekali dibaca, dipegang sampai proses mati. Pekerja produksi hidup berjam-jam sampai berhari-hari,
+# jadi SELURUH DNA niche yang menjadi asupan LLM (deskripsi, persona narasi, gaya visual, kriteria
+# emosi, kata kunci, timing seksi, hashtag) adalah potret saat pekerja dinyalakan. Admin menyunting
+# niche di `/admin/niches`, atau tenant Business di `/niche-studio` — tersimpan benar di DB, tak
+# pernah sampai ke naskah. `invalidate_niches_cache()` sudah ditulis untuk kasus ini tapi TIDAK
+# PERNAH dipanggil satu baris pun (mekanisme lahir mati), dan memang tak bisa menolong: layar
+# berjalan di proses Next.js, pekerja di proses Python — memori keduanya terpisah.
+_TTL = 300
 _CACHE_FILE = Path(__file__).parent.parent.parent / "data" / "niches_cache.json"
 
 
@@ -207,25 +221,36 @@ def get_niches() -> dict:
         RuntimeError: jika Supabase unreachable DAN local cache tidak ada.
                       Pipeline harus berhenti dan lapor ke Telegram.
     """
-    global _NICHES_CACHE
-    if _NICHES_CACHE is not None:
+    global _NICHES_CACHE, _NICHES_TS
+    if _NICHES_CACHE is not None and (time.time() - _NICHES_TS) < _TTL:
         return _NICHES_CACHE
 
     # 1. Coba Supabase (primary source)
     try:
         niches = _load_from_supabase()
         _save_cache(niches)
-        _NICHES_CACHE = niches
+        _NICHES_CACHE, _NICHES_TS = niches, time.time()
         print(f"[NicheRegistry] {len(niches)} niches loaded from Supabase")
         return _NICHES_CACHE
     except Exception as e:
         print(f"[NicheRegistry] Supabase tidak tersedia ({e}) — coba local cache")
 
+    # 1b. PENYEGARAN gagal tapi kita SUDAH punya data baik → pakai yang lama, JANGAN hentikan produksi.
+    #     Tanpa cabang ini, memberi masa berlaku pada cache justru menanam cacat baru: satu kedipan
+    #     jaringan saat penyegaran akan menjatuhkan produksi yang sebelumnya berjalan mulus (dan bisa
+    #     memicu RuntimeError di bawah). Penanda waktu ikut dimajukan supaya percobaan berikutnya
+    #     tidak membanjiri DB setiap panggilan.
+    if _NICHES_CACHE is not None:
+        _NICHES_TS = time.time()
+        print(f"[NicheRegistry] ⚠️  penyegaran gagal — tetap memakai {len(_NICHES_CACHE)} niche "
+              f"yang sudah ada (coba lagi ≤{_TTL} dtk)")
+        return _NICHES_CACHE
+
     # 2. Coba local cache (admin-managed fallback)
     try:
         niches = _load_cache()
         if niches:
-            _NICHES_CACHE = niches
+            _NICHES_CACHE, _NICHES_TS = niches, time.time()
             print(
                 f"[NicheRegistry] ⚠️  {len(niches)} niches dari local cache "
                 f"(data/niches_cache.json) — Supabase unreachable"
@@ -244,22 +269,31 @@ def get_niches() -> dict:
 
 # ── Bahasa konten — nama tampilan dari katalog content_languages (DB-driven, no hardcode) ──
 _CONTENT_LANG_CACHE: dict | None = None
+_CONTENT_LANG_TS: float = 0.0
 
 def content_language_name(locale: str) -> str:
     """Nama bahasa utk prompt LLM (mis. 'id-ID' → 'Bahasa Indonesia') dari tabel content_languages.
-    Cache per-proses; fail-soft → locale apa adanya (LLM paham kode BCP-47)."""
-    global _CONTENT_LANG_CACHE
+
+    Masa berlaku `_TTL` sama dengan katalog konfigurasi lain: bahasa yang admin tambahkan ke katalog
+    ikut terbaca pekerja yang sedang berjalan, tanpa restart. Fail-soft → locale apa adanya (LLM
+    paham kode BCP-47)."""
+    global _CONTENT_LANG_CACHE, _CONTENT_LANG_TS
     loc = (locale or "").strip()
     if not loc:
         return "English"
-    if _CONTENT_LANG_CACHE is None:
+    if _CONTENT_LANG_CACHE is None or (time.time() - _CONTENT_LANG_TS) >= _TTL:
         try:
             from supabase import create_client
             sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
             r = sb.table("content_languages").select("locale, display_name").execute()
             _CONTENT_LANG_CACHE = {row["locale"]: (row.get("display_name") or row["locale"]) for row in (r.data or [])}
         except Exception:
-            _CONTENT_LANG_CACHE = {}   # fail-soft; jangan retry tiap panggilan dalam proses ini
+            # Fail-soft. Isi yang SUDAH baik tidak dihapus — sebelum masa berlaku ada, baris ini
+            # hanya berjalan sekali sehingga menulis {} tak berbahaya; dengan penyegaran berkala,
+            # menulis {} akan MENGHAPUS katalog yang sudah benar hanya karena satu kedipan jaringan.
+            if _CONTENT_LANG_CACHE is None:
+                _CONTENT_LANG_CACHE = {}
+        _CONTENT_LANG_TS = time.time()   # sukses atau gagal: jangan mencoba tiap panggilan
     return _CONTENT_LANG_CACHE.get(loc, loc)
 
 
@@ -271,7 +305,10 @@ def is_english_locale(locale: str) -> bool:
 def invalidate_niches_cache() -> None:
     """
     Reset memory cache — paksa reload dari Supabase pada pemanggilan get_niches() berikutnya.
-    Dipanggil jika admin update niches table dan ingin perubahan langsung berlaku.
+
+    Dipakai proses yang MENYUNTING niche lalu ingin membacanya kembali seketika (mis. skrip
+    pemeliharaan). Layar admin/tenant TIDAK bisa memakainya — memorinya di proses lain; untuk itu
+    yang bekerja adalah masa berlaku `_TTL` di atas.
     """
-    global _NICHES_CACHE
-    _NICHES_CACHE = None
+    global _NICHES_CACHE, _NICHES_TS
+    _NICHES_CACHE, _NICHES_TS = None, 0.0
