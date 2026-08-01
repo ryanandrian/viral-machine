@@ -708,8 +708,6 @@ class TenantConfigManager:
                 # Niche Rotation (s84)
                 default_niche_rotation  = list(row.get("default_niche_rotation") or []),
                 niche_rotation_index    = int(row.get("niche_rotation_index") or 0),
-                # OAuth Token path (s84d) — opsional, auto-resolve jika kosong
-                youtube_token_path      = row.get("youtube_token_path") or "",
             )
             # Fix fosil s85 (2026-07-14): penanda niche yang DNA-nya termuat di atas — dipakai load()
             # utk memuat-ulang visual_style/fallbacks bila niche EFEKTIF run/channel berbeda.
@@ -757,8 +755,6 @@ class TenantConfigManager:
             # Niche Rotation (s84)
             default_niche_rotation  = [],
             niche_rotation_index    = 0,
-            # OAuth Token path (s84d)
-            youtube_token_path      = "",
         )
 
     def invalidate_cache(self, tenant_id: str) -> None:

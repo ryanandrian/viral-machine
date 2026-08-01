@@ -240,7 +240,10 @@ bukan membaca kode.
 | **Resep tiap preset × tiap channel aktif** (2-Agu) | 6 channel × 7 preset = **42 kombinasi, NOL di luar band** — resep yang diperintahkan ke penulis, diterjemahkan balik ke durasi video, selalu jatuh di dalam rentangnya |
 | **DNA niche sampai ke prompt** (2-Agu) | prompt naskah nyata `dark_history` ditangkap: 8 dari 8 kolom DNA bertujuan-naskah MUNCUL (nama · deskripsi · gaya · emosi · persona · kriteria skor · kata kunci · mood). Kolom bertujuan lain diverifikasi di tujuannya masing-masing (gambar/musik/suara/caption/publish); hanya `origin` yang nol konsumen (metadata asal-usul) |
 | **Jalur penanda waktu pada ElevenLabs** (2-Agu) | jalur pertama menolak KEEMPAT tanda (koma −0,039 · em-dash −0,009 · elipsis sebaran ±0,170 · titik 67% konsisten) → jalur kedua menghasilkan keempatnya (0,197 · 0,162 · 0,3245 · 0,418). Angka TIDAK disimpan: render berjalan pada `speed 0,9` (0187 belum menyala) |
-| Uji otomatis | **505 lulus** |
+| **ANGKA DASAR PRODUKSI** (kode LAMA, server `0a0c2b9`) | 80 video terakhir dinilai dgn band titik-tengah: **51 DI LUAR band (64%)** — pendek 4–67 dtk, panjang 9–37 dtk. Inilah angka yang harus dikalahkan; semua perbaikan 1–2 Agu BELUM naik ke server |
+| **Rantai penuh 6 channel, KODE BARU** (2-Agu, gpt-4o-mini, izin owner) | **5 dari 6 MASUK band** · ramalan meleset 0,1–0,7 dtk di lima channel · naskah bersih 6/6 |
+| — satu-satunya yang meleset: RAD The Explorer (ElevenLabs) | Dibuktikan penyebab TUNGGALnya: naskah SAMA, suara SAMA → pada katalog `speed 0,87` audio **80,4** dtk (video 83,9, DI LUAR band 52–68, ramalan meleset 20,0 dtk); pada **ratio 1** audio **62,1** dtk (video 65,6, **MASUK**, ramalan meleset **1,8 dtk**). Migrasi 0187 menutupnya → **6/6** |
+| Uji otomatis | **521 lulus** |
 | Audit wiring DB→BE→FE | 11 tabel · 65 kolom diperiksa satu per satu |
 
 ### MASIH TERBUKA (jujur — jangan diklaim tuntas)
