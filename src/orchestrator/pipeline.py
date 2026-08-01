@@ -240,14 +240,14 @@ class Pipeline:
                         if not (_lo35 - _lebar35 <= _proj35 <= _hi35 + _lebar35):
                             raise LLMError(
                                 f"Naskah tidak layak: perkiraan durasi video {_proj35:.0f} detik, jauh di "
-                                f"luar rentang preset {int(_p35)} detik (sah {_lo35:.0f}–{_hi35:.0f} detik). "
+                                f"luar rentang preset {int(_p35)} detik (sah {_lo35:.1f}–{_hi35:.1f} detik). "
                                 f"Produksi dihentikan SEBELUM biaya suara & gambar terpakai; naskah baru "
                                 f"dibuat otomatis pada siklus berikutnya.", step="script")
                         result["steps"]["duration_gate_hulu"] = {
                             "status": "ok" if _lo35 <= _proj35 <= _hi35 else "near_miss",
                             "projected": round(_proj35, 1), "window": [round(_lo35), round(_hi35)]}
                         logger.info(f"[Pipeline] Gerbang durasi HULU: proyeksi {_proj35:.1f}s vs band "
-                                    f"{_lo35:.0f}-{_hi35:.0f}s → "
+                                    f"{_lo35:.1f}-{_hi35:.1f}s → "
                                     f"{'lolos' if _lo35 <= _proj35 <= _hi35 else 'near-miss (lanjut)'}")
             except LLMError:
                 raise
@@ -296,7 +296,7 @@ class Pipeline:
                                 script["hook"] = script["original_hook"]
                                 script["hook_reverted_reason"] = (
                                     f"hook baru membuat durasi {_vv['video_prediksi']:.1f}s di luar batas "
-                                    f"{_vv['band_video'][0]:.0f}-{_vv['band_video'][1]:.0f}s")
+                                    f"{_vv['band_video'][0]:.1f}-{_vv['band_video'][1]:.1f}s")
                                 logger.warning(f"[Pipeline] hook optimasi DIPULIHKAN ke asal — "
                                                f"{script['hook_reverted_reason']}")
                     except Exception as _he:
@@ -428,7 +428,7 @@ class Pipeline:
                     if not (_gross_lo <= _gate_proj <= _gross_hi):
                         raise TTSError(
                             f"Durasi proyeksi {_gate_proj:.1f}s meleset PARAH dari preset {_gate_preset}s "
-                            f"(batas sah {_gate_lo:.0f}–{_gate_hi:.0f}s, pagar {_gross_lo:.0f}–{_gross_hi:.0f}s) — "
+                            f"(batas sah {_gate_lo:.1f}–{_gate_hi:.1f}s, pagar {_gross_lo:.1f}–{_gross_hi:.1f}s) — "
                             f"naskah tak layak, dihentikan sebelum biaya render terpakai; diproduksi ulang "
                             f"otomatis siklus berikutnya.", step="tts")
                 _within = (_gate_lo is None) or (_gate_lo <= _gate_proj <= _gate_hi)
@@ -438,10 +438,10 @@ class Pipeline:
                         "projected": round(_gate_proj, 1), "window": [round(_gate_lo), round(_gate_hi)]}
                     if _within:
                         logger.info(f"[Pipeline] Gerbang durasi pra-visual LOLOS: proyeksi {_gate_proj:.1f}s "
-                                    f"dalam batas sah {_gate_lo:.0f}–{_gate_hi:.0f}s (aturan titik-tengah)")
+                                    f"dalam batas sah {_gate_lo:.1f}–{_gate_hi:.1f}s (aturan titik-tengah)")
                     else:
                         logger.info(f"[Pipeline] Durasi NEAR-MISS {_gate_proj:.1f}s (batas sah {_gate_lo:.0f}–"
-                                    f"{_gate_hi:.0f}s) — LANJUT produksi → review pasca-render (bukan dibuang)")
+                                    f"{_gate_hi:.1f}s) — LANJUT produksi → review pasca-render (bukan dibuang)")
             # Image-gen per-preset (MULTI_FORMAT §3): durasi per-beat (1 image/beat) dari word_timestamps
             # NYATA → sinkron TTS. SUMBER TUNGGAL: dikonsumsi visual_assembler (bake) & video_renderer (concat).
             from src.intelligence.script_engine import compute_beat_durations
@@ -897,9 +897,15 @@ class Pipeline:
                         self._qc_kode = ("durasi_kepanjangan" if duration_secs > hi else "durasi_kependekan")
                         self._qc_param = {"durasi": round(float(duration_secs), 1),
                                           "preset": int(target_seconds),
-                                          "min": round(lo), "maks": round(hi)}
+                                          # SATU DESIMAL, bukan bulat: setiap batas band berakhir di
+                                          # ",50" (titik tengah antar-preset), dan pembulatan Python
+                                          # membuatnya kadang melebar kadang menyempit (82,5→82 tapi
+                                          # 97,5→98). Terukur 2026-08-01: video 82,1 dtk DITOLAK
+                                          # sementara tenant diberi tahu "masih sah 82–98 detik" —
+                                          # angka yang ditampilkan membantah vonisnya sendiri.
+                                          "min": round(lo, 1), "maks": round(hi, 1)}
                         return False, (f"Durasi {duration_secs:.1f}s {_arah} untuk preset {target_seconds}s "
-                                       f"(masih sah {lo:.0f}–{hi:.0f}s — di luar itu lebih dekat ke preset lain)")
+                                       f"(masih sah {lo:.1f}–{hi:.1f}s — di luar itu lebih dekat ke preset lain)")
             else:
                 # Interim (tanpa preset): floor integritas (deteksi render terpotong-total)
                 min_dur = _ambang.detik("qc_min_duration_sec", 3)

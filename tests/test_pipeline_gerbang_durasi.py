@@ -146,3 +146,32 @@ def test_kegagalan_gerbang_hulu_TIDAK_menjatuhkan_produksi():
     hulu = src[src.index("GERBANG DURASI PALING HULU"):src.index("STEP 4: Hook Optimization")]
     assert "except LLMError:" in hulu and "raise" in hulu, "kegagalan sah ikut tertelan"
     assert "non-fatal" in hulu, "error tak terduga di gerbang hulu bisa menjatuhkan produksi"
+
+
+def test_batas_yang_DITAMPILKAN_tidak_boleh_membantah_vonisnya():
+    """Setiap batas band berakhir di ",50" (titik tengah antar-preset), dan pembulatan Python membuatnya
+    kadang MELEBAR kadang MENYEMPIT: 82,5→82 tapi 97,5→98. Terukur 2026-08-01 pada channel BISIK
+    NUSANTARA: video 82,1 dtk DITOLAK sementara tenant diberi tahu "masih sah 82–98 detik" — angka yang
+    ditampilkan membantah vonisnya sendiri, dan tenant kehilangan kepercayaan pada mesinnya.
+
+    Diuji pada seluruh tangga preset: batas yang ditampilkan harus SAMA dengan batas yang dipakai
+    memutuskan, sampai satu desimal."""
+    from src.production.duration_model import band_video
+    tangga = [8, 15, 30, 45, 60, 75, 90]
+    for p in tangga:
+        lo, hi = band_video(p, tangga)
+        # angka yang ditampilkan (satu desimal) harus identik dengan yang dipakai memutuskan
+        assert round(lo, 1) == lo and round(hi, 1) == hi, \
+            f"preset {p}: batas {lo}/{hi} tak terwakili satu desimal"
+        # dan setiap batas memang berakhir di ,5 → pembulatan bulat PASTI menyesatkan
+        assert abs(lo * 10 % 5) < 1e-9 and abs(hi * 10 % 5) < 1e-9
+
+
+def test_pesan_ke_tenant_memakai_satu_desimal():
+    import inspect
+
+    import src.orchestrator.pipeline as pl
+    src = inspect.getsource(pl)          # seluruh modul: batas ditampilkan di run() DAN di QC
+    assert '"min": round(lo, 1)' in src, "parameter alasan QC masih dibulatkan ke bilangan bulat"
+    assert ':.0f}–{' not in src and ':.0f}-{' not in src, \
+        "masih ada batas yang ditampilkan tanpa desimal"
