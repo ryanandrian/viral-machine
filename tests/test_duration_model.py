@@ -121,11 +121,23 @@ def test_prediksi_naik_bila_kalimat_bertambah_walau_kata_sama():
     assert p2 > p1, "jeda per kalimat tidak berpengaruh — model salah"
 
 
-def test_elipsis_mahal_sesuai_ukuran():
-    """Terukur 1,38 dtk per elipsis (benih lama 0,75) — inilah sebab prompt melarang '...'."""
+def test_elipsis_berbiaya_sesuai_yang_TERUKUR():
+    """Elipsis menambah durasi — sebesar yang TERUKUR, bukan sebesar yang dulu dikira.
+
+    Riwayat angka ini adalah contoh terbaik kenapa regresi tidak boleh dipercaya untuk tanda jeda:
+        benih tak terkalibrasi           0,75 dtk
+        turunan regresi (dipakai s/d 31-Jul)  1,376 dtk   ← uji ini dulu mengunci ">1,0 dtk"
+        di-fit dari data tanpa elipsis        0,000 dtk   ← ranjau 'elipsis gratis'
+        DIUKUR LANGSUNG 2026-08-01       0,156–0,376 dtk  ← kenyataan, 5 suara, pasangan terkontrol
+    Jadi uji ini sendiri pernah menjadi penjaga sebuah kekeliruan: ia akan MENOLAK angka yang benar.
+    Sekarang ia mengunci yang bisa dipertanggungjawabkan — elipsis berbiaya, dan besarnya dalam
+    rentang yang benar-benar terukur di seluruh suara."""
     tanpa = "Kota itu jatuh pada tahun 1348."
     dengan = "Kota itu jatuh... pada tahun 1348."
-    assert prediksi_audio(dengan) - prediksi_audio(tanpa) > 1.0
+    selisih = prediksi_audio(dengan) - prediksi_audio(tanpa)
+    assert selisih > 0.05, "elipsis dianggap gratis"
+    assert selisih < 1.0, ("elipsis diberi biaya di atas apa pun yang pernah terukur (maks 0,376 dtk) "
+                           "— kemungkinan angka turunan regresi kembali dipasang")
 
 
 # ── resep (perintah ke penulis) ───────────────────────────────────────────────────────────────────
@@ -209,8 +221,8 @@ def test_modul_tak_punya_jalan_masuk_untuk_kecepatan_suara():
 def test_koefisien_KOSONG_memakai_bawaan_bukan_dianggap_nol():
     """Bug NYATA yang tertangkap 2026-08-01: naskah kalibrasi tak memuat satu pun elipsis, sehingga
     `sec_per_ellipsis` ter-fit **0,0** dan tertulis ke DB. Artinya mesin diberi tahu "tanda '...' itu
-    GRATIS" — padahal biaya terukurnya >1 detik per tanda. Naskah produksi ber-elipsis akan diramal
-    terlalu pendek dan tak ada yang tahu sebabnya.
+    GRATIS" — padahal biaya terukurnya 0,156–0,376 dtk per tanda. Naskah produksi ber-elipsis akan
+    diramal terlalu pendek dan tak ada yang tahu sebabnya.
 
     Aturan: koefisien yang TIDAK ADA di data harus kosong (None) → dipakai angka BAWAAN terukur.
     Nol hanya sah bila memang TERUKUR nol."""
@@ -222,7 +234,9 @@ def test_koefisien_KOSONG_memakai_bawaan_bukan_dianggap_nol():
     # elipsis WAJIB menambah durasi meski kalibrasi tak punya datanya
     tanpa = prediksi_audio("Kota itu jatuh pada tahun 1348.", kal)
     dengan = prediksi_audio("Kota itu jatuh... pada tahun 1348.", kal)
-    assert dengan - tanpa > 1.0, "elipsis tidak berbiaya padahal kalibrasi kosong"
+    # abs=0.011: `prediksi_audio` membulatkan ke 2 desimal, jadi selisih dua ramalan bisa meleset 0,01
+    assert dengan - tanpa == pytest.approx(BAWAAN["sec_per_ellipsis"], abs=0.011), \
+        "elipsis tidak berbiaya padahal kalibrasi kosong (atau tidak memakai angka bawaan terukur)"
 
 
 def test_penulis_kalibrasi_tidak_menulis_nol_untuk_ciri_yang_TIDAK_ADA_di_data():

@@ -44,12 +44,22 @@ def _rate_to_factor(rate_str) -> float:
         return 1.0
 
 
-def _apply_speed_to_rate(base_rate, speed: float) -> str:
-    """Durasi-via-speed (Pilihan A): gabung baseline rate edge dgn pengali kecepatan ter-solve gate
-    → string rate edge. S=1.0 ⇒ persis baseline (nol regresi). Clamp ke rentang knob edge [-50%,+100%]."""
-    factor = _rate_to_factor(base_rate) * max(0.1, float(speed or 1.0))
-    pct = max(-50, min(100, round((factor - 1.0) * 100)))
-    return f"+{pct}%" if pct >= 0 else f"{pct}%"
+# `_apply_speed_to_rate` DIBUANG 2026-08-01 bersama jalur datanya.
+#
+# Fungsi itu menggabungkan baseline suara dengan `tts_voice_settings[niche].speed` — lubang tempat
+# solver durasi dulu menyuntikkan pengali kecepatan. Solvernya sudah dicabut 31-Jul, TAPI JALUR
+# DATANYA TERTINGGAL HIDUP, dan nilai lamanya masih ada di DB setiap tenant (0,83–0,93). Terukur
+# 2026-08-01 pada channel yang SEDANG AKTIF:
+#
+#     BJ Yusroon   (dark_history, preset 90 dtk)  speed 0,83  → dibacakan pada −17%
+#     Abyss ID     (ocean_mysteries)              speed 0,86 × baseline +5% → −10%
+#
+# Jadi keluhan owner "suara sangat lambat, seperti orang malas" MASIH BERLAKU hari ini meski tuasnya
+# sudah "dicabut" — karena yang dicabut hanya yang MENULIS, bukan yang MEMBACA. Pelajaran yang sama
+# dengan lima generasi perbaikan durasi yang bertumpuk: mencabut separuh rantai membuat separuh sisanya
+# jadi ranjau yang lebih sulit dilihat.
+#
+# Sekarang laju bicara SEMATA-MATA dari `voice_catalog.default_settings` (kenop admin yang terlihat).
 
 
 class EdgeTTSProvider(TTSProvider):
@@ -67,19 +77,27 @@ class EdgeTTSProvider(TTSProvider):
             raise TTSError(
                 "Edge TTS: voice belum ter-resolve. Set voice di Channel (channels.voice_key, §10.B FINAL)."
             )
-        # Durasi-via-speed (Pilihan A, multi-provider): rate dinamis = baseline rate × kecepatan ter-solve
-        # gate. baseline (voice_catalog.default_settings.rate) = titik S=1.0 (perilaku lama, nol regresi);
-        # gate menyuntik speed ter-solve ke tts_voice_settings[niche].speed → modulasi pace utk durasi tepat.
-        _base_rate = (config.get("tts_voice_default_settings") or {}).get("rate") or DEFAULT_RATE
+        # LAJU BICARA = HANYA baseline suara dari katalog (kenop admin yang terlihat di layar).
+        # Lapisan `tts_voice_settings[niche].speed` TIDAK LAGI DIBACA — lihat catatan di atas: itu lubang
+        # tuas kecepatan yang dilarang owner, dan nilai lamanya masih membuat channel aktif dibacakan
+        # 17% lebih lambat. Bila lapisan itu masih memuat speed, kita LAPORKAN bahwa ia diabaikan —
+        # diam berarti tak seorang pun tahu data basi itu ada.
+        from src.production.voice_delivery import rasio_laju, rasio_teks
+        _setelan   = (config.get("tts_voice_default_settings") or {})
+        self.rate  = _setelan.get("rate") or DEFAULT_RATE
         _niche     = config.get("niche") or ""
         _vs        = config.get("tts_voice_settings") or {}
         _override  = _vs.get(_niche, {}) if isinstance(_vs, dict) else {}
-        _S         = float(_override.get("speed", 1.0) or 1.0)
-        self.rate  = _apply_speed_to_rate(_base_rate, _S)
-        # Setelan laju YANG BENAR-BENAR dikirim ke vendor — direkam ke sampel kalibrasi (0184).
-        # Tanpa ini, sampel dari baseline berbeda tercampur diam-diam dan kalibrasi jadi
-        # 'percaya diri tapi salah' (kesalahan paling mahal 2026-07-31: dua hari terbuang).
-        self.effective_rate = self.rate
+        if _override.get("speed") is not None:
+            logger.warning(
+                f"[EdgeTTS] setelan lama tts_voice_settings[{_niche}].speed="
+                f"{_override.get('speed')} DIABAIKAN — kecepatan suara bukan tuas durasi (aturan owner "
+                f"2026-07-29) dan laju bicara hanya boleh dari voice_catalog.default_settings. "
+                f"Suara dibacakan pada {self.rate}.")
+        # Laju yang BENAR-BENAR dipakai, sebagai RASIO tanpa satuan — direkam ke sampel kalibrasi
+        # (0184/0185). Rasio, bukan string penyedia: penjaga kalibrasi harus bisa membandingkan angka
+        # dari penyedia mana pun. Kesalahan paling mahal 2026-07-31 lahir dari tidak adanya angka ini.
+        self.effective_rate = rasio_teks(rasio_laju(_setelan))
         self._word_timestamps: list[dict] | None = None
 
     # ──────────────────────────────────────────────

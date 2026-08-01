@@ -75,16 +75,21 @@ class OpenAITTSProvider(TTSProvider):
         except ImportError:
             raise TTSError("openai tidak terinstall. Jalankan: pip install openai")
 
-        # Durasi-via-speed (Pilihan A, multi-provider): terapkan kecepatan terpecahkan gate/LLM.
-        # Sumber = {baseline voice_catalog.default_settings} ⊕ {override tts_voice_settings[niche]}
-        # (gate menyuntik speed ter-solve ke override saat runtime) — POLA SAMA elevenlabs (no-hardcode).
-        # S=1.0 (default) ⇒ perilaku lama (OpenAI default) = nol regresi. Clamp ke rentang API OpenAI.
+        # LAJU BICARA: HANYA dari baseline katalog (kenop admin), bawaan 1,0 = laju alami.
+        # Lapisan `tts_voice_settings[niche].speed` TIDAK LAGI DIBACA: itu lubang tempat solver durasi
+        # dulu menyuntikkan pengali kecepatan (dilarang owner 2026-07-29). Solvernya dicabut 31-Jul,
+        # tapi nilai lamanya masih ada di DB tiap tenant (0,83–0,93) dan MENANG di atas baseline —
+        # sehingga suara masih dibacakan lambat meski tuasnya "sudah tidak ada".
+        from src.production.voice_delivery import rasio_laju, rasio_teks
         niche     = self.config.get("niche") or ""
         baseline  = self.config.get("tts_voice_default_settings", {}) or {}
         vs_cfg    = self.config.get("tts_voice_settings", {}) or {}
         override  = vs_cfg.get(niche, {}) if isinstance(vs_cfg, dict) else {}
-        speed     = float({**baseline, **override}.get("speed", 1.0) or 1.0)
-        speed     = round(min(4.0, max(0.25, speed)), 3)   # rentang API OpenAI TTS
+        if isinstance(override, dict) and override.get("speed") is not None:
+            logger.warning(f"[OpenAI TTS] setelan lama tts_voice_settings[{niche}].speed="
+                           f"{override.get('speed')} DIABAIKAN — kecepatan suara bukan tuas durasi.")
+        speed     = round(min(4.0, max(0.25, rasio_laju(baseline))), 3)   # rentang API OpenAI TTS
+        self.effective_rate = rasio_teks(speed)
         logger.info(f"[OpenAI TTS] voice={self.voice} model={self.model} speed={speed} chars={len(text)}")
 
         try:

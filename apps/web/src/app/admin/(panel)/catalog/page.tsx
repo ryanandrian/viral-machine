@@ -24,8 +24,11 @@ type Cat = {
   // admin mengisi "Pace voice" tapi mesin memakai angka kalibrasi yang MENIMPANYA, dan angka yang
   // BERLAKU tak terlihat di mana pun → admin menyetel sesuatu yang tak berefek tanpa tahu.
   tts_pace_calibration?: { voice_key: string; delivery_wps: number | null; sec_per_char: number | null;
-    sec_per_sentence: number | null; chars_per_word: number | null; words_per_sentence: number | null;
-    calib_error_secs: number | null; sample_n: number | null; updated_at?: string }[];
+    sec_per_sentence: number | null; sec_per_comma: number | null; sec_per_ellipsis: number | null;
+    sec_per_em_dash: number | null; sec_per_digit: number | null;
+    chars_per_word: number | null; words_per_sentence: number | null;
+    calib_error_secs: number | null; sample_n: number | null; updated_at?: string;
+    pause_source?: string | null; pause_measured_at?: string | null }[];
 };
 
 // Kolom yang WAJIB dropdown (nilai-sah dari registry KODE via catalog_valid_values) — anti-typo.
@@ -775,11 +778,29 @@ export default function AdminCatalogPage() {
                   <td className="muted" style={{ fontSize: "var(--text-xs)", whiteSpace: "nowrap" }}>
                     {(() => {
                       const k = (data.tts_pace_calibration ?? []).find((c) => c.voice_key === v.voice_key);
-                      if (!k || k.sec_per_char == null) return <Bi id="belum dikalibrasi" en="not calibrated yet" />;
+                      const jedaUkur = k?.pause_source === "measured";
+                      if (!k || (k.sec_per_char == null && !jedaUkur)) return <Bi id="belum dikalibrasi" en="not calibrated yet" />;
                       const err = k.calib_error_secs != null ? `±${Number(k.calib_error_secs).toFixed(2)}s` : "";
-                      return (<span title={`detik = ${k.sec_per_char}/huruf + ${k.sec_per_sentence}/kalimat · ${k.chars_per_word} huruf/kata · ${k.words_per_sentence} kata/kalimat · dari ${k.sample_n} render`}>
-                        <b style={{ color: "var(--text-primary)" }}>{Number(k.delivery_wps ?? 0).toFixed(2)}</b> kata/dtk<br />
-                        <span style={{ opacity: 0.75 }}>{err} · n={k.sample_n ?? 0}</span>
+                      // Angka mana yang TERUKUR dan mana yang jatuh ke bawaan harus terlihat: baris yang
+                      // kolomnya kosong diam-diam memakai angka bawaan, dan bawaan itu pernah 5–9× salah
+                      // (elipsis 1,376 dtk padahal terukur 0,29). Admin tak boleh menebak.
+                      const bawaan = ([["sec_per_char", "huruf"], ["sec_per_digit", "angka"],
+                                       ["sec_per_sentence", "kalimat"], ["sec_per_comma", "koma"],
+                                       ["sec_per_ellipsis", "elipsis"], ["sec_per_em_dash", "em-dash"]] as const)
+                        .filter(([c]) => (k as Record<string, unknown>)[c] == null).map(([, n]) => n);
+                      const rincian = `detik = ${k.sec_per_char ?? "bawaan"}/huruf + ${k.sec_per_sentence ?? "bawaan"}/kalimat`
+                        + ` + ${k.sec_per_comma ?? "bawaan"}/koma + ${k.sec_per_em_dash ?? "bawaan"}/em-dash`
+                        + ` + ${k.sec_per_ellipsis ?? "bawaan"}/elipsis + ${k.sec_per_digit ?? "bawaan"}/angka`
+                        + ` · ${k.chars_per_word ?? "—"} huruf/kata · dari ${k.sample_n ?? 0} render`
+                        + (jedaUkur ? " · biaya jeda DIUKUR langsung (pasangan teks terkontrol), bukan hasil regresi" : "")
+                        + (bawaan.length ? ` · memakai angka bawaan untuk: ${bawaan.join(", ")}` : "");
+                      return (<span title={rincian}>
+                        <b style={{ color: "var(--text-primary)" }}>{k.delivery_wps != null ? Number(k.delivery_wps).toFixed(2) + " kata/dtk" : "—"}</b><br />
+                        <span style={{ opacity: 0.75 }}>
+                          {jedaUkur ? <Bi id="jeda diukur" en="pauses measured" /> : <Bi id="jeda dari regresi" en="pauses fitted" />}
+                          {err ? ` · ${err}` : ""} · n={k.sample_n ?? 0}
+                          {bawaan.length ? <> · <span title={`kolom kosong → angka bawaan: ${bawaan.join(", ")}`}>{bawaan.length} <Bi id="pakai bawaan" en="use defaults" /></span></> : null}
+                        </span>
                       </span>);
                     })()}
                   </td>

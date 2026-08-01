@@ -15,7 +15,7 @@ from loguru import logger
 from dotenv import load_dotenv
 
 from src.intelligence.config import TenantConfig
-from src.exceptions import ErrorClass, PipelineError
+from src.exceptions import ErrorClass, PipelineError, TTSError
 
 load_dotenv()
 
@@ -84,7 +84,35 @@ def _run_provider(provider_name: str, text: str, config: dict, output_dir: str) 
     from src.providers.tts import build_tts_provider
     provider = build_tts_provider(provider_name, config)
 
-    audio = asyncio.run(provider.generate(text, output_path))
+    # ── BATAS WAKTU: penyedia yang MENGGANTUNG tidak boleh mematikan utas pekerja ─────────────────
+    # Sampai 2026-08-01 panggilan ini tanpa batas waktu sama sekali. Adaptor Edge (penyedia BAWAAN
+    # semua tenant) membaca aliran websocket; bila vendor berhenti mengirim tanpa menutup sambungan,
+    # `generate` tidak pernah kembali. Terjadi nyata saat pengukuran hari ini: satu render berhenti
+    # dan prosesnya diam belasan menit.
+    # Di produksi akibatnya kelas "gagal senyap" yang paling mahal: satu dari tujuh utas pekerja mati
+    # selamanya — tanpa error, tanpa notifikasi, tanpa jejak di log. Channel itu berhenti berproduksi
+    # dan tak seorang pun tahu sebabnya; utas berikutnya yang menggantung memakan kapasitas berikutnya.
+    # Batasnya ikut panjang naskah (naskah Regular 1.000+ kata memang lama), sangat longgar terhadap
+    # kecepatan normal (Edge ±500 huruf ≈ 5 dtk), dan hasilnya TRANSIENT = produksi diulang.
+    _detik = min(float(os.getenv("TTS_TIMEOUT_MAKS", "900")),
+                 float(os.getenv("TTS_TIMEOUT_DASAR", "180"))
+                 + float(os.getenv("TTS_TIMEOUT_PER_HURUF", "0.2")) * len(text or ""))
+
+    async def _dengan_batas():
+        return await asyncio.wait_for(provider.generate(text, output_path), timeout=_detik)
+
+    try:
+        audio = asyncio.run(_dengan_batas())
+    except asyncio.TimeoutError:
+        try:
+            if output_path.exists():
+                output_path.unlink()      # berkas separuh jadi tak boleh tertinggal
+        except OSError:
+            pass
+        raise TTSError(
+            f"Penyedia suara '{provider_name}' tidak menyelesaikan permintaan dalam {_detik:.0f} detik "
+            f"({len(text or '')} huruf). Produksi dihentikan agar tidak menggantung — akan diulang.",
+            error_class=ErrorClass.TRANSIENT)
     timestamps = provider.get_word_timestamps() or []
     return str(audio), timestamps, _voice_rate_of(provider)
 

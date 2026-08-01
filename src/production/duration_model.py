@@ -61,15 +61,36 @@ from __future__ import annotations
 import re
 
 # ── Angka BAWAAN (dipakai HANYA bila suara belum punya baris kalibrasi) ───────────────────────────
-# Diambil dari suara paling banyak datanya (id-ID-ArdiNeural, n=46) sebagai titik awal yang terukur,
-# BUKAN tebakan. Begitu `tts_pace_calibration` punya baris untuk sebuah suara, baris itu yang menang.
+#
+# Diperbarui 2026-08-01 dari PENGUKURAN LANGSUNG, menggantikan angka turunan-regresi yang terbukti
+# salah besar. Yang lama vs yang terukur:
+#
+#     elipsis   1,376 → 0,288 dtk   (lama 5–9× terlalu BESAR)
+#     koma      0,221 → 0,296 dtk   (lama 1,3–1,8× terlalu KECIL)
+#     em-dash   0,442 → 0,292 dtk
+#     kalimat   1,308 → 1,184 dtk
+#
+# Kenapa angka lama bisa sesalah itu: ia diturunkan dengan REGRESI dari naskah produksi, dan keempat
+# tanda jeda bergerak bersama panjang naskah — regresi tak bisa memisahkannya. Angka baru diukur dengan
+# pasangan teks ber-HURUF IDENTIK yang hanya berbeda tandanya (`pause_probe.py`), jadi selisih durasinya
+# hanya bisa milik tanda itu.
+#
+# Sumber tiap angka (MEDIAN, bukan rata-rata — satu render aneh tak boleh menggeser hasil):
+#   • jeda: median 5 suara Edge yang diukur langsung 2026-08-01 pada baseline produksinya masing-masing
+#     (Ardi & Gadis di ratio 1; Christopher +5%, Guy +10%, Jenny +15% sesuai katalog).
+#   • huruf & angka: median dua suara Indonesia dari 36 render naskah produksi di ratio 1, di-fit dengan
+#     biaya jeda DIPATOK pada angka terukur (Ardi 0,04948/0,17796 · Gadis 0,06726/0,24625).
+#
+# Angka ini tetap CADANGAN, bukan tujuan: sebaran antar-suara lebar (kalimat 0,85–1,37 dtk), jadi suara
+# yang benar-benar dipakai WAJIB diukur sendiri (`pause_probe`) atau dikalibrasi dari sampel produksi.
+# Begitu `tts_pace_calibration` punya baris untuk sebuah suara, baris itu yang menang.
 BAWAAN = {
-    "sec_per_char":     0.04666,
-    "sec_per_digit":    0.13150,
-    "sec_per_sentence": 1.308,
-    "sec_per_ellipsis": 1.376,
-    "sec_per_comma":    0.221,
-    "sec_per_em_dash":  0.442,
+    "sec_per_char":     0.05837,
+    "sec_per_digit":    0.21211,
+    "sec_per_sentence": 1.184,
+    "sec_per_ellipsis": 0.288,
+    "sec_per_comma":    0.296,
+    "sec_per_em_dash":  0.292,
     "chars_per_word":   5.77,
     "words_per_sentence": 14.0,
 }

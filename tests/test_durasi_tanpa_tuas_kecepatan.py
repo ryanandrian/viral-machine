@@ -159,14 +159,34 @@ def test_kalibrasi_MENOLAK_sampel_dari_setelan_suara_berbeda():
 
 
 def test_adaptor_suara_mengekspos_setelan_yang_BENAR_dipakai():
-    """Nilainya harus datang dari adaptor, bukan dihitung ulang di tempat lain (dua sumber = drift)."""
+    """Nilainya harus datang dari adaptor, bukan dihitung ulang di tempat lain (dua sumber = drift).
+
+    Dilaporkan sebagai RASIO terhadap laju alami, bukan sebagai string milik penyedia. Sebabnya nyata:
+    hanya Edge menulis `rate` bergaya persen, sehingga penjaga kalibrasi yang membandingkan STRING
+    menolak setiap sampel ElevenLabs/fal/OpenAI — suara berbayar tak akan pernah bisa terkalibrasi,
+    selamanya, tanpa satu pun pesan error."""
     from src.providers.tts.edge_tts import EdgeTTSProvider
     p = EdgeTTSProvider({"tts_voice": "id-ID-ArdiNeural", "niche": "x",
                          "tts_voice_default_settings": {"rate": "+15%"}, "tts_voice_settings": {}})
-    assert p.effective_rate == "+15%"
+    assert p.rate == "+15%", "yang dikirim ke vendor berubah"
+    assert p.effective_rate == "1.1500"
     p2 = EdgeTTSProvider({"tts_voice": "id-ID-ArdiNeural", "niche": "x",
                           "tts_voice_default_settings": {}, "tts_voice_settings": {}})
-    assert p2.effective_rate == "+0%", "baseline kosong harus ratio 1, bukan angka karangan"
+    assert p2.rate == "+0%", "baseline kosong harus ratio 1, bukan angka karangan"
+    assert p2.effective_rate == "1.0000"
+
+
+def test_edge_TIDAK_LAGI_membaca_tuas_kecepatan_warisan():
+    """Ranjau yang masih hidup sampai 2026-08-01: solver kecepatan dicabut 31-Jul, tapi adaptor Edge
+    MASIH membaca `tts_voice_settings[niche].speed` — lubang tempat solver dulu menyuntik. Nilai
+    lamanya masih ada di DB setiap tenant, jadi channel BJ Yusroon (aktif, preset 90 dtk) dibacakan
+    pada −17% sampai hari ini. Persis keluhan owner 'seperti orang malas'."""
+    from src.providers.tts.edge_tts import EdgeTTSProvider
+    p = EdgeTTSProvider({"tts_voice": "id-ID-GadisNeural", "niche": "dark_history",
+                         "tts_voice_default_settings": {},
+                         "tts_voice_settings": {"dark_history": {"speed": 0.83, "style": 0.55}}})
+    assert p.rate == "+0%", "tuas kecepatan lewat warisan tenant HIDUP KEMBALI di adaptor Edge"
+    assert p.effective_rate == "1.0000"
 
 
 def test_kalibrasi_MENYAPU_baris_warisan_hanya_setelah_ada_baris_sah():

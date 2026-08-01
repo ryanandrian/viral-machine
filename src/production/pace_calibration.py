@@ -37,6 +37,10 @@ PAGAR ANTI-RANJAU
     memasukkannya berarti mengkalibrasi dunia yang sudah tidak ada.
   • `voice_catalog.pace_locked=true` → suara TIDAK ditulis + baris kalibrasi lamanya DIHAPUS (admin berdaulat).
   • Sel < PACE_CALIB_MIN_N sampel tidak ditulis (kurang bukti ≠ menebak).
+  • Per KOLOM juga: tanda yang muncul di < PACE_CALIB_MIN_FITUR_N naskah TIDAK dapat koefisien —
+    dikosongkan agar `duration_model.BAWAAN` yang terukur dipakai. Kolom "ada tapi jarang" lebih
+    berbahaya daripada kolom kosong: hasilnya angka yang tampak masuk akal (terukur: em-dash 1,137
+    dtk dari 6 naskah, sementara suara ber-data-tebal 0,16–0,25).
   • Koefisien di luar pagar `duration_model.PAGAR` → seluruh sel DILEWATI + warning. Tidak di-clamp
     diam-diam: data rusak tidak boleh menyelinap jadi angka yang tampak masuk akal.
   • Kesalahan luar-sampel di atas PACE_CALIB_MAX_ERR → sel DILEWATI (angka yang tak lebih baik dari
@@ -75,13 +79,34 @@ def _env_float(name: str, default: float) -> float:
 def _fit(rows: list) -> list | None:
     """Kuadrat terkecil untuk detik = Σ x_j · ciri_j.
 
-    Kolom yang seluruhnya NOL di data tak bisa diidentifikasi. Nilai kembaliannya `None` untuk kolom
-    itu — BUKAN 0. Bedanya menentukan: menulis 0 berarti memberi tahu mesin "tanda ini GRATIS", dan itu
-    salah. Terukur 2026-08-01: naskah kalibrasi tak memuat satu pun elipsis, sehingga
-    `sec_per_ellipsis` ter-fit 0,0 — padahal biaya nyatanya >1 detik per tanda. Naskah produksi yang
-    memakai "..." akan diramal terlalu pendek, dan tak ada yang tahu sebabnya.
-    `None` membuat `duration_model.angka_efektif` memakai angka BAWAAN terukur untuk kunci itu."""
-    aktif = [j for j, k in enumerate(_FIT_KOL) if any(r[k] for r in rows)]
+    ═══ SATU KOLOM HANYA BOLEH PUNYA KOEFISIEN BILA ADA CUKUP BUKTI UNTUKNYA ═══
+
+    Kembaliannya `None` untuk kolom yang buktinya kurang — BUKAN 0. Bedanya menentukan: menulis 0
+    berarti memberi tahu mesin "tanda ini GRATIS", dan itu salah. `None` membuat
+    `duration_model.angka_efektif` memakai angka BAWAAN terukur untuk kunci itu.
+
+    Dua kegagalan NYATA yang terhitung di DB 2026-08-01 — keduanya lahir dari aturan lama
+    `any(r[k] for r in rows)` ("ada satu saja, fit-lah"):
+
+      1. `sec_per_ellipsis = 0,000` untuk kedua suara Indonesia. Sebabnya: 36 naskah kalibrasi memuat
+         NOL elipsis, jadi kolomnya seluruh-nol dan ter-fit 0. Biaya nyatanya >1 detik per tanda.
+         Setiap naskah produksi yang memakai "..." diramal terlalu pendek, tanpa jejak apa pun.
+      2. `sec_per_em_dash = 1,137` (Ardi) dan `1,262` (Gadis) — di-fit dari hanya 6 naskah / 20
+         kemunculan. Bandingkan tiga suara Inggris yang datanya tebal: 0,164–0,247. Jadi angka ID-nya
+         5–7× lipat: itu bukan pengukuran, itu derau yang menyamar jadi pengukuran. Naskah dengan 4
+         em-dash akan salah ramal ~4 detik ke arah yang salah.
+
+    Kolom "ada tapi jarang" justru LEBIH berbahaya daripada kolom yang kosong: kolom kosong menghasilkan
+    0 yang mencurigakan, sedangkan kolom jarang menghasilkan angka yang tampak masuk akal. Karena itu
+    ambangnya BUKAN "ada/tidak ada", tapi "muncul di cukup banyak naskah".
+    """
+    min_bukti = _env_int("PACE_CALIB_MIN_FITUR_N", 10)
+    # Ambang tak boleh melebihi ukuran selnya sendiri — kalau tidak, kolom yang HADIR DI SEMUA sampel
+    # (huruf, kalimat) ikut tertolak dan seluruh fit mati. Batas bawah 3: di bawah itu satu naskah
+    # aneh sudah cukup menentukan koefisien.
+    min_bukti = max(3, min(min_bukti, len(rows)))
+    aktif = [j for j, k in enumerate(_FIT_KOL)
+             if sum(1 for r in rows if r[k]) >= min_bukti]
     if not aktif:
         return None
     n = len(aktif)
@@ -103,6 +128,47 @@ def _fit(rows: list) -> list | None:
     return x
 
 
+def _fit_jeda_dipatok(rows: list, jeda: dict) -> list | None:
+    """Fit HANYA huruf + angka, dengan biaya jeda DIPATOK pada angka yang sudah diukur langsung.
+
+    Kenapa ini lebih akurat: regresi 6-koefisien dipaksa memisahkan empat jenis jeda yang semuanya
+    bergerak bersama panjang naskah, dari data yang tidak dirancang untuk itu. Bila biaya jeda sudah
+    diketahui dari pengukuran terkontrol (`pause_probe`), biaya itu cukup DIKURANGKAN dari audio dan
+    sisanya hanya menyisakan dua parameter untuk di-fit — jauh lebih stabil.
+
+    Terbukti pada 36 render yang sama (leave-one-out, rentang preset produksi ≤100 dtk):
+        id-ID-ArdiNeural   salah rata 1,47 → 1,18 dtk · terburuk 5,33 → 3,76 dtk
+        id-ID-GadisNeural  salah rata 1,82 → 1,58 dtk · terburuk 5,89 → 4,61 dtk
+
+    `jeda` = {nama_kolom_ciri: detik} untuk tanda yang dipatok. Kembalian bentuknya sama dengan `_fit`
+    (sejajar `_FIT_KOL`): kolom yang dipatok berisi angka patokan, huruf/angka hasil fit.
+    """
+    kol = [k for k in ("chars", "digits") if sum(1 for r in rows if r[k]) >= 3]
+    if "chars" not in kol:
+        return None
+    n = len(kol)
+    sisa = [r["audio"] - sum(v * r[k] for k, v in jeda.items()) for r in rows]
+    N = [[sum(r[kol[a]] * r[kol[b]] for r in rows) for b in range(n)]
+         + [sum(r[kol[a]] * s for r, s in zip(rows, sisa))] for a in range(n)]
+    for i in range(n):
+        pv = max(range(i, n), key=lambda x: abs(N[x][i]))
+        if abs(N[pv][i]) < 1e-12:
+            return None
+        N[i], N[pv] = N[pv], N[i]
+        for r in range(n):
+            if r != i:
+                f = N[r][i] / N[i][i]
+                for cc in range(i, n + 1):
+                    N[r][cc] -= f * N[i][cc]
+    x = [None] * len(_FIT_KOL)
+    for i, k in enumerate(kol):
+        x[_FIT_KOL.index(k)] = N[i][n] / N[i][i]
+    for k, v in jeda.items():
+        if k in _FIT_KOL:
+            x[_FIT_KOL.index(k)] = v
+    return x
+
+
 def _ramal(x: list, r: dict) -> float:
     """Kolom tak teridentifikasi (None) memakai angka BAWAAN terukur, bukan dianggap nol."""
     from src.production.duration_model import BAWAAN
@@ -113,12 +179,14 @@ def _ramal(x: list, r: dict) -> float:
     return tot
 
 
-def _error_luar_sampel(rows: list) -> float | None:
+def _error_luar_sampel(rows: list, jeda: dict | None = None) -> float | None:
     """Leave-one-out: tiap sampel diramal oleh fit TANPA sampel itu. Inilah satu-satunya angka
-    kesalahan yang boleh dipercaya (fit pada datanya sendiri selalu tampak lebih bagus)."""
+    kesalahan yang boleh dipercaya (fit pada datanya sendiri selalu tampak lebih bagus).
+    `jeda` diisi → dinilai dengan cara yang SAMA seperti yang dipakai produksi (jeda dipatok)."""
     errs = []
     for i in range(len(rows)):
-        x = _fit(rows[:i] + rows[i + 1:])
+        sisa_rows = rows[:i] + rows[i + 1:]
+        x = _fit_jeda_dipatok(sisa_rows, jeda) if jeda else _fit(sisa_rows)
         if x is None:
             return None
         errs.append(abs(_ramal(x, rows[i]) - rows[i]["audio"]))
@@ -139,6 +207,7 @@ def compute_pace_calibration(sb=None, dry_run: bool = False) -> dict:
         min_chars = _env_int("PACE_CALIB_MIN_CHARS", 60)     # naskah super-pendek = rasio jeda liar
         max_err = _env_float("PACE_CALIB_MAX_ERR", 2.5)      # angka yang tak lebih baik dari bawaan: buang
 
+        from src.production.voice_delivery import laju_sama, rasio_dari_teks, rasio_laju
         _vc = (sb.table("voice_catalog").select("voice_key,pace_locked,default_settings")
                  .execute().data or [])
         locked = {r["voice_key"] for r in _vc if r.get("pace_locked")}
@@ -146,9 +215,33 @@ def compute_pace_calibration(sb=None, dry_run: bool = False) -> dict:
         # ikut di-fit: kesalahan paling mahal 2026-07-31 adalah mengukur pada baseline lain dari
         # produksi (selisih 15% pada laju bicara) tanpa apa pun di sistem yang memberi tahu — dua hari
         # pengukuran terbuang, dan koefisiennya akan tampak "terkalibrasi" padahal salah.
-        # Kosong di katalog = ratio 1 (+0%), sama dengan yang dipakai adaptor.
-        BASELINE = {r["voice_key"]: str(((r.get("default_settings") or {}).get("rate") or "+0%"))
-                    for r in _vc}
+        #
+        # [0185] Dibandingkan sebagai RASIO, bukan sebagai teks. Versi teks punya cacat yang
+        # mematikan tanpa suara: hanya adaptor Edge menuliskan `rate` bergaya persen, sehingga
+        # perbandingan teks menolak SETIAP sampel ElevenLabs/fal/OpenAI (rekamannya kosong atau
+        # bergaya `speed`). Akibatnya suara berbayar tak akan pernah terkalibrasi — selamanya, tanpa
+        # satu pun pesan error. Rasio dihitung satu fungsi bersama (`voice_delivery`) yang juga dipakai
+        # adaptor, jadi kedua sisi tak bisa berbeda diam-diam.
+        BASELINE = {r["voice_key"]: rasio_laju(r.get("default_settings")) for r in _vc}
+        # Baris kalibrasi yang biaya jedanya SUDAH DIUKUR LANGSUNG → dipatok, bukan di-fit ulang.
+        # Tanpa ini, siklus berikutnya menimpa angka terukur dengan angka regresi dan ranjaunya kembali
+        # sendiri (em-dash 1,137 dtk padahal terukur 0,424).
+        _pc_lama = (sb.table("tts_pace_calibration")
+                      .select("voice_key,niche,pause_source,sec_per_comma,sec_per_em_dash,"
+                              "sec_per_ellipsis,sec_per_sentence")
+                      .eq("niche", "*").execute().data or [])
+        JEDA_TERUKUR = {}
+        for r in _pc_lama:
+            if (r.get("pause_source") or "") != "measured":
+                continue
+            j = {}
+            for kol_ciri, kol_db in (("comma", "sec_per_comma"), ("em_dash", "sec_per_em_dash"),
+                                     ("ellipsis", "sec_per_ellipsis"), ("sentence", "sec_per_sentence")):
+                v = r.get(kol_db)
+                if v is not None:
+                    j[kol_ciri] = float(v)
+            if j:
+                JEDA_TERUKUR[r["voice_key"]] = j
 
         rows, off = [], 0
         while True:  # paginasi manual — jangan percaya cap default (pelajaran undercount 7.220-vs-1000)
@@ -177,9 +270,10 @@ def compute_pace_calibration(sb=None, dry_run: bool = False) -> dict:
                     buang["speed_bukan_1"] += 1; continue    # dunia lama (suara dimodulasi) — tak sah lagi
                 if int(ch) < min_chars:
                     buang["terlalu_pendek"] += 1; continue
-                # [0184] setelan laju harus SAMA dengan baseline suara saat ini; kosong = tak bisa
-                # diverifikasi asalnya → dibuang (lebih baik menolak daripada mengarang keyakinan)
-                if str(r.get("voice_rate") or "") != BASELINE.get(vk, "+0%"):
+                # [0184/0185] laju harus SAMA dengan baseline suara saat ini; kosong = tak bisa
+                # diverifikasi asalnya → dibuang (lebih baik menolak daripada mengarang keyakinan).
+                # Dibandingkan sebagai rasio → berlaku untuk SEMUA penyedia, bukan hanya Edge.
+                if not laju_sama(rasio_dari_teks(r.get("voice_rate")), BASELINE.get(vk)):
                     buang["setelan_suara_beda"] += 1; continue
                 ok.append({"vk": vk, "niche": r.get("niche") or "*", "audio": au, "chars": int(ch),
                            "digits": int(pc.get("digits") or 0), "words": int(r.get("words") or 0),
@@ -198,7 +292,10 @@ def compute_pace_calibration(sb=None, dry_run: bool = False) -> dict:
         for vk, g in sorted(per_suara.items()):
             if len(g) < min_n:
                 dilewati.append((vk, f"sampel {len(g)} < {min_n}")); continue
-            x = _fit(g)
+            # Biaya jeda sudah diukur langsung? → DIPATOK, hanya huruf+angka yang di-fit (lebih akurat,
+            # terbukti). Belum? → regresi biasa dengan aturan bukti-minimum per kolom.
+            jeda_patok = JEDA_TERUKUR.get(vk)
+            x = _fit_jeda_dipatok(g, jeda_patok) if jeda_patok else _fit(g)
             if x is None:
                 dilewati.append((vk, "sistem tak terpecahkan")); continue
             # Kolom tak teridentifikasi TIDAK ditulis (None) → `angka_efektif` memakai bawaan terukur.
@@ -210,7 +307,7 @@ def compute_pace_calibration(sb=None, dry_run: bool = False) -> dict:
                 dilewati.append((vk, f"koefisien di luar pagar: {', '.join(luar)}"))
                 logger.warning(f"[PaceCalib] {vk} DILEWATI — {luar} (tidak di-clamp; data dicurigai)")
                 continue
-            err = _error_luar_sampel(g)
+            err = _error_luar_sampel(g, jeda_patok)
             if err is None or err > max_err:
                 dilewati.append((vk, f"kesalahan luar-sampel {err} > {max_err}"))
                 logger.warning(f"[PaceCalib] {vk} DILEWATI — kesalahan luar-sampel {err} dtk "
@@ -220,6 +317,9 @@ def compute_pace_calibration(sb=None, dry_run: bool = False) -> dict:
             wpk = statistics.median([r["words"] / max(1, r["sentence"]) for r in g if r["sentence"]])
             baris = {"voice_key": vk, "niche": "*", "sample_n": len(g),
                      **nilai,
+                     # Ditulis eksplisit supaya keadaannya tak pernah ambigu di DB maupun di layar
+                     # admin: 'measured' = biaya jeda dari pengukuran terkontrol dan DIPATOK di sini.
+                     "pause_source": "measured" if jeda_patok else "fitted",
                      "chars_per_word": round(hpk, 3), "words_per_sentence": round(wpk, 3),
                      "calib_error_secs": round(err, 3),
                      # lapis lama tetap diisi supaya jalur cadangan (preset di luar tangga) tak mati

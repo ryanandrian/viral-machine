@@ -160,15 +160,39 @@ class ElevenLabsProvider(TTSProvider):
                      if k in ("style", "stability") and isinstance(v, (int, float)) and 0.0 <= float(v) <= 1.0}                     if isinstance(_expr_raw, dict) else {}
             tts_vs_config = self.config.get("tts_voice_settings", {}) or {}
             _override     = tts_vs_config.get(niche, {}) if isinstance(tts_vs_config, dict) else {}
-            # Urutan: bawaan-suara ⊕ ekspresi-niche ⊕ warisan-tenant (warisan TERAKHIR = suara channel
-            # berjalan IDENTIK hari ini; pembongkaran warisan = fase terpisah ber-ketok owner).
-            niche_vs      = {**baseline, **_expr, **_override}
+            # Urutan: bawaan-suara ⊕ ekspresi-niche ⊕ warisan-tenant. `speed` DIKELUARKAN dari lapisan
+            # warisan — lihat catatan di bawah.
+            niche_vs      = {**baseline, **_expr, **{k: v for k, v in _override.items() if k != "speed"}}
+            # ── LAJU BICARA: HANYA dari baseline katalog, dan bawaannya 1,0 ──────────────────────────
+            # DULU: `float(niche_vs.get("speed", 0.87))` — dua cacat sekaligus.
+            #  (a) Bawaan 0,87 DITANAM DI KODE: suara ElevenLabs mana pun yang katalognya tak menyebut
+            #      speed dibacakan 13% LEBIH LAMBAT dari rancangan suaranya, tanpa terlihat di layar
+            #      mana pun. Kembaran persis cacat `+10%` di adaptor Edge, tapi ke arah yang justru
+            #      dikeluhkan owner: "seperti orang malas".
+            #  (b) Lapisan `tts_voice_settings[niche].speed` menang di atas segalanya, dan nilai lamanya
+            #      masih ada di DB SETIAP tenant (0,83–0,93) — sisa lubang tempat solver durasi dulu
+            #      menyuntikkan pengali kecepatan. Solvernya dicabut 31-Jul; jalur datanya tertinggal.
+            # Akibat ketiga yang tak terlihat: sampel dengan speed≠1 DITOLAK penjaga kalibrasi (0184),
+            # sehingga suara ElevenLabs tak akan pernah bisa mengkalibrasi dirinya — selamanya.
+            from src.production.voice_delivery import RASIO_ALAMI, rasio_laju, rasio_teks
+            if _override.get("speed") is not None:
+                logger.warning(
+                    f"[ElevenLabs] setelan lama tts_voice_settings[{niche}].speed="
+                    f"{_override.get('speed')} DIABAIKAN — kecepatan suara bukan tuas durasi (aturan "
+                    f"owner 2026-07-29); laju bicara hanya dari voice_catalog.default_settings.")
+            _rasio = rasio_laju(baseline)
+            if abs(_rasio - RASIO_ALAMI) > 0.001:
+                logger.warning(
+                    f"[ElevenLabs] laju bicara {_rasio:.2f}× laju alami untuk voice={self.voice} "
+                    f"(voice_catalog.default_settings.speed). Aturan owner: 1,0. "
+                    f"{'Lebih LAMBAT' if _rasio < 1 else 'Lebih cepat'} dari rancangan suaranya.")
             voice_settings = VoiceSettings(
                 stability        = float(niche_vs.get("stability",        0.30)),
                 similarity_boost = float(niche_vs.get("similarity_boost", 0.75)),
                 style            = float(niche_vs.get("style",            0.50)),
-                speed            = float(niche_vs.get("speed",            0.87)),
+                speed            = _rasio,
             )
+            self.effective_rate = rasio_teks(_rasio)
             source = "supabase" if tts_vs_config.get(niche) else "default"
             logger.info(
                 f"[ElevenLabs] voice_settings [{source}] niche={niche}: "

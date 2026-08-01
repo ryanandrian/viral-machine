@@ -99,11 +99,30 @@ class FalTTSProvider(TTSProvider):
         # Nilai bawaan = ANGKA PERSIS ElevenLabs langsung → suara identik lintas jalur.
         vs = self._voice_settings()
         for kunci, bawaan in (("stability", 0.30), ("similarity_boost", 0.75),
-                              ("style", 0.50), ("speed", 0.87)):
+                              ("style", 0.50)):
             try:
                 payload[kunci] = float(vs.get(kunci, bawaan))
             except (TypeError, ValueError):
                 payload[kunci] = bawaan
+        # ── LAJU BICARA: HANYA dari baseline katalog, bawaan 1,0 (aturan owner) ──────────────────────
+        # DULU bawaannya 0,87 ditanam di kode → suara mana pun yang katalognya tak menyebut speed
+        # dibacakan 13% lebih lambat dari rancangannya, tanpa terlihat di layar mana pun. Dan lapisan
+        # warisan `tts_voice_settings[niche].speed` (0,83–0,93 di DB tiap tenant) menang di atasnya —
+        # sisa lubang tuas kecepatan yang dilarang owner 2026-07-29. Keduanya dicabut di sini.
+        from src.production.voice_delivery import RASIO_ALAMI, rasio_laju, rasio_teks
+        _baseline = self.config.get("tts_voice_default_settings", {}) or {}
+        _niche    = self.config.get("niche") or ""
+        _vs_cfg   = self.config.get("tts_voice_settings", {}) or {}
+        _ovr      = _vs_cfg.get(_niche, {}) if isinstance(_vs_cfg, dict) else {}
+        if isinstance(_ovr, dict) and _ovr.get("speed") is not None:
+            logger.warning(f"[falTTS] setelan lama tts_voice_settings[{_niche}].speed="
+                           f"{_ovr.get('speed')} DIABAIKAN — kecepatan suara bukan tuas durasi.")
+        _rasio = rasio_laju(_baseline)
+        if abs(_rasio - RASIO_ALAMI) > 0.001:
+            logger.warning(f"[falTTS] laju bicara {_rasio:.2f}× laju alami untuk voice="
+                           f"{self.voice or '(bawaan)'}. Aturan owner: 1,0.")
+        payload["speed"] = _rasio
+        self.effective_rate = rasio_teks(_rasio)
 
         req = urllib.request.Request(
             _BASE + self.model.lstrip("/"),

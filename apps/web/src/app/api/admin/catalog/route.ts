@@ -134,7 +134,8 @@ export async function GET() {
     // admin mengisi Tempo voice di layar ini, tapi mesin memakai angka HASIL KALIBRASI yang menimpanya —
     // dan angka yang BERLAKU itu tak terlihat di mana pun. Admin jadi menyetel sesuatu yang tak berefek.
     a.from("tts_pace_calibration").select("voice_key,niche,delivery_wps,sec_per_char,sec_per_digit,"
-      + "sec_per_sentence,chars_per_word,words_per_sentence,calib_error_secs,sample_n,updated_at")
+      + "sec_per_sentence,sec_per_comma,sec_per_ellipsis,sec_per_em_dash,chars_per_word,"
+      + "words_per_sentence,calib_error_secs,sample_n,updated_at,pause_source,pause_measured_at")
       .eq("niche", "*").order("voice_key"),
   ]);
   // public_url musik (S3) untuk tombol Play di catalog. voice_catalog sudah simpan preview_url.

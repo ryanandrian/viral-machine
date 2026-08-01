@@ -134,14 +134,24 @@ def test_ekspresi_niche_menimpa_baseline_hanya_style_dan_stability(monkeypatch):
     assert body["speed"] == 0.87   # speed = milik mesin durasi, bukan ekspresi niche
 
 
-def test_warisan_tenant_menang_terakhir(monkeypatch):
+def test_warisan_tenant_menang_untuk_GAYA_tapi_TIDAK_untuk_laju(monkeypatch):
+    """Lapisan warisan `tts_voice_settings[niche]` tetap berlaku untuk gaya baca — TAPI TIDAK untuk
+    kecepatan.
+
+    Sebabnya nyata dan mahal: lapisan itu adalah lubang tempat solver durasi dulu menyuntikkan pengali
+    kecepatan. Solvernya dicabut 2026-07-31, tapi jalur datanya tertinggal hidup DAN nilai lamanya
+    masih ada di DB setiap tenant (0,83–0,93). Terukur pada channel yang sedang aktif 2026-08-01:
+    BJ Yusroon dibacakan pada −17%, Abyss ID −10%. Jadi keluhan owner "suara seperti orang malas"
+    masih berlaku meski tuasnya sudah 'dicabut' — yang dicabut hanya yang MENULIS, bukan yang MEMBACA.
+    """
     body = _payload_terkirim(monkeypatch, {
         "tts_voice": "Adam", "niche": "fun_facts",
-        "tts_voice_default_settings": {"speed": 0.87, "style": 0.5},
+        "tts_voice_default_settings": {"speed": 1.0, "style": 0.5},
         "niche_voice_expression": {"style": 0.9},
         "tts_voice_settings": {"fun_facts": {"speed": 0.8, "style": 0.1}},
     })
-    assert body["speed"] == 0.8 and body["style"] == 0.1
+    assert body["style"] == 0.1, "lapisan gaya milik tenant ikut mati — itu regresi"
+    assert body["speed"] == 1.0, "tuas kecepatan lewat warisan tenant HIDUP KEMBALI"
 
 
 def test_ekspresi_di_luar_rentang_diabaikan(monkeypatch):
@@ -153,13 +163,21 @@ def test_ekspresi_di_luar_rentang_diabaikan(monkeypatch):
     assert body["stability"] == 0.3
 
 
-def test_tanpa_pengaturan_apa_pun_pakai_angka_elevenlabs(monkeypatch):
-    """Angka bawaan sengaja SAMA dgn adaptor ElevenLabs: suara sama = terdengar sama."""
+def test_tanpa_pengaturan_apa_pun_LAJU_ALAMI_bukan_0_87(monkeypatch):
+    """Angka gaya tetap sama dengan adaptor ElevenLabs (suara sama = terdengar sama), TAPI laju
+    bicaranya 1,0.
+
+    Bawaan lama `0.87` ditanam di kode kedua adaptor: setiap suara yang katalognya tak menyebut speed
+    dibacakan 13% LEBIH LAMBAT dari rancangan suaranya — tanpa terlihat di layar mana pun, dan tanpa
+    pernah diputuskan siapa pun. Itu persis yang dikeluhkan owner: "seperti orang malas".
+    Kembaran cacat `+10%` di adaptor Edge, hanya berlawanan arah."""
     body = _payload_terkirim(monkeypatch, {"tts_voice": "Adam"})
-    assert (body["stability"], body["similarity_boost"], body["style"], body["speed"]) == (0.30, 0.75, 0.50, 0.87)
+    assert (body["stability"], body["similarity_boost"], body["style"]) == (0.30, 0.75, 0.50)
+    assert body["speed"] == 1.0, "bawaan 0,87 (13% lebih lambat) ditanam kembali di kode"
 
 
 def test_nilai_pengaturan_rusak_tidak_mematikan_render(monkeypatch):
+    """Setelan rusak → laju alami, bukan angka karangan dan bukan render gagal."""
     body = _payload_terkirim(monkeypatch, {
         "tts_voice": "Adam", "tts_voice_default_settings": {"speed": "cepat sekali"}})
-    assert body["speed"] == 0.87
+    assert body["speed"] == 1.0
