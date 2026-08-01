@@ -56,7 +56,15 @@ INSERT INTO app_config (key, value, description) VALUES
  ('drift_window_n',            30,  'Berapa video terakhir yang dinilai saat memeriksa akurasi durasi.'),
  ('drift_alarm_cooldown_h',    24,  'Jarak minimum antar-alarm akurasi durasi (jam), supaya tidak berdering berkali-kali sehari.'),
  ('beat_align_min_n',          10,  'Berapa sampel minimum sebelum bobot sebuah adegan disesuaikan ke kenyataan.'),
- ('beat_align_max_step_pct',   20,  'Seberapa jauh bobot adegan boleh bergeser dalam satu siklus (%). Geser halus, tak pernah melompat.')
+ ('beat_align_max_step_pct',   20,  'Seberapa jauh bobot adegan boleh bergeser dalam satu siklus (%). Geser halus, tak pernah melompat.'),
+-- ── Lima kenop yang DIBACA kode tapi sempat tak punya barisnya di sini ────────────────────────────
+-- Tertangkap pemeriksaan silang kode↔migrasi 2026-08-01: kenop yang dibaca kode tanpa baris DB akan
+-- diam-diam memakai angka bawaan DAN tak muncul di panel — persis cacat yang migrasi ini perbaiki.
+ ('qc_duration_tolerance_pct',   15,  'Pagar atas toleransi panjang naskah (%). Target internal tak pernah lebih longgar dari ini.'),
+ ('script_perbeat_maks_rasio_pct', 115, 'Adegan di atas sekian persen jatahnya langsung dirapatkan. Tanpa plafon, kelebihan menumpuk melewati semua adegan.'),
+ ('script_perbeat_markup_pct',   100, 'Kelebihan pesanan per adegan. 100 = minta persis sesuai jatah (di atas 100 terbukti menyebabkan kelebihan ganda).'),
+ ('script_perbeat_trigger_atas_pct', 120, 'Naskah di atas sekian persen batas ATAS ditulis ulang per adegan. Pasangan dari ambang bawah — tanpa ini naskah kepanjangan tak punya jalur perbaikan.'),
+ ('tts_chunk_maks_huruf',        3000, 'Batas huruf satu permintaan suara untuk penyedia yang batas resminya belum terverifikasi. Penyedia yang sudah diketahui memakai tts_profiles.max_chars_per_request.')
 ON CONFLICT (key) DO NOTHING;
 
 INSERT INTO app_config (key, value, value_text, description) VALUES
