@@ -9,7 +9,7 @@ Fixes:
   - Retry feedback: skor per dimensi + teknik konkret per area lemah
 """
 
-import os, json, re, time
+import difflib, os, json, re, time
 from datetime import datetime
 from loguru import logger
 from dotenv import load_dotenv
@@ -791,24 +791,105 @@ def _narrative_intent(target_duration, n_beats) -> str:
     return (f"LONG {target_duration}s: the complete arc — layered mystery, multiple distinct facts, build and release with depth. Zero filler.")
 
 
+def _kata_polos(teks: str) -> list:
+    """Kata tanpa tanda baca/kapital — untuk MENCOCOKKAN teks beat ke deretan kata audio."""
+    return [re.sub(r"[^\w]", "", w).lower() for w in (teks or "").split() if re.sub(r"[^\w]", "", w)]
+
+
+def _batas_beat_dari_audio(script: dict, beats: list, wt: list) -> list | None:
+    """Detik MULAI tiap beat menurut audio SUNGGUHAN, dengan mencocokkan teksnya ke penanda kata.
+
+    Kenapa mencocokkan, bukan menghitung: yang DIUCAPKAN adalah `full_script`, dan `full_script`
+    BUKAN sekadar gabungan beat aktif — model menulis ulang sambungannya dan sering mengisi beat yang
+    tidak dipakai preset. Terukur pada 82 video produksi: 47 di antaranya punya `full_script` lebih
+    panjang 9–43 kata dari gabungan beat aktifnya; kemiripan katanya median 0,86.
+
+    Return None bila pencocokan tidak bisa dipercaya → pemanggil memakai jalur lama.
+    """
+    A = [re.sub(r"[^\w]", "", (w.get("word") or "")).lower() for w in wt]
+    if not A:
+        return None
+    mulai_idx, pos, cocok = [], 0, 0
+    for b in beats:
+        B = _kata_polos(script.get(b) or "")
+        if not B:
+            mulai_idx.append(None); continue
+        sisa = len(A) - pos
+        if sisa <= 0:
+            mulai_idx.append(None); continue
+        m = difflib.SequenceMatcher(None, A[pos:], B, autojunk=False) \
+                   .find_longest_match(0, sisa, 0, len(B))
+        # Cuplikan sepadan harus cukup panjang; kalau tidak, beat ini dianggap TIDAK ketemu
+        # (lebih baik mengaku tak tahu daripada menaruh batas adegan di tempat asal).
+        if m.size < max(3, int(0.35 * len(B))):
+            mulai_idx.append(None); continue
+        i_mulai = pos + m.a - m.b               # mundur ke kata PERTAMA beat, bukan ke awal cuplikan
+        i_mulai = max(pos, min(i_mulai, len(A) - 1))
+        mulai_idx.append(i_mulai)
+        pos = max(pos, i_mulai + max(1, m.size))
+        cocok += 1
+    if cocok < max(2, int(0.6 * len(beats))):    # terlalu banyak yang gagal → jangan dipaksakan
+        return None
+
+    # Beat yang tak ketemu: sisipkan merata di antara tetangganya yang ketemu (bukan ditebak liar).
+    for i, v in enumerate(mulai_idx):
+        if v is not None:
+            continue
+        kiri = next((mulai_idx[j] for j in range(i - 1, -1, -1) if mulai_idx[j] is not None), 0)
+        kanan = next((mulai_idx[j] for j in range(i + 1, len(mulai_idx)) if mulai_idx[j] is not None),
+                     len(A) - 1)
+        mulai_idx[i] = min(kanan, kiri + max(1, (kanan - kiri) // 2))
+    if any(mulai_idx[i] > mulai_idx[i + 1] for i in range(len(mulai_idx) - 1)):
+        return None                              # urutan kacau = pencocokan tak bisa dipercaya
+    detik = [0.0] + [float(wt[i].get("start", 0.0) or 0.0) for i in mulai_idx[1:]]
+    return detik
+
+
 def compute_beat_durations(script: dict, word_timestamps: list | None, audio_duration: float) -> list:
     """Durasi per-beat untuk image-gen + render (1 image per beat). SUMBER TUNGGAL (dipanggil SEKALI di
     pipeline) → dikonsumsi visual_assembler (bake Ken-Burns) DAN renderer (concat) = bake==display=exact
-    → sinkron TTS, nol glitch. Dari word_timestamps NYATA (presisi per-beat) bila ada+andal; else proporsi
-    jumlah-kata. Total dinormalisasi = audio_duration."""
+    → sinkron TTS, nol glitch. Total dinormalisasi = audio_duration.
+
+    ═══ CACAT YANG DIPERBAIKI 2026-08-02 — GAMBAR MELESET DARI KATA ═══
+
+    Jalur lama menyusuri penanda waktu SEBANYAK JUMLAH KATA BEAT AKTIF: beat-1 mengambil N1 kata
+    pertama, beat-2 N2 berikutnya, dan seterusnya. Itu hanya benar bila audio = gabungan beat aktif.
+    Kenyataannya audio dibuat dari `full_script`, yang MEMUAT LEBIH BANYAK: model mengisi beat yang
+    tidak dipakai preset dan menulis ulang sambungannya.
+
+    Akibatnya setiap batas adegan setelah selisih pertama menempel pada kata yang salah. Diukur pada
+    naskah produksi nyata (BJ Yusroon #172, preset 90, audio 94,6 dtk — 170 kata diucapkan vs 127 kata
+    beat aktif): gambar meleset **rata 4,3 dtk, terburuk 9,0 dtk**. Penonton melihat gambar adegan
+    berikutnya sementara narasi masih di adegan sebelumnya. Nol pemeriksaan menangkapnya — durasi
+    TOTAL tetap benar karena dinormalisasi, jadi cacat ini tak pernah menyalakan alarm apa pun.
+
+    Sekarang tiap beat DICOCOKKAN ke deretan kata audio, lalu batas adegan diambil dari waktu kata
+    pertamanya. Kata yang tidak dimiliki beat mana pun (isian beat tak-aktif, sambungan tulisan model)
+    otomatis jatuh ke adegan SEBELUMNYA — yang memang benar: kata itu terdengar saat gambar itu
+    tampil. Pencocokan gagal/tak masuk akal → jalur lama dipakai (nol regresi).
+    """
     beats  = script.get("beats") or _all_sections()
     counts = [max(1, len((script.get(b) or "").split())) for b in beats]
     total_w = sum(counts) or 1
     wt = word_timestamps or []
     durs = None
     if wt and len(wt) >= total_w * 0.6:          # cukup andal (ElevenLabs ~98%, edge ~80%)
-        durs, idx = [], 0
-        for c in counts:
-            s_i = min(idx, len(wt) - 1)
-            e_i = min(idx + c - 1, len(wt) - 1)
-            d = float(wt[e_i].get("end", 0)) - float(wt[s_i].get("start", 0))
-            durs.append(max(0.6, d))
-            idx += c
+        batas = _batas_beat_dari_audio(script, beats, wt)
+        if batas and audio_duration > 0:
+            tepi = batas + [float(audio_duration)]
+            kandidat = [tepi[i + 1] - tepi[i] for i in range(len(beats))]
+            if all(d >= 0.6 for d in kandidat):
+                durs = kandidat
+            else:
+                logger.warning("[BeatDurations] pencocokan menghasilkan adegan <0,6 dtk — pakai jalur lama")
+        if durs is None:
+            durs, idx = [], 0
+            for c in counts:
+                s_i = min(idx, len(wt) - 1)
+                e_i = min(idx + c - 1, len(wt) - 1)
+                d = float(wt[e_i].get("end", 0)) - float(wt[s_i].get("start", 0))
+                durs.append(max(0.6, d))
+                idx += c
     if not durs:                                  # fallback: proporsi jumlah-kata
         durs = [max(0.6, audio_duration * c / total_w) for c in counts]
     tot = sum(durs) or 1
