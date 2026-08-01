@@ -1828,8 +1828,18 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                                       beat_keys=active_beats)
                         _parah_baru = len(_c_baru)
                         _fakta_ok = not _fakta_hilang(_teks_lama, _tb)
-                        _panjang_ok = abs(len(_tb.split()) - len(_teks_lama.split())) <= max(
-                            3, 0.10 * len(_teks_lama.split()))
+                        # Ukurannya DURASI, bukan jumlah kata. Pagar jumlah-kata (±10%) menolak
+                        # perbaikan yang sebenarnya sah: terukur di BISIK NUSANTARA, elipsis berhasil
+                        # dibuang (cacat 1→0, fakta utuh) tapi ditolak karena penulis menggeser 19 kata
+                        # dari 185 — padahal videonya tetap mendarat di band. Yang menentukan adalah
+                        # video jadi masuk rentang preset (isu utama #1), bukan angka kata di tengah jalan.
+                        if preset_seconds:
+                            from src.production.duration_model import vonis as _v_cek
+                            _panjang_ok = _v_cek(_tb, preset_seconds, _tangga, render_overhead_sec,
+                                                 _kalib)["status"] == "ok"
+                        else:
+                            _panjang_ok = abs(len(_tb.split()) - len(_teks_lama.split())) <= max(
+                                3, 0.15 * len(_teks_lama.split()))
                         if _parah_baru < len(_cacat) and _fakta_ok and _panjang_ok:
                             best_script.update(_baru)
                             best_script["full_script"] = _tb

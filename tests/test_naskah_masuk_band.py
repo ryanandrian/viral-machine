@@ -250,4 +250,7 @@ def test_cacat_mekanis_yang_TERDETEKSI_diperbaiki_penulis():
     blok = blok[:blok.index("SATU PERHITUNGAN AKHIR")]
     assert "_fakta_hilang(_teks_lama, _tb)" in blok, "perbaikan cacat tidak memeriksa fakta hilang"
     assert "_parah_baru < len(_cacat)" in blok, "hasil yang tak mengurangi cacat bisa diterima"
-    assert "_panjang_ok" in blok, "perbaikan cacat bisa mengubah panjang naskah → durasi rusak"
+    assert "_panjang_ok" in blok, "perbaikan cacat bisa merusak durasi"
+    assert 'status"] == "ok"' in blok, \
+        "penerimaan diukur dari jumlah KATA, bukan dari vonis DURASI — perbaikan sah akan ditolak " \
+        "(terukur: elipsis berhasil dibuang tapi ditolak karena 19 kata dari 185 bergeser)"

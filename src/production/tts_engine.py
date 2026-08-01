@@ -8,6 +8,8 @@ Fase 6C s6c8:
 
 import asyncio
 import os
+import re
+import subprocess
 import time
 from pathlib import Path
 
@@ -60,6 +62,10 @@ def _get_provider_config(tenant_config: TenantConfig) -> dict:
         "tts_voice_default_settings": getattr(rc, "tts_voice_default_settings", {}) or {},  # baseline delivery dari voice_catalog
         "niche_voice_expression": getattr(rc, "niche_voice_expression", None),  # [EKSPRESI VOKAL] gaya-baca per-niche (niches.voice_expression)
         "visual_api_key":      getattr(rc, "visual_api_key", "") or "",
+        # Koefisien durasi suara ini — dipakai penjaga audio-terpotong PER POTONGAN pada naskah
+        # panjang (video Regular). Tanpa ini, potongan dinilai dengan angka bawaan, dan suara yang
+        # jauh dari bawaan (ElevenLabs) bisa lolos/tertuduh keliru.
+        "duration_calibration": getattr(rc, "duration_calibration", None),
         "niche":               tenant_config.niche,
         "tenant_id":           tenant_config.tenant_id,
     }
@@ -70,6 +76,63 @@ def _voice_rate_of(provider) -> str | None:
     Adaptor yang tak punya konsep ini → None → sampel tidak dipakai kalibrasi (gagal-aman)."""
     v = getattr(provider, "effective_rate", None)
     return str(v) if v else None
+
+
+def _potong_kalimat(teks: str, maks_huruf: int) -> list[str]:
+    """Pecah naskah panjang di BATAS KALIMAT, tiap potongan ≤ `maks_huruf`.
+
+    Memotong di tengah kalimat akan terdengar: narator berhenti mendadak lalu memulai lagi dengan
+    intonasi awal-kalimat. Karena itu batas potongnya selalu akhir kalimat. Satu kalimat yang sendirian
+    sudah melebihi batas TIDAK dipotong paksa — dikirim apa adanya (lebih baik satu permintaan besar
+    daripada narasi yang patah di tengah kalimat)."""
+    t = (teks or "").strip()
+    if not t or len(t) <= maks_huruf:
+        return [t] if t else []
+    kalimat = re.split(r"(?<=[.!?…])\s+", t)
+    potongan, kini = [], ""
+    for k in kalimat:
+        if not k:
+            continue
+        if kini and len(kini) + 1 + len(k) > maks_huruf:
+            potongan.append(kini)
+            kini = k
+        else:
+            kini = f"{kini} {k}".strip() if kini else k
+    if kini:
+        potongan.append(kini)
+    return potongan
+
+
+def _sambung_audio(bagian: list[Path], keluaran: Path) -> Path:
+    """Sambung potongan audio jadi satu berkas, tanpa jeda tambahan di sambungannya.
+
+    Dipakai `ffmpeg concat` dengan RE-ENCODE: menyambung mp3 mentah (copy) menyisakan padding encoder
+    di tiap sambungan — terdengar sebagai 'tik' halus dan menambah durasi yang tak terhitung model."""
+    daftar = keluaran.parent / f"{keluaran.stem}_daftar.txt"
+    daftar.write_text("\n".join(f"file '{p.as_posix()}'" for p in bagian), encoding="utf-8")
+    r = subprocess.run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(daftar),
+                        "-c:a", "libmp3lame", "-b:a", "128k", str(keluaran)],
+                       capture_output=True, timeout=600)
+    try:
+        daftar.unlink()
+    except OSError:
+        pass
+    if r.returncode != 0 or not keluaran.exists() or keluaran.stat().st_size < 2000:
+        raise TTSError(f"Penyambungan potongan suara gagal: {r.stderr[-200:].decode('utf-8', 'replace')}",
+                       error_class=ErrorClass.TRANSIENT)
+    return keluaran
+
+
+def _geser_timestamp(ts: list[dict], offset: float) -> list[dict]:
+    """Geser penanda waktu satu potongan ke posisinya di audio gabungan (caption tetap presisi)."""
+    out = []
+    for w in ts or []:
+        try:
+            out.append({**w, "start": float(w.get("start", 0)) + offset,
+                        "end": float(w.get("end", 0)) + offset})
+        except (TypeError, ValueError):
+            continue
+    return out
 
 
 def _run_provider(provider_name: str, text: str, config: dict, output_dir: str) -> tuple[str, list[dict]]:
@@ -98,6 +161,55 @@ def _run_provider(provider_name: str, text: str, config: dict, output_dir: str) 
     _detik = min(_ambang.detik("tts_timeout_maks_sec", 900),
                  _ambang.detik("tts_timeout_dasar_sec", 180)
                  + _ambang.milidetik("tts_timeout_per_huruf_ms", 200) * len(text or ""))
+
+    # ── NASKAH PANJANG (video Regular 2–12 menit) DIPOTONG & DISAMBUNG ───────────────────────────
+    # Naskah 1.000+ kata (±6.000–11.000 huruf) melampaui batas satu permintaan di semua penyedia, dan
+    # bahkan bila diterima, satu permintaan sebesar itu jauh lebih sering menggantung atau terputus di
+    # tengah. Potongannya SELALU di batas kalimat (memotong di tengah kalimat terdengar: narator
+    # berhenti mendadak lalu memulai lagi dengan intonasi awal-kalimat).
+    # Penjaga audio-terpotong tetap berlaku PER POTONGAN — justru di sinilah ia paling dibutuhkan,
+    # sebab satu potongan yang gagal di tengah akan tersembunyi di dalam audio gabungan yang panjang.
+    _maks_huruf = _ambang.angka("tts_chunk_maks_huruf", 3000)
+    _bagian_teks = _potong_kalimat(text, _maks_huruf)
+    if len(_bagian_teks) > 1:
+        logger.info(f"[TTSEngine] naskah {len(text)} huruf → {len(_bagian_teks)} potongan "
+                    f"(batas {_maks_huruf} huruf/potongan, dipotong di batas kalimat)")
+        from src.production.duration_model import prediksi_audio as _pred
+        _kalib = config.get("duration_calibration")
+        _berkas, _ts_gab, _offset = [], [], 0.0
+        for _i, _bt in enumerate(_bagian_teks, 1):
+            _pp = Path(output_dir) / f"{output_path.stem}_bagian{_i:02d}.mp3"
+            _det_b = min(_ambang.detik("tts_timeout_maks_sec", 900),
+                         _ambang.detik("tts_timeout_dasar_sec", 180)
+                         + _ambang.milidetik("tts_timeout_per_huruf_ms", 200) * len(_bt))
+            _prov_b = build_tts_provider(provider_name, config)
+            try:
+                asyncio.run(asyncio.wait_for(_prov_b.generate(_bt, _pp), timeout=_det_b))
+            except asyncio.TimeoutError:
+                raise TTSError(f"Penyedia suara '{provider_name}' tidak menyelesaikan potongan {_i} "
+                               f"dari {len(_bagian_teks)} dalam {_det_b:.0f} detik.",
+                               error_class=ErrorClass.TRANSIENT)
+            _d = TTSEngine.get_duration(str(_pp))
+            _ramal_b = _pred(_bt, _kalib)
+            _amb_potong = _ambang.pct("tts_potong_ambang_pct", 75)
+            if _ramal_b > 0 and _d > 0 and (_d / _ramal_b) < _amb_potong:
+                raise TTSError(
+                    f"Suara potongan {_i} dari {len(_bagian_teks)} tidak lengkap: {_d:.1f} dtk "
+                    f"padahal seharusnya ±{_ramal_b:.1f} dtk. Narasi akan terputus di tengah video — "
+                    f"produksi dihentikan agar tidak menghasilkan video cacat.",
+                    error_class=ErrorClass.TRANSIENT)
+            _ts_gab += _geser_timestamp(_prov_b.get_word_timestamps() or [], _offset)
+            _offset += _d
+            _berkas.append(_pp)
+            logger.info(f"[TTSEngine] potongan {_i}/{len(_bagian_teks)}: {len(_bt)} huruf → {_d:.1f} dtk")
+        _sambung_audio(_berkas, output_path)
+        for _pp in _berkas:
+            try:
+                _pp.unlink()
+            except OSError:
+                pass
+        logger.info(f"[TTSEngine] {len(_berkas)} potongan disambung → {TTSEngine.get_duration(str(output_path)):.1f} dtk")
+        return str(output_path), _ts_gab, _voice_rate_of(provider)
 
     async def _dengan_batas():
         return await asyncio.wait_for(provider.generate(text, output_path), timeout=_detik)
