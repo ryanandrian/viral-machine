@@ -160,3 +160,94 @@ def test_putaran_yang_MENJAUH_dari_band_ditolak():
                                     maks_putaran=1)
     assert hasil.get("full_script") == asal, "hasil yang MENJAUH dari band diterima"
     assert any("tidak mendekati band" in j for j in jejak), f"jejak tidak menjelaskan: {jejak}"
+
+
+# ── 5. throttle penyedia bukan "balasan rusak" ────────────────────────────────────────────────────
+
+def test_perbaikan_MENUNGGU_saat_penyedia_throttle_bukan_menyerah():
+    """Terukur di Bang Us-Dat: Groq membalas 429, dua percobaan habis dalam dua detik karena dicatat
+    sebagai 'balasan rusak', perbaikan menyerah, video keluar band. 429 hanya berarti 'tunggu'.
+    Tenant tingkat GRATIS — persona utama produk — menabrak batas ini setiap hari, dan jalur baru
+    memakai banyak panggilan kecil."""
+    from src.exceptions import ErrorClass, PipelineError
+
+    class _Throttle:
+        def __init__(self):
+            self.n = 0
+
+        def complete(self, **kw):
+            self.n += 1
+            if self.n == 1:
+                e = PipelineError("Error code: 429 rate limit")
+                e.error_class = ErrorClass.RATE_LIMIT
+                raise e
+            return json.dumps({"hook": "Pada tahun 1923 kota Kanto runtuh. " * 4,
+                               "core_facts": "Pada tahun 1923 kota Kanto runtuh. " * 8})
+
+    r = _resep_uji(60)
+    asal = "Pada tahun 1923 kota Kanto runtuh. " * 3
+    script = {"full_script": asal, "hook": asal[:40], "core_facts": asal[40:]}
+    v_awal = {"status": "terlalu_pendek", "kata_selisih": 60, "video_prediksi": 20.0,
+              "band_video": r["band_video"]}
+    prov = _Throttle()
+    _, jejak = se._refit_naskah(prov, "m", script, ["hook", "core_facts"], r, v_awal, maks_putaran=1)
+    assert prov.n >= 2, "throttle membuat perbaikan menyerah — padahal cukup menunggu"
+    assert any("throttle" in j for j in jejak), f"throttle tidak dikenali sebagai throttle: {jejak}"
+
+
+def test_error_yang_TIDAK_bisa_ditunggu_berhenti_seketika():
+    """Kredit habis / kunci ditolak: menunggu tak menolong — jangan buang waktu & uang tenant."""
+    from src.exceptions import ErrorClass, PipelineError
+
+    class _Mati:
+        def __init__(self):
+            self.n = 0
+
+        def complete(self, **kw):
+            self.n += 1
+            e = PipelineError("insufficient credit")
+            e.error_class = ErrorClass.ACCOUNT_BILLING
+            raise e
+
+    r = _resep_uji(60)
+    asal = "Pada tahun 1923 kota Kanto runtuh. " * 3
+    script = {"full_script": asal, "hook": asal[:40], "core_facts": asal[40:]}
+    v_awal = {"status": "terlalu_pendek", "kata_selisih": 60, "video_prediksi": 20.0,
+              "band_video": r["band_video"]}
+    prov = _Mati()
+    _, jejak = se._refit_naskah(prov, "m", script, ["hook", "core_facts"], r, v_awal, maks_putaran=2)
+    assert prov.n == 1, f"error non-retryable diulang {prov.n}× — buang waktu & uang tenant"
+
+
+# ── 6. jalur per-bagian dipicu DUA ARAH ───────────────────────────────────────────────────────────
+
+def test_naskah_KEPANJANGAN_juga_memicu_tulis_per_bagian():
+    """Terukur di Abyss ID (preset 30 dtk, band 22–38): satu panggilan menghasilkan 148 kata untuk
+    jatah ±75 → video 57 dtk. Jalur per-bagian — satu-satunya mekanisme yang terbukti bekerja — tak
+    pernah dipicu karena pemicunya hanya melihat naskah KEPENDEKAN. Akibatnya seluruh beban jatuh ke
+    perbaikan akhir, yang harus memotong separuh naskah sekaligus dan ditolak 3× karena fakta ikut
+    terbuang."""
+    src = inspect.getsource(se.ScriptEngine.generate)
+    assert "script_perbeat_trigger_atas_pct" in src, "pemicu arah KEPANJANGAN tidak ada"
+    assert "_kepanjangan" in src and "_kependekan" in src, "pemicu tidak dua arah"
+    assert "abs(_w_pb - _bidik) < abs(_w_now - _bidik)" in src, \
+        "hasil per-bagian masih dinilai 'lebih panjang', bukan 'lebih dekat ke jatah' — salah arah " \
+        "untuk naskah yang kepanjangan"
+
+
+# ── 7. cacat mekanis diperbaiki, bukan cuma dilaporkan ────────────────────────────────────────────
+
+def test_cacat_mekanis_yang_TERDETEKSI_diperbaiki_penulis():
+    """Terukur di BISIK NUSANTARA: naskah mendarat tepat di band (meleset 0,1 dtk) tapi memuat
+    elipsis — tanda yang DILARANG prompt. Pemeriksa menemukannya, lalu tak ada yang menindaklanjuti:
+    cacat hanya jadi umpan-balik retry, dan naskah ini tak pernah di-retry karena skornya lolos di
+    percobaan pertama. Narasi adalah ISI produk — cacat yang sudah KITA KETAHUI tak boleh sampai ke
+    penonton."""
+    src = inspect.getsource(se.ScriptEngine.generate)
+    assert "CACAT MEKANIS YANG TERDETEKSI HARUS DIPERBAIKI" in src, \
+        "cacat mekanis kembali hanya dilaporkan"
+    blok = src[src.index("CACAT MEKANIS YANG TERDETEKSI HARUS DIPERBAIKI"):]
+    blok = blok[:blok.index("SATU PERHITUNGAN AKHIR")]
+    assert "_fakta_hilang(_teks_lama, _tb)" in blok, "perbaikan cacat tidak memeriksa fakta hilang"
+    assert "_parah_baru < len(_cacat)" in blok, "hasil yang tak mengurangi cacat bisa diterima"
+    assert "_panjang_ok" in blok, "perbaikan cacat bisa mengubah panjang naskah → durasi rusak"

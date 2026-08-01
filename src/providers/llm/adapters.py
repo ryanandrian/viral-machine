@@ -26,17 +26,26 @@ from src.exceptions import ErrorClass
 #   • `is no longer available` (Gemini 404 model dipensiunkan) — production_runs 21/22-Jul (insiden riandipantria `gemini-2.5-flash`).
 #   • `insufficient_quota` — worker.log 09-Jul (OpenAI) · `exceeded your current quota` — production_runs 21-Jul (OpenAI, insiden riandipantria).
 # CATATAN 429: HANYA token quota di atas → fast-fail; 429 rate-limit throttle (pesan "Rate limit reached") TIDAK di-map → UNKNOWN/retryable (jangan salah-rem).
+#   • `tokens per day (TPD)` — bukti sampel 2026-08-01 (uji rantai penuh, Groq llama-3.3-70b):
+#     "Rate limit reached ... on tokens per day (TPD): Limit 100000, Used 97156 ... try again in 35m51s".
+#     Ini KUOTA HARIAN tingkat gratis, bukan throttle sesaat — menunggu 2–8 detik sia-sia. Tapi ia
+#     PULIH SENDIRI, jadi SENGAJA TIDAK dipetakan ke QUOTA_EXHAUSTED: kelas itu masuk FAST_FAIL yang
+#     MENGHENTIKAN channel dan menuntut "Jalankan Ulang" manual — tenant tingkat gratis akan terpaksa
+#     menekannya setiap hari. RATE_LIMIT = tetap retryable (tak mengerem channel) tapi kini membawa
+#     PESAN YANG BENAR, bukan "kesalahan tak dikenal".
 _OPENAI_COMPAT_ERROR_MAP = {
     "invalid_api_key": ErrorClass.AUTH_INVALID,
     "model_not_found": ErrorClass.MODEL_UNAVAILABLE,
     "is no longer available": ErrorClass.MODEL_UNAVAILABLE,
     "insufficient_quota": ErrorClass.QUOTA_EXHAUSTED,
     "exceeded your current quota": ErrorClass.QUOTA_EXHAUSTED,
+    "tokens per day": ErrorClass.RATE_LIMIT,
 }
 _OPENAI_COMPAT_HUMAN = {
     ErrorClass.AUTH_INVALID: "Kunci API AI (penulis naskah) ditolak penyedia. Periksa/perbarui kunci di halaman Integrasi, lalu pastikan Akun (kunci) di setting channel sepadan dengan penyedianya.",
     ErrorClass.MODEL_UNAVAILABLE: "Model AI ini sudah tidak tersedia di penyedianya (dipensiunkan/tak bisa diakses). Pilih model lain di setting channel.",
     ErrorClass.QUOTA_EXHAUSTED: "Kuota/kredit penyedia AI (penulis naskah) sudah habis. Isi saldo/kredit di akun penyedia Anda, lalu Jalankan Ulang.",
+    ErrorClass.RATE_LIMIT: "Jatah harian penyedia AI (penulis naskah) sudah terpakai habis untuk hari ini — ini batas paket gratis penyedia, bukan masalah di MesinViral. Produksi akan dicoba lagi otomatis pada jadwal berikutnya; bila ingin produksi lebih banyak per hari, tingkatkan paket di akun penyedia AI Anda.",
 }
 
 

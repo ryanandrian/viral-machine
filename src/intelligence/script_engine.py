@@ -406,6 +406,14 @@ def _refit_naskah(provider, model, script: dict, beats: list, resep: dict, vonis
         )
         # Balasan JSON rusak = coba lagi, JANGAN menghabiskan putaran (terukur: satu "Unterminated
         # string" menghabiskan putaran satu-satunya dan naskah preset 15 dtk tetap kepanjangan).
+        # THROTTLE ≠ BALASAN RUSAK. Terukur 2026-08-01 di channel Bang Us-Dat: dua percobaan habis
+        # dalam dua detik karena Groq membalas 429, dan keduanya dicatat sebagai "balasan rusak" —
+        # lalu perbaikan menyerah dan videonya keluar band. Padahal 429 hanya berarti "tunggu sebentar".
+        # Tenant tingkat GRATIS (persona utama produk) paling sering menabrak batas ini, dan jalur baru
+        # memakai banyak panggilan kecil — jadi ini bukan kasus tepi, ini keadaan sehari-hari mereka.
+        # Jalur tulis-per-bagian sudah sadar-throttle sejak awal; jalur perbaikan tertinggal.
+        from src.exceptions import ErrorClass as _EC
+        _RETRY_OK = {_EC.RATE_LIMIT, _EC.TRANSIENT, _EC.UNKNOWN}
         hasil = None
         for _c in range(1, _ambang.angka("script_refit_parse_retry", 2) + 1):
             try:
@@ -414,8 +422,15 @@ def _refit_naskah(provider, model, script: dict, beats: list, resep: dict, vonis
                 hasil = json.loads(ScriptEngine._clean_json(ScriptEngine.__new__(ScriptEngine), raw))
                 break
             except Exception as e:
-                jejak.append(f"putaran {putaran} coba {_c}: balasan rusak ({str(e)[:45]})")
-                time.sleep(1)
+                _kelas = getattr(e, "error_class", None)
+                if _kelas is not None and _kelas not in _RETRY_OK:
+                    # kredit habis / kunci ditolak / model dipensiunkan → menunggu tak menolong
+                    jejak.append(f"putaran {putaran}: berhenti ({_kelas}) {str(e)[:40]}")
+                    break
+                _jeda = 2 ** _c
+                jejak.append(f"putaran {putaran} coba {_c}: {'throttle' if _kelas else 'balasan rusak'} "
+                             f"({str(e)[:40]}) — tunggu {_jeda}s")
+                time.sleep(_jeda)
         if hasil is None:
             break
         baru = {b: (hasil.get(b) or "").strip() for b in isi}
@@ -1688,23 +1703,41 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
         # ulang. Memecah jadi bagian ±30 kata membuatnya berada di dalam kemampuan model mana pun.
         if preset_seconds and _resep and best_script:
             _amb = _ambang.pct("script_perbeat_trigger_pct", 80)
+            _amb_atas = _ambang.angka("script_perbeat_trigger_atas_pct", 120) / 100.0
             _w_now = len((best_script.get("full_script") or "").split())
-            if _w_now < _amb * _resep["kata_min"]:
-                logger.warning(f"[ScriptEngine] naskah {_w_now} kata << batas bawah {_resep['kata_min']} "
+            _kependekan = _w_now < _amb * _resep["kata_min"]
+            # ── DIPICU DUA ARAH (2026-08-01) ──────────────────────────────────────────────────────
+            # Jalur ini dulu hanya menangkap naskah KEPENDEKAN, karena sejarahnya memang begitu
+            # (model lemah menulis 45–65% pesanan). Tapi mekanismenya — satu panggilan kecil per
+            # adegan, dengan lantai DAN plafon yang dikoreksi seketika — sama ampuhnya untuk naskah
+            # KEPANJANGAN, dan itulah satu-satunya jalur yang terbukti bekerja.
+            # Terukur di channel Abyss ID (preset 30 dtk, band 22–38 dtk): satu panggilan menghasilkan
+            # 148 kata untuk jatah ±75 → video 57 dtk. Jalur per-bagian tak pernah dipicu, sehingga
+            # satu-satunya harapan tinggal perbaikan akhir — yang harus memotong SEPARUH naskah
+            # sekaligus, dan ditolak tiga kali karena fakta ikut terbuang. Memotong 148→75 kata dalam
+            # satu langkah memang bukan pekerjaan yang bisa diandalkan; menulis 5 adegan @15 kata bisa.
+            _kepanjangan = _w_now > _amb_atas * _resep["kata_maks"]
+            if _kependekan or _kepanjangan:
+                logger.warning(f"[ScriptEngine] naskah {_w_now} kata "
+                               f"{'<<' if _kependekan else '>>'} batas "
+                               f"{_resep['kata_min'] if _kependekan else _resep['kata_maks']} "
                                f"— satu panggilan tak sanggup; beralih ke TULIS PER-BAGIAN")
                 _pb = _generate_per_beat(llm, script_model, topic, tenant_config.niche,
                                          _beats_for_preset(preset_seconds), _resep, niche_profile,
                                          _clang, insights_block)
                 if _pb.get("full_script"):
                     _w_pb = len(_pb["full_script"].split())
-                    if _w_pb > _w_now:
+                    # "Lebih baik" = lebih DEKAT ke jatah, bukan sekadar lebih panjang. Aturan lama
+                    # (`>` saja) benar untuk naskah kependekan tapi salah arah untuk yang kepanjangan.
+                    _bidik = _resep["kata_bidik"]
+                    if abs(_w_pb - _bidik) < abs(_w_now - _bidik):
                         best_script = {**best_script, **_pb}
                         best_script["_written_per_beat"] = True
                         logger.info(f"[ScriptEngine] per-bagian menghasilkan {_w_pb} kata "
-                                    f"(sebelumnya {_w_now}) — dipakai")
+                                    f"(sebelumnya {_w_now}, jatah {_bidik}) — dipakai")
                     else:
-                        logger.warning(f"[ScriptEngine] per-bagian {_w_pb} kata tidak lebih baik dari "
-                                       f"{_w_now} — naskah asal dipertahankan")
+                        logger.warning(f"[ScriptEngine] per-bagian {_w_pb} kata tidak lebih dekat ke "
+                                       f"jatah {_bidik} daripada {_w_now} — naskah asal dipertahankan")
 
         # ── PERBAIKAN AKHIR: suruh MODEL merapatkan/melengkapi bila durasi masih di luar band ──────
         # Retry biasa mengulang dari nol dan itu TIDAK menutup selisih (goyangan antar-produksi
@@ -1750,6 +1783,63 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                 logger.info(f"[ScriptEngine] periksa ulang naskah akhir: {_ringkas2(_c2)}")
             except Exception as _ce2:
                 logger.warning(f"[ScriptEngine] periksa ulang gagal (naskah tetap dipakai): {_ce2}")
+        # ── CACAT MEKANIS YANG TERDETEKSI HARUS DIPERBAIKI, BUKAN CUMA DILAPORKAN ─────────────────
+        # Terukur 2026-08-01 di channel BISIK NUSANTARA: naskah mendarat tepat di band (meleset 0,1
+        # dtk) tapi memuat elipsis — tanda yang DILARANG prompt karena membakar hampir sepertiga detik
+        # keheningan dan membuat narasi terdengar menggantung. Pemeriksa menemukannya, lalu tidak ada
+        # yang menindaklanjuti: cacat hanya jadi umpan-balik untuk retry, dan naskah ini tidak pernah
+        # di-retry karena skornya sudah lolos di percobaan pertama.
+        # Narasi adalah ISI produk (isu utama owner #2) — cacat yang sudah KITA KETAHUI tak boleh
+        # sampai ke penonton. Yang memperbaiki tetap MODEL (kode tak pernah memotong naskah); kode
+        # hanya memverifikasi: cacat berkurang, fakta utuh, durasi tidak memburuk.
+        if best_script and (best_script.get("mechanical_issues") or []):
+            try:
+                from src.intelligence.script_checker import periksa_naskah as _pn
+                _cacat = [t for t in best_script["mechanical_issues"] if t.get("parah")]
+                if _cacat and llm:
+                    _daftar = "\n".join(f"- {t['jenis']}: {t['pesan']} [{t.get('bukti','')[:80]}]"
+                                        for t in _cacat[:6])
+                    _teks_lama = best_script.get("full_script") or ""
+                    _isi = {b: (best_script.get(b) or "").strip()
+                            for b in (_beats_for_preset(preset_seconds) if preset_seconds else _ALL_SECTIONS)
+                            if (best_script.get(b) or "").strip()}
+                    _up = (
+                        "Fix ONLY these mechanical defects in the narration below. They are certain, "
+                        "not opinions:\n" + _daftar + "\n\n"
+                        "ABSOLUTE RULES: keep every FACT (numbers, years, names, events) · keep the "
+                        "SAME language, tone and style · keep the word count within ±5% · whole "
+                        "sentences only · NEVER use '...' · do not change the first sentence · return "
+                        "the SAME section keys and nothing else.\n\n"
+                        f"SCRIPT (JSON):\n{json.dumps(_isi, ensure_ascii=False, indent=1)}\n\n"
+                        "Reply with JSON only, exactly these keys: " + ", ".join(_isi)
+                    )
+                    _r = llm.complete(system="You are a professional video-script editor. Reply with JSON only.",
+                                      user=_up, model=script_model, temperature=0.2, max_tokens=2000,
+                                      as_json=True)
+                    _h = json.loads(ScriptEngine._clean_json(ScriptEngine.__new__(ScriptEngine), _r))
+                    _baru = {b: (_h.get(b) or "").strip() for b in _isi}
+                    if all(_baru.values()):
+                        _tb = " ".join(_baru[b] for b in _isi)
+                        _c_baru = _pn(_tb, niche_profile=niche_profile, content_language=_clang,
+                                      beat_keys=active_beats)
+                        _parah_baru = sum(1 for t in _c_baru if t.get("parah"))
+                        _fakta_ok = not _fakta_hilang(_teks_lama, _tb)
+                        _panjang_ok = abs(len(_tb.split()) - len(_teks_lama.split())) <= max(
+                            3, 0.10 * len(_teks_lama.split()))
+                        if _parah_baru < len(_cacat) and _fakta_ok and _panjang_ok:
+                            best_script.update(_baru)
+                            best_script["full_script"] = _tb
+                            best_script["mechanical_issues"] = _c_baru
+                            logger.info(f"[ScriptEngine] cacat mekanis diperbaiki penulis: "
+                                        f"{len(_cacat)} → {_parah_baru}")
+                        else:
+                            logger.warning(f"[ScriptEngine] perbaikan cacat mekanis DITOLAK "
+                                           f"(cacat {len(_cacat)}→{_parah_baru} · fakta_utuh={_fakta_ok} "
+                                           f"· panjang_wajar={_panjang_ok}) — naskah asal dipakai")
+            except Exception as _ce3:
+                logger.warning(f"[ScriptEngine] perbaikan cacat mekanis gagal (naskah tetap dipakai): "
+                               f"{str(_ce3)[:90]}")
+
         # ── SATU PERHITUNGAN AKHIR untuk SELURUH angka durasi (2026-08-01) ─────────────────────────
         # Cacat yang tertangkap uji rantai-penuh: `_duration_est` DITAMBAL di tiga tempat dengan
         # bagian yang berbeda-beda, masing-masing dengan syaratnya sendiri. Akibatnya isinya bisa
