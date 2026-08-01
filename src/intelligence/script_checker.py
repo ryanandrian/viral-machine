@@ -179,12 +179,26 @@ def periksa_naskah(teks: str, niche_profile: dict | None = None,
             break
 
     # 7. artefak sambungan (khas naskah yang digabung per-segmen)
+    #
+    # ELIPSIS DIKELUARKAN DULU. Cacat di pemeriksa ini sendiri, terukur pada 82 naskah produksi
+    # (2026-08-02): `\.\s*\.` ikut cocok DI DALAM "..." , dan `[.!?]\s+[a-z]` cocok pada "you... it's".
+    # Hasilnya elipsis dihitung DUA KALI — sekali sebagai elipsis (aturan 2, benar) dan sekali lagi
+    # sebagai "titik ganda" + "kalimat diawali huruf kecil" (10× dan 5×, keduanya SALAH). Penulis lalu
+    # diminta memperbaiki sisa-penggabungan yang tidak pernah ada, memakai putaran perbaikan dan kuota
+    # penyedia untuk mengejar hantu.
+    #
+    # Elipsis diganti satu karakter penanda (bukan spasi, bukan titik) supaya penggantiannya sendiri
+    # tak melahirkan "spasi ganda" palsu.
+    _tj = t.replace("…", "\x01")
+    while "..." in _tj:
+        _tj = _tj.replace("...", "\x01")
+    _tj = _tj.replace("..", "\x01\x01")     # dua titik = artefak sungguhan, jangan disamarkan
     artefak = []
-    if re.search(r"\.\s*\.", t):
+    if "\x01\x01" in _tj or re.search(r"\.\s*\.", _tj):
         artefak.append("titik ganda")
-    if "  " in t:
+    if "  " in _tj:
         artefak.append("spasi ganda")
-    if re.search(r"[.!?]\s+[a-zà-ÿ]", t):
+    if re.search(r"[.!?]\s+[a-zà-ÿ]", _tj):
         artefak.append("kalimat diawali huruf kecil")
     if artefak:
         out.append(_temuan("artefak_sambungan", False,
