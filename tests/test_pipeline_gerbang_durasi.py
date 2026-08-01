@@ -103,3 +103,46 @@ def test_batas_platform_tetap_berlaku_bila_preset_tak_diset(monkeypatch, tmp_pat
     p = Pipeline.__new__(Pipeline)
     ok, alasan = p._pre_publish_qc(str(f), 300.0, clip_count=8, target_seconds=None)
     assert not ok and "terlalu panjang" in alasan
+
+
+# ── GERBANG PALING HULU: hentikan sebelum sepeser pun terpakai ────────────────────────────────────
+
+def test_gerbang_durasi_HULU_ada_sebelum_hook_dan_suara():
+    """Alat ukur kini meleset ~1 detik, jadi begitu naskah selesai kita SUDAH TAHU video jadinya
+    berapa detik. Sampai 2026-08-01 pengetahuan itu tak dipakai: pipeline tetap membayar optimasi
+    hook, pembuatan prompt gambar, dan SUARA (ElevenLabs ditagih per huruf) sebelum gerbang
+    pasca-suara menghentikannya. Untuk tenant BYOK itu uang mereka, terbakar pada video yang sudah
+    kita ketahui akan gagal."""
+    import inspect
+
+    import src.orchestrator.pipeline as pl
+    src = inspect.getsource(pl.Pipeline.run)
+    assert "GERBANG DURASI PALING HULU" in src, "gerbang hulu hilang"
+    i_hulu = src.index("GERBANG DURASI PALING HULU")
+    i_hook = src.index("STEP 4: Hook Optimization")
+    i_tts = src.index("STEP 5: TTS Audio")
+    assert i_hulu < i_hook < i_tts, "gerbang hulu tidak berada sebelum hook & suara"
+
+
+def test_gerbang_hulu_memakai_PENGGARIS_YANG_SAMA_dengan_gerbang_pasca_suara():
+    """Dua gerbang dengan aturan berbeda = 'tiga penggaris' yang dulu melahirkan insiden 15-Jul.
+    Keduanya: band titik-tengah + pagar satu lebar band; near-miss LANJUT (tenant yang meninjau)."""
+    import inspect
+
+    import src.orchestrator.pipeline as pl
+    src = inspect.getsource(pl.Pipeline.run)
+    hulu = src[src.index("GERBANG DURASI PALING HULU"):src.index("STEP 4: Hook Optimization")]
+    assert "band_video" in hulu and "effective_overhead" in hulu, "gerbang hulu memakai rumus sendiri"
+    assert "_lebar35" in hulu and "near_miss" in hulu, "pagar/near-miss gerbang hulu berbeda aturan"
+
+
+def test_kegagalan_gerbang_hulu_TIDAK_menjatuhkan_produksi():
+    """Gerbang ini penghemat biaya, bukan penentu mutu. Bila ia sendiri error, produksi harus tetap
+    jalan — gerbang pasca-suara yang menjaga."""
+    import inspect
+
+    import src.orchestrator.pipeline as pl
+    src = inspect.getsource(pl.Pipeline.run)
+    hulu = src[src.index("GERBANG DURASI PALING HULU"):src.index("STEP 4: Hook Optimization")]
+    assert "except LLMError:" in hulu and "raise" in hulu, "kegagalan sah ikut tertelan"
+    assert "non-fatal" in hulu, "error tak terduga di gerbang hulu bisa menjatuhkan produksi"

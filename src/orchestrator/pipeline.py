@@ -207,6 +207,55 @@ class Pipeline:
             }
             logger.info(f"STEP 3 DONE | {scripts[0].get('word_count', 0)} words")
 
+            # ── STEP 3.5: GERBANG DURASI PALING HULU — hentikan SEBELUM sepeser pun terpakai ──────
+            # Alat ukur durasi kini meleset ~1 detik (terukur 0,2–2,8 dtk pada 6 channel nyata). Jadi
+            # begitu naskah selesai, kita SUDAH TAHU video jadinya akan berapa detik. Sampai 2026-08-01
+            # pengetahuan itu tidak dipakai: pipeline tetap membayar optimasi hook (STEP 4), pembuatan
+            # prompt gambar (STEP 4.5), dan SUARA (STEP 5, ElevenLabs ditagih per huruf) — baru
+            # dihentikan gerbang pasca-suara. Untuk tenant BYOK itu UANG MEREKA, terbakar pada video
+            # yang sudah kita ketahui akan gagal.
+            # Aturannya SAMA PERSIS dengan gerbang pasca-suara (satu penggaris, bukan aturan baru):
+            # hanya meleset PARAH (di luar band ± satu lebar band) yang dihentikan; near-miss tetap
+            # lanjut supaya tenant yang meninjaunya, bukan mesin yang membuangnya.
+            try:
+                _p35 = getattr(tenant_config, "duration_preset", None)
+                _est35 = (scripts[0].get("_duration_est") or {})
+                _audio35 = _est35.get("est_seconds")
+                if _p35 and _audio35:
+                    from src.config.format_catalog import active_presets as _ap35
+                    from src.config.format_catalog import effective_overhead as _eo35
+                    from src.production.duration_model import band_video as _bv35
+                    _rc35 = None
+                    try:
+                        from src.config.tenant_config import load_tenant_config as _ltc35
+                        _rc35 = _ltc35(tenant_config.tenant_id, getattr(tenant_config, "channel_id", None),
+                                       getattr(tenant_config, "niche", None))
+                    except Exception:
+                        _rc35 = None
+                    _tangga35 = _ap35()
+                    if _tangga35 and int(_p35) in _tangga35:
+                        _lo35, _hi35 = _bv35(_p35, _tangga35)
+                        _proj35 = float(_audio35) + _eo35(_p35, _rc35)
+                        _lebar35 = max(1.0, _hi35 - _lo35)
+                        if not (_lo35 - _lebar35 <= _proj35 <= _hi35 + _lebar35):
+                            raise LLMError(
+                                f"Naskah tidak layak: perkiraan durasi video {_proj35:.0f} detik, jauh di "
+                                f"luar rentang preset {int(_p35)} detik (sah {_lo35:.0f}–{_hi35:.0f} detik). "
+                                f"Produksi dihentikan SEBELUM biaya suara & gambar terpakai; naskah baru "
+                                f"dibuat otomatis pada siklus berikutnya.", step="script")
+                        result["steps"]["duration_gate_hulu"] = {
+                            "status": "ok" if _lo35 <= _proj35 <= _hi35 else "near_miss",
+                            "projected": round(_proj35, 1), "window": [round(_lo35), round(_hi35)]}
+                        logger.info(f"[Pipeline] Gerbang durasi HULU: proyeksi {_proj35:.1f}s vs band "
+                                    f"{_lo35:.0f}-{_hi35:.0f}s → "
+                                    f"{'lolos' if _lo35 <= _proj35 <= _hi35 else 'near-miss (lanjut)'}")
+            except LLMError:
+                raise
+            except Exception as _e35:
+                # Gerbang ini penghemat biaya, bukan penentu mutu — kegagalannya TIDAK boleh
+                # menjatuhkan produksi. Gerbang pasca-suara tetap menjaga.
+                logger.warning(f"[Pipeline] gerbang durasi hulu dilewati (non-fatal): {str(_e35)[:90]}")
+
             # ── STEP 4: Hook Optimization ───────────────────────────
             # [B6] F2: preset TANPA beat hook (8s = core-saja) → optimasi hook DILEWATI. script['hook']
             # tetap "" (setdefault validator) → overlay judul-hook & blok deskripsi publisher otomatis

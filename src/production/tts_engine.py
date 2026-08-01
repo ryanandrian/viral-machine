@@ -119,7 +119,9 @@ def _sambung_audio(bagian: list[Path], keluaran: Path) -> Path:
         pass
     if r.returncode != 0 or not keluaran.exists() or keluaran.stat().st_size < 2000:
         raise TTSError(f"Penyambungan potongan suara gagal: {r.stderr[-200:].decode('utf-8', 'replace')}",
-                       error_class=ErrorClass.TRANSIENT)
+                       error_class=ErrorClass.TRANSIENT,
+                       human_message="Potongan suara video panjang gagal disambung. Produksi diulang "
+                                     "otomatis.")
     return keluaran
 
 
@@ -188,16 +190,21 @@ def _run_provider(provider_name: str, text: str, config: dict, output_dir: str) 
             except asyncio.TimeoutError:
                 raise TTSError(f"Penyedia suara '{provider_name}' tidak menyelesaikan potongan {_i} "
                                f"dari {len(_bagian_teks)} dalam {_det_b:.0f} detik.",
-                               error_class=ErrorClass.TRANSIENT)
+                               error_class=ErrorClass.TRANSIENT,
+                               human_message="Pembuatan suara untuk video panjang terhenti di tengah. "
+                                             "Ini gangguan sesaat di penyedia suara — produksi diulang "
+                                             "otomatis.")
             _d = TTSEngine.get_duration(str(_pp))
             _ramal_b = _pred(_bt, _kalib)
             _amb_potong = _ambang.pct("tts_potong_ambang_pct", 75)
             if _ramal_b > 0 and _d > 0 and (_d / _ramal_b) < _amb_potong:
                 raise TTSError(
                     f"Suara potongan {_i} dari {len(_bagian_teks)} tidak lengkap: {_d:.1f} dtk "
-                    f"padahal seharusnya ±{_ramal_b:.1f} dtk. Narasi akan terputus di tengah video — "
-                    f"produksi dihentikan agar tidak menghasilkan video cacat.",
-                    error_class=ErrorClass.TRANSIENT)
+                    f"padahal seharusnya ±{_ramal_b:.1f} dtk.",
+                    error_class=ErrorClass.TRANSIENT,
+                    human_message="Suara tidak selesai dibuat sehingga narasinya akan terputus di "
+                                  "tengah video. Produksi dihentikan dan diulang otomatis — video "
+                                  "dengan narasi terputus lebih buruk daripada gagal.")
             _ts_gab += _geser_timestamp(_prov_b.get_word_timestamps() or [], _offset)
             _offset += _d
             _berkas.append(_pp)
@@ -222,10 +229,12 @@ def _run_provider(provider_name: str, text: str, config: dict, output_dir: str) 
                 output_path.unlink()      # berkas separuh jadi tak boleh tertinggal
         except OSError:
             pass
+        _pesan = (f"Pembuatan suara tidak selesai dalam {_detik:.0f} detik dan dihentikan agar tidak "
+                  f"menggantung. Ini gangguan sesaat di penyedia suara — produksi diulang otomatis.")
         raise TTSError(
             f"Penyedia suara '{provider_name}' tidak menyelesaikan permintaan dalam {_detik:.0f} detik "
-            f"({len(text or '')} huruf). Produksi dihentikan agar tidak menggantung — akan diulang.",
-            error_class=ErrorClass.TRANSIENT)
+            f"({len(text or '')} huruf).",
+            error_class=ErrorClass.TRANSIENT, human_message=_pesan)
     timestamps = provider.get_word_timestamps() or []
     return str(audio), timestamps, _voice_rate_of(provider)
 
