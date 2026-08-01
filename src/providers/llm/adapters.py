@@ -16,6 +16,8 @@ import urllib.request
 
 from src.providers.llm.base import LLMProvider, LLMError
 from src.providers.llm import catalog as _catalog
+import re
+
 from src.exceptions import ErrorClass
 
 
@@ -26,37 +28,63 @@ from src.exceptions import ErrorClass
 #   • `is no longer available` (Gemini 404 model dipensiunkan) — production_runs 21/22-Jul (insiden riandipantria `gemini-2.5-flash`).
 #   • `insufficient_quota` — worker.log 09-Jul (OpenAI) · `exceeded your current quota` — production_runs 21-Jul (OpenAI, insiden riandipantria).
 # CATATAN 429: HANYA token quota di atas → fast-fail; 429 rate-limit throttle (pesan "Rate limit reached") TIDAK di-map → UNKNOWN/retryable (jangan salah-rem).
-#   • `tokens per day (TPD)` — bukti sampel 2026-08-01 (uji rantai penuh, Groq llama-3.3-70b):
-#     "Rate limit reached ... on tokens per day (TPD): Limit 100000, Used 97156 ... try again in 35m51s".
-#     Ini KUOTA HARIAN tingkat gratis, bukan throttle sesaat — menunggu 2–8 detik sia-sia. Tapi ia
-#     PULIH SENDIRI, jadi SENGAJA TIDAK dipetakan ke QUOTA_EXHAUSTED: kelas itu masuk FAST_FAIL yang
-#     MENGHENTIKAN channel dan menuntut "Jalankan Ulang" manual — tenant tingkat gratis akan terpaksa
-#     menekannya setiap hari. RATE_LIMIT = tetap retryable (tak mengerem channel) tapi kini membawa
-#     PESAN YANG BENAR, bukan "kesalahan tak dikenal".
+# 429 ditangani GENERIK di bawah (lapis 2), bukan lewat kalimat khas vendor — katalog model akan terus
+# bertambah dan aturan ber-kalimat akan diam-diam gagal pada vendor berikutnya. Bukti sampel yang
+# melatarbelakanginya (Groq llama-3.3-70b, 2026-08-01): "Rate limit reached ... on tokens per day (TPD):
+# Limit 100000, Used 97156 ... try again in 35m51s" — kuota HARIAN tingkat gratis. SENGAJA bukan
+# QUOTA_EXHAUSTED: kelas itu masuk FAST_FAIL yang MENGHENTIKAN channel dan menuntut "Jalankan Ulang"
+# manual, sedangkan kuota harian pulih sendiri — tenant tingkat gratis akan terpaksa menekannya tiap hari.
 _OPENAI_COMPAT_ERROR_MAP = {
     "invalid_api_key": ErrorClass.AUTH_INVALID,
     "model_not_found": ErrorClass.MODEL_UNAVAILABLE,
     "is no longer available": ErrorClass.MODEL_UNAVAILABLE,
     "insufficient_quota": ErrorClass.QUOTA_EXHAUSTED,
     "exceeded your current quota": ErrorClass.QUOTA_EXHAUSTED,
-    "tokens per day": ErrorClass.RATE_LIMIT,
 }
 _OPENAI_COMPAT_HUMAN = {
     ErrorClass.AUTH_INVALID: "Kunci API AI (penulis naskah) ditolak penyedia. Periksa/perbarui kunci di halaman Integrasi, lalu pastikan Akun (kunci) di setting channel sepadan dengan penyedianya.",
     ErrorClass.MODEL_UNAVAILABLE: "Model AI ini sudah tidak tersedia di penyedianya (dipensiunkan/tak bisa diakses). Pilih model lain di setting channel.",
     ErrorClass.QUOTA_EXHAUSTED: "Kuota/kredit penyedia AI (penulis naskah) sudah habis. Isi saldo/kredit di akun penyedia Anda, lalu Jalankan Ulang.",
-    ErrorClass.RATE_LIMIT: "Jatah harian penyedia AI (penulis naskah) sudah terpakai habis untuk hari ini — ini batas paket gratis penyedia, bukan masalah di MesinViral. Produksi akan dicoba lagi otomatis pada jadwal berikutnya; bila ingin produksi lebih banyak per hari, tingkatkan paket di akun penyedia AI Anda.",
+    # Pesan UMUM 429: berlaku untuk penyedia mana pun. Varian "jatah harian" hanya dipakai bila
+    # penyedianya sendiri menyebutkannya — mengatakan "jatah harian habis" untuk throttle per-menit
+    # adalah berbohong kepada tenant, dan ia akan menunggu sampai besok padahal cukup beberapa detik.
+    ErrorClass.RATE_LIMIT: "Penyedia AI (penulis naskah) sedang menolak permintaan karena terlalu banyak permintaan dalam waktu singkat. Ini batas di sisi penyedia, bukan masalah di MesinViral. Produksi akan dicoba lagi otomatis.",
 }
+# Varian pesan bila penyedianya menyebut batas HARIAN (bukan per-menit) — tindakan tenantnya berbeda:
+# yang satu cukup ditunggu, yang lain perlu menaikkan paket bila ingin produksi lebih banyak per hari.
+_HUMAN_KUOTA_HARIAN = ("Jatah HARIAN penyedia AI (penulis naskah) sudah terpakai habis untuk hari ini "
+                       "— ini batas paket penyedia, bukan masalah di MesinViral. Produksi berlanjut "
+                       "otomatis setelah jatahnya pulih; bila ingin produksi lebih banyak per hari, "
+                       "tingkatkan paket di akun penyedia AI Anda.")
+_RX_HARIAN = re.compile(r"per day|daily limit|/day|harian", re.I)
 
 
 def _classify_openai_compat_error(exc: Exception) -> tuple[ErrorClass, str | None]:
     """Petakan error transport OpenAI-compatible → (ErrorClass, human_message).
-    String-scan token kode PASTI di str(exc) (body vendor tercetak utuh oleh SDK).
-    Tak cocok → (UNKNOWN, None) = perilaku lama persis."""
+
+    DUA LAPIS, dari yang PALING SPESIFIK ke yang PALING UMUM — supaya berlaku untuk penyedia yang
+    BELUM ADA hari ini juga (katalog model akan terus bertambah; aturan yang hanya mengenali kalimat
+    khas satu vendor akan diam-diam gagal pada vendor berikutnya):
+
+      1. Kode vendor ber-BUKTI-SAMPEL (tabel di atas) — ini yang membedakan "kredit habis" (fast-fail,
+         menghentikan channel) dari "terlalu cepat" (cukup ditunggu). Salah kelas di sini = channel
+         tenant berhenti padahal cukup menunggu, atau sebaliknya.
+      2. **HTTP 429 apa pun** → RATE_LIMIT. 429 adalah standar HTTP untuk "terlalu banyak permintaan",
+         bukan istilah milik satu vendor. Sebelum ini, 429 yang kalimatnya tak dikenal jatuh ke UNKNOWN:
+         mesin menunggu beberapa detik lalu menyerah dengan pesan "kesalahan tak dikenal" — padahal
+         penyedianya hanya minta ditunggu. Lapis ini menangkapnya untuk vendor mana pun.
+    """
     blob = str(exc)
     for tok, ec in _OPENAI_COMPAT_ERROR_MAP.items():
         if tok in blob:
             return ec, _OPENAI_COMPAT_HUMAN.get(ec)
+    # Status HTTP dibaca dari atribut SDK bila ada (openai/groq/anthropic sama-sama menyediakannya),
+    # else dari teks — SDK selalu mencetak "Error code: NNN".
+    _status = getattr(exc, "status_code", None) or getattr(exc, "status", None)
+    if _status == 429 or "Error code: 429" in blob or "429 Too Many Requests" in blob:
+        _pesan = (_HUMAN_KUOTA_HARIAN if _RX_HARIAN.search(blob)
+                  else _OPENAI_COMPAT_HUMAN.get(ErrorClass.RATE_LIMIT))
+        return ErrorClass.RATE_LIMIT, _pesan
     return ErrorClass.UNKNOWN, None
 
 
