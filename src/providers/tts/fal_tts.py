@@ -164,9 +164,18 @@ class FalTTSProvider(TTSProvider):
     def get_word_timestamps(self) -> list[dict] | None:
         return self._word_timestamps
 
+    # `@property` WAJIB — begitu kontrak `TTSProvider` (base.py) dan begitu pula kelima adaptor lain.
+    # Sampai 2026-08-02 dua anggota ini ditulis sebagai fungsi biasa di sini saja. Akibatnya
+    # `prov.supports_word_timestamps` mengembalikan METODE (selalu benar, bahkan untuk penyedia yang
+    # tak mendukung), sementara `prov.supports_word_timestamps()` meledak di lima adaptor lain — jadi
+    # pemanggil mana pun pasti salah pada salah satu sisi. Tertangkap saat alat ukur jeda memakainya
+    # untuk pertama kali; `provider_name` bernasib sama dan akan mencetak "<bound method …>" begitu
+    # ada yang me-log-nya.
+    @property
     def provider_name(self) -> str:
         return "fal"
 
+    @property
     def supports_word_timestamps(self) -> bool:
         # Penanda per-karakter dari fal digabung jadi per-kata di sini → presisi setara
         # ElevenLabs langsung (bukan estimasi seperti Edge TTS).

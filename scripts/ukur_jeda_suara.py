@@ -98,10 +98,22 @@ def ukur(sb, daftar: list[str]) -> int:
             print(f"  GAGAL: {h.get('error')}")
             if h.get("dibuang"):
                 print(f"  tanda yang ditolak: {h['dibuang']}")
+            if h.get("catatan_ts"):
+                print(f"  jalur penanda waktu: {h['catatan_ts']}")
             gagal += 1
             continue
         for d in h["rincian"]:
             print("   ", d)
+        # Metode per-tanda ditampilkan APA ADANYA: dua jalur pengukuran boleh bercampur dalam satu
+        # suara (penyedia tak-deterministik sering hanya lolos di jalur penanda waktu), dan operator
+        # berhak tahu angka mana datang dari mana — bukan sekadar "terukur".
+        _met = h.get("metode") or {}
+        for k, v in h["nilai"].items():
+            print(f"  {k:20} {v:<10} ← {_met.get(k, 'pasangan_terkontrol')}")
+        if h.get("dibuang"):
+            print(f"  ditolak jalur pertama: {h['dibuang']}")
+        if h.get("catatan_ts"):
+            print(f"  jalur penanda waktu: {h['catatan_ts']}")
         print(f"  NILAI: {h['nilai']} (dari {h['n_teks']} teks)")
         simpan_jeda(sb, vk, h["nilai"], h["n_teks"])
         print("  ✔ tersimpan")

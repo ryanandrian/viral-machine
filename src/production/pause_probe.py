@@ -34,6 +34,26 @@ rentang antar-6-teks hanya ±0,05 dtk.
 Teks dasarnya ada di DB (`duration_probe_texts`), BUKAN di kode: mengganti teks = mengganti alat ukur,
 jadi ia harus terlihat dan bisa ditambah (bahasa baru) tanpa developer.
 
+═══ JALUR KEDUA: PENANDA WAKTU (untuk penyedia yang TAK DETERMINISTIK) ═══
+
+Cara di atas membandingkan DUA RENDER TERPISAH. Itu sah bila penyedianya rapat (Edge: sebaran ±0,05
+dtk), tapi runtuh pada penyedia yang mengambil sampel prosodi tiap render — ElevenLabs dengan
+`stability` 0,3 menghasilkan sebaran yang MENELAN selisih 0,2–0,4 dtk yang sedang dicari. Pagar MAD
+menolaknya, sebagaimana seharusnya. Tetapi menolak saja berarti 20 suara ElevenLabs/fal selamanya
+memakai angka bawaan.
+
+Jalur kedua mengukur dari DALAM SATU RENDER: jarak antar-kata menurut penanda waktu penyedia. Karena
+pembanding dan yang dibandingkan lahir dari render yang SAMA, ketidakstabilan antar-render tidak
+ikut terhitung. Biaya tanda = median(jarak saat ada tanda) − median(jarak saat tanpa tanda apa pun).
+
+Jalur ini dipakai OTOMATIS dan hanya untuk tanda yang jalur pertama TOLAK — jalur pertama tetap yang
+utama karena ia mengukur durasi audio sungguhan, bukan laporan penyedia. Keduanya sama-sama
+`pause_source='measured'` (dua-duanya pengukuran, bukan regresi); metode per-tanda dicatat di log dan
+di keluaran `scripts/ukur_jeda_suara.py`.
+
+(Sampai 2026-08-02 jalur kedua ADA di berkas ini tapi NOL pemanggil — kemampuannya nyata, pintunya
+tak pernah dipasang. Dokumen menjanjikan dua metode, kenyataannya hanya satu yang bisa dijalankan.)
+
 ═══ PAGAR ═══
   • Versi yang jumlah HURUFnya tidak identik → teks itu DIBUANG (selisihnya tak lagi murni milik tanda).
   • Biaya negatif atau di luar `duration_model.PAGAR` → DIBUANG (render cacat/vendor mengabaikan tanda).
@@ -120,6 +140,32 @@ def _biaya_dari_durasi(durasi: dict, ciri: dict) -> dict | None:
     return hasil or None
 
 
+def _lengkapi_dari_timestamp(nilai: dict, metode: dict, ts_kumpul: list[dict]) -> tuple[dict, dict, str]:
+    """Isi tanda yang BELUM punya angka dari jalur penanda waktu. Tak pernah menimpa jalur pertama.
+
+    Return (nilai, metode, catatan). `catatan` menjelaskan kenapa jalur kedua tak dipakai — supaya
+    kegagalan tidak senyap (operator harus tahu bedanya "penyedia tak punya penanda waktu" dengan
+    "penanda waktunya ada tapi datanya kurang").
+    """
+    if not ts_kumpul:
+        return nilai, metode, "penyedia tidak melaporkan penanda waktu per kata (atau semua render dilewati dari cache)"
+    kurang = [db for _v, (_k, db) in TANDA.items() if db not in nilai]
+    if not kurang:
+        return nilai, metode, "tidak diperlukan — jalur pertama menghasilkan semua tanda"
+    ts = gabung_jeda_timestamp(ts_kumpul)
+    if not ts.get("ok"):
+        return nilai, metode, f"jalur penanda waktu tidak menghasilkan angka sah: {ts.get('error')}"
+    dipakai = []
+    for dbkol, v in (ts.get("nilai") or {}).items():
+        if dbkol in nilai:          # jalur pertama menang — selalu
+            continue
+        nilai[dbkol] = v
+        metode[dbkol] = "penanda_waktu"
+        dipakai.append(f"{dbkol}={v}")
+    return nilai, metode, (f"melengkapi {', '.join(dipakai)}" if dipakai
+                           else f"tak ada tanda yang bisa dilengkapi ({ts.get('dibuang')})")
+
+
 def ukur_jeda(voice_key: str, provider_key: str, config: dict, sb=None,
               lang: str | None = None, workdir: str | None = None) -> dict:
     """Ukur biaya tiap tanda jeda untuk SATU suara, lewat render nyata.
@@ -146,6 +192,11 @@ def ukur_jeda(voice_key: str, provider_key: str, config: dict, sb=None,
 
         per_tanda: dict[str, list[float]] = {k: [] for k in TANDA}
         rincian, lulus = [], 0
+        # JALUR KEDUA (penanda waktu) — dipanen dari render yang MEMANG sedang dibuat, jadi nol biaya
+        # tambahan. Hanya terisi bila penyedia benar-benar melaporkan penanda waktu per kata
+        # (ElevenLabs & fal: ya · Edge/OpenAI/Gemini: tidak) DAN render benar-benar terjadi
+        # (berkas yang sudah ada dilewati — penyedianya tak dipanggil, jadi tak ada penanda waktu).
+        ts_kumpul: list[dict] = []
         for i, klausa in enumerate(dasar, 1):
             durasi, ciri = {}, {}
             for vname, fn in VERSI.items():
@@ -158,6 +209,16 @@ def ukur_jeda(voice_key: str, provider_key: str, config: dict, sb=None,
                     except Exception as e:
                         logger.warning(f"[PauseProbe] {voice_key} teks{i}/{vname} render gagal: {e}")
                         continue
+                    try:
+                        # properti, bukan fungsi (kontrak `TTSProvider`)
+                        if prov.supports_word_timestamps:
+                            _kts = prov.get_word_timestamps()
+                            if _kts:
+                                _h = jeda_dari_timestamp(teks, _kts)
+                                if _h.get("_jarak"):
+                                    ts_kumpul.append(_h)
+                    except Exception as e:      # panen sampingan — tak boleh menjatuhkan pengukuran
+                        logger.debug(f"[PauseProbe] penanda waktu {voice_key} teks{i}/{vname}: {e}")
                 durasi[vname] = durasi_audio(f)
                 ciri[vname] = ciri_teks(teks)
             biaya = _biaya_dari_durasi(durasi, ciri)
@@ -170,6 +231,13 @@ def ukur_jeda(voice_key: str, provider_key: str, config: dict, sb=None,
                 per_tanda[k].append(v)
 
         if lulus < min_teks:
+            # Jalur pertama tak menghasilkan apa pun — coba jalur kedua sebelum menyerah.
+            _n, _m, _c = _lengkapi_dari_timestamp({}, {}, ts_kumpul)
+            if _n:
+                logger.info(f"[PauseProbe] {voice_key}: jalur pertama gagal ({lulus} teks lulus), "
+                            f"jalur PENANDA WAKTU berhasil untuk {list(_n)}")
+                return {"ok": True, "voice_key": voice_key, "nilai": _n, "n_teks": lulus,
+                        "metode": _m, "dibuang": [], "rincian": rincian, "catatan_ts": _c}
             return {"ok": False, "error": f"hanya {lulus} teks lulus (butuh {min_teks})",
                     "rincian": rincian}
 
@@ -217,16 +285,20 @@ def ukur_jeda(voice_key: str, provider_key: str, config: dict, sb=None,
                                f"penyedia tidak konsisten, angkanya tak bisa dipercaya")
                 continue
             nilai[dbkol] = round(med, 5)
+        metode = {k: "pasangan_terkontrol" for k in nilai}
         if dibuang:
             logger.warning(f"[PauseProbe] {voice_key} tanda dibuang: {dibuang}")
+        # JALUR KEDUA hanya untuk tanda yang jalur pertama TOLAK — jalur pertama tetap yang utama
+        # (ia mengukur durasi audio sungguhan; yang kedua mengandalkan laporan penyedia).
+        nilai, metode, catatan_ts = _lengkapi_dari_timestamp(nilai, metode, ts_kumpul)
         if not nilai:
             return {"ok": False, "error": f"tak satu pun tanda menghasilkan angka wajar ({dibuang})",
-                    "rincian": rincian}
+                    "rincian": rincian, "catatan_ts": catatan_ts}
 
         logger.info(f"[PauseProbe] {voice_key}: {lulus} teks · " +
-                    " · ".join(f"{k}={v}" for k, v in nilai.items()))
+                    " · ".join(f"{k}={v} [{metode.get(k, '?')}]" for k, v in nilai.items()))
         return {"ok": True, "voice_key": voice_key, "nilai": nilai, "n_teks": lulus,
-                "dibuang": dibuang, "rincian": rincian}
+                "metode": metode, "dibuang": dibuang, "rincian": rincian, "catatan_ts": catatan_ts}
     except Exception as e:
         logger.error(f"[PauseProbe] {voice_key} gagal (fail-soft): {e}")
         return {"ok": False, "error": str(e)}

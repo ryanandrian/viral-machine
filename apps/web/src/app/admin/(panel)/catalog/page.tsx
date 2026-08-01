@@ -168,8 +168,22 @@ function durOverridePreview(values: Record<string, string>): { node: React.React
               <div style={{ width: `${Math.round(pct * 100)}%`, background: status.color }} />
             </div>
             <div className="muted" style={{ marginTop: "0.3rem" }}>
-              <Bi id={`Narasi ${win.toFixed(1)}s │ jeda ${trail.toLocaleString("id-ID")}s + loop ±1,0s. Hitungan = rumus mesin (bukan ilustrasi).`}
-                  en={`Narration ${win.toFixed(1)}s │ pause ${trail}s + loop ±1.0s. Same formula the engine uses (not an illustration).`} />
+              {/* Rumusnya memang rumus mesin (`format_catalog.effective_overhead`), TAPI dua sukunya
+                  milik TENANT: jeda-akhir & loop penutup. Klaim lama "hitungan = rumus mesin" karena
+                  itu OVER-CLAIM — diperiksa 2026-08-02: satu tenant dengan channel AKTIF memakai jeda
+                  1,5s dan loop MATI, jadi jendela nyatanya 2,0s lebih lega dari yang tertulis (di
+                  preset pendek itu cukup untuk membalik vonis "agak padat" jadi "normal"). Yang
+                  ditampilkan = KASUS PALING KETAT, dan itu memang yang benar untuk alat peringatan;
+                  yang salah hanya klaimnya. Bila override diisi, suku jeda menjadi PERSIS untuk semua
+                  tenant (override mengalahkan setelan tenant — `effective_trailing`). */}
+              <Bi id={`Narasi ${win.toFixed(1)}s │ jeda ${trail.toLocaleString("id-ID")}s + loop ±1,0s. `
+                      + (provided
+                        ? "Jeda ini berlaku sama untuk semua tenant. Loop dihitung kasus paling ketat (menyala)."
+                        : "Kasus paling ketat: jeda default 2,5s + loop menyala. Tenant berjeda lebih pendek / loop mati dapat jendela lebih lega.")}
+                  en={`Narration ${win.toFixed(1)}s │ pause ${trail}s + loop ±1.0s. `
+                      + (provided
+                        ? "This pause applies to every tenant. Loop shown at its tightest (enabled)."
+                        : "Tightest case: default 2.5s pause + loop enabled. Tenants with a shorter pause / loop off get a roomier window.")} />
             </div>
           </>
         )}
