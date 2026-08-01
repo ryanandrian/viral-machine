@@ -28,7 +28,7 @@ def test_lapis1_adaptor_menolak_sintesis_yang_tak_sampai_habis():
     sampai. Cakupan di bawah ambang = aliran berhenti di tengah."""
     import src.providers.tts.edge_tts as e
     src = inspect.getsource(e.EdgeTTSProvider.generate)
-    assert "TTS_CAKUPAN_MIN" in src, "adaptor tidak memeriksa cakupan naskah"
+    assert "tts_cakupan_min_pct" in src, "adaptor tidak memeriksa cakupan naskah"
     assert "raise TTSError" in src, "cakupan kurang tidak menggagalkan — audio tak lengkap bisa dipakai"
     assert "sentence_boundaries and" in src, \
         "pemeriksaan tak dijaga: tanpa penanda vendor, adaptor bisa menuduh secara salah"
@@ -39,7 +39,7 @@ def test_lapis2_mesin_suara_menolak_audio_jauh_lebih_pendek_dari_ramalan():
     aliran. Perbandingannya dengan ramalan dari teks, yang kini akurat ~1 detik."""
     import src.production.tts_engine as te
     src = inspect.getsource(te.TTSEngine.generate)
-    assert "TTS_POTONG_AMBANG" in src, "mesin suara tidak memeriksa audio terpotong"
+    assert "tts_potong_ambang_pct" in src, "mesin suara tidak memeriksa audio terpotong"
     assert "_duration_est" in src, "pemeriksaan tidak memakai ramalan alat ukur"
     assert 'return "", []' in src, "audio terpotong tidak menggagalkan produksi"
     assert "os.remove(audio_path)" in src, "berkas audio cacat tidak dibuang"

@@ -807,15 +807,16 @@ class Pipeline:
         # Ambang config-driven. Bila Duration Preset di-set (target_seconds) → QC RELATIF (§8):
         # durasi di dalam BAND titik-tengah (duration_model.band_video) + clip_count = visual_beats preset.
         # Tanpa preset → interim: floor integritas (deteksi render terpotong) + clips env default.
+        from src.config import ambang as _ambang
         self._qc_kode, self._qc_param = None, None      # kode dwibahasa (§3.5); None = tak ada
-        min_size_mb = float(os.getenv("QC_MIN_SIZE_MB", "5"))
+        min_size_mb = _ambang.angka("qc_min_size_mb", 5)
         # [B6] F4 fix (mandat owner 2026-07-14): ambang ukuran SADAR-DURASI — basis env = per-60s
         # (60s→5MB tak berubah; 8s→0.67MB). Video 8s sehat (3.3MB) sempat dicap "render gagal?" oleh
         # ambang rata. Floor 0.3MB = deteksi file korup/kosong tetap hidup. Tanpa preset → perilaku lama.
         if target_seconds:
             min_size_mb = max(0.3, min_size_mb * float(target_seconds) / 60.0)
-        max_dur     = float(os.getenv("QC_MAX_DURATION", "180"))
-        min_clips   = int(expected_beats) if expected_beats else int(os.getenv("QC_MIN_CLIPS", "6"))
+        max_dur     = _ambang.detik("qc_max_duration_sec", 180)
+        min_clips   = int(expected_beats) if expected_beats else _ambang.angka("qc_min_clips", 6)
 
         # Check 1: File size — render korup/kosong
         try:
@@ -852,7 +853,7 @@ class Pipeline:
                                        f"(masih sah {lo:.0f}–{hi:.0f}s — di luar itu lebih dekat ke preset lain)")
             else:
                 # Interim (tanpa preset): floor integritas (deteksi render terpotong-total)
-                min_dur = float(os.getenv("QC_MIN_DURATION", "3"))
+                min_dur = _ambang.detik("qc_min_duration_sec", 3)
                 if duration_secs < min_dur:
                     return False, f"Durasi tak wajar (render terpotong?): {duration_secs:.1f}s < {min_dur}s"
             # Batas atas PLATFORM (bukan batas preset): hanya berlaku bila preset TIDAK di-set, atau
@@ -875,14 +876,14 @@ class Pipeline:
         if streams is not None:
             if not streams["has_video"]:
                 return False, "Render rusak: tidak ada stream VIDEO"
-            if os.getenv("QC_REQUIRE_AUDIO", "true").lower() != "false" and not streams["has_audio"]:
+            if _ambang.saklar("qc_require_audio", True) and not streams["has_audio"]:
                 return False, "Render rusak: tidak ada stream AUDIO (TTS tak ter-mux?)"
             w, h = streams["width"], streams["height"]
             if w and h:
-                target = self._aspect_ratio(os.getenv("QC_ASPECT", "9:16"))   # w/h
-                tol    = float(os.getenv("QC_ASPECT_TOLERANCE", "0.05"))
+                target = self._aspect_ratio(_ambang.teks("qc_aspect", "9:16"))   # w/h
+                tol    = _ambang.pct("qc_aspect_tolerance_pct", 5)
                 if target and abs((w / h) - target) > tol:
-                    return False, f"Aspect salah: {w}x{h} (rasio {w/h:.3f}) ≠ target {os.getenv('QC_ASPECT','9:16')} ({target:.3f})"
+                    return False, f"Aspect salah: {w}x{h} (rasio {w/h:.3f}) ≠ target {_ambang.teks('qc_aspect', '9:16')} ({target:.3f})"
 
         return True, "ok"
 

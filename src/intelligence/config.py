@@ -159,6 +159,13 @@ def _load_from_supabase() -> dict:
             # (script_analyzer:74) — selalu jatuh ke derive/default. (hook_templates di-drop: fosil,
             # nol konsumen — hook via HOOK_FORMULAS + persona.hook_style.)
             "emotion_scoring_criteria": row.get("emotion_scoring_criteria") or "",
+            # BUG FIX 2026-08-01 (audit DNA→prompt): kolom DESKRIPSI juga tak pernah disalin — kelas
+            # cacat yang sama dengan `emotion_scoring_criteria` di atas. Padahal deskripsi adalah
+            # satu-satunya kalimat UTUH yang menjelaskan niche ini apa; ia terisi untuk 47 niche dan
+            # berhenti di DB. Dibuktikan dengan menangkap prompt sungguhan: nol kemunculan.
+            # Dwibahasa: `description_en` dipakai untuk channel berbahasa Inggris.
+            "description":      row.get("description") or "",
+            "description_en":   row.get("description_en") or "",
             # Voice = PER-CHANNEL (§10.B FINAL, owner 2026-06-23): niche provider-AGNOSTIK,
             # TIDAK menyimpan voice. narration_persona = gaya/persona narasi (membentuk TEKS naskah
             # via LLM, BUKAN pemilih suara). voice_key/voice_defaults niche = fosil (di-drop migr 0083).

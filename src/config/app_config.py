@@ -40,6 +40,15 @@ def get_int(key: str, default: int) -> int:
         return int(default)
 
 
+def get_text(key: str, default: str = "") -> str:
+    """Nilai TEKS business-config (dari value_text). Kosong/tak ada → default (fail-safe)."""
+    _load()
+    v = (_CACHE["data"] or {}).get(key)
+    if isinstance(v, str) and v.strip():
+        return v.strip()
+    return default
+
+
 def get_json(key: str, default=None):
     """Nilai JSON business-config (dari value_text, 0125). Tak ada/tak-valid → default (fail-safe)."""
     import json

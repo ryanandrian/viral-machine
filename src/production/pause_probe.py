@@ -55,6 +55,7 @@ from pathlib import Path
 
 from loguru import logger
 
+from src.config import ambang as _ambang
 from src.production.duration_model import PAGAR, ciri_teks
 
 # Tanda yang diukur → nama kolom ciri di `duration_model.ciri_teks` → kolom DB
@@ -72,13 +73,6 @@ VERSI = {
     "elipsis": lambda k: "... ".join(k) + ".",
     "titik":   lambda k: ". ".join(k) + ".",
 }
-
-
-def _env_int(name: str, default: int) -> int:
-    try:
-        return int(os.getenv(name, str(default)))
-    except Exception:
-        return default
 
 
 def durasi_audio(path: str | Path) -> float:
@@ -141,7 +135,7 @@ def ukur_jeda(voice_key: str, provider_key: str, config: dict, sb=None,
             from supabase import create_client
             sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
 
-        min_teks = _env_int("PROBE_MIN_TEKS", 4)
+        min_teks = _ambang.angka("probe_min_teks", 4)
         dasar = teks_probe(sb, lang or config.get("content_language") or "id")
         if len(dasar) < min_teks:
             return {"ok": False, "error": f"teks alat ukur bahasa '{lang}' hanya {len(dasar)} "
@@ -196,9 +190,9 @@ def ukur_jeda(voice_key: str, provider_key: str, config: dict, sb=None,
         #       biayanya memang kecil (elipsis 0,156 dtk) akan selalu punya sebaran relatif besar.
         # Gagal → tandanya TIDAK dianggap terukur → angka BAWAAN yang dipakai. Menolak lebih baik
         # daripada menyimpan derau yang menyamar jadi pengukuran.
-        min_positif = float(os.getenv("PROBE_MIN_POSITIF", "0.75"))
-        maks_mad    = float(os.getenv("PROBE_MAKS_MAD", "0.10"))
-        min_detik   = float(os.getenv("PROBE_MIN_DETIK", "0.05"))
+        min_positif = _ambang.pct("probe_min_positif_pct", 75)
+        maks_mad    = _ambang.milidetik("probe_maks_mad_ms", 100)
+        min_detik   = _ambang.milidetik("probe_min_detik_ms", 50)
 
         nilai, dibuang = {}, []
         for vname, (_kol, dbkol) in TANDA.items():
@@ -315,11 +309,11 @@ def gabung_jeda_timestamp(semua: list[dict]) -> dict:
     for h in semua:
         for k, v in (h.get("_jarak") or {}).items():
             per[k].extend(v)
-    if len(per["none"]) < _env_int("PROBE_TS_MIN_DASAR", 30):
+    if len(per["none"]) < _ambang.angka("probe_ts_min_dasar", 30):
         return {"ok": False, "error": f"hanya {len(per['none'])} jarak antar-kata tanpa tanda "
-                                      f"(butuh {_env_int('PROBE_TS_MIN_DASAR', 30)}) — tak ada pembanding"}
+                                      f"(butuh {_ambang.angka('probe_ts_min_dasar', 30)}) — tak ada pembanding"}
     dasar = statistics.median(per["none"])
-    min_n = _env_int("PROBE_TS_MIN_TANDA", 12)
+    min_n = _ambang.angka("probe_ts_min_tanda", 12)
     nilai, dibuang, rincian = {}, [], {"jarak_dasar": round(dasar, 4), "n_dasar": len(per["none"])}
     for kol_ciri, dbkol in (("comma", "sec_per_comma"), ("em_dash", "sec_per_em_dash"),
                             ("ellipsis", "sec_per_ellipsis"), ("sentence", "sec_per_sentence")):

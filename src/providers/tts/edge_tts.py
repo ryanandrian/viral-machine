@@ -16,6 +16,7 @@ from pathlib import Path
 
 from loguru import logger
 
+from src.config import ambang as _ambang
 from src.exceptions import ErrorClass
 from src.providers.tts.base import TTSProvider, TTSError
 
@@ -153,7 +154,7 @@ class EdgeTTSProvider(TTSProvider):
             # Pemeriksaan memakai data yang SUDAH ada: penanda kalimat dari vendor. Bila penanda hanya
             # mencakup sebagian teks, sintesis memang tak sampai habis. Tanpa penanda (vendor tak
             # mengirimnya) → tak menuduh apa pun; lapis kedua di `tts_engine` yang menjaga.
-            _amb = float(os.getenv("TTS_CAKUPAN_MIN", "0.85"))
+            _amb = _ambang.pct("tts_cakupan_min_pct", 85)
             _huruf_teks = len(re.sub(r"\s+", "", text or ""))
             _huruf_penanda = sum(len(re.sub(r"\s+", "", b.get("text") or "")) for b in sentence_boundaries)
             if sentence_boundaries and _huruf_teks > 0:

@@ -54,26 +54,14 @@ import os
 import statistics
 from loguru import logger
 
+from src.config import ambang as _ambang
+
 # Kolom fit: satuan bicara + empat tanda jeda. Urutan ini mengikat nama kolom DB di bawah.
 _FIT_KOL = ["chars", "digits", "sentence", "ellipsis", "comma", "em_dash"]
 _KOL_DB = {"chars": "sec_per_char", "digits": "sec_per_digit", "sentence": "sec_per_sentence",
            "ellipsis": "sec_per_ellipsis", "comma": "sec_per_comma", "em_dash": "sec_per_em_dash"}
 # Rentang kecepatan yang dianggap "normal" (tuas kecepatan sudah dicabut → produksi selalu di sini).
 _SPEED_LO, _SPEED_HI = 0.98, 1.02
-
-
-def _env_int(name: str, default: int) -> int:
-    try:
-        return int(os.getenv(name, str(default)))
-    except Exception:
-        return default
-
-
-def _env_float(name: str, default: float) -> float:
-    try:
-        return float(os.getenv(name, str(default)))
-    except Exception:
-        return default
 
 
 def _fit(rows: list) -> list | None:
@@ -100,7 +88,7 @@ def _fit(rows: list) -> list | None:
     0 yang mencurigakan, sedangkan kolom jarang menghasilkan angka yang tampak masuk akal. Karena itu
     ambangnya BUKAN "ada/tidak ada", tapi "muncul di cukup banyak naskah".
     """
-    min_bukti = _env_int("PACE_CALIB_MIN_FITUR_N", 10)
+    min_bukti = _ambang.angka("pace_calib_min_fitur_n", 10)
     # Ambang tak boleh melebihi ukuran selnya sendiri — kalau tidak, kolom yang HADIR DI SEMUA sampel
     # (huruf, kalimat) ikut tertolak dan seluruh fit mati. Batas bawah 3: di bawah itu satu naskah
     # aneh sudah cukup menentukan koefisien.
@@ -203,9 +191,9 @@ def compute_pace_calibration(sb=None, dry_run: bool = False) -> dict:
             from supabase import create_client
             sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
 
-        min_n = _env_int("PACE_CALIB_MIN_N", 14)             # fit 6 koefisien butuh cukup titik
-        min_chars = _env_int("PACE_CALIB_MIN_CHARS", 60)     # naskah super-pendek = rasio jeda liar
-        max_err = _env_float("PACE_CALIB_MAX_ERR", 2.5)      # angka yang tak lebih baik dari bawaan: buang
+        min_n = _ambang.angka("pace_calib_min_n", 14)         # fit 6 koefisien butuh cukup titik
+        min_chars = _ambang.angka("pace_calib_min_chars", 60)  # naskah super-pendek = rasio jeda liar
+        max_err = _ambang.milidetik("pace_calib_max_err_ms", 2500)  # tak lebih baik dari bawaan: buang
 
         from src.production.voice_delivery import laju_sama, rasio_dari_teks, rasio_laju
         _vc = (sb.table("voice_catalog").select("voice_key,pace_locked,default_settings")
@@ -377,8 +365,8 @@ def align_beat_weights(sb=None, dry_run: bool = False) -> dict:
         if sb is None:
             from supabase import create_client
             sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
-        min_n    = _env_int("BEAT_ALIGN_MIN_N", 10)
-        step_pct = max(1, min(50, _env_int("BEAT_ALIGN_MAX_STEP_PCT", 20))) / 100.0
+        min_n    = _ambang.angka("beat_align_min_n", 10)
+        step_pct = max(0.01, min(0.5, _ambang.pct("beat_align_max_step_pct", 20)))
 
         beats = {r["beat_key"]: r for r in
                  (sb.table("content_beats").select("beat_key,weight,weight_locked").execute().data or [])}
@@ -509,8 +497,8 @@ def check_drift_alarm(sb=None) -> dict:
         if sb is None:
             from supabase import create_client
             sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
-        window = _env_int("DRIFT_WINDOW_N", 30)
-        thresh = float(os.getenv("DRIFT_ALARM_PCT", "10"))
+        window = _ambang.angka("drift_window_n", 30)
+        thresh = _ambang.angka("drift_alarm_pct", 10)
         rows = (sb.table("tts_delivery_samples")
                   .select("predicted_secs,raw_audio_secs,created_at")
                   .not_.is_("predicted_secs", "null").not_.is_("raw_audio_secs", "null")
@@ -530,7 +518,7 @@ def check_drift_alarm(sb=None) -> dict:
             # itulah akarnya → waktu alarm terakhir disimpan di DB `app_config`, BUKAN di memori).
             # Maks 1 alarm per DRIFT_ALARM_COOLDOWN_H (default 24 jam). Fail-soft: gagal baca/tulis
             # jam-terakhir → alarm TETAP terkirim (lebih baik dering ganda daripada bisu senyap).
-            cooldown_h = float(os.getenv("DRIFT_ALARM_COOLDOWN_H", "24"))
+            cooldown_h = _ambang.angka("drift_alarm_cooldown_h", 24)
             try:
                 from datetime import datetime, timezone
                 last = st.get("last_at")

@@ -90,9 +90,10 @@ def test_kolom_ditolak_memakai_angka_BAWAAN_bukan_nol_detik():
 
 
 def test_ambang_bukti_bisa_diatur_lewat_config_bukan_angka_mati():
-    """Ambang ini kenop operasional, bukan angka mati di kode (aturan owner: nol hardcode)."""
+    """Ambang ini kenop operasional di `app_config` (bisa dilihat & diubah owner di panel admin),
+    bukan angka mati di kode — aturan owner: nol hardcode."""
     import inspect
 
     import src.production.pace_calibration as pc
     src = inspect.getsource(pc._fit)
-    assert "PACE_CALIB_MIN_FITUR_N" in src, "ambang bukti ditanam mati di kode"
+    assert "pace_calib_min_fitur_n" in src, "ambang bukti ditanam mati di kode"

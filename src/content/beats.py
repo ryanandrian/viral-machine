@@ -55,7 +55,11 @@ def _load() -> list:
                       "motion_mode": r.get("motion_mode") or "fix",
                       "motion_dir": r.get("motion_dir") or "zoom_in",
                       # JANGAN pakai `or` — motion_rate 0.0 sah (peran pan) & 0.0 falsy → bug. Cek None eksplisit.
-                      "motion_rate": float(r["motion_rate"]) if r.get("motion_rate") is not None else 0.04}
+                      "motion_rate": float(r["motion_rate"]) if r.get("motion_rate") is not None else 0.04,
+                      # Arahan penulisan per-adegan (0185: sebelumnya terisi di DB tapi tak dibaca
+                      # siapa pun — tuas mutu narasi yang kita punya sendiri tapi mati).
+                      "hint_id": (r.get("hint_id") or "").strip(),
+                      "hint_en": (r.get("hint_en") or "").strip()}
                      for r in rows]
     except Exception as e:
         logger.debug(f"[beats] load DB gagal ({e}) — pakai fallback konstanta")
@@ -76,6 +80,23 @@ def weights() -> dict:
 
 def timing_defaults() -> dict:
     return {b["beat_key"]: b["default_timing_sec"] for b in _load()}
+
+
+def hints(locale: str | None = None) -> dict:
+    """Arahan penulisan per-adegan (`content_beats.hint_id` / `hint_en`), mengikuti bahasa channel.
+
+    Kolom ini SUDAH terisi sejak lama ("Detik pertama yang menahan jempol penonton", "Janji jawaban
+    yang bikin bertahan", …) tapi terhitung 2026-08-01 TIDAK dibaca satu baris kode pun — tidak di
+    backend, tidak di frontend. Padahal isinya persis jenis arahan yang menentukan mutu narasi, dan
+    itu tuas yang KITA kuasai (visi §8: optimasi pada tuas milik kita, bukan pada pilihan model tenant).
+    Dikosongkan admin = tidak muncul di prompt (bukan teks karangan)."""
+    en = not str(locale or "").lower().startswith("id")
+    out = {}
+    for b in _load():
+        h = (b.get("hint_en") if en else b.get("hint_id")) or b.get("hint_id") or b.get("hint_en") or ""
+        if h:
+            out[b["beat_key"]] = h
+    return out
 
 
 def labels_upper() -> dict:

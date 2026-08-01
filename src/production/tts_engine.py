@@ -15,6 +15,7 @@ from loguru import logger
 from dotenv import load_dotenv
 
 from src.intelligence.config import TenantConfig
+from src.config import ambang as _ambang
 from src.exceptions import ErrorClass, PipelineError, TTSError
 
 load_dotenv()
@@ -94,9 +95,9 @@ def _run_provider(provider_name: str, text: str, config: dict, output_dir: str) 
     # dan tak seorang pun tahu sebabnya; utas berikutnya yang menggantung memakan kapasitas berikutnya.
     # Batasnya ikut panjang naskah (naskah Regular 1.000+ kata memang lama), sangat longgar terhadap
     # kecepatan normal (Edge ±500 huruf ≈ 5 dtk), dan hasilnya TRANSIENT = produksi diulang.
-    _detik = min(float(os.getenv("TTS_TIMEOUT_MAKS", "900")),
-                 float(os.getenv("TTS_TIMEOUT_DASAR", "180"))
-                 + float(os.getenv("TTS_TIMEOUT_PER_HURUF", "0.2")) * len(text or ""))
+    _detik = min(_ambang.detik("tts_timeout_maks_sec", 900),
+                 _ambang.detik("tts_timeout_dasar_sec", 180)
+                 + _ambang.milidetik("tts_timeout_per_huruf_ms", 200) * len(text or ""))
 
     async def _dengan_batas():
         return await asyncio.wait_for(provider.generate(text, output_path), timeout=_detik)
@@ -312,7 +313,7 @@ class TTSEngine:
                 _est = ((script or {}).get("_duration_est") or {}).get("est_seconds")
                 if _est and _raw_secs > 0:
                     _rasio = _raw_secs / float(_est)
-                    _amb_potong = float(os.getenv("TTS_POTONG_AMBANG", "0.75"))
+                    _amb_potong = _ambang.pct("tts_potong_ambang_pct", 75)
                     if _rasio < _amb_potong:
                         _msg = (f"Suara tidak lengkap: audio {_raw_secs:.1f} dtk padahal naskahnya "
                                 f"seharusnya ±{float(_est):.1f} dtk ({_rasio:.0%}). Narasi terputus — "
