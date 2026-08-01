@@ -232,9 +232,10 @@ bukan membaca kode.
 | — RETRO REWIND 60s | 63,2s ∈ 52–68 · meleset 2,0 dtk |
 | — BJ Yusroon 90s | 89,5s ∈ 82–98 · meleset 0,3 dtk |
 | — BISIK NUSANTARA 90s | 83,5s ∈ 82–98 · meleset 0,1 dtk |
-| — RAD The Explorer (ElevenLabs) | 77,2s vs band 52–68 → **DI LUAR karena `speed 0,87` belum dimigrasi**: ramalan 65,5 ÷ nyata 74,7 = 0,877 persis. Alat ukur benar; produksi yang 13% lambat |
+| — RAD The Explorer (ElevenLabs) | **DI LUAR karena `speed 0,87` belum dimigrasi** — dibuktikan langsung pada naskah yang SAMA: pada 0,87 audio 82,1 dtk (ramalan meleset 16,0%), pada ratio 1 audio 66,8 dtk (**meleset 2,1 dtk = 3,2%**). Narasi yang sama dibacakan **15,3 detik lebih lama** hanya karena setelan itu. Migrasi 0187 menutup satu-satunya band-miss yang tersisa |
 | — Abyss ID 30s | 148 kata untuk jatah 75 → diperbaiki pemicu per-bagian dua-arah (132→65 kata, jatah 64) |
-| Uji otomatis | **447 lulus** |
+| Video Regular: naskah 1.288 kata (Ardi) | dipotong 4 bagian → disambung **591,7 dtk = 9,9 menit** · ramalan meleset **2,1%** · penanda waktu caption 1.288 kata berurutan, cakupan **100%** |
+| Uji otomatis | **457 lulus** |
 | Audit wiring DB→BE→FE | 11 tabel · 65 kolom diperiksa satu per satu |
 
 ### MASIH TERBUKA (jujur — jangan diklaim tuntas)
