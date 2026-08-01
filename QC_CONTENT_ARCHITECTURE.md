@@ -294,6 +294,13 @@ bukan membaca kode.
 - Biaya jeda dari regresi — lihat tabel angka di atas.
 - Mencabut separuh rantai (yang MENULIS saja, bukan yang MEMBACA) — itu yang membuat tuas kecepatan
   hidup sepuluh hari setelah "dicabut".
+- **Memasangkan naskah dengan audio lewat NOMOR URUT.** Skrip kalibrasi luar-jalur menamai berkas
+  audio `voice_001.mp3`, `voice_002.mp3`… mengikuti urutan daftar naskah — sementara kuerinya
+  TIDAK punya `ORDER BY`. Begitu urutan baris berubah, naskah ke-3 dipasangkan dengan audio yang
+  isinya naskah LAIN. Terukur 2026-08-01: skrip yang sama, masukan yang sama, kesalahan melonjak
+  1,35 → 3,97 dtk (terburuk 23,9 dtk) tanpa satu pun tanda. Pemasangan WAJIB berbasis ISI (sidik
+  jari teks), bukan posisi. **Produksi TIDAK rentan** — di sana satu sampel = satu baris berisi
+  teks DAN durasinya sekaligus (`tts_delivery_samples`), jadi pasangannya melekat.
 
 ### PETA KODE (grep ulang sebelum dipakai)
 
