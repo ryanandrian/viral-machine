@@ -68,3 +68,27 @@ def test_penyambungan_memakai_RE_ENCODE_bukan_salin_mentah():
     src = inspect.getsource(te._sambung_audio)
     assert "libmp3lame" in src, "penyambungan memakai salin mentah — sambungannya akan berbunyi"
     assert "concat" in src
+
+
+# ── batas huruf PER PENYEDIA (CONTENT_CATEGORY §7h, migr 0189) ────────────────────────────────────
+
+def test_batas_huruf_dibaca_per_penyedia_bukan_satu_angka_untuk_semua():
+    """Satu angka untuk semua penyedia aman hari ini tapi bukan jawaban yang benar: penyedia baru
+    dengan batas LEBIH KECIL akan gagal, dan yang batasnya lebih besar dipecah lebih banyak dari perlu
+    — tiap potongan tambahan adalah satu permintaan berbayar lagi. Desainnya sudah diketok di
+    CONTENT_CATEGORY_ARCHITECTURE.md §7h; ini pelaksanaannya."""
+    import inspect
+
+    import src.production.tts_engine as te
+    src = inspect.getsource(te._run_provider)
+    assert "tts_max_chars" in src, "jalur render memakai satu angka untuk semua penyedia"
+
+
+def test_penyedia_tanpa_batas_terverifikasi_pakai_kenop_global():
+    """Aturan §7h: isi HANYA dari dokumentasi resmi vendor. Yang belum terverifikasi dibiarkan kosong
+    → kenop global konservatif. Mengarang angka = produksi gagal di tengah naskah panjang tanpa sebab
+    yang terlihat."""
+    from src.config.format_catalog import tts_max_chars
+    assert tts_max_chars("penyedia_yang_belum_ada", 3000) == 3000
+    assert tts_max_chars(None, 3000) == 3000
+    assert tts_max_chars("", 1234) == 1234

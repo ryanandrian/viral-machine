@@ -217,6 +217,25 @@ def tts_adapter(tts_provider, default=None):
     return (tp.get("adapter") if tp else None) or default
 
 
+def tts_max_chars(tts_provider, default: int = 0) -> int:
+    """Batas huruf SATU permintaan ke penyedia ini (`tts_profiles.max_chars_per_request`, migr 0189).
+
+    Melaksanakan desain CONTENT_CATEGORY_ARCHITECTURE.md §7h. Naskah video Regular (2–12 menit,
+    6.000–11.000 huruf) melampaui batas satu permintaan di semua penyedia, dan tiap penyedia punya
+    batasnya sendiri. KOSONG di DB → `default` dari pemanggil (kenop global konservatif) — sengaja,
+    karena mengarang angka di sini berarti produksi gagal di tengah naskah panjang tanpa sebab yang
+    terlihat. Penyedia baru cukup satu baris DB, nol perubahan kode."""
+    if not tts_provider:
+        return default
+    _load()
+    tp = (_CACHE["tts"] or {}).get(tts_provider)
+    try:
+        v = int((tp or {}).get("max_chars_per_request") or 0)
+        return v if v > 0 else default
+    except (TypeError, ValueError):
+        return default
+
+
 def tts_speed_range(tts_provider, default=(0.7, 1.2)):
     """Rentang PENGALI-KECEPATAN efektif per provider — GENERIK (dari `param_schema`/`speed_param`, DB).
     Dipakai gate durasi §10.A untuk clamp speed lintas-provider (BUKAN hardcode EL [0.7,1.2]):

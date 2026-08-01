@@ -171,7 +171,12 @@ def _run_provider(provider_name: str, text: str, config: dict, output_dir: str) 
     # berhenti mendadak lalu memulai lagi dengan intonasi awal-kalimat).
     # Penjaga audio-terpotong tetap berlaku PER POTONGAN — justru di sinilah ia paling dibutuhkan,
     # sebab satu potongan yang gagal di tengah akan tersembunyi di dalam audio gabungan yang panjang.
-    _maks_huruf = _ambang.angka("tts_chunk_maks_huruf", 3000)
+    # Batas huruf: PER-PENYEDIA dari DB (`tts_profiles.max_chars_per_request`, §7h), jatuh ke kenop
+    # global bila penyedia itu belum terverifikasi batas resminya. Satu angka untuk semua penyedia
+    # aman tapi bukan jawaban yang benar: penyedia baru dengan batas LEBIH KECIL akan gagal, dan yang
+    # batasnya lebih besar dipecah lebih banyak dari perlu — tiap potongan = satu permintaan berbayar.
+    from src.config.format_catalog import tts_max_chars as _tmc
+    _maks_huruf = _tmc(provider_name, _ambang.angka("tts_chunk_maks_huruf", 3000))
     _bagian_teks = _potong_kalimat(text, _maks_huruf)
     if len(_bagian_teks) > 1:
         logger.info(f"[TTSEngine] naskah {len(text)} huruf → {len(_bagian_teks)} potongan "

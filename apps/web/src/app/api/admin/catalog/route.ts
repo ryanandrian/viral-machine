@@ -25,7 +25,7 @@ const CATALOG: Record<string, { pk: string; cols: string[] }> = {
   voice_catalog: { pk: "voice_key", cols: ["provider_key", "vendor_voice_id", "display_name", "locale", "language", "gender", "age", "accent", "use_case", "description", "default_settings", "niche_default", "preview_url", "delivery_wps", "pace_locked", "is_active", "sort_order"] },
   music_library: { pk: "id", cols: ["is_active", "is_default", "name", "mood", "niche", "bpm", "duration_s"] },
   fonts: { pk: "name", cols: ["is_active"] },   // nama/berkas/ass_scale lahir dari berkas saat unggah — bukan ketikan
-  tts_profiles: { pk: "provider_key", cols: ["is_active", "delivery_wps", "tts_class", "speed_param", "param_schema"] },
+  tts_profiles: { pk: "provider_key", cols: ["is_active", "delivery_wps", "tts_class", "speed_param", "param_schema", "max_chars_per_request"] },
   moods: { pk: "mood_id", cols: ["keywords", "is_active"] },   // NICHE_DNA F4: kelola mood + keyword deteksi (dwibahasa)
   niche_property_presets: { pk: "id", cols: ["property", "preset_key", "label", "label_en", "description", "description_en", "value", "apply_mode", "sort_order", "is_active"] },
   // Kendali preset durasi (owner 2026-07-06): kolom engine-critical (beats/visual_beats/render_mode)
@@ -47,7 +47,7 @@ const NUMERIC_COLS: Record<string, Record<string, [number, number]>> = {
   ai_models: { sort_order: [0, 99999] },
   content_languages: { sort_order: [0, 99999] },
   niche_property_presets: { sort_order: [0, 99999] },
-  tts_profiles: { delivery_wps: [1.0, 4.0] },
+  tts_profiles: { delivery_wps: [1.0, 4.0], max_chars_per_request: [200, 100000] },
   // Jeda akhir per-preset (override; NULL = default tenant 2,5s). Rentang statis 0–6s;
   // batas relatif (≤40% durasi preset) ditegakkan tambahan di PATCH (butuh nilai PK=seconds).
   duration_presets: { trailing_silence_override: [0, 6] },
