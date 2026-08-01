@@ -235,7 +235,8 @@ bukan membaca kode.
 | — RAD The Explorer (ElevenLabs) | **DI LUAR karena `speed 0,87` belum dimigrasi** — dibuktikan langsung pada naskah yang SAMA: pada 0,87 audio 82,1 dtk (ramalan meleset 16,0%), pada ratio 1 audio 66,8 dtk (**meleset 2,1 dtk = 3,2%**). Narasi yang sama dibacakan **15,3 detik lebih lama** hanya karena setelan itu. Migrasi 0187 menutup satu-satunya band-miss yang tersisa |
 | — Abyss ID 30s | 148 kata untuk jatah 75 → diperbaiki pemicu per-bagian dua-arah (132→65 kata, jatah 64) |
 | Video Regular: naskah 1.288 kata (Ardi) | dipotong 4 bagian → disambung **591,7 dtk = 9,9 menit** · ramalan meleset **2,1%** · penanda waktu caption 1.288 kata berurutan, cakupan **100%** |
-| Uji otomatis | **457 lulus** |
+| **PIPELINE SEBENARNYA** (jalur uji resmi `test_nopub`, publish=False) | BJ Yusroon preset 90: STEP 1–7 lengkap → **QC PASSED 91,5 dtk / 44,6 MB** (805 dtk). Gerbang durasi HULU menyala benar: proyeksi 94,6 dtk vs band 82,5–97,5 → lolos. Inventory ditandai `test` (publisher tak mengklaim) |
+| Uji otomatis | **489 lulus** |
 | Audit wiring DB→BE→FE | 11 tabel · 65 kolom diperiksa satu per satu |
 
 ### MASIH TERBUKA (jujur — jangan diklaim tuntas)
