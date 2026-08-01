@@ -149,8 +149,8 @@ di kecepatan suara paling lambat (**nol** render normal); **107 dari 294** produ
 
 | suara | sebelum | sekarang | terburuk |
 |---|---|---|---|
-| id-ID-ArdiNeural | 1,47 dtk | **1,13** | 3,63 |
-| id-ID-GadisNeural | 1,82 dtk | **1,52** | 4,46 |
+| id-ID-ArdiNeural | 1,47 dtk | **1,08** | 3,48 |
+| id-ID-GadisNeural | 1,82 dtk | **1,41** | 4,24 |
 | en-US-JennyNeural | — | **0,89** | 2,04 |
 | ElevenLabs Adam | 3,33 dtk | **2,34** | pertama kali terkalibrasi |
 
