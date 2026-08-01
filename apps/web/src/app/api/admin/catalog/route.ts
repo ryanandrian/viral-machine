@@ -119,7 +119,7 @@ export async function GET() {
   const g = await requireSuperAdmin();
   if (g.error) return g.error;
   const a = createAdminClient();
-  const [ai_models, ai_providers, music_library, content_languages, voice_catalog, tts_profiles, moods, fonts, duration_presets, valid_values, pace_calib] = await Promise.all([
+  const [ai_models, ai_providers, music_library, content_languages, voice_catalog, tts_profiles, moods, fonts, duration_presets, valid_values, pace_calib, probe_texts] = await Promise.all([
     a.from("ai_models").select("*").order("component").order("sort_order"),
     a.from("ai_providers").select("*").order("provider_key"),
     a.from("music_library").select("id, name, niche, mood, duration_s, bpm, object_key, is_active, is_default, source").order("niche").order("name"),
@@ -137,6 +137,9 @@ export async function GET() {
       + "sec_per_sentence,sec_per_comma,sec_per_ellipsis,sec_per_em_dash,chars_per_word,"
       + "words_per_sentence,calib_error_secs,sample_n,updated_at,pause_source,pause_measured_at")
       .eq("niche", "*").order("voice_key"),
+    // Teks ALAT UKUR biaya jeda (0185). Read-only di layar: mengubah isinya = mengubah alat ukurnya,
+    // jadi ia harus TERLIHAT (janji migrasi 0185) tapi tidak diubah tanpa sengaja.
+    a.from("duration_probe_texts").select("lang,idx,clauses,is_active").order("lang").order("idx"),
   ]);
   // public_url musik (S3) untuk tombol Play di catalog. voice_catalog sudah simpan preview_url.
   const music = (music_library.data ?? []).map((m) => ({
@@ -150,6 +153,7 @@ export async function GET() {
     fonts: fonts.data ?? [],
     catalog_valid_values: valid_values.data ?? [],
     tts_pace_calibration: pace_calib.data ?? [],
+    duration_probe_texts: probe_texts.data ?? [],
   });
 }
 

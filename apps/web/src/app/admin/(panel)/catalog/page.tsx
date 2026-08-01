@@ -29,6 +29,8 @@ type Cat = {
     chars_per_word: number | null; words_per_sentence: number | null;
     calib_error_secs: number | null; sample_n: number | null; updated_at?: string;
     pause_source?: string | null; pause_measured_at?: string | null }[];
+  // Teks ALAT UKUR biaya jeda (0185) — read-only; mengubah isinya = mengubah alat ukurnya.
+  duration_probe_texts?: { lang: string; idx: number; clauses: string[]; is_active: boolean }[];
 };
 
 // Kolom yang WAJIB dropdown (nilai-sah dari registry KODE via catalog_valid_values) — anti-typo.
@@ -792,7 +794,7 @@ export default function AdminCatalogPage() {
                         + ` + ${k.sec_per_comma ?? "bawaan"}/koma + ${k.sec_per_em_dash ?? "bawaan"}/em-dash`
                         + ` + ${k.sec_per_ellipsis ?? "bawaan"}/elipsis + ${k.sec_per_digit ?? "bawaan"}/angka`
                         + ` · ${k.chars_per_word ?? "—"} huruf/kata · dari ${k.sample_n ?? 0} render`
-                        + (jedaUkur ? " · biaya jeda DIUKUR langsung (pasangan teks terkontrol), bukan hasil regresi" : "")
+                        + (jedaUkur ? ` · biaya jeda DIUKUR langsung${k.pause_measured_at ? " pada " + new Date(k.pause_measured_at).toLocaleDateString("id-ID") : ""}, bukan hasil regresi` : "")
                         + (bawaan.length ? ` · memakai angka bawaan untuk: ${bawaan.join(", ")}` : "");
                       return (<span title={rincian}>
                         <b style={{ color: "var(--text-primary)" }}>{k.delivery_wps != null ? Number(k.delivery_wps).toFixed(2) + " kata/dtk" : "—"}</b><br />
@@ -837,6 +839,21 @@ export default function AdminCatalogPage() {
             <tbody>{data.tts_profiles.map((p) => (
               <tr key={p.provider_key as string}><td className="mono">{p.provider_key as string}</td><td>{p.tts_class as string}</td><td className="num">{String(p.delivery_wps)}</td><td><Switch table="tts_profiles" k={p.provider_key as string} on={p.is_active as boolean} /> <button className="btn btn-ghost btn-sm" title="Edit profil engine" onClick={() => openRowEdit("ttsprof", p)}>✎</button></td></tr>
             ))}</tbody>
+          </table></div></div>
+          <div className="cat-toolbar" style={{ marginTop: "1.25rem" }}><span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="ALAT UKUR biaya jeda per tanda baca. Mesin menyusun tiap baris jadi 5 versi ber-HURUF IDENTIK (tanpa tanda / koma / em-dash / elipsis / titik), lalu mengukur selisih durasinya — jadi selisih itu hanya bisa milik tandanya. Read-only: mengubah isinya berarti mengubah alat ukurnya." en="Pause-cost MEASURING INSTRUMENT. The engine turns each row into 5 versions with IDENTICAL letters (none / comma / em-dash / ellipsis / period) and measures the duration difference — so the difference can only belong to the mark. Read-only: changing it changes the instrument." /></span></div>
+          <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl cat-tbl">
+            <thead><tr><th><Bi id="bahasa" en="language" /></th><th className="num">#</th><th><Bi id="klausa" en="clauses" /></th><th><Bi id="contoh" en="sample" /></th><th>active</th></tr></thead>
+            <tbody>
+              {(data.duration_probe_texts ?? []).length === 0 && <tr><td colSpan={5} className="muted" style={{ padding: "1rem", textAlign: "center" }}><Bi id="Belum ada teks alat ukur — suara baru akan memakai angka bawaan." en="No probe texts yet — new voices will fall back to default numbers." /></td></tr>}
+              {(data.duration_probe_texts ?? []).map((t) => (
+                <tr key={`${t.lang}-${t.idx}`}>
+                  <td className="mono">{t.lang}</td><td className="num">{t.idx}</td>
+                  <td className="num">{(t.clauses ?? []).length}</td>
+                  <td className="muted" style={{ fontSize: "var(--text-xs)" }}>{((t.clauses ?? [])[0] || "").slice(0, 70)}…</td>
+                  <td>{t.is_active ? <span className="badge badge-success"><span className="dot" />on</span> : <span className="badge badge-warning"><span className="dot" />off</span>}</td>
+                </tr>
+              ))}
+            </tbody>
           </table></div></div>
         </>)}
 
