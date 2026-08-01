@@ -26,6 +26,23 @@ function alasanQC(m: NonNullable<Item["metadata"]>): ReactNode {
   }
 }
 
+// Saran tindakan — DITURUNKAN dari kode alasan yang sama, jadi tidak perlu kolom baru di DB.
+// Sebelumnya BE mengirim satu kalimat bahasa Indonesia dan layar menampilkannya apa adanya; tiga dari
+// enam channel aktif berbahasa Inggris, jadi tenant-nya membaca bahasa yang tidak ia pakai (§3.5).
+// `recommendation` dari BE tetap dipakai sebagai CADANGAN untuk data lama / kode yang belum dikenal.
+function saranQC(m: NonNullable<Item["metadata"]>): ReactNode {
+  switch (m.qc_reason_code) {
+    case "durasi_kepanjangan":
+      return <Bi id="Naskahnya terlalu panjang untuk preset ini. Anda bisa memilih preset durasi yang lebih panjang di pengaturan channel, atau setujui video ini apa adanya."
+                 en="The script is too long for this preset. You can pick a longer duration preset in channel settings, or approve this video as it is." />;
+    case "durasi_kependekan":
+      return <Bi id="Naskahnya terlalu pendek untuk preset ini. Anda bisa memilih preset durasi yang lebih pendek di pengaturan channel, atau setujui video ini apa adanya."
+                 en="The script is too short for this preset. You can pick a shorter duration preset in channel settings, or approve this video as it is." />;
+    default:
+      return m.recommendation ? <>{m.recommendation}</> : null;
+  }
+}
+
 // OPSI C (QC_CONTENT_ARCHITECTURE §3 / DESAIN §12d.F) — tinjau video 'ready_with_issues':
 // lolos render tapi ada catatan QC (mis. durasi meleset). DI DOMAIN KITA (bukan auto-upload YouTube).
 // Pakai  → RPC approve_inventory_item → promote ke 'ready' → Publisher publish saat SLOT (KUOTA berkurang
@@ -154,9 +171,12 @@ export default function ReviewPage() {
               <div className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: 4 }}>
                 ❌ {alasanQC(m)}
               </div>
-              {m.recommendation && (
-                <div style={{ fontSize: "var(--text-sm)", marginBottom: 8 }}>💡 {m.recommendation}</div>
-              )}
+              {(() => {
+                const saran = saranQC(m);
+                return saran ? (
+                  <div style={{ fontSize: "var(--text-sm)", marginBottom: 8 }}>💡 {saran}</div>
+                ) : null;
+              })()}
               <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: 12 }}>
                 {m.duration_secs != null && <>⏱ {Number(m.duration_secs).toFixed(1)}s · </>}
                 {m.size_mb != null && <>💾 {m.size_mb} MB · </>}
