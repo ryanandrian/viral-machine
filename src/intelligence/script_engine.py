@@ -1795,7 +1795,11 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
         if best_script and (best_script.get("mechanical_issues") or []):
             try:
                 from src.intelligence.script_checker import periksa_naskah as _pn
-                _cacat = [t for t in best_script["mechanical_issues"] if t.get("parah")]
+                # SEMUA cacat, bukan hanya yang bertanda "parah". Modul pemeriksa hanya melaporkan
+                # cacat PASTI (bukan pendapat); tingkat keparahan cuma menentukan seberapa keras ia
+                # mengeluh. Terukur di BISIK NUSANTARA: elipsis + artefak sambungan keduanya bertanda
+                # tidak-parah, jadi tak ada yang memperbaikinya — padahal keduanya terdengar penonton.
+                _cacat = list(best_script["mechanical_issues"])
                 if _cacat and llm:
                     _daftar = "\n".join(f"- {t['jenis']}: {t['pesan']} [{t.get('bukti','')[:80]}]"
                                         for t in _cacat[:6])
@@ -1822,7 +1826,7 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                         _tb = " ".join(_baru[b] for b in _isi)
                         _c_baru = _pn(_tb, niche_profile=niche_profile, content_language=_clang,
                                       beat_keys=active_beats)
-                        _parah_baru = sum(1 for t in _c_baru if t.get("parah"))
+                        _parah_baru = len(_c_baru)
                         _fakta_ok = not _fakta_hilang(_teks_lama, _tb)
                         _panjang_ok = abs(len(_tb.split()) - len(_teks_lama.split())) <= max(
                             3, 0.10 * len(_teks_lama.split()))

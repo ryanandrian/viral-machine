@@ -93,8 +93,9 @@ def periksa_naskah(teks: str, niche_profile: dict | None = None,
     n_ell = t.count("…") + t.count("...")
     if n_ell:
         out.append(_temuan("elipsis", False,
-                           f"{n_ell} tanda '...' — tiap tanda memakan lebih dari 1 detik hening dan "
-                           f"mengacaukan takaran durasi.", ""))
+                           f"{n_ell} tanda '...' — prompt melarangnya: ia menambah keheningan "
+                           f"(terukur 0,16–0,38 dtk per tanda, tergantung suara) dan membuat narasi "
+                           f"terdengar menggantung.", ""))
 
     # 3. frasa berulang (3-kata, ≥3 kemunculan)
     kata = [w.lower() for w in _RX_KATA.findall(t)]
