@@ -196,7 +196,7 @@ def compute_pace_calibration(sb=None, dry_run: bool = False) -> dict:
         max_err = _ambang.milidetik("pace_calib_max_err_ms", 2500)  # tak lebih baik dari bawaan: buang
 
         from src.production.voice_delivery import laju_sama, rasio_dari_teks, rasio_laju
-        _vc = (sb.table("voice_catalog").select("voice_key,pace_locked,default_settings")
+        _vc = (sb.table("voice_catalog").select("voice_key,provider_key,pace_locked,default_settings")
                  .execute().data or [])
         locked = {r["voice_key"] for r in _vc if r.get("pace_locked")}
         # [0184] Baseline laju suara SAAT INI. Sampel yang direkam pada baseline BERBEDA tidak boleh
@@ -210,7 +210,15 @@ def compute_pace_calibration(sb=None, dry_run: bool = False) -> dict:
         # bergaya `speed`). Akibatnya suara berbayar tak akan pernah terkalibrasi — selamanya, tanpa
         # satu pun pesan error. Rasio dihitung satu fungsi bersama (`voice_delivery`) yang juga dipakai
         # adaptor, jadi kedua sisi tak bisa berbeda diam-diam.
-        BASELINE = {r["voice_key"]: rasio_laju(r.get("default_settings")) for r in _vc}
+        # RENTANG PER-PENYEDIA harus SAMA dengan yang dipakai adaptor saat merender (dari
+        # `tts_profiles.param_schema` di DB). Bila kedua sisi memakai pagar berbeda, nilai katalog yang
+        # di luar rentang penyedia akan dihitung apa adanya di sini tapi dijatuhkan ke 1,0 oleh adaptor
+        # → SETIAP sampel suara itu ditolak, selamanya, tanpa satu pun pesan. Itu persis kelas cacat
+        # "dua sisi menghitung baseline dengan cara berbeda" yang menghabiskan dua hari pada 31-Jul.
+        from src.config.format_catalog import tts_speed_range as _rng_prov
+        BASELINE = {r["voice_key"]: rasio_laju(r.get("default_settings"),
+                                               _rng_prov(r.get("provider_key")))
+                    for r in _vc}
         # Baris kalibrasi yang biaya jedanya SUDAH DIUKUR LANGSUNG → dipatok, bukan di-fit ulang.
         # Tanpa ini, siklus berikutnya menimpa angka terukur dengan angka regresi dan ranjaunya kembali
         # sendiri (em-dash 1,137 dtk padahal terukur 0,424).

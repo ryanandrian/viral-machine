@@ -35,14 +35,6 @@ from src.providers.tts.base import TTSProvider, TTSError
 DEFAULT_RATE  = "+0%"
 
 
-def _rate_to_factor(rate_str) -> float:
-    """Edge rate '+10%' → pengali 1.10. Tak valid/kosong → 1.0 (ratio 1, netral)."""
-    try:
-        return 1.0 + float(str(rate_str).strip().replace("%", "")) / 100.0
-    except Exception:
-        return 1.0
-
-
 # `_apply_speed_to_rate` DIBUANG 2026-08-01 bersama jalur datanya.
 #
 # Fungsi itu menggabungkan baseline suara dengan `tts_voice_settings[niche].speed` — lubang tempat
@@ -96,7 +88,8 @@ class EdgeTTSProvider(TTSProvider):
         # Laju yang BENAR-BENAR dipakai, sebagai RASIO tanpa satuan — direkam ke sampel kalibrasi
         # (0184/0185). Rasio, bukan string penyedia: penjaga kalibrasi harus bisa membandingkan angka
         # dari penyedia mana pun. Kesalahan paling mahal 2026-07-31 lahir dari tidak adanya angka ini.
-        self.effective_rate = rasio_teks(rasio_laju(_setelan))
+        from src.config.format_catalog import tts_speed_range as _rng
+        self.effective_rate = rasio_teks(rasio_laju(_setelan, _rng(config.get('tts_provider') or 'edge_tts')))
         self._word_timestamps: list[dict] | None = None
 
     # ──────────────────────────────────────────────

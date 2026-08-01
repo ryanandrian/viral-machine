@@ -179,7 +179,8 @@ class ElevenLabsProvider(TTSProvider):
                     f"[ElevenLabs] setelan lama tts_voice_settings[{niche}].speed="
                     f"{_override.get('speed')} DIABAIKAN — kecepatan suara bukan tuas durasi (aturan "
                     f"owner 2026-07-29); laju bicara hanya dari voice_catalog.default_settings.")
-            _rasio = rasio_laju(baseline)
+            from src.config.format_catalog import tts_speed_range as _rng
+            _rasio = rasio_laju(baseline, _rng(self.config.get('tts_provider') or 'elevenlabs'))
             if abs(_rasio - RASIO_ALAMI) > 0.001:
                 logger.warning(
                     f"[ElevenLabs] laju bicara {_rasio:.2f}× laju alami untuk voice={self.voice} "

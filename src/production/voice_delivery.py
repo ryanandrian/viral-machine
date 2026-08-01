@@ -44,29 +44,38 @@ TOLERANSI_RASIO = 0.005
 _RX_PERSEN = re.compile(r"^\s*([+-]?\d+(?:[.,]\d+)?)\s*%\s*$")
 
 
-def rasio_laju(setelan: dict | None) -> float:
+def rasio_laju(setelan: dict | None, rentang: tuple | None = None) -> float:
     """Setelan suara (gaya penyedia apa pun) → rasio terhadap laju alami.
 
     `rate` bergaya persen diprioritaskan bila ada, lalu `speed` bergaya pengali. Tak ada keduanya,
     atau nilainya tak masuk akal → 1,0 (laju alami). TIDAK PERNAH melempar: dipakai di jalur render.
+
+    `rentang` = (min, maks) pengali yang BENAR-BENAR diterima penyedia ini, diambil pemanggil dari
+    `format_catalog.tts_speed_range()` yang membacanya dari `tts_profiles.param_schema` di DB.
+    Diberikan → nilai di luar rentang DIBUANG (pakai laju alami), bukan diteruskan ke vendor dan
+    menghasilkan error. Tidak diberikan → hanya pagar kewajaran paling longgar.
+
+    Kenapa rentangnya dari DB dan bukan dari kode: tiap penyedia punya batas sendiri (ElevenLabs
+    0,7–1,2 · OpenAI 0,25–4,0 · Edge −50%..+100% · Gemini tak punya kenop sama sekali), dan katalog
+    penyedia akan terus bertambah. Menuliskannya di kode berarti tiap penyedia baru menuntut perubahan
+    kode — persis yang dilarang: perbaikan harus GENERAL, bukan per-vendor.
     """
     s = setelan if isinstance(setelan, dict) else {}
+    lo, hi = (rentang if (isinstance(rentang, (tuple, list)) and len(rentang) == 2) else (0.1, 4.0))
     r = s.get("rate")
     if isinstance(r, (str, bytes)):
         m = _RX_PERSEN.match(str(r))
         if m:
             try:
-                return round(1.0 + float(m.group(1).replace(",", ".")) / 100.0, 6)
+                v = round(1.0 + float(m.group(1).replace(",", ".")) / 100.0, 6)
+                return v if lo <= v <= hi else RASIO_ALAMI
             except ValueError:
                 pass
     sp = s.get("speed")
     if isinstance(sp, (int, float)) and not isinstance(sp, bool):
         try:
-            v = float(sp)
-            # Rentang kewajaran gabungan seluruh penyedia (OpenAI 0,25–4,0 paling lebar). Di luar itu =
-            # data rusak → laju alami, bukan angka mustahil yang diteruskan ke vendor.
-            if 0.1 <= v <= 4.0:
-                return round(v, 6)
+            v = round(float(sp), 6)
+            return v if lo <= v <= hi else RASIO_ALAMI
         except (TypeError, ValueError):
             pass
     return RASIO_ALAMI

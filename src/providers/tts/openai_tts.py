@@ -85,7 +85,10 @@ class OpenAITTSProvider(TTSProvider):
         if isinstance(override, dict) and override.get("speed") is not None:
             logger.warning(f"[OpenAI TTS] setelan lama tts_voice_settings[{niche}].speed="
                            f"{override.get('speed')} DIABAIKAN — kecepatan suara bukan tuas durasi.")
-        speed     = round(min(4.0, max(0.25, rasio_laju(baseline))), 3)   # rentang API OpenAI TTS
+        # Rentang DARI DB (`tts_profiles.param_schema`), bukan angka OpenAI yang ditanam di kode —
+        # adaptor ini juga melayani penyedia lain ber-protokol audio.speech (mis. Groq PlayAI).
+        from src.config.format_catalog import tts_speed_range as _rng
+        speed     = round(rasio_laju(baseline, _rng(self.config.get('tts_provider') or 'openai_tts')), 3)
         self.effective_rate = rasio_teks(speed)
         logger.info(f"[OpenAI TTS] voice={self.voice} model={self.model} speed={speed} chars={len(text)}")
 

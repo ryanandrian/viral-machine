@@ -117,7 +117,8 @@ class FalTTSProvider(TTSProvider):
         if isinstance(_ovr, dict) and _ovr.get("speed") is not None:
             logger.warning(f"[falTTS] setelan lama tts_voice_settings[{_niche}].speed="
                            f"{_ovr.get('speed')} DIABAIKAN — kecepatan suara bukan tuas durasi.")
-        _rasio = rasio_laju(_baseline)
+        from src.config.format_catalog import tts_speed_range as _rng
+        _rasio = rasio_laju(_baseline, _rng(self.config.get('tts_provider') or 'fal'))
         if abs(_rasio - RASIO_ALAMI) > 0.001:
             logger.warning(f"[falTTS] laju bicara {_rasio:.2f}× laju alami untuk voice="
                            f"{self.voice or '(bawaan)'}. Aturan owner: 1,0.")
