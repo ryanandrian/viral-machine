@@ -111,7 +111,7 @@ video nyata → video_analytics (views, watch_time, avg_view_pct, ctr, subscribe
 
 ---
 
-## 2c. DURASI VIDEO & MUTU NARASI — SATU-SATUNYA ACUAN (status per 2026-08-01)
+## 2c. DURASI VIDEO & MUTU NARASI — SATU-SATUNYA ACUAN (status per 2026-08-02)
 
 > **Bagian ini menggantikan seluruh catatan durasi sebelumnya.** Yang tertulis di bawah adalah
 > **keadaan sekarang**, bukan riwayat. Riwayat percobaan hanya disebut di satu tempat: daftar
@@ -236,17 +236,26 @@ bukan membaca kode.
 | — Abyss ID 30s | 148 kata untuk jatah 75 → diperbaiki pemicu per-bagian dua-arah (132→65 kata, jatah 64) |
 | Video Regular: naskah 1.288 kata (Ardi) | dipotong 4 bagian → disambung **591,7 dtk = 9,9 menit** · ramalan meleset **2,1%** · penanda waktu caption 1.288 kata berurutan, cakupan **100%** |
 | **PIPELINE SEBENARNYA** (jalur uji resmi `test_nopub`, publish=False) | BJ Yusroon preset 90: STEP 1–7 lengkap → **QC PASSED 91,5 dtk / 44,6 MB** (805 dtk). Gerbang durasi HULU menyala benar: proyeksi 94,6 dtk vs band 82,5–97,5 → lolos. Inventory ditandai `test` (publisher tak mengklaim) |
-| Uji otomatis | **489 lulus** |
+| **Bobot adegan ikut hidup** (2-Agu) | `climax` diubah 9→4 SAAT proses berjalan → BEAT PLAN di prompt sungguhan bergeser seketika (CLIMAX 33 kata/23% → 17 kata/12%), tanpa restart |
+| **Resep tiap preset × tiap channel aktif** (2-Agu) | 6 channel × 7 preset = **42 kombinasi, NOL di luar band** — resep yang diperintahkan ke penulis, diterjemahkan balik ke durasi video, selalu jatuh di dalam rentangnya |
+| **DNA niche sampai ke prompt** (2-Agu) | prompt naskah nyata `dark_history` ditangkap: 8 dari 8 kolom DNA bertujuan-naskah MUNCUL (nama · deskripsi · gaya · emosi · persona · kriteria skor · kata kunci · mood). Kolom bertujuan lain diverifikasi di tujuannya masing-masing (gambar/musik/suara/caption/publish); hanya `origin` yang nol konsumen (metadata asal-usul) |
+| **Jalur penanda waktu pada ElevenLabs** (2-Agu) | jalur pertama menolak KEEMPAT tanda (koma −0,039 · em-dash −0,009 · elipsis sebaran ±0,170 · titik 67% konsisten) → jalur kedua menghasilkan keempatnya (0,197 · 0,162 · 0,3245 · 0,418). Angka TIDAK disimpan: render berjalan pada `speed 0,9` (0187 belum menyala) |
+| Uji otomatis | **505 lulus** |
 | Audit wiring DB→BE→FE | 11 tabel · 65 kolom diperiksa satu per satu |
 
 ### MASIH TERBUKA (jujur — jangan diklaim tuntas)
 
-1. **Verifikasi pada model llama tertunda** — kuota harian Groq tingkat gratis habis (TPD 100rb).
-   Model lemah = kasus terburuk dan justru paling menguji mekanisme per-bagian.
-2. **Belum di-deploy.** Migrasi **0187 (ratio 1)** dan **0188 (31 kenop)** SENGAJA belum diterapkan:
-   0187 mengubah perilaku produksi, 0188 akan memunculkan 31 baris mentah di panel admin yang LIVE.
-   Keduanya menyala bersama deploy. 0185/0186 sudah diterapkan (tak terlihat kode server).
-3. **Video Regular (2–12 menit)**: butuh pemotongan+penyambungan suara untuk naskah 1.000+ kata.
+1. **Belum di-deploy.** Migrasi **0187 (ratio 1)** dan **0188 (40 kenop)** SENGAJA belum diterapkan:
+   0187 mengubah perilaku produksi, 0188 akan memunculkan barisnya mentah di panel admin yang LIVE.
+   Keduanya menyala bersama deploy. 0185/0186/0189 sudah diterapkan (tak terlihat kode server).
+2. **Layar admin & tenant belum pernah DIKLIK manusia.** Tipe, build, dan kontrak data sudah
+   diverifikasi silang (setiap kolom yang dibaca komponen dikirim API dan ada di DB), dan seluruh
+   rute merespons benar tanpa error server — tapi isi layar saat sudah login belum pernah dilihat.
+   Butuh sesi login; permintaan membuat sesi lokal diblokir penjaga izin (2026-08-02).
+3. **20 suara ElevenLabs/fal belum diukur** (biaya vendor). Jalurnya kini LENGKAP — jalur penanda
+   waktu tersambung dan terbukti bekerja pada ElevenLabs (2026-08-02) — tetapi pengukuran harus
+   dilakukan **SETELAH 0187 menyala**: biaya jeda ikut melambat bersama `speed`, jadi mengukur
+   sekarang membekukan angka dunia lama. Sekali jalan, dengan izin biaya vendor.
 4. **Mutu naskah belum punya alat ukur** yang tumbuh bersama ratusan niche. Kandidat satu-satunya =
    retensi penonton. **Ini MOAT produk** (DESAIN §8 killer feature #1), bukan pekerjaan sisa.
 
@@ -284,7 +293,11 @@ bukan membaca kode.
    **GERBANG: JANGAN diwiring ke produksi sebelum A2 diketok owner** (PROGRAM_BUKTI_KECERDASAN §6).
 5. **5 dari 6 kunci OpenAI habis kredit tapi berstatus 'valid'** di layar — validasi hanya terjadi
    saat kunci dipasang.
-6. 20 suara ElevenLabs/fal lain belum diukur (biaya vendor); memakai angka bawaan sampai dipakai.
+6. **Suara `en-US-ChristopherNeural` (channel AKTIF Abyss ID)**: koefisien hurufnya di-fit 31-Jul
+   13:08 dari 7 render (syarat minimum 14) dan **sebelum** biaya jedanya diukur 19:51 — dua dunia
+   tercampur. Diukur ulang 2-Agu dengan 32 render nyata (gratis): angka DB sekarang meleset rata
+   0,97 dtk / terburuk 3,67 dtk; fit dua-tahap yang benar 0,91 / **2,61**. **Tidak ada video keluar
+   band karenanya** (band preset 30 = 22,5–37,5 dtk), jadi ini kerapian — menunggu ketok owner.
 
 ### JANGAN DIULANG (tertutup dengan bukti)
 
@@ -471,6 +484,7 @@ Semua parameter dikontrol via ADMIN PANEL atau ENV — tidak ada nilai bisnis ya
 ---
 
 ### Changelog
+- **2026-08-02 — RANTAI BELAJAR TERSAMBUNG SAMPAI UJUNG + tiga cacat sambungan lain (§2c).** (1) **Bobot antar-adegan & DNA niche berhenti di DB.** `align_beat_weights` menulis bobot baru tiap hari dan benar-benar berjalan di produksi (`core_facts 12→11` 29-Jul, `climax 10→9` 1-Agu 10:23:23), tapi `script_engine` memotret `content_beats` sekali saat pekerja menyala (10:22:04 — satu menit sebelumnya) lalu memegangnya sampai restart; empat konstanta modul dicabut jadi fungsi baca-saat-dipakai. Cache `get_niches()` bahkan TANPA masa berlaku sama sekali → seluruh DNA (deskripsi/persona/gaya visual/kriteria emosi/kata kunci/timing/hashtag) adalah potret saat pekerja menyala; `invalidate_niches_cache()` ditulis persis untuk ini tapi NOL pemanggil dan memang tak bisa menolong (layar di proses Next.js, pekerja di Python) → masa berlaku 300 dtk, sama dengan empat cache konfigurasi lain, plus dua cabang agar penyegaran yang GAGAL tidak menjatuhkan produksi maupun mengosongkan katalog. (2) **Jalur kedua alat ukur jeda (penanda waktu) tak pernah bisa dijalankan** — kode ada, NOL pemanggil; kini tersambung otomatis untuk tanda yang jalur pertama tolak, terbukti pada ElevenLabs. (3) **Kontrak `TTSProvider` dilanggar `fal_tts`** (`provider_name`/`supports_word_timestamps` ditulis fungsi, bukan `@property`) — tak ada cara memanggil yang benar untuk semua adaptor; tertangkap oleh pemanggil pertamanya. (4) **Layar admin berhenti over-claim** pada pratinjau jeda-akhir preset (satu tenant ber-channel AKTIF memakai jeda 1,5s + loop mati → jendela nyatanya 2,0 dtk lebih lega). **505 uji lulus** (+16 baru; SEMUA dijalankan pada kode lama dulu dan gagal di sana, kecuali penjaga regresi). **Nol migrasi baru · nol kolom DB baru · belum deploy.**
 - **2026-07-16 (2) — SINKRONISASI PENUH dokumen ↔ codebase (mandat owner: single source of truth, nol ambigu).** §0.4 prinsip diluruskan (GAGAL-JUJUR/no-fallback = kondisi terpasang; "fail-soft" hanya utk komponen observasi) · §1 tabel rantai disinkron (TTS NO-FALLBACK + instrumen; clip = visual_beats; QC v2 relatif) · §2 ditulis ulang sesuai kode (dua mode QC; size sadar-durasi; gerbang pra-visual overhead-penuh; SEMUA masalah lama ✅ tertutup; root-cause 2026-06 → ARSIP) · §3 dicap TERPASANG + sumber preset dikoreksi (channels.duration_preset, bukan 'belum ada field') · §4b kondisi nyata NO-FALLBACK kedua komponen (field tts_fallback_provider sudah tiada; checkbox = opt-in masa depan QC-F7) · §5 penomoran QC-F dipertegas (catatan kepala dokumen: 3 penomoran fase berbeda) · §5b +baris kalibrasi/bobot-beat/ambang-F5; utang-F3 dicap LUNAS · §6 'perlu data' kalibrasi pace → SELESAI. Form bobot-beat admin (Catalog>Durasi) DEPLOYED FE `4bf98cf` situs 200.
 - **2026-07-29 — RISET DURASI: jalur PROMPT DITUTUP DENGAN BUKTI; klaim ✅ lama DICABUT (§2c).** 83 naskah lewat jalur prompt produksi (7 preset × 3 model × 3 niche, Latin, berpasangan), audio diukur nyata (Edge, gratis), skor mutu dinilai; biaya ±Rp 2.900. **Terukur:** (1) sisi suara bukan masalah — `audio = 0,61 × kata^0,95` R²=0,98 ±8%; (2) LLM tidak menuruti jumlah kata dan berpola `kata = a × pesanan^b`, b=0,24–0,70 → pesanan kecil dilampaui, pesanan besar tidak tercapai (SATU sebab untuk dua gejala yang selama ini dikejar terpisah); (3) **memperbaiki prompt tidak bisa menyelesaikan** — membuang pengikat angka F3 menaikkan mutu hanya +0,7 dari 84 tapi menurunkan yang lolos 24%→17%; (4) goyangan model ±12–17% > toleransi preset panjang ±8% → sekali-tulis mustahil andal; (5) mutu isi TIDAK dikorbankan kendali durasi (83,9 vs 84,6); (6) pilihan MODEL lebih menentukan daripada prompt (gemini-2.5-flash unggul mutu DAN kendali); (7) preset 8 dtk gagal di ketiga model karena KELEBIHAN; (8) preset 75 dtk paling rapuh. **Dicabut:** klaim 17-Jun 'akar = prompting' (akar benar sudah tertulis 16-Jun lalu ditimpa, tak pernah diperbaiki); status 'PROGRAM DURASI SEMUANYA ✅ LIVE' (kodenya ter-deploy, DONE-BILA-nya tidak pernah dipenuhi — produksi 30 hari: 60s −5,5 dtk · 90s −14,2 dtk · 36 dari 110 di luar ±15%); toleransi persen (diganti aturan TITIK-TENGAH antar-preset, keputusan owner). **BELUM TERBUKTI (jangan bangun di atasnya):** pace 2,585 vs 2,05 hasil ukur, dan apakah tuas kecepatan benar-benar sampai ke pembuat suara. **Nol kode produksi disentuh.**
 - **2026-07-16 — PROGRAM DURASI 5-FASE dimulai; F1+korektor DEPLOYED (`fe83d28`+`a4ea83e`, deploy_be OK health=200; izin eksplisit owner).** (1) **F1 instrumen**: migr 0162 +5 kolom nullable `tts_delivery_samples` (taksiran vs aktual + jeda + mentah-pra-atempo); nol ffprobe/waktu tambahan (durasi mentah diukur 1×, dipakai-ulang `_fit_duration`). (2) **Backfill mining `worker.log`** (16-Jun→16-Jul): 78/112 baris lama terisi (0 ambigu; md5 kolom lama identik) → error taksiran per-niche kini TERUKUR (ocean 3% · dark 6% · legenda ~10% · radiant ~12% · fun_facts ~20%). (3) **DURASI-3 korektor**: trailing atempo SATU rumus per-preset dgn naskah/gerbang/renderer (dulu env global → 8s diperas 7.0→6.5s). (4) **Root-cause DISEMPURNAKAN** dari data: biang dominan = pace per (voice×gaya-DNA-niche), bukan estimator global (delivery_wps provider akurat <1%); dark_history (pace pas) = 86% dalam ±15% = patokan DONE. (5) Batch `d27273b` 2026-07-15 ikut terangkat (near-miss→review · pesan manusiawi · prompt Lapis-1). Sisa: F2 kalibrasi → F3 prompt+toleransi-1-sumber → F4 jalur DNA → F5 swa-kalibrasi+alarm (tracker `SISA_KERJA [C1]`). **Insiden dihindari**: `SUPABASE-CONNECTION.md` berisi URI v1+v2 → nyaris ALTER di DB v1; kini guard identitas DB wajib sebelum tulis.
