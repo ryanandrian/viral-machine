@@ -153,22 +153,10 @@ class TenantRunConfig:
     # 'long'  → YouTube regular, landscape 16:9 (belum diimplementasi)
     content_type: str = "short"
 
-    # OAuth Token — multi-channel ready (s84d)
-    # Konvensi: tokens/{channel_id}.json — satu file per channel
-    # Fallback: token_youtube.json (backward compatible)
-    youtube_token_path: str = ""  # diisi otomatis dari tenant_id jika kosong
-
-    def get_youtube_token_path(self) -> str:
-        """
-        Resolve path token YouTube untuk channel ini.
-        Priority: youtube_token_path (dari Supabase) → tokens/{tenant_id}.json → token_youtube.json
-        """
-        if self.youtube_token_path:
-            return self.youtube_token_path
-        per_channel = f"tokens/{self.tenant_id}.json"
-        if os.path.exists(per_channel):
-            return per_channel
-        return "token_youtube.json"  # backward compatible fallback
+    # (FOSIL DICABUT 2026-08-02: `youtube_token_path` + `get_youtube_token_path()` — token YouTube
+    #  berbasis BERKAS `tokens/{tenant}.json` adalah peninggalan v1. Sejak per-channel OAuth, token
+    #  hidup di DB (vault, per channel). Nol pemanggil di seluruh repo, dan kolom DB-nya pun tidak
+    #  ada — jadi ia menjanjikan jalur yang sudah tak eksis.)
 
     # Provider settings (raw config — provider diinisialisasi saat dibutuhkan)
     tts_provider:      str           = "edge_tts"
@@ -266,16 +254,10 @@ class TenantRunConfig:
             return self.llm_model
         return ""  # llm_models & llm_model kosong → fail-loud di adapter (TANPA model hardcode)
 
-    def niche_or_fallback(self) -> str:
-        """Niche efektif tenant — TANPA default global. Urutan: niche_fallback
-        (pilihan tenant) → niche → niche_pool[0]. Kosong semua → '' (caller fail-loud,
-        no-silent-degradation). Niche dijamin ada di hulu (onboarding/schedule gate)."""
-        for cand in (self.niche_fallback, self.niche):
-            if cand and str(cand).strip():
-                return cand
-        if self.niche_pool:
-            return self.niche_pool[0]
-        return ""
+    # (FOSIL DICABUT 2026-08-02: `niche_or_fallback()` — nol pemanggil. Pemilihan niche efektif
+    #  sekarang milik `niche_selector` + `channels.niche/niche_mode/niche_pool`. Kolom
+    #  `tenant_configs.niche_fallback` SENGAJA dibiarkan (0 baris terisi; membuang kolom DB butuh
+    #  ketok owner) — yang dicabut hanya kode yang tak pernah dijalankan.)
 
     def missing_credentials(self) -> list[str]:
         """Phase 4.5: daftar key WAJIB yang belum diisi, per provider terpilih tenant.
@@ -781,8 +763,14 @@ class TenantConfigManager:
 
     def invalidate_cache(self, tenant_id: str) -> None:
         """Hapus cache tenant (semua channel/niche) — paksa reload dari Supabase.
-        Kunci cache = komposit "tenant|channel|niche", jadi hapus per-prefix (pop kunci
-        tenant polos tidak pernah cocok — bug lama, tak pernah menghapus apa pun)."""
+
+        Kunci cache = komposit "tenant|channel|niche", jadi hapus per-prefix (pop kunci tenant polos
+        tidak pernah cocok — bug lama, tak pernah menghapus apa pun).
+
+        SENGAJA TANPA PEMANGGIL (diperiksa 2026-08-02): suntingan setting channel oleh tenant/admin
+        terbaca sendiri lewat masa berlaku `_CACHE_TTL_S` (120 dtk) — layar berjalan di proses lain,
+        jadi ia tak mungkin memanggil ini. Disediakan untuk proses Python yang menyunting lalu perlu
+        membaca ulang seketika."""
         gone = [k for k in self._cache if k.split("|", 1)[0] == tenant_id]
         for k in gone:
             self._cache.pop(k, None)

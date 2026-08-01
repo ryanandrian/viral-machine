@@ -186,19 +186,10 @@ class EdgeTTSProvider(TTSProvider):
         # Akurasi ~80-85% (bukan true word timestamps, tapi lebih baik dari estimasi)
         return True
 
-    # ──────────────────────────────────────────────
-    # Helper: estimate audio duration dari file size
-    # (digunakan oleh pipeline sebelum ada timestamps)
-    # ──────────────────────────────────────────────
-
-    @staticmethod
-    def estimate_duration(audio_path: str | Path) -> float:
-        """Estimasi durasi audio dari file size (bitrate 128kbps)."""
-        try:
-            size_bytes = Path(audio_path).stat().st_size
-            return round((size_bytes * 8) / (128 * 1000), 1)
-        except Exception:
-            return 0.0
+    # (FOSIL DICABUT 2026-08-02: `estimate_duration()` — menaksir durasi dari UKURAN BERKAS dengan
+    #  asumsi bitrate 128 kbps. Nol pemanggil, dan komentarnya sendiri berbohong: "digunakan oleh
+    #  pipeline" — pipeline memakai ffprobe. Rumus durasi ketiga yang menganggur di rantai yang paling
+    #  sensitif terhadap durasi = jebakan bagi siapa pun yang kelak mencarinya.)
 
     # ──────────────────────────────────────────────
     # Internal: parse SubMaker → word timestamp list

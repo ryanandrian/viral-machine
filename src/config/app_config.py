@@ -50,7 +50,11 @@ def get_text(key: str, default: str = "") -> str:
 
 
 def get_json(key: str, default=None):
-    """Nilai JSON business-config (dari value_text, 0125). Tak ada/tak-valid → default (fail-safe)."""
+    """Nilai JSON business-config (dari value_text, 0125). Tak ada/tak-valid → default (fail-safe).
+
+    Belum ada kenop berbentuk JSON yang dipakai hari ini (diperiksa 2026-08-02) — fungsi ini
+    melengkapi trio pembaca `get_int`/`get_text`/`get_json` supaya kenop JSON pertama tak perlu
+    menambah jalur baca baru. Bukan sisa kode mati."""
     import json
     _load()
     v = (_CACHE["data"] or {}).get(key)

@@ -65,7 +65,13 @@ def get_models() -> dict:
 
 
 def invalidate() -> None:
-    """Reset cache — dipanggil saat admin update katalog."""
+    """Reset cache katalog LLM.
+
+    SENGAJA TANPA PEMANGGIL (diperiksa 2026-08-02). Dokumentasi lamanya berkata "dipanggil saat admin
+    update katalog" — itu TIDAK pernah terjadi dan memang tak bisa: layar admin berjalan di proses
+    Next.js, cache ini di proses Python. Yang menjamin admin melihat efek suntingannya adalah masa
+    berlaku `_TTL_SECONDS` (300 dtk) di atas. Fungsi ini dipakai proses Python yang menyunting katalog
+    lalu ingin membacanya kembali seketika (mis. skrip pemeliharaan)."""
     _CACHE.update(providers=None, models=None, ts=0.0)
 
 

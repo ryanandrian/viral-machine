@@ -103,9 +103,8 @@ def labels_upper() -> dict:
     return {b["beat_key"]: b["label_upper"] for b in _load()}
 
 
-def motion_map() -> dict:
-    """Peran → indeks gerak default (kompat lama; Fase 2 pakai resolve_motion_sequence)."""
-    return {b["beat_key"]: b["motion_index"] for b in _load()}
+# (FOSIL DICABUT 2026-08-02: `motion_map()` — "kompat lama" yang tak pernah dipanggil sejak Fase 2
+#  memakai `resolve_motion_sequence()`. Kolom `content_beats.motion_index` tetap dipakai `_load()`.)
 
 
 def motion_config() -> dict:

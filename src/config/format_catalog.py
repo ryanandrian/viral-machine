@@ -57,13 +57,9 @@ def format_wps(format_key, default: float = 2.4) -> float:
         return default
 
 
-def default_preset_seconds(default: int = 45):
-    """Preset default platform (duration_presets.is_default) — utk seed channel baru (onboarding/UI)."""
-    _load()
-    for sec, row in (_CACHE["presets"] or {}).items():
-        if row.get("is_default"):
-            return sec
-    return default
+# (FOSIL DICABUT 2026-08-02: `default_preset_seconds()` — nol pemanggil. Kolom
+#  `duration_presets.is_default` tetap dipakai LAYAR admin (badge "default"); yang tak pernah dipanggil
+#  hanyalah pembacanya di sisi backend.)
 
 
 def preset_visual_beats(seconds, default: int = 6) -> int:

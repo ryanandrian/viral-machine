@@ -65,8 +65,12 @@ def _sink(message) -> None:
 
 
 def flush_logs() -> None:
-    """Flush paksa sisa buffer (panggil di akhir run/job agar tail tak hilang).
-    `logger.complete()` men-drain antrian enqueue dulu agar semua record terproses."""
+    """Flush paksa sisa buffer. `logger.complete()` men-drain antrian enqueue dulu.
+
+    SENGAJA TANPA PEMANGGIL (diperiksa 2026-08-02, bukan kelalaian): `_BATCH_SIZE = 1`, jadi tiap
+    baris log SUDAH ditulis seketika dan tak ada ekor yang bisa hilang. Fungsi ini jaring pengaman
+    bila kelak batch dinaikkan demi hemat panggilan DB — saat itu ia WAJIB dipanggil di akhir tiap
+    run. (Dokumentasi lamanya menyuruh "panggil di akhir run" seolah itu sudah terjadi — tidak.)"""
     try:
         logger.complete()
     except Exception:
