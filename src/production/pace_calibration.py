@@ -311,7 +311,13 @@ def compute_pace_calibration(sb=None, dry_run: bool = False) -> dict:
                 continue
             hpk = statistics.median([r["chars"] / max(1, r["words"]) for r in g if r["words"]])
             wpk = statistics.median([r["words"] / max(1, r["sentence"]) for r in g if r["sentence"]])
+            from datetime import datetime as _dt
+            from datetime import timezone as _tz
             baris = {"voice_key": vk, "niche": "*", "sample_n": len(g),
+                     # Konvensi kode ini: PENULIS menyetel updated_at (hanya 1 tabel pakai trigger).
+                     # Tanpa ini baris kalibrasi yang isinya berubah tetap menampilkan tanggal LAMA —
+                     # dan layar admin membacanya, jadi angka yang baru diukur tampak berminggu basi.
+                     "updated_at": _dt.now(_tz.utc).isoformat(),
                      **nilai,
                      # Ditulis eksplisit supaya keadaannya tak pernah ambigu di DB maupun di layar
                      # admin: 'measured' = biaya jeda dari pengukuran terkontrol dan DIPATOK di sini.

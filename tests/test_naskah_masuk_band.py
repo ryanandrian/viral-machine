@@ -263,8 +263,8 @@ import pytest as _pytest
 
 @_pytest.mark.parametrize("pesan,harap", [
     ("Error 429: Please try again in 8.523s", 9.023),
-    ("rate limit. Please try again in 1m2.5s", 63.0),
-    ("Please try again in 35m51.36s", 90.0),          # kuota harian → dibatasi 90 dtk
+    ("rate limit. Please try again in 1m2.5s", 63.0),   # per-menit → tunggu, jauh lebih murah
+    ("Please try again in 35m51.36s", None),         # kuota harian → JANGAN tunggu, berhenti
     ("Rate limit reached (no hint)", 4.0),            # tanpa petunjuk → pakai bawaan
 ])
 def test_lama_tunggu_dibaca_dari_pesan_penyedia(pesan, harap):
@@ -272,7 +272,12 @@ def test_lama_tunggu_dibaca_dari_pesan_penyedia(pesan, harap):
     dibaca. Terukur di RETRO REWIND: empat bagian naskah sudah jadi (135 kata), bagian kelima kena
     batas laju, kita menunggu 2/4/8 detik lalu menyerah — seluruh 135 kata dibuang dan videonya jadi
     27 detik untuk preset 60 detik. Penyedianya hanya minta ditunggu beberapa detik lagi."""
-    assert se._tunggu_dari_pesan(Exception(pesan), 4.0) == _pytest.approx(harap, abs=0.01)
+    hasil = se._tunggu_dari_pesan(Exception(pesan), 4.0)
+    if harap is None:
+        assert hasil is None, ("permintaan tunggu yang kelewat lama tetap ditunggu — 3×90 detik utas "
+                               "pekerja tertahan untuk kuota yang baru pulih belasan menit lagi")
+    else:
+        assert hasil == _pytest.approx(harap, abs=0.01)
 
 
 def test_pekerjaan_yang_DIBUANG_harus_terlihat_di_log():

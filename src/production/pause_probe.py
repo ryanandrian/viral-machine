@@ -340,7 +340,9 @@ def simpan_jeda(sb, voice_key: str, nilai: dict, n_teks: int) -> dict:
     jeda; kolom lain milik `pace_calibration`."""
     from datetime import datetime, timezone
     kolom = {**nilai, "pause_source": "measured",
-             "pause_measured_at": datetime.now(timezone.utc).isoformat()}
+             "pause_measured_at": datetime.now(timezone.utc).isoformat(),
+             # konvensi kode: penulis menyetel updated_at sendiri
+             "updated_at": datetime.now(timezone.utc).isoformat()}
     ada = (sb.table("tts_pace_calibration").select("voice_key")
              .eq("voice_key", voice_key).eq("niche", "*").limit(1).execute().data or [])
     if ada:

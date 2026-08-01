@@ -60,10 +60,6 @@ _PISAH = "\"'“”‘’«»()[]{}.,;:!?…—–-"
 _RX_KATA = re.compile(r"[A-Za-zÀ-ÿ']+")
 
 
-def _kalimat(teks: str) -> list[str]:
-    return [x.strip() for x in re.split(r"(?<=[.!?…])\s+", (teks or "").strip()) if x.strip()]
-
-
 def _temuan(jenis: str, parah: bool, pesan: str, bukti: str = "") -> dict:
     return {"jenis": jenis, "parah": parah, "pesan": pesan, "bukti": bukti[:200]}
 

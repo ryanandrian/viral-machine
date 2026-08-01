@@ -309,7 +309,7 @@ def _count_pauses(text: str) -> dict:
 _RX_ANGKA_FAKTA = re.compile(r"\d+(?:[.,]\d+)*")
 
 
-def _tunggu_dari_pesan(exc, bawaan: float) -> float:
+def _tunggu_dari_pesan(exc, bawaan: float) -> float | None:
     """Berapa lama harus menunggu — MENURUT PENYEDIANYA SENDIRI, bukan tebakan kita.
 
     Penyedia yang menolak karena batas laju hampir selalu menyebutkan kapan boleh mencoba lagi
@@ -321,15 +321,22 @@ def _tunggu_dari_pesan(exc, bawaan: float) -> float:
 
     Dibatasi `bawaan`..90 dtk. Batas atas 90 dtk dipilih sadar: batas PER-MENIT penyedia hampir selalu
     minta ditunggu di bawah itu, dan menunggu semenit jauh lebih murah daripada membuang naskah yang
-    sudah setengah jadi lalu mengulang seluruh produksi di siklus berikutnya. Permintaan tunggu yang
-    lebih lama dari itu = kuota HARIAN, bukan throttle sesaat — dan itu tidak pantas menahan utas pekerja.
+    sudah setengah jadi lalu mengulang seluruh produksi di siklus berikutnya.
+
+    **None = JANGAN menunggu, berhenti sekarang.** Dikembalikan bila penyedia meminta ditunggu LEBIH
+    LAMA dari batas itu — artinya kuota HARIAN, bukan throttle sesaat. Terukur 2026-08-01: penyedia
+    menulis "try again in 15m24s", mesin tetap menunggu 3×90 detik lalu gagal juga — 4,5 menit satu
+    utas pekerja tertahan untuk sesuatu yang mustahil pulih di dalam rentang itu. Gagal SEKARANG dengan
+    pesan yang benar jauh lebih berguna: tenant tahu sebabnya dan jadwal berikutnya mencoba lagi.
     """
     try:
         m = re.search(r"try again in\s+(?:(\d+)m)?([\d.]+)s", str(exc), re.I)
         if not m:
             return bawaan
         detik = (int(m.group(1)) * 60 if m.group(1) else 0) + float(m.group(2))
-        return max(bawaan, min(90.0, detik + 0.5))
+        if detik > 90.0:
+            return None            # kuota harian — menunggu tak akan menolong
+        return max(bawaan, detik + 0.5)
     except Exception:
         return bawaan
 
@@ -453,6 +460,10 @@ def _refit_naskah(provider, model, script: dict, beats: list, resep: dict, vonis
                     jejak.append(f"putaran {putaran}: berhenti ({_kelas}) {str(e)[:40]}")
                     break
                 _jeda = _tunggu_dari_pesan(e, 2 ** _c)
+                if _jeda is None:
+                    jejak.append(f"putaran {putaran}: berhenti — penyedia meminta ditunggu jauh lebih "
+                                 f"lama dari yang pantas ditahan (kuota harian)")
+                    break
                 jejak.append(f"putaran {putaran} coba {_c}: {'throttle' if _kelas else 'balasan rusak'} "
                              f"({str(e)[:40]}) — tunggu {_jeda:.0f}s")
                 time.sleep(_jeda)
@@ -633,6 +644,11 @@ def _generate_per_beat(provider, model, topic, niche, beats: list, resep: dict,
                     logger.warning(f"[ScriptEngine] per-bagian '{b}' berhenti ({_kelas}): {str(e)[:90]}")
                     return {}
                 _jeda = _tunggu_dari_pesan(e, 2 ** _coba)
+                if _jeda is None:
+                    logger.warning(f"[ScriptEngine] per-bagian '{b}' berhenti: penyedia meminta "
+                                   f"ditunggu jauh lebih lama dari yang pantas ditahan (kuota harian). "
+                                   f"Produksi diulang pada jadwal berikutnya.")
+                    return {}
                 logger.warning(f"[ScriptEngine] per-bagian '{b}' {_kelas} (coba {_coba}) — tunggu "
                                f"{_jeda:.0f}s (menurut penyedianya): {str(e)[:70]}")
                 time.sleep(_jeda)
