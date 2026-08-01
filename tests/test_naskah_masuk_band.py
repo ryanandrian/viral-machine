@@ -254,3 +254,30 @@ def test_cacat_mekanis_yang_TERDETEKSI_diperbaiki_penulis():
     assert 'status"] == "ok"' in blok, \
         "penerimaan diukur dari jumlah KATA, bukan dari vonis DURASI — perbaikan sah akan ditolak " \
         "(terukur: elipsis berhasil dibuang tapi ditolak karena 19 kata dari 185 bergeser)"
+
+
+# ── 8. tunggu SESUAI YANG DIMINTA PENYEDIA ────────────────────────────────────────────────────────
+
+import pytest as _pytest
+
+
+@_pytest.mark.parametrize("pesan,harap", [
+    ("Error 429: Please try again in 8.523s", 9.023),
+    ("rate limit. Please try again in 1m2.5s", 63.0),
+    ("Please try again in 35m51.36s", 90.0),          # kuota harian → dibatasi 90 dtk
+    ("Rate limit reached (no hint)", 4.0),            # tanpa petunjuk → pakai bawaan
+])
+def test_lama_tunggu_dibaca_dari_pesan_penyedia(pesan, harap):
+    """Penyedia hampir selalu menyebutkan kapan boleh mencoba lagi; sampai 2026-08-01 pesan itu tidak
+    dibaca. Terukur di RETRO REWIND: empat bagian naskah sudah jadi (135 kata), bagian kelima kena
+    batas laju, kita menunggu 2/4/8 detik lalu menyerah — seluruh 135 kata dibuang dan videonya jadi
+    27 detik untuk preset 60 detik. Penyedianya hanya minta ditunggu beberapa detik lagi."""
+    assert se._tunggu_dari_pesan(Exception(pesan), 4.0) == _pytest.approx(harap, abs=0.01)
+
+
+def test_pekerjaan_yang_DIBUANG_harus_terlihat_di_log():
+    """Membuang empat bagian yang sudah jadi tanpa menyebutkannya = kegagalan yang tak bisa dilacak."""
+    src = inspect.getsource(se._generate_per_beat)
+    assert "ikut dibuang" in src, "pekerjaan yang dibuang tidak dilaporkan"
+    blok = src[src.index("ikut dibuang") - 300:src.index("ikut dibuang")]
+    assert "logger.error" in blok, "dibuangnya pekerjaan hanya dicatat sebagai peringatan biasa"

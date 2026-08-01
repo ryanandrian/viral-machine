@@ -309,6 +309,31 @@ def _count_pauses(text: str) -> dict:
 _RX_ANGKA_FAKTA = re.compile(r"\d+(?:[.,]\d+)*")
 
 
+def _tunggu_dari_pesan(exc, bawaan: float) -> float:
+    """Berapa lama harus menunggu — MENURUT PENYEDIANYA SENDIRI, bukan tebakan kita.
+
+    Penyedia yang menolak karena batas laju hampir selalu menyebutkan kapan boleh mencoba lagi
+    ("Please try again in 8.523s" · "in 35m51.36s"). Sampai 2026-08-01 pesan itu tidak dibaca: kita
+    menunggu 2, 4, 8 detik lalu menyerah. Terukur di channel RETRO REWIND — empat bagian naskah sudah
+    ditulis dengan baik (135 kata), lalu bagian kelima kena batas laju, seluruh 135 kata itu DIBUANG,
+    dan videonya jadi 27 detik untuk preset 60 detik. Padahal penyedianya hanya minta ditunggu
+    beberapa detik lagi.
+
+    Dibatasi `bawaan`..90 dtk. Batas atas 90 dtk dipilih sadar: batas PER-MENIT penyedia hampir selalu
+    minta ditunggu di bawah itu, dan menunggu semenit jauh lebih murah daripada membuang naskah yang
+    sudah setengah jadi lalu mengulang seluruh produksi di siklus berikutnya. Permintaan tunggu yang
+    lebih lama dari itu = kuota HARIAN, bukan throttle sesaat — dan itu tidak pantas menahan utas pekerja.
+    """
+    try:
+        m = re.search(r"try again in\s+(?:(\d+)m)?([\d.]+)s", str(exc), re.I)
+        if not m:
+            return bawaan
+        detik = (int(m.group(1)) * 60 if m.group(1) else 0) + float(m.group(2))
+        return max(bawaan, min(90.0, detik + 0.5))
+    except Exception:
+        return bawaan
+
+
 def _nama_diri(teks: str) -> set:
     """Nama diri = kata berhuruf-besar yang muncul di TENGAH KLAUSA, bukan di awalnya.
 
@@ -427,9 +452,9 @@ def _refit_naskah(provider, model, script: dict, beats: list, resep: dict, vonis
                     # kredit habis / kunci ditolak / model dipensiunkan → menunggu tak menolong
                     jejak.append(f"putaran {putaran}: berhenti ({_kelas}) {str(e)[:40]}")
                     break
-                _jeda = 2 ** _c
+                _jeda = _tunggu_dari_pesan(e, 2 ** _c)
                 jejak.append(f"putaran {putaran} coba {_c}: {'throttle' if _kelas else 'balasan rusak'} "
-                             f"({str(e)[:40]}) — tunggu {_jeda}s")
+                             f"({str(e)[:40]}) — tunggu {_jeda:.0f}s")
                 time.sleep(_jeda)
         if hasil is None:
             break
@@ -607,12 +632,16 @@ def _generate_per_beat(provider, model, topic, niche, beats: list, resep: dict,
                 if _kelas not in _RETRYABLE:
                     logger.warning(f"[ScriptEngine] per-bagian '{b}' berhenti ({_kelas}): {str(e)[:90]}")
                     return {}
-                _jeda = 2 ** _coba
-                logger.warning(f"[ScriptEngine] per-bagian '{b}' {_kelas} (coba {_coba}) — tunggu {_jeda}s: "
-                               f"{str(e)[:70]}")
+                _jeda = _tunggu_dari_pesan(e, 2 ** _coba)
+                logger.warning(f"[ScriptEngine] per-bagian '{b}' {_kelas} (coba {_coba}) — tunggu "
+                               f"{_jeda:.0f}s (menurut penyedianya): {str(e)[:70]}")
                 time.sleep(_jeda)
         if not teks:
-            logger.warning(f"[ScriptEngine] per-bagian '{b}' balasan kosong")
+            _sudah = sum(len(v.split()) for v in hasil.values())
+            logger.error(f"[ScriptEngine] per-bagian '{b}' gagal setelah semua percobaan — "
+                         f"{len(hasil)} bagian yang SUDAH jadi ({_sudah} kata) ikut dibuang, naskah "
+                         f"kembali ke versi sebelumnya. Struktur naskah harus utuh: bagian yang hilang "
+                         f"membuat narasi berhenti tanpa penutup.")
             return {}
         # ── BETULKAN BAGIAN ITU SEKETIKA, bukan menunggu seluruh naskah selesai ───────────────────
         # Kenapa: terukur, model mengirim ±65% dari pesanan TIAP BAGIAN (8w dari 11 · 24w dari 37 ·
