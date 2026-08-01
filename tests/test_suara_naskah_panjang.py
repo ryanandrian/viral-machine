@@ -92,3 +92,41 @@ def test_penyedia_tanpa_batas_terverifikasi_pakai_kenop_global():
     assert tts_max_chars("penyedia_yang_belum_ada", 3000) == 3000
     assert tts_max_chars(None, 3000) == 3000
     assert tts_max_chars("", 1234) == 1234
+
+
+# ── penjaga PER POTONGAN benar-benar MENYALA (butir yang belum pernah terbukti di render nyata) ────
+
+def test_potongan_yang_tak_lengkap_MENGHENTIKAN_produksi(tmp_path, monkeypatch):
+    """Penjaga ini paling dibutuhkan justru di naskah panjang: satu potongan yang gagal di tengah akan
+    TERSEMBUNYI di dalam audio gabungan yang panjang — penonton mendengar cerita melompat, dan tak
+    satu pun log menyebut apa pun. Diuji dengan penyedia tiruan yang menghasilkan audio jauh lebih
+    pendek dari naskahnya, karena kejadian nyatanya (1 dari 73 render) tak bisa dipesan."""
+    import subprocess
+
+    import src.production.tts_engine as te
+    from src.exceptions import ErrorClass, TTSError
+
+    class _Pendek:
+        """Potongan ke-2 sengaja menghasilkan audio yang jauh lebih pendek dari teksnya."""
+        def __init__(self, cfg): self.n = 0
+        async def generate(self, teks, out):
+            self.n += 1
+            detik = 0.3 if "POTONGAN_CACAT" in teks else max(1.0, len(teks) * 0.05)
+            subprocess.run(["ffmpeg", "-y", "-f", "lavfi", "-i", f"anullsrc=r=44100:cl=mono",
+                            "-t", str(detik), "-c:a", "libmp3lame", str(out)],
+                           capture_output=True, timeout=60)
+            return out
+        def get_word_timestamps(self): return []
+
+    monkeypatch.setattr("src.providers.tts.build_tts_provider", lambda p, c: _Pendek(c))
+    monkeypatch.setattr(te._ambang, "angka",
+                        lambda k, d: 200 if k == "tts_chunk_maks_huruf" else d)
+
+    kal_pendek = "Kalimat biasa yang cukup panjang untuk mengisi potongan pertama ini. " * 3
+    teks = kal_pendek + "POTONGAN_CACAT " + ("kalimat lanjutan yang panjang sekali. " * 8)
+    with pytest.raises(TTSError) as e:
+        te._run_provider("edge_tts", teks, {"tenant_id": "uji"}, str(tmp_path))
+    assert e.value.error_class is ErrorClass.TRANSIENT, \
+        "potongan tak lengkap harus TRANSIENT (produksi diulang), bukan mematikan channel"
+    pesan = (getattr(e.value, "human_message", "") or str(e.value)).lower()
+    assert "tidak lengkap" in pesan or "terputus" in pesan, f"pesan tak menjelaskan sebabnya: {pesan}"
