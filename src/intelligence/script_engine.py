@@ -791,6 +791,57 @@ def _narrative_intent(target_duration, n_beats) -> str:
     return (f"LONG {target_duration}s: the complete arc — layered mystery, multiple distinct facts, build and release with depth. Zero filler.")
 
 
+def _lipat_beat_liar(script: dict, active_beats: list | None) -> None:
+    """Teks yang ditulis model ke adegan YANG TIDAK DIPAKAI preset → dilipat ke adegan sebelumnya.
+
+    BUKAN dibuang. Kata-kata itu tetap ada di `full_script`, jadi tetap terucap; yang diperbaiki di
+    sini adalah PEMBUKUAN-nya. Sebelum ini teks itu tak dimiliki adegan mana pun, sehingga:
+      • jatah kata per-adegan (MIN/MAX) menghitung 127 kata padahal 170 kata terucap,
+      • prompt gambar untuk adegan itu tak tahu ada 32 kata lain yang terdengar saat gambarnya tampil,
+      • bila `full_script` kebetulan tak dikirim model, teks di kunci tak-dikenal (`core_facts_2`)
+        HILANG sama sekali dari narasi karena perakitan hanya menyapu beat kanonik.
+
+    Terukur pada 82 video produksi: 80 kejadian beat tak-aktif berisi teks, 22 di antaranya
+    `core_facts_2` (18–32 kata). Prompt sudah meminta "kosongkan" dan model tetap mengisinya —
+    karena itu penjaganya harus di KODE, bukan di kalimat permintaan (pelajaran riset 29-Jul).
+
+    Urutan kanonik diambil dari katalog beat; `core_facts_2` (kunci warisan yang tak pernah bisa
+    aktif) diselipkan tepat setelah `core_facts` supaya urutannya sama dengan urutan bicara.
+    """
+    if not active_beats:
+        return
+    urut = list(_all_sections())
+    if "core_facts" in urut:
+        urut.insert(urut.index("core_facts") + 1, "core_facts_2")
+    elif script.get("core_facts_2"):
+        urut.append("core_facts_2")
+
+    tujuan, tertunda, dilipat = None, [], []
+    for b in urut:
+        isi = (script.get(b) or "").strip()
+        if b in active_beats:
+            tujuan = b
+            if tertunda:                      # teks liar SEBELUM adegan aktif pertama → ikut ke depan
+                script[b] = " ".join(tertunda + ([isi] if isi else [])).strip()
+                dilipat.extend(tertunda); tertunda = []
+            continue
+        if not isi:
+            continue
+        if tujuan is None:                    # belum ada adegan aktif → tahan dulu
+            tertunda.append(isi)
+        else:
+            script[tujuan] = f"{(script.get(tujuan) or '').strip()} {isi}".strip()
+            dilipat.append(isi)
+        script[b] = ""
+    if tertunda and active_beats:             # tak ada adegan aktif sesudahnya → titipkan ke yang pertama
+        p = active_beats[0]
+        script[p] = " ".join(tertunda + [(script.get(p) or "").strip()]).strip()
+        dilipat.extend(tertunda)
+    if dilipat:
+        logger.info(f"[ScriptEngine] {len(dilipat)} potongan di adegan tak-terpakai dilipat ke adegan "
+                    f"sebelumnya ({sum(len(t.split()) for t in dilipat)} kata) — nol kata dibuang")
+
+
 def _kata_polos(teks: str) -> list:
     """Kata tanpa tanda baca/kapital — untuk MENCOCOKKAN teks beat ke deretan kata audio."""
     return [re.sub(r"[^\w]", "", w).lower() for w in (teks or "").split() if re.sub(r"[^\w]", "", w)]
@@ -1006,7 +1057,10 @@ def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, ins
             f"REVISE any beat outside its MIN–MAX → only then output. Report the final per-beat counts in "
             f"`_beat_words` (they must be your real counts, not the targets).\n"
             + (f"Leave these JSON fields as EMPTY string \"\": {', '.join(inactive)}.\n" if inactive else "")
-            + (f"Also output field \"core_facts_2\" (a SECOND distinct fact).\n" if "core_facts_2" in active else "")
+            # (baris "Also output core_facts_2" DICABUT 2026-08-02: `core_facts_2` bukan beat kanonik
+            #  — `_beats_for_preset` menyaring ke beat yang dikenal katalog, jadi syarat ini MUSTAHIL
+            #  benar. Kode mati, tapi kuncinya tetap diminta di skema JSON dan model mengisinya di
+            #  22 dari 82 video produksi: 18–32 kata yang ikut terucap tanpa punya adegan.)
             + f"The numbered section guide below is your CRAFT TOOLBOX — apply only the active beats' techniques.\n"
         )
         words = {s: words.get(s, 0) for s in _semua_beat}   # panduan ber-nomor (1-8) refs semua 8; inactive→0
@@ -1208,7 +1262,6 @@ Return ONLY valid JSON — no markdown, no preamble, no explanation:
   "build_up": "exact build up text",
   "pattern_interrupt": "exact pattern interrupt text — must be topic-specific",
   "core_facts": "exact core facts text",
-  "core_facts_2": "exact SECOND distinct fact text — ONLY if CORE FACT 2 is listed in the BEAT PLAN above; otherwise an empty string",
   "curiosity_bridge": "exact curiosity bridge text",
   "climax": "exact climax text",
   "cta": "exact cta text — must sound human, not scripted",
@@ -1262,6 +1315,7 @@ class ScriptEngine:
             return None
         for f in ["mystery_drop", "build_up", "pattern_interrupt", "curiosity_bridge", "climax", "core_facts_2"]:
             script.setdefault(f, "")
+        _lipat_beat_liar(script, active_beats)
         # A2 (Opsi A): SETIAP beat aktif preset WAJIB punya teks — compute_beat_durations + image-gen
         # baca per-beat; beat aktif kosong → durasi & scene meleset. Kosong → tolak (retry attempt).
         if active_beats:
