@@ -176,7 +176,7 @@ class AIVideoProvider(VisualProvider):
             r = subprocess.run(
                 ["ffprobe", "-v", "error", "-show_entries", "format=duration",
                  "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
-                capture_output=True, text=True,
+                capture_output=True, text=True, timeout=30,
             )
             return float((r.stdout or "0").strip() or 0)
         except Exception:

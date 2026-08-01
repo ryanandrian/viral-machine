@@ -64,7 +64,14 @@ INSERT INTO app_config (key, value, description) VALUES
  ('script_perbeat_maks_rasio_pct', 115, 'Adegan di atas sekian persen jatahnya langsung dirapatkan. Tanpa plafon, kelebihan menumpuk melewati semua adegan.'),
  ('script_perbeat_markup_pct',   100, 'Kelebihan pesanan per adegan. 100 = minta persis sesuai jatah (di atas 100 terbukti menyebabkan kelebihan ganda).'),
  ('script_perbeat_trigger_atas_pct', 120, 'Naskah di atas sekian persen batas ATAS ditulis ulang per adegan. Pasangan dari ambang bawah — tanpa ini naskah kepanjangan tak punya jalur perbaikan.'),
- ('tts_chunk_maks_huruf',        3000, 'Batas huruf satu permintaan suara untuk penyedia yang batas resminya belum terverifikasi. Penyedia yang sudah diketahui memakai tts_profiles.max_chars_per_request.')
+ ('tts_chunk_maks_huruf',        3000, 'Batas huruf satu permintaan suara untuk penyedia yang batas resminya belum terverifikasi. Penyedia yang sudah diketahui memakai tts_profiles.max_chars_per_request.'),
+-- ── Batas waktu alat video (ffmpeg/ffprobe) ──────────────────────────────────────────────────────
+-- Dasar angkanya PENGUKURAN, bukan tebakan: render nyata 2026-08-01 (video 91,5 dtk) = rakit visual
+-- 96 detik + render akhir 456 detik. Jadi 1800 detik sangat longgar untuk render sehat, tapi tetap
+-- membebaskan utas pekerja yang tergantung — sebelum ini alat video dipanggil TANPA batas waktu sama
+-- sekali di 13 tempat: satu ffmpeg yang menggantung = satu utas mati selamanya, tanpa error.
+ ('ffmpeg_timeout_sec',         1800, 'Batas waktu satu perintah ffmpeg (encode/gabung/overlay). Render sehat terukur jauh di bawah ini; batas ini hanya membebaskan proses yang menggantung.'),
+ ('ffprobe_timeout_sec',          30, 'Batas waktu satu perintah ffprobe (baca metadata saja — tak pernah lama secara sah).')
 ON CONFLICT (key) DO NOTHING;
 
 INSERT INTO app_config (key, value, value_text, description) VALUES

@@ -20,6 +20,22 @@ from loguru import logger
 from dotenv import load_dotenv
 from src.intelligence.config import TenantConfig
 
+# ── BATAS WAKTU ALAT VIDEO (2026-08-01) ──────────────────────────────────────────────────────────
+# Sebelum ini ffmpeg/ffprobe dipanggil TANPA batas waktu di 13 tempat. Satu perintah yang menggantung
+# = satu utas pekerja mati SELAMANYA, tanpa error dan tanpa notifikasi — kelas cacat yang sama dengan
+# yang dicabut dari jalur suara hari ini, dan yang benar-benar terjadi saat pengukuran.
+# Angkanya dari PENGUKURAN, bukan tebakan: render nyata video 91,5 dtk = rakit visual 96 dtk + render
+# akhir 456 dtk. Jadi 1800 dtk sangat longgar untuk render sehat; ia hanya membebaskan yang tergantung.
+def _batas_ffmpeg() -> int:
+    from src.config import ambang as _a
+    return _a.angka("ffmpeg_timeout_sec", 1800)
+
+
+def _batas_ffprobe() -> int:
+    from src.config import ambang as _a
+    return _a.angka("ffprobe_timeout_sec", 30)
+
+
 load_dotenv()
 
 # Default caption style — override via tenant_configs.caption_style (partial override OK)
@@ -213,7 +229,7 @@ class VideoRenderer:
         try:
             cmd    = ["ffprobe", "-v", "quiet", "-print_format", "json",
                       "-show_format", audio_path]
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=_batas_ffmpeg())
             data   = json.loads(result.stdout)
             return float(data["format"]["duration"])
         except Exception as e:
@@ -224,7 +240,7 @@ class VideoRenderer:
         try:
             cmd    = ["ffprobe", "-v", "quiet", "-print_format", "json",
                       "-show_streams", video_path]
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=_batas_ffmpeg())
             data   = json.loads(result.stdout)
             for stream in data.get("streams", []):
                 if stream.get("codec_type") == "video":
@@ -345,7 +361,7 @@ class VideoRenderer:
                 "-b:v", self.VIDEO_BITRATE,
                 "-an", out_path
             ]
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=_batas_ffmpeg())
             if result.returncode == 0 and os.path.exists(out_path):
                 logger.info(
                     f"[Renderer] s72 Hook title: {len(lines)} baris | y={y_start}"
@@ -359,7 +375,7 @@ class VideoRenderer:
                         ["ffmpeg", "-y", "-i", out_path,
                          "-frames:v", "1", "-q:v", "2", thumb_dst],
                         capture_output=True
-                    )
+                    , timeout=_batas_ffmpeg())
                     logger.info(f"[Renderer] s72e Thumbnail frame extracted: {thumb_dst}")
                 except Exception as _e:
                     logger.warning(f"[Renderer] s72e Thumbnail extract gagal (non-critical): {_e}")
@@ -659,7 +675,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             output_path,
         ]
         logger.info(f"[5.5b] single-pass concat: {len(clips)} clips, preset={preset} (1 encode)")
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=_batas_ffmpeg())
         if result.returncode != 0 or not os.path.exists(output_path):
             logger.warning(f"[5.5b] single-pass gagal → fallback 2-pass: {result.stderr[-300:]}")
             return False
@@ -707,7 +723,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 "-b:v", self.VIDEO_BITRATE,
                 "-an", temp_path
             ]
-            result = subprocess.run(cmd_concat, capture_output=True, text=True)
+            result = subprocess.run(cmd_concat, capture_output=True, text=True, timeout=_batas_ffmpeg())
             if result.returncode != 0:
                 logger.error(f"Concat failed: {result.stderr[-500:]}")
                 return ""
@@ -770,7 +786,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 f"[Renderer] Xfade: {len(clips)} clips, "
                 f"{XFADE_DUR}s crossfade, transition={XFADE_TRANSITION}"
             )
-            result = subprocess.run(cmd_xfade, capture_output=True, text=True)
+            result = subprocess.run(cmd_xfade, capture_output=True, text=True, timeout=_batas_ffmpeg())
             if result.returncode != 0:
                 logger.warning(f"[Renderer] Xfade failed — fallback to concat: {result.stderr[-300:]}")
                 # Fallback ke concat biasa jika xfade gagal
@@ -788,14 +804,14 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                     "-b:v", self.VIDEO_BITRATE,
                     "-an", temp_path
                 ]
-                result = subprocess.run(cmd_concat, capture_output=True, text=True)
+                result = subprocess.run(cmd_concat, capture_output=True, text=True, timeout=_batas_ffmpeg())
                 if result.returncode != 0:
                     logger.error(f"Concat fallback failed: {result.stderr[-500:]}")
                     return ""
 
         logger.info("Clips concatenated successfully")
         try:
-            _p = subprocess.run(["ffprobe","-v","quiet","-print_format","json","-show_streams",temp_path],capture_output=True,text=True)
+            _p = subprocess.run(["ffprobe","-v","quiet","-print_format","json","-show_streams",temp_path], capture_output=True, text=True, timeout=_batas_ffprobe())
             _sd = {s["codec_type"]:s.get("duration","?") for s in json.loads(_p.stdout).get("streams",[])}
             logger.info(f"[StepA-Diag] temp_path video={_sd.get('video','?')}s | target=audio_duration={audio_duration:.3f}s")
         except Exception as _e:
@@ -832,7 +848,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             cmd_final += ["-vf", tpad_filter]
         cmd_final.append(output_path)
 
-        result = subprocess.run(cmd_final, capture_output=True, text=True)
+        result = subprocess.run(cmd_final, capture_output=True, text=True, timeout=_batas_ffmpeg())
         if os.path.exists(temp_path):
             os.remove(temp_path)
 
@@ -984,7 +1000,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             f"| caption: {caption_mode}"
         )
         try:
-            _p2 = subprocess.run(["ffprobe","-v","quiet","-print_format","json","-show_streams",output_path],capture_output=True,text=True)
+            _p2 = subprocess.run(["ffprobe","-v","quiet","-print_format","json","-show_streams",output_path], capture_output=True, text=True, timeout=_batas_ffprobe())
             _sd2 = {s["codec_type"]:s.get("duration","?") for s in json.loads(_p2.stdout).get("streams",[])}
             logger.info(f"[StepB-Diag] output video={_sd2.get('video','?')}s audio={_sd2.get('audio','?')}s | expected total_duration={total_duration:.3f}s")
         except Exception as _e2:
@@ -1052,7 +1068,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             "-show_format",
             video_path,
         ]
-        probe_result = subprocess.run(probe_cmd, capture_output=True, text=True)
+        probe_result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=_batas_ffprobe())
         if probe_result.returncode != 0:
             logger.warning("[LoopEnding] ffprobe gagal — skip loop ending")
             return video_path
@@ -1075,7 +1091,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             "-an",
             loop_clip_path,
         ]
-        r_extract = subprocess.run(cmd_extract, capture_output=True, text=True)
+        r_extract = subprocess.run(cmd_extract, capture_output=True, text=True, timeout=_batas_ffmpeg())
         if r_extract.returncode != 0 or not os.path.exists(loop_clip_path):
             logger.warning(f"[LoopEnding] Gagal extract loop clip: {r_extract.stderr[-200:]}")
             return video_path
@@ -1112,7 +1128,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             "-c:a", "aac", "-b:a", self.AUDIO_BITRATE,
             output_loop_path,
         ]
-        r_xfade = subprocess.run(cmd_xfade, capture_output=True, text=True)
+        r_xfade = subprocess.run(cmd_xfade, capture_output=True, text=True, timeout=_batas_ffmpeg())
 
         # Cleanup loop clip
         if os.path.exists(loop_clip_path):
@@ -1191,7 +1207,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                "-filter_complex", filt, "-map", "[vout]", "-map", "0:a?",
                "-c:v", "libx264", "-preset", "fast", "-b:v", self.VIDEO_BITRATE,
                "-c:a", "copy", out]
-        r = subprocess.run(cmd, capture_output=True, text=True)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=_batas_ffmpeg())
         if r.returncode != 0 or not os.path.exists(out):
             logger.warning(f"[Renderer] logo overlay gagal: {r.stderr[-300:]}")
             return video_path
@@ -1206,7 +1222,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         try:
             pr = subprocess.run(["ffprobe", "-v", "quiet", "-select_streams", "v:0",
                                  "-show_entries", "stream=width,height", "-of", "json", path],
-                                capture_output=True, text=True, timeout=15)
+                                capture_output=True, text=True, timeout=_batas_ffprobe())
             if pr.returncode == 0:
                 s = _json.loads(pr.stdout)["streams"][0]
                 return int(s["width"]), int(s["height"])
@@ -1274,7 +1290,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             mixed_path,
         ]
 
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=_batas_ffmpeg())
         if result.returncode != 0:
             logger.error(f"[Renderer] Music mix failed: {result.stderr[-300:]}")
             return video_path  # fallback ke video tanpa musik

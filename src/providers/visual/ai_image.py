@@ -635,7 +635,7 @@ class AIImageProvider(VisualProvider):
             "-preset", "fast",
             str(output_path),
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
         if result.returncode != 0:
             raise VisualError(
                 f"FFmpeg image-to-video failed: {result.stderr[-500:]}"
