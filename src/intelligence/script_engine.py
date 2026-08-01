@@ -13,7 +13,7 @@ import os, json, re, time
 from datetime import datetime
 from loguru import logger
 from dotenv import load_dotenv
-from src.intelligence.config import TenantConfig, get_niches, system_config
+from src.intelligence.config import TenantConfig, get_niches
 from src.content import beats as _beats   # SATU SUMBER kosakata beat (0128)
 from src.config import ambang as _ambang
 
@@ -1905,7 +1905,6 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                 f"threshold {min_score} — using best available"
             )
 
-        from src.config.format_catalog import preset_visual_beats as _pvb_g
         _beats = _beats_for_preset(preset_seconds) if preset_seconds else list(_ALL_SECTIONS)
         best_script.update({
             "topic":                   topic.get("topic", ""),

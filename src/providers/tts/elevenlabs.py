@@ -6,7 +6,6 @@ Fase 6C s6c8 upgrade:
   - Voice di-resolve di config layer (channels.voice_key, §10.B FINAL); delivery override via tts_voice_settings
 """
 
-import asyncio
 import base64
 import time
 from pathlib import Path

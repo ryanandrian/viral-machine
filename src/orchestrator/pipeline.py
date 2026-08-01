@@ -19,7 +19,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from loguru import logger
 
-from src.intelligence.config import TenantConfig, system_config
+from src.intelligence.config import TenantConfig
 from src.intelligence.trend_radar import TrendRadar
 from src.intelligence.niche_selector import NicheSelector
 from src.intelligence.script_engine import ScriptEngine
