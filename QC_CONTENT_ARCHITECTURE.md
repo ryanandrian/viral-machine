@@ -243,7 +243,10 @@ bukan membaca kode.
 | **ANGKA DASAR PRODUKSI** (kode LAMA, server `0a0c2b9`) | 80 video terakhir dinilai dgn band titik-tengah: **51 DI LUAR band (64%)** — pendek 4–67 dtk, panjang 9–37 dtk. Inilah angka yang harus dikalahkan; semua perbaikan 1–2 Agu BELUM naik ke server |
 | **Rantai penuh 6 channel, KODE BARU** (2-Agu, gpt-4o-mini, izin owner) | **5 dari 6 MASUK band** · ramalan meleset 0,1–0,7 dtk di lima channel · naskah bersih 6/6 |
 | — satu-satunya yang meleset: RAD The Explorer (ElevenLabs) | Dibuktikan penyebab TUNGGALnya: naskah SAMA, suara SAMA → pada katalog `speed 0,87` audio **80,4** dtk (video 83,9, DI LUAR band 52–68, ramalan meleset 20,0 dtk); pada **ratio 1** audio **62,1** dtk (video 65,6, **MASUK**, ramalan meleset **1,8 dtk**). Migrasi 0187 menutupnya → **6/6** |
-| Uji otomatis | **521 lulus** |
+| **PIPELINE PENUH dengan SELURUH perbaikan 2-Agu** (jalur uji resmi `test_nopub`) | Bang Us-Dat preset 60: STEP 1–7 lengkap · gerbang HULU lolos (proyeksi 52,7 vs band 52,5–67,5) · gerbang pra-visual lolos (54,5) · `beat_durations` [3,4·11,8·13,8·13,8·8,2] · **QC PASSED 54,5 dtk / 24,8 MB** · inventory `test` (publisher tak mengklaim) |
+| **VIDEO JADI DIUKUR LANGSUNG** (diunduh dari penyimpanan, bukan dari log) | 1080×1920 · 30fps · jalur suara aac ada · 54,55 dtk = 51,0 adegan + 3,55 jeda akhir+loop. Perpindahan gambar NYATA di video vs rencana mesin: 3,4→3,17–3,47 (meleset **0,08**) · 29,0→28,77 (**0,23**) · 42,8→42,63–42,97 (**0,00**); satu batas tak terdeteksi karena dua gambarnya mirip (batas alat, bukan cacat). Rantai hitung→bake→concat terbukti utuh sampai piksel |
+| **SEBARAN, bukan satu percobaan** (2 putaran × 6 channel) | **12 dari 12 MASUK band · 0 naskah bercacat parah**; 10 di antaranya diukur dari AUDIO nyata. Catatan jujur: 2 sisanya (RAD/ElevenLabs) hanya RAMALAN — hari ini keduanya masih di LUAR band karena `speed 0,87`, dan baru masuk setelah 0187 |
+| Uji otomatis | **560 lulus** |
 | Audit wiring DB→BE→FE | 11 tabel · 65 kolom diperiksa satu per satu |
 
 ### MASIH TERBUKA (jujur — jangan diklaim tuntas)
