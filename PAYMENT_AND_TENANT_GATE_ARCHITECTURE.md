@@ -318,9 +318,10 @@ kuitansi terkirim. Anti dobel-bayar terbukti 2× (2 order lama auto-cancel). [A1
 
 # 10. [G-UJI] GERBANG UJI PRODUKSI — SSOT kerja aktif (dibuka 2026-08-02)
 
-> **Status: 🟢 F1–F7 SELESAI & TERVALIDASI LOKAL (2026-08-02) — BELUM DEPLOY (menunggu izin owner, §5.0).**
-> 3 migrasi **SUDAH APPLIED ke DB live** (0190/0191/0192) — jadi gerbang lapis DATABASE sudah AKTIF di produksi;
-> lapis API & layar baru aktif setelah deploy. 707 pemeriksaan lulus di 5 jalur, 0 gagal. Rincian = §10e.
+> **Status: 🟢 F1–F7 + AUDIT FINAL SELESAI (2026-08-02) — BELUM DEPLOY (menunggu izin owner, §5.0).**
+> 4 migrasi **SUDAH APPLIED ke DB live** (0190/0191/0192/0193) — gerbang lapis DATABASE sudah AKTIF di produksi;
+> lapis API & layar baru aktif setelah deploy. **755 pemeriksaan lulus di 9 jalur, 0 gagal** (§10e-2).
+> Audit final menemukan & menutup **2 lubang tambahan**: pintu unduh hasil uji, dan JEBAKAN kunci-tanpa-jalur-buka.
 > Dokumen ini = satu-satunya tempat rencana & progress kerja ini. Pasca-compaction: baca §10 UTUH, jangan riset ulang §10a.
 >
 > **⚠️ DUA HAL MENUNGGU KEPUTUSAN OWNER (jangan diputuskan sendiri):**
@@ -517,6 +518,87 @@ Catatan tambahan yang ditemukan sambil jalan: cookie sesi tenant bisa melewati b
   (a) biarkan (ia memang sudah memanen 7 video lewat tombol uji), (b) set `trial_extended_at = now()` untuk tenant
   trial yang ada saat gerbang dinyalakan = jatah segar sejak kebijakan berlaku, (c) owner perpanjang trialnya lewat
   layar admin (efeknya sama dengan (b), tanpa kode). Tenant lain tak terdampak.
+
+## 10e-2. AUDIT FINAL PRA-DEPLOY (2026-08-02, perintah owner) — 2 lubang DITEMUKAN & DITUTUP
+
+Audit ini sengaja TIDAK mengulang yang sudah hijau; ia memburu apa yang saya **tanam atau tinggalkan**.
+
+### Lubang 1 — pintu keluar KEENAM yang terlewat: tautan unduh hasil uji
+`lib/test-run.ts::latestTestResult` menerbitkan **presigned URL video uji terakhir** tanpa gerbang apa
+pun, dan menerbitkannya **ulang setiap kali halaman dibuka**. Tenant yang langganannya mati tetap bisa
+memanen video uji terakhirnya berkali-kali — tanpa menekan tombol apa pun. Ini pintu paling senyap dari
+semuanya, dan saya melewatkannya di sapuan pertama karena hanya menelusuri pembuat `direct_jobs`.
+**Ditutup** dengan gerbang PRODUKSI (grace tetap boleh melihat hasilnya — konsisten dengan pintu stok).
+
+> **⚠️ HIJAU PALSU yang nyaris lolos.** Uji pertama untuk lubang ini LULUS — padahal lubangnya masih
+> terbuka. Sebabnya: tenant terkunci yang dipakai menguji tak punya video sama sekali (semua ujinya
+> gagal), jadi tautannya kosong karena **tak ada isinya**, bukan karena gerbang menahan. Uji diperbaiki:
+> tenant terkunci **diberi video uji sungguhan**, lalu ditambah **uji pembanding** (hidupkan sesaat →
+> tautan wajib TERBIT). Tanpa pembanding itu, "tidak ada tautan" tak membuktikan apa pun.
+> **Pelajaran: setiap uji "X tidak terjadi" WAJIB berpasangan dengan uji "X terjadi" pada kondisi lawan.**
+
+### Lubang 2 — JEBAKAN yang lahir dari gerbang ini sendiri (kunci tanpa jalur buka)
+Rem darurat channel (3 produksi gagal beruntun) selama ini **hanya** bisa dilepas oleh "Jalankan ulang"
+yang sukses. Setelah gerbang uji dipasang, tombol itu terkunci untuk:
+- tenant **masa tenggang** — padahal produksi rutinnya SENGAJA tetap jalan (keputusan K1)
+- tenant **masa coba yang jatah ujinya habis** — produksi rutinnya juga masih jalan
+
+Keduanya **terjebak**: mesin berhenti, satu-satunya pemulih dikunci. Bukan teori — `m.yusroon` (trial,
+jatah uji habis, produksi boleh) tinggal menunggu 3 kegagalan beruntun, dan kegagalan seperti itu
+terjadi pada 3 channel lain di hari yang sama.
+
+**Ditutup** dengan jalur buka yang tidak memproduksi apa pun: migrasi **0193** (parameter channel pada
+`tenant_resume_channels`) + endpoint `POST /api/channels/[id]/resume` (gerbang PRODUKSI + kepemilikan) +
+tombol **"Pulihkan produksi"** yang muncul PERSIS pada kondisi terjebak. Melepas rem tak memanggil AI,
+tak merender, tak mengunggah; bila sebabnya belum diperbaiki, rem menyala lagi setelah 3 kegagalan.
+
+### Matriks "setiap kunci punya jalur buka" (mandat owner)
+| Kunci | Jalur buka yang sah |
+|---|---|
+| Gerbang uji — status mati | bayar (Midtrans) · admin **Aktifkan** · admin **Perpanjang trial** · admin **Aktifkan bersih** |
+| Gerbang uji — masa tenggang | bayar · admin Aktifkan |
+| Jatah uji masa coba habis | bayar · **admin Perpanjang trial** (jatah ikut segar — kenop `trial_quota_reset_on_extend`) |
+| Tautan unduh hasil uji / stok | sama dengan gerbang produksi (masa tenggang tetap boleh) |
+| **Rem channel** | "Jalankan ulang" (bila uji boleh) · **otomatis** saat reaktivasi · **"Pulihkan produksi"** (baru — untuk yang produksinya boleh tapi ujinya terkunci) |
+| Saklar induk gerbang | `/admin/app-config` → **Gerbang Uji Aktif = Tidak** (seketika, tanpa deploy) |
+
+### Berkas tambahan dari audit (di luar tracker §10e)
+| Berkas | Perubahan |
+|---|---|
+| `migrations/0193_pulihkan_channel_per_channel.sql` | ✅ APPLIED — `tenant_resume_channels` + parameter channel opsional |
+| `apps/web/src/app/api/channels/[id]/resume/route.ts` | **BARU** — jalur buka manual (gerbang PRODUKSI + kepemilikan) |
+| `apps/web/src/lib/test-run.ts` | gerbang pada penerbitan tautan unduh hasil uji (lubang 1) |
+| `apps/web/src/app/(app)/channels/[id]/page.tsx` | tombol **"Pulihkan produksi"** pada kondisi terjebak + `pulihkanProduksi()` |
+| `apps/web/src/components/test-niche-panel.tsx` | prop `onGate` (lapor keadaan gerbang ke halaman induk, via ref — anti loop polling) |
+| `tests/test_gerbang_uji.py` | +5 uji: setiap jalur reaktivasi WAJIB tetap memanggil pelepas rem |
+
+### VALIDASI TOTAL PASCA-AUDIT — 755 pemeriksaan, 0 gagal
+Seluruhnya dijalankan ULANG setelah perbaikan terakhir, bukan hanya bagian yang berubah:
+
+| Jalur | Hasil |
+|---|---|
+| Lapis DB (samar sebagai tenant) | 64/64 |
+| Mesin (RPC ke DB live) | 30/30 |
+| Suite proyek | **586 passed** (560 → 581 → 586) |
+| Lapis API (sesi tenant nyata) | 13/13 |
+| Layar (klik→mata) | 19/19, nol galat halaman |
+| Audit final (jalur belum teruji) | 14/14 |
+| Pintu 6 + pembanding | 6/6 |
+| **Jalur buka** (kondisi terjebak dibuat sungguhan) | 10/10 |
+| **Proses terkait** (admin suspend · admin perpanjang · 3 layar lain) | 13/13 |
+
+Bukti jalur buka resmi owner berjalan: admin menekan **Perpanjang trial** pada `m.yusroon`
+(terkunci `trial_quota`) → `trial_extended_at` tercatat → gerbang berubah jadi `allowed=true`,
+terpakai kembali `0`. Dikembalikan apa adanya setelah diuji.
+
+Keadaan produksi setelah SELURUH pekerjaan: `direct_jobs` **98** · channel terjeda **3** ·
+nol status tenant berubah · nol `trial_extended_at` terisi.
+
+### Kesalahan prosedur saya yang TERULANG (dicatat supaya berhenti terulang)
+Uji lubang 1 sempat merah palsu karena **server lokal yang diuji masih build LAMA** — `pkill` gagal
+(exit 144) dan proses lama (20:38) tetap hidup saat build baru sudah jadi (23:45). Ini **kejadian kedua**
+pada sesi yang sama. **Aturan untuk seterusnya: setelah build, WAJIB bandingkan waktu-mulai proses
+server dengan waktu `.next/BUILD_ID`; jangan percaya `pkill`, bunuh lewat PID lalu verifikasi.**
 
 ## 10f. MATRIKS REGRESI — "haram bug baru" (tiap baris = uji otomatis)
 | Wajib tetap utuh | Risiko yang dijaga |

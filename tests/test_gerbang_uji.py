@@ -278,5 +278,54 @@ class TestAntiDriftSqlVsPython(unittest.TestCase):
         self.assertIn("'success')", fungsi)
 
 
+class TestJalurBukaTerpasang(unittest.TestCase):
+    """
+    I — SETIAP KUNCI WAJIB PUNYA JALUR BUKA (mandat owner 2026-08-02).
+
+    Lima jalur reaktivasi harus memanggil pelepas rem. Dua di antaranya (settlement Midtrans dan
+    link 1-klik) hanya bisa dibuktikan penuh saat ada pembayaran/klik NYATA — jadi di sini yang
+    dijaga adalah pemasangannya: kalau suatu hari pemanggilan itu terhapus saat refactor, uji ini
+    merah SEBELUM ada tenant yang terjebak. Tiga jalur lain sudah dibuktikan lewat HTTP nyata.
+    """
+
+    def _baca(self, rel):
+        with open(os.path.join(AKAR, rel), encoding="utf-8") as f:
+            return f.read()
+
+    def test_settlement_midtrans_melepas_rem(self):
+        src = self._baca("src/billing/midtrans.py")
+        self.assertIn("resume_channels", src,
+                      "settlement Midtrans tak lagi melepas rem → tenant yang baru bayar TERJEBAK")
+        # Wajib fail-soft: urusan rem tak boleh menggagalkan pencatatan pembayaran.
+        blok = src[src.index("from src.billing.limits import resume_channels") - 400:]
+        self.assertIn("try:", blok[:500])
+
+    def test_link_reaktivasi_melepas_rem_dan_mencatat_perpanjangan(self):
+        src = self._baca("src/billing/webhook_app.py")
+        self.assertIn("resume_channels", src, "link 1-klik tak melepas rem")
+        self.assertIn("trial_extended_at", src,
+                      "link 1-klik tak mencatat perpanjangan → jatah uji tak pernah segar")
+
+    def test_jalur_admin_melepas_rem(self):
+        for rel in ("apps/web/src/app/api/admin/tenants/[id]/suspend/route.ts",
+                    "apps/web/src/app/api/admin/tenants/[id]/lifecycle/route.ts"):
+            self.assertIn("tenant_resume_channels", self._baca(rel), rel)
+
+    def test_jalur_buka_manual_ada(self):
+        # Tenant yang produksinya boleh tapi ujinya terkunci HARUS punya cara memulihkan channel.
+        src = self._baca("apps/web/src/app/api/channels/[id]/resume/route.ts")
+        self.assertIn("tenant_produce_allowed", src, "jalur buka manual wajib pakai gerbang PRODUKSI")
+        self.assertIn("tenant_resume_channels", src)
+        halaman = self._baca("apps/web/src/app/(app)/channels/[id]/page.tsx")
+        self.assertIn("pulihkanProduksi", halaman, "tombol pemulih hilang dari layar channel")
+
+    def test_pintu_unduh_hasil_uji_bergerbang(self):
+        # Pintu paling senyap: tautan unduh terbit ulang tiap halaman dibuka, tanpa menekan apa pun.
+        src = self._baca("apps/web/src/lib/test-run.ts")
+        i = src.index("presignBufferKey(s3key)")
+        self.assertIn("tenant_produce_allowed", src[:i],
+                      "tautan unduh video uji diterbitkan TANPA gerbang — pintu bocor terbuka lagi")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

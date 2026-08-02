@@ -70,7 +70,17 @@ export async function latestTestResult(tenantId: string, nicheId: string, jobTyp
         .eq("tenant_id", tenantId).like("s3_key", `%${job.run_id}%`).limit(1).maybeSingle();
       s3key = (inv?.s3_key as string) ?? undefined;
     }
-    if (s3key) video_url = await presignBufferKey(s3key);
+    // [B24 §10a pintu 6] Tautan unduh video uji = pintu keluar nilai yang paling senyap: tak perlu
+    // menekan apa pun, cukup membuka halaman, dan tautannya diterbitkan ulang setiap kali. Tanpa
+    // gerbang ini, tenant yang langganannya sudah mati tetap bisa memanen video uji terakhirnya
+    // berkali-kali. Dipakai gerbang PRODUKSI (bukan gerbang uji): ini "melihat hasil produksi",
+    // sehingga masa tenggang (grace) TETAP boleh — sama seperti pintu unduh stok gudang.
+    if (s3key) {
+      const { data: bolehLihat, error: gErr } = await a.rpc("tenant_produce_allowed", { p_tenant_id: tenantId });
+      if (gErr) console.error("[test-run] gerbang produksi gagal:", gErr.message);
+      // Gagal jujur: saat kita tak bisa memastikan, tautan TIDAK diterbitkan.
+      if (bolehLihat === true) video_url = await presignBufferKey(s3key);
+    }
   }
   return { ...job, run, video_url, progress };
 }

@@ -140,6 +140,8 @@ export default function ChannelDetailPage() {
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [testMsg, setTestMsg] = useState<string | null>(null);
+  // [B24] Keadaan gerbang uji dilaporkan oleh panel uji (satu panggilan, tidak diminta dua kali).
+  const [ujiTerkunci, setUjiTerkunci] = useState(false);
   const wasHaltedRef = useRef(false);  // latch: channel pernah halted saat sesi ini → pesan hasil pakai "aktif kembali".
   const chRef = useRef<ChannelRow | null>(null);  // nilai tersimpan SEBELUM penyegaran (pagar anti-timpa di load)
   // Siklus hidup kartu hasil uji (owner 2026-07-08: "sampai kapan muncul?") — hilang bila:
@@ -520,6 +522,17 @@ export default function ChannelDetailPage() {
     load();
   }
 
+  // [B24 §10c] Lepas rem darurat TANPA memproduksi apa pun — jalur buka saat tombol uji terkunci
+  // tapi produksi rutin masih boleh jalan (masa tenggang / jatah masa coba habis).
+  async function pulihkanProduksi() {
+    setErr(null); setBusy(true); setTestMsg(null);
+    const r = await fetch(`/api/channels/${id}/resume`, { method: "POST" });
+    const j = await r.json().catch(() => ({}));
+    setBusy(false);
+    if (!r.ok) return setErr(j.error ?? `gagal (${r.status})`);
+    load();
+  }
+
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     const { data } = await supabase.from("channels")
@@ -824,6 +837,15 @@ export default function ChannelDetailPage() {
               <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.625rem", flexWrap: "wrap" }}>
                 {eff.key === "incomplete" && <button className="btn btn-default btn-sm" onClick={() => setTab("settings")}><Settings size={14} /> <Bi id="Lengkapi konfigurasi" en="Complete config" /></button>}
                 {eff.key === "paused" && <button className="btn btn-default btn-sm" disabled={busy} onClick={() => pausePlay(true)}><Play size={14} /> <Bi id="Aktifkan" en="Activate" /></button>}
+                {/* [B24 §10c] JALUR BUKA saat terjebak: channel dihentikan sistem, produksi rutin
+                    masih boleh jalan, tapi tombol uji terkunci (masa tenggang / jatah coba habis).
+                    Tanpa tombol ini mesin berhenti selamanya tanpa cara memulihkan. Melepas rem
+                    tidak memproduksi apa pun — bila sebabnya belum diperbaiki, rem menyala lagi. */}
+                {eff.key === "halted" && ujiTerkunci && subIsProducing(sub) && (
+                  <button className="btn btn-default btn-sm" disabled={busy} onClick={pulihkanProduksi}>
+                    <Play size={14} /> <Bi id="Pulihkan produksi" en="Resume production" />
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -841,6 +863,7 @@ export default function ChannelDetailPage() {
           confirmMessage={<Bi id="Tindakan ini memproduksi 1 video uji (privat di YouTube) untuk memeriksa konfigurasi channel Anda. Lanjutkan?" en="This produces 1 test video (private on YouTube) to check your channel configuration. Continue?" />}
           renderResult={channelTestResult}
           onComplete={() => load()}
+          onGate={(g) => setUjiTerkunci(g?.allowed === false)}
           hideRefresh
           hideSummary={isResultHidden}
         />
