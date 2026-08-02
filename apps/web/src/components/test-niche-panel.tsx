@@ -67,6 +67,11 @@ export default function TestNichePanel({ getUrl, postUrl, postBody, confirmMessa
   }
 
   const running = !!test && ["pending", "producing"].includes(test.status);
+  // Lama menunggu giliran mesin — dihitung dari `created_at` job, disegarkan tiap detak polling
+  // yang sudah ada (bukan timer baru). null = data waktu tak tersedia.
+  const menungguMenit = test?.created_at
+    ? Math.max(0, Math.floor((Date.now() - new Date(test.created_at).getTime()) / 60000))
+    : null;
   // Status SUKSES = done (test_nopub) ATAU published (test channel = upload privat YouTube). Keduanya terminal-sukses.
   const succeeded = !!test && ["done", "published"].includes(test.status);
   // Ringkasan hasil terminal disembunyikan bila konteks memintanya (ditutup tenant / usang) — BUKAN saat berjalan.
@@ -105,7 +110,29 @@ export default function TestNichePanel({ getUrl, postUrl, postBody, confirmMessa
             </div>
             {test.progress.last_log && <div className="muted mono" style={{ fontSize: "0.625rem", marginTop: ".35rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{test.progress.last_log}</div>}
           </>) : (
-            <div className="muted" style={{ fontSize: "var(--text-xs)", display: "flex", alignItems: "center", gap: ".4rem" }}><Loader2 size={11} className="spin" /> <Bi id="Menunggu giliran mesin…" en="Waiting for an engine slot…" /></div>
+            /* MENUNGGU GILIRAN — dulu hanya satu kalimat tanpa keterangan apa pun, sehingga layar
+               tampak macet (dilaporkan owner 2026-08-02: "seperti hang, tidak ada informasi").
+               Kini disebutkan SEBABNYA (mesin mengerjakan satu produksi pada satu waktu), SUDAH
+               BERAPA LAMA menunggu, dan bahwa ia mulai sendiri — tenant tak perlu menekan apa pun.
+               Sengaja TIDAK menyebut channel/tenant lain yang sedang memakai mesin: itu data milik
+               tenant lain. */
+            <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".1rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: ".4rem" }}>
+                <Loader2 size={11} className="spin" />
+                <span><Bi id="Menunggu giliran mesin produksi…" en="Waiting for an engine slot…" /></span>
+                {menungguMenit !== null && (
+                  <span className="mono" style={{ fontSize: "0.625rem", opacity: 0.8 }}>
+                    {menungguMenit < 1
+                      ? <Bi id="baru saja" en="just now" />
+                      : <Bi id={`sudah ${menungguMenit} mnt`} en={`${menungguMenit} min so far`} />}
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: "0.625rem", marginTop: ".25rem", opacity: 0.75 }}>
+                <Bi id="Mesin mengerjakan satu produksi pada satu waktu. Antrean Anda akan mulai sendiri — tak perlu menekan apa pun."
+                    en="The engine runs one production at a time. Your job starts automatically — no action needed." />
+              </div>
+            </div>
           )}
         </div>
       )}

@@ -2,8 +2,8 @@
    `body` design → `.ob-root` wrapper (route-scoped). */
 
 .ob-root { min-height: 100vh; display: flex; flex-direction: column; }
-.spin { animation: ob-spin 1s linear infinite; }
-@keyframes ob-spin { to { transform: rotate(360deg); } }
+/* `.spin` PINDAH ke `styles/components.css` (global) 2026-08-02 — dulu hanya hidup di sini,
+   sehingga ikon berputar di seluruh halaman LAIN diam saja dan proses tampak macet. */
 /* top bar */
 .ob-top { height: 60px; display: flex; align-items: center; gap: 1rem; padding: 0 1.5rem; border-bottom: 1px solid var(--border-subtle); position: sticky; top: 0; background: color-mix(in srgb,var(--bg) 85%,transparent); backdrop-filter: blur(12px); z-index: 20; }
 .ob-root .brandmark { display: flex; align-items: center; gap: 0.625rem; font-weight: 600; letter-spacing: -0.01em; }
