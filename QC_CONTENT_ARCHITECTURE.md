@@ -111,7 +111,18 @@ video nyata → video_analytics (views, watch_time, avg_view_pct, ctr, subscribe
 
 ---
 
-## 2c. DURASI VIDEO & MUTU NARASI — SATU-SATUNYA ACUAN (status per 2026-08-02)
+## 2c. DURASI VIDEO & MUTU NARASI — SATU-SATUNYA ACUAN (status per 2026-08-02, **SUDAH DEPLOY**)
+
+> ✅ **DEPLOY 2026-08-02 17:29–17:33 WIB, izin eksplisit owner.** Server kini `98df1a9` (dari `0a0c2b9`,
+> 66 commit). `mv-worker`/`mv-webhook`/`mv-web` active · situs 200 · `/health` 200. **Migrasi 0187
+> (ratio suara 1) dan 0188 (42 kenop) SUDAH DITERAPKAN** — `app_config` 68→110 baris, nol suara
+> ber-`speed`≠1, nol sisa tuas kecepatan di lapisan tenant, lapisan Ekspresi Vokal 17 tenant utuh.
+> **Bukti pasca-deploy:** satu produksi NYATA lewat jalur resmi `test_nopub` di server → STEP 1–7,
+> gerbang hulu lolos (proyeksi 63,6 vs band 52,5–67,5), gerbang pra-visual lolos (63,3),
+> `beat_durations` [3,1·17,5·17,3·14,2·7,8] → **QC PASSED 63,3 dtk / 29,9 MB**, inventory `test`
+> (publisher tak mengklaim, nol kuota publish). Nol galat dari kode kita di log pasca-restart.
+> Titik pulih: tag git `pra-deploy-durasi-narasi` (= `0a0c2b9`) + cadangan JSON 44 baris
+> `voice_catalog` & 17 baris `tenant_configs` sebelum 0187.
 
 > **Bagian ini menggantikan seluruh catatan durasi sebelumnya.** Yang tertulis di bawah adalah
 > **keadaan sekarang**, bukan riwayat. Riwayat percobaan hanya disebut di satu tempat: daftar
