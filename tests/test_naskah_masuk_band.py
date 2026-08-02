@@ -249,7 +249,12 @@ def test_cacat_mekanis_yang_TERDETEKSI_diperbaiki_penulis():
     blok = src[src.index("CACAT MEKANIS YANG TERDETEKSI HARUS DIPERBAIKI"):]
     blok = blok[:blok.index("SATU PERHITUNGAN AKHIR")]
     assert "_fakta_hilang(_teks_lama, _tb)" in blok, "perbaikan cacat tidak memeriksa fakta hilang"
-    assert "_parah_baru < len(_cacat)" in blok, "hasil yang tak mengurangi cacat bisa diterima"
+    # DIPERBARUI 2026-08-02: dulu barisnya `_parah_baru < len(_cacat)` — perbandingan JUMLAH belaka,
+    # sehingga menukar dua cacat ringan dengan satu cacat PARAH tetap diterima (1 < 2). Aturannya
+    # kini berbasis KEPARAHAN (`_perbaikan_lebih_baik`), dan perilakunya diuji sungguhan di
+    # `tests/test_perbaikan_cacat_hormati_keparahan.py`.
+    assert "_perbaikan_lebih_baik(_cacat, _c_baru)" in blok, \
+        "hasil yang tak mengurangi cacat — atau yang menambah cacat PARAH — bisa diterima"
     assert "_panjang_ok" in blok, "perbaikan cacat bisa merusak durasi"
     assert 'status"] == "ok"' in blok, \
         "penerimaan diukur dari jumlah KATA, bukan dari vonis DURASI — perbaikan sah akan ditolak " \

@@ -827,6 +827,26 @@ def _narrative_intent(target_duration, n_beats) -> str:
     return (f"LONG {target_duration}s: the complete arc — layered mystery, multiple distinct facts, build and release with depth. Zero filler.")
 
 
+def _perbaikan_lebih_baik(cacat_lama: list, cacat_baru: list) -> bool:
+    """Apakah naskah hasil perbaikan BENAR-BENAR lebih baik? Keparahan lebih dulu, baru jumlah.
+
+    CACAT YANG DITUTUP 2026-08-02: aturannya dulu `len(cacat_baru) < len(cacat_lama)` — hanya
+    membandingkan JUMLAH (variabelnya bahkan bernama `_parah_baru` padahal isinya total). Akibatnya
+    perbaikan yang membuang DUA cacat RINGAN tetapi melahirkan SATU cacat PARAH tetap diterima:
+    1 < 2. Angkanya membaik, narasinya memburuk — misalnya kalimat jadi menggantung, atau bahasa
+    asing menyelinap. Jumlah cacat bukan ukuran mutu; yang menentukan apa yang penonton dengar
+    adalah keparahannya.
+
+    Aturan sekarang: cacat PARAH tak boleh bertambah; bila jumlah parahnya sama, barulah total
+    dipakai sebagai penentu.
+    """
+    p_lama = sum(1 for t in (cacat_lama or []) if t.get("parah"))
+    p_baru = sum(1 for t in (cacat_baru or []) if t.get("parah"))
+    if p_baru != p_lama:
+        return p_baru < p_lama
+    return len(cacat_baru or []) < len(cacat_lama or [])
+
+
 def _margin_penulis(preset_seconds, tangga: list) -> float:
     """Jarak aman (detik) dari tepi band untuk SASARAN PENULIS. Gerbang TIDAK memakainya.
 
@@ -2111,7 +2131,17 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                         _tb = " ".join(_baru[b] for b in _isi)
                         _c_baru = _pn(_tb, niche_profile=niche_profile, content_language=_clang,
                                       beat_keys=active_beats)
-                        _parah_baru = len(_c_baru)
+                        # HITUNG PARAH TERPISAH DARI TOTAL. Sampai 2026-08-02 keduanya dijadikan satu
+                        # angka (`len(_c_baru)`, dinamai `_parah_baru` padahal isinya TOTAL), lalu
+                        # dibandingkan dengan total lama. Akibatnya perbaikan yang membuang dua cacat
+                        # RINGAN tetapi melahirkan satu cacat PARAH tetap DITERIMA — 1 < 2. Narasi
+                        # jadi lebih buruk (mis. kalimat menggantung atau bahasa asing menyelinap),
+                        # tapi angkanya tampak membaik. Jumlah cacat bukan ukuran mutu; keparahannya
+                        # yang menentukan apa yang penonton dengar.
+                        _parah_lama = sum(1 for t in _cacat if t.get("parah"))
+                        _parah_baru = sum(1 for t in _c_baru if t.get("parah"))
+                        _total_baru = len(_c_baru)
+                        _lebih_baik = _perbaikan_lebih_baik(_cacat, _c_baru)
                         _fakta_ok = not _fakta_hilang(_teks_lama, _tb)
                         # Ukurannya DURASI, bukan jumlah kata. Pagar jumlah-kata (±10%) menolak
                         # perbaikan yang sebenarnya sah: terukur di BISIK NUSANTARA, elipsis berhasil
@@ -2125,15 +2155,17 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                         else:
                             _panjang_ok = abs(len(_tb.split()) - len(_teks_lama.split())) <= max(
                                 3, 0.15 * len(_teks_lama.split()))
-                        if _parah_baru < len(_cacat) and _fakta_ok and _panjang_ok:
+                        if _lebih_baik and _fakta_ok and _panjang_ok:
                             best_script.update(_baru)
                             best_script["full_script"] = _tb
                             best_script["mechanical_issues"] = _c_baru
                             logger.info(f"[ScriptEngine] cacat mekanis diperbaiki penulis: "
-                                        f"{len(_cacat)} → {_parah_baru}")
+                                        f"parah {_parah_lama}→{_parah_baru} · "
+                                        f"total {len(_cacat)}→{_total_baru}")
                         else:
                             logger.warning(f"[ScriptEngine] perbaikan cacat mekanis DITOLAK "
-                                           f"(cacat {len(_cacat)}→{_parah_baru} · fakta_utuh={_fakta_ok} "
+                                           f"(parah {_parah_lama}→{_parah_baru} · "
+                                           f"total {len(_cacat)}→{_total_baru} · fakta_utuh={_fakta_ok} "
                                            f"· panjang_wajar={_panjang_ok}) — naskah asal dipakai")
             except Exception as _ce3:
                 logger.warning(f"[ScriptEngine] perbaikan cacat mekanis gagal (naskah tetap dipakai): "
