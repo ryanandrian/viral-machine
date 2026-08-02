@@ -10,7 +10,6 @@ v0.2 Changes:
 """
 
 import os
-import random
 import json
 import time
 from datetime import datetime
@@ -31,7 +30,7 @@ from src.distribution.youtube_publisher import YouTubePublisher
 from src.utils.storage_cleaner import StorageCleaner
 from src.utils.supabase_writer import SupabaseWriter
 from src.utils.telegram_notifier import TelegramNotifier
-from src.exceptions import PipelineError, ConfigError, LLMError, TTSError, VisualError, RenderError, ErrorClass
+from src.exceptions import ConfigError, LLMError, TTSError, VisualError, RenderError, ErrorClass
 
 load_dotenv()
 

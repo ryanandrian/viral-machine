@@ -12,7 +12,6 @@ Data tersedia 48 jam setelah video dipublish (YouTube delay normal).
 """
 
 import os
-import json
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional

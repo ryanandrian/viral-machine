@@ -5,7 +5,14 @@ description = "Viral Video Automation Machine"
 authors = [
     {name = "rad"}
 ]
-requires-python = "^3.11"
+# `>=3.11,<4.0`, BUKAN `^3.11`. Tabel `[project]` memakai aturan PEP 621/PEP 440, dan `^` adalah
+# sintaks Poetry — berkas ini campuran keduanya. Akibatnya SETIAP alat standar gagal membacanya:
+# tertangkap 2026-08-02 saat pemeriksa kode `ruff` menolak jalan ("Failed to parse version").
+# Nol dampak ke produksi (server memakai `requirements.txt`, tak ada yang memasang paket ini),
+# tapi ia memblokir alat mutu — dan alat mutu yang tak bisa jalan = cacat yang tak pernah terlihat.
+requires-python = ">=3.11,<4.0"
+# Daftar dependensi sengaja KOSONG: sumber kebenaran paket = `requirements.txt` (dipakai VPS &
+# lingkungan lokal). Dicatat di sini supaya tak ada yang mengira daftar ini tertinggal terisi.
 dependencies = [
 ]
 

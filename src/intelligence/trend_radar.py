@@ -19,7 +19,7 @@ from loguru import logger
 from pytrends.request import TrendReq
 from dotenv import load_dotenv
 
-from src.intelligence.config import TenantConfig, get_niches, system_config
+from src.intelligence.config import TenantConfig, get_niches
 
 load_dotenv()
 
@@ -458,12 +458,12 @@ class TrendRadar:
             or getattr(tenant_config, "peak_region", None)
             or "us"
         )
-        region      = REGION_MAP.get(peak_region, REGION_MAP["us"])
-        geo         = region["geo"]
-        yt_region   = region["yt_region"]
-        news_geo    = region["news_geo"]
-        news_ceid   = region["news_ceid"]
-        tz          = region["tz"]
+        # (FOSIL DICABUT 2026-08-02: lima nilai turunan `REGION_MAP` — geo · yt_region · news_geo ·
+        #  news_ceid · tz — dihitung di sini lalu TIDAK PERNAH dipakai. Sisa dari masa `scan()` masih
+        #  mengambil data langsung; kini ia hanya MEMBACA CACHE, dan cache-nya sudah berkunci
+        #  `peak_region`. Yang mengisi cache — dan yang benar-benar memakai kelima nilai itu — adalah
+        #  `trend_refresher`. Membiarkannya di sini membuat pembaca kode mengira fungsi ini
+        #  ber-parameter wilayah, padahal tidak.)
         # ────────────────────────────────────────────────────────────
 
         logger.info(f"Scanning trends | tenant: {tenant_config.tenant_id}")

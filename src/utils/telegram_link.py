@@ -19,7 +19,6 @@ TTL pendek, dan setiap pengikatan dibalas konfirmasi di Telegram + terlihat di l
 Bot username: dari getMe (cache proses) — NO-HARDCODE nama bot; gagal → error jujur.
 """
 
-import base64
 import hashlib
 import hmac
 import os

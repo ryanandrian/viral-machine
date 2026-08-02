@@ -22,7 +22,7 @@ Feed widget D20 (frontend, Phase 9-10) via `channel_insights.compliance`.
 import os
 import math
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime
 
 from loguru import logger
 

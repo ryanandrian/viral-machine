@@ -23,7 +23,7 @@ from unittest import mock
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from google.auth.exceptions import RefreshError
-from src.exceptions import PipelineError, PublishError, ErrorClass, FAST_FAIL
+from src.exceptions import PublishError, ErrorClass, FAST_FAIL
 
 
 # ─────────────────────────── Fake Supabase (chainable) ───────────────────────────

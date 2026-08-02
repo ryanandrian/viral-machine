@@ -7,7 +7,6 @@ Kalau `full_script` (yang dibacakan suara) dan teks per-beat (yang menentukan ga
 akibatnya BUKAN error — video jadi, tapi gambar bergeser dari narasinya di setiap adegan, dan tak ada
 yang menangkapnya kecuali menonton.
 """
-import pytest
 
 from src.intelligence.script_engine import compute_beat_durations
 

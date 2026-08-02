@@ -4,7 +4,7 @@ import re
 from datetime import datetime
 from loguru import logger
 from dotenv import load_dotenv
-from src.intelligence.config import TenantConfig, get_niches, system_config
+from src.intelligence.config import TenantConfig, get_niches
 
 load_dotenv()
 

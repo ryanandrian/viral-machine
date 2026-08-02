@@ -4,7 +4,7 @@ import re
 from datetime import datetime
 from loguru import logger
 from dotenv import load_dotenv
-from src.intelligence.config import TenantConfig, get_niches, VIRAL_SCORE_WEIGHTS, system_config
+from src.intelligence.config import TenantConfig, get_niches, VIRAL_SCORE_WEIGHTS
 from src.intelligence.trend_radar import REGION_DISPLAY
 from src.utils.supabase_writer import _normalize_slug, get_writer
 
@@ -221,7 +221,8 @@ class NicheSelector:
         Bangun blok teks channel performance untuk diinjeksi ke AI prompt.
         Hanya dipanggil jika grade >= learning.
         """
-        grade         = insights.get("performance_grade", "insufficient_data")
+        # (`grade` dicabut 2026-08-02 — dibaca dari insights lalu tak pernah dipakai; penyaringan
+        #  grade sudah terjadi di pemanggil, sesuai docstring di atas.)
         top_topics    = insights.get("top_topics") or []
         top_hooks     = insights.get("top_hooks") or []
         avoid         = insights.get("avoid_patterns") or []

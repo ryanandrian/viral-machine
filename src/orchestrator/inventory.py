@@ -9,7 +9,6 @@ mark_published (+ hapus S3) / revert_to_ready (gagal). Pakai Supabase REST servi
 
 import os
 from datetime import datetime, timedelta, timezone
-from loguru import logger
 
 
 def _default_expiry_iso() -> str:

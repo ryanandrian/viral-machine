@@ -307,7 +307,9 @@ class VisualAssembler:
             # s72: thumbnail_concept = deskripsi visual murni dari script engine
             # Mencegah DALL-E render teks literal dari kalimat hook
             thumbnail_concept = script.get("thumbnail_concept", "").strip() or hook_text
-            niche     = config.get("niche") or config.get("niche_fallback") or ""
+            # (`niche` dicabut 2026-08-02 — dibaca lalu tak pernah dipakai. Ia juga satu-satunya
+            #  pembaca `niche_fallback` yang tersisa di jalur produksi; kolomnya sendiri kosong
+            #  di seluruh 17 tenant.)
 
             if not hook_text:
                 return None

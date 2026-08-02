@@ -14,7 +14,6 @@ avg_view_pct + subscriber_gain + views + like_rate (degradasi jujur, bukan error
 
 import math
 from datetime import datetime, timezone
-from typing import Optional
 
 from loguru import logger
 

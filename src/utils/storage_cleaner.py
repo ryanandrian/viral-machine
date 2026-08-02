@@ -9,7 +9,6 @@ Strategi (sudah disepakati):
   - R2              → BUKAN untuk backup video
 """
 
-import os
 import shutil
 from datetime import datetime, timedelta
 from pathlib import Path

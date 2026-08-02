@@ -10,7 +10,6 @@ Contoh nyata dari produksi:
   hook baru : "Apa rahasia di balik Gunung Tangkuban Perahu?"
   dibacakan : "Kamu tahu dari mana asal nama Gunung Tangkuban Perahu?"   ← hook LAMA
 """
-from src.content import beats as _beats
 
 
 class _TC:

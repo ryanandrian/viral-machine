@@ -1071,7 +1071,6 @@ def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, ins
     _lo, _hi        = round(total_words * (1 - _tol)), round(total_words * (1 + _tol))
 
     # ── Compression-mapping per-preset (MULTI_FORMAT §3): N beat = visual_beats → narasi + scene + QC.
-    from src.config.format_catalog import preset_visual_beats as _pvb
     if preset_seconds:
         # Budget = (detik − overhead render) × WPS. QC mengukur VIDEO FINAL = audio + trailing_silence
         # (+ loop net), jadi target AUDIO = preset − overhead agar video JADI ≈ preset. Tanpa ini, kata
@@ -1094,9 +1093,9 @@ def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, ins
             total_words = round(_spoken * WPS)
             _lo, _hi    = round(total_words * (1 - _tol)), round(total_words * (1 + _tol))
         active  = _beats_for_preset(preset_seconds)  # SEGMENTASI dari DB (single-source) / fallback _BEATS_FOR_N
-        n_beats = len(active)
         words   = _distribute_words(active, total_words)   # konsentrasi budget ke beat aktif (bukan sebar 8)
-        n_scenes = len(active)
+        # (FOSIL DICABUT 2026-08-02: `n_beats` dan `n_scenes` — dua nama untuk `len(active)`, tak satu
+        #  pun pernah dibaca. Yang dipakai prompt adalah `len(active)` langsung.)
         _semua_beat = _all_sections()
         inactive = [s for s in _semua_beat if s not in active]
         _wsum = sum(words.get(b, 0) for b in active) or 1
@@ -1141,7 +1140,7 @@ def _build_user_prompt(topic, niche, niche_visual_style=None, feedback=None, ins
         )
         words = {s: words.get(s, 0) for s in _semua_beat}   # panduan ber-nomor (1-8) refs semua 8; inactive→0
     else:
-        active, n_scenes, beat_plan = list(words.keys()), 6, ""
+        active, beat_plan = list(words.keys()), ""   # (`n_scenes` dicabut — tak pernah dibaca)
 
     feedback_block = ""
     if feedback:
@@ -1423,7 +1422,6 @@ class ScriptEngine:
         active_beats = None
         if preset_seconds:   # selaras dgn prompt (validate pakai timing + beat aktif yg sama)
             section_timing = _scale_section_timing(section_timing, preset_seconds)
-            from src.config.format_catalog import preset_visual_beats as _pvb
             active_beats = _beats_for_preset(preset_seconds)   # segmentasi DB (single-source) — WAJIB non-kosong (A2)
         try:
             raw = provider.complete(
@@ -1798,12 +1796,10 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
         best_len_ok_score  = 0
         actual_provider = llm_provider
         feedback        = None  # Feedback dari attempt sebelumnya
-        # F2d — target word-budget (LLM-QC length gate). Aktif hanya bila preset di-set.
-        # Anggaran kata = dari RESEP terkalibrasi bila ada (sadar-jeda); jatuh ke rumus lama hanya bila
-        # resep tak bisa dihitung (preset tak di tangga aktif) — supaya jalur lama tak mati mendadak.
-        word_budget = (_resep["kata_bidik"] if _resep else
-                       (round(max(1.0, preset_seconds - render_overhead_sec) * float(format_wps))
-                        if (preset_seconds and format_wps) else None))
+        # (FOSIL DICABUT 2026-08-02: `word_budget` — komentarnya mengaku "target word-budget (LLM-QC
+        #  length gate)" padahal nilainya TAK PERNAH dibaca satu baris pun. Gerbang panjang yang
+        #  sebenarnya berjalan adalah `vonis()` atas resep terkalibrasi, dan itu memakai DURASI, bukan
+        #  jumlah kata. Komentar yang menjanjikan gerbang yang tak ada = jebakan bagi pembaca kode.)
         # [DURASI-F3] toleransi SATU-SUMBER utk gerbang durasi internal (dulu: _LEN_TOL dibaca tapi TAK
         # PERNAH dipakai = config-mati, gerbang malah hardcode ±10% — insiden 'tiga penggaris' 2026-07-15).
 

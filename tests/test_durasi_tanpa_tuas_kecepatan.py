@@ -12,7 +12,6 @@ pengganti-penggantinya (penjaga fakta saat naskah diperbaiki, penanda alat skor 
 """
 import inspect
 
-import pytest
 
 
 # ── lapis 1 & 2: tak boleh ada lagi di kode produksi ──────────────────────────────────────────────

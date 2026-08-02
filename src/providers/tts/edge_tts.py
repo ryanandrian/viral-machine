@@ -113,7 +113,9 @@ class EdgeTTSProvider(TTSProvider):
 
         try:
             communicate = edge_tts.Communicate(text, self.voice, rate=self.rate)
-            submaker    = edge_tts.SubMaker()
+            # (FOSIL DICABUT 2026-08-02: `edge_tts.SubMaker()` dibuat lalu tak pernah dipakai —
+            #  peninggalan masa Edge masih mengirim WordBoundary. Sejak v7.x hanya SentenceBoundary
+            #  yang tersedia, dan penanda kata disusun sendiri di `_parse_sentence_boundaries`.)
 
             # Stream output — kumpulkan audio + sentence boundary events
             # Edge TTS v7.x: WordBoundary tidak tersedia, pakai SentenceBoundary

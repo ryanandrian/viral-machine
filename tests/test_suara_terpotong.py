@@ -20,7 +20,6 @@ yang diramal dari TEKSNYA, yang hilang adalah suaranya — bukan ramalannya.
 import inspect
 import os
 
-import pytest
 
 
 def test_lapis1_adaptor_menolak_sintesis_yang_tak_sampai_habis():

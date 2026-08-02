@@ -8,7 +8,6 @@ s85c: LLM-generated prompts — tidak ada template manual.
 """
 
 import asyncio
-import os
 import subprocess
 from pathlib import Path
 
