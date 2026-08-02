@@ -14,7 +14,10 @@ type TestRun = { status: string; qc_passed: boolean | null; viral_score: number 
 type TestProgress = { step: number; total: number; label: string; last_log: string };
 export type TestInfo = { id: string; status: string; error: string | null; created_at: string; completed_at: string | null; run: TestRun | null; video_url: string | null; progress: TestProgress | null };
 
-const dateID = (iso: string | null) => iso ? new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "—";
+// Tanggal mengikuti BAHASA LAYAR. Sebelum 2026-08-02 selalu dipaksa `id-ID`, sehingga tenant
+// berbahasa Inggris membaca "2 Agu 2026" di tengah panel yang seluruhnya Inggris.
+const tgl = (iso: string | null, loc: string) => iso
+  ? new Date(iso).toLocaleDateString(loc, { day: "numeric", month: "short", year: "numeric" }) : "—";
 
 export default function TestNichePanel({ getUrl, postUrl, postBody, confirmMessage, title, runLabel, renderResult, onComplete, hideRefresh, hideSummary }: {
   getUrl: string;                       // GET → { test }
@@ -84,13 +87,21 @@ export default function TestNichePanel({ getUrl, postUrl, postBody, confirmMessa
         <strong style={{ fontSize: "var(--text-xs)" }}>{title ?? <Bi id="Test niche (tanpa publish)" en="Niche test (no publish)" />}</strong>
         {test && !summaryQuiet && (<>
           <span className={`badge ${succeeded && test.run?.qc_passed ? "badge-success" : succeeded ? "badge-warning" : test.status === "failed" ? "badge-error" : "badge-info"}`} style={{ fontSize: "0.5625rem" }}>
-            {succeeded ? (test.run?.qc_passed ? "QC lolos" : "QC ada catatan") : test.status === "failed" ? "gagal" : test.status === "producing" ? "berjalan…" : "antre"}
+            {/* LENCANA STATUS — dulu HANYA bahasa Indonesia ("antre" · "berjalan…" · "gagal" ·
+                "QC lolos" · "QC ada catatan"), padahal panel ini dilihat tenant berbahasa Inggris
+                juga. Tertangkap 2026-08-02 saat layar dibuka dalam mode EN: seluruh panel berbahasa
+                Inggris kecuali lencana ini. Pelanggaran §3.5 (teks UI wajib dwibahasa). */}
+            {succeeded
+              ? (test.run?.qc_passed ? <Bi id="QC lolos" en="QC passed" /> : <Bi id="QC ada catatan" en="QC has notes" />)
+              : test.status === "failed" ? <Bi id="gagal" en="failed" />
+              : test.status === "producing" ? <Bi id="berjalan…" en="running…" />
+              : <Bi id="antre" en="queued" />}
           </span>
-          {test.run?.viral_score != null && <span className="muted">skor {test.run.viral_score}</span>}
-          <span className="muted">{dateID(test.created_at)}</span>
+          {test.run?.viral_score != null && <span className="muted"><Bi id="skor" en="score" /> {test.run.viral_score}</span>}
+          <span className="muted"><Bi id={tgl(test.created_at, "id-ID")} en={tgl(test.created_at, "en-US")} /></span>
         </>)}
         <span style={{ marginLeft: "auto", display: "inline-flex", gap: ".35rem" }}>
-          {!hideRefresh && <button className="btn btn-ghost btn-icon btn-sm" title="Segarkan" disabled={loading} onClick={load}><RefreshCw size={12} /></button>}
+          {!hideRefresh && <button className="btn btn-ghost btn-icon btn-sm" title="Segarkan / Refresh" disabled={loading} onClick={load}><RefreshCw size={12} /></button>}
           <button className="btn btn-secondary btn-sm" disabled={busy || loading || running} onClick={() => setConfirm(true)}>
             {running ? <><Loader2 size={13} className="spin" /> <Bi id="Berjalan…" en="Running…" /></> : <><FlaskConical size={13} /> {runLabel ?? <Bi id="Jalankan test" en="Run test" />}</>}
           </button>
@@ -140,7 +151,7 @@ export default function TestNichePanel({ getUrl, postUrl, postBody, confirmMessa
       {err && <div style={{ fontSize: "var(--text-xs)", marginTop: ".35rem", color: "var(--danger)" }}>{err}</div>}
       {renderResult && test ? renderResult(test) : (<>
         {test?.error && test.status === "failed" && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".35rem", color: "var(--danger)" }}>{test.error}</div>}
-        {test?.status === "done" && !test.run?.qc_passed && test.run?.error_message && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".35rem" }}>Catatan QC: {test.run.error_message}</div>}
+        {test?.status === "done" && !test.run?.qc_passed && test.run?.error_message && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".35rem" }}><Bi id="Catatan QC:" en="QC note:" /> {test.run.error_message}</div>}
         {test?.video_url && (
           <video controls preload="metadata" src={test.video_url} style={{ marginTop: ".6rem", width: 168, aspectRatio: "9/16", borderRadius: 8, border: "1px solid var(--border)", background: "#000", display: "block" }} />
         )}

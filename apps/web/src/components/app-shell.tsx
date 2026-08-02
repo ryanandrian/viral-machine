@@ -152,7 +152,10 @@ export function AppShell({
         <nav className="sb-nav">
           {NAV.map((n, i) => {
             if ("section" in n) {
-              return <div key={`s${i}`} className="sb-section-title">{n.section.id}</div>;
+              // Judul kelompok menu: DATANYA sudah dwibahasa sejak awal ({id,en}), tapi yang dirender
+              // hanya `.id` — sehingga tenant berbahasa Inggris melihat "AKUN" di tengah menu yang
+              // seluruhnya Inggris. Tertangkap 2026-08-02 saat menyapu teks satu-bahasa di layar.
+              return <div key={`s${i}`} className="sb-section-title"><Bi id={n.section.id} en={n.section.en} /></div>;
             }
             if (n.gated && !studioOK) return null;  // Niche Studio: tampil hanya bila ber-entitlement
             if (n.linkedOnly && !resellerLinked) return null;  // [B21 MGM] Portal Reseller: hanya tenant tertaut
