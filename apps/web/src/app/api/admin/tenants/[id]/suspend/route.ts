@@ -22,12 +22,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .eq("tenant_id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  // [B24 §10c] Diaktifkan kembali → lepas rem circuit-breaker channelnya. Tanpa ini tenant TERJEBAK:
+  // channel "Dihentikan sistem", sementara satu-satunya pelepas (tombol Jalankan-ulang) terkunci
+  // selama langganannya mati. Kelima jalur reaktivasi memanggil fungsi yang SAMA — bukan lima salinan.
+  let resumed = 0;
+  if (next === "active") {
+    const { data: n, error: rErr } = await admin.rpc("tenant_resume_channels", { p_tenant_id: id });
+    if (rErr) console.error("[admin/suspend] lepas rem gagal:", rErr.message);
+    else resumed = Number(n ?? 0);
+  }
+
   await admin.from("admin_audit").insert({
     admin_uid: g.user.id,
     action: `tenant.${action}`,
     target_tenant: id,
-    detail: { subscription_status: next },
+    detail: { subscription_status: next, channels_resumed: resumed },
   });
 
-  return NextResponse.json({ ok: true, subscription_status: next });
+  return NextResponse.json({ ok: true, subscription_status: next, channels_resumed: resumed });
 }

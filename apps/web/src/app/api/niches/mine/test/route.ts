@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { testChannelReadiness } from "@/lib/admin/test-readiness";
 import { latestTestResult } from "@/lib/test-run";
+import { gateCode, testGate } from "@/lib/test-gate";
 
 // NICHE_DNA F5 — Test niche TENANT (Niche Studio, Business+): produksi 1 video uji NYATA memakai
 // KREDENSIAL + CHANNEL tenant sendiri (biaya AI = kunci mereka/BYOK), TANPA publish ke YouTube
@@ -35,6 +36,14 @@ export async function POST(req: Request) {
   if (!nicheId) return NextResponse.json({ error: "niche_id wajib" }, { status: 400 });
   if (!(await ownNiche(g.admin, g.user.id, nicheId))) return NextResponse.json({ error: "niche tak ditemukan / bukan milik Anda" }, { status: 404 });
 
+  // [B24 §10c LAPIS 2] Gerbang UJI — insert di bawah memakai kunci layanan yang MELEWATI aturan akses
+  // tabel. Video uji niche tidak diunggah ke YouTube, tapi disajikan lewat tautan unduh berjangka —
+  // tetap video jadi yang bisa dipakai tenant. Kode dwibahasa (§3.5); `error` diisi utk nol regresi.
+  const tgn = await testGate(g.user.id);
+  if (!tgn.allowed) {
+    return NextResponse.json({ error: gateCode(tgn), error_code: gateCode(tgn) }, { status: 403 });
+  }
+
   const r = await testChannelReadiness(g.user.id);
   if (!r.channel_id) return NextResponse.json({ error: "Anda belum punya channel — buat channel dulu." }, { status: 400 });
   if (!r.ready) {
@@ -55,5 +64,7 @@ export async function GET(req: Request) {
   const nicheId = new URL(req.url).searchParams.get("niche_id") ?? "";
   if (!nicheId) return NextResponse.json({ error: "niche_id wajib" }, { status: 400 });
   if (!(await ownNiche(g.admin, g.user.id, nicheId))) return NextResponse.json({ error: "niche tak ditemukan / bukan milik Anda" }, { status: 404 });
-  return NextResponse.json({ test: await latestTestResult(g.user.id, nicheId, "test_nopub") });
+  // `gate` ikut dikirim → layar menampilkan tombol TERKUNCI sebelum ditekan (K6).
+  const [test, tg] = await Promise.all([latestTestResult(g.user.id, nicheId, "test_nopub"), testGate(g.user.id)]);
+  return NextResponse.json({ test, gate: { allowed: tg.allowed, code: tg.allowed ? null : gateCode(tg) } });
 }

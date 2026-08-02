@@ -21,6 +21,17 @@ export async function GET(req: NextRequest) {
     .maybeSingle();
   if (!item || !item.s3_key) return NextResponse.json({ error: "not found" }, { status: 404 });
 
+  // [B24 §10c] Gerbang PRODUKSI (bukan gerbang uji): video di gudang adalah hasil produksi yang belum
+  // terbit. Tenant yang produksinya sudah berhenti tak boleh lagi memanennya lewat tautan unduh —
+  // itu jalur bocor yang sama dengan tombol uji, hanya lebih senyap. Masa tenggang (grace) TETAP
+  // boleh: produksinya memang masih jalan. Fungsi DB memakai auth.uid() pemanggil (pagar privasi).
+  const { data: hidup, error: gErr } = await supabase.rpc("tenant_produce_allowed", { p_tenant_id: user.id });
+  if (gErr) {
+    console.error("[review/preview] gerbang produksi gagal:", gErr.message);
+    return NextResponse.json({ error: "GATE:gate_unavailable" }, { status: 503 });
+  }
+  if (!hidup) return NextResponse.json({ error: "GATE:subscription" }, { status: 403 });
+
   const endpoint = process.env.S3_ENDPOINT;
   const accessKeyId = process.env.S3_ACCESS_KEY;
   const secretAccessKey = process.env.S3_SECRET_KEY;

@@ -305,6 +305,27 @@ def run_direct(sb, job: dict) -> None:
     if not ch:
         sb.table("direct_jobs").update({"status": "failed", "error": "channel tak ditemukan", "completed_at": _now()}).eq("id", jid).execute()
         return
+
+    # [B24 §10c LAPIS 3] GERBANG UJI — periksa ULANG tepat sebelum membakar slot render.
+    # Job bisa sudah mengantre lalu keadaan berubah di tengah jalan: langganan jatuh tempo, admin
+    # men-suspend, atau job lain di antrean yang sama menghabiskan jatah trial. Lapis DB & lapis API
+    # memeriksa saat job DIBUAT; hanya lapis ini yang memeriksa saat job DIJALANKAN.
+    # `admin_test` dikecualikan: itu channel internal admin (tenant comp), bukan milik tenant.
+    # Pesan disimpan sebagai KODE (`GATE:...`), bukan kalimat — FE yang menerjemahkan dwibahasa (§3.5).
+    if (job.get("job_type") or "") != "admin_test":
+        from src.billing.limits import test_gate
+        _gate = test_gate(sb, tenant_id)
+        if not _gate.get("allowed"):
+            _alasan = _gate.get("reason") or "subscription"
+            _kode = (f"GATE:trial_quota:{_gate.get('used')}:{_gate.get('max')}"
+                     if _alasan == "trial_quota" else f"GATE:{_alasan}")
+            logger.info(f"[Direct] job {jid} ({job.get('job_type')}) DITOLAK gerbang uji: "
+                        f"{_kode} tenant={tenant_id}")
+            sb.table("direct_jobs").update({
+                "status": "failed", "error": _kode, "completed_at": _now(),
+            }).eq("id", jid).execute()
+            return
+
     sb.table("direct_jobs").update({"run_id": run_id}).eq("id", jid).execute()
 
     # Test niche TANPA publish (keputusan owner 2026-07-04): admin_test (channel internal admin) &

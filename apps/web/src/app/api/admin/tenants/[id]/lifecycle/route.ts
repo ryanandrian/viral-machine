@@ -55,6 +55,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const end = new Date(Date.now() + days * DAY_MS).toISOString();
     upd = {
       subscription_status: "trial", current_period_end: end,
+      // [B24 §10c] FAKTA perpanjangan → titik mulai hitung jatah uji bila kenop
+      // `trial_quota_reset_on_extend` menyala. Perpanjangan admin = memang sedang diberi kesempatan.
+      trial_extended_at: nowIso,
       nurture_step: 0, nurture_last_sent_at: null, trial_reminder_sent_at: null,
       winback_offer_pct: null, winback_offer_expires_at: null, lead_temp: null,
       updated_at: nowIso,
@@ -75,6 +78,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // reset kanonik — SAMA dgn midtrans._apply_settlement (jalur bayar) agar tenant bersih dari jejak lapsed/blokir
     upd = {
       subscription_status: "trial", current_period_end: end,
+      trial_extended_at: nowIso,   // [B24 §10c] idem cabang 'extend' — jatah uji ikut segar
       renewal_reminder_sent_at: null, suspend_notified_at: null, trial_reminder_sent_at: null,
       suspended_at: null, blocked_at: null, deletion_scheduled_at: null,
       deletion_warn_sent: 0, nurture_step: 0, nurture_last_sent_at: null,
@@ -90,8 +94,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { error } = await admin.from("tenant_configs").update(upd).eq("tenant_id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  // [B24 §10c] Aksi yang MENGHIDUPKAN langganan → lepas rem circuit-breaker channelnya, supaya
+  // tenant tak terjebak (channel berhenti + pelepasnya terkunci). 'postpone_deletion' tidak
+  // menghidupkan apa pun, jadi tidak ikut.
+  let resumed = 0;
+  if (action === "extend" || action === "reactivate_clean") {
+    const { data: n, error: rErr } = await admin.rpc("tenant_resume_channels", { p_tenant_id: id });
+    if (rErr) console.error("[admin/lifecycle] lepas rem gagal:", rErr.message);
+    else resumed = Number(n ?? 0);
+  }
+
   await admin.from("admin_audit").insert({
-    admin_uid: g.user.id, action: `tenant.lifecycle.${action}`, target_tenant: id, detail,
+    admin_uid: g.user.id, action: `tenant.lifecycle.${action}`, target_tenant: id,
+    detail: { ...detail, channels_resumed: resumed },
   });
-  return NextResponse.json({ ok: true, action, ...detail });
+  return NextResponse.json({ ok: true, action, ...detail, channels_resumed: resumed });
 }

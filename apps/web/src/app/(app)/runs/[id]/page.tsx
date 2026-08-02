@@ -9,7 +9,11 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { BASELINE_WEIGHTS, DIM_LABEL } from "@/components/insights-view";
+import { PesanGalat } from "@/components/gate-message";
 import "./run-detail.css";
+
+// Dwibahasa: dua span, CSS menyembunyikan yang tak dipakai (pola `Bi` seluruh aplikasi, §3.5).
+function Bi({ id, en }: { id: string; en: string }) { return (<><span data-id>{id}</span><span data-en>{en}</span></>); }
 
 // Urutan dimensi skor viral (selaras src/intelligence/config.py).
 const SCORE_DIMS = ["search_volume", "trend_momentum", "emotional_trigger", "competition_gap", "evergreen_potential"];
@@ -79,22 +83,50 @@ export default function RunDetailPage() {
   const [filter, setFilter] = useState("");
   const logRef = useRef<HTMLDivElement>(null);
   const pausedRef = useRef(paused); pausedRef.current = paused;
-  const [retryMsg, setRetryMsg] = useState<string | null>(null);
+  // ReactNode, bukan string: ketiga pesannya dulu terkunci bahasa Indonesia meski layar berbahasa
+  // Inggris ([B24] sekalian, §3.5 dwibahasa wajib).
+  const [retryMsg, setRetryMsg] = useState<React.ReactNode | null>(null);
   // #5 breakdown skor viral: dimensi mentah (videos.topic_scores by run_id) × bobot adaptif (tenant_configs).
   const [dims, setDims] = useState<Record<string, number> | null>(null);
   const [scoreW, setScoreW] = useState<Record<string, number> | null>(null);
 
   // Jalankan ulang run yang gagal — direct_job retry (mis. setelah beli kredit AI).
+  // [B24 §10a pintu 3] Tombol ini menulis LANGSUNG dari browser ke tabel antrean — tidak melewati
+  // kode server kita sama sekali. Penjaga sesungguhnya = aturan akses tabel `direct_jobs`. Pemeriksaan
+  // di bawah HANYA agar tenant membaca kalimat manusiawi, bukan pesan teknis "row-level security".
+  // Kalau keduanya sempat tak sinkron (status berubah di antara dua panggilan), aturan tabel tetap
+  // menang dan pesannya kita terjemahkan dari kode galatnya.
   async function retry() {
-    if (!run?.channel_id) { setRetryMsg("Channel run ini tak diketahui — tak bisa retry."); return; }
+    if (!run?.channel_id) {
+      setRetryMsg(<Bi id="Channel untuk produksi ini tak diketahui — tak bisa dijalankan ulang."
+                      en="The channel for this run is unknown — cannot re-run." />);
+      return;
+    }
     setRetryMsg(null);
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setRetryMsg("Sesi tak valid"); return; }
+    if (!user) { setRetryMsg(<Bi id="Sesi Anda tidak valid. Muat ulang halaman." en="Your session is invalid. Reload the page." />); return; }
+
+    const { data: g } = await supabase.rpc("tenant_test_gate", { p_tenant_id: user.id });
+    const gate = (Array.isArray(g) ? g[0] : g) as { allowed?: boolean; reason?: string; used?: number; max?: number } | null;
+    if (gate && gate.allowed === false) {
+      setRetryMsg(<PesanGalat text={gate.reason === "trial_quota"
+        ? `GATE:trial_quota:${gate.used ?? 0}:${gate.max ?? 0}` : `GATE:${gate.reason}`} />);
+      return;
+    }
+
     const { error } = await supabase.from("direct_jobs").insert({
       tenant_id: user.id, channel_id: run.channel_id, job_type: "retry",
       source_run_id: run.run_id, niche: run.niche, requested_by: user.id,
     });
-    setRetryMsg(error ? `Gagal: ${error.message}` : "Diantre ulang — pantau di Runs (Antre→Berjalan).");
+    if (!error) {
+      setRetryMsg(<Bi id="Diantre ulang — pantau di daftar Produksi (Antre → Berjalan)."
+                      en="Re-queued — follow it in the Runs list (Queued → Running)." />);
+    } else if (error.code === "42501") {
+      // Ditolak aturan akses tabel = gerbang uji. Tampilkan sebagai penolakan langganan, bukan galat teknis.
+      setRetryMsg(<PesanGalat text="GATE:subscription" />);
+    } else {
+      setRetryMsg(<span><Bi id="Gagal: " en="Failed: " />{error.message}</span>);
+    }
   }
 
   const load = useCallback(async () => {

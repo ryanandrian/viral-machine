@@ -141,6 +141,69 @@ def published_today_count(sb, channel_id: str) -> int:
         return 0
 
 
+def test_gate(sb, tenant_id: str) -> dict:
+    """
+    Boleh menjalankan UJI manual (Test Run / Test Niche / Jalankan-ulang)? — [B24] §10c.
+
+    SATU OTAK: seluruh logikanya hidup di fungsi DB `tenant_test_gate` (migr 0191), yang juga dipanggil
+    oleh aturan akses tabel `direct_jobs` (menjaga jalur browser-langsung) dan oleh API route. Meniru
+    logikanya di Python akan melahirkan dua kebenaran yang suatu hari berbeda — persis kelas bug yang
+    kerja ini tutup. Fungsi ini HANYA memanggil; ia tidak menghitung apa pun sendiri.
+
+    Return {allowed: bool, reason: str, ...}. reason ∈ gate_off|comp|ok|subscription|trial_quota|
+    tenant_unknown|forbidden|gate_unavailable. Field 'used'/'max' hadir saat jatah trial berlaku.
+
+    GAGAL JUJUR (§0.6): RPC tak terjawab → allowed=False + reason='gate_unavailable' + log ERROR.
+    Uji = aksi manual yang bisa diulang tenant; menolak sesaat jauh lebih aman daripada membuka pintu
+    diam-diam justru saat kita buta. Ini BUKAN gerbang produksi — produksi terjadwal tak tersentuh.
+    """
+    if not sb or not tenant_id:
+        return {"allowed": False, "reason": "tenant_unknown"}
+    try:
+        data = sb.rpc("tenant_test_gate", {"p_tenant_id": str(tenant_id)}).execute().data
+        # PostgREST kadang membungkus hasil dalam daftar satu-baris.
+        row = data[0] if (isinstance(data, list) and data) else data
+        # Kontrak WAJIB dipenuhi sebelum diteruskan: pemanggil berhak menulis `g["allowed"]`.
+        # Meneruskan dict sembarang membuat fungsi ini berbohong tentang bentuk hasilnya —
+        # kebetulan aman untuk pemanggil yang memakai .get(), fatal untuk yang tidak.
+        if isinstance(row, dict) and isinstance(row.get("allowed"), bool):
+            return row
+        logger.error(f"[Limits] tenant_test_gate({tenant_id}) bentuk hasil tak dikenal: {data!r} "
+                     f"— uji ditolak (gagal jujur)")
+        return {"allowed": False, "reason": "gate_unavailable"}
+    except Exception as e:
+        logger.error(f"[Limits] tenant_test_gate({tenant_id}) GAGAL: {e} — uji ditolak (gagal jujur)")
+        return {"allowed": False, "reason": "gate_unavailable"}
+
+
+def resume_channels(sb, tenant_id: str) -> int:
+    """
+    Lepas rem circuit-breaker semua channel tenant — [B24] §10c. Dipanggil setiap kali langganan
+    AKTIF KEMBALI (settlement Midtrans, link reaktivasi 1-klik). Jalur admin memanggil RPC yang sama
+    dari sisi Next.js.
+
+    Kenapa perlu: rem `production_paused` selama ini HANYA dilepas oleh 'Jalankan ulang' yang sukses —
+    dan jalur itu kini dikunci untuk tenant tak aktif. Tanpa ini, tenant yang baru membayar TERJEBAK:
+    channel berhenti, pelepasnya terkunci.
+
+    Melepas rem tidak memaksa produksi: gerbang kesiapan channel + gerbang langganan tetap berlaku.
+    Dijaga kenop `auto_resume_on_reactivate`. Fail-soft: gagal → 0 + log (pembayaran tenant TIDAK
+    boleh terganggu oleh urusan rem; alarmnya di log, bukan di jalur uang).
+    """
+    if not sb or not tenant_id:
+        return 0
+    try:
+        n = sb.rpc("tenant_resume_channels", {"p_tenant_id": str(tenant_id)}).execute().data
+        n = int(n or 0) if not isinstance(n, list) else int((n or [0])[0] or 0)
+        if n:
+            logger.info(f"[Limits] rem produksi dilepas utk {n} channel tenant={tenant_id} (reaktivasi)")
+        return n
+    except Exception as e:
+        logger.error(f"[Limits] tenant_resume_channels({tenant_id}) GAGAL: {e} "
+                     f"— channel tetap berhenti, tenant perlu dibantu manual")
+        return 0
+
+
 def _tenant_gate_row(sb, tenant_id: str) -> dict:
     """Ambil field gate dari tenant_configs. Fail-soft → {} (caller perlakukan back-compat)."""
     if not sb or not tenant_id:

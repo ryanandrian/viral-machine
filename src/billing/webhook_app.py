@@ -262,11 +262,23 @@ try:
             if status == "trial_expired" and extend > 0:
                 from datetime import datetime, timezone, timedelta
                 end = (datetime.now(timezone.utc) + timedelta(days=extend)).isoformat()
+                # [B24 §10c] `trial_extended_at` = FAKTA kapan trial diperpanjang. Dibaca
+                # `tenant_test_gate` sebagai titik mulai hitung jatah uji bila kenop
+                # `trial_quota_reset_on_extend` menyala. Kolom merekam fakta; kenop yang memutuskan
+                # dipakai atau tidak — supaya mengubah kebijakan tak merusak data historis.
+                # Ditulis dalam SATU update bersama status: tak boleh ada keadaan separuh.
                 sb.table("tenant_configs").update({
                     "subscription_status": "trial", "current_period_end": end,
+                    "trial_extended_at": datetime.now(timezone.utc).isoformat(),
                     "nurture_step": 0, "nurture_last_sent_at": None, "trial_reminder_sent_at": None,
                     "winback_offer_pct": None, "winback_offer_expires_at": None,
                 }).eq("tenant_id", tid).execute()
+                # Trial hidup lagi → lepas rem circuit-breaker channelnya.
+                try:
+                    from src.billing.limits import resume_channels
+                    resume_channels(sb, tid)
+                except Exception as _re:
+                    logger.error(f"[lifecycle] lepas rem channel gagal tenant={tid}: {_re}")
                 logger.info(f"[lifecycle] reactivate: trial diperpanjang {extend} hari tenant={tid}")
                 return {"ok": True, "action": "extended", "days": extend}
             # suspended/blocked/active/deleted → tak bisa gratis → arahkan ke pembayaran

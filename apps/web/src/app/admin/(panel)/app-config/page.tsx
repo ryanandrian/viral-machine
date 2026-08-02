@@ -14,6 +14,7 @@ type AppCfg = { key: string; value: number; value_text: string | null; descripti
 
 // Metadata tampilan (label ramah + unit + grup). Keterangan detail = description (DB, bahasa admin).
 const G_BILLING = "Langganan, Trial & Penagihan";
+const G_GERBANG = "Gerbang Uji Produksi (penjaga kebocoran konten)";   // [B24] §10d
 const G_LIFECYCLE = "Pertumbuhan & Siklus-Hidup";
 const G_TREND = "Bobot Sumber Tren";
 const G_ENGINE = "Performa Mesin Tren";
@@ -27,6 +28,7 @@ const G_OTHER = "Lainnya";
 const G_INTERNAL = "Internal — ditulis mesin (jangan diubah)";
 const CFG_GROUPS: [string, string][] = [
   [G_BILLING, "Subscription, Trial & Billing"],
+  [G_GERBANG, "Production Test Gate (content leak guard)"],   // [B24] §10d
   [G_LIFECYCLE, "Growth & Lifecycle"],
   [G_TREND, "Trend Source Weights"],
   [G_ENGINE, "Trend Engine Performance"],
@@ -48,7 +50,45 @@ const U_MS: BiTxt = { id: "ms", en: "ms" }; const U_NONE: BiTxt = { id: "", en: 
 const U_MB: BiTxt = { id: "MB", en: "MB" }; const U_KALI: BiTxt = { id: "kali", en: "times" };
 const U_NASKAH: BiTxt = { id: "naskah", en: "scripts" }; const U_VIDEO: BiTxt = { id: "video", en: "videos" };
 const U_RP: BiTxt = { id: "Rp", en: "IDR" }; const U_TGL: BiTxt = { id: "tgl/bln", en: "day/mo" };
-const CFG_META: Record<string, { label: BiTxt; group: string; unit: BiTxt; desc?: BiTxt; hint?: BiTxt; options?: string[]; readonly?: boolean }> = {
+// `optionLabels` = teks manusiawi untuk tiap pilihan dropdown (dwibahasa). Tanpa ini, kenop "1/0"
+// tampil sebagai angka telanjang — pilihan terbatas yang tak terbaca sama saja dengan salah-ketik
+// yang menunggu terjadi (§3.3: tipe input tepat + label yang bermakna).
+const CFG_META: Record<string, { label: BiTxt; group: string; unit: BiTxt; desc?: BiTxt; hint?: BiTxt; options?: string[]; optionLabels?: Record<string, BiTxt>; readonly?: boolean }> = {
+  // ── [B24 2026-08-02] GERBANG UJI PRODUKSI — penjaga kebocoran konten ────────────────────────────
+  // Empat pintu (Uji produksi channel · Uji niche · Jalankan-ulang · unduh stok) menghasilkan video
+  // JADI. Video uji terunggah PRIVAT ke YouTube Studio tenant dan bisa mereka ubah jadi Publik —
+  // artinya tenant yang tak berlangganan tetap bisa memanen konten. SSOT: §10 dokumen payment-gate.
+  test_gate_enabled: {
+    label: { id: "Gerbang Uji Aktif", en: "Test Gate Enabled" }, group: G_GERBANG, unit: U_NONE,
+    options: ["1", "0"], optionLabels: { "1": { id: "Ya — gerbang menjaga", en: "Yes — gate active" }, "0": { id: "Tidak — gerbang mati", en: "No — gate off" } },
+    desc: { id: "Saklar induk. Ya = tenant yang langganannya tidak aktif TIDAK bisa menjalankan uji produksi, uji niche, maupun jalankan-ulang. Tidak = gerbang mati total, perilaku kembali seperti sebelum gerbang dipasang.", en: "Master switch. Yes = tenants without an active subscription cannot run channel tests, niche tests, or re-runs. No = gate fully off, behaviour reverts to before the gate existed." },
+    hint: { id: "jaring pengaman: bisa dimatikan seketika tanpa deploy", en: "safety net: can be switched off instantly, no deploy" },
+  },
+  test_allowed_statuses: {
+    label: { id: "Status Yang Boleh Menguji", en: "Statuses Allowed To Test" }, group: G_GERBANG, unit: U_NONE,
+    desc: { id: "Daftar status langganan yang boleh menjalankan uji. Masa tenggang (grace) sengaja TIDAK termasuk: produksi rutinnya tetap jalan, tapi tombol ujinya dikunci sampai tagihan dibayar.", en: "Subscription statuses allowed to run tests. Grace is deliberately excluded: routine production keeps running, but test buttons stay locked until the invoice is paid." },
+    hint: { id: 'nilai sah: active · trial · grace · trial_expired · suspended · cancelled · blocked', en: 'valid values: active · trial · grace · trial_expired · suspended · cancelled · blocked' },
+  },
+  trial_test_quota: {
+    label: { id: "Jatah Uji Masa Coba", en: "Trial Test Quota" }, group: G_GERBANG, unit: U_VIDEO,
+    desc: { id: "Berapa video uji yang boleh dihasilkan tenant selama masa coba. 0 = tanpa batas. Tenant berbayar tidak dibatasi kenop ini.", en: "How many test videos a trial tenant may produce during the trial. 0 = unlimited. Paying tenants are not limited by this." },
+  },
+  trial_test_quota_counts: {
+    label: { id: "Jatah Menghitung Apa", en: "What Counts Against Quota" }, group: G_GERBANG, unit: U_NONE,
+    options: ["success", "all"], optionLabels: { success: { id: "Hanya uji yang BERHASIL", en: "Only SUCCESSFUL tests" }, all: { id: "Semua percobaan", en: "Every attempt" } },
+    desc: { id: "Hanya-berhasil = uji yang gagal karena kredensial atau kuota AI tidak menghukum tenant (tenant baru wajar gagal beberapa kali saat menyetel channel). Semua-percobaan = setiap tekan tombol memotong jatah.", en: "Only-successful = tests that fail on credentials or AI quota don't punish the tenant (new tenants normally fail a few times while configuring). Every-attempt = each press consumes quota." },
+  },
+  trial_quota_reset_on_extend: {
+    label: { id: "Jatah Segar Saat Diperpanjang", en: "Reset Quota On Extension" }, group: G_GERBANG, unit: U_NONE,
+    options: ["1", "0"], optionLabels: { "1": { id: "Ya — jatah segar", en: "Yes — quota resets" }, "0": { id: "Tidak — tetap dihitung", en: "No — keeps counting" } },
+    desc: { id: "Saat Anda memperpanjang masa coba seseorang secara sengaja, apakah jatah ujinya ikut segar? Ya = perpanjangan berarti memang sedang diberi kesempatan. Tidak = jatah tetap dihitung sejak masa coba pertama dimulai.", en: "When you deliberately extend someone's trial, does their test quota refresh too? Yes = an extension means you are giving them a real chance. No = quota still counts from the original trial start." },
+  },
+  auto_resume_on_reactivate: {
+    label: { id: "Lepas Rem Otomatis Saat Aktif Kembali", en: "Auto-Resume On Reactivation" }, group: G_GERBANG, unit: U_NONE,
+    options: ["1", "0"], optionLabels: { "1": { id: "Ya — otomatis jalan lagi", en: "Yes — resumes automatically" }, "0": { id: "Tidak — tenant pulihkan sendiri", en: "No — tenant recovers manually" } },
+    desc: { id: "Saat langganan tenant aktif kembali (bayar, atau Anda aktifkan dari layar admin), channel yang berstatus \"Dihentikan sistem\" otomatis dijalankan lagi. Tanpa ini tenant terjebak: channelnya berhenti sementara satu-satunya tombol pemulih justru terkunci.", en: "When a tenant's subscription becomes active again (payment, or you activate it from admin), channels marked \"Halted by system\" resume automatically. Without this the tenant is trapped: production is stopped while the only recovery button is locked." },
+  },
+
   // ── [DURASI 2026-08-01] Ambang rantai DURASI · NASKAH · SUARA ───────────────────────────────────
   // Sebelumnya SELURUHNYA hanya variabel lingkungan dengan angka bawaan di kode, dan `.env` server tak
   // memuat satu pun — jadi tak terlihat di layar mana pun dan mengubahnya butuh deploy. Pola yang sama
@@ -277,9 +317,15 @@ export default function AppConfigPage() {
                             /* Penanda internal: ditulis mesin — tampil demi transparansi, TIDAK bisa diedit */
                             <span className="muted" style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)" }}>{a.value_text ?? a.value} 🔒</span>
                           ) : m?.options && a.value_text != null ? (
-                            /* Pilihan terbatas (mis. tipe komisi) — dropdown auto-save, anti salah-ketik */
-                            <select className="input" style={{ width: "9rem", height: "2rem", fontSize: "var(--text-xs)" }} defaultValue={a.value_text} onChange={(e) => { const v = e.target.value; if (v !== a.value_text) patch(a.key, { value_text: v }); }}>
-                              {m.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                            /* Pilihan terbatas TEKS (mis. tipe komisi) — dropdown auto-save, anti salah-ketik */
+                            <select className="input" style={{ width: "12rem", height: "2rem", fontSize: "var(--text-xs)" }} defaultValue={a.value_text} onChange={(e) => { const v = e.target.value; if (v !== a.value_text) patch(a.key, { value_text: v }); }}>
+                              {m.options.map((o) => <option key={o} value={o}>{m.optionLabels?.[o] ? (lang === "en" ? m.optionLabels[o].en : m.optionLabels[o].id) : o}</option>)}
+                            </select>
+                          ) : m?.options && a.value_text == null ? (
+                            /* [B24] Pilihan terbatas ANGKA (mis. saklar Ya/Tidak) — dulu tampil sebagai kotak
+                               angka telanjang: pilihan terbatas yang tak terbaca = salah-ketik menunggu terjadi. */
+                            <select className="input" style={{ width: "12rem", height: "2rem", fontSize: "var(--text-xs)" }} defaultValue={String(a.value)} onChange={(e) => { const n = parseInt(e.target.value, 10); if (Number.isInteger(n) && n !== a.value) patch(a.key, { value: n }); }}>
+                              {m.options.map((o) => <option key={o} value={o}>{m.optionLabels?.[o] ? (lang === "en" ? m.optionLabels[o].en : m.optionLabels[o].id) : o}</option>)}
                             </select>
                           ) : a.value_text != null ? (
                             /* Baris TEKS/JSON (0125, value_text) — mis. default_publish_slots */

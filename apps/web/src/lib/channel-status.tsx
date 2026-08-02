@@ -11,8 +11,26 @@ export type Eff = {
 type ChLite = { is_active: boolean | null; production_paused: boolean | null; production_paused_reason?: string | null };
 type Readiness = { ready: boolean; missing: string[] } | null;
 
+/**
+ * Status langganan yang membolehkan PRODUKSI — cerminan `PRODUCING_STATUSES` di
+ * src/billing/limits.py dan `tenant_produce_allowed()` di database.
+ *
+ * [B24 2026-08-02] Daftar ini sebelumnya ditulis ulang di TIGA tempat dan salah satu isinya berbeda:
+ * ketiganya memuat `"trialing"` — nilai yang TIDAK ADA di mesin maupun di database (diperiksa
+ * langsung ke keduanya). Artinya layar bersiap menerima status yang tak pernah lahir, sementara
+ * mesin akan memperlakukannya sebagai mati. Fosil dibuang; daftarnya kini satu tempat.
+ *
+ * CATATAN: ini gerbang PRODUKSI. Gerbang UJI berbeda — masa tenggang (grace) boleh berproduksi
+ * tapi TIDAK boleh menjalankan uji. Aturannya ada di database (`tenant_test_gate`), bukan di sini.
+ */
+export const SUB_PRODUCING = ["active", "trial", "grace"] as const;
+
+export function subIsProducing(sub: string | null | undefined): boolean {
+  return !sub || (SUB_PRODUCING as readonly string[]).includes(sub);
+}
+
 export function effectiveStatus(ch: ChLite, sub: string | null, rd: Readiness): Eff {
-  if (sub && !["active", "trialing", "trial", "grace"].includes(sub))
+  if (sub && !subIsProducing(sub))
     return { key: "sub", label_id: "Langganan nonaktif", label_en: "Subscription inactive", tone: "stop",
       reco_id: "Aktifkan langganan untuk melanjutkan produksi.", reco_en: "Reactivate subscription to resume." };
   if (ch.production_paused)

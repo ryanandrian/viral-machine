@@ -401,6 +401,16 @@ def _apply_settlement(sb, order: dict, txn: str | None, fraud, payment_type=None
                     "winback_offer_pct": None, "winback_offer_expires_at": None,
                 }).eq("tenant_id", order["tenant_id"]).execute()
                 logger.info(f"[Midtrans] periode order={order_id}: {_note} → end {end.isoformat()}")
+                # [B24 §10c] Tenant baru membayar → lepas rem circuit-breaker semua channelnya.
+                # Tanpa ini ia TERJEBAK: channel "Dihentikan sistem", sementara satu-satunya pelepas
+                # (tombol Jalankan-ulang) kini terkunci untuk tenant yang tadinya tak aktif.
+                # Fail-soft: urusan rem TIDAK boleh mengganggu pencatatan pembayaran.
+                try:
+                    from src.billing.limits import resume_channels
+                    resume_channels(sb, order["tenant_id"])
+                except Exception as _re:
+                    logger.error(f"[Midtrans] lepas rem channel gagal order={order_id}: {_re} "
+                                 f"— pembayaran AMAN, channel perlu dipulihkan manual")
                 activated = True
                 # [B21] Program Agen: pembayaran langganan beratribusi → komisi (SPEC 5b).
                 # Fail-soft BER-ALARM (desain diketok SPEC 5b.3): pembayaran tenant TIDAK boleh

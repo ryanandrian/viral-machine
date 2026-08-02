@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
-import { FlaskConical, Loader2, RefreshCw } from "lucide-react";
+import { FlaskConical, Loader2, Lock, RefreshCw } from "lucide-react";
 import ConfirmDialog from "@/components/confirm-dialog";
+import { PesanGalat } from "@/components/gate-message";
 
 // Panel TEST NICHE tanpa-publish — SATU card: tombol + konfirmasi + progres stepper NYATA + hasil video
 // (aturan UX owner 2026-07-04: status & tombol aksi SATU tempat, terbaca tenant awam).
@@ -37,11 +38,16 @@ export default function TestNichePanel({ getUrl, postUrl, postBody, confirmMessa
   const [confirm, setConfirm] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // [B24] Keadaan gerbang uji dari server. Panel admin tidak mengirim field ini → tetap null →
+  // perilaku persis seperti sebelumnya (nol regresi untuk layar admin).
+  const [gate, setGate] = useState<{ allowed: boolean; code: string | null } | null>(null);
+  const terkunci = gate?.allowed === false;
+
   const load = useCallback(async () => {
     setLoading(true);
     const r = await fetch(getUrl);
     setLoading(false);
-    if (r.ok) { const j = await r.json(); setTest(j.test); }
+    if (r.ok) { const j = await r.json(); setTest(j.test); setGate(j.gate ?? null); }
   }, [getUrl]);
   useEffect(() => { setTest(null); load(); }, [load]);
   useEffect(() => {
@@ -102,8 +108,14 @@ export default function TestNichePanel({ getUrl, postUrl, postBody, confirmMessa
         </>)}
         <span style={{ marginLeft: "auto", display: "inline-flex", gap: ".35rem" }}>
           {!hideRefresh && <button className="btn btn-ghost btn-icon btn-sm" title="Segarkan / Refresh" disabled={loading} onClick={load}><RefreshCw size={12} /></button>}
-          <button className="btn btn-secondary btn-sm" disabled={busy || loading || running} onClick={() => setConfirm(true)}>
-            {running ? <><Loader2 size={13} className="spin" /> <Bi id="Berjalan…" en="Running…" /></> : <><FlaskConical size={13} /> {runLabel ?? <Bi id="Jalankan test" en="Run test" />}</>}
+          {/* [B24 K6] Terkunci = tombol TERLIHAT terkunci sebelum ditekan (bukan hilang, bukan gagal
+              setelah ditekan). Alasannya muncul di bawah bersama ajakan berlangganan. */}
+          <button className="btn btn-secondary btn-sm" disabled={busy || loading || running || terkunci}
+                  onClick={() => setConfirm(true)}
+                  title={terkunci ? "Terkunci — lihat keterangan di bawah / Locked — see note below" : undefined}>
+            {running ? <><Loader2 size={13} className="spin" /> <Bi id="Berjalan…" en="Running…" /></>
+             : terkunci ? <><Lock size={13} /> <Bi id="Terkunci" en="Locked" /></>
+             : <><FlaskConical size={13} /> {runLabel ?? <Bi id="Jalankan test" en="Run test" />}</>}
           </button>
         </span>
       </div>
@@ -148,9 +160,18 @@ export default function TestNichePanel({ getUrl, postUrl, postBody, confirmMessa
         </div>
       )}
 
-      {err && <div style={{ fontSize: "var(--text-xs)", marginTop: ".35rem", color: "var(--danger)" }}>{err}</div>}
+      {/* [B24] Penolakan gerbang datang sebagai KODE (`GATE:…`) supaya bisa tampil dwibahasa; teks
+          galat lain lewat apa adanya seperti sebelumnya. */}
+      {err && <div style={{ fontSize: "var(--text-xs)", marginTop: ".35rem", color: "var(--danger)" }}><PesanGalat text={err} /></div>}
+      {/* Keadaan TERKUNCI: alasan + ajakan berlangganan, tampil tanpa tenant perlu menekan apa pun. */}
+      {terkunci && gate?.code && !err && (
+        <div style={{ fontSize: "var(--text-xs)", marginTop: ".4rem", display: "flex", gap: ".4rem", alignItems: "flex-start" }}>
+          <Lock size={12} style={{ marginTop: "1px", flex: "none", color: "var(--text-secondary)" }} />
+          <span className="muted"><PesanGalat text={gate.code} /></span>
+        </div>
+      )}
       {renderResult && test ? renderResult(test) : (<>
-        {test?.error && test.status === "failed" && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".35rem", color: "var(--danger)" }}>{test.error}</div>}
+        {test?.error && test.status === "failed" && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".35rem", color: "var(--danger)" }}><PesanGalat text={test.error} /></div>}
         {test?.status === "done" && !test.run?.qc_passed && test.run?.error_message && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".35rem" }}><Bi id="Catatan QC:" en="QC note:" /> {test.run.error_message}</div>}
         {test?.video_url && (
           <video controls preload="metadata" src={test.video_url} style={{ marginTop: ".6rem", width: 168, aspectRatio: "9/16", borderRadius: 8, border: "1px solid var(--border)", background: "#000", display: "block" }} />

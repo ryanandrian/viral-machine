@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 import { ExternalLink, Settings, ArrowRight, BarChart3, Calendar, Activity, Loader2, Check, Pause, Play, AlertTriangle, Mic, ShieldCheck, Sparkles, Clock, Trash2, Plus, PenLine, Image as ImageIcon, Info, Search, X, Shuffle, Upload, Lock, Video } from "lucide-react";
 import { HelpDot } from "@/components/help-dot";
 import { createClient } from "@/lib/supabase/client";
-import { effectiveStatus, TONE } from "@/lib/channel-status";
+import { effectiveStatus, subIsProducing, TONE } from "@/lib/channel-status";
 import PresetTables from "@/components/preset-tables";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { ComplianceView, type Compliance } from "@/components/compliance-view";
@@ -803,7 +803,7 @@ export default function ChannelDetailPage() {
         <div style={{ display: "flex", gap: "0.5rem" }}>
           {/* Tombol YouTube Studio dipindah ke tab Analytics (F2-13b) — tak lagi di header (buang duplikat). */}
           {/* F2-07: pause/play (is_active). Play ter-gate readiness. Sembunyikan saat halted/sub (pakai aksi di banner). */}
-          {!ch.production_paused && (sub === null || ["active","trialing","trial","grace"].includes(sub)) && (
+          {!ch.production_paused && subIsProducing(sub) && (
             ch.is_active
               ? <button className="btn btn-secondary" disabled={busy} onClick={askPause}><Pause size={15} /> <Bi id="Jeda" en="Pause" /></button>
               : <button className="btn btn-secondary" disabled={busy} onClick={() => pausePlay(true)}><Play size={15} /> <Bi id="Aktifkan" en="Activate" /></button>
@@ -886,7 +886,7 @@ export default function ChannelDetailPage() {
                     ))}
                   </ul>
                   {/* Aktifkan DI DALAM kartu — ENABLED hanya saat semua 🟢 + langganan aktif + tak dihentikan */}
-                  {(sub === null || ["active", "trialing", "trial", "grace"].includes(sub)) && !ch.production_paused && (
+                  {subIsProducing(sub) && !ch.production_paused && (
                     ch.is_active
                       ? <span style={{ fontSize: "var(--text-sm)", color: "var(--success)", display: "inline-flex", alignItems: "center", gap: "0.4rem" }}><Check size={15} /> <Bi id="Channel aktif & berproduksi" en="Channel active & producing" /></span>
                       : <button className="btn btn-default btn-sm" disabled={busy || !rd.ready} onClick={() => pausePlay(true)} title={rd.ready ? "" : "Lengkapi semua syarat dulu"}><Play size={14} /> <Bi id="Aktifkan channel" en="Activate channel" /></button>

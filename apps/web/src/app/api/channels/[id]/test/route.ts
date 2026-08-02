@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { latestTestResult } from "@/lib/test-run";
+import { gateCode, testGate } from "@/lib/test-gate";
 
 // Test / Run & recover CHANNEL (Channel Setting) — produksi 1 video uji NYATA memakai config+kredensial
 // channel ini (job_type "test" = upload PRIVAT ke YouTube, perilaku disetujui owner). Worker auto-recover:
@@ -21,6 +22,14 @@ async function gate(channelId: string) {
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const g = await gate(id); if (g.error) return g.error;
+  // [B24 §10c LAPIS 2] Gerbang UJI — WAJIB di sini: insert di bawah memakai kunci layanan yang
+  // MELEWATI aturan akses tabel. Tanpa ini, tenant yang langganannya mati tetap bisa memanen video
+  // privat ke YouTube Studio-nya lalu mengubahnya jadi publik. `error_code` = kode dwibahasa (§3.5);
+  // `error` tetap diisi agar layar versi lama tidak menampilkan kotak kosong (nol regresi).
+  const tg = await testGate(g.user.id);
+  if (!tg.allowed) {
+    return NextResponse.json({ error: gateCode(tg), error_code: gateCode(tg) }, { status: 403 });
+  }
   // Gerbang kesiapan channel (RPC tenant-scoped yang dipakai halaman channel).
   const { data: rd } = await g.supabase.rpc("channel_readiness", { p_channel_id: id });
   const ready = (rd as { ready?: boolean; missing?: string[] } | null)?.ready;
@@ -38,5 +47,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const g = await gate(id); if (g.error) return g.error;
-  return NextResponse.json({ test: await latestTestResult(g.user.id, "", "test", id) });
+  // `gate` ikut dikirim supaya layar bisa menampilkan tombol TERKUNCI sebelum ditekan, bukan
+  // membiarkan tenant menekan lalu menerima penolakan (K6: terkunci = ajakan, bukan gagal senyap).
+  const [test, tg] = await Promise.all([latestTestResult(g.user.id, "", "test", id), testGate(g.user.id)]);
+  return NextResponse.json({ test, gate: { allowed: tg.allowed, code: tg.allowed ? null : gateCode(tg) } });
 }
