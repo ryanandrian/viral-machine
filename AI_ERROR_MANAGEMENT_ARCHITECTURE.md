@@ -171,6 +171,28 @@ dipalsukan atau dihapus; ia hanya berhenti dipakai menghukum periode yang sudah 
 **Bukti pada kasus nyata:** streak BISIK 3 → **0** setelah pemulihan, sementara kegagalan dalam 7 hari
 tetap terhitung 3 (rem tidak dilumpuhkan). 6 uji unit permanen + verifikasi terhadap data produksi.
 
+**BUKTI RUNTIME DI PRODUKSI (3-Agu):** BISIK dipulihkan 11:48 → penjadwal berjalan **12 siklus** →
+**12:09 channel MEMPRODUKSI VIDEO SUKSES** (stok masuk) → rem **tetap mati** setelah 41 menit.
+Sebelum perbaikan: rem menyala lagi dalam **1–11 detik** dan channel tak pernah sempat memproduksi.
+
+### 8d. Tiga cacat turunan yang ikut ditemukan & ditutup (3-Agu)
+Ditemukan saat menyisir SELURUH permukaan yang menampilkan keadaan rem — bukan hanya halaman channel
+(kacamata kuda yang ditegur owner):
+1. **Alasan terpotong di tengah kata.** `reason[:300]` memotong buta; setelah alasan menyertakan
+   penyebab nyata (pesan penyedia ±275 huruf + awalan ±100) hasilnya melewati batas — terekam di
+   produksi berbunyi *"…jatah HARIAN penyedia AI sudah terpa"*. Kalimat terputus membuat pesan yang
+   seharusnya menenangkan justru terlihat seperti sistem rusak. → pemotong yang menghormati batas
+   kata, ruang cukup agar pesan wajar tersimpan UTUH (terverifikasi 369 huruf, utuh).
+2. **Anjuran tebakan jadi fosil.** *"Perbaiki penyebabnya (kredit/konfigurasi)"* dibuat sebelum kelas
+   error disimpan; setelah keadaan halted punya panelnya sendiri, teks itu tak pernah tampil di mana
+   pun tapi tetap duduk di sumber status bersama — siap dipakai permukaan berikutnya. → dibuang.
+3. **Kartu daftar channel bisa memanjang** — menampilkan alasan tanpa batas; satu channel bermasalah
+   mendorong kartu lain keluar layar. → dibatasi 3 baris + tooltip.
+
+Diperiksa dan TIDAK bermasalah: **dashboard** (menampilkan alasan lalu mengantar ke halaman channel) ·
+**publisher** (sengaja tidak memeriksa rem — stok yang sudah lolos QC tetap boleh terbit; rem
+melindungi biaya PRODUKSI, bukan melarang menerbitkan yang sudah jadi).
+
 ### 8b. `notify_publish_fail` belum diseragamkan
 Jalur upload YouTube gagal (`_yt_err`) — konteks berbeda dari crash produksi. Tercatat sejak 22-Jul,
 belum ditangani. Bukan kegagalan produksi, jadi tak masuk aliran §3.
