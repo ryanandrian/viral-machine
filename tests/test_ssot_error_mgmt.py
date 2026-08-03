@@ -131,11 +131,17 @@ class TestTakAdaAnchorBarisBasi(unittest.TestCase):
     """Nomor baris selalu basi. Aturan §3: rujuk nama simbol, bukan baris."""
 
     def test_tak_ada_anchor_file_baris(self):
-        # Pola `sesuatu.py:123` atau `.py:~123` — DI LUAR blok yang sengaja mencatat koreksinya.
+        """Dua bentuk anchor, keduanya basi: `berkas.py:123` DAN `` `:123` `` telanjang.
+
+        Bentuk kedua sempat lolos dari penjaga versi pertama — §3 menulis "scheduled `:206`"
+        tanpa nama berkas, jadi pola yang menuntut `.py:` tidak mencocokkannya. Angkanya
+        memang sudah basi (nyata 137/397/491). Pelajaran yang sama, kedua kalinya di berkas
+        ini: pola yang terlalu sempit = penjaga yang tidur.
+        """
         t = _teks()
         t = re.sub(r"> ⚠️ \*\*Anchor baris SENGAJA DIHAPUS.*?\n\n", "", t, flags=re.S)
         t = re.sub(r"## §11 CHANGELOG.*", "", t, flags=re.S)   # changelog = catatan sejarah, boleh
-        sisa = re.findall(r"[\w/]+\.py:~?\d+", t)
+        sisa = re.findall(r"[\w/]+\.py:~?\d+", t) + re.findall(r"`:~?\d+`", t)
         self.assertFalse(sisa, f"Anchor baris muncul lagi (selalu basi, menyesatkan): {sisa}")
 
 
