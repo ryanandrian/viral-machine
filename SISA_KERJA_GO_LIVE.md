@@ -251,6 +251,24 @@
 - **DEPENDS:** idealnya SETELAH **[A1]** (butuh aliran tenant nyata). **Nyambung:** [B8] /feedback · [D1] funnel · `PAYMENT_AND_TENANT_GATE_ARCHITECTURE.md` (state machine gate).
 - **REALISASI:** ✅ **DEPLOYED + LIVE 2026-07-02** (commit `db589b1`). Mesin lifecycle PENUH LIVE: nurture trial-lapse (5-email config) + suspended→blocked→deleted (30+30h) + purge S3 dini + revoke token YT (UU PDP) + diskon comeback + reaktivasi 1-klik (`/reactivate`) + banner blocked + admin lead_temp. Sweep terverifikasi bersih (nol hapus mendadak; timing di `app_config`). Detail+tracker = `LIFECYCLE_NURTURE_ARCHITECTURE.md §11`. **Follow-up SELESAI 2026-07-03:** ✅ tombol aksi-manual admin (`6a5f798`: Perpanjang trial / Undur hapus / Aktifkan-bersih / Hapus-permanen + ConfirmDialog + footgun Suspend@blocked) · ✅ Telegram admin di-wire ke `company_profile.admin_telegram_chat_id` (`603640e`, migr 0114, editable via `/admin/company-profile` — **bukan env**). **LIFECYCLE = 100% & dokumen di-CLOSE (direkonsiliasi vs realita via 2 verifikator 2026-07-03).**
 
+- **⚠️ TEMUAN AUDIT 2026-08-04 (BELUM diperbaiki — butuh ketok owner + kemungkinan konsultan):** daftar
+  penghapusan data (`_PURGE_TABLES` di `renewal.py`) **tertinggal dari skema**. Diukur, bukan ditebak:
+  **24 tabel di DB live punya kolom `tenant_id`**; 17 dihapus, 3 terdokumentasi disimpan
+  (`payments` legal · `tenant_configs` dianonimkan · `feedback_submissions` anonim) ⇒ **4 TABEL TIDAK
+  DIHAPUS DAN TIDAK ADA KETERANGAN MENGAPA DISIMPAN**: `channel_decisions` · `commission_ledger` ·
+  `tenant_attribution` · `video_retention_curves`.
+  **Akar (bertanggal, bukan tuduhan):** spec purge dibekukan **3-Jul** (`LIFECYCLE_NURTURE_ARCHITECTURE.md`
+  §98); keempat tabel itu lahir **SESUDAHNYA** (program agen [B21] · kecerdasan [B17] · retensi). Kode
+  PATUH pada spec — spec-nya tak diperbarui saat tabel baru ditambah. Pola yang sama akan terulang setiap
+  kali tabel ber-`tenant_id` baru lahir.
+  **BOBOT: kepatuhan UU PDP** (hak hapus data), bukan kerapian. **HARAM Claude putuskan sendiri** —
+  menghapus data = aksi IRREVERSIBLE (CLAUDE.md §2.3d), dan dua di antaranya (`commission_ledger`,
+  `tenant_attribution`) sangat mungkin WAJIB DISIMPAN sebagai catatan keuangan/komisi seperti `payments`
+  — itu ranah konsultan pajak/hukum (lihat `AGENT_AND_AFILIATION_ARCITECTURE.md` §6b), bukan ranah kode.
+  **Usul: (a)** owner putuskan per-tabel: hapus · simpan-dengan-alasan · anonimkan; **(b)** pasang uji
+  anti-drift yang MERAH bila ada tabel ber-`tenant_id` tak terdaftar di salah satu kategori — supaya
+  tabel berikutnya tak lolos diam-diam lagi.
+
 ### [B10] UX AI-Catalog & Channel — audit terpadu (AUDIT_UX_AI_CATALOG.md) — 🟡 Fase 1-4 ✅ (2026-07-08) · sisa: konfirmasi visual owner
 - **TUJUAN:** UI/UX area AI provider/model world-class utk tenant awam + admin (visi budget-aware + anti-bingung).
 - **SPEC + status detail = `AUDIT_UX_AI_CATALOG.md`** (temuan ber-bukti file:baris + fase + realisasi). Arsitektur rantai AI = `ARSITEKTUR_AI_PROVIDER_MODEL.md` (referensi, wajib sync per-commit).
