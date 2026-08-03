@@ -258,6 +258,54 @@ class TestPemulihanMemutusHitungan(unittest.TestCase):
                       "kelas lama wajib ikut dibersihkan — kalau tidak, layar menampilkan sebab basi")
 
 
+class TestJalurPemulihanYangBenarDidahulukan(unittest.TestCase):
+    """
+    PELAJARAN MAHAL 2026-08-03 — tenant komplain, dan penyebabnya keputusan UI, bukan logika.
+
+    Tombol "Pulihkan produksi" sempat ditawarkan kepada SEMUA orang. Ia hanya melepas rem: tak
+    memproduksi apa pun, tak membuktikan apa pun. Tenant wajar menekan tombol yang paling menonjol —
+    log produksi mencatat ia menekannya pukul 11:01:19 dan 11:08:08, dan mesin mengerem lagi
+    11 detik & 1 detik kemudian. Bagi tenant: aplikasinya rusak.
+
+    Jalur lama ("Jalankan uji & pulihkan") tak pernah punya masalah itu justru karena ia MENUNTUT
+    BUKTI: satu produksi berhasil, dan keberhasilan itulah yang memutus hitungan kegagalan.
+
+    Aturan yang dikunci di sini: selama uji masih boleh dijalankan, ITU jalur yang ditawarkan.
+    Jalan pintas hanya untuk tenant yang benar-benar tak punya pilihan lain (uji terkunci).
+    """
+
+    FE = os.path.join(AKAR, "apps", "web", "src", "components", "pemulihan-channel.tsx")
+    HAL = os.path.join(AKAR, "apps", "web", "src", "app", "(app)", "channels", "[id]", "page.tsx")
+
+    def test_tombol_pintas_hanya_saat_uji_terkunci(self):
+        fe = _baca(self.FE)
+        self.assertIn("bisaUji", fe, "panel tak lagi membedakan tenant yang masih bisa menguji")
+        # Tombol pintas WAJIB berada di cabang terakhir (setelah `bisaUji`), bukan ditawarkan lebih dulu.
+        i_uji = fe.index("bisaUji ? (")
+        i_tombol = fe.index("onClick={onPulihkan}")
+        self.assertLess(i_uji, i_tombol,
+                        "tombol pintas mendahului jalur uji — tenant akan menekannya lagi")
+
+    def test_yang_masih_bisa_menguji_diarahkan_ke_uji(self):
+        fe = _baca(self.FE)
+        self.assertRegex(fe, r"Jalankan uji & pulihkan|Run & recover",
+                         "panel tak mengarahkan ke jalur yang MEMBUKTIKAN")
+        self.assertIn("membuktikan channel Anda sehat", fe,
+                      "alasan 'kenapa uji' tak dijelaskan — tenant tak tahu bedanya dengan jalan pintas")
+
+    def test_halaman_meneruskan_keadaan_gerbang(self):
+        hal = _baca(self.HAL)
+        self.assertIn("onGate=", hal, "halaman tak lagi tahu apakah uji terkunci")
+        self.assertIn("bisaUji={!ujiTerkunci}", hal)
+
+    def test_tombol_pintas_tetap_ada_untuk_yang_terjebak(self):
+        # Jangan berlebihan: yang ujinya TERKUNCI (masa tenggang / jatah coba habis) tetap butuh
+        # jalan keluar — tanpa itu, jebakan yang ditutup [B24] kembali terbuka.
+        fe = _baca(self.FE)
+        self.assertIn("onPulihkan", fe)
+        self.assertIn("Pulihkan produksi", fe)
+
+
 class TestAntiDriftTigaTempat(unittest.TestCase):
     """
     D — `SELF_HEALING` hidup di TIGA tempat: kode (Python), dokumen (tabel §1), layar (peta resep TS).

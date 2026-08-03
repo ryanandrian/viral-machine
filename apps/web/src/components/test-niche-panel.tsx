@@ -20,7 +20,7 @@ export type TestInfo = { id: string; status: string; error: string | null; creat
 const tgl = (iso: string | null, loc: string) => iso
   ? new Date(iso).toLocaleDateString(loc, { day: "numeric", month: "short", year: "numeric" }) : "—";
 
-export default function TestNichePanel({ getUrl, postUrl, postBody, confirmMessage, title, runLabel, renderResult, onComplete, hideRefresh, hideSummary }: {
+export default function TestNichePanel({ getUrl, postUrl, postBody, confirmMessage, title, runLabel, renderResult, onComplete, hideRefresh, hideSummary, onGate }: {
   getUrl: string;                       // GET → { test }
   postUrl: string;                      // POST → enqueue
   postBody?: Record<string, unknown>;   // body POST (tenant kirim niche_id)
@@ -30,7 +30,8 @@ export default function TestNichePanel({ getUrl, postUrl, postBody, confirmMessa
   renderResult?: (test: TestInfo) => ReactNode;  // slot hasil khusus konteks (channel: tautan YT Studio + status recover). Default: preview buffer.
   onComplete?: (test: TestInfo) => void;         // dipanggil sekali saat test selesai (done/failed) → mis. segarkan banner channel.
   hideRefresh?: boolean;                          // konteks channel: sembunyikan tombol segarkan (panel sudah auto-update).
-  hideSummary?: (test: TestInfo) => boolean;      // konteks channel: true → ringkasan hasil terminal (badge/skor/tanggal) ikut hilang (Tutup = SEMUA info hasil hilang). Status berjalan tak terpengaruh.
+  hideSummary?: (test: TestInfo) => boolean;
+  onGate?: (g: { allowed: boolean; code: string | null } | null) => void;  // [B25] halaman induk perlu tahu: kalau uji BOLEH, jalur pemulihan yang benar adalah uji itu sendiri — bukan jalan pintas.      // konteks channel: true → ringkasan hasil terminal (badge/skor/tanggal) ikut hilang (Tutup = SEMUA info hasil hilang). Status berjalan tak terpengaruh.
 }) {
   const [test, setTest] = useState<TestInfo | null>(null);
   const [loading, setLoading] = useState(false);
@@ -41,13 +42,16 @@ export default function TestNichePanel({ getUrl, postUrl, postBody, confirmMessa
   // [B24] Keadaan gerbang uji dari server. Panel admin tidak mengirim field ini → tetap null →
   // perilaku persis seperti sebelumnya (nol regresi untuk layar admin).
   const [gate, setGate] = useState<{ allowed: boolean; code: string | null } | null>(null);
+  // ref, bukan dependensi `load`: induk yang mengirim fungsi baru tiap render akan membuat
+  // identitas `load` berubah dan effect polling dijadwal ulang terus.
+  const onGateRef = useRef(onGate); onGateRef.current = onGate;
   const terkunci = gate?.allowed === false;
 
   const load = useCallback(async () => {
     setLoading(true);
     const r = await fetch(getUrl);
     setLoading(false);
-    if (r.ok) { const j = await r.json(); setTest(j.test); setGate(j.gate ?? null); }
+    if (r.ok) { const j = await r.json(); setTest(j.test); setGate(j.gate ?? null); onGateRef.current?.(j.gate ?? null); }
   }, [getUrl]);
   useEffect(() => { setTest(null); load(); }, [load]);
   useEffect(() => {

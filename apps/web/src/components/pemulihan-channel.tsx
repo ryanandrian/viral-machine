@@ -98,12 +98,13 @@ export function resepUntuk(kelas: string | null | undefined): Resep {
 }
 
 export default function PemulihanChannel({
-  channelId, kelas, alasan, sejak, bolehPulihkan, sedangProses, onPulihkan,
+  channelId, kelas, alasan, sejak, bisaUji, bolehPulihkan, sedangProses, onPulihkan,
 }: {
   channelId: string;
   kelas: string | null | undefined;
   alasan: string | null | undefined;
   sejak: string | null | undefined;
+  bisaUji: boolean;                // gerbang uji mengizinkan → jalur pemulihan yang BENAR adalah uji
   bolehPulihkan: boolean;          // langganan mengizinkan produksi
   sedangProses: boolean;
   onPulihkan: () => void;
@@ -144,16 +145,29 @@ export default function PemulihanChannel({
             </div>
           )}
 
+          {/* ══ JALUR PEMULIHAN — yang MEMBUKTIKAN didahulukan ══════════════════════════════════
+              Pelajaran mahal 2026-08-03: tombol "Pulihkan produksi" sempat ditawarkan kepada SEMUA
+              orang. Ia hanya melepas rem — tak memproduksi apa pun, tak membuktikan apa pun. Tenant
+              wajar menekan tombol paling menonjol, mesin mengerem lagi beberapa detik kemudian, dan
+              tenant menyimpulkan aplikasinya rusak. Jalur lama ("Jalankan uji & pulihkan") tak pernah
+              punya masalah itu justru karena ia MENUNTUT BUKTI: satu produksi berhasil.
+              Karena itu: selama uji masih boleh dijalankan, jalur itulah yang ditawarkan. Jalan
+              pintas hanya untuk yang benar-benar tak punya pilihan lain. */}
           <div style={{ display: "flex", gap: ".5rem", marginTop: ".7rem", flexWrap: "wrap", alignItems: "center" }}>
-            {bolehPulihkan ? (
-              <button className="btn btn-default btn-sm" disabled={sedangProses} onClick={onPulihkan}>
-                <RefreshCw size={14} /> <Bi id="Pulihkan produksi" en="Resume production" />
-              </button>
-            ) : (
+            {!bolehPulihkan ? (
               <span className="muted" style={{ fontSize: "var(--text-xs)" }}>
                 <Bi id="Aktifkan langganan dulu untuk memulihkan produksi."
                     en="Reactivate your subscription first to resume production." />
               </span>
+            ) : bisaUji ? (
+              <span style={{ fontSize: "var(--text-xs)" }}>
+                <Bi id="👉 Tekan “Jalankan uji & pulihkan” di panel bawah. Satu video uji membuktikan channel Anda sehat, lalu produksi berjalan lagi dengan sendirinya."
+                    en="👉 Press “Run & recover” in the panel below. One test video proves your channel is healthy, and production resumes on its own." />
+              </span>
+            ) : (
+              <button className="btn btn-default btn-sm" disabled={sedangProses} onClick={onPulihkan}>
+                <RefreshCw size={14} /> <Bi id="Pulihkan produksi" en="Resume production" />
+              </button>
             )}
             {aksi && (
               <Link href={aksi.href} className="btn btn-secondary btn-sm">

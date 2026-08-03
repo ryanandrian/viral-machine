@@ -142,6 +142,8 @@ export default function ChannelDetailPage() {
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [testMsg, setTestMsg] = useState<string | null>(null);
+  // [B25] Uji terkunci? Menentukan jalur pemulihan mana yang PANTAS ditawarkan (lihat PemulihanChannel).
+  const [ujiTerkunci, setUjiTerkunci] = useState(false);
   const wasHaltedRef = useRef(false);  // latch: channel pernah halted saat sesi ini → pesan hasil pakai "aktif kembali".
   const chRef = useRef<ChannelRow | null>(null);  // nilai tersimpan SEBELUM penyegaran (pagar anti-timpa di load)
   // Siklus hidup kartu hasil uji (owner 2026-07-08: "sampai kapan muncul?") — hilang bila:
@@ -834,6 +836,7 @@ export default function ChannelDetailPage() {
           kelas={ch.production_paused_class}
           alasan={ch.production_paused_reason}
           sejak={ch.production_paused_at}
+          bisaUji={!ujiTerkunci}
           bolehPulihkan={subIsProducing(sub)}
           sedangProses={busy}
           onPulihkan={pulihkanProduksi}
@@ -872,6 +875,7 @@ export default function ChannelDetailPage() {
           confirmMessage={<Bi id="Tindakan ini memproduksi 1 video uji (privat di YouTube) untuk memeriksa konfigurasi channel Anda. Lanjutkan?" en="This produces 1 test video (private on YouTube) to check your channel configuration. Continue?" />}
           renderResult={channelTestResult}
           onComplete={() => load()}
+          onGate={(g) => setUjiTerkunci(g?.allowed === false)}
           hideRefresh
           hideSummary={isResultHidden}
         />
