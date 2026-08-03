@@ -31,6 +31,10 @@ from src.exceptions import FAST_FAIL, SELF_HEALING, ErrorClass  # noqa: E402
 AKAR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOK = os.path.join(AKAR, "AI_ERROR_MANAGEMENT_ARCHITECTURE.md")
 FE_PANEL = os.path.join(AKAR, "apps", "web", "src", "components", "pemulihan-channel.tsx")
+# Cermin KEEMPAT — layar admin punya salinan SELF_HEALING sendiri. Sempat luput dari penjagaan:
+# uji ini bahkan mengklaim "lintas 3 tempat" padahal ada 4. Kelas baru yang tak diperbarui di sini
+# membuat layar admin salah menyatakan "pulih sendiri" tanpa ada yang menangkapnya.
+FE_ADMIN = os.path.join(AKAR, "apps", "web", "src", "app", "admin", "(panel)", "system", "page.tsx")
 
 
 def _baca(path):
@@ -339,6 +343,16 @@ class TestAntiDriftTigaTempat(unittest.TestCase):
             harus = "true" if kelas in SELF_HEALING else "false"
             self.assertIn(f"pulihSendiri: {harus}", m.group(1),
                           f"Layar menyatakan pulihSendiri yang BERBEDA dari SELF_HEALING utk {kelas.value}")
+
+    def test_layar_admin_selaras_dengan_self_healing(self):
+        """Cermin KEEMPAT: daftar channel-berhenti di layar admin."""
+        src = _baca(FE_ADMIN)
+        m = re.search(r"const SELF_HEALING = \[([^\]]*)\]", src)
+        self.assertIsNotNone(m, "layar admin tak lagi punya daftar SELF_HEALING — strukturnya berubah?")
+        di_admin = {x.strip().strip('"\'') for x in m.group(1).split(",") if x.strip()}
+        di_kode = {k.value for k in SELF_HEALING}
+        self.assertEqual(di_admin, di_kode,
+                         f"layar admin melenceng.\n  admin: {sorted(di_admin)}\n  kode : {sorted(di_kode)}")
 
     def test_layar_tak_menyebut_nama_penyedia(self):
         """Arahan owner: penyedia akan terus bertambah → petakan per KELAS, jangan per merek."""

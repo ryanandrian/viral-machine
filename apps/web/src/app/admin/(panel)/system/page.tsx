@@ -47,7 +47,7 @@ const FAIL_COLOR: Record<string, string> = { "TTS/timeout": "#ef4444", "Rate lim
 export default async function AdminSystemPage() {
   const a = createAdminClient();
   const since24h = new Date(Date.now() - 24 * 3.6e6).toISOString();
-  const [hb, inv, chRows, runs24, failedRows, runsTotal, runsFailed, runsSuccess, vids, analytics, channels, direct, sysState, berhenti] = await Promise.all([
+  const [hb, inv, chRows, runs24, failedRows, runsTotal, runsFailed, runsSuccess, vids, analytics, channels, direct, sysState, berhenti, tenantNama] = await Promise.all([
     a.from("worker_heartbeats").select("*").order("worker_name"),
     a.from("content_inventory").select("channel_id, status").in("status", STOCK_STATUSES),
     a.from("channels").select("id, channel_name, buffer_depth, publish_slots").eq("is_active", true).order("channel_name").limit(24),
@@ -66,6 +66,9 @@ export default async function AdminSystemPage() {
     // menyebut SEBABNYA, bukan sekadar "berhenti".
     a.from("channels").select("id, channel_name, tenant_id, production_paused_at, production_paused_class, production_paused_reason")
       .eq("production_paused", true).order("production_paused_at", { ascending: true }),
+    // Nama tenant — tanpa ini daftar hanya menyebut channel, dan owner tak tahu itu milik siapa.
+    // Justru "melihat seluruh tenant sekaligus" yang jadi alasan kartu ini dibuat.
+    a.from("tenant_configs").select("tenant_id, display_handle"),
   ]);
   // Target stok efektif — CERMIN rumus BE `producer.target_stock` (sadar-jadwal, owner 2026-07-09):
   // buffer_depth eksplisit menang; NULL → slot/hari × app_config.buffer_target_days; tanpa slot → 0.
@@ -89,6 +92,8 @@ export default async function AdminSystemPage() {
   ];
   const djRows = direct.data ?? [];
   const remRows = berhenti.data ?? [];
+  const namaTenant = Object.fromEntries(((tenantNama.data ?? []) as { tenant_id: string; display_handle: string | null }[])
+    .map((t) => [t.tenant_id, t.display_handle || "—"]));
   // 'done' = test niche selesai TANPA publish (2026-07-04) — dihitung "Selesai" bersama 'published'.
   const dj = { pending: djRows.filter((d) => d.status === "pending").length, producing: djRows.filter((d) => d.status === "producing").length, published: djRows.filter((d) => ["published", "done"].includes(d.status)).length, failed: djRows.filter((d) => d.status === "failed").length };
 
@@ -215,6 +220,7 @@ export default async function AdminSystemPage() {
               <thead>
                 <tr style={{ textAlign: "left", color: "var(--text-muted)" }}>
                   <th style={{ padding: ".35rem .5rem" }}><span data-id>Channel</span><span data-en>Channel</span></th>
+                  <th style={{ padding: ".35rem .5rem" }}><span data-id>Tenant</span><span data-en>Tenant</span></th>
                   <th style={{ padding: ".35rem .5rem" }}><span data-id>Sejak</span><span data-en>Since</span></th>
                   <th style={{ padding: ".35rem .5rem" }}><span data-id>Sebab</span><span data-en>Cause</span></th>
                   <th style={{ padding: ".35rem .5rem" }}><span data-id>Pulih sendiri?</span><span data-en>Self-healing?</span></th>
@@ -230,6 +236,7 @@ export default async function AdminSystemPage() {
                   return (
                     <tr key={r.id as string} style={{ borderTop: "1px solid var(--border-subtle)" }}>
                       <td style={{ padding: ".4rem .5rem", fontWeight: 600 }}>{r.channel_name as string}</td>
+                      <td style={{ padding: ".4rem .5rem" }} className="muted">{namaTenant[r.tenant_id as string] ?? "—"}</td>
                       <td style={{ padding: ".4rem .5rem" }} className="muted">
                         {jam === null ? "—" : jam >= 24 ? `${Math.floor(jam / 24)}h ${jam % 24}j` : `${jam}j`}
                       </td>
