@@ -238,6 +238,31 @@ Itu perilaku-saat-gagal = KEPUTUSAN PRODUK (CLAUDE.md §0.6); salah golong = cha
 ditunggu. Dua baris ⏳ di §4 (`fal`, OpenAI `billing_hard_limit_reached`) adalah GEJALA bagian B ini —
 sampelnya sudah lengkap & bertanggal, yang belum ada hanya ketoknya.
 
+### 8f. 🔴 DEGRADASI SENYAP pada FRAME PERTAMA (tuas viral) *(ditemukan 2026-08-04, BELUM diperbaiki)*
+`visual_assembler._generate_hook_frame` gagal → `logger.warning(... keeping original clips[0])` → video
+**tetap dikirim** dengan frame pertama yang lebih buruk, **tanpa notifikasi ke siapa pun**. Frame pertama =
+penentu penonton berhenti menggulir; menurunkannya diam-diam melemahkan janji inti produk.
+
+**Terukur di produksi (worker.log, 04-Agu):** **4 gagal dari 181 percobaan = 2,2%.** Empat sebab BERBEDA:
+| Sebab | Milik siapa |
+|---|---|
+| `[Errno 2] No such file: hook_frame_img.jpg` | **kode kita** |
+| `FFmpeg image-to-video failed` | **kode kita** |
+| `Billing hard limit has been reached` (OpenAI) | akun penyedia tenant |
+| `cannot schedule new futures after interpreter shutdown` | worker sedang berhenti (jinak) |
+
+**Kenapa ini pelanggaran, bukan selera:** CLAUDE.md §0.6 — kegagalan komponen = STOP + notifikasi, HARAM
+fallback senyap; dan **`PROGRESS.md` kita sendiri menetapkan gerbang validasi "hook_frame generated tanpa
+warning"**, jadi kegagalan ini pernah diperlakukan sebagai CACAT. Toleransi ini masuk lewat commit fitur
+(`6a6da40`), **bukan lewat ketok owner.**
+
+**KEJUJURAN:** celah ini TERLIHAT saat menyisir §8e malam yang sama dan **dilewati** — Claude membacanya lalu
+melanjutkan. Persis pola yang ditegur owner: melihat catatan yang relevan, lalu melangkahinya.
+
+**BELUM DIPERBAIKI — menunggu ketok owner**, karena pilihannya adalah perilaku-saat-gagal (§0.6):
+(a) tetap kirim tapi **beri tahu** · (b) STOP produksi run itu · (c) coba ulang N× dulu. Dua dari empat sebab
+adalah bug kita sendiri dan pantas ditangani terpisah dari kebijakan degradasi.
+
 ### 8b. ~~`notify_publish_fail` belum diseragamkan~~ — ✅ **DITUTUP 2026-08-04**
 Jalur upload YouTube gagal adalah satu-satunya notifikasi yang tak bisa menjawab pertanyaan penentu
 tenant — **perlu bertindak, atau cukup ditunggu?** — padahal `youtube_publisher.publish()` SUDAH
