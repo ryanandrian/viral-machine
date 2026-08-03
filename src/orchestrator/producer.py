@@ -540,6 +540,22 @@ def _active_channels(sb) -> list:
     return sb.table("channels").select("*").eq("is_active", True).execute().data or []
 
 
+def _potong_rapi(teks: str, batas: int = 500) -> str:
+    """Potong teks pada BATAS KATA + elipsis — jangan pernah memutus kata di tengah.
+
+    Batas lama 300 karakter memotong buta. Setelah alasan rem menyertakan penyebab nyata (pesan
+    penyedia bisa ~275 huruf), hasilnya kalimat terputus yang dibaca tenant apa adanya — terekam di
+    produksi: "…jatah HARIAN penyedia AI sudah terpa". Kalimat terputus membuat pesan yang seharusnya
+    menenangkan justru terlihat seperti sistem yang rusak.
+    """
+    teks = (teks or "").strip()
+    if len(teks) <= batas:
+        return teks
+    potong = teks[:batas]
+    spasi = potong.rfind(" ")
+    return (potong[:spasi] if spasi > batas * 0.6 else potong).rstrip(" ,.;:—-") + "…"
+
+
 def _pause_channel(sb, ch: dict, reason: str, error_class: str | None = None) -> None:
     """Circuit-breaker §4b/F7: hentikan produksi channel + catat alasan DAN KELASNYA.
 
@@ -557,7 +573,7 @@ def _pause_channel(sb, ch: dict, reason: str, error_class: str | None = None) ->
         sb.table("channels").update({
             "production_paused": True,
             "production_paused_at": datetime.now(timezone.utc).isoformat(),
-            "production_paused_reason": reason[:300],
+            "production_paused_reason": _potong_rapi(reason),
             "production_paused_class": (error_class or None),
         }).eq("id", ch["id"]).execute()
     except Exception as e:

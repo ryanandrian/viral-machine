@@ -34,8 +34,13 @@ export function effectiveStatus(ch: ChLite, sub: string | null, rd: Readiness): 
     return { key: "sub", label_id: "Langganan nonaktif", label_en: "Subscription inactive", tone: "stop",
       reco_id: "Aktifkan langganan untuk melanjutkan produksi.", reco_en: "Reactivate subscription to resume." };
   if (ch.production_paused)
-    return { key: "halted", label_id: "Dihentikan sistem", label_en: "Halted by system", tone: "stop", reason: ch.production_paused_reason ?? undefined,
-      reco_id: "Perbaiki penyebabnya (kredit/konfigurasi), lalu jalankan ulang & pulihkan.", reco_en: "Fix the cause (credit/config), then run & recover." };
+    // [B25] TANPA `reco` — sengaja. Anjuran lama ("perbaiki kredit/konfigurasi") adalah TEBAKAN yang
+    // dibuat sebelum sistem menyimpan kelas errornya. Kini penjelasan + langkah konkret per-KELAS ada
+    // di `PemulihanChannel` (halaman channel), dan permukaan lain (dashboard, daftar channel) cukup
+    // menampilkan `reason` lalu mengantar ke sana. Menyisakan tebakan di sini = mengundang permukaan
+    // berikutnya memakainya lagi dan menyebarkan anjuran yang salah.
+    return { key: "halted", label_id: "Dihentikan sistem", label_en: "Halted by system", tone: "stop",
+      reason: ch.production_paused_reason ?? undefined };
   if (rd && !rd.ready)
     return { key: "incomplete", label_id: "Belum lengkap", label_en: "Incomplete", tone: "warn", reason: rd.missing?.length ? `Kurang: ${rd.missing.join(", ")}` : undefined,
       reco_id: "Lengkapi konfigurasi & kredensial, lalu aktifkan.", reco_en: "Complete config & credentials, then activate." };

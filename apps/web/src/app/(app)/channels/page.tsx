@@ -86,7 +86,13 @@ function ChannelCard({ ch, eff, vid, ana, busy, onToggle, outQuota }: { ch: Chan
         border: "1px solid color-mix(in srgb,var(--warning) 35%,transparent)", borderRadius: "var(--r-md)",
         padding: "0.5rem 0.625rem", margin: "0.125rem 1.25rem 0.625rem", fontSize: "var(--text-xs)",
         color: "var(--text-primary)", lineHeight: 1.55, fontWeight: 500 }}>
-        <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1, color: "var(--warning)" }} /><span>{eff.reason}</span></div>}
+        {/* Alasan kini memuat PENYEBAB nyata (bisa ±370 huruf), bukan lagi satu kalimat generik.
+            Dibatasi 3 baris supaya kartu tak memanjang & daftar tetap bisa dipindai; teks penuhnya
+            ada di halaman channel. Tanpa batas ini, satu channel bermasalah mendorong kartu lain
+            keluar layar. */}
+        <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1, color: "var(--warning)" }} />
+        <span style={{ display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}
+              title={eff.reason}>{eff.reason}</span></div>}
       <div className="ch-stats">
         <div className="ch-stat"><div className="v">{vid.toLocaleString("id-ID")}</div><div className="l"><Bi id="Video terbit" en="Published" /></div></div>
         <div className="ch-stat"><div className="v">{ch.subscriber_count != null ? fmtK(ch.subscriber_count) : "—"}</div><div className="l">Subscribers</div></div>
