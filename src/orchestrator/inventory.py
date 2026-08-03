@@ -138,16 +138,26 @@ def mark_ready_with_issues(inv_id: int, s3_key: str, reason: str = "",
     }).eq("id", inv_id).execute()
 
 
-def recent_nonready_streak(channel_id: str, limit: int = 12) -> int:
+def recent_nonready_streak(channel_id: str, limit: int = 12, sejak: str | None = None) -> int:
     """Hitung kegagalan BERUNTUN terbaru untuk channel — basis circuit-breaker §4b/F7.
     Sumber = production_runs (buku besar SEMUA run: buffer + direct/"Jalankan Ulang" + test).
     Dulu membaca content_inventory (jalur buffer SAJA) → run direct sukses tidak memutus
     streak: channel di-pause ULANG tiap siklus producer + alarm 🛑 palsu berulang, padahal
     video barusan terbit (insiden live 2026-07-08, channel ke-2 ryan).
-    failed/qc_failed = gagal; success = streak putus; lainnya (discarded) netral."""
-    res = (_sb().table("production_runs").select("status")
-           .eq("channel_id", channel_id)
-           .order("created_at", desc=True).limit(limit).execute())
+    failed/qc_failed = gagal; success = streak putus; lainnya (discarded) netral.
+
+    `sejak` (migr 0197) = `channels.production_resumed_at`. Kegagalan SEBELUM titik pemulihan
+    TIDAK dihitung. Tanpa ini, melepas rem tak ada gunanya: kegagalan hari sebelumnya masih
+    terhitung, siklus penjadwal berikutnya membaca streak lama dan langsung mengerem lagi —
+    tenant melihat channelnya "dipulihkan lalu mati lagi" berulang-ulang (dilaporkan owner
+    2026-08-03 pada BISIK NUSANTARA; log membuktikan rem menyala 2× tanpa SATU PUN percobaan
+    produksi baru). Pola identik dengan insiden 8-Jul di atas — sebab berbeda, akibat sama.
+    """
+    q = (_sb().table("production_runs").select("status")
+         .eq("channel_id", channel_id))
+    if sejak:
+        q = q.gt("created_at", sejak)
+    res = q.order("created_at", desc=True).limit(limit).execute()
     streak = 0
     for row in (res.data or []):
         st = row["status"]
@@ -158,14 +168,22 @@ def recent_nonready_streak(channel_id: str, limit: int = 12) -> int:
     return streak
 
 
-def latest_failure(channel_id: str) -> dict | None:
+def latest_failure(channel_id: str, sejak: str | None = None) -> dict | None:
     """[ERROR-MGMT] {error_class, error_message} run TERBARU channel BILA run itu gagal (failed/
     qc_failed). Sumber = production_runs (SAMA dgn recent_nonready_streak → konsisten). Dipakai
     circuit-breaker untuk REM SEGERA pada error non-retryable (billing/kuota) + pesan manusiawi.
-    Return None bila run terbaru sukses/kosong → jatuh ke jalur streak biasa (aman)."""
-    res = (_sb().table("production_runs").select("status,error_class,error_message")
-           .eq("channel_id", channel_id)
-           .order("created_at", desc=True).limit(1).execute())
+    Return None bila run terbaru sukses/kosong → jatuh ke jalur streak biasa (aman).
+
+    `sejak` (migr 0197) WAJIB sama dengan yang dipakai `recent_nonready_streak` — keduanya membaca
+    periode yang sama. Bila tidak, rem-cepat bisa menghukum berdasarkan kegagalan dari periode yang
+    sudah ditutup pemulihan, sementara hitungan streak sudah memaafkannya: dua pengambil keputusan
+    membaca dunia yang berbeda.
+    """
+    q = (_sb().table("production_runs").select("status,error_class,error_message")
+         .eq("channel_id", channel_id))
+    if sejak:
+        q = q.gt("created_at", sejak)
+    res = q.order("created_at", desc=True).limit(1).execute()
     row = (res.data or [None])[0]
     if not row or row.get("status") not in ("failed", "qc_failed"):
         return None

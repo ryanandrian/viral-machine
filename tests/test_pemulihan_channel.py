@@ -102,9 +102,12 @@ class TestAlasanMemuatPenyebabNyata(unittest.TestCase):
     """B — cabang 3-kegagalan dulu hanya menulis kalimat generik."""
 
     def test_kedua_cabang_menyertakan_pesan_terakhir(self):
+        # Jendela dibatasi SEMANTIK (dari "REM DARURAT" sampai notifikasinya), bukan jumlah karakter:
+        # potongan sepanjang-N pecah begitu ada komentar baru menggeser barisnya keluar.
         src = _baca(os.path.join(AKAR, "src", "orchestrator", "producer.py"))
         i = src.index("REM DARURAT")
-        blok = src[i:i + 2000]
+        j = src.index("notify_circuit_break", i)
+        blok = src[i:j]
         self.assertIn("Penyebab terakhir:", blok,
                       "cabang 3-kegagalan tak lagi menyertakan penyebab — tenant kembali buta")
         self.assertIn("error_class=_kelas", blok, "kelas tak diteruskan ke penyimpan rem")
@@ -149,6 +152,110 @@ class TestTelegramBedakanPulihSendiri(unittest.TestCase):
             t = self._kirim("rate_limit")
             self.assertNotIn("/channels/", t)
             self.assertIn("Pulihkan produksi", t, "tanpa alamat, anjurannya tetap harus utuh")
+
+
+class _QRuns:
+    """Stub rantai kueri production_runs yang MENDUKUNG `.gt()` — inti perbaikan 0197."""
+
+    def __init__(self, rows):
+        self._rows = rows
+        self._sejak = None
+
+    def select(self, *_a, **_k):
+        return self
+
+    def eq(self, *_a, **_k):
+        return self
+
+    def gt(self, kolom, nilai):
+        assert kolom == "created_at", f"filter tak terduga: {kolom}"
+        self._sejak = nilai
+        return self
+
+    def order(self, *_a, **_k):
+        return self
+
+    def limit(self, *_a, **_k):
+        return self
+
+    def execute(self):
+        rows = [r for r in self._rows if not self._sejak or r["created_at"] > self._sejak]
+        rows = sorted(rows, key=lambda r: r["created_at"], reverse=True)
+        class R:  # noqa: N801
+            data = rows
+        return R()
+
+
+class TestPemulihanMemutusHitungan(unittest.TestCase):
+    """
+    [0197] BUG yang dilaporkan owner: BISIK NUSANTARA "dihentikan mesin" berulang meski sudah
+    dipulihkan. Log membuktikan rem menyala 2× dalam sehari TANPA satu pun percobaan produksi baru —
+    kegagalan HARI SEBELUMNYA masih terhitung, jadi siklus penjadwal berikutnya langsung mengerem lagi.
+
+    Lahir dari jalur buka yang ditambahkan [B24]: dulu rem hanya dilepas oleh produksi SUKSES, dan
+    sukses itu sendiri memutus hitungan. Menambah cara melepas rem tanpa ikut memutus hitungannya =
+    menambah pintu tanpa memasang lantainya.
+    """
+
+    RUNS = [
+        {"created_at": "2026-08-02T11:50:00+00:00", "status": "failed",
+         "error_class": "rate_limit", "error_message": "jatah harian habis"},
+        {"created_at": "2026-08-02T11:49:00+00:00", "status": "failed",
+         "error_class": "rate_limit", "error_message": "jatah harian habis"},
+        {"created_at": "2026-08-02T11:36:00+00:00", "status": "failed",
+         "error_class": "unknown", "error_message": "naskah tak layak"},
+        {"created_at": "2026-08-02T11:27:00+00:00", "status": "success",
+         "error_class": None, "error_message": None},
+    ]
+
+    def _stub(self):
+        class SB:
+            def table(_self, _n):
+                return _QRuns(TestPemulihanMemutusHitungan.RUNS)
+        return SB()
+
+    def test_tanpa_titik_pemulihan_streak_penuh(self):
+        # Perilaku lama — inilah yang mengerem berulang.
+        with patch("src.orchestrator.inventory._sb", return_value=self._stub()):
+            from src.orchestrator import inventory
+            self.assertEqual(inventory.recent_nonready_streak("C1"), 3)
+
+    def test_sesudah_pemulihan_hitungan_nol(self):
+        with patch("src.orchestrator.inventory._sb", return_value=self._stub()):
+            from src.orchestrator import inventory
+            self.assertEqual(
+                inventory.recent_nonready_streak("C1", sejak="2026-08-03T00:00:00+00:00"), 0,
+                "kegagalan sebelum pemulihan masih dihitung → channel direm ulang seketika")
+
+    def test_kegagalan_BARU_tetap_dihitung(self):
+        # Rem tidak boleh lumpuh: periode yang belum ditutup tetap dihukum.
+        with patch("src.orchestrator.inventory._sb", return_value=self._stub()):
+            from src.orchestrator import inventory
+            self.assertEqual(
+                inventory.recent_nonready_streak("C1", sejak="2026-08-01T00:00:00+00:00"), 3)
+
+    def test_rem_cepat_membaca_periode_yang_sama(self):
+        # Dua pengambil keputusan tak boleh membaca dunia yang berbeda.
+        with patch("src.orchestrator.inventory._sb", return_value=self._stub()):
+            from src.orchestrator import inventory
+            self.assertIsNone(inventory.latest_failure("C1", sejak="2026-08-03T00:00:00+00:00"))
+            lf = inventory.latest_failure("C1", sejak="2026-08-01T00:00:00+00:00")
+            self.assertEqual(lf["error_class"], "rate_limit")
+
+    def test_penjadwal_meneruskan_titik_pemulihan(self):
+        src = _baca(os.path.join(AKAR, "src", "orchestrator", "producer.py"))
+        self.assertIn('_sejak = ch.get("production_resumed_at")', src,
+                      "penjadwal tak membaca titik pemulihan → bug 0197 kembali")
+        self.assertIn("recent_nonready_streak(cid, sejak=_sejak)", src)
+        self.assertIn("latest_failure(cid, sejak=_sejak)", src)
+
+    def test_semua_jalur_pelepas_rem_mencatat_titiknya(self):
+        # Melepas rem tanpa mencatat titiknya = pemulihan yang hanya bertahan sampai siklus berikutnya.
+        self.assertIn("production_resumed_at", _baca(os.path.join(AKAR, "src", "orchestrator", "producer.py")))
+        sql = _baca(os.path.join(AKAR, "migrations", "0197_pemulihan_memutus_hitungan_kegagalan.sql"))
+        self.assertIn("production_resumed_at = now()", sql)
+        self.assertIn("production_paused_class = null", sql,
+                      "kelas lama wajib ikut dibersihkan — kalau tidak, layar menampilkan sebab basi")
 
 
 class TestAntiDriftTigaTempat(unittest.TestCase):

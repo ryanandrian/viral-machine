@@ -149,6 +149,28 @@ Rencana perbaikan (menunggu ketok owner): simpan kelas + rincian saat rem menyal
 per-KELAS di layar channel → notifikasi selaras → daftar admin. **Pemulihan tetap keputusan tenant**
 (arahan owner 2026-08-03: *"jangan otomatis aktif, tapi UI/UX harus user-friendly & well-informed"*).
 
+### 8c. ~~Memulihkan produksi tidak memutus hitungan kegagalan~~ — ✅ **DITUTUP 2026-08-03** *(migr 0197)*
+**Dilaporkan owner, terbukti di log produksi.** BISIK NUSANTARA "dihentikan mesin" berulang meski sudah
+dipulihkan dan sudah dijalankan uji. Log membuktikan rem menyala **dua kali** hari itu (11:01 & 11:08 WIB)
+**tanpa satu pun percobaan produksi baru** — nol `production_runs` dan nol stok bertanggal hari itu.
+
+Sebabnya: hitungan kegagalan beruntun membaca 12 run terakhir channel. Tiga kegagalan dari **hari
+sebelumnya** masih terhitung; melepas rem tak menyentuh hitungan itu, jadi siklus penjadwal berikutnya
+membaca streak=3 dan langsung mengerem lagi. Bagi tenant: **pemulihan yang hanya ilusi beberapa menit.**
+
+**KEJUJURAN — ini lahir dari jalur buka yang baru ditambahkan** ([B24] tombol "Pulihkan produksi").
+Sebelumnya rem HANYA dilepas oleh produksi direct yang SUKSES, dan sukses itu sendiri memutus hitungan,
+sehingga masalahnya tak pernah muncul. **Menambah cara melepas rem tanpa ikut memutus hitungannya =
+menambah pintu tanpa memasang lantainya.** Komentar `recent_nonready_streak` bahkan sudah merekam
+insiden BERPOLA SAMA pada 2026-07-08 — sebab berbeda, akibat identik.
+
+**Perbaikan:** `channels.production_resumed_at` dicatat oleh SETIAP jalur pelepas rem, dalam pernyataan
+yang SAMA dengan pelepasannya (dua pernyataan terpisah membuka celah bagi siklus yang lewat di antaranya).
+Hitungan kegagalan — dan rem-cepat — hanya membaca kejadian SESUDAH titik itu. Riwayat lama tidak
+dipalsukan atau dihapus; ia hanya berhenti dipakai menghukum periode yang sudah ditutup.
+**Bukti pada kasus nyata:** streak BISIK 3 → **0** setelah pemulihan, sementara kegagalan dalam 7 hari
+tetap terhitung 3 (rem tidak dilumpuhkan). 6 uji unit permanen + verifikasi terhadap data produksi.
+
 ### 8b. `notify_publish_fail` belum diseragamkan
 Jalur upload YouTube gagal (`_yt_err`) — konteks berbeda dari crash produksi. Tercatat sejak 22-Jul,
 belum ditangani. Bukan kegagalan produksi, jadi tak masuk aliran §3.

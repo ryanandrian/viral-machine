@@ -412,9 +412,12 @@ def run_direct(sb, job: dict) -> None:
     # channel sehat lagi → lepas pause agar producer lanjut jaga buffer.
     if status in ("success", "qc_failed"):
         try:
-            sb.table("channels").update(
-                {"production_paused": False, "production_paused_reason": None}
-            ).eq("id", job["channel_id"]).execute()
+            sb.table("channels").update({
+                "production_paused": False, "production_paused_reason": None,
+                "production_paused_at": None, "production_paused_class": None,
+                # [0197] titik nol hitungan kegagalan — sama seperti jalur pemulihan lain.
+                "production_resumed_at": _now(),
+            }).eq("id", job["channel_id"]).execute()
         except Exception as e:
             logger.warning(f"[Direct] gagal lepas pause ch={job.get('channel_id')}: {e}")
 
@@ -591,8 +594,12 @@ def plan_and_submit(sb, pool: ThreadPoolExecutor, sem: threading.Semaphore) -> i
         # [ERROR-MGMT 2026-07-18] REM SEGERA (setelah 1×) bila kegagalan TERAKHIR = kelas non-retryable
         # (kredit habis / pembayaran gagal) — mustahil sembuh dgn diulang → hemat biaya LLM percobaan
         # ke-2/3. Error lain (transien/unknown) TETAP toleransi `fail_stop` (nol regresi channel sehat).
-        streak = inventory.recent_nonready_streak(cid)
-        _lf = inventory.latest_failure(cid)
+        # [0197] Hitungan kegagalan dimulai dari titik PEMULIHAN terakhir. Tanpa batas ini,
+        # kegagalan hari sebelumnya masih terhitung dan channel yang baru dipulihkan langsung
+        # direm lagi pada siklus ini juga — tenant melihat 'dipulihkan lalu mati lagi' berulang.
+        _sejak = ch.get("production_resumed_at")
+        streak = inventory.recent_nonready_streak(cid, sejak=_sejak)
+        _lf = inventory.latest_failure(cid, sejak=_sejak)
         _hard = bool(_lf and _lf.get("error_class") in _FAST_FAIL_VALUES)
         if streak >= fail_stop or (_hard and streak >= 1):
             # Pesan manusiawi dari kegagalan TERAKHIR — kini dipakai untuk KEDUA cabang. Dulu hanya
