@@ -197,18 +197,49 @@ class TestRunDirectDitolakGerbang(unittest.TestCase):
         self.assertFalse([t for t in tulisan if "run_id" in t],
                          "job yang ditolak tak boleh menulis run_id")
 
-    def test_admin_test_MELEWATI_gerbang(self):
-        # E — channel internal admin; kalau ikut terpagari, Pustaka Niche admin mati.
+    def test_admin_test_TIDAK_LAGI_melewati_gerbang(self):
+        """
+        E — [§10e-3 CELAH A] Dulu jenis 'admin_test' dikecualikan dari gerbang. Itu pintu belakang:
+        tenant tinggal menulis 'admin_test' untuk melewati gerbang DAN penghitung jatah. Pengecualian
+        dicabut — dan tak diperlukan, karena tenant internal admin adalah akun comp yang gerbangnya
+        selalu mengizinkan.
+        """
         job = dict(self.JOB, job_type="admin_test")
         from src.orchestrator import producer
+
+        # (a) Gerbang menolak → admin_test WAJIB ikut ditolak (pintu belakang tertutup).
         sb = FakeSBJob(self.CH)
-        dipanggil = []
-        with patch("src.billing.limits.test_gate",
-                   side_effect=lambda *a, **k: dipanggil.append(1) or {"allowed": False, "reason": "subscription"}), \
+        with patch("src.billing.limits.test_gate", return_value={"allowed": False, "reason": "trial_quota", "used": 9, "max": 3}), \
              patch("src.orchestrator.producer._run_test_no_publish") as jalan:
             producer.run_direct(sb, job)
-        self.assertEqual(dipanggil, [], "admin_test tak boleh menanyakan gerbang uji")
-        jalan.assert_called_once()
+        jalan.assert_not_called()
+        self.assertEqual([t for t in sb.tulisan if t.get("status") == "failed"][0]["error"],
+                         "GATE:trial_quota:9:3")
+
+        # (b) Akun comp (tenant admin internal) → gerbang mengizinkan → jalur admin tetap hidup.
+        sb2 = FakeSBJob(self.CH)
+        with patch("src.billing.limits.test_gate", return_value={"allowed": True, "reason": "comp"}), \
+             patch("src.orchestrator.producer._run_test_no_publish") as jalan2:
+            producer.run_direct(sb2, dict(job))
+        jalan2.assert_called_once()
+
+    def test_channel_milik_tenant_lain_DITOLAK(self):
+        """
+        [§10e-3 CELAH B] Job yang menunjuk channel orang lain akan memakai kunci AI + koneksi
+        YouTube KORBAN. Aturan tabel kini menahannya, tapi jalur kunci-layanan melewati aturan itu —
+        worker wajib punya pemeriksaannya sendiri.
+        """
+        from src.orchestrator import producer
+        ch_orang_lain = {"id": "C1", "tenant_id": "TENANT-LAIN", "niche": "history"}
+        sb = FakeSBJob(ch_orang_lain)
+        with patch("src.billing.limits.test_gate", return_value={"allowed": True, "reason": "ok"}) as g, \
+             patch("src.orchestrator.producer._run_test_no_publish") as jalan:
+            producer.run_direct(sb, dict(self.JOB))
+        jalan.assert_not_called()
+        g.assert_not_called()   # ditolak SEBELUM apa pun dikerjakan
+        self.assertEqual([t for t in sb.tulisan if t.get("status") == "failed"][0]["error"],
+                         "GATE:forbidden")
+        self.assertFalse([t for t in sb.tulisan if "run_id" in t])
 
 
 class TestGerbangProduksiTakBerubah(unittest.TestCase):
@@ -318,6 +349,29 @@ class TestJalurBukaTerpasang(unittest.TestCase):
         self.assertIn("tenant_resume_channels", src)
         halaman = self._baca("apps/web/src/app/(app)/channels/[id]/page.tsx")
         self.assertIn("pulihkanProduksi", halaman, "tombol pemulih hilang dari layar channel")
+
+    def test_aturan_tabel_membatasi_jenis_dan_kepemilikan_channel(self):
+        """[§10e-3 CELAH A & B] Aturan akses tabel antrean wajib memuat KEEMPAT syarat."""
+        sql = self._baca("migrations/0194_antrean_produksi_tak_bisa_disamarkan.sql")
+        self.assertIn("job_type IN ('test', 'test_nopub', 'retry')", sql,
+                      "jenis pekerjaan tak dibatasi → 'admin_test' jadi pintu belakang lagi")
+        self.assertIn("c.tenant_id = (auth.uid())::text", sql,
+                      "kepemilikan channel tak diperiksa → produksi bisa dipicu di kanal orang lain")
+        self.assertIn("tenant_test_gate", sql)
+        self.assertIn("tenant_id = (auth.uid())::text", sql)
+
+    def test_perpanjangan_mandiri_dibatasi(self):
+        """[§10e-3 CELAH C] Link 1-klik tak boleh bisa diulang tanpa batas."""
+        src = self._baca("src/billing/webhook_app.py")
+        self.assertIn("nurture_self_extend_max", src, "batas perpanjangan mandiri hilang")
+        self.assertIn("trial_self_extends", src, "penghitung perpanjangan mandiri tak dinaikkan")
+        # Setelah jatah habis, tenant WAJIB diarahkan ke jalur uang yang tepat.
+        self.assertIn('"arah"', src)
+        self.assertIn("upgrade", src)
+        self.assertIn("renew", src)
+        fe = self._baca("apps/web/src/app/reactivate/page.tsx")
+        self.assertIn("Perpanjang sekarang", fe, "tenant yang pernah bayar tak diajak memperpanjang")
+        self.assertIn("Lihat paket", fe, "tenant masa coba tak diajak memilih paket")
 
     def test_pintu_unduh_hasil_uji_bergerbang(self):
         # Pintu paling senyap: tautan unduh terbit ulang tiap halaman dibuka, tanpa menekan apa pun.

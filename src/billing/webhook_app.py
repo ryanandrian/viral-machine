@@ -257,9 +257,28 @@ try:
                     return default
 
             extend = _cfg_int("nurture_trial_extend_days", 3)
-            # Trial lapsed + tuas nyala → perpanjangan GRATIS + reset penanda nurture (sekali; klik ulang → status
-            # sudah 'trial' → jatuh ke cabang checkout, tak bisa extend berulang tanpa lapse lagi).
-            if status == "trial_expired" and extend > 0:
+            # [B24 §10e-3 CELAH C] Perpanjangan mandiri DIBATASI JUMLAHNYA.
+            # Komentar lama mengklaim "tak bisa extend berulang tanpa lapse lagi" — dan justru di
+            # situlah bugnya: masa coba memang lapse lagi beberapa hari kemudian, sementara token
+            # email berlaku 90 hari. Siklus lapse → klik → lapse → klik bisa diulang tanpa henti,
+            # artinya masa coba gratis selamanya. Owner: "jelas-jelas bug yang harus ditutup."
+            #
+            # Yang TIDAK berubah: klik pertama tetap memberi perpanjangan gratis — itu umpan
+            # konversi yang memang disengaja. Setelah jatah habis, link jatuh ke cabang checkout
+            # di bawah: tenant masa coba diarahkan MEMILIH PAKET, tenant yang pernah bayar
+            # diarahkan MEMPERPANJANG. Jalur uangnya tidak pernah hilang, hanya jadi satu-satunya.
+            maks_mandiri = _cfg_int("nurture_self_extend_max", 1)
+            terpakai_mandiri = 0
+            try:
+                _r2 = (sb.table("tenant_configs").select("trial_self_extends")
+                       .eq("tenant_id", tid).limit(1).execute())
+                terpakai_mandiri = int((_r2.data or [{}])[0].get("trial_self_extends") or 0)
+            except Exception as _ce:
+                # Gagal jujur ke sisi AMAN: tak bisa memastikan → jangan beri gratisan.
+                logger.warning(f"[lifecycle] baca jatah perpanjangan mandiri gagal tenant={tid}: {_ce}")
+                terpakai_mandiri = maks_mandiri
+
+            if status == "trial_expired" and extend > 0 and terpakai_mandiri < maks_mandiri:
                 from datetime import datetime, timezone, timedelta
                 end = (datetime.now(timezone.utc) + timedelta(days=extend)).isoformat()
                 # [B24 §10c] `trial_extended_at` = FAKTA kapan trial diperpanjang. Dibaca
@@ -270,6 +289,7 @@ try:
                 sb.table("tenant_configs").update({
                     "subscription_status": "trial", "current_period_end": end,
                     "trial_extended_at": datetime.now(timezone.utc).isoformat(),
+                    "trial_self_extends": terpakai_mandiri + 1,   # [B24] jatah perpanjangan mandiri
                     "nurture_step": 0, "nurture_last_sent_at": None, "trial_reminder_sent_at": None,
                     "winback_offer_pct": None, "winback_offer_expires_at": None,
                 }).eq("tenant_id", tid).execute()
@@ -281,8 +301,17 @@ try:
                     logger.error(f"[lifecycle] lepas rem channel gagal tenant={tid}: {_re}")
                 logger.info(f"[lifecycle] reactivate: trial diperpanjang {extend} hari tenant={tid}")
                 return {"ok": True, "action": "extended", "days": extend}
-            # suspended/blocked/active/deleted → tak bisa gratis → arahkan ke pembayaran
-            return {"ok": True, "action": "checkout", "status": status}
+            # Tak bisa gratis → arahkan ke JALUR UANG. `arah` memberi tahu layar harus berkata apa:
+            #   'upgrade'  = belum pernah berlangganan (masa coba) → ajak PILIH PAKET
+            #   'renew'    = pernah membayar → ajak PERPANJANG
+            # Tanpa pembeda ini, layar hanya melompat ke halaman tagihan tanpa penjelasan dan tenant
+            # yang mengira dapat perpanjangan gratis merasa dipermainkan.
+            belum_pernah_bayar = status in ("trial", "trial_expired")
+            return {
+                "ok": True, "action": "checkout", "status": status,
+                "arah": "upgrade" if belum_pernah_bayar else "renew",
+                "alasan": "self_extend_habis" if belum_pernah_bayar and extend > 0 else "status",
+            }
         except Exception as e:
             logger.warning(f"[lifecycle] reactivate gagal: {e}")
             return JSONResponse({"error": str(e)}, status_code=400)

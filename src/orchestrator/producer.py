@@ -306,25 +306,41 @@ def run_direct(sb, job: dict) -> None:
         sb.table("direct_jobs").update({"status": "failed", "error": "channel tak ditemukan", "completed_at": _now()}).eq("id", jid).execute()
         return
 
+    # [B24 §10e-3 CELAH B] Channel WAJIB milik tenant pemilik job. Aturan akses tabel kini
+    # memeriksanya, tapi jalur kunci-layanan melewati aturan itu — dan tanpa pemeriksaan di sini,
+    # satu baris job yang menunjuk channel orang lain akan memakai kunci AI + koneksi YouTube
+    # KORBAN: membakar dompet mereka dan mengunggah ke kanal mereka. Terbukti bisa disisipkan
+    # (HTTP 201) sebelum ditutup. Nol job historis pernah melakukannya — ditutup sebelum terjadi.
+    if str(ch.get("tenant_id") or "") != str(tenant_id):
+        logger.error(f"[Direct] job {jid} menunjuk channel {job.get('channel_id')} milik tenant LAIN "
+                     f"({ch.get('tenant_id')} ≠ {tenant_id}) — DITOLAK")
+        sb.table("direct_jobs").update({
+            "status": "failed", "error": "GATE:forbidden", "completed_at": _now(),
+        }).eq("id", jid).execute()
+        return
+
     # [B24 §10c LAPIS 3] GERBANG UJI — periksa ULANG tepat sebelum membakar slot render.
     # Job bisa sudah mengantre lalu keadaan berubah di tengah jalan: langganan jatuh tempo, admin
     # men-suspend, atau job lain di antrean yang sama menghabiskan jatah trial. Lapis DB & lapis API
     # memeriksa saat job DIBUAT; hanya lapis ini yang memeriksa saat job DIJALANKAN.
-    # `admin_test` dikecualikan: itu channel internal admin (tenant comp), bukan milik tenant.
+    #
+    # [§10e-3 CELAH A] Dulu jenis 'admin_test' DIKECUALIKAN dari pemeriksaan ini — dan itu jadi
+    # pintu belakang: tenant tinggal menulis 'admin_test' untuk melewati gerbang DAN melewati
+    # penghitung jatah. Pengecualian dicabut; tak diperlukan sama sekali, karena tenant internal
+    # admin (`admin_test_internal`) adalah akun comp yang gerbangnya SELALU mengizinkan.
     # Pesan disimpan sebagai KODE (`GATE:...`), bukan kalimat — FE yang menerjemahkan dwibahasa (§3.5).
-    if (job.get("job_type") or "") != "admin_test":
-        from src.billing.limits import test_gate
-        _gate = test_gate(sb, tenant_id)
-        if not _gate.get("allowed"):
-            _alasan = _gate.get("reason") or "subscription"
-            _kode = (f"GATE:trial_quota:{_gate.get('used')}:{_gate.get('max')}"
-                     if _alasan == "trial_quota" else f"GATE:{_alasan}")
-            logger.info(f"[Direct] job {jid} ({job.get('job_type')}) DITOLAK gerbang uji: "
-                        f"{_kode} tenant={tenant_id}")
-            sb.table("direct_jobs").update({
-                "status": "failed", "error": _kode, "completed_at": _now(),
-            }).eq("id", jid).execute()
-            return
+    from src.billing.limits import test_gate
+    _gate = test_gate(sb, tenant_id)
+    if not _gate.get("allowed"):
+        _alasan = _gate.get("reason") or "subscription"
+        _kode = (f"GATE:trial_quota:{_gate.get('used')}:{_gate.get('max')}"
+                 if _alasan == "trial_quota" else f"GATE:{_alasan}")
+        logger.info(f"[Direct] job {jid} ({job.get('job_type')}) DITOLAK gerbang uji: "
+                    f"{_kode} tenant={tenant_id}")
+        sb.table("direct_jobs").update({
+            "status": "failed", "error": _kode, "completed_at": _now(),
+        }).eq("id", jid).execute()
+        return
 
     sb.table("direct_jobs").update({"run_id": run_id}).eq("id", jid).execute()
 

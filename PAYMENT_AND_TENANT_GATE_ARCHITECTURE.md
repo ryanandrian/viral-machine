@@ -318,10 +318,12 @@ kuitansi terkirim. Anti dobel-bayar terbukti 2× (2 order lama auto-cancel). [A1
 
 # 10. [G-UJI] GERBANG UJI PRODUKSI — SSOT kerja aktif (dibuka 2026-08-02)
 
-> **Status: 🟢 F1–F7 + AUDIT FINAL SELESAI (2026-08-02) — BELUM DEPLOY (menunggu izin owner, §5.0).**
-> 4 migrasi **SUDAH APPLIED ke DB live** (0190/0191/0192/0193) — gerbang lapis DATABASE sudah AKTIF di produksi;
-> lapis API & layar baru aktif setelah deploy. **755 pemeriksaan lulus di 9 jalur, 0 gagal** (§10e-2).
-> Audit final menemukan & menutup **2 lubang tambahan**: pintu unduh hasil uji, dan JEBAKAN kunci-tanpa-jalur-buka.
+> **Status: 🟢 F1–F7 + AUDIT 3 PUTARAN SELESAI (2026-08-02/03) — BELUM DEPLOY (menunggu izin owner, §5.0).**
+> 5 migrasi **SUDAH APPLIED ke DB live** (0190–0194) — gerbang lapis DATABASE sudah AKTIF di produksi;
+> lapis API & layar baru aktif setelah deploy. **778 pemeriksaan lulus, 0 gagal** (§10e-3).
+> Audit menemukan & menutup **5 lubang tambahan** di luar 4 pintu awal: tautan unduh hasil uji (§10e-2) ·
+> JEBAKAN kunci-tanpa-jalur-buka (§10e-2) · pekerjaan disamarkan sbg admin · **produksi di channel tenant
+> LAIN** · perpanjangan masa coba mandiri tanpa batas (§10e-3). **Total 9 pintu/celah ditutup.**
 > Dokumen ini = satu-satunya tempat rencana & progress kerja ini. Pasca-compaction: baca §10 UTUH, jangan riset ulang §10a.
 >
 > **⚠️ DUA HAL MENUNGGU KEPUTUSAN OWNER (jangan diputuskan sendiri):**
@@ -599,6 +601,81 @@ Uji lubang 1 sempat merah palsu karena **server lokal yang diuji masih build LAM
 (exit 144) dan proses lama (20:38) tetap hidup saat build baru sudah jadi (23:45). Ini **kejadian kedua**
 pada sesi yang sama. **Aturan untuk seterusnya: setelah build, WAJIB bandingkan waktu-mulai proses
 server dengan waktu `.next/BUILD_ID`; jangan percaya `pkill`, bunuh lewat PID lalu verifikasi.**
+
+## 10e-3. AUDIT PUTARAN KETIGA — 3 CELAH LAGI, dua di antaranya LINTAS-TENANT
+
+> Owner: *"kalau anda masih menemukan bug, artinya audit terakhir juga bisa jadi anda masih miss."*
+> Benar. Putaran ini menemukan **tiga celah lagi — dua di antaranya lebih serius dari semua yang
+> sebelumnya**, karena menembus batas antar-tenant.
+
+### CELAH A — pekerjaan bisa DISAMARKAN sebagai pekerjaan admin *(dibuktikan: HTTP 201)*
+Aturan tabel antrean hanya memeriksa "atas nama diri sendiri" — **tidak** memeriksa JENIS pekerjaan.
+Sementara itu worker sengaja MELEWATI gerbang untuk `admin_test`, dan penghitung jatah hanya
+menghitung `test`/`test_nopub`/`retry`. Tenant cukup menulis `admin_test` dari browser untuk
+memproduksi **tanpa batas**: melewati jatah DAN melewati pemeriksaan worker sekaligus.
+**Ditutup:** aturan tabel membatasi jenis + pengecualian `admin_test` di worker **dicabut** (tak
+diperlukan — tenant internal admin adalah akun comp yang gerbangnya selalu mengizinkan).
+
+### CELAH B — produksi bisa dipicu di CHANNEL MILIK TENANT LAIN *(dibuktikan: HTTP 201)*
+Aturan tabel memeriksa `tenant_id` tapi **tidak** memeriksa bahwa channel yang ditunjuk memang milik
+tenant itu. Worker memakai channel dari job apa adanya, termasuk **kunci AI + koneksi YouTube
+korban** → membakar dompet mereka dan mengunggah ke kanal mereka.
+**Ditutup:** aturan tabel memeriksa kepemilikan + worker memeriksa ulang sebelum apa pun dikerjakan.
+Data historis diperiksa: **NOL** pekerjaan pernah memakai channel orang lain — ditutup sebelum terjadi.
+
+> **KEJUJURAN:** celah A & B **lebih tua** dari gerbang uji — aturan `direct_jobs_tenant_insert`
+> sudah begitu sejak dibuat. Tetapi **saya baru saja mengganti aturan itu di 0191 dan tidak
+> memperbaikinya saat itu.** Saya menyentuh persis baris yang bocor dan melewatkannya.
+
+### CELAH C — perpanjangan masa coba mandiri BERULANG tanpa batas
+Link 1-klik di email memperpanjang masa coba gratis. Komentar kode lama mengklaim "tak bisa berulang
+tanpa lapse lagi" — dan **di situlah bugnya**: masa coba memang lapse lagi beberapa hari kemudian,
+sementara token email berlaku 90 hari. Siklus lapse → klik → lapse → klik = **masa coba gratis
+selamanya**. Owner: *"jelas-jelas bug yang harus ditutup."*
+
+**Ditutup TANPA membuang jalur konversinya** (jawaban atas pertanyaan owner "penggantinya seperti apa"):
+
+| Yang mengklik | Sebelum | Sesudah |
+|---|---|---|
+| Masa coba lapse, **pertama kali** | +N hari gratis | **tetap** +N hari gratis (umpan konversi) |
+| Masa coba lapse, **sudah pernah** | +N hari gratis **lagi, tanpa batas** 🔴 | layar **"Lihat paket"** → diarahkan **UPGRADE** |
+| **Pernah membayar** (tenggang/ditangguhkan) | dilempar diam-diam ke `/billing` | layar **"Perpanjang sekarang"** → diarahkan **RENEW** |
+
+Dulu cabang non-gratis melompat ke halaman tagihan **tanpa satu kalimat pun penjelasan** — cara
+tercepat kehilangan orang yang sebenarnya sudah hampir membayar. Kini halaman reaktivasi menjelaskan
+keadaannya, menegaskan pengaturan channel mereka masih utuh, lalu mengarahkan ke jalur uang yang tepat.
+
+Kolom `tenant_configs.trial_self_extends` menghitung perpanjangan **mandiri** saja — perpanjangan oleh
+admin tidak menambahnya, karena admin memang berwenang memperpanjang berkali-kali (perintah owner:
+*"jika ingin diperpanjang dilakukan lewat FE admin panel"*). Batasnya kenop
+**`nurture_self_extend_max`** (default 1; **0 = tenant tak boleh sama sekali**).
+
+### Berkas putaran ketiga
+| Berkas | Perubahan |
+|---|---|
+| `migrations/0194_antrean_produksi_tak_bisa_disamarkan.sql` | ✅ APPLIED — aturan tabel 4 syarat + kolom `trial_self_extends` + kenop `nurture_self_extend_max` |
+| `src/orchestrator/producer.py` | cabut pengecualian `admin_test` + tolak channel milik tenant lain |
+| `src/billing/webhook_app.py` | batas perpanjangan mandiri + `arah` (upgrade/renew) |
+| `apps/web/src/app/reactivate/page.tsx` | layar checkout dwibahasa: **Perpanjang** vs **Lihat paket** |
+| `admin/(panel)/app-config/page.tsx` | kenop **Batas Perpanjang Mandiri** lahir lengkap (total 7 kenop baru) |
+| `tests/test_gerbang_uji.py` | +3 uji (jenis pekerjaan · channel silang · batas perpanjangan) |
+
+### VALIDASI TOTAL PUTARAN KETIGA — **778 pemeriksaan, 0 gagal**
+| Jalur | Hasil |
+|---|---|
+| Lapis DB · Mesin RPC | 64 · 30 |
+| Suite proyek | **589 passed** (560 → 581 → 586 → 589) |
+| **Celah C** — layanan webhook dijalankan NYATA (TestClient), token HMAC sah | **18/18** |
+| API · Layar · Audit final · Pintu 6 · Jalur buka · Proses terkait | 13 · 19 · 14 · 6 · 10 · 13 |
+| **Celah A · Celah B** — penyisipan nyata ke tabel antrean | ✅ 403 (dulu 201) |
+
+Produksi tak tergores: `direct_jobs` **98** · channel terjeda **3** · perpanjangan mandiri **0** ·
+`trial_extended_at` **0** · kenop 110 → **117**.
+
+**Kesalahan prosedur yang TERULANG (ketiga kalinya):** uji celah C sempat 401 di semua langkah —
+endpoint webhook dijaga rahasia internal dan uji saya tidak mengirim headernya. Bukan bug aplikasi;
+**pagar yang benar**. Pola yang sama dengan dua sebelumnya: **saya menyalahkan aplikasi sebelum
+memeriksa perkakas ujinya sendiri.**
 
 ## 10f. MATRIKS REGRESI — "haram bug baru" (tiap baris = uji otomatis)
 | Wajib tetap utuh | Risiko yang dijaga |

@@ -12,6 +12,11 @@ export default function ReactivatePage() {
   const [lang, setLang] = useState<"id" | "en">("id");
   const [state, setState] = useState<State>("loading");
   const [days, setDays] = useState<number>(0);
+  // [B24] 'upgrade' = belum pernah berlangganan → ajak PILIH PAKET.
+  // 'renew' = pernah membayar → ajak PERPANJANG. Dulu keduanya dilempar diam-diam ke /billing:
+  // tenant yang mengira dapat perpanjangan gratis mendarat di halaman tagihan tanpa satu kalimat
+  // pun penjelasan — cara tercepat kehilangan orang yang sebenarnya sudah hampir membayar.
+  const [arah, setArah] = useState<"upgrade" | "renew">("upgrade");
 
   useEffect(() => {
     if ((navigator.language || "id").toLowerCase().startsWith("en")) setLang("en");
@@ -23,7 +28,7 @@ export default function ReactivatePage() {
       .then((r) => r.ok ? r.json() : r.json().then((j) => Promise.reject(j)))
       .then((j) => {
         if (j?.action === "extended") { setDays(j.days || 0); setState("extended"); }
-        else if (j?.action === "checkout") { window.location.href = "/billing"; }
+        else if (j?.action === "checkout") { setArah(j.arah === "renew" ? "renew" : "upgrade"); setState("checkout"); }
         else setState("error");
       })
       .catch(() => setState("error"));
@@ -47,6 +52,28 @@ export default function ReactivatePage() {
                  `We added ${days} more trial days for you. Sign in to keep producing.`)}
             </p>
             <a href="/auth?view=login" className="btn btn-default btn-lg" style={{ width: "100%" }}>{t("Masuk sekarang", "Sign in now")}</a>
+          </>
+        )}
+        {state === "checkout" && (
+          <>
+            <h2 style={{ marginBottom: ".5rem" }}>
+              {arah === "renew"
+                ? t("Perpanjang langganan Anda", "Renew your subscription")
+                : t("Lanjutkan dengan paket berbayar", "Continue on a paid plan")}
+            </h2>
+            <p className="muted" style={{ marginBottom: "1.25rem" }}>
+              {arah === "renew"
+                ? t("Produksi otomatis Anda berhenti karena langganan belum diperpanjang. Perpanjang sekarang dan channel Anda langsung jalan lagi — pengaturan, niche, dan riwayatnya tetap utuh.",
+                    "Your automated production stopped because the subscription hasn't been renewed. Renew now and your channels resume immediately — settings, niches, and history are all still there.")
+                : t("Masa coba Anda sudah kami perpanjang sebelumnya, jadi kali ini pilih paket untuk melanjutkan. Semua pengaturan channel Anda tersimpan dan langsung dipakai begitu paket aktif.",
+                    "We already extended your trial once before, so this time please pick a plan to continue. All your channel settings are saved and will be used the moment a plan is active.")}
+            </p>
+            <a href="/billing" className="btn btn-default btn-lg" style={{ width: "100%" }}>
+              {arah === "renew" ? t("Perpanjang sekarang", "Renew now") : t("Lihat paket", "View plans")}
+            </a>
+            <a href="/auth?view=login" className="btn btn-ghost btn-sm" style={{ width: "100%", marginTop: ".5rem" }}>
+              {t("Masuk dulu", "Sign in first")}
+            </a>
           </>
         )}
         {state === "error" && (
