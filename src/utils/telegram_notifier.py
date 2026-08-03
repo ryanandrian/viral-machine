@@ -148,7 +148,7 @@ class TelegramNotifier:
         return "Video ini perlu Anda tinjau sebentar sebelum tayang."
 
     def notify_circuit_break(self, tenant_id: str, channel_id: str, reason: str,
-                             channel_name: str = "") -> bool:
+                             channel_name: str = "", error_class: str = "") -> bool:
         """REM DARURAT §4b/F7: produksi channel DIHENTIKAN otomatis (gagal beruntun). Alarm KERAS,
         dikirim SEKETIKA (tak menunggu slot) — cegah loop bakar-kredit.
         Header SERAGAM dgn notif lain: [nama channel] (owner 2026-07-10 — dulu UUID mentah,
@@ -157,10 +157,29 @@ class TelegramNotifier:
         if not chat_id:
             return False
         display = self._escape(str(channel_name or channel_id))
+        # [B25] Satu bit yang paling menentukan bagi tenant: PERLU BERTINDAK ATAU TIDAK.
+        # Dulu anjurannya menebak untuk semua kasus ("mis. saldo/kredensial AI") — dan tenant yang
+        # sebabnya sebenarnya pulih sendiri tetap membiarkan channelnya mati berhari-hari.
+        # Sumber kebenaran = `SELF_HEALING` (src/exceptions.py), BUKAN nama penyedia.
+        from src.exceptions import SELF_HEALING, ErrorClass
+        try:
+            _pulih = ErrorClass(error_class) in SELF_HEALING if error_class else None
+        except ValueError:
+            _pulih = None
+        if _pulih is True:
+            anjuran = ("⏳ Penyebabnya pulih sendiri — Anda tidak perlu mengubah pengaturan apa pun.\n"
+                       "👉 Buka channel Anda, lalu tekan <b>Pulihkan produksi</b>.")
+        elif _pulih is False:
+            anjuran = ("🔧 Penyebabnya TIDAK pulih sendiri — ada satu hal yang perlu Anda kerjakan dulu.\n"
+                       "👉 Buka channel Anda: di sana tertulis langkahnya beserta tombol pemulihnya.")
+        else:
+            anjuran = "👉 Buka channel Anda untuk melihat penyebab & tombol <b>Pulihkan produksi</b>."
+        base = (os.getenv("APP_BASE_URL", "") or "").rstrip("/")
+        tautan = f"\n🔗 {base}/channels/{channel_id}" if base else ""
         text = (
             f"🛑 <b>[{display}] Produksi DIHENTIKAN otomatis</b>\n"
             f"⚠️ {self._escape(reason)}\n"
-            f"👉 Perbaiki penyebab (mis. saldo/kredensial AI), lalu tekan <b>Jalankan Ulang</b> untuk melanjutkan."
+            f"{anjuran}{tautan}"
         )
         return self._send(chat_id, text)
 

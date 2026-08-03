@@ -20,7 +20,7 @@ export type TestInfo = { id: string; status: string; error: string | null; creat
 const tgl = (iso: string | null, loc: string) => iso
   ? new Date(iso).toLocaleDateString(loc, { day: "numeric", month: "short", year: "numeric" }) : "—";
 
-export default function TestNichePanel({ getUrl, postUrl, postBody, confirmMessage, title, runLabel, renderResult, onComplete, hideRefresh, hideSummary, onGate }: {
+export default function TestNichePanel({ getUrl, postUrl, postBody, confirmMessage, title, runLabel, renderResult, onComplete, hideRefresh, hideSummary }: {
   getUrl: string;                       // GET → { test }
   postUrl: string;                      // POST → enqueue
   postBody?: Record<string, unknown>;   // body POST (tenant kirim niche_id)
@@ -31,7 +31,6 @@ export default function TestNichePanel({ getUrl, postUrl, postBody, confirmMessa
   onComplete?: (test: TestInfo) => void;         // dipanggil sekali saat test selesai (done/failed) → mis. segarkan banner channel.
   hideRefresh?: boolean;                          // konteks channel: sembunyikan tombol segarkan (panel sudah auto-update).
   hideSummary?: (test: TestInfo) => boolean;      // konteks channel: true → ringkasan hasil terminal (badge/skor/tanggal) ikut hilang (Tutup = SEMUA info hasil hilang). Status berjalan tak terpengaruh.
-  onGate?: (g: { allowed: boolean; code: string | null } | null) => void;  // [B24] laporkan keadaan gerbang ke halaman induk (satu panggilan, tak diminta dua kali)
 }) {
   const [test, setTest] = useState<TestInfo | null>(null);
   const [loading, setLoading] = useState(false);
@@ -42,16 +41,13 @@ export default function TestNichePanel({ getUrl, postUrl, postBody, confirmMessa
   // [B24] Keadaan gerbang uji dari server. Panel admin tidak mengirim field ini → tetap null →
   // perilaku persis seperti sebelumnya (nol regresi untuk layar admin).
   const [gate, setGate] = useState<{ allowed: boolean; code: string | null } | null>(null);
-  // ref, bukan dependensi `load`: kalau induk mengirim fungsi baru tiap render, `load` ikut
-  // berubah identitas dan effect polling terus dijadwal ulang.
-  const onGateRef = useRef(onGate); onGateRef.current = onGate;
   const terkunci = gate?.allowed === false;
 
   const load = useCallback(async () => {
     setLoading(true);
     const r = await fetch(getUrl);
     setLoading(false);
-    if (r.ok) { const j = await r.json(); setTest(j.test); setGate(j.gate ?? null); onGateRef.current?.(j.gate ?? null); }
+    if (r.ok) { const j = await r.json(); setTest(j.test); setGate(j.gate ?? null); }
   }, [getUrl]);
   useEffect(() => { setTest(null); load(); }, [load]);
   useEffect(() => {

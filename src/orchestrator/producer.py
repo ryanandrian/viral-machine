@@ -537,15 +537,25 @@ def _active_channels(sb) -> list:
     return sb.table("channels").select("*").eq("is_active", True).execute().data or []
 
 
-def _pause_channel(sb, ch: dict, reason: str) -> None:
-    """Circuit-breaker §4b/F7: hentikan produksi channel + catat alasan. Auto-recover saat 1 produce
-    sukses (run_direct membersihkan flag). Kolom channels.production_paused* (migr 0050)."""
+def _pause_channel(sb, ch: dict, reason: str, error_class: str | None = None) -> None:
+    """Circuit-breaker §4b/F7: hentikan produksi channel + catat alasan DAN KELASNYA.
+
+    `error_class` (migr 0196) = kelas error dari kegagalan yang menyalakan rem. Sistem SUDAH tahu
+    nilainya saat memutuskan mengerem — sebelumnya dibuang, sehingga layar & notifikasi hanya bisa
+    menganjurkan tebakan dan tenant tak pernah tahu apakah sebabnya PULIH SENDIRI atau butuh tindakan.
+    Dampaknya terukur: satu channel tenant berbayar mati ±44 jam karena jatah harian penyedia habis —
+    sebab yang pulih sendiri keesokan harinya. SSOT: AI_ERROR_MANAGEMENT_ARCHITECTURE.md §8a/§9.
+
+    Dilepas oleh: produksi direct yang sukses · reaktivasi langganan · tombol "Pulihkan produksi"
+    (jalur buka manual, [B24] §10c).
+    """
     from datetime import datetime, timezone
     try:
         sb.table("channels").update({
             "production_paused": True,
             "production_paused_at": datetime.now(timezone.utc).isoformat(),
             "production_paused_reason": reason[:300],
+            "production_paused_class": (error_class or None),
         }).eq("id", ch["id"]).execute()
     except Exception as e:
         logger.error(f"[Producer] gagal set pause ch={ch.get('id')}: {e}")
@@ -585,19 +595,25 @@ def plan_and_submit(sb, pool: ThreadPoolExecutor, sem: threading.Semaphore) -> i
         _lf = inventory.latest_failure(cid)
         _hard = bool(_lf and _lf.get("error_class") in _FAST_FAIL_VALUES)
         if streak >= fail_stop or (_hard and streak >= 1):
+            # Pesan manusiawi dari kegagalan TERAKHIR — kini dipakai untuk KEDUA cabang. Dulu hanya
+            # cabang rem-cepat yang menyertakannya; cabang 3-kegagalan hanya menulis kalimat generik,
+            # sehingga tenant yang paling sering terkena justru yang paling sedikit diberi tahu.
+            _human = (_lf.get("error_message") or "").strip() if _lf else ""
+            _kelas = (_lf.get("error_class") or "").strip() if _lf else ""
             if _hard:
-                _human = (_lf.get("error_message") or "").strip()
                 reason = (f"Produksi channel DIHENTIKAN otomatis: {_human or 'kredit/pembayaran provider bermasalah'} "
                           f"(perbaiki penyebabnya, lalu Jalankan Ulang).")
             else:
+                _sebab = f" Penyebab terakhir: {_human}" if _human else ""
                 reason = (f"{streak}x produksi beruntun gagal/bermasalah → produksi channel DIHENTIKAN "
-                          f"otomatis. Periksa kredensial/konfigurasi, lalu Jalankan Ulang (direct).")
-            logger.error(f"[Producer] CIRCUIT-BREAK ch={cid} (hard={_hard}): {reason}")
-            _pause_channel(sb, ch, reason)
+                          f"otomatis.{_sebab}")
+            logger.error(f"[Producer] CIRCUIT-BREAK ch={cid} (hard={_hard}, kelas={_kelas or '-'}): {reason}")
+            _pause_channel(sb, ch, reason, error_class=_kelas)
             try:
                 from src.utils.telegram_notifier import TelegramNotifier
                 TelegramNotifier().notify_circuit_break(tenant_id=ch["tenant_id"], channel_id=cid, reason=reason,
-                                                        channel_name=ch.get("channel_name") or "")
+                                                        channel_name=ch.get("channel_name") or "",
+                                                        error_class=_kelas)
             except Exception as _te:
                 logger.warning(f"[Producer] alarm circuit-break gagal: {_te}")
             continue

@@ -14,6 +14,7 @@ import { InsightsView, type Insights, type LearnedWeights } from "@/components/i
 import { LearningCurveCard } from "@/components/learning-curve-card";
 import RunsTable from "@/components/runs-table";
 import TestNichePanel, { type TestInfo } from "@/components/test-niche-panel";
+import PemulihanChannel from "@/components/pemulihan-channel";
 import "./channel-detail.css";
 
 // D3 Channel Detail — Phase 9.3 (wired Supabase v2, anon + RLS).
@@ -30,6 +31,7 @@ type ChannelRow = {
   niche: string | null; niche_pool: string[] | null; niche_mode: string | null; content_language: string | null;
   is_active: boolean | null; publish_privacy: string | null; duration_preset: number | null; publish_slots: string[] | null;
   production_paused: boolean | null; production_paused_reason: string | null;
+  production_paused_class: string | null; production_paused_at: string | null;
   llm_model: string | null; llm_library: string | null; visual_mode: string | null;
   llm_account_id: string | null; tts_account_id: string | null; visual_account_id: string | null;
   tts_provider: string | null; tts_model: string | null; voice_key: string | null;
@@ -140,8 +142,6 @@ export default function ChannelDetailPage() {
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [testMsg, setTestMsg] = useState<string | null>(null);
-  // [B24] Keadaan gerbang uji dilaporkan oleh panel uji (satu panggilan, tidak diminta dua kali).
-  const [ujiTerkunci, setUjiTerkunci] = useState(false);
   const wasHaltedRef = useRef(false);  // latch: channel pernah halted saat sesi ini → pesan hasil pakai "aktif kembali".
   const chRef = useRef<ChannelRow | null>(null);  // nilai tersimpan SEBELUM penyegaran (pagar anti-timpa di load)
   // Siklus hidup kartu hasil uji (owner 2026-07-08: "sampai kapan muncul?") — hilang bila:
@@ -536,7 +536,7 @@ export default function ChannelDetailPage() {
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     const { data } = await supabase.from("channels")
-      .select("id,channel_name,platform_channel_id,youtube_account_id,subscriber_count,niche,niche_pool,niche_mode,content_language,is_active,publish_privacy,duration_preset,publish_slots,production_paused,production_paused_reason,llm_model,llm_library,visual_mode,llm_account_id,tts_account_id,visual_account_id,tts_provider,tts_model,voice_key,image_quality,music_enabled,music_volume,music_default_mood,script_min_viral_score,script_max_retry,caption_style,hook_title_style,niche_hashtags,cta_mode,brand_name,brand_cta_text,brand_logo,logo_position,logo_size,logo_opacity,landing_link,link_position")
+      .select("id,channel_name,platform_channel_id,youtube_account_id,subscriber_count,niche,niche_pool,niche_mode,content_language,is_active,publish_privacy,duration_preset,publish_slots,production_paused,production_paused_reason,production_paused_class,production_paused_at,llm_model,llm_library,visual_mode,llm_account_id,tts_account_id,visual_account_id,tts_provider,tts_model,voice_key,image_quality,music_enabled,music_volume,music_default_mood,script_min_viral_score,script_max_retry,caption_style,hook_title_style,niche_hashtags,cta_mode,brand_name,brand_cta_text,brand_logo,logo_position,logo_size,logo_opacity,landing_link,link_position")
       .eq("id", id).maybeSingle();
     const c = data as ChannelRow | null;
     setCh(c);
@@ -825,8 +825,23 @@ export default function ChannelDetailPage() {
         {testMsg && <div style={{ flexBasis: "100%", fontSize: "var(--text-xs)", color: "var(--text-secondary)", marginTop: ".5rem" }}>{testMsg}</div>}
       </div>
 
+      {/* [B25] Keadaan "dihentikan sistem" punya panelnya sendiri: menjawab APA yang terjadi, APAKAH
+          pulih sendiri, dan APA langkah tenant — per KELAS error, tidak pernah per nama penyedia.
+          Menggantikan banner generik yang dulu hanya menampilkan kalimat mentah + anjuran menebak. */}
+      {eff.key === "halted" && (
+        <PemulihanChannel
+          channelId={id}
+          kelas={ch.production_paused_class}
+          alasan={ch.production_paused_reason}
+          sejak={ch.production_paused_at}
+          bolehPulihkan={subIsProducing(sub)}
+          sedangProses={busy}
+          onPulihkan={pulihkanProduksi}
+        />
+      )}
+
       {/* F2-07/F1-09: banner status efektif — tenant well-informed (alasan + rekomendasi + aksi pemulihan) */}
-      {eff.key !== "active" && (
+      {eff.key !== "active" && eff.key !== "halted" && (
         <div className="card card-pad" style={{ marginBottom: "1rem", borderLeft: `3px solid var(--${eff.tone === "stop" ? "danger" : eff.tone === "warn" ? "warning" : "border"}, #f59e0b)` }}>
           <div style={{ display: "flex", alignItems: "flex-start", gap: "0.625rem" }}>
             <AlertTriangle size={18} style={{ color: `var(--${eff.tone === "stop" ? "danger" : "warning"}, #f59e0b)`, flexShrink: 0, marginTop: 2 }} />
@@ -837,15 +852,9 @@ export default function ChannelDetailPage() {
               <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.625rem", flexWrap: "wrap" }}>
                 {eff.key === "incomplete" && <button className="btn btn-default btn-sm" onClick={() => setTab("settings")}><Settings size={14} /> <Bi id="Lengkapi konfigurasi" en="Complete config" /></button>}
                 {eff.key === "paused" && <button className="btn btn-default btn-sm" disabled={busy} onClick={() => pausePlay(true)}><Play size={14} /> <Bi id="Aktifkan" en="Activate" /></button>}
-                {/* [B24 §10c] JALUR BUKA saat terjebak: channel dihentikan sistem, produksi rutin
-                    masih boleh jalan, tapi tombol uji terkunci (masa tenggang / jatah coba habis).
-                    Tanpa tombol ini mesin berhenti selamanya tanpa cara memulihkan. Melepas rem
-                    tidak memproduksi apa pun — bila sebabnya belum diperbaiki, rem menyala lagi. */}
-                {eff.key === "halted" && ujiTerkunci && subIsProducing(sub) && (
-                  <button className="btn btn-default btn-sm" disabled={busy} onClick={pulihkanProduksi}>
-                    <Play size={14} /> <Bi id="Pulihkan produksi" en="Resume production" />
-                  </button>
-                )}
+                {/* [B25] Tombol "Pulihkan produksi" untuk keadaan halted PINDAH ke PemulihanChannel —
+                    di sana ia berdiri bersama penjelasan sebabnya, bukan sendirian tanpa konteks.
+                    Banner ini kini hanya melayani keadaan selain halted. */}
               </div>
             </div>
           </div>
@@ -863,7 +872,6 @@ export default function ChannelDetailPage() {
           confirmMessage={<Bi id="Tindakan ini memproduksi 1 video uji (privat di YouTube) untuk memeriksa konfigurasi channel Anda. Lanjutkan?" en="This produces 1 test video (private on YouTube) to check your channel configuration. Continue?" />}
           renderResult={channelTestResult}
           onComplete={() => load()}
-          onGate={(g) => setUjiTerkunci(g?.allowed === false)}
           hideRefresh
           hideSummary={isResultHidden}
         />

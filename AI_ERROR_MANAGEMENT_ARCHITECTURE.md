@@ -107,7 +107,8 @@ Klasifikasi menempel pada **transport yang menerima error**, bukan merek model. 
 | `tests/test_error_429_generik.py` | — | 429 level-transport (bukan kalimat vendor) → RATE_LIMIT |
 | `tests/test_youtube_auth_invalid.py` | — | `invalid_grant`→AUTH_INVALID; RefreshError lain tetap transien |
 | `tests/test_suara_terpotong.py` · `test_suara_naskah_panjang.py` | — | kegagalan suara → TRANSIENT |
-| **`tests/test_ssot_error_mgmt.py`** | **BARU** | **penjaga anti-drift: dokumen ini vs kode** (§10) |
+| **`tests/test_ssot_error_mgmt.py`** | 9 | **penjaga anti-drift: dokumen ini vs kode** (§10) |
+| **`tests/test_pemulihan_channel.py`** | **12** | **[B25] rem menyimpan sebabnya · Telegram bedakan pulih-sendiri · anti-drift `SELF_HEALING` lintas 3 tempat** |
 | **Total kelima berkas lama** | **39 lulus** | dijalankan 2026-08-03 |
 
 **Bukti dari PRODUKSI NYATA** (bukan hanya uji) — `production_runs.error_class` sejak migr 0170:
@@ -116,7 +117,22 @@ empat kelas berbeda benar-benar terklasifikasi pada trafik sungguhan, bukan semu
 
 ## §8 CELAH TERBUKA yang diketahui (jujur — belum diperbaiki)
 
-### 8a. Rem darurat MEMBUANG kelas errornya *(ditemukan 2026-08-03)*
+### 8a. ~~Rem darurat MEMBUANG kelas errornya~~ — ✅ **DITUTUP 2026-08-03** *(migr 0196 + [B25] A–D)*
+> Kelas error kini **disimpan** saat rem menyala (`channels.production_paused_class`), dan alasan yang
+> tercatat memuat pesan manusiawi dari kegagalan terakhir untuk **kedua** cabang (rem-cepat & 3-gagal;
+> dulu hanya cabang rem-cepat). Layar channel menampilkan **panel pemulihan per-KELAS** yang menjawab
+> tiga pertanyaan tenant — apa yang terjadi · apakah pulih sendiri · apa langkah Anda — plus tombol
+> **Pulihkan produksi**. Telegram memberi anjuran yang berbeda untuk kelas yang pulih-sendiri vs yang
+> menuntut tindakan, dan mengantar ke layar. Layar admin (`/admin/system`) memuat satu daftar seluruh
+> channel yang berhenti beserta sebabnya. Sumber "pulih sendiri" = **`SELF_HEALING`** (`src/exceptions.py`),
+> dijaga uji anti-drift lintas tiga tempat (kode ↔ dokumen ↔ layar).
+> **Bukti:** 22 pemeriksaan klik→layar (7 kelas × judul & status, kelas tak-dikenal, daftar admin), nol
+> galat halaman. **Pemulihan tetap keputusan tenant** — sistem tidak pernah melepas rem sendiri karena
+> sebab teknis dianggap lewat (arahan owner).
+>
+> Teks aslinya dipertahankan di bawah sebagai catatan sebab-akibat.
+
+### 8a-lama. Rem darurat MEMBUANG kelas errornya *(ditemukan 2026-08-03)*
 `_pause_channel` (`producer.py`) menyimpan `production_paused_reason` sebagai kalimat generik
 **"3x produksi beruntun gagal/bermasalah"** — kelas errornya sudah diketahui sistem saat itu
 (`inventory.latest_failure()` membacanya untuk memutuskan rem) **tetapi tidak ikut disimpan**.
@@ -183,6 +199,20 @@ Bila salah satu bergeser tanpa yang lain, uji MERAH sebelum sempat menyesatkan s
 - dokumen tidak boleh memuat anchor `file:baris` (aturan §3 — nomor baris selalu basi)
 
 ## §11 CHANGELOG
+- **2026-08-03 (2)** — **[B25] CELAH §8a DITUTUP: rem darurat berhenti membuang sebabnya.**
+  (A) migr **0196** `channels.production_paused_class` + `_pause_channel` menyimpannya; alasan kini
+  memuat pesan manusiawi untuk KEDUA cabang (dulu hanya rem-cepat — tenant yang paling sering terkena
+  justru paling sedikit diberi tahu). (B) **panel pemulihan per-KELAS** di layar channel: apa yang
+  terjadi · **apakah pulih sendiri** · langkah konkret + tautan + tombol *Pulihkan produksi*; kelas tak
+  dikenal tidak mengarang, hanya mengantar ke dukungan. (C) Telegram memberi anjuran berbeda untuk
+  pulih-sendiri vs butuh-tindakan, plus tautan ke channelnya. (D) `/admin/system` memuat satu daftar
+  seluruh channel yang berhenti + sebab + kolom pulih-sendiri.
+  **Himpunan baru `SELF_HEALING`** (`src/exceptions.py`) jadi sumber tunggal jawaban "pulih sendiri?" —
+  hidup di tiga tempat (Python · dokumen §1 · peta layar TS) dan **keselarasannya diuji**, bukan
+  dipercaya. Layar dilarang menyebut nama penyedia (arahan owner: katalog akan terus bertambah →
+  petakan per KELAS); larangan itu **ditegakkan uji**. **Pemulihan tetap keputusan tenant.**
+  Bukti: 12 uji unit + **22 pemeriksaan klik→layar** (7 kelas × judul & status · kelas tak-dikenal ·
+  daftar admin), nol galat halaman; suite proyek 600 → 612.
 - **2026-08-03** — **AUDIT DOKUMEN-vs-KODE (perintah owner: "pastikan masih sesuai codebase & terus
   jadi SSOT"). EMPAT DRIFT ditemukan, dua di antaranya membuat dokumen ini MENYATAKAN PERILAKU YANG
   SALAH:**

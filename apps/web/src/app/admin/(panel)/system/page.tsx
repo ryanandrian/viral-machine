@@ -12,6 +12,10 @@ export const dynamic = "force-dynamic";
 // ready + ready_with_issues + producing (rem alami anti-runaway); publishing = sedang diambil publisher.
 const STOCK_STATUSES = ["ready", "ready_with_issues", "producing", "publishing"];
 
+// Cerminan `SELF_HEALING` (src/exceptions.py) — kelas yang sebabnya hilang tanpa tenant berbuat
+// apa pun. Duplikasi lintas-bahasa tak terhindarkan; keselarasannya dijaga tests/test_pemulihan_channel.py.
+const SELF_HEALING = ["rate_limit", "transient"];
+
 function LineChart({ data, color, gid }: { data: number[]; color: string; gid: string }) {
   const W = 480, H = 160, pad = 10, max = Math.max(1, ...data);
   const x = (i: number) => pad + i * (W - pad * 2) / Math.max(1, data.length - 1);
@@ -43,7 +47,7 @@ const FAIL_COLOR: Record<string, string> = { "TTS/timeout": "#ef4444", "Rate lim
 export default async function AdminSystemPage() {
   const a = createAdminClient();
   const since24h = new Date(Date.now() - 24 * 3.6e6).toISOString();
-  const [hb, inv, chRows, runs24, failedRows, runsTotal, runsFailed, runsSuccess, vids, analytics, channels, direct, sysState] = await Promise.all([
+  const [hb, inv, chRows, runs24, failedRows, runsTotal, runsFailed, runsSuccess, vids, analytics, channels, direct, sysState, berhenti] = await Promise.all([
     a.from("worker_heartbeats").select("*").order("worker_name"),
     a.from("content_inventory").select("channel_id, status").in("status", STOCK_STATUSES),
     a.from("channels").select("id, channel_name, buffer_depth, publish_slots").eq("is_active", true).order("channel_name").limit(24),
@@ -57,6 +61,11 @@ export default async function AdminSystemPage() {
     a.from("channels").select("id", { count: "exact", head: true }),
     a.from("direct_jobs").select("status, job_type, created_at").order("created_at", { ascending: false }).limit(50),
     a.from("system_state").select("key, value").in("key", ["ai_price_synced_at", "fx_synced_at"]),
+    // [B25] Channel yang DIHENTIKAN mesin — owner melihat seluruh tenant sekaligus, tak perlu
+    // membuka satu per satu. Kelas errornya kini tersimpan (migr 0196), jadi daftar ini bisa
+    // menyebut SEBABNYA, bukan sekadar "berhenti".
+    a.from("channels").select("id, channel_name, tenant_id, production_paused_at, production_paused_class, production_paused_reason")
+      .eq("production_paused", true).order("production_paused_at", { ascending: true }),
   ]);
   // Target stok efektif — CERMIN rumus BE `producer.target_stock` (sadar-jadwal, owner 2026-07-09):
   // buffer_depth eksplisit menang; NULL → slot/hari × app_config.buffer_target_days; tanpa slot → 0.
@@ -79,6 +88,7 @@ export default async function AdminSystemPage() {
       vid: humanEpoch(stateMap["fx_synced_at"], "id-ID", "Asia/Jakarta", " WIB"), ven: humanEpoch(stateMap["fx_synced_at"], "en-US", "UTC", " UTC") },
   ];
   const djRows = direct.data ?? [];
+  const remRows = berhenti.data ?? [];
   // 'done' = test niche selesai TANPA publish (2026-07-04) — dihitung "Selesai" bersama 'published'.
   const dj = { pending: djRows.filter((d) => d.status === "pending").length, producing: djRows.filter((d) => d.status === "producing").length, published: djRows.filter((d) => ["published", "done"].includes(d.status)).length, failed: djRows.filter((d) => d.status === "failed").length };
 
@@ -183,6 +193,63 @@ export default async function AdminSystemPage() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* [B25] Channel yang DIHENTIKAN mesin — satu daftar untuk seluruh tenant, lengkap dengan
+          SEBABNYA (kelas error, migr 0196) dan apakah sebab itu pulih sendiri. Sebelumnya owner
+          harus membuka channel satu per satu, dan tetap hanya melihat kalimat generik. */}
+      <div className="card card-pad" style={{ marginTop: "1rem", ...(remRows.length ? { borderLeft: "3px solid var(--danger, #ef4444)" } : {}) }}>
+        <h3 className="card-title" style={{ marginBottom: "1rem" }}>
+          <AlertTriangle size={16} />{" "}
+          <span data-id>Channel dihentikan mesin</span><span data-en>Channels halted by the engine</span>
+          {" · "}{remRows.length}
+        </h3>
+        {remRows.length === 0 ? (
+          <div className="muted" style={{ fontSize: "var(--text-sm)" }}>
+            <span data-id>Tidak ada channel yang sedang dihentikan. </span>
+            <span data-en>No channels are currently halted. </span>
+          </div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", fontSize: "var(--text-xs)", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ textAlign: "left", color: "var(--text-muted)" }}>
+                  <th style={{ padding: ".35rem .5rem" }}><span data-id>Channel</span><span data-en>Channel</span></th>
+                  <th style={{ padding: ".35rem .5rem" }}><span data-id>Sejak</span><span data-en>Since</span></th>
+                  <th style={{ padding: ".35rem .5rem" }}><span data-id>Sebab</span><span data-en>Cause</span></th>
+                  <th style={{ padding: ".35rem .5rem" }}><span data-id>Pulih sendiri?</span><span data-en>Self-healing?</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {remRows.map((r) => {
+                  const jam = r.production_paused_at
+                    ? Math.floor((Date.now() - new Date(r.production_paused_at as string).getTime()) / 3_600_000)
+                    : null;
+                  const kelas = (r.production_paused_class as string | null) ?? null;
+                  const pulih = kelas ? SELF_HEALING.includes(kelas) : null;
+                  return (
+                    <tr key={r.id as string} style={{ borderTop: "1px solid var(--border-subtle)" }}>
+                      <td style={{ padding: ".4rem .5rem", fontWeight: 600 }}>{r.channel_name as string}</td>
+                      <td style={{ padding: ".4rem .5rem" }} className="muted">
+                        {jam === null ? "—" : jam >= 24 ? `${Math.floor(jam / 24)}h ${jam % 24}j` : `${jam}j`}
+                      </td>
+                      <td style={{ padding: ".4rem .5rem" }} className="mono">{kelas ?? "—"}</td>
+                      <td style={{ padding: ".4rem .5rem" }}>
+                        {pulih === null ? <span className="muted">—</span>
+                          : pulih ? <span style={{ color: "var(--success)" }}>✅ <span data-id>ya</span><span data-en>yes</span></span>
+                          : <span style={{ color: "var(--warning)" }}>⚠️ <span data-id>butuh tindakan tenant</span><span data-en>needs tenant action</span></span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <div className="muted" style={{ fontSize: "0.625rem", marginTop: ".5rem" }}>
+              <span data-id>Sebab kosong = rem menyala sebelum pencatatan kelas error dipasang. Pemulihan tetap dilakukan tenant dari layar channel mereka.</span>
+              <span data-en>Empty cause = halted before error-class recording existed. Recovery is still performed by the tenant from their channel screen.</span>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="card card-pad" style={{ marginTop: "1rem" }}>

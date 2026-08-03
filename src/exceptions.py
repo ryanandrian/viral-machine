@@ -45,6 +45,22 @@ FAST_FAIL: frozenset = frozenset({
     ErrorClass.MODEL_UNAVAILABLE,
 })
 
+# Kelas yang PULIH SENDIRI — sebabnya hilang tanpa tenant mengerjakan apa pun (throttle mereda, jaringan
+# membaik, jatah harian berganti hari). Lawannya: kelas yang menuntut tindakan (isi ulang kredit, ganti
+# kunci, pilih model lain).
+#
+# Ini pembeda yang paling menentukan bagi tenant, dan dulu TIDAK PERNAH disampaikan: layar & Telegram
+# hanya bisa berkata "perbaiki penyebabnya (mis. saldo/kredensial AI)" — tebakan. Akibatnya satu channel
+# tenant BERBAYAR mati ±44 jam menunggu sesuatu yang sudah pulih sendiri keesokan harinya.
+#
+# CATATAN PENTING: "pulih sendiri" TIDAK berarti sistem melepas rem sendiri. Rem tetap dilepas TENANT
+# (arahan owner 2026-08-03: "jangan otomatis aktif, tapi UI/UX harus well-informed"). Himpunan ini hanya
+# menentukan APA YANG DIKATAKAN kepada mereka: "tunggu, jangan ubah apa pun" vs "ada yang perlu Anda
+# kerjakan dulu". SSOT: AI_ERROR_MANAGEMENT_ARCHITECTURE.md §1 kolom "Pulih sendiri?" & §9.
+SELF_HEALING: frozenset = frozenset({
+    ErrorClass.RATE_LIMIT, ErrorClass.TRANSIENT,
+})
+
 
 class PipelineError(Exception):
     """Base error pipeline terstruktur. Membawa `category` (di mana) + `step` +
@@ -96,5 +112,5 @@ class PublishError(PipelineError):
 __all__ = [
     "PipelineError", "ConfigError", "LLMError", "TTSError",
     "VisualError", "RenderError", "PublishError",
-    "ErrorClass", "FAST_FAIL",
+    "ErrorClass", "FAST_FAIL", "SELF_HEALING",
 ]
