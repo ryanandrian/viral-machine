@@ -373,6 +373,22 @@ class TestJalurBukaTerpasang(unittest.TestCase):
         self.assertIn("Perpanjang sekarang", fe, "tenant yang pernah bayar tak diajak memperpanjang")
         self.assertIn("Lihat paket", fe, "tenant masa coba tak diajak memilih paket")
 
+    def test_rem_darurat_readonly_bagi_tenant(self):
+        """[§10e-4 CELAH D] Tenant tak boleh mematikan rem darurat sendiri lewat perubahan langsung."""
+        sql = self._baca("migrations/0195_rem_darurat_tak_bisa_dimatikan_tenant.sql")
+        self.assertIn("auth.uid() is null", sql, "kunci layanan wajib tetap berwenang")
+        for kol in ("production_paused", "production_paused_at", "production_paused_reason"):
+            self.assertIn(f"NEW.{kol}", sql, f"{kol} tak dijaga")
+        self.assertIn("channels_rem_readonly", sql)
+
+    def test_akun_youtube_wajib_milik_tenant(self):
+        """[§10e-4 CELAH E] Saudara kembar celah B: akun yang ditunjuk channel wajib milik tenant."""
+        src = self._baca("src/utils/tenant_credentials.py")
+        i = src.index("def _account_id_for")
+        blok = src[i:i + 1800]
+        self.assertIn('.eq("tenant_id", tenant_id)', blok,
+                      "akun YouTube diambil tanpa memeriksa pemiliknya → bisa pakai token tenant lain")
+
     def test_pintu_unduh_hasil_uji_bergerbang(self):
         # Pintu paling senyap: tautan unduh terbit ulang tiap halaman dibuka, tanpa menekan apa pun.
         src = self._baca("apps/web/src/lib/test-run.ts")

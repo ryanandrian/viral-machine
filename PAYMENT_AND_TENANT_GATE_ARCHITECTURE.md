@@ -319,11 +319,12 @@ kuitansi terkirim. Anti dobel-bayar terbukti 2× (2 order lama auto-cancel). [A1
 # 10. [G-UJI] GERBANG UJI PRODUKSI — SSOT kerja aktif (dibuka 2026-08-02)
 
 > **Status: 🟢 F1–F7 + AUDIT 3 PUTARAN SELESAI (2026-08-02/03) — BELUM DEPLOY (menunggu izin owner, §5.0).**
-> 5 migrasi **SUDAH APPLIED ke DB live** (0190–0194) — gerbang lapis DATABASE sudah AKTIF di produksi;
-> lapis API & layar baru aktif setelah deploy. **778 pemeriksaan lulus, 0 gagal** (§10e-3).
-> Audit menemukan & menutup **5 lubang tambahan** di luar 4 pintu awal: tautan unduh hasil uji (§10e-2) ·
+> 6 migrasi **SUDAH APPLIED ke DB live** (0190–0195) — gerbang lapis DATABASE sudah AKTIF di produksi;
+> lapis API & layar baru aktif setelah deploy. **787 pemeriksaan lulus, 0 gagal** (§10e-4).
+> Audit 4 putaran menemukan & menutup **7 lubang tambahan** di luar 4 pintu awal: tautan unduh hasil uji ·
 > JEBAKAN kunci-tanpa-jalur-buka (§10e-2) · pekerjaan disamarkan sbg admin · **produksi di channel tenant
-> LAIN** · perpanjangan masa coba mandiri tanpa batas (§10e-3). **Total 9 pintu/celah ditutup.**
+> LAIN** · perpanjangan masa coba tanpa batas (§10e-3) · **tenant mematikan rem darurat sendiri** ·
+> **akun YouTube tanpa cek pemilik** (§10e-4). **Total 11 pintu/celah ditutup.**
 > Dokumen ini = satu-satunya tempat rencana & progress kerja ini. Pasca-compaction: baca §10 UTUH, jangan riset ulang §10a.
 >
 > **⚠️ DUA HAL MENUNGGU KEPUTUSAN OWNER (jangan diputuskan sendiri):**
@@ -676,6 +677,42 @@ Produksi tak tergores: `direct_jobs` **98** · channel terjeda **3** · perpanja
 endpoint webhook dijaga rahasia internal dan uji saya tidak mengirim headernya. Bukan bug aplikasi;
 **pagar yang benar**. Pola yang sama dengan dua sebelumnya: **saya menyalahkan aplikasi sebelum
 memeriksa perkakas ujinya sendiri.**
+
+## 10e-4. AUDIT PUTARAN KEEMPAT — 2 celah lagi (total 11)
+
+Putaran ini menyisir apa yang **tenant boleh ubah sendiri** pada channelnya — permukaan yang belum
+pernah saya sentuh di tiga putaran sebelumnya.
+
+### CELAH D — tenant bisa MEMATIKAN REM DARURAT sendiri *(dibuktikan: PATCH → HTTP 200, rem mati)*
+Aturan UPDATE `channels` mengizinkan tenant mengubah **seluruh** kolom miliknya — `production_paused`
+ikut di dalamnya. Satu permintaan langsung ke database sudah cukup untuk:
+- melewati seluruh gerbang pemulihan yang baru dibangun (tombol "Pulihkan produksi" jadi hiasan), dan
+- **melumpuhkan rem darurat 3-kegagalan** — pelindung slot render **KITA**, bukan milik tenant.
+  Channel dengan kredensial rusak bisa dilepas berulang kali dan membakar antrean tanpa henti.
+
+**Ditutup:** trigger `channels_rem_readonly` (migr 0195) — ketiga kolom rem READ-ONLY bagi pemanggil
+ber-sesi; kunci layanan (mesin & jalur pemulihan resmi) tetap berwenang penuh.
+**Regresi diuji 9/9:** tenant tetap bebas mengubah kolom lain (stok, jeda, dsb) · PATCH yang
+menyertakan nilai rem yang *sama* tidak ikut ditolak · rem otomatis mesin tetap bekerja · jalur
+pemulihan resmi tetap jalan · PATCH langsung tetap 403.
+
+### CELAH E — akun YouTube diambil TANPA memeriksa pemiliknya
+`_account_id_for` membaca `channels.youtube_account_id` lalu memakainya apa adanya. Karena kolom itu
+bisa diubah tenant dari browser, id akun milik tenant **lain** akan diterima → produksi memakai token
+YouTube orang lain dan mengunggah ke kanal mereka. Praktis sulit dieksploitasi (id akun tak bisa
+dibaca lintas-tenant), **tetapi pertahanan tidak boleh bersandar pada "sulit ditebak"**. Saudara
+kembar celah B. **Ditutup:** kepemilikan diverifikasi; akun asing diabaikan + dicatat sebagai ERROR.
+
+### VALIDASI TOTAL — **787 pemeriksaan, 0 gagal**
+DB 64 · RPC 30 · suite **591** (560 → 591) · celah C 18 · sepuluh berkas uji Node 84.
+Produksi bersih: `direct_jobs` **98** · channel terjeda **3** · perpanjangan mandiri **0**.
+
+> **⚠️ EFEK SAMPING UJI SAYA SENDIRI — dicatat jujur.** Perkakas uji regresi rem sempat meninggalkan
+> channel **RETRO REWIND GARAGE dalam keadaan terjeda**: pada jalan pertama yang gagal, blok
+> pemulihannya IKUT gagal (memakai nilai kosong di dalam SQL). Terdeteksi karena saya membandingkan
+> jumlah channel terjeda dengan cadangan pra-kerja, lalu dipulihkan. **Pelajaran: blok pemulihan yang
+> bisa gagal = pemulihan yang tidak dijamin; dan setiap sesi uji WAJIB ditutup dengan pembandingan
+> keadaan terhadap cadangan, bukan asumsi bahwa `finally` selalu berhasil.**
 
 ## 10f. MATRIKS REGRESI — "haram bug baru" (tiap baris = uji otomatis)
 | Wajib tetap utuh | Risiko yang dijaga |

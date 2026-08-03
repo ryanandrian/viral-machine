@@ -39,7 +39,18 @@ def _account_id_for(sb, tenant_id: str, channel_id: str | None) -> str | None:
         r = sb.table("channels").select("youtube_account_id").eq("id", channel_id).limit(1).execute()
         aid = (r.data or [{}])[0].get("youtube_account_id") if r.data else None
         if aid:
-            return aid
+            # [B24 §10e-4 CELAH E] Akun WAJIB milik tenant ini. `channels.youtube_account_id` bisa
+            # diubah tenant dari browser (aturan UPDATE mengizinkan seluruh kolom miliknya), dan
+            # tanpa pemeriksaan ini id akun milik tenant LAIN akan diterima apa adanya → produksi
+            # memakai token YouTube orang lain dan mengunggah ke kanal mereka. Praktis sulit
+            # dieksploitasi (id akun tak bisa dibaca lintas-tenant), tapi pertahanan tak boleh
+            # bersandar pada "sulit ditebak". Saudara kembar celah B (channel milik orang lain).
+            ok = (sb.table("tenant_youtube_accounts").select("id")
+                  .eq("id", aid).eq("tenant_id", tenant_id).limit(1).execute())
+            if ok.data:
+                return aid
+            logger.error(f"[tenant_credentials] channel {channel_id} menunjuk koneksi YouTube {aid} "
+                         f"yang BUKAN milik tenant {tenant_id} — diabaikan, pakai akun tenant sendiri")
     r = sb.table("tenant_youtube_accounts").select("id").eq("tenant_id", tenant_id).eq("status", "valid").limit(1).execute()
     return (r.data or [{}])[0].get("id") if r.data else None
 
