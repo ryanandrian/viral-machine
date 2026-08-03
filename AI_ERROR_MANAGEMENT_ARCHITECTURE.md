@@ -238,6 +238,30 @@ Itu perilaku-saat-gagal = KEPUTUSAN PRODUK (CLAUDE.md §0.6); salah golong = cha
 ditunggu. Dua baris ⏳ di §4 (`fal`, OpenAI `billing_hard_limit_reached`) adalah GEJALA bagian B ini —
 sampelnya sudah lengkap & bertanggal, yang belum ada hanya ketoknya.
 
+### 8g. UKURAN KEBUTAAN DIAGNOSA — angka, bukan kesan *(diukur 2026-08-04)*
+Owner bertanya, wajar: seburuk apa sebenarnya? Dijawab dengan hitungan, bukan adjektiva.
+
+**326 run produksi · 229 sukses (70,2%) · 79 gagal (24,2%).** 79 kegagalan itu, menurut PEMILIK sebabnya:
+| Jumlah | Sebab | Milik |
+|---|---|---|
+| 33 (42%) | kuota/kunci/tagihan/model-pensiun di akun penyedia **tenant** | tenant |
+| 15 (19%) | **gerbang mutu kita MENOLAK naskah buruk**, lalu produksi ulang | by design — mesin menolak membakar biaya |
+| 26 (33%) | **sebab TERHAPUS** — tak seorang pun bisa tahu | kode kita |
+| 3 (4%) | setelan tak cocok yang seharusnya mustahil dipilih (§3.1) | UX kita |
+| 2 (3%) | tak tergolong | — |
+
+**26 "bisu" itu nyaris seluruhnya SEJARAH, bukan keadaan sekarang** — dan ini diperiksa dengan aturan
+tanggal (§11 04-Agu), bukan ditebak:
+- 15 catatan bisu naskah/suara **semuanya bertanggal ≤ 17-Jul**; jalur suara mulai membawa sebab **18-Jul**
+  (`99b1c32`), jalur naskah **20-Jul** (`84d9ebb`). Satu hari & dua belas hari SEBELUM perbaikannya.
+- 11 sisanya = jalur visual → akarnya dipotong **§8e-A** malam ini.
+
+**UKURAN SEKARANG: dari 42 kegagalan sejak 20-Jul, hanya 1 yang sebabnya terhapus** (2,4%) — yaitu
+kegagalan visual 29-Jul, jenis yang §8e-A tutup. **Cara owner memeriksa sendiri:** hitung `production_runs`
+berstatus `failed` yang `error_message`-nya PERSIS kalimat pembungkus tanpa rincian
+("No topics selected" · "TTS generation failed" · "Visual assembly failed — no clips downloaded").
+Angka itu harus tetap 0 untuk run baru; kalau naik, diagnosa melorot lagi.
+
 ### 8f. 🔴 DEGRADASI SENYAP pada FRAME PERTAMA (tuas viral) *(ditemukan 2026-08-04, BELUM diperbaiki)*
 `visual_assembler._generate_hook_frame` gagal → `logger.warning(... keeping original clips[0])` → video
 **tetap dikirim** dengan frame pertama yang lebih buruk, **tanpa notifikasi ke siapa pun**. Frame pertama =
