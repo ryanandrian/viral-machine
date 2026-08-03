@@ -21,6 +21,29 @@ load_dotenv()
 class VisualAssembler:
     """Selector provider visual (generator AI). NO-FALLBACK: gagal = gagal jujur (return [])."""
 
+    # [ERROR-MGMT §8e 2026-08-04] Sebab kegagalan visual TERAKHIR, apa adanya dari penyedia.
+    #
+    # KENAPA ADA: jalur visual dulu MEMBUANG sebabnya. Ketiga penangkap di kelas ini hanya menulis ke
+    # worker.log lalu `return []`, sehingga pemanggil cuma tahu "daftar klip kosong" dan run tercatat
+    # dengan kalimat generik "Visual assembly failed — no clips downloaded". Bukti nyata (worker.log
+    # 2026-07-14 19:54/19:56/19:57, 6 kejadian): penyedia video berkata TERANG
+    #   fal submit HTTP 403: {"detail":"User is locked. Reason: Exhausted balance.
+    #                          Top up your balance at fal.ai/dashboard/billing."}
+    # — sebab yang tenant bisa selesaikan dalam 2 menit — tapi yang tersimpan di `production_runs`
+    # (dan karenanya yang DILIHAT tenant di layar run) hanya "no clips downloaded". Tiga run terbakar
+    # 55-85 detik masing-masing tanpa tenant pernah tahu apa yang harus ia perbuat.
+    #
+    # Pola ini MENIRU `tts_engine.last_error_class` & `niche_selector.last_error*` yang sudah dipakai
+    # jalur suara/naskah — bukan mekanisme baru.
+    #
+    # SENGAJA hanya TEKS, bukan `error_class`: memberi kelas berarti kelas seperti QUOTA_EXHAUSTED
+    # masuk `FAST_FAIL` → channel direm setelah 1 kegagalan (bukan 3). Itu perilaku-saat-gagal =
+    # KEPUTUSAN PRODUK (CLAUDE.md §0.6) dan aplikasi ini sudah punya tenant berbayar. Menunggu ketok
+    # owner; celahnya tercatat di AI_ERROR_MANAGEMENT_ARCHITECTURE.md §8e.
+    #
+    # Atribut KELAS (bukan `__init__`) agar cara objek ini dibuat tidak berubah sama sekali.
+    last_error: str | None = None
+
     def assemble(
         self,
         script: dict,
@@ -37,6 +60,12 @@ class VisualAssembler:
         Returns:
             List path clip (string).
         """
+        # [§8e] Kosongkan sebab lama SEBELUM mencoba. `Pipeline()` memang dibuat baru tiap run
+        # (3 titik di producer.py) sehingga kebocoran antar-run tidak mungkin hari ini — pagar ini
+        # untuk hari ketika seseorang memakai ulang objeknya: sebab run LAMA yang menempel di pesan
+        # run BARU adalah bug yang jauh lebih menyesatkan daripada tanpa sebab sama sekali.
+        self.last_error = None
+
         run_config  = self._load_run_config(tenant_config)
         visual_mode = run_config.get("visual_mode") or ""
         self._current_audio_duration = audio_duration
@@ -87,9 +116,12 @@ class VisualAssembler:
                     f"[VisualAssembler] visual_mode '{visual_mode}' tak dikenal — "
                     f"gagal jujur (no-fallback)"
                 )
+                self.last_error = (f"mode visual '{visual_mode}' tidak dikenali sistem — "
+                                   f"periksa setelan Visual di channel")
                 return []
         except Exception as e:
             logger.error(f"[VisualAssembler] Provider error: {e}")
+            self.last_error = str(e)   # [§8e] jangan dibuang — ini satu-satunya sebab yg tenant punya
             return []
 
     def _compute_clip_durations(self, script: dict, n_clips: int = 6, audio_duration: float = 0.0) -> list[float]:
@@ -185,6 +217,10 @@ class VisualAssembler:
 
         except Exception as e:
             logger.error(f"[VisualAssembler] AI Video error: {e}")
+            # [§8e] Penangkap ini menangkap LEBIH DULU daripada `_try_provider` (bersarang) — terbukti
+            # di worker.log 14-Jul yang mencetak "AI Video error", bukan "Provider error". Jadi tanpa
+            # baris ini sebab penyedia video HILANG sebelum sampai ke mana pun.
+            self.last_error = str(e)
             return []
 
     def _try_ai_image(
@@ -286,6 +322,7 @@ class VisualAssembler:
 
         except Exception as e:
             logger.error(f"[VisualAssembler] AI Image error: {e}")
+            self.last_error = str(e)   # [§8e] idem jalur video — bersarang, menangkap lebih dulu
             return []
 
     def _generate_hook_frame(

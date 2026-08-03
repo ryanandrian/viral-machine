@@ -158,6 +158,73 @@ class TestTelegramBedakanPulihSendiri(unittest.TestCase):
             self.assertIn("Pulihkan produksi", t, "tanpa alamat, anjurannya tetap harus utuh")
 
 
+class TestNotifUnggahGagalIkutMenjawabPulihSendiri(unittest.TestCase):
+    """§8b — notifikasi kegagalan UNGGAH dulu satu-satunya yang tak bisa menjawab
+    "perlu bertindak atau cukup ditunggu?", padahal `publish()` SUDAH mengembalikan `error_class`
+    (dibuang di pemanggil). Akibatnya jatah unggah yang pulih sendiri terlihat sama gentingnya
+    dengan koneksi YouTube yang putus permanen.
+
+    SAMPEL DI SINI VERBATIM DARI worker.log PRODUKSI (bukan karangan — pelajaran §11 04-Agu):
+      • `invalid_grant: Token has been expired or revoked.`  (4 kejadian)
+      • `unauthorized_client: Unauthorized`                  (2 kejadian)
+    """
+
+    SAMPEL_INVALID_GRANT = ("('invalid_grant: Token has been expired or revoked.', "
+                            "{'error': 'invalid_grant', 'error_description': "
+                            "'Token has been expired or revoked.'})")
+    SAMPEL_UNAUTH_CLIENT = ("('unauthorized_client: Unauthorized', "
+                            "{'error': 'unauthorized_client', 'error_description': 'Unauthorized'})")
+
+    def _kirim(self, kelas, pesan="apa pun"):
+        from src.utils.telegram_notifier import TelegramNotifier
+        n = TelegramNotifier()
+        with patch.object(n, "_get_chat_id", return_value="123"), \
+             patch.object(n, "_channel_name", return_value="Channel X"), \
+             patch.object(n, "_send", side_effect=lambda _c, t: t) as kirim:
+            n.notify_publish_fail(run_id="R1", tenant_id="T1", error=pesan, error_class=kelas)
+        return kirim.call_args[0][1]
+
+    def test_token_dicabut_menyuruh_periksa_koneksi_youtube(self):
+        """Sampel nyata paling sering: token dicabut/kedaluwarsa = AUTH_INVALID, mustahil sembuh
+        dengan menunggu. Tenant harus disuruh menyambungkan ulang, bukan dibiarkan menunggu."""
+        t = self._kirim(ErrorClass.AUTH_INVALID.value, self.SAMPEL_INVALID_GRANT)
+        self.assertIn("TIDAK pulih sendiri", t)
+        self.assertIn("Koneksi YouTube", t)
+        self.assertIn("invalid_grant", t, "sebab nyata harus tetap terbaca untuk diagnosa")
+
+    def test_kelas_pulih_sendiri_menyuruh_menunggu(self):
+        for kelas in SELF_HEALING:
+            with self.subTest(kelas=kelas.value):
+                t = self._kirim(kelas.value)
+                self.assertIn("pulih sendiri", t)
+                self.assertNotIn("perlu Anda kerjakan", t)
+
+    def test_semua_kelas_butuh_tindakan_konsisten(self):
+        for kelas in FAST_FAIL:
+            with self.subTest(kelas=kelas.value):
+                self.assertIn("TIDAK pulih sendiri", self._kirim(kelas.value))
+
+    def test_tanpa_kelas_atau_kelas_asing_tidak_mengarang(self):
+        """`unauthorized_client` BELUM terpetakan (§4) — sengaja: memetakannya ke AUTH_INVALID akan
+        MENANDAI koneksi YouTube tenant tidak sah = perilaku mesin, keputusan produk (§0.6).
+        Sampai diketok, notifikasinya harus netral, bukan menjanjikan pemulihan."""
+        for nilai in ("", "kelas_ngawur"):
+            with self.subTest(kelas=nilai):
+                t = self._kirim(nilai, self.SAMPEL_UNAUTH_CLIENT)
+                self.assertNotIn("pulih sendiri", t)
+                self.assertIn("dicoba ulang otomatis", t)
+
+    def test_tetap_jalan_tanpa_argumen_kelas(self):
+        """Argumen baru tidak boleh memaksa pemanggil lama — nol regresi."""
+        from src.utils.telegram_notifier import TelegramNotifier
+        n = TelegramNotifier()
+        with patch.object(n, "_get_chat_id", return_value="123"), \
+             patch.object(n, "_channel_name", return_value="Channel X"), \
+             patch.object(n, "_send", side_effect=lambda _c, t: t) as kirim:
+            n.notify_publish_fail(run_id="R1", tenant_id="T1", error="x")
+        self.assertIn("dicoba ulang otomatis", kirim.call_args[0][1])
+
+
 class _QRuns:
     """Stub rantai kueri production_runs yang MENDUKUNG `.gt()` — inti perbaikan 0197."""
 
@@ -353,6 +420,37 @@ class TestAntiDriftTigaTempat(unittest.TestCase):
         di_kode = {k.value for k in SELF_HEALING}
         self.assertEqual(di_admin, di_kode,
                          f"layar admin melenceng.\n  admin: {sorted(di_admin)}\n  kode : {sorted(di_kode)}")
+
+    def test_kartu_kegagalan_admin_pakai_kelas_tersimpan(self):
+        """Cermin KELIMA (lahir 2026-08-04): `KELAS_LABEL` di kartu "Pipeline failures by type".
+
+        Kartu itu dulu MENEBAK jenis kegagalan dari teks pesan dan mengabaikan `error_class` yang
+        sudah disimpan mesin — angka yang dilihat owner tidak menggambarkan apa yang mesin tahu.
+        Sekarang ia memakai kelas tersimpan sebagai FAKTA. Konsekuensinya: setiap kelas baru di
+        `src/exceptions.py` WAJIB dapat label, kalau tidak ia jatuh senyap ke keranjang tebakan dan
+        kartunya kembali menyesatkan — pelan-pelan, tanpa ada yang sadar. Itu pola melorot yang sama
+        dengan empat cermin sebelumnya, karena itu dijaga di sini juga."""
+        src = _baca(FE_ADMIN)
+        self.assertIn("error_message,error_class", src,
+                      "kartu tak lagi mengambil error_class dari DB — kembali menebak dari teks")
+
+        m = re.search(r"const KELAS_LABEL[^=]*=\s*\{(.*?)\n\};", src, re.S)
+        self.assertIsNotNone(m, "KELAS_LABEL tak ditemukan — struktur kartu berubah?")
+        blok = m.group(1)
+        di_layar = set(re.findall(r"^\s{2}(\w+):", blok, re.M))
+        harus = {k.value for k in ErrorClass if k is not ErrorClass.UNKNOWN}
+        self.assertEqual(di_layar, harus,
+                         f"label kelas di kartu admin melenceng dari kode.\n"
+                         f"  kartu: {sorted(di_layar)}\n  kode : {sorted(harus)}")
+
+        # `unknown` SENGAJA tak berlabel: ia bukan fakta, jadi harus jatuh ke jalur tebakan-teks.
+        self.assertNotIn("unknown:", blok,
+                         "`unknown` diberi label = menyamarkan 'tak tahu' sebagai fakta")
+
+        # Kejujuran asal-angka: keranjang hasil tebakan WAJIB ditandai, dan dwibahasa (§3.5).
+        for penanda in ("(tebakan dari teks)", "(guessed from text)"):
+            self.assertIn(penanda, src,
+                          "keranjang tebakan tak ditandai — pembaca akan menganggapnya fakta mesin")
 
     def test_layar_tak_menyebut_nama_penyedia(self):
         """Arahan owner: penyedia akan terus bertambah → petakan per KELAS, jangan per merek."""

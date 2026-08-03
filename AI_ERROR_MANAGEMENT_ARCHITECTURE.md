@@ -72,8 +72,8 @@ Klasifikasi menempel pada **transport yang menerima error**, bukan merek model. 
 | **OpenAI (LLM/image)** | `insufficient_quota` · `exceeded your current quota` | QUOTA_EXHAUSTED | ✅ AKTIF (22-Jul) | worker.log 09-Jul + production_runs 21-Jul (riandipantria) — uji 6/6 |
 | **Google Gemini (AI Studio, adapter `openai_chat`)** | `is no longer available` (404 model dipensiunkan) | MODEL_UNAVAILABLE | ✅ AKTIF (22-Jul) | production_runs 21/22-Jul (riandipantria `gemini-2.5-flash` ditutup Google utk user baru) |
 | **SEMUA transport OpenAI-compatible** | **HTTP 429 apa pun** (status SDK, else `Error code: 429`) | RATE_LIMIT | ✅ AKTIF (2026-08-01) | Groq llama-3.3 TPD: "Rate limit reached ... tokens per day (TPD): Limit 100000, Used 97156 ... try again in 35m51s" (uji rantai penuh 01-Agu). **Aturan LEVEL-TRANSPORT, bukan kalimat vendor** (§2): katalog model akan terus bertambah dan aturan ber-kalimat diam-diam gagal pada vendor berikutnya. §1 sendiri mendefinisikan RATE_LIMIT = "throttle sesaat (429)". Pesan manusiawi punya DUA varian: batas HARIAN (bila pesan menyebut per-day/daily/harian) vs sesaat — tindakan tenantnya berbeda. TIDAK masuk FAST_FAIL → channel tidak direm (kekhawatiran lama "salah-rem" berlaku utk QUOTA_EXHAUSTED, bukan RATE_LIMIT) |
-| **OpenAI** | `billing_hard_limit_reached` | ACCOUNT_BILLING | ⏳ dokumentasi, belum ada sampel | — |
-| **fal (agregator)** | ? | ? | ⏳ menunggu sampel error nyata | adapter tangkap `status_code`+body (`src/providers/visual/ai_video.py`) |
+| **OpenAI (jalur GAMBAR)** | `billing_hard_limit_reached` | ACCOUNT_BILLING | ⏳ **SAMPEL SUDAH ADA** — penghalangnya bukan sampel lagi, lihat **§8e** | worker.log **2026-07-29 11:32:40** `visual_assembler._generate_hook_frame`: `Error code: 400 - {'message': 'Billing hard limit has been reached.', 'code': 'billing_hard_limit_reached'}`. **KOREKSI 04-Agu:** baris ini sebelumnya berbunyi "belum ada sampel" — salah; sampelnya sudah ada di produksi sejak 29-Jul. Tak bisa dinaikkan ✅ dengan menambah token saja: jalur visual tak punya penggolong sama sekali (§8e) |
+| **fal (agregator)** | ? | ? | ⏳ gejala **§8e** (jalur visual 38 titik `raise`, 0 berkelas) — bukan pekerjaan terpisah | adapter tangkap `status_code`+body (`src/providers/visual/ai_video.py`) |
 | **edge_tts** | — gratis, tak ada billing | — | n/a | — |
 | **SEMUA penyedia suara** | audio jauh lebih pendek dari ramalan (`tts_potong_ambang_pct`) | TRANSIENT | ✅ AKTIF (2026-08-01) | narasi TERPUTUS; laju terukur 1 dari 73 render. Berlaku per potongan pada naskah panjang |
 | **SEMUA penyedia suara** | tak menyelesaikan permintaan dalam batas waktu | TRANSIENT | ✅ AKTIF (2026-08-01) | direproduksi 01-Agu: render Edge menggantung belasan menit; tanpa batas waktu satu utas pekerja mati selamanya tanpa error |
@@ -193,9 +193,73 @@ Diperiksa dan TIDAK bermasalah: **dashboard** (menampilkan alasan lalu mengantar
 **publisher** (sengaja tidak memeriksa rem — stok yang sudah lolos QC tetap boleh terbit; rem
 melindungi biaya PRODUKSI, bukan melarang menerbitkan yang sudah jadi).
 
-### 8b. `notify_publish_fail` belum diseragamkan
-Jalur upload YouTube gagal (`_yt_err`) — konteks berbeda dari crash produksi. Tercatat sejak 22-Jul,
-belum ditangani. Bukan kegagalan produksi, jadi tak masuk aliran §3.
+### 8e. 🔴 JALUR TERMAHAL adalah satu-satunya yang MEMBUANG sebab errornya *(ditemukan 2026-08-04)*
+**Terukur, bukan taksiran:**
+
+| Jalur | Titik `raise` | Yang membawa `error_class` | Biaya per kegagalan |
+|---|---|---|---|
+| Naskah (LLM) | — | `_classify_openai_compat_error` **aktif** (5 pola + lapis HTTP 429) | termurah |
+| Suara (TTS) | — | sebagian (`TRANSIENT` di 4 titik) | menengah |
+| **Gambar & video** | **38** (`ai_image.py` 21 · `ai_video.py` 17) | **0** | **termahal** |
+
+Setiap `raise VisualError(...)` di jalur visual memakai `error_class` DEFAULT = `UNKNOWN`, padahal pesannya
+sudah memuat status HTTP + body vendor utuh. Lebih jauh: **TIGA penangkap di `visual_assembler.py`
+(`_try_ai_image` · `_try_ai_video` · penangkap pembangun provider) menelan sebab aslinya** dengan pola identik
+`except Exception → logger.error → return []`. Exception-nya tidak diteruskan; pemanggil hanya menerima daftar
+kosong, lalu run tercatat dengan kalimat generik *"Visual assembly failed — no clips downloaded"* — jejak
+vendornya HANYA ada di worker.log, tidak pernah masuk `production_runs`.
+Sampel nyata: `production_runs` 2026-07-29 04:32 (kelas `unknown`).
+
+**Rantai akibat (tiap mata bisa ditelusuri):** batas tagihan/kuota penyedia gambar tercapai → sebab dibuang
+→ `error_class=unknown` → `UNKNOWN` = retryable (default aman §1) → mesin mengulang → streak 3 → rem menyala
+berbunyi "3× gagal beruntun" → panel pemulihan hanya bisa menampilkan varian kelas-tak-dikenal → tenant tak
+tahu ini soal tagihannya. **Biaya sudah terbakar 3× di langkah paling mahal**, dan `FAST_FAIL` — yang ada
+justru untuk mencegah itu — tidak pernah terpicu karena kelasnya hilang sebelum sampai ke pengambil keputusan.
+
+**Ini insiden yang MELAHIRKAN arsitektur ini** (RAD 2026-07-17, langganan ElevenLabs gagal bayar → 3× gagal
+membakar biaya sebelum rem; §11 entri 18-Jul). Ditutup di jalur naskah, **dibiarkan terbuka di jalur termahal.**
+
+**DIPECAH DUA — SENGAJA, karena aplikasi ini sudah punya tenant berbayar:**
+
+**§8e-A — ✅ DITUTUP 2026-08-04 (nol risiko perilaku).** Sebab penyedia kini DIBAWA sampai ke
+`production_runs.error_message`, yaitu teks yang layar detail run & tabel run tampilkan APA ADANYA ke tenant.
+`VisualAssembler.last_error` (atribut KELAS — cara objek dibuat tak berubah) direkam di **ketiga** penangkap,
+termasuk kedua penangkap BERSARANG yang menangkap lebih dulu daripada penangkap luar (tanpa itu kasus nyata
+14-Jul tetap lolos), lalu dirakit `Pipeline._pesan_gagal_visual()`. Dikosongkan di awal tiap `assemble()`
+supaya sebab run LAMA tak menempel di run BARU. Cabang mode-tak-dikenal kini menyebut modenya.
+**Yang berubah HANYA teks** — mesin tidak mengambil satu keputusan pun dari nilai ini, jadi tak ada channel
+yang bisa berhenti karenanya. Pola meniru `tts_engine.last_error_class` / `niche_selector.last_error*`.
+**Bukti:** `tests/test_sebab_visual_sampai_ke_tenant.py` — 11 uji, semua sampel VERBATIM dari produksi;
+**merah dibuktikan lebih dulu** (11/11 gagal tanpa perbaikan) sebelum hijau dipercaya. Suite 623 → **634**.
+
+**§8e-B — ⛔ BELUM, menunggu ketok owner.** Mengisi `error_class` pada jalur visual berarti kelas seperti
+`QUOTA_EXHAUSTED`/`ACCOUNT_BILLING` masuk `FAST_FAIL` → **channel tenant direm setelah 1 kegagalan, bukan 3**.
+Itu perilaku-saat-gagal = KEPUTUSAN PRODUK (CLAUDE.md §0.6); salah golong = channel berhenti padahal cukup
+ditunggu. Dua baris ⏳ di §4 (`fal`, OpenAI `billing_hard_limit_reached`) adalah GEJALA bagian B ini —
+sampelnya sudah lengkap & bertanggal, yang belum ada hanya ketoknya.
+
+### 8b. ~~`notify_publish_fail` belum diseragamkan~~ — ✅ **DITUTUP 2026-08-04**
+Jalur upload YouTube gagal adalah satu-satunya notifikasi yang tak bisa menjawab pertanyaan penentu
+tenant — **perlu bertindak, atau cukup ditunggu?** — padahal `youtube_publisher.publish()` SUDAH
+mengembalikan `error_class` **dan** `human_error` ([B11] 3.2); keduanya DIBUANG di pemanggil
+(`pipeline` STEP publish membaca hanya `error`). Akibatnya kegagalan yang pulih sendiri terlihat sama
+gentingnya dengan koneksi YouTube yang putus permanen.
+
+**Perbaikan:** pemanggil meneruskan `error_class` + memakai `human_error` bila ada; `notify_publish_fail`
+memberi anjuran per-KELAS dari `SELF_HEALING` (persis pola `notify_circuit_break`) — pulih-sendiri →
+"tidak ada yang perlu Anda ubah, akan diunggah ulang otomatis"; butuh-tindakan → "periksa Koneksi
+YouTube"; kelas kosong/asing → netral, TIDAK mengarang. **Argumen aditif** (satu-satunya pemanggil
+memakai keyword) → nol regresi.
+
+**SENGAJA TIDAK diubah:** dua jalur `return` pagar salah-channel di `youtube_publisher` tetap TANPA
+kelas. Memberinya `AUTH_INVALID` akan **menandai koneksi YouTube tenant tidak sah** (→ `channel_missing`
+menutup gerbang) padahal tokennya SAH — hanya menunjuk channel lain. Demikian juga
+`unauthorized_client` (sampel nyata worker.log, 2 kejadian) belum dipetakan: memetakannya = perilaku
+mesin = keputusan produk (§0.6). Keduanya dijaga uji agar tidak "diperbaiki" jadi salah.
+
+**Bukti:** 6 uji baru di `tests/test_pemulihan_channel.py`, sampel VERBATIM worker.log
+(`invalid_grant: Token has been expired or revoked.` ×4 · `unauthorized_client: Unauthorized` ×2);
+merah dibuktikan lebih dulu (10 gagal tanpa perbaikan). Suite 634 → **639**.
 
 ## §9 KONTRAK TAMPILAN PER-KELAS (mengikat semua permukaan)
 
@@ -243,6 +307,25 @@ Bila salah satu bergeser tanpa yang lain, uji MERAH sebelum sempat menyesatkan s
 - dokumen tidak boleh memuat anchor `file:baris` (aturan §3 — nomor baris selalu basi)
 
 ## §11 CHANGELOG
+- **2026-08-04 (2)** — **§8e-A DITUTUP: jalur visual berhenti membuang sebabnya.** Sampel yang menuntunnya
+  (worker.log 14-Jul, 6 kejadian): penyedia video menjawab *"User is locked. Reason: Exhausted balance.
+  Top up your balance at fal.ai/dashboard/billing"* — sebab yang tenant bisa bereskan dalam 2 menit —
+  sementara yang tersimpan & ditampilkan hanya *"no clips downloaded"*; 3 run terbakar 55-85 dtk.
+  Kini sebab itu ikut ke `error_message` → layar tenant. **Hanya TEKS**: `error_class` sengaja TIDAK diisi
+  (§8e-B) karena itu memicu rem-setelah-1-gagal = keputusan produk. 11 uji sampel-produksi, merah dibuktikan
+  dulu; suite 623 → 634. Aman-untuk-tenant dipilih di atas lengkap-tapi-berisiko.
+- **2026-08-04** — **CELAH §8e DIDOKUMENTASIKAN (belum diperbaiki — menunggu ketok owner).** Audit atas
+  perintah owner *"jangan berhenti selama masih ada bug"*. Metodenya: **menjalankan penggolong yang ADA DI
+  PRODUKSI atas 5 sampel error ASLI** dari `production_runs`/worker.log — bukan membaca kode. Hasil: 4 dari 5
+  sudah benar (429 throttle→RATE_LIMIT · 429 kuota→QUOTA_EXHAUSTED · 404 Gemini→MODEL_UNAVAILABLE ·
+  401→AUTH_INVALID). Satu tersisa (`billing_hard_limit_reached`→UNKNOWN) menyingkap celah STRUKTURAL §8e:
+  **jalur visual = 38 titik `raise`, 0 berkelas** — jalur termahal justru satu-satunya yang membuang sebab.
+  Dua baris ⏳ §4 dikoreksi (satu di antaranya menyatakan "belum ada sampel" padahal sampelnya ada sejak 29-Jul).
+  **KOREKSI KEJUJURAN:** putaran ini sempat "menemukan" bug kedua (404 Gemini tak dikenali) yang **TIDAK ADA** —
+  sampel ujinya DIKARANG (`"is not found"`), sedangkan teks produksi berbunyi `"is no longer available"` yang
+  sudah terpetakan. Nyaris menyunting penggolong produksi tanpa sebab. Pelajaran yang mengikat:
+  **sampel uji WAJIB diambil dari produksi, bukan disusun dari ingatan** — temuan yang lahir dari sampel
+  karangan adalah mesin utama rantai bug-fix tanpa ujung.
 - **2026-08-03 (2)** — **[B25] CELAH §8a DITUTUP: rem darurat berhenti membuang sebabnya.**
   (A) migr **0196** `channels.production_paused_class` + `_pause_channel` menyimpannya; alasan kini
   memuat pesan manusiawi untuk KEDUA cabang (dulu hanya rem-cepat — tenant yang paling sering terkena

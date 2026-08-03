@@ -370,6 +370,64 @@
 - **DONE-BILA:** tiap status tenant × tiap pintu terbukti sesuai matriks §10f lewat uji nyata (bukan baca kode), nol regresi 5 permukaan, pesan penolakan dwibahasa, kenop terlihat & bisa diubah owner dari `/admin/app-config`.
 - **REALISASI:** 2-Agu — deep-dive tuntas + rencana ditulis ke SPEC §10, lalu **F1–F7 DIKERJAKAN TUNTAS**: 3 migrasi APPLIED ke DB live (0190 kenop · 0191 fungsi+RLS · 0192 gerbang produksi) · 16 berkas kode disunting + 4 berkas baru · **707 pemeriksaan lulus di 5 jalur, 0 gagal** (DB 64 · RPC 30 · suite 581 · API 13 · layar 19) · 4 bug ditemukan & dituntaskan selama siklus validasi (1 di kode produksi, 3 di perkakas uji) · fosil `trialing` dibuang dari 3 tempat · produksi tak tergores (direct_jobs tetap 98, channel terjeda tetap 3). Bukti + rincian + pelajaran = SPEC §10e. **AUDIT FINAL pra-deploy (perintah owner) menemukan & menutup 2 LUBANG TAMBAHAN:** (1) tautan unduh hasil uji terbit tanpa gerbang — pintu keluar KEENAM yang terlewat di sapuan pertama (uji pertamanya sempat HIJAU PALSU karena subjeknya tak punya video; diperbaiki + diberi uji pembanding); (2) **JEBAKAN yang lahir dari gerbang ini sendiri** — tenant masa-tenggang & masa-coba-jatah-habis punya hak produksi tapi tombol pemulih remnya ikut terkunci → ditutup dengan migr 0193 + endpoint `channels/[id]/resume` + tombol **"Pulihkan produksi"** (tidak memproduksi apa pun). **AUDIT PUTARAN KETIGA (owner: "kalau masih menemukan bug, berarti audit terakhir juga bisa miss") menemukan 3 CELAH LAGI — dua di antaranya LINTAS-TENANT dan lebih serius dari semuanya:** (A) pekerjaan bisa **disamarkan sebagai `admin_test`** → melewati jatah DAN gerbang worker sekaligus (dibuktikan HTTP 201); (B) **produksi bisa dipicu di channel MILIK TENANT LAIN** → memakai kunci AI + koneksi YouTube korban (dibuktikan HTTP 201; nol kejadian historis); (C) **link perpanjang masa coba bisa diulang tanpa batas** = masa coba gratis selamanya. **A & B lebih tua dari gerbang uji — tapi Claude menyentuh persis aturan yang bocor di 0191 dan melewatkannya.** Ketiganya ditutup (migr 0194 + worker + webhook + layar reaktivasi). **Jalur konversi C diganti, bukan dibuang:** klik pertama tetap gratis · sudah pernah → diarahkan **UPGRADE** · pernah bayar → diarahkan **PERPANJANG** (jawaban pertanyaan owner). **PUTARAN KEEMPAT (menyisir apa yang tenant boleh ubah sendiri) menemukan 2 celah lagi:** (D) tenant bisa **MEMATIKAN REM DARURAT sendiri** lewat perubahan langsung — melumpuhkan pelindung slot render kita DAN membuat gerbang pemulihan jadi hiasan (dibuktikan HTTP 200); (E) akun YouTube diambil **tanpa cek pemilik** — saudara kembar celah B. Ditutup (migr 0195 trigger rem read-only + validasi kepemilikan akun); regresi trigger diuji 9/9 (tenant tetap bebas mengubah kolom lain). **Total 787 pemeriksaan lulus, 0 gagal; 11 pintu/celah ditutup.** **SISA: izin deploy owner (§5.0) — lapis DB sudah aktif, lapis API & layar menunggu deploy. [Keputusan owner 2-Agu: m.yusroon DIBIARKAN sesuai aturan; perpanjangan HANYA lewat layar admin — terbukti menyegarkan jatah.]**
 
+### 🧭🛑 POSISI 2026-08-03 13:45 — BACA INI SEBELUM MENYENTUH ALUR GERBANG/REM/PEMULIHAN
+> **Ditulis sebagai antisipasi compaction (perintah owner). Kalau Anda baru "bangun": JANGAN bongkar
+> kode apa pun sebelum membaca blok ini + `AI_ERROR_MANAGEMENT_ARCHITECTURE.md` §8–§10 + [B24]/[B25].**
+
+**SUDAH LIVE DI PRODUKSI:** FE & BE `9ba3075`, tiga layanan aktif, situs 200.
+**8 migrasi SUDAH APPLIED** ke DB live: `0190`–`0197` (kenop gerbang · fungsi+RLS · gerbang produksi ·
+pulihkan per-channel · rem read-only · antrean tak bisa disamarkan · rem simpan sebab · pemulihan
+memutus hitungan). **JANGAN diterapkan ulang. JANGAN dibuat migrasi yang mengulang isinya.**
+
+**⛔ KEPUTUSAN YANG SUDAH DIKETOK — HARAM dibalik tanpa ketok owner baru:**
+1. **Pemulihan produksi = keputusan TENANT.** Sistem TIDAK PERNAH melepas rem sendiri karena sebab
+   teknis dianggap lewat. (Pengecualian tunggal: reaktivasi LANGGANAN — bayar/admin aktifkan.)
+2. **Petakan per KELAS error, TIDAK PERNAH per nama penyedia** — penyedia akan terus bertambah.
+   Menyebut merek di kode UI = pelanggaran, dan sudah ditegakkan uji.
+3. **Jalur yang MEMBUKTIKAN didahulukan.** Selama uji masih boleh dijalankan, tawarkan "Jalankan uji
+   & pulihkan" (memproduksi → membuktikan sehat → rem lepas). Tombol "Pulihkan produksi" HANYA untuk
+   yang ujinya terkunci. **Membalik ini = mengulang insiden yang membuat tenant komplain.**
+4. **Masa tenggang (grace):** produksi & publish TETAP JALAN, tombol uji DIKUNCI.
+5. **Perpanjangan masa coba hanya lewat layar admin.** m.yusroon dibiarkan terkunci sesuai aturan.
+6. **HARAM memperbaiki channel tenant lewat jalur belakang (DB).** Pemulihan lewat produk.
+
+**💣 JEBAKAN YANG SUDAH DIBAYAR MAHAL — jangan diulang:**
+- **Melepas rem TANPA memutus hitungan kegagalan** → penjadwal mengerem lagi dalam HITUNGAN DETIK.
+  Terjadi ke tenant nyata (11:01:19 tekan → 11:01:30 rem lagi). Kolom `production_resumed_at` +
+  filter `sejak` pada `recent_nonready_streak`/`latest_failure` adalah OBATNYA — jangan dicabut.
+- **Uji yang berhenti di detik pertama.** Apa pun yang berjalan periodik BELUM SELESAI sampai satu
+  siklus penuh terlewati. "Tombol berhasil" ≠ "keadaan bertahan".
+- **Alat verifikasi yang bisa MENULIS.** Uji pernah memulihkan channel tenant sungguhan. Uji terhadap
+  produksi wajib read-only.
+- **`SELF_HEALING` punya EMPAT cermin** (kode · dokumen §1 · `pemulihan-channel.tsx` · `admin/system`).
+  Menambah kelas error = perbarui KEEMPATNYA; uji `test_pemulihan_channel.py` menjaga semuanya.
+- **Server lokal untuk uji layar:** SELALU bandingkan waktu-mulai proses vs `.next/BUILD_ID`. Sudah
+  2× menguji build LAMA dan menyimpulkan salah.
+
+**BUKTI TERAKHIR (jangan diaudit ulang):** BISIK NUSANTARA dipulihkan 11:48 → penjadwal 12 siklus →
+**12:09 memproduksi video SUKSES** → rem tetap mati. Sebelumnya menyala lagi dalam 1–11 detik.
+
+**SISA — dan alasan kenapa BELUM dikerjakan (bukan kelalaian):**
+| Sisa | Kenapa belum |
+|---|---|
+| Bang Us-Dat & Abyss ID masih ter-rem | Keputusan TENANT. Layarnya sudah mengarahkan ke jalur yang benar. JANGAN dipulihkan dari DB. |
+| ~~`notify_publish_fail` belum seragam~~ | ✅ **SELESAI 4-Agu** (SSOT §8b) — anjuran per-KELAS; 6 uji sampel-produksi |
+| ~~Kartu admin "failures by type" menebak dari teks~~ | ✅ **SELESAI 4-Agu** — pendekatan GABUNGAN: kelas tersimpan = fakta, tebakan-teks hanya utk data lama & **DITANDAI**; kartu menyebut perbandingannya. Cermin KELIMA dijaga uji. |
+| ~~Registry §4: baris ⏳ fal & OpenAI billing~~ | Sampel NYATA sudah ditemukan & dicatat 4-Agu (fal 403 saldo habis ×6 · billing hard limit ×1). Menaikkan ke ✅ = **§8e-B**, butuh ketok owner. |
+| Registry §4: Anthropic | Belum ada sampel error nyata. Aturan emas: jangan menebak. |
+| ~~`MEMORY.md` mendekati batas baca~~ | ✅ **SELESAI 3-Agu** — 20,6KB → 12,4KB, 18 penunjuk terverifikasi utuh |
+| **§8e-B: kelas error jalur GAMBAR/VIDEO** | ⛔ **BUTUH KETOK OWNER.** Mengisi `error_class` di jalur visual = kelas `QUOTA_EXHAUSTED`/`ACCOUNT_BILLING` masuk `FAST_FAIL` → **channel direm setelah 1 kegagalan, bukan 3**. Hemat biaya tenant, TAPI salah golong = channel berhenti padahal cukup ditunggu. Perilaku-saat-gagal = keputusan produk (§0.6). Bagian TEKS-nya (§8e-A) sudah tuntas & aman. |
+
+**REALISASI 2026-08-04 (perintah owner "jangan berhenti sebelum zero bug"):** 3 benang diluruskan, semuanya
+dengan **merah dibuktikan lebih dulu** (uji gagal tanpa perbaikan) — (1) **§8e-A** jalur gambar/video berhenti
+membuang sebab penyedia; tenant kini melihat *"saldo habis — isi ulang di …/billing"* alih-alih *"no clips
+downloaded"* (sampel nyata 14-Jul: 3 run terbakar 55-85 dtk tanpa tenant tahu apa pun). (2) **§8b** notifikasi
+gagal-unggah kini menjawab "perlu bertindak atau cukup ditunggu". (3) **Kartu admin** berhenti menampilkan
+angka tebakan. Suite **623 → 641 lulus, nol regresi**; nol tulisan ke DB; nol deploy.
+**KOREKSI JUJUR:** putaran ini juga MENGGUGURKAN satu "temuan" Claude sendiri (404 Gemini) — sampel ujinya
+DIKARANG, teks produksinya sudah tertangani sejak 22-Jul. Dari 5 sampel error nyata yang diuji ke kode
+berjalan, **4 sudah benar sejak lama.** Pelajaran mengikat → memory `feedback_sampel_uji_wajib_dari_produksi`.
+
 ### [B25] REM DARURAT: simpan sebabnya & katakan apa artinya — 🟢 A–D SELESAI + TERVALIDASI (2026-08-03)
 - **SPEC/SSOT = `AI_ERROR_MANAGEMENT_ARCHITECTURE.md` §8a (celah, kini TERTUTUP) + §9 (kontrak tampilan per-KELAS).** WAJIB baca §9 sebelum menyentuh UI kegagalan produksi.
 - **SEBAB:** rem darurat MEMBUANG kelas error yang sudah diketahui sistem → layar & Telegram cuma bisa menebak ("mis. saldo/kredensial AI") → tenant tak pernah tahu **apakah sebabnya pulih sendiri**. Dampak terukur pada tenant BERBAYAR: **Bang Us-Dat mati ±44 jam** menunggu jatah harian yang sudah pulih keesokan harinya; BISIK NUSANTARA pola yang sama sehari kemudian.

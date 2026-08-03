@@ -31,6 +31,39 @@ function LineChart({ data, color, gid }: { data: number[]; color: string; gid: s
   );
 }
 
+// [ERROR-MGMT 2026-08-04] Kelas error TERSIMPAN (`production_runs.error_class`) = FAKTA yang mesin
+// pakai untuk memutuskan rem — bukan tebakan. Kartu ini dulu MENGABAIKANNYA dan menebak jenis
+// kegagalan dari teks pesan, sehingga angka yang dilihat owner tidak menggambarkan apa pun yang
+// mesin sungguh tahu (mis. "kuota habis" masuk keranjang "Lainnya" karena kalimatnya tak cocok pola).
+//
+// KENAPA TIDAK diganti total ke `error_class`: realita data (diperiksa 04-Agu, 79 run gagal) = 9
+// berkelas berarti · 32 berkelas `unknown` · **38 KOSONG** karena lebih tua dari migr 0170. Mengganti
+// buta akan menampilkan "38 tanpa kelas" dan MEMBURUK. Karena itu: fakta bila ada, tebak-dari-teks
+// hanya untuk sisanya, dan kartu MENGATAKAN mana yang mana (angka yang tidak menjelaskan asalnya
+// adalah angka yang menyesatkan pembacanya).
+//
+// Label = cerminan §1 AI_ERROR_MANAGEMENT_ARCHITECTURE.md. Ini LABEL TAMPILAN saja; nol keputusan
+// diambil dari sini (keputusan rem ada di `FAST_FAIL`, sisi Python).
+const KELAS_LABEL: Record<string, { id: string; en: string; c: string }> = {
+  account_billing:   { id: "Tagihan penyedia bermasalah", en: "Provider billing issue", c: "#dc2626" },
+  quota_exhausted:   { id: "Kuota/kredit penyedia habis", en: "Provider quota exhausted", c: "#ef4444" },
+  auth_invalid:      { id: "Kunci/koneksi ditolak", en: "Key/connection rejected", c: "#f97316" },
+  model_unavailable: { id: "Model tak tersedia lagi", en: "Model no longer available", c: "#a855f7" },
+  rate_limit:        { id: "Dibatasi sesaat (429)", en: "Rate limited (429)", c: "#f59e0b" },
+  transient:         { id: "Gangguan sesaat", en: "Transient glitch", c: "#0ea5e9" },
+};
+
+type Ember = { key: string; id: string; en: string; c: string; tebakan: boolean };
+
+function ember(r: { error_class?: string | null; error_message: string | null }): Ember {
+  const k = (r.error_class || "").trim();
+  const m = KELAS_LABEL[k];
+  if (m) return { key: k, id: m.id, en: m.en, c: m.c, tebakan: false };
+  // `unknown` & NULL → jatuh ke tebakan teks (jujur: ditandai di tampilan).
+  const t = categorize(r.error_message);
+  return { key: `~${t}`, id: t, en: t, c: FAIL_COLOR[t] ?? "#a1a1aa", tebakan: true };
+}
+
 function categorize(msg: string | null): string {
   const m = (msg || "").toLowerCase();
   if (/timeout|tts/.test(m)) return "TTS/timeout";
@@ -52,7 +85,7 @@ export default async function AdminSystemPage() {
     a.from("content_inventory").select("channel_id, status").in("status", STOCK_STATUSES),
     a.from("channels").select("id, channel_name, buffer_depth, publish_slots").eq("is_active", true).order("channel_name").limit(24),
     a.from("production_runs").select("created_at, status").gte("created_at", since24h),
-    a.from("production_runs").select("error_message").eq("status", "failed").order("created_at", { ascending: false }).limit(500),
+    a.from("production_runs").select("error_message,error_class").eq("status", "failed").order("created_at", { ascending: false }).limit(500),
     a.from("production_runs").select("id", { count: "exact", head: true }),
     a.from("production_runs").select("id", { count: "exact", head: true }).eq("status", "failed"),
     a.from("production_runs").select("id", { count: "exact", head: true }).eq("status", "success"),
@@ -122,8 +155,14 @@ export default async function AdminSystemPage() {
   const failedAll = runsFailed.count ?? 0;
   const totalAll = runsTotal.count ?? 0;
   const failRows = failedRows.data ?? [];
-  const failByType = failRows.reduce((m: Record<string, number>, r) => { const c = categorize(r.error_message); m[c] = (m[c] ?? 0) + 1; return m; }, {});
+  // Fakta dulu (error_class), tebakan-teks hanya untuk sisanya — lalu katakan perbandingannya.
+  const failByType = failRows.reduce((m: Record<string, Ember & { n: number }>, r) => {
+    const e = ember(r);
+    m[e.key] = { ...e, n: (m[e.key]?.n ?? 0) + 1 };
+    return m;
+  }, {});
   const failTotal = failRows.length || 1;
+  const berkelas = failRows.filter((r) => KELAS_LABEL[(r.error_class || "").trim()]).length;
   const errRate = totalAll ? Math.round((failedAll / totalAll) * 100) : 0;
 
   const workers = hb.data ?? [];
@@ -181,8 +220,25 @@ export default async function AdminSystemPage() {
 
       <div className="sys-grid2" style={{ marginTop: "1rem" }}>
         <div className="card card-pad"><h3 className="card-title" style={{ marginBottom: "1rem" }}><XCircle size={16} /> Pipeline failures by type ({failedAll} total)</h3>
-          {failRows.length === 0 ? <div className="muted" style={{ fontSize: "var(--text-sm)" }}>Tidak ada kegagalan tercatat.</div> :
-            Object.entries(failByType).sort((x, y) => y[1] - x[1]).map(([n, v]) => { const pct = Math.round((v / failTotal) * 100); return (<div className="sys-bar-row" key={n}><span className="lab">{n}</span><div className="track"><span style={{ width: `${pct}%`, background: FAIL_COLOR[n] ?? "#a1a1aa" }} /></div><span className="val">{pct}%</span></div>); })}
+          {failRows.length === 0 ? <div className="muted" style={{ fontSize: "var(--text-sm)" }}>Tidak ada kegagalan tercatat.</div> : <>
+            {Object.values(failByType).sort((x, y) => y.n - x.n).map((e) => { const pct = Math.round((e.n / failTotal) * 100); return (
+              <div className="sys-bar-row" key={e.key}>
+                <span className="lab">
+                  <span data-id>{e.id}</span><span data-en>{e.en}</span>
+                  {e.tebakan ? <span className="muted" style={{ fontSize: "var(--text-xs)" }}>
+                    {" "}<span data-id>(tebakan dari teks)</span><span data-en>(guessed from text)</span>
+                  </span> : null}
+                </span>
+                <div className="track"><span style={{ width: `${pct}%`, background: e.c }} /></div>
+                <span className="val">{e.n} · {pct}%</span>
+              </div>
+            ); })}
+            {/* Kejujuran asal-angka: tanpa ini pembaca menganggap SELURUH grafik adalah fakta mesin. */}
+            <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".625rem", lineHeight: 1.5 }}>
+              <span data-id>{`${berkelas} dari ${failRows.length} kegagalan punya kelas yang disimpan mesin (fakta). Sisanya ditebak dari teks pesan — sebagian besar run lama, sebelum sistem menyimpan kelas error.`}</span>
+              <span data-en>{`${berkelas} of ${failRows.length} failures carry a machine-recorded class (fact). The rest are guessed from the message text — mostly older runs, from before error classes were stored.`}</span>
+            </div>
+          </>}
         </div>
         <div className="card card-pad"><h3 className="card-title" style={{ marginBottom: "1rem" }}><Command size={16} /> Database (skala data) · {runsSuccess.count ?? 0} runs sukses</h3>
           {DB.map(([k, v]) => (<div className="sys-db-stat" key={k}><span className="muted">{k}</span><span>{v}</span></div>))}

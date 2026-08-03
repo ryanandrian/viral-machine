@@ -300,19 +300,47 @@ class TelegramNotifier:
         return self._send(chat_id, "\n".join(l for l in lines if l))
 
     def notify_publish_fail(self, run_id: str, tenant_id: str, error: str,
-                            run_config=None) -> bool:
+                            error_class: str = "", run_config=None) -> bool:
         """
         Kirim alert ketika QC lulus tapi upload YouTube gagal.
+
+        [ERROR-MGMT §8b 2026-08-04] Kini SERAGAM dengan `notify_circuit_break`: menjawab satu bit
+        yang paling menentukan bagi tenant — **perlu bertindak, atau cukup ditunggu?** Sebelum ini
+        notifikasi ini adalah satu-satunya yang tidak bisa menjawabnya, padahal `publish()` sudah
+        mengembalikan `error_class` (dibuang di pemanggil). Akibatnya kegagalan yang pulih sendiri
+        (mis. jatah unggah harian) terlihat sama gentingnya dengan koneksi YouTube yang putus permanen.
+
+        Sumber jawaban = `SELF_HEALING` (src/exceptions.py) — **per KELAS, bukan per nama penyedia**
+        (arahan owner: penyedia & model akan terus bertambah). `error_class` kosong/tak dikenal →
+        TIDAK mengarang: cukup katakan akan dicoba ulang otomatis.
+
+        Argumen `error_class` disisipkan SEBELUM `run_config` yang selalu dipanggil sebagai keyword
+        (satu-satunya pemanggil: pipeline STEP publish) — aman, tapi tetap keyword-only secara praktik.
         """
         chat_id = self._get_chat_id(run_config)
         if not chat_id:
             return False
 
+        from src.exceptions import SELF_HEALING, ErrorClass
+        try:
+            _pulih = ErrorClass(error_class) in SELF_HEALING if error_class else None
+        except ValueError:
+            _pulih = None   # kelas asing (mis. dari versi lebih baru) → jangan mengarang
+
+        if _pulih is True:
+            anjuran = ("⏳ Penyebabnya pulih sendiri — tidak ada yang perlu Anda ubah.\n"
+                       "Video tetap tersimpan dan akan diunggah ulang otomatis.")
+        elif _pulih is False:
+            anjuran = ("🔧 Penyebabnya TIDAK pulih sendiri — ada satu hal yang perlu Anda kerjakan.\n"
+                       "👉 Periksa <b>Koneksi YouTube</b> pada channel ini di menu Channel.")
+        else:
+            anjuran = "ℹ️ Video sudah dirender (QC lulus) tapi belum terunggah; akan dicoba ulang otomatis."
+
         channel = self._channel_name(run_config, {"tenant_id": tenant_id})
         text = (
             f"📤 <b>[{channel}] Upload YouTube GAGAL</b>\n"
             f"💥 Error: <code>{self._escape(str(error)[:200])}</code>\n"
-            f"ℹ️ Video sudah dirender (QC lulus) tapi tidak terupload.\n"
+            f"{anjuran}\n"
             f"<code>{run_id}</code>"
         )
         return self._send(chat_id, text)

@@ -449,7 +449,13 @@ class Pipeline:
                         f"{[round(d,1) for d in script['beat_durations']]} = {sum(script['beat_durations']):.1f}s")
             clips = self.visual_assembler.assemble(script, tenant_config, audio_duration=audio_duration)
             if not clips:
-                raise VisualError("Visual assembly failed — no clips downloaded", step="visual")
+                # [ERROR-MGMT §8e] Sertakan sebab NYATA dari penyedia — pesan ini ditampilkan APA ADANYA
+                # ke tenant (layar detail run + tabel run: `error_message`). Kalimat "no clips downloaded"
+                # sendirian membuat tenant buta: sampel nyata 14-Jul, penyedia berkata "saldo habis, isi
+                # ulang di dashboard billing" — 3 run terbakar tanpa tenant pernah tahu itu.
+                # SENGAJA tanpa `error_class`: itu memicu FAST_FAIL (rem setelah 1 gagal) = keputusan
+                # produk, menunggu ketok owner (§8e). Pola sama dgn niche_selector.last_error di STEP 1.
+                raise VisualError(self._pesan_gagal_visual(), step="visual")
             clip_count = len(clips)
             result["steps"]["visuals"] = {"status": "ok", "clips": clip_count}
             logger.info(f"STEP 6 DONE | {clip_count} clips ready")
@@ -662,15 +668,24 @@ class Pipeline:
                         logger.warning(f"[Telegram] notify_success gagal: {_te}")
 
                 else:
-                    _yt_err = yt_result.get("error", "unknown")
+                    # [ERROR-MGMT §8b] `publish()` sudah MENGEMBALIKAN makna errornya
+                    # (`error_class` + `human_error`, youtube_publisher [B11] 3.2) — dulu keduanya
+                    # DIBUANG di sini, sehingga notifikasi kegagalan unggah adalah satu-satunya
+                    # notifikasi yang tak bisa menjawab pertanyaan paling menentukan: "perlu saya
+                    # kerjakan sesuatu, atau cukup ditunggu?". Sumber jawaban = `SELF_HEALING`,
+                    # BUKAN nama penyedia (arahan owner: penyedia akan terus bertambah).
+                    _yt_err   = yt_result.get("error", "unknown")
+                    _yt_kelas = yt_result.get("error_class") or ""
+                    _yt_human = yt_result.get("human_error") or ""
                     logger.warning(f"YouTube publish failed: {_yt_err}")
                     # s81: Notifikasi Telegram upload gagal (QC lulus tapi YouTube reject)
                     try:
                         self.telegram.notify_publish_fail(
-                            run_id     = run_id,
-                            tenant_id  = tenant_config.tenant_id,
-                            error      = _yt_err,
-                            run_config = run_config,
+                            run_id      = run_id,
+                            tenant_id   = tenant_config.tenant_id,
+                            error       = _yt_human or _yt_err,
+                            error_class = _yt_kelas,
+                            run_config  = run_config,
                         )
                     except Exception as _te:
                         logger.warning(f"[Telegram] notify_publish_fail gagal: {_te}")
@@ -830,6 +845,24 @@ class Pipeline:
         except Exception as e:
             logger.warning(f"[Pipeline] Thumbnail copy gagal: {e}")
             return ""
+
+    def _pesan_gagal_visual(self) -> str:
+        """[ERROR-MGMT §8e] Pesan kegagalan visual yang MEMBAWA sebab nyata penyedia.
+
+        Pesan ini bukan catatan internal: layar detail run dan tabel run menampilkan
+        `production_runs.error_message` APA ADANYA ke tenant. Kalimat "no clips downloaded"
+        sendirian membuat tenant buta terhadap sesuatu yang bisa ia bereskan sendiri —
+        sampel nyata worker.log 2026-07-14 (6 kejadian): penyedia video menjawab
+        `HTTP 403 {"detail":"User is locked. Reason: Exhausted balance. Top up your balance
+        at fal.ai/dashboard/billing."}` sementara yang tersimpan hanya "no clips downloaded".
+
+        Sebab kosong (mis. provider mengembalikan daftar kosong tanpa exception) → kalimat dasar
+        saja; TIDAK mengarang sebab. Metode terpisah supaya bisa diuji langsung dengan sampel
+        produksi (pola `Pipeline.__new__` seperti uji gerbang durasi).
+        """
+        _sebab = (getattr(self.visual_assembler, "last_error", None) or "").strip()
+        dasar = "Visual assembly failed — no clips downloaded"
+        return f"{dasar} — {_sebab}" if _sebab else dasar
 
     def _pre_publish_qc(self, video_path: str, duration_secs, clip_count: int = None,
                         target_seconds=None, expected_beats=None) -> tuple:
