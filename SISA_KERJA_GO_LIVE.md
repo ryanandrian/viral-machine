@@ -77,6 +77,60 @@
 
 ---
 
+## 📚 §0b. DAFTAR STATUS SELURUH DOKUMEN — SATU-SATUNYA acuan "mana yang valid" (2026-08-05)
+
+> **Lahir dari teguran owner 5-Agu:** *"Anda tidak pernah tahu dokumen mana yang sudah dikerjakan dan valid,
+> mana yang belum, mana yang dibatalkan."* **Benar** — daftar ini tak pernah ada, dan itu akar seluruh
+> kekacauan: setiap sesi baru (termasuk Claude) MENEBAK dokumen mana yang boleh dipercaya.
+> **Aturan pakai:** dokumen di luar kelompok 1 **TIDAK BOLEH** dijadikan acuan implementasi tanpa
+> diverifikasi ulang ke KODE + DB LIVE (CLAUDE.md §1.2).
+
+**KELOMPOK 1 — SSOT HIDUP, DIJAGA MESIN (10).** Boleh dipercaya: bila isinya melenceng dari kode, uji
+MERAH. Tiap satunya sudah dibuktikan merah dengan sengaja membusukkan dokumennya.
+`CLAUDE.md` · `SISA_KERJA_GO_LIVE.md` · `AI_ERROR_MANAGEMENT_ARCHITECTURE.md` ·
+`PAYMENT_AND_TENANT_GATE_ARCHITECTURE.md` · `LIFECYCLE_NURTURE_ARCHITECTURE.md` ·
+`AGENT_AND_AFILIATION_ARCITECTURE.md` · `PROGRAM_BUKTI_KECERDASAN.md` · `DESAIN_PRODUK_SAAS.md` ·
+`QC_CONTENT_ARCHITECTURE.md` · `CONTENT_CATEGORY_ARCHITECTURE.md`
+
+**KELOMPOK 2 — BERSPANDUK (23).** Dokumennya SENDIRI memperingatkan (CLOSED/ARSIP/USANG/SELESAI/
+"bukan daftar kerja"). Aman dibaca sebagai sejarah; **jangan** jadi acuan implementasi.
+
+**KELOMPOK 3 — ALAT KERJA, bukan arsitektur (5).** `CLAUDE_DESIGN_BRIEF.md` + `ADDENDUM v2/v3/v4`
+(kepalanya sendiri berbunyi *"copy-paste ke Claude Design"*) · `PANDUAN_CLAUDE_CODE.md` (panduan memakai
+CLI, lintas-proyek). **⚠️ `CLAUDE_DESIGN_BRIEF` memuat spesifikasi layar untuk Webhook · Priority Queue ·
+API access — TIGA fitur yang TIDAK ADA di aplikasi (lihat [D8])**; jangan dijadikan dasar membangun.
+
+**KELOMPOK 4 — CATATAN BERTANGGAL (2).** `RISET_NICHE_TRENDING_2026-07-05.md` ·
+`AUDIT_ATRIBUSI_NICHE_2026-07-15.md`. Bahan riset/rekaman audit — bukan keadaan sistem.
+
+**KELOMPOK 5 — MENUNJUK SUMBER LAIN (5).** `PHASE4_DESIGN.md` · `PHASE5_DESIGN.md` · `PHASE6_DESIGN.md` ·
+`PHASE9_FRONTEND_WIRING.md` · `PHASE10_ADMIN_WIRING.md` — dokumen fase pembangunan; kepalanya menunjuk
+*"Status LIVE = `PROGRESS.md`"*. **Baca sumber yang ditunjuknya, bukan isinya.**
+*(Nama ditulis PENUH satu per satu — bukan disingkat "PHASE4/5/6" — supaya penjaga uji bisa membacanya;
+bentuk singkat itu membuat 4 dokumen tak terhitung berstatus, tertangkap uji 05-Agu.)*
+
+**KELOMPOK 6 — PERLU DIBERESKAN (3).**
+| Berkas | Masalah |
+|---|---|
+| `SOFTCODE_AI_CONFIG - BELUM DI EKSEKUSI.md` | indeks memory menyatakannya SUPERSEDED, tapi berkasnya sendiri tak bilang apa-apa |
+| `S3-CONNECTION.md` | catatan endpoint S3, **tak pernah di-commit** (di disk sejak 19-Jun) |
+| `SUPABASE-CONNECTION.md` | berjudul **"DATABAE VER-1"** = database yang sudah PENSIUN; tak pernah di-commit (21-Jun) |
+
+**⚠️ BATAS KEJUJURAN DAFTAR INI (jangan dibaca lebih kuat dari isinya):** pengelompokan 2–6 dibuat dari
+**membaca kepala** tiap dokumen + memeriksa penunjuk & penjaga — **BUKAN** membaca seluruh isinya.
+`CLAUDE_DESIGN_BRIEF` membuktikan risikonya: kepalanya tampak tak berbahaya, isinya (2.003 baris) memuat
+fitur yang tak ada. **Jadi: kelompok 1 = terbukti; kelompok 2–6 = belum diverifikasi isi, bukan "aman".**
+Upaya memverifikasi isi secara otomatis (skor "artefak masih ada") **GAGAL TOTAL — salah 5 dari 5** dan
+dibuang; satu-satunya cara yang terbukti = membaca + membandingkan klaim yang tumpang tindih.
+
+**PRESEDEN RESOLUSI TUMPANG TINDIH (contoh cara memutuskan, 5-Agu):** 7 dokumen menyebut batas video/hari
+dengan angka berbeda. Vonis diambil dari DB live (`plan_limits` = 1/1/3/5): VALID = `CONTENT_CATEGORY`,
+`finalisasi_tier_plan`, `ONBOARDING_FUNNEL`, `PAYMENT_GATE`, halaman pemasaran ("50/hari" = 5×10 channel).
+BASI = `CLAUDE_DESIGN_BRIEF`, `DESAIN_PRODUK_SAAS` (6 baris naratif), `RISET_NICHE_TRENDING` — ketiganya
+kini bertanda. Dijaga `tests/test_kuota_tak_ditanam_di_dokumen.py`.
+
+---
+
 ## 📸 SNAPSHOT KONDISI LIVE (verified 2026-07-01 — baseline; JANGAN kerjakan ulang)
 - **v2 LIVE di VPS**, v1 PENSIUN. `mv-web`+`mv-worker`+`mv-webhook` = **active**. `mesinviral.com`=200, `/api/youtube/oauth/callback`=302. Worker HEAD `8d44f01`, web HEAD `ee01575`, branch `v2-backend`, migrasi terakhir ~0107.
 - **Mesin produktif**: `videos`=273 (185 published), `production_runs`=130. 2 channel (ryan aktif, kumala belum lengkap).

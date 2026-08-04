@@ -98,15 +98,38 @@ class TestKolomJanjiMigrasiAdaDiDB(unittest.TestCase):
         sb = _sb()
         if sb is None:
             self.skipTest("kredensial DB tak tersedia di lingkungan ini")
-        hilang, tabel_hilang = [], set()
+        # [DIPERBAIKI 2026-08-05] Versi pertama uji ini menganggap **error apa pun** sebagai "kolom
+        # hilang". Akibatnya, saat 111 permintaan beruntun kena gangguan/pembatasan laju, ia melaporkan
+        # BELASAN kolom hilang — padahal diverifikasi satu-per-satu SEMUANYA ADA (`app_config.value_text`,
+        # `ai_providers.key_group`, `agents.telegram_chat_id`, …). **Alarm palsu dari penjaga sendiri**
+        # adalah ranjau: sesi berikutnya akan "memperbaiki" DB yang sehat.
+        # Sekarang dibedakan TIGA keadaan, dan "tak bisa memverifikasi" TIDAK PERNAH dilaporkan sebagai
+        # "hilang" (kode PostgreSQL: 42703 = kolom tak ada · 42P01/PGRST205 = tabel tak ada).
+        hilang, tabel_hilang, tak_terverifikasi = [], set(), []
         for (t, k), berkas in sorted(_kolom_dijanjikan_migrasi().items()):
-            try:
-                sb.table(t).select(k).limit(1).execute()
-            except Exception as e:
-                if "find the table" in str(e):
-                    tabel_hilang.add(t)
-                else:
-                    hilang.append(f"{t}.{k} (migrasi {berkas})")
+            galat = None
+            for _ in range(3):                     # ulang 2× pada gangguan sesaat
+                try:
+                    sb.table(t).select(k).limit(1).execute()
+                    galat = None
+                    break
+                except Exception as e:
+                    galat = str(e)
+                    if "42703" in galat or "does not exist" in galat or "find the table" in galat:
+                        break                      # vonis pasti — tak perlu diulang
+            if galat is None:
+                continue
+            if "42703" in galat or ("column" in galat and "does not exist" in galat):
+                hilang.append(f"{t}.{k} (migrasi {berkas})")
+            elif "find the table" in galat or "42P01" in galat or "PGRST205" in galat:
+                tabel_hilang.add(t)
+            else:
+                tak_terverifikasi.append(f"{t}.{k} → {galat[:90]}")
+        self.assertFalse(
+            tak_terverifikasi,
+            "TAK BISA MEMVERIFIKASI ke DB (bukan berarti kolomnya hilang — jangan 'perbaiki' apa pun "
+            "atas dasar ini):\n  " + "\n  ".join(tak_terverifikasi[:8])
+            + "\nPeriksa koneksi/pembatasan laju, lalu jalankan ulang.")
         self.assertFalse(
             hilang,
             "Kolom yang DIJANJIKAN migrasi tapi TIDAK ADA di DB live:\n  " + "\n  ".join(hilang)
