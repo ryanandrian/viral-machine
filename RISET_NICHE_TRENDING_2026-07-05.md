@@ -1,5 +1,16 @@
 # RISET NICHE TRENDING — YouTube Shorts Faceless (2026-07-05)
 
+> 📌 **SIFAT BERKAS: CATATAN RISET BERTANGGAL, bukan SSOT.** Isinya kandidat niche hasil riset 5-Jul —
+> berguna sebagai bahan, TIDAK menggambarkan keadaan sistem. Daftar niche yang benar-benar aktif =
+> tabel `niches` di DB (editor: `/admin/niches`).
+>
+> ⚠️ **DIKOREKSI 2026-08-05 — satu angka di berkas ini basi.** Kalimat *"Konteks mesin: produksi
+> **5–24 video/hari/channel**"* memakai angka RANCANGAN yang tak pernah terpasang. Kenop hidup
+> `plan_limits.max_videos_per_day` = **1 · 1 · 3 · 5** (trial/starter/pro/business), admin-editable di
+> `/admin/pricing`. Akibatnya kesimpulan *"pada 5 video/hari pool habis dalam hitungan minggu"* memakai
+> laju **5× lebih cepat** dari kenyataan — kekhawatiran kehabisan pool jauh lebih kecil dari yang tertulis.
+> Nilai hidup: lihat `CONTENT_CATEGORY_ARCHITECTURE.md` (1/1/3/5) · keputusan kuota: `SISA_KERJA` [D6].
+
 > **Tujuan:** 30–50 kandidat niche baru (di luar 6 niche yang sudah ada di database: dark history, mind-blowing facts, ocean mysteries, universe/space mysteries, kesehatan imunitas, misteri perang dunia), trending lintas platform khususnya YouTube, pasar Global/EN + Indonesia, di-ranking berdasarkan **potensi viral/views**.
 > **Batasan format produk:** narasi TTS + gambar AI (Ken Burns) + musik, 15–90 detik, faceless — semua kandidat di bawah SUDAH disaring agar bisa diproduksi murni dengan format ini (tanpa gameplay, footage nyata, screen-recording, reaction).
 > **Metode:** panen 13 sumber global + 5 sumber Indonesia (artikel daftar niche 2025–2026, studi kasus channel, berita kebijakan YouTube), diverifikasi silang antar sumber. Sumber daftar niche mayoritas blog vendor tool — angka channel dianggap indikatif, bukan audit.

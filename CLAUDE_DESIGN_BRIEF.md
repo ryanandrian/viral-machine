@@ -12,7 +12,17 @@
 
 **Target market:** Indonesia content creator yang scaling channel YouTube Shorts faceless (history/mystery/facts/science). Income range Rp 3-7jt/bulan. Tech-comfortable tapi BUKAN developer.
 
-**Paket utama:** Starter Rp 149K (1 channel, 5 video/hari), Pro Rp 349K (3 channel, 10/hari), Scale Rp 699K (10 channel, 24/hari), Enterprise custom.
+**Paket utama:** Starter Rp 149K · Pro Rp 349K · Business Rp 699K · Enterprise custom.
+
+> ⚠️🔴 **DIKOREKSI 2026-08-05 — jangan pakai angka volume dari berkas ini.** Baris ini dulu menulis
+> *"Starter (1 channel, **5 video/hari**), Pro (3 channel, **10/hari**), Scale (10 channel, **24/hari**)"*.
+> Diverifikasi ke DB live: **`plan_limits.max_videos_per_day` = 1 · 1 · 3 · 5** (trial/starter/pro/business)
+> — **3–5× lebih rendah** dari angka di atas, dan nama tier "Scale" sudah diganti **"Business"** (owner 14-Jun).
+> **NILAI HIDUP = `plan_limits`**, admin-editable di `/admin/pricing` (migr 0073, nol hardcode). Angka apa pun
+> yang disalin ke dokumen PASTI membusuk begitu owner menggeser kenopnya — karena itu di sini tidak disalin.
+> Pernyataan yang TERVERIFIKASI cocok dengan DB: `CONTENT_CATEGORY_ARCHITECTURE.md` §"rumah gating tier"
+> (1/1/3/5) dan `finalisasi_tier_plan.md` ("Max video/hari 50 landing = 5×10 channel").
+> Status keputusan kuota = `SISA_KERJA_GO_LIVE.md` **[D6]**.
 
 **Brand voice:** Profesional, calm, premium tapi tidak intimidating. Bahasa Indonesia (utama) + English (toggle). Terminology AI/tech tapi dijelaskan dalam bahasa awam.
 

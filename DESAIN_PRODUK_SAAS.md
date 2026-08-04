@@ -177,6 +177,16 @@
 | **Max Video/hari/channel** | ⚠️ lihat catatan | ⚠️ | ⚠️ | Custom |
 | **Total Video/bulan (max)** | ⚠️ lihat catatan | ⚠️ | ⚠️ | Custom |
 
+> ⚠️🔴 **BERLAKU UNTUK SELURUH BERKAS INI, termasuk 6 baris naratif "5-24 video/hari" (§Pasar, §Risiko,
+> §Positioning, §Elevator pitch, §Compliance) — SEMUANYA BASI (disisir 2026-08-05).** Angka "5-24" adalah
+> RANCANGAN yang tak pernah terpasang; kenop hidup **1 · 1 · 3 · 5**. Klaim turunannya juga gugur:
+> *"3-12× lebih agresif dari kompetitor"* dan *"Max video/hari 5-24 vs 2"* dihitung dari angka rancangan itu.
+> Yang BENAR & terverifikasi: Business **5/hari/channel × 10 channel = 50/hari** — itulah dasar klaim
+> *"Hingga 50 video/hari"* di halaman pemasaran, dan klaim itu **SAH**.
+> Pernyataan dokumen lain yang TERVERIFIKASI cocok DB: `CONTENT_CATEGORY_ARCHITECTURE.md` (1/1/3/5) ·
+> `finalisasi_tier_plan.md` ("50 landing = 5×10ch"). Yang BASI: `CLAUDE_DESIGN_BRIEF.md` (sudah ditandai) ·
+> `RISET_NICHE_TRENDING_2026-07-05.md` (sudah ditandai).
+>
 > ⚠️🔴 **KUOTA VIDEO = KENOP HIDUP, BUKAN ANGKA DOKUMEN (dikoreksi 2026-08-04).**
 > Baris ini dulu menulis **5 / 10 / 24** per-hari-per-channel (dan turunannya ~150/~900/~7.200 per bulan)
 > sebagai ANGKA MATI. Nilai yang benar-benar ditegakkan sistem ada di **`plan_limits.max_videos_per_day`**,
