@@ -17,6 +17,7 @@ HUKUM DESAIN (§6c — dipegang mati):
 """
 
 import json
+import re
 from datetime import datetime, timezone
 
 from loguru import logger
@@ -120,6 +121,101 @@ def validate_decisions(decisions, channel_ctx: dict) -> tuple:
         elif dtype == "duration_note":
             if not (isinstance(detail.get("note"), str) and 0 < len(detail["note"]) <= 300):
                 return False, f"#{i}: note wajib string ≤300"
+    return True, None
+
+
+# ── Verifikasi FAKTA reason_codes terhadap dosir (murni & ber-uji) ────────────
+#
+# KENAPA ADA (temuan terukur 2026-08-04, mode bayangan):
+# `validate_decisions` di atas memeriksa BENTUK keputusan — `reason_codes` hanya dicek "string tidak
+# kosong", ISINYA tak pernah diperiksa. Hasil audit 3 siklus bayangan (18-Jul, 26-Jul, 2-Agu):
+# **3 klaim perbandingan BENAR, 3 SALAH** — dan yang salah adalah kesalahan yang SAMA, terulang setiap
+# siklus: `per_niche.fun_facts.retention_avg=60.0 higher than dark_history` sementara dosir yang ANALIS
+# SENDIRI BACA mencatat dark_history=69.2. Angkanya dibaca PERSIS BENAR; yang salah PERBANDINGANNYA.
+# Lalu perbandingan salah itu dipakai membenarkan arahan produksi (perbanyak fun_facts) — padahal
+# dark_history justru yang retensinya tertinggi. Bila otak ini disambungkan ke produksi (A2) tanpa
+# pemeriksa ini, tenant menerima konten yang lebih LEMAH dan nol jejak sebabnya.
+#
+# PRINSIP: jangan percayai perbandingan LLM — periksa MEKANIS terhadap angka yang ia dibaca.
+# Deterministik, nol biaya AI, tak bisa berhalusinasi.
+#
+# DISIPLIN ANTI-BUG-BARU (penting): HANYA menolak klaim yang TERBUKTI SALAH. Klaim yang tak bisa
+# diselesaikan (jalur tak ada di dosir, pembanding bukan kunci — mis. "higher than average") DILEWATI,
+# tidak dianggap salah. Menolak karena parser kita tak paham = menanam bug baru dan membuang keputusan
+# yang sah. Ambang toleransi angka mengikuti pembulatan 1 desimal yang dipakai dosir.
+_RX_KLAIM = re.compile(
+    r"^([A-Za-z_][\w.]*)\s*=\s*(-?\d+(?:\.\d+)?)\s*"
+    r"(highest|lowest|higher than|lower than|better than|worse than)\s*([\w.]*)\s*$")
+_TOLERANSI = 0.15   # dosir membulatkan 1 desimal; beda ≤0,15 = sama, bukan halusinasi
+
+
+def _ambil(dos, jalur: str):
+    """Ambil nilai bersarang dari dosir. None = tak terselesaikan (→ DILEWATI, bukan salah)."""
+    cur = dos
+    for bagian in jalur.split("."):
+        if isinstance(cur, dict) and bagian in cur:
+            cur = cur[bagian]
+        else:
+            return None
+    return cur if isinstance(cur, (int, float)) else None
+
+
+def verifikasi_klaim_reason_codes(decisions, dossier: dict) -> tuple:
+    """Return (valid, error|None). Periksa klaim ANGKA & PERBANDINGAN di reason_codes vs dosir.
+
+    Dua jenis kebohongan yang ditangkap:
+      1. **Angka dikarang** — `X=nilai` padahal dosir mencatat nilai lain (di luar toleransi).
+      2. **Perbandingan terbalik** — `X=nilai higher than Y` padahal Y lebih besar (kasus NYATA 3×).
+
+    Yang tak terselesaikan dilewati (lihat catatan disiplin di atas)."""
+    if not isinstance(decisions, list) or not isinstance(dossier, dict):
+        return True, None                      # bukan tugas fungsi ini (skema diurus validator lain)
+    for i, d in enumerate(decisions):
+        if not isinstance(d, dict):
+            continue
+        for kode in (d.get("reason_codes") or []):
+            m = _RX_KLAIM.match(str(kode).strip())
+            if not m:
+                continue                       # bentuk bebas → tak bisa diperiksa, DILEWATI
+            jalur, nilai_str, relasi, pembanding = m.group(1), m.group(2), m.group(3), m.group(4)
+            nilai = float(nilai_str)
+            aktual = _ambil(dossier, jalur)
+            if aktual is None:
+                continue                       # jalur tak ada di dosir → DILEWATI
+            if abs(float(aktual) - nilai) > _TOLERANSI:
+                return False, (f"#{i} reason_code mengarang angka: {jalur}={nilai_str} "
+                               f"padahal dosir mencatat {aktual}")
+            metrik = jalur.split(".")[-1]
+            induk = ".".join(jalur.split(".")[:-2])
+            if relasi in ("highest", "lowest"):
+                grup = dossier
+                for bagian in (induk.split(".") if induk else []):
+                    grup = grup.get(bagian) if isinstance(grup, dict) else None
+                if not isinstance(grup, dict):
+                    continue                   # grup tak terselesaikan → DILEWATI
+                sebanding = [v.get(metrik) for v in grup.values()
+                             if isinstance(v, dict) and isinstance(v.get(metrik), (int, float))]
+                if len(sebanding) < 2:
+                    continue                   # tak ada pembanding → DILEWATI
+                benar = (nilai >= max(sebanding) - _TOLERANSI) if relasi == "highest" \
+                    else (nilai <= min(sebanding) + _TOLERANSI)
+                if not benar:
+                    lawan = max(sebanding) if relasi == "highest" else min(sebanding)
+                    return False, (f"#{i} reason_code salah: {jalur}={nilai_str} BUKAN {relasi} "
+                                   f"(ada {metrik}={lawan})")
+            else:
+                if not pembanding:
+                    continue
+                lain = _ambil(dossier, f"{induk}.{pembanding}.{metrik}" if induk
+                              else f"{pembanding}.{metrik}")
+                if lain is None:
+                    continue                   # pembanding tak terselesaikan → DILEWATI
+                lebih_besar = relasi in ("higher than", "better than")
+                benar = (nilai > float(lain) - _TOLERANSI) if lebih_besar \
+                    else (nilai < float(lain) + _TOLERANSI)
+                if not benar:
+                    return False, (f"#{i} reason_code salah: {jalur}={nilai_str} BUKAN {relasi} "
+                                   f"{pembanding} ({pembanding}.{metrik}={lain})")
     return True, None
 
 
@@ -352,7 +448,12 @@ RULES (violations are rejected by a strict validator):
             raw, model = self._call_llm(system, user)
             parsed = json.loads(clean_json_response(raw))
             cand = parsed.get("decisions") if isinstance(parsed, dict) else parsed
+            # DUA lapis: (1) bentuk/menu tertutup, (2) KEBENARAN klaim reason_codes vs dosir.
+            # Lapis 2 lahir dari temuan terukur 04-Agu: 3 dari 6 klaim perbandingan SALAH di mode
+            # bayangan, kesalahan sama terulang 3 siklus. Bentuk lolos, isinya bohong.
             ok, err = validate_decisions(cand, channel_ctx)
+            if ok:
+                ok, err = verifikasi_klaim_reason_codes(cand, dossier)
             if not ok:
                 # retry 1× dengan umpan-balik error (LLM sering benar di percobaan kedua)
                 logger.info(f"[Analyst] validasi gagal ({err}) — retry 1× dgn umpan-balik")
@@ -362,6 +463,8 @@ RULES (violations are rejected by a strict validator):
                 parsed = json.loads(clean_json_response(raw2))
                 cand = parsed.get("decisions") if isinstance(parsed, dict) else parsed
                 ok, err = validate_decisions(cand, channel_ctx)
+                if ok:
+                    ok, err = verifikasi_klaim_reason_codes(cand, dossier)
                 raw = raw2
             if ok:
                 decisions = cand

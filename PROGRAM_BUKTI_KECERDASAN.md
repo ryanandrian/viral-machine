@@ -247,8 +247,45 @@ Minggu ini mesin belajar dari 34 video di 2 channel-mu:
 | M1 | Lapis 1 kolektor + fitur turunan + backfill RAD | ±1 sesi | Ketok K1 | **✅ TUNTAS 2026-07-18 — cakupan 100,0% (205/205 video eligible RAD: 161 ok + 44 empty-tercatat, kering 6 putaran)** · fitur 3 video spot-check IDENTIK vs hitung manual independen · kurva byte-cocok probe pagi · 2 error transien Google-500 ter-retry otomatis · uji permanen `tests/test_retention_curves.py` **12/12** + regresi auth-invalid 10/10 + py_compile/import + tsc/next-build FE lulus · migr **0171** APPLIED (RLS tertutup 0-policy; 4 kenop + kartu admin "Mata Mesin — Kurva Retensi"). Wawasan perdana mata-baru: hook RAD rata2 DITONTON ULANG (hook_hold 1,38; 159/161 video ber-loop) — kebocoran di BADAN video (end_ratio 0,38). **✅ DEPLOYED PRODUKSI 2026-07-18 (izin owner "deploy batch M1"): BE OK 16:36 (mv-worker/webhook active, health=200) + FE OK 16:53 (situs=200), commit `5a6c463`; kolektor terbukti hidup di log produksi 16:37 (idempoten: eligible=0/final=153 — cocok persis kondisi akhir backfill); 0 error ber-timestamp pasca-deploy; nol run produksi di jendela deploy** |
 | M2 | Vonis loop (dua-sinyal) + konsistensi tampilan | ±½ sesi | Vonis K2 | **✅ TUNTAS LOKAL 2026-07-18:** completion (cap 100) dipatri di SUMBER (`_compute_top_hooks`/`_compute_top_topics`); loop_factor terpisah = M1. Uji permanen `tests/test_analyzer_completion_cap.py` **3/3** (cap + ranking hooks by-views & topik by-composite TAK berubah + avoid_patterns utuh) + regresi 22/22 · recompute RAD via kode produksi: **0 nilai >100 tersisa** di JSON; `niche_weights` identik (nol regresi) · FE tak disentuh (sudah ber-cap defensif — dugaan awal salah, dikoreksi jujur di §6e2). **⛔ Sisa: izin DEPLOY BE** (tanpa deploy, loop harian worker menulis mentah lagi) |
 | A1 | `channel_decisions` + dosir + analis MODE BAYANGAN | ±1–1,5 sesi | M1 done | **✅ DIBANGUN + TERVALIDASI LOKAL 2026-07-18:** migr **0172** APPLIED (RLS tertutup; 3 kenop + kartu admin "Otak Analis") · `channel_analyst.py` (dosir 4-sumber terukur → LLM BYOK 'utility' → menu-tertutup ber-prediksi-wajib → retry-1× → gagal = `rejected` JUJUR) · uji **12/12** + suite penuh 35/35 + tsc/build FE · **siklus NYATA RAD: 5 keputusan ber-sitasi angka dosir tercatat (gpt-4o-mini)** — insiden validasi-vs-prompt (share_hint tak dideklarasikan di RULES → rejected 2×) tertangkap oleh pagar, di-fix di sumber + dikunci uji regresi `TestPromptDeclaresAllBounds` · grep: `channel_decisions` konsumen = HANYA channel_analyst (NOL efek produksi terbukti). **✅ DEPLOYED PRODUKSI 2026-07-18 (izin owner "deploy batch A1"): BE OK 22:03 + FE OK 22:06 (`067fa67`); siklus pasca-restart bersih (insights ✓, analis not_due benar, 0 error). 🕐 JAM BAYANGAN K4 MULAI 18-Jul → review mutu keputusan ± 1 Agu 2026 (bertepatan evaluasi G1 kurva); selama itu buku keputusan menumpuk mingguan — owner bisa minta sajian kapan pun. Gerbang A2 = ketok owner pasca-review** |
-| A2 | Review owner bayangan → wiring LIVE + hakim mekanik | ±1 sesi | Ketok pasca-review (K4) | Arahan terbukti di prompt run nyata · vonis hakim benar vs ground-truth |
+| A1b | **HUKUM §6c.1 DITEGAKKAN KODE: mekanik MENGADILI klaim `reason_codes`** | selesai | — | **✅ 2026-08-04** — blok temuan di bawah tabel |
+| A2 | Review owner bayangan → wiring LIVE + hakim mekanik | ±1 sesi | Ketok pasca-review (K4) | Arahan terbukti di prompt run nyata · vonis hakim benar vs ground-truth. **⚠️ BEKAL WAJIB: blok A1b di bawah — 3 dari 6 klaim analis SALAH sebelum 04-Agu. Jangan ketok A2 tanpa siklus baru yang LOLOS pemeriksa.** |
 | W1 | Warisan: agregator + cold-start + benih RAD | ±1 sesi | ≥X vonis (config) + K6 | Channel-uji baru menerima prior berlabel · isolasi privasi teruji |
+#### 🔴 A1b — TEMUAN TERUKUR 2026-08-04: analis SALAH pada 3 dari 6 klaim (mode bayangan)
+
+**Hukum §6c.1 ("mekanik MENGADILI") tertulis sejak 18-Jul tapi TAK DITEGAKKAN KODE.** `validate_decisions`
+memeriksa BENTUK keputusan; `reason_codes` hanya dicek "string tidak kosong" — **isinya tak pernah
+diadili.** (Pola identik pernah terjadi pada anti-komisi-diri agen: *"hanya tertulis, TAK ditegakkan di
+kode"* — `AGENT_AND_AFILIATION` §5g.9, diperbaiki 19-Jul. **Aturan yang hanya tertulis = aturan yang tidak ada.**)
+
+**Audit 3 siklus bayangan nyata** (18-Jul · 26-Jul · 2-Agu, channel RAD The Explorer):
+
+| | Jumlah |
+|---|---|
+| Klaim perbandingan BENAR (`universe_mysteries.views_per_video` tertinggi — cocok dosir) | **3** |
+| Klaim perbandingan **SALAH** | **3** |
+
+Ketiga yang salah = **kesalahan yang SAMA, terulang setiap siklus**:
+`per_niche.fun_facts.retention_avg=60.0 higher than dark_history` — padahal dosir yang **analis sendiri
+baca** mencatat `dark_history.retention_avg=69.2`. **Angka dibaca PERSIS BENAR; PERBANDINGANNYA terbalik**,
+lalu dipakai membenarkan arahan "perbanyak fun_facts" — padahal dark_history justru retensi tertinggi.
+
+**MODE BAYANGAN MENAHANNYA 3 MINGGU: nol kerusakan produksi.** Pagar §6 bekerja sebagaimana dirancang.
+
+**Perbaikan (A1b):** `verifikasi_klaim_reason_codes()` — fungsi MURNI, deterministik, nol biaya AI:
+menolak (a) angka dikarang (nilai ≠ dosir di luar toleransi pembulatan 0,15) dan (b) perbandingan
+terbalik / `highest` / `lowest` palsu. Disambung ke alur retry yang SUDAH ADA → analis diberi tahu
+kesalahannya **beserta angka pembandingnya** dan bisa memperbaiki diri; tetap gagal = `status='rejected'`
++ `reject_reason` (slot yang skema migr 0172 sudah siapkan sejak awal).
+**DISIPLIN ANTI-BUG-BARU:** hanya menolak yang **TERBUKTI** salah. Klaim tak terselesaikan (jalur tak ada
+di dosir · pembanding bukan kunci, mis. `higher than average` yang NYATA muncul 18-Jul · kalimat bebas)
+**DILEWATI** — menolak karena parser kita tak paham = membuang keputusan sah = bug yang lebih parah.
+
+**Bukti:** `tests/test_analis_klaim_tak_boleh_bohong.py` — 15 uji, sampel = **angka asli dosir produksi**;
+**merah dibuktikan** (4 gagal saat pemeriksa dilumpuhkan). Suite proyek 663 → **675**.
+**Konsekuensi untuk A2:** ketiga siklus lama kini DITOLAK pemeriksa. **Jangan ketok A2 sebelum ada siklus
+baru yang LOLOS** — kalau tidak, arahan berbasis perbandingan palsu masuk produksi dan tenant menerima
+konten lebih lemah tanpa jejak sebabnya.
+
 Administrasi tiap fase: rekonsiliasi dokumen ini + `SISA_KERJA` + memory DI COMMIT YANG SAMA (§3.7). TIDAK disentuh: pipeline inti, program durasi, error-mgmt, partner, DNA niche, FE tenant (sampai jendela pasca-G1).
 
 ### §6e2 🦴 DAFTAR SAPU FOSIL TERIKAT-FASE (perintah owner 18-Jul: "jangan meninggalkan fosil setitikpun BE/DB/FE") — WAJIB dieksekusi di fase tercantum, bukan "nanti"
