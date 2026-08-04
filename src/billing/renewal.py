@@ -168,17 +168,32 @@ def _hard_delete_tenant(sb, tenant_id: str) -> None:
         except Exception as e:
             logger.warning(f"[Billing] purge {tbl} {tenant_id} gagal (lanjut): {e}")
     # 4) Anonimkan record sisa (legal/anti-abuse)
+    #
+    # [2026-08-04] Kegagalan di sini DULU DITELAN BISU (`except: pass`) — padahal baris di bawahnya
+    # (tenant_configs) mencatat error. Dua operasi sejenis, dua perlakuan berbeda, di fungsi yang sama.
+    # Bahayanya bukan barisnya gagal, tapi: EMAIL tenant tetap tersimpan setelah ia memakai hak hapus
+    # datanya, DAN log penutup tetap berkata "selesai — record diminimalkan". Laporan sukses yang
+    # BOHONG adalah ranjau terburuk: tak ada yang mencari masalah yang katanya sudah beres.
+    gagal: list[str] = []
     try:
         sb.table("feedback_submissions").update({"email": None}).eq("tenant_id", tenant_id).execute()
-    except Exception:
-        pass
+    except Exception as e:
+        gagal.append("feedback_submissions.email")
+        logger.error(f"[Billing] anonimkan email feedback {tenant_id} GAGAL — email masih tersimpan "
+                     f"padahal tenant minta data dihapus (UU PDP): {e}")
     try:
         sb.table("tenant_configs").update({
             "subscription_status": "deleted", "display_handle": None, "telegram_chat_id": None,
         }).eq("tenant_id", tenant_id).execute()
     except Exception as e:
+        gagal.append("tenant_configs")
         logger.error(f"[Billing] set deleted {tenant_id} gagal: {e}")
-    logger.info(f"[Billing] HARD-DELETE selesai tenant={tenant_id} (data purged, token revoked, record diminimalkan)")
+    if gagal:
+        logger.error(f"[Billing] HARD-DELETE tenant={tenant_id} SELESAI SEBAGIAN — "
+                     f"masih menyimpan data pribadi di: {', '.join(gagal)}. Perlu tindakan manual.")
+    else:
+        logger.info(f"[Billing] HARD-DELETE selesai tenant={tenant_id} "
+                    f"(data purged, token revoked, record diminimalkan)")
 
 
 def sweep_subscriptions(sb) -> dict:

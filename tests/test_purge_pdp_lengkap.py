@@ -26,6 +26,7 @@ import os
 import re
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -202,3 +203,73 @@ class TestSetiapTabelTenantPunyaKeputusan(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestHardDeleteTakPernahMENGAKUSelesaiPalsu(unittest.TestCase):
+    """Laporan sukses yang BOHONG = ranjau terburuk: tak ada yang mencari masalah yang katanya beres.
+
+    Ditemukan 2026-08-04 saat mengukur "kegagalan yang ditelan diam-diam" di seluruh `src/`:
+    anonimisasi EMAIL tenant di `_hard_delete_tenant` dulu `except: pass` — bisu — sementara operasi
+    sejenis dua baris di bawahnya (tenant_configs) mencatat error. Akibatnya email tenant bisa tetap
+    tersimpan setelah ia memakai hak hapus datanya, DAN log penutup tetap berkata "selesai — record
+    diminimalkan". Owner tak akan pernah tahu ada yang harus dibereskan.
+    """
+
+    def _jalankan(self, gagalkan: set):
+        """Jalankan _hard_delete_tenant dengan DB tiruan yang menggagalkan tabel tertentu.
+        Read-only terhadap produksi: nol koneksi, nol jaringan (pelajaran: alat uji tak boleh menulis)."""
+        from src.billing import renewal
+
+        dipanggil = []
+
+        class _Q:
+            def __init__(self, tbl): self.tbl = tbl
+            def update(self, *_a, **_k): return self
+            def delete(self, *_a, **_k): return self
+            def eq(self, *_a, **_k): return self
+            def execute(self):
+                dipanggil.append(self.tbl)
+                if self.tbl in gagalkan:
+                    raise RuntimeError(f"DB tolak update {self.tbl}")
+                return type("R", (), {"data": []})()
+
+        class _SB:
+            def table(self, tbl): return _Q(tbl)
+
+        pesan = []
+        kelas_log = []
+
+        class _Log:
+            def info(self, m): pesan.append(m); kelas_log.append("info")
+            def warning(self, m): pesan.append(m); kelas_log.append("warning")
+            def error(self, m): pesan.append(m); kelas_log.append("error")
+
+        asli_log, asli_revoke = renewal.logger, None
+        renewal.logger = _Log()
+        try:
+            with patch("src.billing.youtube_oauth.revoke_tenant_tokens", create=True), \
+                 patch("src.utils.s3_buffer.delete_prefix", create=True):
+                renewal._hard_delete_tenant(_SB(), "t-uji")
+        finally:
+            renewal.logger = asli_log
+        return pesan, kelas_log
+
+    def test_gagal_anonimkan_email_TIDAK_dilaporkan_selesai(self):
+        pesan, kelas = self._jalankan({"feedback_submissions"})
+        gabung = " | ".join(pesan)
+        self.assertIn("SELESAI SEBAGIAN", gabung,
+                      "email gagal dianonimkan tapi laporan tetap 'selesai' — laporan sukses BOHONG")
+        self.assertIn("feedback_submissions.email", gabung, "tak menyebut data apa yang masih tersimpan")
+        self.assertIn("error", kelas, "kegagalan UU PDP tercatat bukan sebagai error")
+
+    def test_gagal_tandai_deleted_juga_dilaporkan(self):
+        pesan, _ = self._jalankan({"tenant_configs"})
+        self.assertIn("SELESAI SEBAGIAN", " | ".join(pesan))
+
+    def test_semua_sukses_baru_boleh_lapor_selesai(self):
+        """REGRESI: jalur normal tak boleh jadi berisik/alarm palsu."""
+        pesan, kelas = self._jalankan(set())
+        gabung = " | ".join(pesan)
+        self.assertIn("HARD-DELETE selesai", gabung)
+        self.assertNotIn("SELESAI SEBAGIAN", gabung)
+        self.assertNotIn("error", kelas, "jalur sukses memunculkan error — alarm palsu")
