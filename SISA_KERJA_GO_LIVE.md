@@ -251,7 +251,33 @@
 - **DEPENDS:** idealnya SETELAH **[A1]** (butuh aliran tenant nyata). **Nyambung:** [B8] /feedback · [D1] funnel · `PAYMENT_AND_TENANT_GATE_ARCHITECTURE.md` (state machine gate).
 - **REALISASI:** ✅ **DEPLOYED + LIVE 2026-07-02** (commit `db589b1`). Mesin lifecycle PENUH LIVE: nurture trial-lapse (5-email config) + suspended→blocked→deleted (30+30h) + purge S3 dini + revoke token YT (UU PDP) + diskon comeback + reaktivasi 1-klik (`/reactivate`) + banner blocked + admin lead_temp. Sweep terverifikasi bersih (nol hapus mendadak; timing di `app_config`). Detail+tracker = `LIFECYCLE_NURTURE_ARCHITECTURE.md §11`. **Follow-up SELESAI 2026-07-03:** ✅ tombol aksi-manual admin (`6a5f798`: Perpanjang trial / Undur hapus / Aktifkan-bersih / Hapus-permanen + ConfirmDialog + footgun Suspend@blocked) · ✅ Telegram admin di-wire ke `company_profile.admin_telegram_chat_id` (`603640e`, migr 0114, editable via `/admin/company-profile` — **bukan env**). **LIFECYCLE = 100% & dokumen di-CLOSE (direkonsiliasi vs realita via 2 verifikator 2026-07-03).**
 
-- **⚠️ TEMUAN AUDIT 2026-08-04 (BELUM diperbaiki — butuh ketok owner + kemungkinan konsultan):** daftar
+- **✅ TEMUAN AUDIT 2026-08-04 — TUNTAS TANPA PERLU KETOK BARU (jawabannya SUDAH ada di SPEC):**
+  Keempat tabel diselesaikan dengan MEMBACA dokumen, bukan menanyakan owner — teguran owner:
+  *"anda sudah baca AGENT_AND_AFILIATION? buat apa file MD dibuat? pajangan?"*
+  | Tabel | Putusan | Pasal yang mengetoknya |
+  |---|---|---|
+  | `commission_ledger` | **SIMPAN** | AGENT §5g.8 "seluruh ledger/payout DISIMPAN (kewajiban audit & pajak)" |
+  | `tenant_attribution` | **SIMPAN** | AGENT §1.3/§2 "terkunci PERMANEN"/"selamanya" · "Masa komisi: SELAMANYA" |
+  | `video_retention_curves` | **HAPUS** | LIFECYCLE §4.2 (data per-video, sekeluarga `video_analytics`) |
+  | `channel_decisions` | **HAPUS** | LIFECYCLE §4.2 (data per-channel, sekeluarga `channel_insights`) |
+  **Alasan atribusi jauh lebih berat dari "kerapian data"** (diverifikasi, bukan dugaan): akun login tenant
+  TIDAK ikut dihapus (nol `deleteUser` di seluruh jalur) DAN atribusi hanya ditulis saat PENDAFTARAN ⇒
+  bila dihapus lalu tenant kembali & bayar, `partner.record_settlement_commission` tak menemukan
+  atribusinya → tenant jadi "bukan bawaan siapa pun" (§1b) → **agen kehilangan komisi SELAMANYA tanpa tahu.**
+  **Hasil:** 19 tabel dihapus · 5 disimpan (tiap satu menyebut pasalnya) · **nol tabel ber-`tenant_id`
+  tanpa kategori** (24/24). `LIFECYCLE §4.2` diperbarui — daftarnya sudah sebulan basi.
+  **PENJAGA (akar masalahnya, bukan gejalanya):** `tests/test_purge_pdp_lengkap.py` — 9 uji; MERAH bila
+  (a) tabel ber-`tenant_id` tak masuk kategori mana pun, (b) alasan simpan tak menyebut pasal SPEC
+  (memaksa sesi berikutnya MEMBACA dokumen, bukan bertanya), (c) dua tabel uang agen masuk daftar hapus,
+  (d) **daftar di DOKUMEN §4.2 tak selaras dengan kode** — merah dibuktikan dengan sengaja membusukkan
+  dokumennya. Suite 647 → **650**.
+- **❓ TERBUKA, BELUM PERNAH DIKETOK (jangan diputuskan sendiri):** hard-delete **tidak menghapus akun
+  login** tenant ⇒ **email tenant tetap ada di `auth.users`** padahal ia minta datanya dihapus. Mungkin
+  DISENGAJA sebagai anti-abuse (penanda masa-coba ikut bertahan sebagai jangkar → cegah panen trial ulang),
+  tapi **nol baris di dokumen mana pun menyatakannya** — jadi tak diketahui rencana atau terlewat.
+  Keputusan ini TIDAK mengubah putusan 4 tabel di atas (atribusi tetap wajib disimpan dalam kedua
+  kemungkinan). Diusulkan dibahas bersama konsultan pajak/hukum (AGENT §6b) — bukan diputuskan terpisah.
+- **~~TEMUAN AUDIT (versi awal, sudah digantikan blok di atas)~~:** daftar
   penghapusan data (`_PURGE_TABLES` di `renewal.py`) **tertinggal dari skema**. Diukur, bukan ditebak:
   **24 tabel di DB live punya kolom `tenant_id`**; 17 dihapus, 3 terdokumentasi disimpan
   (`payments` legal · `tenant_configs` dianonimkan · `feedback_submissions` anonim) ⇒ **4 TABEL TIDAK

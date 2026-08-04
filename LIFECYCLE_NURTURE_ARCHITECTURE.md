@@ -94,10 +94,21 @@ Muncul di **`/admin/app-config`** (System Config; catch-all "Lainnya" sudah jami
 ✅ **ADA:** `subscription_status`, `plan_type`, `current_period_end`, `is_developer`, `discount_pct`, `display_handle`, `telegram_chat_id`, `trial_reminder_sent_at`, `renewal_reminder_sent_at`, `suspend_notified_at`.
 🆕 **BANGUN (migrasi baru):** `lead_temp` (hot/warm/cold) · `nurture_step` (int, anti-dobel) · `nurture_last_sent_at` · `suspended_at` · `blocked_at` · `deletion_scheduled_at` · `raw_assets_purged_at` · `winback_offer_pct` · `winback_offer_expires_at` · `deletion_warn_sent` (int langkah peringatan terkirim).
 
-### 4.2 CAKUPAN HAPUS DATA (verified: tabel ber-`tenant_id`) — saat `deleted`
-🗑️ **PURGE (WHERE tenant_id = X):** `channels`, `content_inventory`, `production_runs`, `pipeline_run_logs`, `pipeline_queue`, `video_analytics`, `videos`, `channel_insights`, `tts_delivery_samples`, `direct_jobs`, `tenant_ai_accounts` (kunci AI), `tenant_youtube_accounts` (SETELAH revoke), `support_tickets`, `email_outbox`, `music_library` (baris milik tenant), `voice_catalog` (HANYA baris ber-tenant_id; baris global tenant_id NULL JANGAN disentuh), `niche_requests` (pesanan tenant; niche publik 90hr milik katalog → jangan hapus).
-📦 **SISAKAN (legal/anti-abuse, anonimkan bila perlu):** `payments` (bukti bayar/legal), `tenant_configs` (set `subscription_status='deleted'` + strip PII), `feedback_submissions` (insight lead — anonimkan email).
+### 4.2 CAKUPAN HAPUS DATA (tabel ber-`tenant_id`) — saat `deleted`
+> **⚠️ DAFTAR INI WAJIB IKUT BERTAMBAH SETIAP TABEL BER-`tenant_id` BARU LAHIR.** Versi 3-Jul menulis
+> "verified" lalu **membusuk diam-diam**: 4 tabel ber-`tenant_id` lahir SESUDAHNYA
+> (`channel_decisions` migr 0172 · `video_retention_curves` migr 0171 · `commission_ledger` +
+> `tenant_attribution` migr 0168) dan tak seorang pun memperbarui daftarnya ⇒ data tenant BERTAHAN
+> setelah ia memakai hak hapusnya (temuan audit 2026-08-04). Kode PATUH pada daftar ini; jadi daftar
+> yang basi = celah UU PDP yang tumbuh sendiri.
+> **Penjaganya sekarang mesin, bukan ingatan:** `tests/test_purge_pdp_lengkap.py` MERAH bila ada tabel
+> ber-`tenant_id` yang tak masuk salah satu kategori di bawah. Kategori = `_PURGE_TABLES` /
+> `_KEEP_TABLES` / `_PENDING_OWNER_TABLES` di `src/billing/renewal.py`.
+
+🗑️ **PURGE (WHERE tenant_id = X):** `channels`, `content_inventory`, `production_runs`, `pipeline_run_logs`, `pipeline_queue`, `video_analytics`, `videos`, `channel_insights`, `tts_delivery_samples`, `direct_jobs`, `tenant_ai_accounts` (kunci AI), `tenant_youtube_accounts` (SETELAH revoke), `support_tickets`, `email_outbox`, `music_library` (baris milik tenant), `voice_catalog` (HANYA baris ber-tenant_id; baris global tenant_id NULL JANGAN disentuh), `niche_requests` (pesanan tenant; niche publik 90hr milik katalog → jangan hapus), **`video_retention_curves`** (data per-video, sekeluarga `video_analytics` — ditambah 04-Agu), **`channel_decisions`** (jejak analis AI per-channel, sekeluarga `channel_insights` — ditambah 04-Agu).
+📦 **SISAKAN (legal/anti-abuse, anonimkan bila perlu):** `payments` (bukti bayar/legal), `tenant_configs` (set `subscription_status='deleted'` + strip PII), `feedback_submissions` (insight lead — anonimkan email), **`commission_ledger`** (AGENT §5g.8 "seluruh ledger/payout DISIMPAN — kewajiban audit & pajak"; catatan uang ke PIHAK KETIGA/agen, bukan data tenant), **`tenant_attribution`** (AGENT §1.3/§2 atribusi "terkunci PERMANEN"/"selamanya" + "Masa komisi: SELAMANYA"; **dihapus = agen kehilangan komisi selamanya bila tenant kembali**, sebab akun login tenant TIDAK ikut dihapus dan atribusi hanya ditulis saat pendaftaran).
 ⚠️ Tabel global (tanpa tenant_id / tenant_id NULL) — `niches` base, `voice_catalog` global, `pricing_config`, `app_config`, `plan_limits` — **JANGAN disentuh**.
+❓ **TERBUKA (belum diketok, JANGAN diputuskan sendiri):** hard-delete **TIDAK menghapus akun login** tenant (nol `deleteUser` di seluruh jalur) ⇒ **email tenant tetap tersimpan di `auth.users`** padahal ia meminta datanya dihapus. Mungkin DISENGAJA sebagai anti-abuse (penanda masa-coba ikut bertahan sebagai jangkar → cegah panen trial ulang), tapi **tak ada satu baris pun di dokumen mana pun yang menyatakannya** — jadi tak diketahui apakah rencana atau terlewat. Status: `SISA_KERJA_GO_LIVE.md` [B9].
 
 ### 4.3 Aset S3 (✅ mekanisme ada — `src/utils/s3_buffer.py`)
 - Video mentah/perantara = MP4 di S3, key di **`content_inventory.s3_key`** (✅). Publisher hapus pasca-publish (`s3_buffer.delete`).

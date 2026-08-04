@@ -112,30 +112,37 @@ def _compute_lead_temp(sb, tenant_id: str) -> str:
 # kali tabel baru ditambah. Dijaga uji `tests/test_purge_pdp_lengkap.py` — tabel ber-`tenant_id` yang tidak
 # terdaftar di mana pun membuat uji MERAH, jadi tabel berikutnya tak bisa lolos tanpa keputusan sadar.
 _PURGE_TABLES = [
-    "video_analytics", "channel_insights", "tts_delivery_samples", "pipeline_run_logs",
+    "video_analytics", "video_retention_curves",          # data per-VIDEO (anak `videos`)
+    "channel_insights", "channel_decisions",              # data per-CHANNEL (anak `channels`)
+    "tts_delivery_samples", "pipeline_run_logs",
     "pipeline_queue", "production_runs", "content_inventory", "videos", "direct_jobs",
     "niche_requests", "music_library", "voice_catalog", "tenant_ai_accounts",
     "tenant_youtube_accounts", "support_tickets", "email_outbox", "channels",
 ]
 
-# SENGAJA DISIMPAN saat hard-delete — masing-masing dengan alasannya (bukan kelalaian).
+# SENGAJA DISIMPAN saat hard-delete. Tiap baris = KEPUTUSAN OWNER YANG SUDAH DIKETOK + kutipan SPEC-nya,
+# supaya sesi berikutnya tidak menanyakannya ulang kepada owner (teguran 04-Agu: "buat apa file MD dibuat?").
 _KEEP_TABLES = {
-    "payments":             "kewajiban legal/akuntansi — catatan transaksi tak boleh hilang",
-    "tenant_configs":       "baris ditandai deleted + PII di-strip (anonim), bukan dihapus",
-    "feedback_submissions": "sudah anonim; dipakai perbaikan produk agregat",
+    "payments":             "kewajiban legal/akuntansi — LIFECYCLE §4.2 'bukti bayar/legal'",
+    "tenant_configs":       "LIFECYCLE §4.2 — ditandai deleted + PII di-strip (anonim), bukan dihapus",
+    "feedback_submissions": "LIFECYCLE §4.2 — insight lead, email dianonimkan",
+    # AGENT_AND_AFILIATION §5g.8: "Putus kontrak agen: seluruh ledger/payout DISIMPAN (kewajiban audit
+    # & pajak)". Ini catatan keuangan PERUSAHAAN atas kewajiban ke PIHAK KETIGA (agen), bukan data milik
+    # tenant. Menghapusnya = kehilangan jejak komisi yang sudah/harus dibayar.
+    "commission_ledger":    "AGENT §5g.8 — kewajiban audit & pajak; catatan uang ke agen (pihak ketiga)",
+    # AGENT_AND_AFILIATION §1.3/§2/§5a: atribusi "terkunci PERMANEN sejak daftar", "terkunci selamanya",
+    # "Masa komisi: SELAMANYA". Konsekuensi bila dihapus (diverifikasi 04-Agu): akun login tenant TIDAK
+    # ikut dihapus (nol `deleteUser` di jalur ini) DAN atribusi hanya ditulis saat PENDAFTARAN ⇒ bila
+    # tenant kembali & bayar, `partner.record_settlement_commission` tak menemukan atribusi → tenant
+    # dianggap "bukan bawaan siapa pun" (§1b) → AGEN KEHILANGAN KOMISI SELAMANYA tanpa tahu.
+    "tenant_attribution":   "AGENT §1.3/§2 — atribusi PERMANEN; dihapus = agen kehilangan komisi bila tenant kembali",
 }
 
-# BELUM DIPUTUSKAN OWNER (temuan audit 2026-08-04). Bukan 'aman', bukan 'sengaja' — MENUNGGU KEPUTUSAN.
-# Dua di antaranya sangat mungkin WAJIB disimpan sebagai catatan keuangan/komisi seperti `payments`
-# (ranah konsultan pajak/hukum — AGENT_AND_AFILIATION §6b), bukan ranah kode. Menghapus data =
-# aksi IRREVERSIBLE (CLAUDE.md §2.3d) ⇒ Claude TIDAK memutuskannya sendiri.
-# Status hidup + usul per-tabel: SISA_KERJA_GO_LIVE.md [B9].
-_PENDING_OWNER_TABLES = {
-    "commission_ledger":      "komisi agen — kemungkinan wajib simpan (catatan keuangan)",
-    "tenant_attribution":     "atribusi agen perujuk — kemungkinan wajib simpan (dasar komisi)",
-    "channel_decisions":      "jejak keputusan AI per-channel — hapus? anonimkan?",
-    "video_retention_curves": "kurva retensi penonton per-video — hapus? anonimkan?",
-}
+# Menunggu keputusan owner. KOSONG per 2026-08-04 — keempat temuan audit sudah terjawab oleh SPEC yang
+# ADA (2 disimpan per AGENT §5g.8/§1.3, 2 dihapus per LIFECYCLE §4.2 karena data produksi/konten tenant).
+# Mekanismenya DIPERTAHANKAN untuk tabel ber-`tenant_id` berikutnya: kalau SPEC belum menjawab, taruh di
+# sini + tulis pertanyaannya, JANGAN diam-diam dibiarkan di luar ketiga daftar (uji akan merah).
+_PENDING_OWNER_TABLES: dict[str, str] = {}
 
 
 def _hard_delete_tenant(sb, tenant_id: str) -> None:

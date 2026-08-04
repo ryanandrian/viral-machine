@@ -126,6 +126,73 @@ class TestSetiapTabelTenantPunyaKeputusan(unittest.TestCase):
                 self.assertTrue(alasan and len(alasan.strip()) >= 15,
                                 f"{nama}['{tabel}'] tanpa alasan yang bisa dibaca manusia")
 
+    def test_alasan_simpan_menyebut_pasal_spec_yang_mengetoknya(self):
+        """Tiap tabel yang DISIMPAN harus menyebut PASAL SPEC-nya, bukan alasan karangan Claude.
+
+        Kenapa dijaga: 04-Agu Claude menyodorkan `commission_ledger` & `tenant_attribution` ke owner
+        sebagai "keputusan baru yang butuh konsultan" — padahal AGENT §5g.8 & §1.3 SUDAH mengetoknya.
+        Menanyakan ulang hal yang sudah diketok = mengundang owner bertentangan dengan dirinya sendiri,
+        dan membuang waktunya. Teguran owner: "buat apa file MD dibuat? pajangan?"
+        Menyebut pasalnya memaksa sesi berikutnya MEMBACA dokumen, bukan bertanya."""
+        for tabel, alasan in _KEEP_TABLES.items():
+            self.assertRegex(
+                alasan, r"(LIFECYCLE|AGENT|PAYMENT|§)",
+                f"_KEEP_TABLES['{tabel}'] tak menyebut pasal SPEC yang mengetoknya — "
+                f"alasan tanpa rujukan akan ditanyakan ulang ke owner oleh sesi berikutnya")
+
+    def test_dokumen_lifecycle_selaras_dengan_kode(self):
+        """DOKUMEN ↔ KODE. Ini penjaga yang paling menentukan, dan yang paling sering tak dipasang.
+
+        Sebab akar seluruh celah ini bukan kodenya — kodenya PATUH. Yang membusuk adalah DAFTAR DI
+        DOKUMEN (`LIFECYCLE_NURTURE_ARCHITECTURE.md` §4.2), yang bahkan menulis "verified" lalu
+        tertinggal 4 tabel selama sebulan. Teguran owner 04-Agu: *"anda selalu abai update dokumen
+        sehingga dokumen tidak bisa dijadikan SSOT yang valid. selalu begitu cara kerja anda, entah
+        kenapa."*
+
+        Jawaban atas "entah kenapa": karena tak ada apa pun yang MEMAKSANYA. Dokumen yang bertahan
+        akurat adalah yang dijaga mesin (mis. `test_ssot_error_mgmt.py`); yang membusuk adalah yang
+        hanya bergantung pada disiplin. Uji ini memindahkan §4.2 ke kategori pertama: begitu daftar di
+        kode berubah tanpa dokumennya ikut, uji ini MERAH.
+        """
+        doc = os.path.join(AKAR, "LIFECYCLE_NURTURE_ARCHITECTURE.md")
+        teks = open(doc, encoding="utf-8").read()
+        m = re.search(r"### 4\.2 CAKUPAN HAPUS DATA(.*?)\n### ", teks, re.S)
+        self.assertIsNotNone(m, "§4.2 CAKUPAN HAPUS DATA tak ditemukan — struktur dokumen berubah?")
+        blok = m.group(1)
+
+        baris_purge = next((b for b in blok.splitlines() if b.lstrip().startswith("🗑️")), "")
+        baris_keep = next((b for b in blok.splitlines() if b.lstrip().startswith("📦")), "")
+        self.assertTrue(baris_purge and baris_keep, "§4.2 kehilangan baris PURGE/SISAKAN")
+
+        for tabel in _PURGE_TABLES:
+            self.assertIn(f"`{tabel}`", baris_purge,
+                          f"`{tabel}` DIHAPUS oleh kode tapi TIDAK tercantum di daftar PURGE §4.2 — "
+                          f"dokumen membusuk lagi; SSOT tak bisa dipercaya")
+        for tabel in _KEEP_TABLES:
+            self.assertIn(f"`{tabel}`", baris_keep,
+                          f"`{tabel}` DISIMPAN oleh kode tapi TIDAK tercantum di daftar SISAKAN §4.2")
+        # Arah sebaliknya: dokumen tak boleh menjanjikan penghapusan yang kodenya tidak lakukan —
+        # itu lebih berbahaya daripada dokumen yang kurang lengkap (owner membaca "dihapus", nyatanya tidak).
+        for tabel in re.findall(r"`(\w+)`", baris_purge):
+            if tabel in BASELINE_LIVE_2026_08_04:
+                self.assertIn(tabel, _PURGE_TABLES,
+                              f"§4.2 menyatakan `{tabel}` DIHAPUS, tapi kode TIDAK menghapusnya — "
+                              f"dokumen menjanjikan sesuatu yang tak terjadi")
+
+    def test_dua_tabel_uang_agen_tidak_pernah_masuk_daftar_hapus(self):
+        """Pagar khusus, konsekuensinya UANG PIHAK KETIGA (agen), bukan kerapian data.
+
+        `tenant_attribution` dihapus ⇒ bila tenant kembali & bayar, mesin komisi tak menemukan
+        atribusinya → tenant dianggap "bukan bawaan siapa pun" (AGENT §1b) → **agen kehilangan komisi
+        SELAMANYA tanpa tahu**. Diverifikasi 04-Agu: akun login tenant TIDAK ikut dihapus (nol
+        `deleteUser`), dan atribusi HANYA ditulis saat pendaftaran — jadi tak akan pernah lahir lagi.
+        `commission_ledger` dihapus ⇒ hilang jejak kewajiban audit & pajak (AGENT §5g.8)."""
+        for t in ("tenant_attribution", "commission_ledger"):
+            self.assertNotIn(t, _PURGE_TABLES,
+                             f"`{t}` masuk daftar HAPUS — melanggar AGENT §5g.8/§1.3 "
+                             f"dan berpotensi menghilangkan komisi agen")
+            self.assertIn(t, _KEEP_TABLES, f"`{t}` harus tercatat DISIMPAN beserta pasalnya")
+
     def test_channels_dihapus_paling_akhir(self):
         """Urutan anak→induk: `channels` dulu = baris anak jadi yatim bila salah satu langkah gagal
         (fungsinya fail-soft per-langkah), dan sisa yatim itu tak akan pernah tersapu lagi."""
