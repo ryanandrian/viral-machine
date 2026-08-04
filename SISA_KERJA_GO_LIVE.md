@@ -295,6 +295,26 @@
   anti-drift yang MERAH bila ada tabel ber-`tenant_id` tak terdaftar di salah satu kategori — supaya
   tabel berikutnya tak lolos diam-diam lagi.
 
+### [D7] ⏱️ TARGET durasi per-video belum terekam — audit presisi durasi historis MUSTAHIL — 🟠 2026-08-05
+- **TEMUAN (diukur ke DB live):** `videos.duration_secs` merekam durasi AKTUAL, tapi **tak ada satu pun
+  kolom/metadata yang merekam TARGET (preset) yang dituju video itu.** `run_metadata` hanya memuat
+  `{ai_usage, cost, mode, scheduled, video_title}` — diperiksa langsung, bukan dibaca dari dokumen.
+- **AKIBAT:** presisi durasi — gerbang PALING TERKUNCI menurut kompas owner (§7.3 *"durasi video = HULU
+  pipeline"*) — **tak bisa diaudit secara historis.** `channels.duration_preset` adalah nilai SEKARANG;
+  begitu owner menggesernya, seluruh video lama seolah menyimpang.
+- **HAMPIR MEMBUAT SALAH LAPOR:** perbandingan pertama (preset sekarang vs 160 video lama RAD The
+  Explorer) menunjukkan selisih **+15,9 detik** dan tampak seperti cacat produksi besar. Setelah
+  dipersempit ke jendela di mana presetnya pasti, angka itu **artefak perbandingan**, bukan cacat.
+  Selisih historis TIDAK diklaim sebagai bug — dan tak akan bisa diklaim sampai target ikut terekam.
+- **SUDAH DIKERJAKAN (aman, satu baris):** durasi AKTUAL kini terekam juga di jalur terjadwal
+  (sebelumnya 55 dari 75 video/14 hari berkolom kosong = 73%). Dijaga
+  `tests/test_durasi_terekam_jalur_terjadwal.py`.
+- **BUTUH KETOK OWNER:** merekam TARGET per-video = menambah kolom/metadata di jalur produksi (§2.3d).
+  Pilihan: (a) tambah `target_seconds` ke metadata stok — paling murah, nol migrasi; (b) kolom baru di
+  `videos`; (c) biarkan, terima bahwa audit durasi hanya berlaku maju (bukan historis).
+- **DONE-BILA:** untuk video yang lahir SESUDAH keputusan, presisi durasi bisa diaudit tanpa bergantung
+  pada nilai preset channel saat ini.
+
 ### [D6] ⚖️ KUOTA VIDEO PER PAKET — Trial & Starter IDENTIK (butuh ketok owner) — 🔴 2026-08-04
 - **TEMUAN (terukur ke DB live + kode, bukan dokumen):** pada kenop HIDUP `plan_limits.max_videos_per_day`
   (admin-editable `/admin/pricing`, migr 0073), **Trial = 1 · Starter = 1 · Pro = 3 · Business = 5**

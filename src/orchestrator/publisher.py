@@ -192,6 +192,16 @@ def _publish_from_buffer(sb, channel_row: dict, item: dict) -> None:
             niche         = tc.niche,
             viral_score   = float(meta.get("viral_score") or script.get("viral_score") or 0),
             file_size_mb  = _size_mb,
+            # [2026-08-05] Durasi AKTUAL hasil QC. Producer SUDAH menyimpannya di metadata stok
+            # (produce_one & run_direct), `write_video` SUDAH punya parameternya — hanya baris ini
+            # yang hilang, sehingga JALUR UTAMA (terjadwal) tak pernah mencatat durasi:
+            # 55 dari 75 video dalam 14 hari (73%) berkolom kosong; yang tercatat hanya jalur uji
+            # langsung (pipeline menulis rownya sendiri).
+            # Akibatnya presisi durasi — gerbang PALING TERKUNCI menurut kompas owner (CLAUDE.md §7.3,
+            # "durasi video = HULU pipeline") — TIDAK BISA DIAUDIT untuk produksi terjadwal.
+            # QC tetap menjaga sebelum publish; yang hilang adalah JEJAKNYA. Tanpa jejak, pergeseran
+            # durasi hanya terlihat saat tenant mengeluh, bukan saat terjadi.
+            duration_secs = meta.get("duration_secs"),
             channel_id    = tc.channel_id,
             # voice_id = suara AKTUAL saat PRODUKSI (meta, ditulis producer). Fallback item buffer
             # lama tanpa jejak = channels.voice_key NYATA (BUKAN tc.tts_voice — konstruktor
