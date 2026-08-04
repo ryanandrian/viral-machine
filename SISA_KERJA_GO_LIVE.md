@@ -295,6 +295,29 @@
   anti-drift yang MERAH bila ada tabel ber-`tenant_id` tak terdaftar di salah satu kategori — supaya
   tabel berikutnya tak lolos diam-diam lagi.
 
+### [D6] ⚖️ KUOTA VIDEO PER PAKET — Trial & Starter IDENTIK (butuh ketok owner) — 🔴 2026-08-04
+- **TEMUAN (terukur ke DB live + kode, bukan dokumen):** pada kenop HIDUP `plan_limits.max_videos_per_day`
+  (admin-editable `/admin/pricing`, migr 0073), **Trial = 1 · Starter = 1 · Pro = 3 · Business = 5**
+  video/hari/channel; `max_channels` Trial 1 · Starter 1 · Pro 3 · Business 10.
+  ⇒ **Trial dan Starter IDENTIK dalam produksi.** Tenant membayar **Rp 149K** dan mendapat jumlah video
+  yang SAMA dengan masa coba gratis. Yang bertambah hanya katalog niche penuh + boleh pesan niche kustom.
+  **Dugaan kuat (belum dibuktikan sebab-akibat):** ini salah satu sebab 10 dari 17 tenant tidak lanjut.
+- **KAPASITAS TERBUKTI:** puncak produksi yang PERNAH tercapai **34 video/hari** (16-Jun, seluruh tenant);
+  rata-rata 3,6/hari selama 121 hari aktif. ⇒ ada ruang menaikkan kuota **tanpa** infra baru, tapi
+  angka dokumen lama (Business 24/hari/channel × 10 channel = **240/hari**) **7× di luar** yang pernah terbukti.
+- **BAHAYA yang nyaris terjadi 04-Agu:** `DESAIN_PRODUK_SAAS` memuat angka mati 5/10/24. Menyelaraskan
+  kenop ke angka itu = beban render **5×**. Owner sendiri yang menahan (*"dokumen bisa basi, kalau
+  dijadikan acuan tunggal bisa berantakan"*) — kekhawatiran itu TERBUKTI benar.
+- **SUDAH DIKERJAKAN (aman, nol perubahan perilaku):** dokumen berhenti menanam angka mati → menunjuk
+  kenopnya + mencatat nilai hidup 04-Agu + peringatan beban render + penanda "jangan pakai klaim 7,5×
+  lebih murah" (klaim itu dihitung dari 150 video/bulan; pada kenop hidup ~30/bulan ⇒ ~3,7×).
+  Dijaga `tests/test_desain_produk_tak_tanam_angka_mati.py` (5 uji, merah dibuktikan).
+- **BUTUH KETOK OWNER (uang + arah produk, §2.3d — Claude TIDAK memutuskan):**
+  (a) naikkan kuota Starter agar upgrade Trial→Starter terasa · (b) biarkan, jual nilai lain
+  (katalog/niche kustom) · (c) sesuaikan harga. **Nol baris kode menunggu** — ini murni kenop admin.
+- **DONE-BILA:** owner menggeser kenop di `/admin/pricing` (atau memutuskan (b)/(c)), lalu baris nilai
+  hidup di `DESAIN_PRODUK_SAAS` §Struktur Paket diperbarui tanggalnya.
+
 ### [B10] UX AI-Catalog & Channel — audit terpadu (AUDIT_UX_AI_CATALOG.md) — 🟡 Fase 1-4 ✅ (2026-07-08) · sisa: konfirmasi visual owner
 - **TUJUAN:** UI/UX area AI provider/model world-class utk tenant awam + admin (visi budget-aware + anti-bingung).
 - **SPEC + status detail = `AUDIT_UX_AI_CATALOG.md`** (temuan ber-bukti file:baris + fase + realisasi). Arsitektur rantai AI = `ARSITEKTUR_AI_PROVIDER_MODEL.md` (referensi, wajib sync per-commit).

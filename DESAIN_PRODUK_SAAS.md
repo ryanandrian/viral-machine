@@ -174,8 +174,36 @@
 | **Harga IDR** | **Rp 149K** | **Rp 349K** | **Rp 699K** | Custom |
 | **Harga USD** | ~$9 | ~$22 | ~$44 | – |
 | **Max Channel** | 1 | 3 | 10 | Unlimited |
-| **Max Video/hari/channel** | 5 | 10 | 24 | Custom |
-| **Total Video/bulan (max)** | ~150 | ~900 | ~7,200 | Custom |
+| **Max Video/hari/channel** | ⚠️ lihat catatan | ⚠️ | ⚠️ | Custom |
+| **Total Video/bulan (max)** | ⚠️ lihat catatan | ⚠️ | ⚠️ | Custom |
+
+> ⚠️🔴 **KUOTA VIDEO = KENOP HIDUP, BUKAN ANGKA DOKUMEN (dikoreksi 2026-08-04).**
+> Baris ini dulu menulis **5 / 10 / 24** per-hari-per-channel (dan turunannya ~150/~900/~7.200 per bulan)
+> sebagai ANGKA MATI. Nilai yang benar-benar ditegakkan sistem ada di **`plan_limits.max_videos_per_day`**,
+> **admin-editable di `/admin/pricing` → "Batas paket"** (migr 0073, nol hardcode) — jadi angka di dokumen
+> PASTI membusuk setiap kali owner menggeser kenopnya.
+>
+> **Nilai HIDUP saat pemeriksaan 2026-08-04:** Trial **1** · Starter **1** · Pro **3** · Business **5**
+> (per hari per channel) — **3–5× LEBIH RENDAH** dari angka mati yang tertulis di sini sebelumnya.
+> Cara memeriksa sendiri: buka `/admin/pricing` → "Batas paket", atau halaman `/pricing` (kolom
+> "Video / hari" memakai token `auto:max_videos_per_day` = dibaca LANGSUNG dari `plan_limits`).
+>
+> **BAHAYA yang dicegah catatan ini (nyata, 04-Agu):** menyelaraskan kenop ke angka dokumen berarti
+> menaikkan beban render **5×**. Puncak yang PERNAH dicapai produksi = **34 video/hari** (seluruh tenant,
+> 16-Jun); Business versi angka-mati menuntut **240/hari**. Menaikkan kuota tanpa kapasitas = produksi
+> tumbang. **Angka dokumen bukan target yang aman untuk dituruti.**
+>
+> ⚖️ **KEPUTUSAN OWNER YANG BELUM DIKETOK (jangan diputuskan Claude — §2.3d uang + arah produk):**
+> pada kenop HIDUP, **Trial dan Starter identik** (1 video/hari, 1 channel). Artinya tenant membayar
+> Rp 149K dan mendapat jumlah video yang SAMA dengan masa coba gratis; yang bertambah hanya katalog
+> niche penuh + boleh pesan niche kustom. Kapasitas terbukti sanggup lebih (34/hari pernah tercapai).
+> Pilihannya: (a) naikkan kuota Starter agar upgrade terasa, (b) biarkan & jual nilai lain, (c) ubah
+> harga. Status hidup: `SISA_KERJA_GO_LIVE.md`.
+>
+> **Turunan yang IKUT BASI karena baris ini:** hitungan "$/video" & klaim "**7,5× lebih murah**" di
+> §Validasi Pricing vs Market di bawah dihitung dari 150 video/bulan. Pada kenop hidup (1/hari ⇒ ~30/bulan)
+> Starter = **~Rp 4.967/video (~$0,31)** ⇒ sekitar **3,7×** lebih murah dari AutoShorts ($1,15), bukan 7,5×.
+> **Jangan pakai angka 7,5× di materi jualan sebelum kenopnya dinaikkan.**
 | **AI Providers** | BYOK wajib (post-trial) | BYOK wajib | BYOK wajib | BYOK + setup support |
 | **Music Library** | Standard (~100 track) | Premium (~500 track) | Premium + upload custom | Custom curate |
 | **Analytics depth** | 7 hari | 90 hari | Unlimited | Unlimited + export |
