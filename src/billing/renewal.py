@@ -161,6 +161,30 @@ def _hard_delete_tenant(sb, tenant_id: str) -> None:
         s3_buffer.delete_prefix(f"brand-logo/{tenant_id}/")
     except Exception as e:
         logger.warning(f"[Billing] purge S3 {tenant_id} gagal (lanjut): {e}")
+    # 2b) Berkas diagnosa di DISK SERVER yang memuat KONTEN tenant.
+    #
+    # [2026-08-05] Ditemukan saat mengukur §6.7 (aset hanya di S3): 197 berkas di `logs/` memuat
+    # NASKAH, JUDUL, dan HOOK tenant — `scripts_<tenant>.json` · `topics_<tenant>.json` ·
+    # `optimized_<tenant>.json` · `pipeline_<run_id>.json` (run_id BERAWALAN tenant_id). Tertua 19-Jul,
+    # tak pernah dibersihkan. Hard-delete hanya menyapu S3 + tabel ⇒ **konten tenant TETAP ADA di disk
+    # server setelah ia memakai hak hapus datanya**, dan tak terlihat oleh pemeriksaan DB mana pun.
+    #
+    # Ini MELAKSANAKAN aturan yang sudah diketok (UU PDP hak hapus + LIFECYCLE §4.2 "purge data tenant"),
+    # bukan keputusan baru: lokasinya saja yang terlewat dari daftar.
+    # Sengaja HANYA berkas yang namanya memuat tenant_id — tak menyentuh log bersama (`worker.log`)
+    # maupun berkas tenant lain. Fail-soft per-langkah, dan kegagalannya IKUT dilaporkan di bawah
+    # (bukan ditelan) supaya "SELESAI SEBAGIAN" tetap jujur.
+    _sisa_disk = 0
+    try:
+        from pathlib import Path
+        for _p in Path("logs").glob(f"*{tenant_id}*"):
+            try:
+                _p.unlink()
+            except Exception:
+                _sisa_disk += 1
+    except Exception as e:
+        logger.warning(f"[Billing] purge berkas disk {tenant_id} gagal (lanjut): {e}")
+        _sisa_disk += 1
     # 3) Purge tabel konten (anak→induk; .eq tenant_id → baris global tenant_id NULL AMAN tak tersentuh)
     for tbl in _PURGE_TABLES:
         try:
@@ -175,6 +199,8 @@ def _hard_delete_tenant(sb, tenant_id: str) -> None:
     # datanya, DAN log penutup tetap berkata "selesai — record diminimalkan". Laporan sukses yang
     # BOHONG adalah ranjau terburuk: tak ada yang mencari masalah yang katanya sudah beres.
     gagal: list[str] = []
+    if _sisa_disk:
+        gagal.append(f"berkas disk ber-ID tenant ({_sisa_disk} tak terhapus)")
     try:
         sb.table("feedback_submissions").update({"email": None}).eq("tenant_id", tenant_id).execute()
     except Exception as e:

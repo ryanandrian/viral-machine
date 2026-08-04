@@ -273,3 +273,48 @@ class TestHardDeleteTakPernahMENGAKUSelesaiPalsu(unittest.TestCase):
         self.assertIn("HARD-DELETE selesai", gabung)
         self.assertNotIn("SELESAI SEBAGIAN", gabung)
         self.assertNotIn("error", kelas, "jalur sukses memunculkan error — alarm palsu")
+
+
+class TestBerkasDiskBerKontenTenantIkutDihapus(unittest.TestCase):
+    """Hak hapus data tak berhenti di DB & S3 — konten tenant juga ada di DISK SERVER.
+
+    TEMUAN 2026-08-05 (diverifikasi di VPS produksi, bukan dugaan): **197 berkas** di `logs/` memuat
+    NASKAH, JUDUL, dan HOOK tenant — `scripts_<tenant>.json` · `topics_<tenant>.json` ·
+    `optimized_<tenant>.json` · `pipeline_<run_id>.json` (run_id BERAWALAN tenant_id). Tertua 19-Jul,
+    tak pernah dibersihkan. `_hard_delete_tenant` hanya menyapu prefix S3 + tabel DB ⇒ **konten tenant
+    TETAP ADA di disk server setelah ia memakai hak hapus datanya.**
+
+    Kelas yang sama dengan 4 tabel yang lolos sebelumnya, tapi LEBIH sulit terlihat: tak ada
+    pemeriksaan DB yang bisa menemukannya. Ditutup dengan melaksanakan aturan yang SUDAH diketok
+    (UU PDP + LIFECYCLE §4.2), bukan keputusan baru — lokasinya saja yang terlewat dari daftar.
+    """
+
+    def _sumber(self) -> str:
+        return open(os.path.join(AKAR, "src", "billing", "renewal.py"), encoding="utf-8").read()
+
+    def test_hard_delete_menghapus_berkas_disk_ber_id_tenant(self):
+        s = self._sumber()
+        self.assertRegex(
+            s, r'Path\("logs"\)\.glob\(\s*f?"\*\{tenant_id\}\*"\s*\)',
+            "hard-delete TIDAK menghapus berkas disk ber-ID tenant.\n"
+            "Terverifikasi di VPS 05-Agu: 197 berkas logs/*.json memuat naskah/judul/hook tenant. "
+            "Tanpa langkah ini, konten tenant tetap ada di disk setelah ia meminta datanya dihapus — "
+            "dan tak ada pemeriksaan DB yang bisa menemukannya.")
+
+    def test_hanya_berkas_ber_id_tenant_yang_disapu(self):
+        """Pagar arah sebaliknya: menyapu `logs/` terlalu lebar akan menghapus `worker.log` dan
+        berkas tenant LAIN — kehilangan jejak diagnosa seluruh sistem demi satu tenant."""
+        s = self._sumber()
+        self.assertNotRegex(s, r'Path\("logs"\)\.glob\(\s*"\*"\s*\)',
+                            "hard-delete menyapu SELURUH logs/ — akan menghapus jejak tenant lain")
+        self.assertNotRegex(s, r'shutil\.rmtree\(\s*"logs"',
+                            "hard-delete menghapus seluruh direktori logs/ — terlalu lebar")
+
+    def test_kegagalan_hapus_disk_ikut_dilaporkan(self):
+        """Kalau berkas gagal dihapus tapi laporannya tetap 'selesai', kita kembali ke ranjau
+        'laporan sukses yang bohong' yang ditutup 04-Agu — kali ini untuk data di disk."""
+        s = self._sumber()
+        self.assertIn("_sisa_disk", s, "kegagalan hapus disk tak dihitung")
+        self.assertRegex(s, r'gagal\.append\(f?"berkas disk',
+                         "kegagalan hapus berkas disk TIDAK masuk laporan 'SELESAI SEBAGIAN' — "
+                         "owner takkan pernah tahu ada data pribadi yang tertinggal")
