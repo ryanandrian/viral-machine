@@ -104,12 +104,38 @@ def _compute_lead_temp(sb, tenant_id: str) -> str:
 
 # ── B9: hard-delete (purge data + revoke token + aset S3) ────────────────────
 # Urutan anak→induk (channels TERAKHIR). KEEP: payments (legal), tenant_configs (anonim), feedback_submissions (anonim).
+#
+# [AUDIT 2026-08-04] SETIAP tabel ber-kolom `tenant_id` WAJIB masuk SALAH SATU dari tiga daftar di bawah.
+# Kenapa dieksplisitkan: daftar ini dibekukan 3-Jul (spec LIFECYCLE §98), lalu 4 tabel ber-`tenant_id` LAHIR
+# SESUDAHNYA (program agen · kecerdasan · retensi) dan tak seorang pun memperbarui daftarnya. Kode patuh
+# spec; spec-nya yang tertinggal. Itu celah kepatuhan UU PDP (hak hapus data) yang tumbuh diam-diam setiap
+# kali tabel baru ditambah. Dijaga uji `tests/test_purge_pdp_lengkap.py` — tabel ber-`tenant_id` yang tidak
+# terdaftar di mana pun membuat uji MERAH, jadi tabel berikutnya tak bisa lolos tanpa keputusan sadar.
 _PURGE_TABLES = [
     "video_analytics", "channel_insights", "tts_delivery_samples", "pipeline_run_logs",
     "pipeline_queue", "production_runs", "content_inventory", "videos", "direct_jobs",
     "niche_requests", "music_library", "voice_catalog", "tenant_ai_accounts",
     "tenant_youtube_accounts", "support_tickets", "email_outbox", "channels",
 ]
+
+# SENGAJA DISIMPAN saat hard-delete — masing-masing dengan alasannya (bukan kelalaian).
+_KEEP_TABLES = {
+    "payments":             "kewajiban legal/akuntansi — catatan transaksi tak boleh hilang",
+    "tenant_configs":       "baris ditandai deleted + PII di-strip (anonim), bukan dihapus",
+    "feedback_submissions": "sudah anonim; dipakai perbaikan produk agregat",
+}
+
+# BELUM DIPUTUSKAN OWNER (temuan audit 2026-08-04). Bukan 'aman', bukan 'sengaja' — MENUNGGU KEPUTUSAN.
+# Dua di antaranya sangat mungkin WAJIB disimpan sebagai catatan keuangan/komisi seperti `payments`
+# (ranah konsultan pajak/hukum — AGENT_AND_AFILIATION §6b), bukan ranah kode. Menghapus data =
+# aksi IRREVERSIBLE (CLAUDE.md §2.3d) ⇒ Claude TIDAK memutuskannya sendiri.
+# Status hidup + usul per-tabel: SISA_KERJA_GO_LIVE.md [B9].
+_PENDING_OWNER_TABLES = {
+    "commission_ledger":      "komisi agen — kemungkinan wajib simpan (catatan keuangan)",
+    "tenant_attribution":     "atribusi agen perujuk — kemungkinan wajib simpan (dasar komisi)",
+    "channel_decisions":      "jejak keputusan AI per-channel — hapus? anonimkan?",
+    "video_retention_curves": "kurva retensi penonton per-video — hapus? anonimkan?",
+}
 
 
 def _hard_delete_tenant(sb, tenant_id: str) -> None:
