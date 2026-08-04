@@ -295,6 +295,47 @@
   anti-drift yang MERAH bila ada tabel ber-`tenant_id` tak terdaftar di salah satu kategori — supaya
   tabel berikutnya tak lolos diam-diam lagi.
 
+### [D8] 🔴🔴 JANJI HALAMAN HARGA vs KENYATAAN — 3 fitur DIJUAL tapi TIDAK ADA, 5 tak ber-gerbang — 2026-08-05
+> **Ini menjawab pertanyaan owner "kenapa pelanggan tidak bertambah". Bukan bug — janji vs barang.**
+> Diverifikasi ke KODE + DB + MIGRASI satu per satu (bukan dibaca dari dokumen).
+
+**A. DIJUAL di paket Business (Rp 699K) tapi NOL implementasi:**
+| Janji di `/pricing` | Bukti |
+|---|---|
+| **Webhook** | nol berkas menyebut `tenant_webhook`/`webhook_url` keluar di `src/` & `apps/web/src/` |
+| **API access** | tak ada `/api/v1`; nol `tenant_api_key`/`api_token` |
+| **Priority queue** | nol prioritas di `producer.py`/`publisher.py` — antrean tunggal |
+⇒ **Business tidak bisa dijual jujur hari ini.** Menagih Rp 699K untuk tiga fitur yang tak ada = risiko
+reputasi & hukum, bukan sekadar pemasaran.
+
+**B. Ditulis "Pro-only" (Starter = ❌) tapi TIDAK ADA GERBANGNYA — tenant Starter mendapatkannya:**
+`Quality Gate kustom` · `Compliance detail` · `Custom voice (ElevenLabs)` · `Captions style kustom` ·
+`Hashtags kustom`.
+**Bukti:** `plan_limits` hanya punya 4 kolom pembatas (`max_videos_per_day`, `max_channels`,
+`full_niche_catalog`, `niche_studio`) — nol kolom untuk kelima fitur itu. Tenant menyimpan setelan channel
+lewat **RLS UPDATE `channels`** yang WITH CHECK-nya hanya `tenant_id = auth.uid()` (migr 0029) — **nol
+pemeriksaan tier**. Nol RPC ber-gerbang untuk kelimanya (yang ada hanya `set_channel_niche` &
+`set_channel_publish_slots`).
+
+**C. Matriks bertentangan dengan DB:** matriks menulis Starter *"Niche tersedia: 3"*, sedangkan migr 0124
+menyetel `full_niche_catalog = true` untuk **starter/pro/business** ⇒ Starter sebenarnya dapat
+**katalog penuh**. Salah satu dari keduanya salah, dan keduanya hidup.
+
+**D. GABUNGAN dengan [D6] = sebab konversi:** Trial & Starter identik (1 video/hari, 1 channel), lima
+fitur "Pro" bebas dipakai Starter, tiga fitur Business tak ada. ⇒ **hampir tak ada yang didapat tenant
+berbayar yang tidak didapat tenant murah/gratis.** 5 aktif dari 17 pendaftar, dan 9 dari 10 masa-coba
+habis tanpa pernah menerbitkan satu video (bukti [D6]).
+
+**KEPUTUSAN OWNER (uang + arah produk, §2.3d — Claude TIDAK memutuskan):**
+1. **Business:** (a) bangun 3 fitur itu · (b) **cabut dari matriks sampai ada** (paling cepat & jujur) ·
+   (c) ganti dengan fitur yang sudah ada.
+2. **Lima fitur "Pro-only":** (a) tegakkan gerbangnya (butuh 5 kolom `plan_limits` + guard) ·
+   (b) pindahkan ke kolom Starter juga (jujur bahwa memang tersedia).
+3. **Katalog niche:** samakan matriks dengan DB, atau sebaliknya.
+**Nol baris kode boleh berubah sebelum ketok** — mengubahnya = mengubah apa yang dijual.
+
+**DONE-BILA:** setiap baris di matriks `/pricing` punya bukti gerbang di kode/DB, atau tak lagi tertulis.
+
 ### [D7] ⏱️ TARGET durasi per-video belum terekam — audit presisi durasi historis MUSTAHIL — 🟠 2026-08-05
 - **TEMUAN (diukur ke DB live):** `videos.duration_secs` merekam durasi AKTUAL, tapi **tak ada satu pun
   kolom/metadata yang merekam TARGET (preset) yang dituju video itu.** `run_metadata` hanya memuat
