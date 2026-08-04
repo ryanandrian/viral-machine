@@ -1,0 +1,123 @@
+"""Migrasi ↔ DB: kolom yang migrasi janjikan harus benar-benar ada.
+
+MASALAH YANG DIJAGA
+Proyek ini **tidak punya tabel pencatat migrasi** (diperiksa 2026-08-04: `schema_migrations`,
+`_migrations`, `migrations`, `supabase_migrations` — tak satu pun ada). Migrasi diterapkan manual, dan
+satu-satunya catatan "sudah terpasang" adalah CATATAN DI DOKUMEN (blok POSISI di `SISA_KERJA_GO_LIVE.md`).
+Catatan dokumen bisa membusuk — malam ini sudah terbukti tiga kali di dokumen lain. Maka satu-satunya
+kebenaran = **EFEK migrasi di DB**.
+
+DIVERIFIKASI 2026-08-04 terhadap DB live:
+  • 111 kolom ditambahkan migrasi & belum dibuang → **111 ADA**, nol terlewat.
+  • Efek 7 migrasi terakhir (0190–0197) yang diklaim blok POSISI: **semua terbukti terpasang**
+    (kenop gerbang · `tenant_test_gate` · `tenant_produce_allowed` · `tenant_resume_channels` ·
+    `trial_self_extends` · `production_paused_class` · `production_resumed_at`).
+
+CATATAN ALAT UKUR (keempat kalinya alat saya salah pada 04-Agu): sapuan pertama melaporkan
+`tts_pace_calibration.constraint` HILANG — padahal itu `ALTER TABLE … ADD CONSTRAINT …`, bukan kolom.
+Regex menangkap kata kunci SQL sebagai nama kolom. **Satu alarm palsu dari 111 = 100% temuan palsu**,
+dan kalau dipercaya, saya akan "memperbaiki" DB yang sehat. Karena itu pemindai di bawah membuang
+kata-kunci SQL secara eksplisit, dan uji `test_pemindai_tak_menangkap_kata_kunci_sql` menjaganya.
+
+LINGKUP: uji ini MENYENTUH DB (read-only, `select … limit 1`). Bila kredensial tak tersedia (mis. CI
+tanpa `.env`), ia SKIP — jangan pernah membuat suite merah karena lingkungan, itu melatih orang
+mengabaikan merah.
+"""
+import glob
+import os
+import re
+import sys
+import unittest
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+AKAR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Kata kunci SQL yang muncul sesudah `ADD` tapi BUKAN nama kolom (sumber alarm palsu 04-Agu).
+BUKAN_KOLOM = {"constraint", "primary", "unique", "foreign", "check", "exclude", "column", "if", "not"}
+
+
+def _kolom_dijanjikan_migrasi() -> dict[tuple[str, str], str]:
+    """(tabel, kolom) → berkas migrasi. Memperhitungkan DROP COLUMN & DROP TABLE."""
+    tambah: dict[tuple[str, str], str] = {}
+    buang_kolom: set[tuple[str, str]] = set()
+    buang_tabel: set[str] = set()
+    for f in sorted(glob.glob(os.path.join(AKAR, "migrations", "*.sql"))):
+        s = open(f, encoding="utf-8", errors="ignore").read()
+        for m in re.finditer(r"alter\s+table\s+(?:if\s+exists\s+)?(?:public\.)?(\w+)\s+add\s+"
+                             r"(?:column\s+)?(?:if\s+not\s+exists\s+)?(\w+)", s, re.I):
+            tabel, kolom = m.group(1).lower(), m.group(2).lower()
+            if kolom in BUKAN_KOLOM:
+                continue                       # `ADD CONSTRAINT …` dst — bukan kolom
+            tambah[(tabel, kolom)] = os.path.basename(f)
+        for m in re.finditer(r"alter\s+table\s+(?:if\s+exists\s+)?(?:public\.)?(\w+)\s+drop\s+"
+                             r"(?:column\s+)?(?:if\s+exists\s+)?(\w+)", s, re.I):
+            buang_kolom.add((m.group(1).lower(), m.group(2).lower()))
+        for m in re.finditer(r"drop\s+table\s+(?:if\s+exists\s+)?(?:public\.)?(\w+)", s, re.I):
+            buang_tabel.add(m.group(1).lower())
+    return {k: v for k, v in tambah.items()
+            if k not in buang_kolom and k[0] not in buang_tabel}
+
+
+def _sb():
+    """Klien DB read-only; None bila lingkungan tak menyediakan kredensial."""
+    try:
+        from dotenv import load_dotenv
+        from supabase import create_client
+        load_dotenv(os.path.join(AKAR, ".env"))
+        url, key = os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_KEY")
+        return create_client(url, key) if url and key else None
+    except Exception:
+        return None
+
+
+class TestPemindaiMigrasiBenar(unittest.TestCase):
+    """Pagar-untuk-pagar. Alat ukur yang salah lebih berbahaya daripada tidak mengukur."""
+
+    def test_menemukan_banyak_kolom(self):
+        n = len(_kolom_dijanjikan_migrasi())
+        self.assertGreaterEqual(n, 80, f"pemindai hanya menemukan {n} kolom — polanya rusak")
+
+    def test_pemindai_tak_menangkap_kata_kunci_sql(self):
+        """Sumber alarm palsu 04-Agu: `ADD CONSTRAINT` dibaca sebagai kolom bernama 'constraint'."""
+        kolom = {k for _, k in _kolom_dijanjikan_migrasi()}
+        keliru = sorted(kolom & BUKAN_KOLOM)
+        self.assertFalse(keliru, f"pemindai kembali menangkap kata kunci SQL sebagai kolom: {keliru}")
+
+    def test_migrasi_terakhir_ikut_terbaca(self):
+        """Migrasi [B24]/[B25] adalah yang paling berbahaya bila luput dari pengawasan."""
+        pasangan = _kolom_dijanjikan_migrasi()
+        for perlu in (("channels", "production_paused_class"), ("channels", "production_resumed_at"),
+                      ("tenant_configs", "trial_self_extends")):
+            self.assertIn(perlu, pasangan, f"{perlu} tak terbaca dari migrasi — pemindai buta")
+
+
+class TestKolomJanjiMigrasiAdaDiDB(unittest.TestCase):
+
+    def test_tak_ada_kolom_yang_terlewat(self):
+        sb = _sb()
+        if sb is None:
+            self.skipTest("kredensial DB tak tersedia di lingkungan ini")
+        hilang, tabel_hilang = [], set()
+        for (t, k), berkas in sorted(_kolom_dijanjikan_migrasi().items()):
+            try:
+                sb.table(t).select(k).limit(1).execute()
+            except Exception as e:
+                if "find the table" in str(e):
+                    tabel_hilang.add(t)
+                else:
+                    hilang.append(f"{t}.{k} (migrasi {berkas})")
+        self.assertFalse(
+            hilang,
+            "Kolom yang DIJANJIKAN migrasi tapi TIDAK ADA di DB live:\n  " + "\n  ".join(hilang)
+            + "\nArtinya migrasi belum diterapkan (atau kolomnya dihapus tangan). Kode yang memakainya "
+              "akan gagal saat dijalankan. Tak ada tabel pencatat migrasi di proyek ini, jadi uji ini "
+              "adalah satu-satunya pengawas otomatis keselarasan migrasi↔DB.")
+        self.assertFalse(
+            tabel_hilang,
+            f"Tabel yang migrasi janjikan tapi tak ada di DB: {sorted(tabel_hilang)} — "
+            f"bila memang sudah di-drop, tambahkan DROP TABLE-nya di migrasi agar tercatat.")
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
