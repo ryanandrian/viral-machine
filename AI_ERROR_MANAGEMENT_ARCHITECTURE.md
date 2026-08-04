@@ -72,8 +72,8 @@ Klasifikasi menempel pada **transport yang menerima error**, bukan merek model. 
 | **OpenAI (LLM/image)** | `insufficient_quota` · `exceeded your current quota` | QUOTA_EXHAUSTED | ✅ AKTIF (22-Jul) | worker.log 09-Jul + production_runs 21-Jul (riandipantria) — uji 6/6 |
 | **Google Gemini (AI Studio, adapter `openai_chat`)** | `is no longer available` (404 model dipensiunkan) | MODEL_UNAVAILABLE | ✅ AKTIF (22-Jul) | production_runs 21/22-Jul (riandipantria `gemini-2.5-flash` ditutup Google utk user baru) |
 | **SEMUA transport OpenAI-compatible** | **HTTP 429 apa pun** (status SDK, else `Error code: 429`) | RATE_LIMIT | ✅ AKTIF (2026-08-01) | Groq llama-3.3 TPD: "Rate limit reached ... tokens per day (TPD): Limit 100000, Used 97156 ... try again in 35m51s" (uji rantai penuh 01-Agu). **Aturan LEVEL-TRANSPORT, bukan kalimat vendor** (§2): katalog model akan terus bertambah dan aturan ber-kalimat diam-diam gagal pada vendor berikutnya. §1 sendiri mendefinisikan RATE_LIMIT = "throttle sesaat (429)". Pesan manusiawi punya DUA varian: batas HARIAN (bila pesan menyebut per-day/daily/harian) vs sesaat — tindakan tenantnya berbeda. TIDAK masuk FAST_FAIL → channel tidak direm (kekhawatiran lama "salah-rem" berlaku utk QUOTA_EXHAUSTED, bukan RATE_LIMIT) |
-| **OpenAI (jalur GAMBAR)** | `billing_hard_limit_reached` | ACCOUNT_BILLING | ⏳ **SAMPEL SUDAH ADA** — penghalangnya bukan sampel lagi, lihat **§8e** | worker.log **2026-07-29 11:32:40** `visual_assembler._generate_hook_frame`: `Error code: 400 - {'message': 'Billing hard limit has been reached.', 'code': 'billing_hard_limit_reached'}`. **KOREKSI 04-Agu:** baris ini sebelumnya berbunyi "belum ada sampel" — salah; sampelnya sudah ada di produksi sejak 29-Jul. Tak bisa dinaikkan ✅ dengan menambah token saja: jalur visual tak punya penggolong sama sekali (§8e) |
-| **fal (agregator)** | ? | ? | ⏳ gejala **§8e** (jalur visual 38 titik `raise`, 0 berkelas) — bukan pekerjaan terpisah | adapter tangkap `status_code`+body (`src/providers/visual/ai_video.py`) |
+| **OpenAI (jalur GAMBAR)** | `billing_hard_limit_reached` | ACCOUNT_BILLING | ✅ **AKTIF (2026-08-05)** | worker.log **2026-07-29 11:32:40** `visual_assembler._generate_hook_frame`: `Error code: 400 - {'message': 'Billing hard limit has been reached.', 'code': 'billing_hard_limit_reached'}`. Diimplement `classify_visual_error` (`providers/visual/base.py`, pola `_classify_el_error`) + dibungkus di `_generate_dalle`; uji `test_kelas_error_visual.py`. *(Baris ini pernah berbunyi "belum ada sampel" — salah, dikoreksi 04-Agu.)* |
+| **fal (agregator: gambar & video)** | `Exhausted balance` · `User is locked` (403) | QUOTA_EXHAUSTED | ✅ **AKTIF (2026-08-05)** | worker.log **2026-07-14 19:54/19:56/19:57** (6 kejadian): `fal submit HTTP 403: {"detail":"User is locked. Reason: Exhausted balance. Top up your balance at fal.ai/dashboard/billing."}` → saldo penyedia HABIS. Diimplement di KEDUA transport (`ai_video._generate_fal` & `ai_image._generate_fal`) lewat `classify_visual_error` yang sama (satu sumber, tabel TIDAK disalin — dijaga uji) |
 | **edge_tts** | — gratis, tak ada billing | — | n/a | — |
 | **SEMUA penyedia suara** | audio jauh lebih pendek dari ramalan (`tts_potong_ambang_pct`) | TRANSIENT | ✅ AKTIF (2026-08-01) | narasi TERPUTUS; laju terukur 1 dari 73 render. Berlaku per potongan pada naskah panjang |
 | **SEMUA penyedia suara** | tak menyelesaikan permintaan dalam batas waktu | TRANSIENT | ✅ AKTIF (2026-08-01) | direproduksi 01-Agu: render Edge menggantung belasan menit; tanpa batas waktu satu utas pekerja mati selamanya tanpa error |
@@ -232,11 +232,28 @@ yang bisa berhenti karenanya. Pola meniru `tts_engine.last_error_class` / `niche
 **Bukti:** `tests/test_sebab_visual_sampai_ke_tenant.py` — 11 uji, semua sampel VERBATIM dari produksi;
 **merah dibuktikan lebih dulu** (11/11 gagal tanpa perbaikan) sebelum hijau dipercaya. Suite 623 → **634**.
 
-**§8e-B — ⛔ BELUM, menunggu ketok owner.** Mengisi `error_class` pada jalur visual berarti kelas seperti
-`QUOTA_EXHAUSTED`/`ACCOUNT_BILLING` masuk `FAST_FAIL` → **channel tenant direm setelah 1 kegagalan, bukan 3**.
-Itu perilaku-saat-gagal = KEPUTUSAN PRODUK (CLAUDE.md §0.6); salah golong = channel berhenti padahal cukup
-ditunggu. Dua baris ⏳ di §4 (`fal`, OpenAI `billing_hard_limit_reached`) adalah GEJALA bagian B ini —
-sampelnya sudah lengkap & bertanggal, yang belum ada hanya ketoknya.
+**§8e-B — ✅ DITUTUP 2026-08-05, MENGIKUTI PROSEDUR §5 (bukan rancangan baru).**
+`classify_visual_error()` di `providers/visual/base.py` — **pola persis `_classify_el_error`** seperti yang
+§5.4 perintahkan, satu sumber untuk kedua transport (tabel TIDAK disalin ke `ai_video`/`ai_image`; dijaga uji).
+Disambung di 3 titik: `ai_video._generate_fal` submit · `ai_image._generate_fal` submit · `_generate_dalle`
+(SDK OpenAI dibungkus — tanpa itu maknanya hilang di lapisan atas).
+
+**KOREKSI PENILAIAN 04-Agu:** catatan sebelumnya di sini menyatakan bagian B "butuh ketok owner karena
+memicu `FAST_FAIL`". **Itu salah, dan itu contoh Claude mengarang gerbang yang arsitekturnya tak punya.**
+`QUOTA_EXHAUSTED` & `ACCOUNT_BILLING` SUDAH anggota `FAST_FAIL` sejak ketok owner 17-Jul & 18-Jul, dan §6
+menyatakan *"menambah/menghapus kelas fast-fail = ubah `FAST_FAIL` saja"* ⇒ memetakan kode penyedia BARU ke
+kelas yang SUDAH ADA adalah **langkah 3 prosedur normal**, bukan keputusan produk. Arahan owner sendiri:
+petakan per KELAS, jangan per nama penyedia.
+
+**Yang TETAP tidak dipetakan (§5.3 "ragu → biarkan UNKNOWN"):** 500/502 · timeout · respons tanpa
+`b64_json`/`url` · unduhan gagal. Salah-petakan lebih berbahaya daripada tak memetakan — kelas fast-fail
+menghentikan channel setelah 1 kegagalan. Dijaga uji khusus.
+
+**Dampak:** saat saldo/tagihan penyedia gambar habis, rem menyala setelah **1** kegagalan alih-alih 3 ⇒
+biaya tenant tak terbakar 3× pada sebab yang mustahil sembuh dengan diulang — insiden RAD 17-Jul yang
+melahirkan seluruh arsitektur ini. **Bukti:** `tests/test_kelas_error_visual.py` (9 uji, sampel VERBATIM
+produksi); merah dibuktikan 3 arah (classifier dilumpuhkan · kelas dicabut dari `FAST_FAIL` · error jaringan
+salah-dipetakan).
 
 ### 8g. UKURAN KEBUTAAN DIAGNOSA — angka, bukan kesan *(diukur 2026-08-04)*
 Owner bertanya, wajar: seburuk apa sebenarnya? Dijawab dengan hitungan, bukan adjektiva.

@@ -20,7 +20,7 @@ from pathlib import Path
 import httpx
 from loguru import logger
 
-from src.providers.visual.base import VisualProvider, VideoClip, VisualError
+from src.providers.visual.base import VisualProvider, VideoClip, VisualError, classify_visual_error
 
 # Poll antrean vendor: interval & batas tunggu (latency riil 1-3 mnt/klip; batas 10 mnt = gagal jujur).
 _POLL_INTERVAL_S = 5.0
@@ -217,7 +217,13 @@ class AIVideoProvider(VisualProvider):
         async with httpx.AsyncClient(timeout=60) as client:
             r = await client.post(url, json=body, headers=headers)
             if r.status_code not in (200, 201, 202):
-                raise VisualError(f"fal submit HTTP {r.status_code}: {r.text[:300]}")
+                # [§8e-B langkah 4] Bawa MAKNA-nya, bukan cuma teksnya. Sampel nyata (worker.log
+                # 14-Jul, 6 kejadian): 403 "Exhausted balance. Top up your balance at …/billing"
+                # ⇒ QUOTA_EXHAUSTED ⇒ rem cepat (kelas ini sudah anggota FAST_FAIL sejak 17-Jul),
+                # sehingga biaya tak terbakar 3× pada sebab yang mustahil sembuh dengan diulang.
+                _pesan = f"fal submit HTTP {r.status_code}: {r.text[:300]}"
+                _ec, _human = classify_visual_error(VisualError(_pesan))
+                raise VisualError(_pesan, error_class=_ec, human_message=_human)
             sub = r.json()
             status_url   = sub.get("status_url")
             response_url = sub.get("response_url")

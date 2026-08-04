@@ -458,6 +458,14 @@ class Pipeline:
                 raise VisualError(self._pesan_gagal_visual(), step="visual")
             clip_count = len(clips)
             result["steps"]["visuals"] = {"status": "ok", "clips": clip_count}
+            # [§8f 2026-08-05] Frame pertama gagal = video TETAP terbit tapi pembukanya lebih lemah.
+            # Dulu senyap total (hanya logger.warning di worker.log) ⇒ 4 kejadian dari 181 tak pernah
+            # diketahui siapa pun, dan DUA di antaranya bug kita sendiri. Melaksanakan §0.6 ("HARAM
+            # fallback senyap") yang SUDAH diketok owner — bukan keputusan baru; produksi tak dihentikan.
+            _hf = getattr(self.visual_assembler, "hook_frame_error", None)
+            if _hf:
+                result["steps"]["visuals"]["status"] = "ok_degraded"
+                result["steps"]["visuals"]["hook_frame_error"] = str(_hf)[:300]
             logger.info(f"STEP 6 DONE | {clip_count} clips ready")
 
             # ── STEP 7: Video Render ────────────────────────────────

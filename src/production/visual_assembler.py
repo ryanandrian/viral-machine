@@ -44,6 +44,21 @@ class VisualAssembler:
     # Atribut KELAS (bukan `__init__`) agar cara objek ini dibuat tidak berubah sama sekali.
     last_error: str | None = None
 
+    # [§8f 2026-08-05] Sebab GAGALNYA FRAME PERTAMA (hook-frame), bila terjadi.
+    #
+    # Frame pertama = penentu penonton berhenti menggulir. Bila pembuatannya gagal, sistem MENERUSKAN
+    # dengan klip biasa — video tetap terbit dengan pembuka yang lebih lemah, dan selama ini **nol
+    # notifikasi**: hanya `logger.warning` yang tenggelam di worker.log. Terukur 05-Agu: **4 gagal dari
+    # 181 percobaan (2,2%)**, empat sebab berbeda, dan **dua di antaranya kode kita sendiri**
+    # (berkas hook_frame_img.jpg tak ada · FFmpeg image-to-video gagal).
+    #
+    # Ini melaksanakan §0.6 yang SUDAH diketok owner ("kegagalan komponen = notifikasi, HARAM fallback
+    # senyap") — BUKAN keputusan baru: yang berubah hanya kegagalannya jadi TERLIHAT.
+    # SENGAJA tidak menghentikan produksi & tidak mengirim alarm ke tenant: menghentikan video karena
+    # frame pembuka = perilaku-saat-gagal (butuh ketok), dan alarm untuk 2,2% kejadian = berisik.
+    # Cukup: tercatat, terbawa ke laporan run, terlihat saat diagnosa.
+    hook_frame_error: str | None = None
+
     def assemble(
         self,
         script: dict,
@@ -65,6 +80,7 @@ class VisualAssembler:
         # untuk hari ketika seseorang memakai ulang objeknya: sebab run LAMA yang menempel di pesan
         # run BARU adalah bug yang jauh lebih menyesatkan daripada tanpa sebab sama sekali.
         self.last_error = None
+        self.hook_frame_error = None      # [§8f] idem: sebab run LAMA tak boleh menempel di run BARU
 
         run_config  = self._load_run_config(tenant_config)
         visual_mode = run_config.get("visual_mode") or ""
@@ -406,7 +422,12 @@ class VisualAssembler:
             )
 
         except Exception as e:
-            logger.warning(f"[s6c7] Hook frame generation failed ({e}) — keeping original clips[0]")
+            # [§8f] ERROR, bukan warning: frame pertama = tuas viral, turunnya BUKAN peristiwa kecil.
+            # Sebabnya direkam agar terbawa ke laporan run (dulu hilang di worker.log → 4 kejadian
+            # tak pernah diketahui siapa pun, 2 di antaranya bug kita sendiri).
+            self.hook_frame_error = str(e)
+            logger.error(f"[s6c7] FRAME PERTAMA GAGAL dibuat ({e}) — video tetap dibuat dengan klip "
+                         f"biasa, tapi pembukanya LEBIH LEMAH. Sebab direkam ke laporan run.")
             return None
 
     # ──────────────────────────────────────────────

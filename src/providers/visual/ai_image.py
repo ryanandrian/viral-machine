@@ -14,7 +14,7 @@ from pathlib import Path
 import httpx
 from loguru import logger
 
-from src.providers.visual.base import VisualProvider, VideoClip, VisualError
+from src.providers.visual.base import VisualProvider, VideoClip, VisualError, classify_visual_error
 
 
 # Katalog model image = DB (ai_models, component='image') — admin-managed via migration/DB.
@@ -396,7 +396,10 @@ class AIImageProvider(VisualProvider):
         async with httpx.AsyncClient(timeout=60) as client:
             r = await client.post(url, json=body, headers=headers)
             if r.status_code not in (200, 201, 202):
-                raise VisualError(f"fal image submit HTTP {r.status_code}: {r.text[:300]}")
+                # [§8e-B langkah 4] idem jalur video: bawa MAKNA-nya (sampel worker.log 14-Jul).
+                _pesan = f"fal image submit HTTP {r.status_code}: {r.text[:300]}"
+                _ec, _human = classify_visual_error(VisualError(_pesan))
+                raise VisualError(_pesan, error_class=_ec, human_message=_human)
             sub = r.json()
             status_url, response_url = sub.get("status_url"), sub.get("response_url")
             if not (status_url and response_url):
@@ -451,7 +454,16 @@ class AIImageProvider(VisualProvider):
             _gen_kw["quality"] = self.image_quality
 
         async with AsyncOpenAI(**_client_kw) as client:
-            response = await client.images.generate(**_gen_kw)
+            try:
+                response = await client.images.generate(**_gen_kw)
+            except Exception as e:
+                # [§8e-B langkah 4] SDK OpenAI melempar exception-nya sendiri; tanpa dibungkus, MAKNANYA
+                # hilang di lapisan atas. Sampel nyata worker.log 2026-07-29 11:32:40:
+                #   Error code: 400 - {'message':'Billing hard limit has been reached.',
+                #                      'code':'billing_hard_limit_reached'}  → ACCOUNT_BILLING.
+                # Kode di luar tabel → UNKNOWN = perilaku lama (retryable), aman.
+                _ec, _human = classify_visual_error(e)
+                raise VisualError(str(e)[:300], error_class=_ec, human_message=_human) from e
             # B2 cost-tracking: keluarga gpt-image-1 ditagih PER-TOKEN dan respons menyertakan usage —
             # tangkap token NYATA (dicatat sbg llm-bucket model image; harga in/out dari feed). Fail-soft.
             try:
