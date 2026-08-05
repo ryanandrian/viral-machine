@@ -35,9 +35,9 @@ type RunRow = {
 function statusKey(s: string | null): "completed" | "running" | "failed" | "queued" | "review" | "discarded" {
   const v = (s || "").toLowerCase();
   if (v.includes("complete") || v === "published" || v === "success") return "completed";
-  // discarded = tenant sudah Buang konten cacat (resolved) → bukan "perlu ditinjau". Cek sebelum qc_fail/fail.
+  // discarded = tenant sudah Buang konten cacat (resolved) → bukan ber-catatan lagi. Cek sebelum qc_fail/fail.
   if (v.includes("discard")) return "discarded";
-  // qc_failed / ready_with_issues = PRODUK JADI + catatan QC → "Perlu Ditinjau" (cek SEBELUM 'fail').
+  // qc_failed / ready_with_issues = PRODUK JADI + catatan QC → "Ada catatan QC" (cek SEBELUM 'fail').
   if (v.includes("qc_fail") || v.includes("ready_with_issues") || v.includes("issue")) return "review";
   if (v.includes("fail") || v.includes("error")) return "failed";
   if (v.includes("run") || v.includes("produc") || v.includes("publish")) return "running";
@@ -89,6 +89,11 @@ export default function RunDetailPage() {
   // #5 breakdown skor viral: dimensi mentah (videos.topic_scores by run_id) × bobot adaptif (tenant_configs).
   const [dims, setDims] = useState<Record<string, number> | null>(null);
   const [scoreW, setScoreW] = useState<Record<string, number> | null>(null);
+  // Apakah run ini PUNYA baris antrean LIVE di halaman Perlu Ditinjau? (`content_inventory
+  // .status='ready_with_issues'` — QC doc §7:496: itu antrean AKSI; `production_runs.qc_failed` hanya
+  // buku-besar riwayat.) Tanpa penanda ini halaman selalu menawarkan tombol "Tinjau" → 8 dari 9 run
+  // ber-catatan QC (jalur uji, TAK PERNAH membuat baris inventory) menabrak halaman KOSONG.
+  const [punyaItemTinjau, setPunyaItemTinjau] = useState(false);
 
   // Jalankan ulang run yang gagal — direct_job retry (mis. setelah beli kredit AI).
   // [B24 §10a pintu 3] Tombol ini menulis LANGSUNG dari browser ke tabel antrean — tidak melewati
@@ -135,6 +140,17 @@ export default function RunDetailPage() {
       .eq("id", id).maybeSingle();
     const r = data as RunRow | null;
     setRun(r);
+    // Sumber & pola SAMA dengan `issueRunIds` di runs-table (satu makna, nol duplikat logika). RLS
+    // men-scope ke tenant; himpunannya kecil (antrean tinjau = stok yang menunggu keputusan, bukan
+    // riwayat). Dicocokkan di sisi klien agar tak bergantung sintaks filter JSON (nol risiko runtime).
+    if (r?.run_id) {
+      const { data: inv } = await supabase.from("content_inventory")
+        .select("metadata").eq("status", "ready_with_issues");
+      setPunyaItemTinjau(((inv as { metadata?: { run_id?: string } | null }[]) ?? [])
+        .some((x) => x.metadata?.run_id === r.run_id));
+    } else {
+      setPunyaItemTinjau(false);
+    }
     // live-tail: log pipeline di-key oleh run_id → UTAMAKAN run_id (queue_id fallback).
     let q = supabase.from("pipeline_run_logs").select("id,level,step,category,message,created_at");
     if (r?.run_id) q = q.eq("run_id", r.run_id);
@@ -208,15 +224,18 @@ export default function RunDetailPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", alignItems: "flex-end" }}>
             <span className={`status-lg ${st === "completed" ? "badge-success" : st === "review" ? "badge-warning" : st === "failed" ? "badge-error" : st === "running" ? "badge-running" : "badge-default"}`}>
               <span className="dot" style={{ width: 7, height: 7, borderRadius: "50%", background: "currentColor" }} />
-              {st === "completed" ? <><span data-id>Selesai</span><span data-en>Completed</span></> : st === "review" ? <><span data-id>Perlu Ditinjau</span><span data-en>Needs Review</span></> : st === "discarded" ? <><span data-id>Dibuang</span><span data-en>Discarded</span></> : st === "failed" ? <><span data-id>Gagal</span><span data-en>Failed</span></> : st === "running" ? <><span data-id>Berjalan</span><span data-en>Running</span></> : <><span data-id>Antre</span><span data-en>Queued</span></>}
+              {st === "completed" ? <><span data-id>Selesai</span><span data-en>Completed</span></> : st === "review" ? <><span data-id>Ada catatan QC</span><span data-en>QC note</span></> : st === "discarded" ? <><span data-id>Dibuang</span><span data-en>Discarded</span></> : st === "failed" ? <><span data-id>Gagal</span><span data-en>Failed</span></> : st === "running" ? <><span data-id>Berjalan</span><span data-en>Running</span></> : <><span data-id>Antre</span><span data-en>Queued</span></>}
             </span>
-            {/* Tempat tinjau (owner 2026-07-10): run direct qc_failed = video PRIVAT di YouTube (tombol
-                "Buka YouTube" di bawah); run terjadwal = halaman /review (bila item masih hidup). */}
+            {/* TEMPAT tinjau — penentunya `punyaItemTinjau` (ADA/TIDAK baris antrean live), BUKAN
+                ada-tidaknya URL YouTube. Versi lama memakai URL sebagai penentu, sehingga run tanpa
+                URL selalu diarahkan ke /review meski di sana tak ada barisnya. */}
             {st === "review" && (
               <span className="muted" style={{ fontSize: "var(--text-xs)", textAlign: "right" }}>
-                {run.youtube_url
-                  ? <><span data-id>Tinjau videonya di YouTube Studio (terunggah privat) — tombol di bawah.</span><span data-en>Review the video in YouTube Studio (uploaded private) — button below.</span></>
-                  : <><span data-id>Tinjau di <a className="link" href="/review">halaman Review</a> (bila masih tersedia — item usang dibuang otomatis).</span><span data-en>Review on the <a className="link" href="/review">Review page</a> (if still available — stale items auto-expire).</span></>}
+                {punyaItemTinjau
+                  ? <><span data-id>Menunggu keputusan Anda di <a className="link" href="/review">halaman Perlu Ditinjau</a>.</span><span data-en>Waiting for your decision on the <a className="link" href="/review">Needs Review page</a>.</span></>
+                  : run.youtube_url
+                    ? <><span data-id>Sudah terunggah PRIVAT ke YouTube Studio Anda — tombol di bawah. Tak ada yang tertunda di aplikasi ini.</span><span data-en>Already uploaded PRIVATE to your YouTube Studio — button below. Nothing is pending in this app.</span></>
+                    : <><span data-id>Tak ada video yang bisa ditinjau di aplikasi ini untuk run tersebut.</span><span data-en>There is no video to review in this app for that run.</span></>}
               </span>
             )}
             <div className="run-actions">
@@ -232,8 +251,19 @@ export default function RunDetailPage() {
       {st === "review" && (
         <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", flexWrap: "wrap", padding: "0.875rem 1.25rem", background: "var(--warning-soft)", border: "1px solid color-mix(in srgb,var(--warning) 30%,transparent)", borderRadius: "var(--r-md)", marginBottom: "1rem" }}>
           <AlertTriangle size={16} style={{ color: "var(--warning)", flex: "none" }} />
-          <span style={{ fontSize: "var(--text-sm)", flex: 1 }}><b><span data-id>Produk berhasil dibuat</span><span data-en>Product was produced</span></b> — <span data-id>ada catatan QC</span><span data-en>QC note</span>: {run.error_message || "—"}. <span data-id>Tinjau (pakai/buang) di halaman Perlu Ditinjau.</span><span data-en>Review (use/discard) on the Needs Review page.</span></span>
-          <a href="/review" className="btn btn-secondary btn-sm"><Eye size={14} /> <span data-id>Tinjau</span><span data-en>Review</span></a>
+          <span style={{ fontSize: "var(--text-sm)", flex: 1 }}>
+            <b><span data-id>Produk berhasil dibuat</span><span data-en>Product was produced</span></b> — <span data-id>ada catatan QC</span><span data-en>QC note</span>: {run.error_message || "—"}.{" "}
+            {/* Kalimat penutup + tombol WAJIB mengikuti kenyataan. Sebelum 05-Agu keduanya tetap
+                (kalimat "tinjau di halaman Perlu Ditinjau" + tombol ke /review) untuk SETIAP run
+                ber-catatan QC — padahal 8 dari 9 tak punya baris di sana ⇒ tenant menabrak halaman
+                kosong berminggu-minggu. */}
+            {punyaItemTinjau
+              ? <><span data-id>Tinjau (pakai/buang) di halaman Perlu Ditinjau.</span><span data-en>Review (use/discard) on the Needs Review page.</span></>
+              : run.youtube_url
+                ? <><span data-id>Videonya sudah terunggah PRIVAT ke YouTube Studio Anda — keputusan menayangkan atau menghapusnya ada di sana. Tak ada yang perlu Anda lakukan di aplikasi ini.</span><span data-en>The video was uploaded PRIVATE to your YouTube Studio — publishing or deleting it is decided there. Nothing needs doing in this app.</span></>
+                : <><span data-id>Tak ada video yang bisa ditinjau di aplikasi ini untuk run tersebut.</span><span data-en>There is no video to review in this app for that run.</span></>}
+          </span>
+          {punyaItemTinjau && <a href="/review" className="btn btn-secondary btn-sm"><Eye size={14} /> <span data-id>Tinjau</span><span data-en>Review</span></a>}
         </div>
       )}
 

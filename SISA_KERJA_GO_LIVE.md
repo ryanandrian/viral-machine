@@ -380,10 +380,35 @@ kini bertanda. Dijaga `tests/test_kuota_tak_ditanam_di_dokumen.py`.
   anti-drift yang MERAH bila ada tabel ber-`tenant_id` tak terdaftar di salah satu kategori — supaya
   tabel berikutnya tak lolos diam-diam lagi.
 
-### [D9] 🔴 "PERLU DITINJAU" TAK PERNAH TERTUTUP — 8 run uji nyangkut selamanya (2026-08-05)
+### [D9] ✅ SELESAI 2026-08-05 — "Perlu Ditinjau" dipakai untuk pekerjaan yang tak pernah ada
 > **⛔ PASCA-COMPACTION: BACA SELURUH ITEM INI SEBELUM MENYENTUH panel tenant / runs-table / janitor.**
 > Analisis LIMA RANTAI (`CLAUDE.md` §0.7) sudah TUNTAS. **JANGAN diulang, JANGAN dianalisis ulang.**
-> Yang tersisa HANYA satu keputusan owner (di bawah). Nol kode disentuh sejauh ini.
+>
+> **✅ REALISASI (ketok owner 05-Agu: "kerjakan tanpa merusak yang sudah berjalan"). SSOT = `QC_CONTENT_ARCHITECTURE.md §7.5` blok "PEMISAHAN NAMA".**
+> **Vonisnya: bukan penutup baru yang dibutuhkan, melainkan NAMA YANG JUJUR.** Nama "Perlu Ditinjau"
+> dikembalikan ke pemiliknya (antrean `content_inventory.ready_with_issues` — menu + `/review`, satu-satunya
+> tempat ada tombol Pakai/Buang); buku-besar `production_runs` memakai **"Ada catatan QC"**.
+> **Nol kolom baru · nol RPC · nol migrasi · nol sentuhan mesin · nol pekerjaan untuk tenant.**
+> 4 berkas layar: `runs-table.tsx` (lencana+tab+laci) · `runs/[id]/page.tsx` (lencana+2 jalan buntu ditutup
+> via `punyaItemTinjau`) · `dashboard/page.tsx` (label; sekalian 3 label yang dulu monolingual → §3.5) ·
+> `channels/[id]/page.tsx` (label KPI). Penjaga: `tests/test_label_tinjau_tak_bohong.py` (11 uji, **merah
+> dibuktikan lebih dulu: 5 gagal**). Bukti: tsc bersih · build ✓ · **779 uji lulus** (dari 768) · replikasi
+> predikat pada **9 baris nyata** → 8 run uji **nol tombol ke halaman kosong**, 1 run terjadwal (#344)
+> tombolnya muncul dan memang berisi · aritmetika buku-besar **232+79+9+9 = 329 COCOK**.
+> **⏳ Belum di-deploy — menunggu izin owner per §5.0.**
+>
+> **DUA RANCANGAN SAYA SENDIRI YANG DIGUGURKAN — jangan dihidupkan lagi:**
+> 1. ❌ *Tombol "Sudah saya tangani" + status ledger baru* → **akan mengubah rem darurat channel diam-diam**:
+>    `inventory.py:164` menghitung `qc_failed` sebagai +1 kegagalan; status lain = netral. Mengubah status =
+>    mengurangi hitungan = rem melonggar tanpa ketok (§0.6 perilaku-saat-gagal = keputusan produk).
+> 2. ❌ *Tombol + kolom penanda `reviewed_at`* → tombolnya **upacara**: nol bagian sistem yang menunggu
+>    jawaban tenant (publisher tak punya barisnya · kuota sudah terhitung · rem tak terpengaruh). Meminta
+>    tenant membereskan pembukuan atas cacat kita = beban yang tak semestinya ada.
+>
+> **Yang TIDAK diubah, dan alasannya:** sumber angka Beranda & KPI channel **tetap** `production_runs` —
+> keduanya rincian buku-besar (`dibuat = sukses+gagal+catatan+dibuang`); mengambil salah satunya dari tabel
+> antrean akan memecah jumlahnya = bug baru. (Saya sempat menjanjikan ini ke owner, lalu **mencabutnya**
+> setelah membaca widget-nya.)
 
 **GEJALA (dilaporkan owner):** di menu **Run → tab Need Review** dan **Channel Setting → Runs → Need
 Review** muncul 2 item (tenant ryan, channel *Mesin Viral (Test)*), **tapi di menu Need Review tersendiri
@@ -418,15 +443,20 @@ kendali aplikasi, jadi item takkan pernah hilang.
 · `direct-1c5d4bcb` 14-Jul (*Ubahlah Hari Anda dengan Afirmasi Harian*, 3,3MB — render diduga gagal).
 Keduanya **3–4 minggu** privat di Studio tenant.
 
-**🔒 MENUNGGU KEPUTUSAN OWNER — pertanyaan yang BELUM dijawab:** *apakah hasil Test Channel SEHARUSNYA
-hilang dari daftar setelah ditangani, atau tetap tinggal sebagai riwayat uji yang bisa dilihat kembali?*
-Jawaban itu menentukan bentuk penutupnya:
-- **(i)** tombol **"Sudah saya tangani"** — tenant menutup sendiri (sejalan prinsip owner: keputusan tenant); +1 tombol, +1 penanda
-- **(ii)** tutup otomatis setelah N hari, label jujur *"uji lampau — cek Studio"*; nol tombol, tapi aplikasi menebak niat tenant
-- **(iii)** biarkan tinggal sebagai riwayat uji
+**✅ PERTANYAAN ITU TERJAWAB SENDIRI OLEH RANCANGAN FINAL — jangan ditanyakan lagi ke owner.**
+Pertanyaan lamanya: *"apakah hasil Test Channel harus hilang dari daftar setelah ditangani, atau tetap
+tinggal sebagai riwayat?"* Premisnya **salah**: ia mengandaikan ada sesuatu yang "ditangani". Tidak ada —
+nol bagian sistem menunggu jawaban tenant. Jadi hasil uji **TETAP tinggal sebagai riwayat**, hanya dengan
+nama yang jujur ("Ada catatan QC"), dan **tak ada yang perlu ditutup**. Ketiga opsi (i)/(ii)/(iii) gugur
+bersama premisnya.
 
-Cacat **1–3 = perbaikan kejujuran layar** (label salah · info yang SUDAH ada di DB tapi disembunyikan ·
-tombol salah arah), **nol elemen UI baru** — tapi §2.3d tetap menuntut ketok karena menyentuh layar tenant.
+Keempat cacat di atas: **1 · 2 · 3 SUDAH DIPERBAIKI** (label · catatan QC ditampilkan di laci · dua jalan
+buntu ke halaman kosong ditutup). **4 ("nol penutup") GUGUR sebagai cacat** — tak ada yang perlu ditutup.
+
+**AKAR yang masih terbuka, SENGAJA tak disentuh di sini:** 8 dari 9 catatan QC = **DURASI**, dan **20% dari
+seluruh video uji yang berhasil dirender keluar dengan keluhan durasi**. Itu milik utas
+`QC_CONTENT_ARCHITECTURE.md §2c` + **[D7]** — bukan menumpang pekerjaan ini. Label yang jujur membuat
+masalah itu **terlihat apa adanya**, bukan menghilangkannya.
 
 ### [D8] 🔴🔴 JANJI HALAMAN HARGA vs KENYATAAN — 3 fitur DIJUAL tapi TIDAK ADA, 5 tak ber-gerbang — 2026-08-05
 > **Ini menjawab pertanyaan owner "kenapa pelanggan tidak bertambah". Bukan bug — janji vs barang.**

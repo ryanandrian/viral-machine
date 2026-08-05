@@ -20,9 +20,9 @@ type StKey = "completed" | "failed" | "review" | "discarded";
 function statusKey(s: string | null): StKey {
   const v = (s || "").toLowerCase();
   if (v.includes("complete") || v === "published" || v === "success") return "completed";
-  // discarded = tenant Buang konten cacat (resolved) → BUKAN "perlu ditinjau". Cek sebelum qc_fail/fail.
+  // discarded = tenant Buang konten cacat (resolved) → BUKAN ber-catatan lagi. Cek sebelum qc_fail/fail.
   if (v.includes("discard")) return "discarded";
-  // qc_failed / ready_with_issues = PRODUK JADI tapi ada catatan QC → "Perlu Ditinjau", BUKAN gagal.
+  // qc_failed / ready_with_issues = PRODUK JADI tapi ada catatan QC → "Ada catatan QC", BUKAN gagal.
   // WAJIB dicek sebelum 'fail' (qc_failed mengandung "fail").
   if (v.includes("qc_fail") || v.includes("ready_with_issues") || v.includes("issue")) return "review";
   if (v.includes("fail") || v.includes("error")) return "failed";
@@ -55,19 +55,22 @@ function prettyNiche(k: string | null) { return (k || "—").replace(/_/g, " ").
 
 const STATUS_TABS: { key: StKey | "all" | "queued"; id: string; en: string }[] = [
   { key: "all", id: "Semua", en: "All" }, { key: "completed", id: "Completed", en: "Completed" },
-  { key: "review", id: "Perlu Ditinjau", en: "Needs Review" },
+  // Nama tab = nama BUKU-BESAR, bukan nama antrean. "Perlu Ditinjau" milik menu/halaman /review
+  // (di situ ada tombol Pakai/Buang). Tab ini hanya menyaring riwayat — 8 dari 9 barisnya tak punya
+  // pekerjaan apa pun di aplikasi kita (keputusannya di YouTube Studio tenant). Lihat QC doc §7:496.
+  { key: "review", id: "Ada catatan QC", en: "QC note" },
   { key: "failed", id: "Failed", en: "Failed" },
   { key: "discarded", id: "Dibuang", en: "Discarded" },
   { key: "queued", id: "Menunggu publish", en: "Awaiting publish" },
 ];
 
 function Badge({ st }: { st: StKey }) {
-  const m: Record<StKey, [string, string, string]> = { completed: ["badge-success", "Selesai", "Completed"], review: ["badge-warning", "Perlu Ditinjau", "Needs Review"], failed: ["badge-error", "Gagal", "Failed"], discarded: ["badge-default", "Dibuang", "Discarded"] };
+  const m: Record<StKey, [string, string, string]> = { completed: ["badge-success", "Selesai", "Completed"], review: ["badge-warning", "Ada catatan QC", "QC note"], failed: ["badge-error", "Gagal", "Failed"], discarded: ["badge-default", "Dibuang", "Discarded"] };
   const [c, idL, enL] = m[st];
   return <span className={`badge ${c}`}><span className="dot" /><span data-id>{idL}</span><span data-en>{enL}</span></span>;
 }
 
-// TEMPAT meninjau run "Perlu Ditinjau" (owner 2026-07-10; dua jalur by-design QC doc §7):
+// TEMPAT meninjau run ber-catatan QC (owner 2026-07-10; dua jalur by-design QC doc §7):
 // direct (ada youtube_url) → video PRIVAT di YouTube Studio · terjadwal + item tinjau masih LIVE →
 // halaman /review · item sudah disapu TTL → kedaluwarsa (tak ada lagi yang bisa ditinjau).
 function ReviewVenue({ d, issueRunIds }: { d: RunRow; issueRunIds: Set<string> }) {
@@ -114,7 +117,7 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
     // scope channel (tab channel): .eq HARUS sebelum .order (builder supabase). channelId kosong = semua channel.
     let prSel = supabase.from("production_runs").select("id,run_id,channel_id,niche,topic,status,elapsed_seconds,youtube_url,youtube_video_id,viral_score,created_at,error_message,error_class,run_metadata");
     if (channelId) prSel = prSel.eq("channel_id", channelId);
-    // + ready_with_issues: dipakai menentukan TEMPAT tinjau run "Perlu Ditinjau" (item live → /review).
+    // + ready_with_issues: dipakai menentukan TEMPAT tinjau run ber-catatan QC (item live → /review).
     let ciSel = supabase.from("content_inventory").select("id,status,niche,channel_id,metadata,created_at").in("status", ["ready", "ready_with_issues"]);
     if (channelId) ciSel = ciSel.eq("channel_id", channelId);
     // Banner "Produksi langsung" — WAJIB scope channel juga (cegah job channel lain bocor ke tab channel ini).
@@ -420,10 +423,29 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
                     </div>
                   </div>
                 ) : (
-                  <div>
-                    <div className="sec-label">Pipeline</div>
-                    <div>{miniSteps(st)}</div>
-                  </div>
+                  <>
+                    {/* Catatan QC = satu-satunya informasi yang tenant butuhkan pada status ini
+                        ("Durasi 35.2s di luar ±15% target preset 60s"). Sebelum 05-Agu laci hanya
+                        menampilkan diagram 8 langkah, jadi sebabnya TERSEMBUNYI padahal sudah ada di
+                        DB — tenant harus membuka halaman detail run untuk membacanya. Pola kotaknya
+                        cermin "Alasan gagal" di atas; bedanya warna warning (produk JADI, bukan gagal). */}
+                    {st === "review" && (
+                      <div>
+                        <div className="sec-label"><span data-id>Catatan QC</span><span data-en>QC note</span></div>
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: "0.6rem", padding: "0.75rem 0.9rem", background: "var(--warning-soft)", border: "1px solid color-mix(in srgb,var(--warning) 30%,transparent)", borderRadius: "var(--r-md)" }}>
+                          <AlertTriangle size={15} style={{ color: "var(--warning)", flex: "none", marginTop: 1 }} />
+                          <span style={{ fontSize: "var(--text-sm)", flex: 1, wordBreak: "break-word" }}>
+                            {selected.error_message
+                              || <><span data-id>Video ini punya catatan QC (sebabnya tak tercatat pada baris lama).</span><span data-en>This video has a QC note (the reason was not recorded on older rows).</span></>}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                    <div>
+                      <div className="sec-label">Pipeline</div>
+                      <div>{miniSteps(st)}</div>
+                    </div>
+                  </>
                 )}
               </div>
               <div className="drawer-foot">

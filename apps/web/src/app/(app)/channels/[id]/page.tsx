@@ -945,7 +945,11 @@ export default function ChannelDetailPage() {
             return (<div className="cd-kpi-strip">
               <div className="item"><div className="v">{tot}</div><div className="l"><Bi id="Total run" en="Total runs" /></div></div>
               <div className="item"><div className="v">{tot ? Math.round((ok / tot) * 100) : 0}%</div><div className="l"><Bi id="Success rate" en="Success rate" /></div></div>
-              <div className="item"><div className="v">{qc}</div><div className="l"><Bi id="Perlu tinjau / QC" en="Review / QC" /></div></div>
+              {/* Statistik BUKU-BESAR run channel ini (Total = sukses + ber-catatan + gagal) — sumbernya
+                  WAJIB tetap `production_runs` (lihat cntRun). Label "Perlu tinjau" dicabut 05-Agu:
+                  8 dari 9 run ber-catatan QC tak punya pekerjaan apa pun di aplikasi (video privat di
+                  YouTube Studio tenant) — memakai nama antrean di sini melahirkan lampu tugas palsu. */}
+              <div className="item"><div className="v">{qc}</div><div className="l"><Bi id="Ada catatan QC" en="QC note" /></div></div>
               <div className="item"><div className="v">{fail}</div><div className="l"><Bi id="Gagal" en="Failed" /></div></div>
             </div>); })()}
           <p className="muted" style={{ fontSize: "var(--text-sm)", margin: "0.875rem 0 0.625rem" }}><Bi id="Metrik YouTube mentah (views/retensi/subscriber) ada di YouTube Studio — kami tak menduplikasinya (kpt 12)." en="Raw YouTube metrics (views/retention/subscribers) live in YouTube Studio — we don't duplicate them." /></p>

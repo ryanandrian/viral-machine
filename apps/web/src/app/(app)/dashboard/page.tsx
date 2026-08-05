@@ -203,7 +203,11 @@ export default function DashboardPage() {
           <div className="kpi-top"><span className="kpi-label"><CheckCircle size={14} /> Success Rate</span></div>
           <span className="kpi-value">{rate != null ? `${rate}%` : "—"}</span>
           <span className="muted" style={{ fontSize: "var(--text-xs)" }}>
-            {stats ? <>{fmtN(stats.made)} dibuat · {fmtN(stats.success)} sukses · {fmtN(stats.failed)} gagal{stats.review > 0 ? ` · ${fmtN(stats.review)} perlu ditinjau` : ""}</> : "—"}
+            {/* Rincian BUKU-BESAR: dibuat = sukses + gagal + ber-catatan. Keempatnya WAJIB dari
+                `production_runs` — jangan pernah mengambil salah satunya dari antrean `/review`
+                (tabel lain, isi lain) atau jumlahnya tak lagi cocok. Label "perlu ditinjau" dicabut
+                05-Agu: nama itu milik ANTREAN yang menunggu keputusan, bukan buku-besar riwayat. */}
+            {stats ? <>{fmtN(stats.made)} <Bi id="dibuat" en="made" /> · {fmtN(stats.success)} <Bi id="sukses" en="succeeded" /> · {fmtN(stats.failed)} <Bi id="gagal" en="failed" />{stats.review > 0 ? <> · {fmtN(stats.review)} <Bi id="ada catatan QC" en="with QC note" /></> : null}</> : "—"}
           </span>
         </div>
         <div className="kpi">
@@ -337,7 +341,12 @@ export default function DashboardPage() {
             {recent.length === 0 ? <div className="muted" style={{ padding: "0.75rem 0", fontSize: "var(--text-xs)" }}><Bi id="Belum ada aktivitas." en="No activity yet." /></div>
               : recent.map((r) => {
                 const st = statusKey(r.status); const m = ST_MAP[st];
-                const lbl = st === "completed" ? "selesai" : st === "failed" ? "gagal" : st === "review" ? "perlu ditinjau" : st;
+                // ReactNode, bukan string: ketiga label ini dulu terkunci bahasa Indonesia meski layar
+                // berbahasa Inggris (§3.5 dwibahasa wajib) — diperbaiki bersama pencabutan nama antrean.
+                const lbl = st === "completed" ? <Bi id="selesai" en="completed" />
+                  : st === "failed" ? <Bi id="gagal" en="failed" />
+                  : st === "review" ? <Bi id="ada catatan QC" en="QC note" />
+                  : <>{st}</>;
                 return (
                   <div className="feed-item" key={r.id}>
                     <span className="fdot" style={{ background: m.c }} />
