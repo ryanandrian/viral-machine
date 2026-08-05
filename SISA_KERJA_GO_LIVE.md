@@ -46,32 +46,46 @@
 - **Prinsip NON-NEGOTIABLE:** kualitas>kuantitas (lebih baik tak produksi daripada jelek) · **no silent degradation** (gagal→tenant tahu via Telegram+dashboard) · **diversity/compliance-first** (bertahan dari YouTube AI-slop crackdown Jan 2026 = **PILAR SURVIVAL**, bukan opsional) · self-learning · **almost fully config-driven (no-hardcode)** · transparansi (BYOK + biaya AI terlihat + log auditable).
 - **⭐ TUJUAN OWNER = SEGERA JUALAN (go-to-market).** Ukuran "SELESAI" yang BENAR = **produk bisa DIJUAL ke tenant baru**, BUKAN menyempurnakan internal/ryan. Pertanyaan pemandu tiap saat: *"apakah ini memblok tenant berbayar pertama?"* Tidak → DEFER (pasca-launch). STOP rabbit-hole perfeksionisme. (memory `project_audit_setup_gaps_2026_06_23`)
 
-### 📏 ATURAN KERJA LENGKAP — 18 memory (WAJIB patuh; tiap `[[...]]` = file memory) — pelanggaran = ditegur owner
-**A. Sebelum bertindak — paham & disiplin**
-1. **[[feedback_comprehend_before_work]]** ⛔ — paham **1000%** peta (DB/BE/FE/koneksi/progress/prioritas) SEBELUM menyentuh apa pun. Darurat = containment dulu, baru diagnosa (jangan menebak komponen).
-2. **[[feedback_post_compaction]]** — pasca-compaction JANGAN "bayi baru lahir": percayai summary+memory, baca URUTAN KANONIK berurut, tulis peta-state, lanjut thread aktif — jangan re-investigasi yang sudah jelas.
-3. **[[feedback_analysis_discipline]]** — **NOL asumsi.** Trace end-to-end dgn angka nyata; baca kode sebelum klaim; **build PASS ≠ running well** (validasi RUNTIME sebelum klaim selesai).
-4. **[[feedback_master_docs_first]]** — kuasai dokumen dulu; **GROUND TRUTH = KODE + DB LIVE** (dok bisa drift/aspiratif — jangan kutip dok sbg bukti perilaku); kontradiksi→terbaru+konfirmasi; hormati banner "JANGAN ANALISA ULANG"; FE = referensi backend.
-5. **[[feedback_review_whole_remediation_before_item]]** 🔗 — sebelum kerjakan 1 item: review SELURUH dokumen terkait + cek DEPENDS + item yang menumpang seam (hindari rework).
+### 📏 ATURAN KERJA LENGKAP → **`/home/rad/viral-machine/CLAUDE.md`** (satu-satunya sumber, auto-dimuat tiap sesi)
+
+> 🔴 **RANJAU DICABUT 2026-08-05 — daftar di bawah ini menunjuk 18 berkas yang SUDAH TIDAK ADA.**
+> Diperiksa satu per satu: **18 dari 18 HILANG.** Ke-24 berkas `feedback_*` dipusatkan ke `CLAUDE.md`
+> lalu **dibuang 2026-07-15** atas perintah owner (*"pusatkan 1 lokasi, buang fosil"*) — tapi baris-baris
+> di bawah **tak pernah ikut diperbarui**. Akibatnya berkas yang setiap sesi baca PERTAMA memerintahkan
+> mematuhi aturan yang tak bisa dibuka: sesi baru mencari, tak menemukan, lalu **menebak**.
+> Inilah bentuk "basi tapi terkesan hidup" yang paling merusak — dan ia bertahan **3 minggu**.
+>
+> **YANG BERLAKU: `CLAUDE.md`** — seluruh 18 aturan itu sudah ada di sana, lengkap beserta konteks
+> insidennya. Daftar di bawah **DISIMPAN sebagai peta-silang saja** (mana aturan lama jatuh ke pasal mana),
+> **BUKAN sebagai perintah membaca berkas memory.**
+> Peta silang: A.1-5 → `CLAUDE.md` §0 & §2 · B.6-10 → §0.1, §2.3, §4 · C.11-14 → §3.2, §3.3, §6.7, §7.2 ·
+> D.15-18 → §3.4, §5, §7.3.
+
+**A. Sebelum bertindak — paham & disiplin** *(peta-silang ke `CLAUDE.md`; berkas memory-nya SUDAH TIADA)*
+1. **`feedback_comprehend_before_work` *(berkas TIADA)*** ⛔ — paham **1000%** peta (DB/BE/FE/koneksi/progress/prioritas) SEBELUM menyentuh apa pun. Darurat = containment dulu, baru diagnosa (jangan menebak komponen).
+2. **`feedback_post_compaction` *(berkas TIADA)*** — pasca-compaction JANGAN "bayi baru lahir": percayai summary+memory, baca URUTAN KANONIK berurut, tulis peta-state, lanjut thread aktif — jangan re-investigasi yang sudah jelas.
+3. **`feedback_analysis_discipline` *(berkas TIADA)*** — **NOL asumsi.** Trace end-to-end dgn angka nyata; baca kode sebelum klaim; **build PASS ≠ running well** (validasi RUNTIME sebelum klaim selesai).
+4. **`feedback_master_docs_first` *(berkas TIADA)*** — kuasai dokumen dulu; **GROUND TRUTH = KODE + DB LIVE** (dok bisa drift/aspiratif — jangan kutip dok sbg bukti perilaku); kontradiksi→terbaru+konfirmasi; hormati banner "JANGAN ANALISA ULANG"; FE = referensi backend.
+5. **`feedback_review_whole_remediation_before_item` *(berkas TIADA)*** 🔗 — sebelum kerjakan 1 item: review SELURUH dokumen terkait + cek DEPENDS + item yang menumpang seam (hindari rework).
 
 **B. Cara memutuskan & komunikasi**
-6. **[[feedback_workflow]]** — **propose dulu + tunggu approval** untuk perubahan; saat ditanya: jawab+opsi+rekomendasi+tunggu konfirmasi (jangan langsung bongkar kode).
-7. **[[feedback_owner_delegates_expert_decisions]]** — owner delegasi teknis: putuskan yang reversible/jelas; **propose untuk yang berisiko/fork bisnis**. North-star = produk **LAKU + skala ribuan tenant + viral NYATA**.
-8. **[[feedback_plain_language]]** 🗣️ — owner **non-teknis**: bahasa dampak bukan mekanisme; nol jargon; status = checklist sederhana.
-9. **[[feedback_no_silent_ui_changes]]** 🚫🎨 — JANGAN tambah/ubah/hapus elemen UI tanpa izin owner. Tugas BE/logika = ubah itu SAJA; usul dulu bila perlu UI.
-10. **[[feedback_define_done_no_scope_creep]]** — tarik garis tegas **SELESAI / poles-opsional / wajib-jualan**; defer opsional; menjelaskan ≠ tugas baru; jangan bingkai follow-up sbg "cacat".
+6. **`feedback_workflow` *(berkas TIADA)*** — **propose dulu + tunggu approval** untuk perubahan; saat ditanya: jawab+opsi+rekomendasi+tunggu konfirmasi (jangan langsung bongkar kode).
+7. **`feedback_owner_delegates_expert_decisions` *(berkas TIADA)*** — owner delegasi teknis: putuskan yang reversible/jelas; **propose untuk yang berisiko/fork bisnis**. North-star = produk **LAKU + skala ribuan tenant + viral NYATA**.
+8. **`feedback_plain_language` *(berkas TIADA)*** 🗣️ — owner **non-teknis**: bahasa dampak bukan mekanisme; nol jargon; status = checklist sederhana.
+9. **`feedback_no_silent_ui_changes` *(berkas TIADA)*** 🚫🎨 — JANGAN tambah/ubah/hapus elemen UI tanpa izin owner. Tugas BE/logika = ubah itu SAJA; usul dulu bila perlu UI.
+10. **`feedback_define_done_no_scope_creep` *(berkas TIADA)*** — tarik garis tegas **SELESAI / poles-opsional / wajib-jualan**; defer opsional; menjelaskan ≠ tugas baru; jangan bingkai follow-up sbg "cacat".
 
 **C. Standar kualitas & teknis**
-11. **[[feedback_world_class_quality]]** 🏆 — DB/BE/FE semua TERBAIK; reuse/relokasi UI bagus yang ada (jangan bikin lebih jelek); nol-duplikat; "selesai" = kualitas + lama-dibereskan + tervalidasi.
-12. **[[feedback_no_hardcode]]** — AI/pricing/business = config-driven (`pricing_config`/`app_config`/DB); no silent fallback (gagal→stop+notify); nol literal nominal/model di kode.
-13. **[[feedback_design_for_multichannel_scale]]** — asumsi default **tenant MULTI-channel**; atribusi data **per-entitas** (per-video/run), bukan "channel tenant"; ryan (1 channel) = test, bukan patokan.
-14. **[[feedback_all_assets_on_s3]]** 🗄️ — semua aset/media di **S3** (`mesinviral-assets`); Supabase = DB saja. **JANGAN keputusan biaya/infra tanpa izin owner.**
+11. **`feedback_world_class_quality` *(berkas TIADA)*** 🏆 — DB/BE/FE semua TERBAIK; reuse/relokasi UI bagus yang ada (jangan bikin lebih jelek); nol-duplikat; "selesai" = kualitas + lama-dibereskan + tervalidasi.
+12. **`feedback_no_hardcode` *(berkas TIADA)*** — AI/pricing/business = config-driven (`pricing_config`/`app_config`/DB); no silent fallback (gagal→stop+notify); nol literal nominal/model di kode.
+13. **`feedback_design_for_multichannel_scale` *(berkas TIADA)*** — asumsi default **tenant MULTI-channel**; atribusi data **per-entitas** (per-video/run), bukan "channel tenant"; ryan (1 channel) = test, bukan patokan.
+14. **`feedback_all_assets_on_s3` *(berkas TIADA)*** 🗄️ — semua aset/media di **S3** (`mesinviral-assets`); Supabase = DB saja. **JANGAN keputusan biaya/infra tanpa izin owner.**
 
 **D. Validasi & deploy**
-15. **[[feedback_local_test_batch_deploy]]** ⚡ — validasi PENUH di LOKAL (dev box mampu render-test/build/DDL); deploy VPS **1× di akhir task** (rebuild FE VPS lambat), jangan per-langkah.
-16. **[[feedback_vps_clean]]** — VPS = runtime bersih (`.md` di-exclude sparse-checkout); alur lokal→commit→push→`git pull` VPS+restart.
-17. **[[feedback_vps_ssh_long_commands]]** — perintah VPS lama/menunggu = **detached + poll** (SSH nganggur diputus→error 255); jangan foreground.
-18. **[[feedback_f4_locked_gate]]** — *(GERBANG SUDAH TERBUKA — F4 durasi SELESAI `8670fc3`)*; prinsip tetap: durasi = hulu, hilir rusak bila hulu meleset.
+15. **`feedback_local_test_batch_deploy` *(berkas TIADA)*** ⚡ — validasi PENUH di LOKAL (dev box mampu render-test/build/DDL); deploy VPS **1× di akhir task** (rebuild FE VPS lambat), jangan per-langkah.
+16. **`feedback_vps_clean` *(berkas TIADA)*** — VPS = runtime bersih (`.md` di-exclude sparse-checkout); alur lokal→commit→push→`git pull` VPS+restart.
+17. **`feedback_vps_ssh_long_commands` *(berkas TIADA)*** — perintah VPS lama/menunggu = **detached + poll** (SSH nganggur diputus→error 255); jangan foreground.
+18. **`feedback_f4_locked_gate` *(berkas TIADA)*** — *(GERBANG SUDAH TERBUKA — F4 durasi SELESAI `8670fc3`)*; prinsip tetap: durasi = hulu, hilir rusak bila hulu meleset.
 
 **⛔ PANTANGAN keras:** JANGAN sentuh v1 (pensiun; arsip+DB disimpan) · JANGAN drop `channels.niche_pool`/`niche_mode` (AKTIF) · JANGAN ngoding di VPS.
 
@@ -109,12 +123,29 @@ API access — TIGA fitur yang TIDAK ADA di aplikasi (lihat [D8])**; jangan dija
 *(Nama ditulis PENUH satu per satu — bukan disingkat "PHASE4/5/6" — supaya penjaga uji bisa membacanya;
 bentuk singkat itu membuat 4 dokumen tak terhitung berstatus, tertangkap uji 05-Agu.)*
 
-**KELOMPOK 6 — PERLU DIBERESKAN (3).**
-| Berkas | Masalah |
-|---|---|
-| `SOFTCODE_AI_CONFIG - BELUM DI EKSEKUSI.md` | indeks memory menyatakannya SUPERSEDED, tapi berkasnya sendiri tak bilang apa-apa |
-| `S3-CONNECTION.md` | catatan endpoint S3, **tak pernah di-commit** (di disk sejak 19-Jun) |
-| `SUPABASE-CONNECTION.md` | berjudul **"DATABAE VER-1"** = database yang sudah PENSIUN; tak pernah di-commit (21-Jun) |
+**KELOMPOK 6 — PERLU DIBERESKAN: ✅ NOL (dituntaskan 2026-08-05).**
+`SOFTCODE_AI_CONFIG - BELUM DI EKSEKUSI.md` — namanya menjanjikan "belum dieksekusi", padahal tujuannya
+**SUDAH TERCAPAI**. Diverifikasi, bukan diklaim: nol nama model AI terpatri di `src/` (disapu gpt-4o ·
+claude-3 · gemini-2 · llama-3 · flux · dall-e) · **48 `ai_models`** + **9 `ai_providers`** di DB · **12
+titik** kode membaca katalog itu · adapter LLM = registry per-PROTOKOL (vendor baru = +1 baris DB, nol
+koding) · nol nominal rupiah terpatri · 117 kenop ber-label. Spanduk bukti dipasang di kepala berkas;
+nama berkas TIDAK diubah agar tautan lama tak putus.
+*(Klaim awal §0b bahwa "indeks memory menyatakannya SUPERSEDED" juga SALAH — yang superseded adalah
+`plan_s93` & `PIPELINE_LOG_SEPARATION`. Itu kekeliruan klasifikasi KETUJUH; tertangkap sebelum bertindak.)*
+
+**KELOMPOK 7 — BERKAS RAHASIA, SENGAJA DI LUAR GIT (2).** `S3-CONNECTION.md` · `SUPABASE-CONNECTION.md`.
+Keduanya tercantum EKSPLISIT di `.gitignore` di bawah komentar **"# secrets (JANGAN commit)"** (baris 22 &
+25) ⇒ tak-terlacak-git adalah **desain yang benar**, bukan kelalaian. **JANGAN commit, JANGAN tampilkan
+isinya di chat** (§6.3). Catatan: `SUPABASE-CONNECTION.md` berjudul *"DATABAE VER-1"* = kredensial DB **v1
+yang sudah PENSIUN** — menghapusnya = keputusan owner (bisa jadi masih dibutuhkan untuk akses arsip).
+
+> 🔴 **KOREKSI 2026-08-05 atas daftar ini sendiri.** Versi pertama §0b menaruh kedua berkas rahasia itu di
+> KELOMPOK 6 ("perlu dibereskan") karena "tak pernah di-commit". **SALAH** — `.gitignore` memang
+> memerintahkannya. Itu **kekeliruan klasifikasi keenam** dalam satu sesi (sebelumnya: "14 ranjau dokumen"
+> yang ternyata 3 · alat "artefak masih ada" salah 5 dari 5 · penjaga migrasi beralarm palsu belasan kolom).
+> **Pelajaran yang harus dibaca sesi berikutnya:** klasifikasi apa pun di daftar ini yang TIDAK berlabel
+> "dijaga uji" adalah **dugaan yang harus diverifikasi ke bukti** (kode · DB · `.gitignore` · isi berkas) —
+> bukan vonis. Verifikasi kelompok 2–7 belum selesai, dan itu dinyatakan terbuka, bukan disembunyikan.
 
 **⚠️ BATAS KEJUJURAN DAFTAR INI (jangan dibaca lebih kuat dari isinya):** pengelompokan 2–6 dibuat dari
 **membaca kepala** tiap dokumen + memeriksa penunjuk & penjaga — **BUKAN** membaca seluruh isinya.
@@ -212,7 +243,7 @@ kini bertanda. Dijaga `tests/test_kuota_tak_ditanam_di_dokumen.py`.
 - **DEPENDS:** — (mandiri, DNS). **Nyambung:** [A2] auth email · [A5] smoke-test · [B9] nurture · [A1] tagihan.
 - **✅ RESOLVED — AKAR SEBENARNYA (verified INBOX 2026-07-02, commit `ebb5d90`, deployed mv-worker):** DUA sebab, keduanya beres:
   **(1) SPF** — relay `relay.idcloudhost.com` (103.193.179.117) tak terdaftar → owner tambah `103.193.179.117/147/148` ke SPF → Gmail **SPF=pass, DMARC=pass** (via SPF; walau DKIM=fail). **(2) CACAT KODE** — `email.py::send_email` membangun pesan **TANPA `Message-ID`+`Date`** (RFC 5322) → Gmail buang diam-diam sbg malformed (webmail Roundcube sampai karena header lengkap; email app cuma 632 byte). Fix `ebb5d90`: `make_msgid`+`formatdate` (domain selaras From). **Verified: `notify_payment_receipt` + tes → MASUK INBOX kumala** (bukan spam). Header Gmail email Roundcube membuktikan spf=pass/dmarc=pass/dkim=fail.
-  ⚠️ **KOREKSI catatan lama saya:** kesimpulan *"app-mail mati di outbound idcloudhost"* + *"provider transaksional WAJIB"* = **SALAH/keras-kepala**. Penyebab nyata = **cacat header di kode kita sendiri** — bisa & sudah diperbaiki tanpa provider. **DKIM=fail (relay) = poles OPSIONAL** (penempatan-inbox lebih baik / DMARC-strict), non-blocker. Provider transaksional = peningkatan reputasi jangka-panjang, **bukan keharusan**. Pelajaran: bila OUTPUT APLIKASI kita gagal, **periksa output kita sendiri (byte/header) DULU** sebelum menyalahkan infra. [[feedback_inspect_our_output_before_blaming_infra]]
+  ⚠️ **KOREKSI catatan lama saya:** kesimpulan *"app-mail mati di outbound idcloudhost"* + *"provider transaksional WAJIB"* = **SALAH/keras-kepala**. Penyebab nyata = **cacat header di kode kita sendiri** — bisa & sudah diperbaiki tanpa provider. **DKIM=fail (relay) = poles OPSIONAL** (penempatan-inbox lebih baik / DMARC-strict), non-blocker. Provider transaksional = peningkatan reputasi jangka-panjang, **bukan keharusan**. Pelajaran: bila OUTPUT APLIKASI kita gagal, **periksa output kita sendiri (byte/header) DULU** sebelum menyalahkan infra. `feedback_inspect_our_output_before_blaming_infra` *(aturan kini di CLAUDE.md; berkas memory TIADA)*
 - **REALISASI (2026-07-02):** 🟢 **BOUNCE TERATASI** — owner tambah 3 IP relay idcloudhost ke SPF (`103.193.179.117/147/148`) + TTL→300. Verified: uji ke `kumala.rw22c@gmail.com` (tag MVCHECK/recheck) → **NOL bounce** = Gmail TERIMA (SPF lolos). 🟡 **TAPI masuk Spam/Promosi, bukan Inbox** (kumala lapor tak lihat di Inbox) — sebab **DKIM masih gagal** (sig `d=lumite s=default`, kunci `default._domainkey` terpublish TAPI Gmail "DKIM did not pass" → kunci publik tak cocok dgn yg dipakai relay/SpamExperts menandatangani ulang) + reputasi domain baru. **SISA (agar INBOX, penting utk verify/reset/tagihan pelanggan):** (a) mark "Not spam" + reputasi, (b) perbaiki DKIM via support idcloudhost (relay invalidasi tanda tangan), **atau (c) ⭐ pakai provider transaksional (SES/SendGrid/Postmark) = solusi world-class andal utk SaaS.** Keputusan (c) = owner (biaya/infra); Claude siap integrasi bila disetujui.
 
 ---
@@ -249,7 +280,7 @@ kini bertanda. Dijaga `tests/test_kuota_tak_ditanam_di_dokumen.py`.
   - ✅ **Ken-Burns motion Fase 1 — SELESAI + DEPLOYED `1670a1f` (2026-07-05).** Configurable per-niche via `niches.visual_style.camera_motion.intensity` (JSONB, nol migrasi kolom). **4 tingkat** Halus(0.6×)/Normal(1.0×)/Dinamis(1.5×)/Cepat(2.2×). Perbaikan world-class atas kode lama: **kecepatan-konstan + full-span** (gerak menyapu SELURUH klip, hilang "ekor statis" paruh-kedua di klip panjang; travel di-clamp [0.10,0.30] bentuk-durasi lalu ×faktor, batas mutlak 0.60). **Durasi preset TERKUNCI** (motion tak sentuh `-t`; uji 2s–15s output tepat + 72 kombinasi vf valid + fallback ngawur→normal). Seed 6 niche per-karakter (migr 0127: fun_facts→dinamis, misteri/imunitas→halus). Default niche baru = normal (template warisi karakter). UI seksi "Gerakan Kamera" di editor DNA (admin+tenant, dwibahasa). Validasi `validateDnaPatch` terima camera_motion. "Seimbang"→"Normal". Sampel disetujui owner (4 klip dari frame ryan nyata).
   - ✅ **Unifikasi kosakata peran (Stage 1 Fase 2, deployed `8bfb85c` 2026-07-05):** SATU SUMBER `content_beats` (migr 0128) + `src/content/beats.py` (DB+fallback). script_engine/tts/renderer/ai_image derive dari 1 sumber (dulu tersebar ~10 tempat). **core_facts_2 mati DIBUANG** (kanonik 8 peran); pattern_interrupt tetap (cadangan preset 8-segmen). Turunan==nilai lama PERSIS (terbukti DB+fallback, zero-behavior-change). FE niche-dna.ts sudah kanonik-8 (mirror).
   - ✅ **Fase 2 motion (arah) — SELESAI + DEPLOYED `44b6f9c` (2026-07-05):** arah per-segmen level SYSTEM, mode **Fix/Cerdas** per 8 segmen (migr 0129 di content_beats: motion_mode/motion_dir/motion_rate). **9 arah** (zoom in/out, pan kiri→kanan/kanan→kiri/atas→bawah/bawah→atas/diagonal/diagonal-balik/diam). **Cerdas** = variasi deterministik anti dua-adegan-searah-berturut, hormati momen. UI tabel di System Configuration (dwibahasa) + API `/admin/beats`. **Default Fix-semua = perilaku Fase 1 PERSIS** (96 kombinasi terbukti → deploy nol-perubahan; arah baru/cerdas DORMAN sampai admin aktifkan per-segmen). Durasi terkunci (9 arah render tepat). **Audit final temukan+perbaiki 3 isu** (hook-frame ikut config, rate≤0 zoom default, bug `or` swallow rate 0.0). Ken Burns configurable = **TUNTAS A-Z**. Nuansa disclosed: cerdas hook↔adegan-2 adjacency (hook selalu zoom_in → dampak ~nol).
-  - ✅ **Temuan kualitas owner (2026-07-05, approved "SEGERA BERESKAN" — DEPLOYED+LIVE `6d76cb3`, 3 service active + situs 200 + log worker nol error):** (1) state mesin (`ai_price_synced_at`+`ai_price_stale_alerted_at`) pindah ke tabel baru **`system_state`** (migr 0126, RLS service-only) + tampil manusiawi read-only dwibahasa di Kesehatan Sistem ("terakhir disinkron: 04 Jul 2026, 17.24 WIB"); (2) **kurs USD→IDR auto-sync harian** (`sync_fx_rate` via janitor, band waras 5k-60k, fail-soft) — uji live: 16500 basi → **17982** kurs pasar; edit manual → auto-lock `usd_idr_rate_locked` (mesin berhenti menimpa); (3+4) **System Configuration dwibahasa PENUH** — 39 key label+desc+unit ID/EN, toast & error dwibahasa (server kirim kode, FE terjemahkan). Aturan baru dipatri+diterapkan: [[feedback_bilingual_mandatory]].
+  - ✅ **Temuan kualitas owner (2026-07-05, approved "SEGERA BERESKAN" — DEPLOYED+LIVE `6d76cb3`, 3 service active + situs 200 + log worker nol error):** (1) state mesin (`ai_price_synced_at`+`ai_price_stale_alerted_at`) pindah ke tabel baru **`system_state`** (migr 0126, RLS service-only) + tampil manusiawi read-only dwibahasa di Kesehatan Sistem ("terakhir disinkron: 04 Jul 2026, 17.24 WIB"); (2) **kurs USD→IDR auto-sync harian** (`sync_fx_rate` via janitor, band waras 5k-60k, fail-soft) — uji live: 16500 basi → **17982** kurs pasar; edit manual → auto-lock `usd_idr_rate_locked` (mesin berhenti menimpa); (3+4) **System Configuration dwibahasa PENUH** — 39 key label+desc+unit ID/EN, toast & error dwibahasa (server kirim kode, FE terjemahkan). Aturan baru dipatri+diterapkan: `feedback_bilingual_mandatory` *(aturan kini di CLAUDE.md; berkas memory TIADA)*.
   - ✅ **Koreksi perilaku timezone (pertanyaan owner Jakarta→Bali):** auto-detect = INISIALISASI SEKALI (hanya saat zona masih UTC default & belum manual) — bepergian TIDAK menggeser jadwal; ubah zona = sadar via Settings→Profil.
 
 ### [B4] Pivot Analytics FE → kinerja-mesin — ✅ SELESAI (dikonfirmasi owner + divalidasi data 2026-07-05)
@@ -287,7 +318,7 @@ kini bertanda. Dijaga `tests/test_kuota_tak_ditanam_di_dokumen.py`.
 - **TUJUAN:** tenant yang trial habis (dan siapa pun penerima email trial-lapse) punya halaman masukan NYATA ber-brand → kumpulkan alasan tak-upgrade (lead insight berharga) + hilangkan kesan buruk link mati. **Keputusan owner 2026-07-01: Opsi B (halaman sendiri, bukan Google Form).**
 - **KONTEKS:** email `notify_trial_lapse` (`src/utils/email.py:92-101`) mengajak isi survei ke `_survey_url()` → default `https://mesinviral.com/feedback` (`email.py:72-73`), TAPI rute `/feedback` **TIDAK ADA** di FE → **404 LIVE** ke tenant nyata (dilaporkan owner: email trial-lapse yang diterima). Trial-expired ditandai **LEAD marketing** (`billing/renewal.py:49`) → masukan ini punya nilai bisnis. Kata "feedback" lain di FE hanya copy marketing (`(marketing)/page.tsx:168`) + widget docs "Apakah artikel ini membantu" (`docs/page.tsx:47`) — **bukan** halaman.
 - **BUKTI (verified 2026-07-01):** `curl -L https://mesinviral.com/feedback` → **HTTP 404**. `find/grep apps/web/src/app` → nol rute `/feedback`. Saklar `TRIAL_SURVEY_URL` sudah ada (env-override, default arahkan ke halaman ini → nol perubahan email saat halaman hidup).
-- **PLAN (world-class; propose rincian sebelum koding — [[feedback_workflow]] + [[feedback_world_class_quality]]):**
+- **PLAN (world-class; propose rincian sebelum koding — `feedback_workflow` *(aturan kini di CLAUDE.md; berkas memory TIADA)* + `feedback_world_class_quality` *(aturan kini di CLAUDE.md; berkas memory TIADA)*):**
   - **FE:** halaman **publik** `/feedback` (marketing group — penerima email mungkin belum login) — form ber-brand: alasan belum upgrade (pilihan terkurasi + isian bebas) + pesan + email (prefill bila token/login) + i18n ID/EN (pola Bi seperti halaman lain). Sukses → state terima-kasih (bukan reload). Reuse komponen/kelas UI yang ada (jangan bikin versi lebih jelek).
   - **Atribusi:** email sisipkan token/ref tenant (mis. `?ref=<token>`) agar masukan terhubung ke lead/tenant tanpa tenant mengetik ulang.
   - **DB (no-hardcode, RLS service-role):** simpan submission — putuskan saat propose: perluas `leads` (trial-expired sudah lead) ATAU tabel `feedback_submissions` dedicated. 
