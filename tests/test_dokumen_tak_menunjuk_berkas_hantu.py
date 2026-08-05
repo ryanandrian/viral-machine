@@ -133,5 +133,100 @@ class TestBlokAturanMenunjukSumberYangHidup(unittest.TestCase):
                          "peringatan bahwa 18 memory itu tiada telah dicabut — ranjau lahir kembali")
 
 
+# ---------------------------------------------------------------------------------------------
+# LAPIS KEDUA — berkas MEMORY itu sendiri (ditemukan 2026-08-05, tepat setelah compaction memotong
+# penulisan memory di tengah jalan).
+#
+# Penjaga di atas hanya mengawasi `SISA_KERJA_GO_LIVE.md` + `CLAUDE.md`. Sapuan ke folder memory
+# menemukan **34 rujukan hantu di 14 berkas** — semuanya menunjuk `feedback_*` yang dibuang 15-Jul.
+# Dua di antaranya ada di JALUR BACA WAJIB pasca-compaction (`project_audit_setup_gaps_2026_06_23`
+# diperintahkan MEMORY.md; `progress_journal` = langkah 2 urutan kanonik). Persis kelas ranjau yang
+# sama dengan 18-rujukan-hantu di SISA_KERJA §0 — hanya pindah tempat, dan bertahan 3 minggu juga.
+#
+# Ditambah temuan kedua: `user_address_boss_ryan.md` (instruksi langsung owner soal sapaan) **tak
+# pernah tercantum di MEMORY.md selama 34 hari** ⇒ tak pernah terbaca sesi mana pun. Memory di luar
+# indeks = memory yang tidak ada, karena hanya MEMORY.md yang auto-dimuat.
+# ---------------------------------------------------------------------------------------------
+
+# Penanda banner koreksi yang dipasang 05-Agu di berkas yang memuat rujukan lama.
+PENANDA_BANNER = "KOREKSI 2026-08-05 — rujukan"
+
+# Ke-14 nama yang TERVERIFIKASI bagian dari 24 berkas `feedback_*` yang dibuang 2026-07-15.
+# Daftar ini sengaja TERTUTUP: rujukan hantu di luar daftar ini = ranjau BARU ⇒ merah.
+DIBUANG_15_JUL = {
+    "feedback_agent_use_requires_owner_permission", "feedback_analysis_discipline",
+    "feedback_bilingual_mandatory", "feedback_comprehend_before_work",
+    "feedback_define_done_no_scope_creep", "feedback_local_test_batch_deploy",
+    "feedback_master_docs_first", "feedback_no_hardcode",
+    "feedback_owner_delegates_expert_decisions", "feedback_plain_language",
+    "feedback_post_compaction", "feedback_vps_clean", "feedback_workflow",
+    "feedback_world_class_quality",
+}
+
+
+def _berkas_memory() -> list[str]:
+    return sorted(p for p in glob.glob(os.path.join(MEM, "*.md"))
+                  if os.path.basename(p) != "MEMORY.md")
+
+
+class TestMemoryTakMenunjukHantuBaru(unittest.TestCase):
+
+    def test_indeks_MEMORY_md_bersih_dari_rujukan_hantu(self):
+        """MEMORY.md auto-dimuat SETIAP sesi — rujukan hantu di sini paling mahal."""
+        teks = open(os.path.join(MEM, "MEMORY.md"), encoding="utf-8").read()
+        hantu = [n for n in re.findall(r"\[\[([a-z0-9_-]+)\]\]", teks)
+                 if not os.path.exists(os.path.join(MEM, f"{n}.md"))]
+        self.assertFalse(sorted(set(hantu)),
+                         f"MEMORY.md menunjuk memory yang TIDAK ADA: {sorted(set(hantu))} — indeks ini "
+                         f"masuk ke hadapan Claude tiap sesi; rujukan buntu di sini langsung jadi tebakan.")
+
+    def test_tak_ada_rujukan_hantu_BARU_di_berkas_memory(self):
+        """Rujukan ke ke-14 nama yang dibuang 15-Jul DIMAAFKAN hanya bila berkasnya memasang banner
+        koreksi (pembaca diberi tahu berkasnya tiada + ke mana harus pergi). Nama hantu LAIN = ranjau
+        baru dan langsung merah — daftar pengecualiannya sengaja tertutup."""
+        baru = []
+        for p in _berkas_memory():
+            teks = open(p, encoding="utf-8", errors="ignore").read()
+            ber_banner = PENANDA_BANNER in teks
+            for n in sorted(set(re.findall(r"\[\[([a-z0-9_-]+)\]\]", teks))):
+                if os.path.exists(os.path.join(MEM, f"{n}.md")):
+                    continue
+                if n in DIBUANG_15_JUL and ber_banner:
+                    continue
+                sebab = "banner koreksi hilang" if n in DIBUANG_15_JUL else "nama di luar daftar 15-Jul"
+                baru.append(f"{os.path.basename(p)} → [[{n}]] ({sebab})")
+        self.assertFalse(
+            baru,
+            "Rujukan memory HANTU yang tak berpenjelasan:\n  " + "\n  ".join(baru[:20])
+            + "\nSesi berikutnya akan mencarinya, tak menemukan, lalu MENEBAK. Perbaiki rujukannya, "
+              "ATAU pasang banner koreksi di kepala berkas itu.")
+
+    def test_banner_koreksi_tak_dicabut_dari_berkas_yang_membutuhkannya(self):
+        """Bila seseorang menghapus banner tapi membiarkan rujukannya, uji di atas sudah merah.
+        Uji ini menjaga arah sebaliknya: jumlah berkas ber-banner tak boleh anjlok diam-diam."""
+        ber_banner = [p for p in _berkas_memory()
+                      if PENANDA_BANNER in open(p, encoding="utf-8", errors="ignore").read()]
+        self.assertGreaterEqual(
+            len(ber_banner), 14,
+            f"hanya {len(ber_banner)} berkas memory ber-banner koreksi (05-Agu: 14). Bila banner "
+            f"dicabut tanpa membereskan rujukannya, ranjau 3-minggu itu lahir kembali.")
+
+
+class TestSetiapMemoryTercantumDiIndeks(unittest.TestCase):
+    """Memory yang tak ada di MEMORY.md = memory yang tidak pernah dibaca.
+
+    Bukti biayanya nyata: `user_address_boss_ryan.md` (perintah owner 1-Jul soal sapaan) luput dari
+    indeks **34 hari** — sesi demi sesi menyapa owner dengan cara yang sudah ia tegur."""
+
+    def test_semua_berkas_memory_punya_penunjuk(self):
+        indeks = open(os.path.join(MEM, "MEMORY.md"), encoding="utf-8").read()
+        yatim = [os.path.basename(p) for p in _berkas_memory()
+                 if os.path.basename(p)[:-3] not in indeks and os.path.basename(p) not in indeks]
+        self.assertFalse(
+            yatim,
+            f"Berkas memory TANPA penunjuk di MEMORY.md: {yatim}\nHanya MEMORY.md yang auto-dimuat "
+            f"tiap sesi — berkas di luar indeks tak akan pernah dibuka, seolah ia tak ditulis.")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
