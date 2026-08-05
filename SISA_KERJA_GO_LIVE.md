@@ -380,6 +380,54 @@ kini bertanda. Dijaga `tests/test_kuota_tak_ditanam_di_dokumen.py`.
   anti-drift yang MERAH bila ada tabel ber-`tenant_id` tak terdaftar di salah satu kategori — supaya
   tabel berikutnya tak lolos diam-diam lagi.
 
+### [D9] 🔴 "PERLU DITINJAU" TAK PERNAH TERTUTUP — 8 run uji nyangkut selamanya (2026-08-05)
+> **⛔ PASCA-COMPACTION: BACA SELURUH ITEM INI SEBELUM MENYENTUH panel tenant / runs-table / janitor.**
+> Analisis LIMA RANTAI (`CLAUDE.md` §0.7) sudah TUNTAS. **JANGAN diulang, JANGAN dianalisis ulang.**
+> Yang tersisa HANYA satu keputusan owner (di bawah). Nol kode disentuh sejauh ini.
+
+**GEJALA (dilaporkan owner):** di menu **Run → tab Need Review** dan **Channel Setting → Runs → Need
+Review** muncul 2 item (tenant ryan, channel *Mesin Viral (Test)*), **tapi di menu Need Review tersendiri
+kosong**. Video kedua item ada di YouTube Studio tenant (privat) — keputusan tenant di YouTube di luar
+kendali aplikasi, jadi item takkan pernah hilang.
+
+**LIMA RANTAI — terverifikasi ke kode + DB live:**
+| # | Mata | Temuan |
+|---|---|---|
+| 1 | **BACA DARI MANA** | `runs-table.tsx` & tab channel baca **`production_runs`**; halaman `/review` baca **`content_inventory`** (`page.tsx:105` `.eq("status","ready_with_issues")`). **Dua tabel berbeda** ⇒ itulah sebab isinya beda. |
+| 2 | **PREDIKAT** | `runs-table.tsx:27` `statusKey()`: status memuat `qc_fail`/`ready_with_issues`/`issue` → label **"Perlu Ditinjau"**. Run kedua item = `qc_failed` ⇒ masuk. Di `/review` tak ada baris ⇒ kosong. |
+| 3 | **SIAPA MEMBUAT** | `direct_jobs.job_type = **"test"`** (Test Channel), `publish_privacy=private` — **dibuktikan langsung dari tabel**, bukan ditebak. Jalur `run_direct` **jatuh terus** ke pipeline `publish=True`. **Test Channel TIDAK PERNAH membuat baris `content_inventory`** (diverifikasi: 0 baris) **dan tidak membuat baris `videos`** (diverifikasi: 0). Hanya `production_runs`. |
+| 4 | **APA YANG MENUTUP** | **TIDAK ADA.** `buffer_janitor.sweep_stale` memadamkan `qc_failed → discarded` HANYA bila ada baris inventory ber-status `ready_with_issues`. Test Channel tak punya artefak apa pun di aplikasi ⇒ **secara struktur mustahil tertutup**. Bukan TTL terlewat. |
+| 5 | **JALUR SAUDARA** | 4 jalur lewat `run_direct`: `test` (unggah privat) · `retry` (unggah privat) · `test_nopub` (Test Niche, **tanpa** unggah, inventory `status='test'`) · `admin_test`. **Cakupan nyata: 9 run `qc_failed` seluruh tenant — 8 di antaranya `job_type=test`**, 1 produksi terjadwal. Owner melihat 2 karena hanya membuka channel itu. |
+
+**DUA HIPOTESIS SAYA YANG SUDAH DIGUGURKAN — JANGAN DIHIDUPKAN LAGI:**
+1. ❌ *"Sembunyikan saja run uji yang sudah terunggah"* → menghapus satu-satunya jejak 2 video privat di
+   Studio tenant **beserta catatan mutunya**; nol dari 4 cacat UX di bawah teratasi.
+2. ❌ *"Penyapu terlewat untuk status `test`"* → **salah sasaran**: itu jalur Test **Niche**; Test
+   **Channel** tak punya baris inventory sama sekali (mata 3).
+
+**EMPAT CACAT UX yang TERUKUR (jalan buntu berlapis bagi tenant):**
+1. Lencana **"Perlu Ditinjau"** ⇒ mengesankan aplikasi punya sesuatu, padahal peninjauannya di YouTube.
+2. Laci run menampilkan **langkah pipeline**, BUKAN catatan QC (`runs-table.tsx` cabang `st === "failed"`
+   saja). Yang disembunyikan justru nilainya: *"Durasi 35.2s di luar ±15% target 60s"* dan *"File terlalu
+   kecil: 3.3MB < 5.0MB (render gagal?)"*.
+3. `/runs/[id]` menampilkan tombol **"Tinjau" → `/review`** tanpa syarat ⇒ **jalan buntu** (halaman kosong
+   untuk jalur ini). *(Adil: `runs-table` SUDAH benar — ia menampilkan tautan "tinjau di YouTube".)*
+4. **Nol penutup** — keputusan tenant terjadi di YouTube; aplikasi takkan pernah tahu.
+
+**DUA ITEM NYATA (bukti):** `direct-71680a68` 08-Jul (*Kisah Islami Anak-Anak*, durasi 35,2s vs target 60)
+· `direct-1c5d4bcb` 14-Jul (*Ubahlah Hari Anda dengan Afirmasi Harian*, 3,3MB — render diduga gagal).
+Keduanya **3–4 minggu** privat di Studio tenant.
+
+**🔒 MENUNGGU KEPUTUSAN OWNER — pertanyaan yang BELUM dijawab:** *apakah hasil Test Channel SEHARUSNYA
+hilang dari daftar setelah ditangani, atau tetap tinggal sebagai riwayat uji yang bisa dilihat kembali?*
+Jawaban itu menentukan bentuk penutupnya:
+- **(i)** tombol **"Sudah saya tangani"** — tenant menutup sendiri (sejalan prinsip owner: keputusan tenant); +1 tombol, +1 penanda
+- **(ii)** tutup otomatis setelah N hari, label jujur *"uji lampau — cek Studio"*; nol tombol, tapi aplikasi menebak niat tenant
+- **(iii)** biarkan tinggal sebagai riwayat uji
+
+Cacat **1–3 = perbaikan kejujuran layar** (label salah · info yang SUDAH ada di DB tapi disembunyikan ·
+tombol salah arah), **nol elemen UI baru** — tapi §2.3d tetap menuntut ketok karena menyentuh layar tenant.
+
 ### [D8] 🔴🔴 JANJI HALAMAN HARGA vs KENYATAAN — 3 fitur DIJUAL tapi TIDAK ADA, 5 tak ber-gerbang — 2026-08-05
 > **Ini menjawab pertanyaan owner "kenapa pelanggan tidak bertambah". Bukan bug — janji vs barang.**
 > Diverifikasi ke KODE + DB + MIGRASI satu per satu (bukan dibaca dari dokumen).
