@@ -19,6 +19,16 @@
 5. **HARAM menyalahkan "warisan lama / sesi sebelumnya".** 100% kode/DB/FE/BE ini karya Claude — semua bug = bug Claude, tanpa pembedaan usia. Laporan bug memuat HANYA: apa bugnya, dampaknya, bukti matinya.
 6. **Perbaikan-saat-gagal (fallback/retry/degradasi) = KEPUTUSAN PRODUK** — tidak pernah diputuskan sendiri; "pola lama di modul lain" BUKAN pembenaran. Default tanpa ketok = GAGAL JUJUR (stop + notifikasi). *(Pelanggaran 14-Jul: 3 fallback senyap ditanam sendiri.)*
 
+7. **🔗 LIMA RANTAI — FORMAT WAJIB, BUKAN NASIHAT.** Setiap jawaban atas pertanyaan **"kenapa X begini / kenapa X muncul / kenapa X gagal"** dan **setiap rekomendasi perbaikan** = **TIDAK SAH** sebelum kelima mata ini ditulis beserta buktinya (berkas+fungsi yang DIBACA · kueri yang DIJALANKAN + hasilnya):
+   1. **BACA DARI MANA** — layar/kode itu membaca tabel/berkas apa
+   2. **PREDIKAT** — aturan apa yang mengklasifikasikannya
+   3. **SIAPA MEMBUAT** — jalur mana yang melahirkan baris/keadaan itu
+   4. **APA YANG MENUTUP** — mekanisme apa yang bisa mengakhirinya (bila tak ada → tulis TIDAK ADA)
+   5. **JALUR SAUDARA** — jalur lain mana yang menghasilkan hal sejenis (menentukan CAKUPAN nyata)
+   **Mata yang belum diperiksa WAJIB ditulis "BELUM DIPERIKSA" — dilarang dikosongkan diam-diam atau ditebak.** Owner menolak seketika bila blok ini tak ada, TANPA membaca isi usulannya — penolakan atas CARA sampai ke kesimpulan, bukan atas isinya.
+   **Kenapa berbentuk FORMAT, bukan "telusuri dengan teliti":** bukti 04/05-Agu — aturan berupa PENILAIAN ("sudah cukup teliti belum?") dilanggar berulang, sementara aturan berupa FORMAT (dwibahasa · skrip deploy · redact rahasia · trailer commit) dipatuhi tanpa diingatkan. Lima rantai mengubah penilaian menjadi daftar ya/tidak.
+   *(Lahir 05-Agu: dalam SATU penyelidikan panel tenant — tepat setelah owner menegaskan "pahami 100%" — Claude mengusulkan perbaikan DUA KALI dan menggugurkan keduanya sendiri. Usulan-1 hanya menelusuri mata 1-2; usulan-2 melewatkan mata 3 & 5 — padahal justru di mata 3 letak sebabnya (Test Channel TIDAK PERNAH membuat baris `content_inventory`) dan di mata 5 letak cakupannya (8 run, bukan 2). Bila owner menjawab "ya", perbaikan akan dibangun di atas model yang SALAH. Owner: "ini biang kerok seluruh kerusakan sistem".)*
+
 ## §1 SUMBER KEBENARAN
 1. **Daftar kerja = HANYA `SISA_KERJA_GO_LIVE.md`.** Marker `[ ]`/⬜ di dokumen lain = bukan daftar kerja. Rencana/bukti/audit/tracker ditulis DI DALAM item terkait file itu — **DILARANG bikin file .md baru** (default nol; bila isi terlalu besar → usulkan → tunggu ketok). *(44 file .md sudah menumpuk — teguran 15-Jul.)*
 2. **Fakta perilaku sistem = KODE + DB LIVE** (introspeksi langsung: grep/baca kode, query DB, ssh). Dokumen = peta yang BISA BASI; anchor `file:baris` wajib di-grep ulang sebelum dipakai. Klaim apa pun dari fakta, bukan tebakan; tak yakin → verifikasi, jangan karang.
