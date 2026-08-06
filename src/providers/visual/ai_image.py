@@ -463,7 +463,7 @@ class AIImageProvider(VisualProvider):
                 #                      'code':'billing_hard_limit_reached'}  → ACCOUNT_BILLING.
                 # Kode di luar tabel → UNKNOWN = perilaku lama (retryable), aman.
                 _ec, _human = classify_visual_error(e)
-                raise VisualError(str(e)[:300], error_class=_ec, human_message=_human) from e
+                raise VisualError(str(e), error_class=_ec, human_message=_human) from e
             # B2 cost-tracking: keluarga gpt-image-1 ditagih PER-TOKEN dan respons menyertakan usage —
             # tangkap token NYATA (dicatat sbg llm-bucket model image; harga in/out dari feed). Fail-soft.
             try:

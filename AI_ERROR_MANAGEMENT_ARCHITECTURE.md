@@ -304,7 +304,35 @@ melanjutkan. Persis pola yang ditegur owner: melihat catatan yang relevan, lalu 
 (a) tetap kirim tapi **beri tahu** · (b) STOP produksi run itu · (c) coba ulang N× dulu. Dua dari empat sebab
 adalah bug kita sendiri dan pantas ditangani terpisah dari kebijakan degradasi.
 
-### 8h. 🔴 EKOR pesan penyedia DIBUANG sebelum disimpan — 13 angka potong sembarang *(ditemukan 2026-08-06, BELUM diperbaiki)*
+### 8h. ~~EKOR pesan penyedia DIBUANG sebelum disimpan~~ — ✅ **DITUTUP 2026-08-06**
+
+> **REALISASI.** 13 pemotongan di jalur simpan **dicabut** — pesan penyedia kini disimpan **apa adanya,
+> tanpa batas**. `_potong_rapi(batas=500)` diganti `_rapikan_alasan()` yang hanya membuang spasi ujung.
+> **Peringkasan hanya tersisa SATU di seluruh sistem: Telegram**, karena Telegram sendiri menolak pesan
+> >4.096 huruf (`BATAS_TELEGRAM` — batas milik Telegram, bukan angka kita), dan ruang untuk pesan galat
+> dihitung dari sisa jatah SETELAH bagian tetap, bukan diketik sendiri.
+>
+> **⚖️ ATURAN YANG DIPATRI — peringkasan tampilan WAJIB DIUMUMKAN.** `ringkas_diumumkan()` menyebut
+> **berapa huruf disembunyikan** + ke mana melihat teks penuhnya. Alasannya bukan gaya: potongan senyap
+> **terbaca persis seperti pesan utuh** — itulah yang menipu owner, tenant, dan Claude sendiri selama
+> berbulan-bulan. Tiga syarat yang mengikat setiap peringkasan tampilan: (1) ada satu tempat yang SELALU
+> menampilkan penuh (halaman detail run — haram memotong) · (2) potongannya diumumkan, bukan sekadar
+> "…" · (3) yang dipotong selalu SALINAN, tak pernah yang tersimpan.
+>
+> **Kenapa tak ada batas simpan sama sekali** (usulan awal "katup pengaman 4.000" DICABUT owner):
+> memasang batas untuk sesuatu yang tak pernah terjadi = persis cara angka 220 lahir. Aturan proyek
+> sendiri berlaku di sini — *"masuk registry HANYA dengan sampel NYATA"*. Bila suatu hari penyimpanan
+> benar-benar gagal karena ukuran, kegagalannya sudah tercatat dan **saat itu** diperbaiki dengan sampel.
+>
+> **BUKTI RUNTIME — 338 pesan NYATA dari `worker.log` VPS dijalankan lewat kode baru:**
+> • disimpan **338/338 UTUH** · • Telegram: **337/338 lolos apa adanya**, 1 diringkas (halaman galat
+> Cloudflare 7.705 huruf) **dan diumumkan** · • nol hasil melebihi batas Telegram ·
+> • **56 pesan memuat waktu "try again in" — sebelumnya 0 yang selamat (terpotong di huruf ke-220),
+> kini 56/56 tersimpan.** Suite 802 lulus (dari 791), nol regresi.
+> Dijaga `tests/test_pesan_penyedia_utuh.py` (11 uji; merah dibuktikan lebih dulu: 7 gagal).
+> **Layar: NOL perubahan** — sudah tak memotong; pembatasan kartu memakai tinggi visual (CSS), teks utuh.
+
+<details><summary>Catatan asli saat ditemukan (disimpan sebagai riwayat)</summary>
 
 **Bukan cacat Groq — cacat jalur BERSAMA.** Potongan `[:220]` ada pada penetapan `last_error` di
 `niche_selector.py` (2 tempat) dan `script_engine.py` (2 tempat) — jalur yang dilewati **SEMUA
@@ -339,6 +367,14 @@ DIUKUR dari 62 pesan galat nyata di `worker.log` (bukan tebakan) · bila harus d
 **Akibat berantai yang sudah terlihat:** §9a tidak bisa memberi tenant jam perkiraan pulih, dan
 pertanyaan "bolehkah rem melepas dirinya sendiri pada waktu yang penyedia sebutkan" **tidak bisa
 dijawab** sebelum celah ini ditutup — waktunya belum benar-benar kita punya.
+
+</details>
+
+> **Kini terbuka (akibat 8h ditutup):** waktu "coba lagi" dari penyedia **sudah tersimpan** (56 kejadian
+> nyata). Pertanyaan "bolehkah rem melepas dirinya sendiri pada waktu itu" **baru sekarang bisa
+> dibicarakan** — dan tetap **KEPUTUSAN OWNER** (§0.6 perilaku-saat-gagal), belum diketok. Ingat batasan
+> yang sudah tertulis di §9: *"pemulihan = keputusan TENANT, bukan sistem"* — mengubahnya butuh ketok
+> baru, bukan disimpulkan dari tersedianya data.
 
 ### 8b. ~~`notify_publish_fail` belum diseragamkan~~ — ✅ **DITUTUP 2026-08-04**
 Jalur upload YouTube gagal adalah satu-satunya notifikasi yang tak bisa menjawab pertanyaan penentu

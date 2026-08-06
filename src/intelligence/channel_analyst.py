@@ -471,7 +471,7 @@ RULES (violations are rejected by a strict validator):
             else:
                 reject = f"validasi: {err}"
         except Exception as e:
-            reject = f"llm/parse: {str(e)[:300]}"
+            reject = f"llm/parse: {str(e)}"
 
         row = {
             "tenant_id":    self._tid,

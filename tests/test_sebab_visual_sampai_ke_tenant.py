@@ -143,13 +143,21 @@ def test_sebab_lama_dibersihkan_di_awal_perakitan(monkeypatch):
 
 
 # ── 5. Pesan yang lebih panjang tidak boleh mengusutkan ALASAN REM ─────────
-# `_pause_channel` menyisipkan `error_message` kegagalan terakhir ke `production_paused_reason`,
-# lalu `_potong_rapi` memotongnya di 500 huruf. Memperpanjang pesan visual = menambah tekanan pada
-# batas itu; kalau tembus, justru BAGIAN YANG BISA DIKERJAKAN tenant (tautan isi-ulang) yang hilang
-# — memperbaiki satu hal sambil merusak hal lain. Dijaga di kasus TERBURUK, bukan kasus rata-rata.
+# `_pause_channel` menyisipkan `error_message` kegagalan terakhir ke `production_paused_reason`.
+# Dulu `_potong_rapi` memotongnya di 500 huruf, dan uji ini menjaga agar pesan visual yang lebih
+# panjang tidak menembus batas itu — kalau tembus, justru BAGIAN YANG BISA DIKERJAKAN tenant
+# (tautan isi-ulang saldo) yang hilang.
+#
+# [DIPERBARUI 2026-08-06, §8h] Batas 500 itu DICABUT — ia tak melindungi apa pun (seluruh riwayat
+# galat sejak proyek lahir = 12,6 KB) dan mana yang terbuang tergantung penyedianya: inti pesan Groq
+# di UJUNG, OpenAI di AWAL, Gemini di TENGAH. Fungsinya kini `_rapikan_alasan` yang TIDAK memotong.
+# Uji ini TIDAK dihapus: yang dijaga tetap sama — **bagian yang bisa dikerjakan tenant wajib
+# selamat** — hanya saja sekarang dijamin oleh konstruksi, bukan oleh muat-tidaknya di 500 huruf.
+# Kasus "terburuk" sengaja dipertahankan (dan diperpanjang) supaya kalau suatu hari ada yang
+# memasang batas baru diam-diam, uji ini yang merah lebih dulu.
 
 def test_alasan_rem_tetap_utuh_termasuk_kasus_terburuk():
-    from src.orchestrator.producer import _potong_rapi
+    from src.orchestrator.producer import _rapikan_alasan as _potong_rapi
 
     PREFIKS = ("3x produksi beruntun gagal/bermasalah → produksi channel DIHENTIKAN otomatis."
                " Penyebab terakhir: ")
@@ -164,7 +172,7 @@ def test_alasan_rem_tetap_utuh_termasuk_kasus_terburuk():
     for nama, pesan in kasus.items():
         alasan = PREFIKS + pesan
         hasil = _potong_rapi(alasan)
-        assert len(alasan) <= 500, f"[{nama}] alasan {len(alasan)} huruf sudah melewati batas 500"
+        # (batas 500 dicabut 06-Agu — tak ada lagi batas yang bisa ditembus; lihat catatan di atas)
         assert hasil == alasan, f"[{nama}] alasan terpotong: {hasil[-60:]!r}"
         assert "fal.ai/dashboard/billing" in hasil, f"[{nama}] bagian yang bisa dikerjakan tenant hilang"
 

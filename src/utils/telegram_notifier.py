@@ -13,6 +13,39 @@ import os
 import requests
 from loguru import logger
 
+# Batas KERAS milik Telegram untuk satu pesan `sendMessage`. Ini SATU-SATUNYA batas panjang di
+# seluruh rantai pesan galat yang berasal dari luar — semua angka lain dulu diketik sendiri tanpa
+# dasar (§8h AI_ERROR_MANAGEMENT: 13 angka berbeda di jalur yang sama). Lewat batas ini Telegram
+# MENOLAK pesannya ⇒ notifikasinya hilang seluruhnya, jadi meringkas di sini bukan pilihan gaya.
+BATAS_TELEGRAM = 4096
+
+
+def ringkas_diumumkan(teks: str | None, ruang: int) -> str:
+    """Ringkas HANYA bila melebihi `ruang`, dan **UMUMKAN** potongannya.
+
+    Kenapa diumumkan, bukan sekadar "…": potongan senyap terbaca PERSIS seperti pesan utuh. Itulah
+    sebab pesan Groq yang terputus di *"…on tokens per day (TPD): Li"* lolos berbulan-bulan — tak
+    ada satu pun tanda bahwa masih ada "Limit 100000, Used 97045, try again in 34m37s" di baliknya.
+    Owner, tenant, dan Claude sendiri sama-sama tertipu olehnya.
+
+    Aturan yang dijaga uji: teks yang MUAT tidak disentuh sama sekali · hasil tak pernah melebihi
+    `ruang` · bila diringkas, jumlah huruf yang disembunyikan DISEBUTKAN.
+    """
+    teks = teks or ""
+    if len(teks) <= ruang:
+        return teks
+    # Penanda dihitung dari panjang FINALnya sendiri (pakai perkiraan lebar angka) supaya hasil
+    # dijamin muat — bukan diperkirakan lalu meleset.
+    for lebar_angka in (7, 8, 9, 10):
+        tanda = f"… [dipotong {'9' * lebar_angka} huruf — teks penuh di halaman run]"
+        sisa = ruang - len(tanda)
+        if sisa <= 0:
+            continue
+        hilang = len(teks) - sisa
+        if len(str(hilang)) <= lebar_angka:
+            return teks[:sisa] + f"… [dipotong {hilang} huruf — teks penuh di halaman run]"
+    return teks[:max(0, ruang)]          # ruang terlalu sempit untuk penanda → potong apa adanya
+
 
 class TelegramNotifier:
     """
@@ -337,9 +370,15 @@ class TelegramNotifier:
             anjuran = "ℹ️ Video sudah dirender (QC lulus) tapi belum terunggah; akan dicoba ulang otomatis."
 
         channel = self._channel_name(run_config, {"tenant_id": tenant_id})
+        # Ruang untuk pesan galat = sisa jatah Telegram SETELAH bagian tetap — bukan angka yang
+        # diketik sendiri. Dulu `str(error)[:200]` memotong diam-diam: 200 tak melindungi apa pun
+        # (batas nyatanya 4096) dan potongannya tak diumumkan, jadi pesan setengah terbaca utuh.
+        _tetap = (f"📤 <b>[{channel}] Upload YouTube GAGAL</b>\n"
+                  f"💥 Error: <code></code>\n{anjuran}\n<code>{run_id}</code>")
+        _galat = self._escape(ringkas_diumumkan(str(error), max(0, BATAS_TELEGRAM - len(_tetap))))
         text = (
             f"📤 <b>[{channel}] Upload YouTube GAGAL</b>\n"
-            f"💥 Error: <code>{self._escape(str(error)[:200])}</code>\n"
+            f"💥 Error: <code>{_galat}</code>\n"
             f"{anjuran}\n"
             f"<code>{run_id}</code>"
         )

@@ -552,11 +552,11 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
         if isinstance(last_error, _PErr):
             self.last_error_class = last_error.error_class
             self.last_human_error = last_error.human_message
-            self.last_error = (last_error.human_message or str(last_error))[:220]
+            self.last_error = (last_error.human_message or str(last_error))
         else:
             self.last_error_class = _ECls.UNKNOWN
             self.last_human_error = None
-            self.last_error = str(last_error)[:220]
+            self.last_error = str(last_error)
         return []
 
     def _apply_signal_factor(self, topic: dict, signals: dict) -> dict:

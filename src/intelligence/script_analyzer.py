@@ -279,7 +279,7 @@ class ScriptAnalyzer:
             # (script_engine) TIDAK memakai skor bertanda ini untuk menjatuhkan naskah.
             logger.error(f"[ScriptAnalyzer] LLM GAGAL ({e}) — jatuh ke taksiran lokal (DITANDAI; "
                          f"skor ini TIDAK dipakai menjatuhkan naskah)")
-            return self._local_estimate(script, active_beats, sebab=f"LLM gagal: {str(e)[:120]}")
+            return self._local_estimate(script, active_beats, sebab=f"LLM gagal: {str(e)}")
 
     def _local_estimate(self, script: dict, active_beats: list | None = None,
                         sebab: str = "tidak diketahui") -> dict:

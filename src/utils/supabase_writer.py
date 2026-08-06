@@ -189,7 +189,7 @@ class SupabaseWriter:
             "topic_slug":    _normalize_slug(topic) if topic else "",
             "status":        "qc_failed",
             "qc_passed":     False,
-            "qc_reason":     qc_reason[:500],
+            "qc_reason":     qc_reason,
             "duration_secs": duration_secs,
             "file_size_mb":  file_size_mb,
             "published_at":  datetime.utcnow().isoformat(),
@@ -226,7 +226,7 @@ class SupabaseWriter:
             "niche":        niche,
             "status":       "failed",
             "qc_passed":    False,
-            "qc_reason":    str(error)[:500] if error else "unknown error",
+            "qc_reason":    str(error) if error else "unknown error",
             "published_at": datetime.utcnow().isoformat(),
         }
         try:

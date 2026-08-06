@@ -109,7 +109,7 @@ def mark_failed(inv_id: int, reason: str = "") -> None:
     (fix bug lama: failed ber-expires_at NULL tak pernah disapu = baris menumpuk). Config FAILED_TTL_HOURS."""
     _sb().table("content_inventory").update({
         "status": "failed",
-        "metadata": {"error": reason[:300]},
+        "metadata": {"error": reason},
         "expires_at": _expiry_iso(float(os.getenv("FAILED_TTL_HOURS", "24"))),
     }).eq("id", inv_id).execute()
 

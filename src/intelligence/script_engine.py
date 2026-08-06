@@ -1453,13 +1453,13 @@ class ScriptEngine:
                 f"[ScriptEngine] {provider.provider_name} attempt {attempt} "
                 f"gagal: {e}"
             )
-            self.last_error = str(e)[:220]   # alasan vendor → error pipeline/Telegram (no-silent)
+            self.last_error = str(e)   # alasan vendor → error pipeline/Telegram (no-silent)
             return None
         except Exception as e:
             logger.warning(
                 f"[ScriptEngine] attempt {attempt} parse/validate gagal: {e}"
             )
-            self.last_error = str(e)[:220]
+            self.last_error = str(e)
             return None
 
     def _load_insights(self, tenant_id: str, channel_id: str | None = None) -> dict | None:

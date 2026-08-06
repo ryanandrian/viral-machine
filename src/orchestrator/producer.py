@@ -540,20 +540,19 @@ def _active_channels(sb) -> list:
     return sb.table("channels").select("*").eq("is_active", True).execute().data or []
 
 
-def _potong_rapi(teks: str, batas: int = 500) -> str:
-    """Potong teks pada BATAS KATA + elipsis — jangan pernah memutus kata di tengah.
+def _rapikan_alasan(teks: str) -> str:
+    """Rapikan alasan rem — **tanpa memotong**. Hanya membuang spasi berlebih di ujung.
 
-    Batas lama 300 karakter memotong buta. Setelah alasan rem menyertakan penyebab nyata (pesan
-    penyedia bisa ~275 huruf), hasilnya kalimat terputus yang dibaca tenant apa adanya — terekam di
-    produksi: "…jatah HARIAN penyedia AI sudah terpa". Kalimat terputus membuat pesan yang seharusnya
-    menenangkan justru terlihat seperti sistem yang rusak.
+    [2026-08-06, §8h] Dulu fungsi ini memotong pada 500 huruf (sebelumnya 300). Batas itu tak
+    melindungi apa pun: seluruh riwayat pesan galat sejak proyek lahir hanya 12,6 KB, dan tabel lain
+    di database yang SAMA sudah menyimpan 1.855 huruf. Yang ia lakukan hanya membuang keterangan
+    penyedia — dan mana yang terbuang tergantung penyedianya: inti pesan Groq ada di UJUNG
+    ("try again in 34m37s"), OpenAI di AWAL, Gemini di TENGAH. **Tak ada aturan potong yang bisa
+    benar untuk semua penyedia**, jadi satu-satunya pilihan jujur adalah tidak memotong.
+    Peringkasan tetap ada — tapi hanya SAAT MENAMPILKAN, dan hanya di Telegram yang memang punya
+    batas keras 4.096 huruf, dengan potongan yang DIUMUMKAN (`ringkas_diumumkan`).
     """
-    teks = (teks or "").strip()
-    if len(teks) <= batas:
-        return teks
-    potong = teks[:batas]
-    spasi = potong.rfind(" ")
-    return (potong[:spasi] if spasi > batas * 0.6 else potong).rstrip(" ,.;:—-") + "…"
+    return (teks or "").strip()
 
 
 def _pause_channel(sb, ch: dict, reason: str, error_class: str | None = None) -> None:
@@ -573,7 +572,7 @@ def _pause_channel(sb, ch: dict, reason: str, error_class: str | None = None) ->
         sb.table("channels").update({
             "production_paused": True,
             "production_paused_at": datetime.now(timezone.utc).isoformat(),
-            "production_paused_reason": _potong_rapi(reason),
+            "production_paused_reason": _rapikan_alasan(reason),
             "production_paused_class": (error_class or None),
         }).eq("id", ch["id"]).execute()
     except Exception as e:
