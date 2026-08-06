@@ -112,6 +112,12 @@ export default function PemulihanChannel({
   const r = resepUntuk(kelas);
   const Ikon = r.ikon;
   const aksi = r.aksi?.(channelId);
+  // Uji PANTAS dijadikan jalur pemulihan hanya bila sebabnya butuh tindakan tenant — di situ uji
+  // MEMBUKTIKAN bahwa perbaikannya berhasil. Untuk sebab yang pulih sendiri (jatah/laju/gangguan
+  // sesaat) uji tak membuktikan apa pun DAN memanggil penyedia yang sedang menolak ⇒ gagal sambil
+  // membakar sisa jatah hari itu. Sebab tak diketahui (kelas kosong — termasuk rem yang menyala
+  // SEBELUM kelas mulai dicatat) juga tak boleh dipaksa lewat uji: kita tak tahu apa yang dibuktikan.
+  const ujiJalurYangBenar = bisaUji && r.pulihSendiri === false;
   const jam = sejak
     ? Math.max(0, Math.floor((Date.now() - new Date(sejak).getTime()) / 3_600_000))
     : null;
@@ -145,29 +151,48 @@ export default function PemulihanChannel({
             </div>
           )}
 
-          {/* ══ JALUR PEMULIHAN — yang MEMBUKTIKAN didahulukan ══════════════════════════════════
-              Pelajaran mahal 2026-08-03: tombol "Pulihkan produksi" sempat ditawarkan kepada SEMUA
-              orang. Ia hanya melepas rem — tak memproduksi apa pun, tak membuktikan apa pun. Tenant
-              wajar menekan tombol paling menonjol, mesin mengerem lagi beberapa detik kemudian, dan
-              tenant menyimpulkan aplikasinya rusak. Jalur lama ("Jalankan uji & pulihkan") tak pernah
-              punya masalah itu justru karena ia MENUNTUT BUKTI: satu produksi berhasil.
-              Karena itu: selama uji masih boleh dijalankan, jalur itulah yang ditawarkan. Jalan
-              pintas hanya untuk yang benar-benar tak punya pilihan lain. */}
+          {/* ══ JALUR PEMULIHAN — ditentukan oleh SEBABNYA, bukan oleh "boleh menguji atau tidak" ══
+              Pelajaran mahal 2026-08-03 (TETAP BERLAKU, jangan dicabut): tombol "Pulihkan produksi"
+              pernah ditawarkan kepada SEMUA orang. Ia hanya melepas rem — tak memproduksi apa pun,
+              tak membuktikan apa pun. Tenant menekannya tanpa memperbaiki apa pun, mesin mengerem
+              lagi beberapa detik kemudian, dan tenant menyimpulkan aplikasinya rusak. Karena itu
+              untuk sebab yang BUTUH TINDAKAN TENANT, uji tetap jalur yang ditawarkan.
+
+              JEBAKAN yang ditemukan owner 2026-08-06: pelajaran itu terlanjur diterapkan ke SEMUA
+              sebab ("selama uji boleh, arahkan ke uji"). Untuk sebab yang PULIH SENDIRI arahan itu
+              mustahil berhasil: rem menyala karena jatah HARIAN penyedia habis, sedangkan uji =
+              satu produksi NYATA yang memanggil penyedia yang jatahnya sedang habis ⇒ dijamin gagal,
+              sambil MEMBAKAR sisa jatah hari itu. Terukur: channel tenant BERBAYAR berhenti 1-Agu
+              dan masih berhenti 6-Agu — karena langganannya aktif ia "masih boleh menguji", jadi
+              tombol pemulih tak pernah muncul untuknya, padahal melepas rem TIDAK memanggil AI
+              sama sekali (lihat `api/channels/[id]/resume/route.ts`).
+
+              Pemisahnya: butuh-tindakan → uji (membuktikan) · pulih-sendiri & tak-diketahui →
+              pemulihan langsung + peringatan jujur (supaya insiden 3-Agu tak lahir kembali). */}
           <div style={{ display: "flex", gap: ".5rem", marginTop: ".7rem", flexWrap: "wrap", alignItems: "center" }}>
             {!bolehPulihkan ? (
               <span className="muted" style={{ fontSize: "var(--text-xs)" }}>
                 <Bi id="Aktifkan langganan dulu untuk memulihkan produksi."
                     en="Reactivate your subscription first to resume production." />
               </span>
-            ) : bisaUji ? (
+            ) : ujiJalurYangBenar ? (
               <span style={{ fontSize: "var(--text-xs)" }}>
-                <Bi id="👉 Tekan “Jalankan uji & pulihkan” di panel bawah. Satu video uji membuktikan channel Anda sehat, lalu produksi berjalan lagi dengan sendirinya."
-                    en="👉 Press “Run & recover” in the panel below. One test video proves your channel is healthy, and production resumes on its own." />
+                <Bi id="👉 Tekan “Jalankan uji & pulihkan” di panel bawah. Satu video uji membuktikan perbaikan Anda berhasil, lalu produksi berjalan lagi dengan sendirinya."
+                    en="👉 Press “Run & recover” in the panel below. One test video proves your fix worked, and production resumes on its own." />
               </span>
             ) : (
-              <button className="btn btn-default btn-sm" disabled={sedangProses} onClick={onPulihkan}>
-                <RefreshCw size={14} /> <Bi id="Pulihkan produksi" en="Resume production" />
-              </button>
+              <>
+                <button className="btn btn-default btn-sm" disabled={sedangProses} onClick={onPulihkan}>
+                  <RefreshCw size={14} />{" "}
+                  {sedangProses
+                    ? <Bi id="Memulihkan…" en="Resuming…" />
+                    : <Bi id="Pulihkan produksi" en="Resume production" />}
+                </button>
+                <span className="muted" style={{ fontSize: "var(--text-xs)" }}>
+                  <Bi id="Tekan setelah penyebabnya lewat. Bila belum, produksi akan gagal lagi dan mesin berhenti lagi."
+                      en="Press once the cause has passed. If it hasn't, production will fail again and the engine will stop again." />
+                </span>
+              </>
             )}
             {aksi && (
               <Link href={aksi.href} className="btn btn-secondary btn-sm">

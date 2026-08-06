@@ -341,27 +341,49 @@ class TestJalurPemulihanYangBenarDidahulukan(unittest.TestCase):
     Jalur lama ("Jalankan uji & pulihkan") tak pernah punya masalah itu justru karena ia MENUNTUT
     BUKTI: satu produksi berhasil, dan keberhasilan itulah yang memutus hitungan kegagalan.
 
-    Aturan yang dikunci di sini: selama uji masih boleh dijalankan, ITU jalur yang ditawarkan.
-    Jalan pintas hanya untuk tenant yang benar-benar tak punya pilihan lain (uji terkunci).
+    Aturan lama yang dikunci di sini: *"selama uji masih boleh dijalankan, ITU jalur yang ditawarkan."*
+
+    ⚠️ DIPERSEMPIT 2026-08-06 — aturan itu terlalu luas, dan keluasannya melahirkan jebakan sendiri.
+    Ditemukan owner: rem menyala karena jatah HARIAN penyedia habis (Groq "tokens per day"), lalu
+    panel menyembunyikan tombol pemulih dan menyuruh menguji. Padahal uji = satu produksi NYATA yang
+    memanggil penyedia yang jatahnya SEDANG habis ⇒ dijamin gagal, sambil membakar sisa jatah hari
+    itu. Terukur: channel tenant BERBAYAR berhenti 1-Agu s/d 6-Agu tanpa jalan keluar yang berfungsi.
+
+    KENAPA MEMPERSEMPITNYA AMAN — akar insiden 3-Agu SUDAH ditutup di MESIN, bukan di layar:
+    migrasi **0197** membuat pelepasan rem menyetel `production_resumed_at` DALAM SATU PERNYATAAN,
+    dan hitungan kegagalan beruntun hanya menghitung kegagalan SESUDAH titik itu. Rem-menyala-lagi-
+    11-detik-kemudian (yang dulu terjadi karena kegagalan HARI SEBELUMNYA masih terhitung) kini
+    mustahil secara struktur. Aturan UI di atas ternyata tambalan penyeimbang untuk bug yang sudah
+    diperbaiki — dan tambalan itu sendiri menjadi jebakan.
+
+    ATURAN BARU yang dikunci: jalur ditentukan oleh **SEBAB**, bukan oleh "boleh menguji atau tidak".
+      • sebab BUTUH TINDAKAN TENANT → uji tetap didahulukan (uji MEMBUKTIKAN perbaikannya berhasil)
+      • sebab PULIH SENDIRI / TAK DIKETAHUI → tombol pemulih + peringatan jujur
+    Jebakannya sendiri dijaga terpisah di `tests/test_pemulihan_tak_menjebak.py`.
     """
 
     FE = os.path.join(AKAR, "apps", "web", "src", "components", "pemulihan-channel.tsx")
     HAL = os.path.join(AKAR, "apps", "web", "src", "app", "(app)", "channels", "[id]", "page.tsx")
 
-    def test_tombol_pintas_hanya_saat_uji_terkunci(self):
+    def test_tombol_pintas_tak_pernah_mendahului_jalur_uji(self):
         fe = _baca(self.FE)
         self.assertIn("bisaUji", fe, "panel tak lagi membedakan tenant yang masih bisa menguji")
-        # Tombol pintas WAJIB berada di cabang terakhir (setelah `bisaUji`), bukan ditawarkan lebih dulu.
-        i_uji = fe.index("bisaUji ? (")
+        self.assertIn("ujiJalurYangBenar", fe,
+                      "penjaga berbasis SEBAB hilang — panel kembali bercabang pada 'boleh menguji'")
+        # Tombol pintas WAJIB tetap di cabang TERAKHIR — pelajaran 3-Agu: jangan ditawarkan lebih dulu.
+        i_uji = fe.index("ujiJalurYangBenar ? (")
         i_tombol = fe.index("onClick={onPulihkan}")
         self.assertLess(i_uji, i_tombol,
                         "tombol pintas mendahului jalur uji — tenant akan menekannya lagi")
 
-    def test_yang_masih_bisa_menguji_diarahkan_ke_uji(self):
+    def test_yang_sebabnya_butuh_tindakan_diarahkan_ke_uji(self):
         fe = _baca(self.FE)
         self.assertRegex(fe, r"Jalankan uji & pulihkan|Run & recover",
                          "panel tak mengarahkan ke jalur yang MEMBUKTIKAN")
-        self.assertIn("membuktikan channel Anda sehat", fe,
+        # Kalimatnya dipertajam bersama penyempitan aturan: uji kini HANYA ditawarkan untuk sebab yang
+        # butuh tindakan tenant, jadi yang dibuktikan adalah PERBAIKAN TENANT — bukan lagi klaim umum
+        # "channel Anda sehat" (yang dulu dipakai untuk semua sebab, termasuk yang pulih sendiri).
+        self.assertIn("membuktikan perbaikan Anda berhasil", fe,
                       "alasan 'kenapa uji' tak dijelaskan — tenant tak tahu bedanya dengan jalan pintas")
 
     def test_halaman_meneruskan_keadaan_gerbang(self):

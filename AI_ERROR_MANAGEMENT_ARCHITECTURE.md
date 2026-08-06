@@ -304,6 +304,42 @@ melanjutkan. Persis pola yang ditegur owner: melihat catatan yang relevan, lalu 
 (a) tetap kirim tapi **beri tahu** · (b) STOP produksi run itu · (c) coba ulang N× dulu. Dua dari empat sebab
 adalah bug kita sendiri dan pantas ditangani terpisah dari kebijakan degradasi.
 
+### 8h. 🔴 EKOR pesan penyedia DIBUANG sebelum disimpan — 13 angka potong sembarang *(ditemukan 2026-08-06, BELUM diperbaiki)*
+
+**Bukan cacat Groq — cacat jalur BERSAMA.** Potongan `[:220]` ada pada penetapan `last_error` di
+`niche_selector.py` (2 tempat) dan `script_engine.py` (2 tempat) — jalur yang dilewati **SEMUA
+penyedia penulis naskah**. OpenAI, Gemini, Anthropic, dan penyedia mana pun yang ditambahkan nanti
+kena potongan yang sama. *(Jangkar sengaja tanpa nomor baris — §10 melarangnya, nomor baris cepat basi.)*
+
+**Aritmetika (terverifikasi pada 3 baris `production_runs` nyata):** 21 huruf kalimat kita +
+23 huruf `"Provider 'Groq' gagal: "` + **197 huruf sisa pesan penyedia** = 241 · dan 23 + 197 = **220**,
+tepat di batasnya. Potongnya jatuh di **"Li"** dari **"Limit"**.
+
+**Yang hilang** (dibuktikan dari `worker.log` VPS, kejadian 2026-08-01 19:00 — nomor organisasi Groq-nya
+identik dengan yang tersimpan di DB):
+> `… on tokens per day (TPD): **Limit 100000, Used 97045, Requested 5359. Please try again in 34m37.056s.**
+> Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing`, `'code': 'rate_limit_exceeded'`
+
+⇒ **kapan boleh dicoba lagi · berapa jatah terpakai · tautan menaikkan paket · kode resmi penyedia** —
+keempatnya sampai ke server kita, tercatat di log kita, lalu **dibuang sebelum disimpan**. Yang
+tersimpan justru bagian tak berguna bagi tenant: nama model + nomor organisasi (± **110 dari 220** huruf).
+
+**Ini BUG, bukan disain.** Di jalur pesan galat ada **13 angka potong berbeda** — 40, 40, 70, 80, 120,
+200, 220, 220, 300, 300, 300, 500, 500 — tak satu pun sama, tak satu pun beralasan tertulis, tak satu
+pun bisa diatur (melanggar §3.3 CLAUDE.md: nilai bisnis dari config, nol literal di kode). Disain punya
+SATU angka di SATU tempat dengan SATU alasan. Angka 220 masuk 9-Jul bersamaan dengan fitur "teruskan
+alasan penyedia"; tak ada catatan kenapa 220. **Makin banyak penyedia makin parah**: penyedia dengan
+basa-basi pembuka lebih panjang kehilangan lebih banyak ekor.
+
+**Rencana (Tahap 2, menunggu ketok owner):** satu pemotong bersama · batas dari config, angkanya
+DIUKUR dari 62 pesan galat nyata di `worker.log` (bukan tebakan) · bila harus dipotong yang dibuang
+**bagian TENGAH** (kepala = penyedia & jenis galat, ekor = angka/waktu/tautan — keduanya disimpan) ·
+**pemotongan hanya saat DITAMPILKAN, bukan saat disimpan.**
+
+**Akibat berantai yang sudah terlihat:** §9a tidak bisa memberi tenant jam perkiraan pulih, dan
+pertanyaan "bolehkah rem melepas dirinya sendiri pada waktu yang penyedia sebutkan" **tidak bisa
+dijawab** sebelum celah ini ditutup — waktunya belum benar-benar kita punya.
+
 ### 8b. ~~`notify_publish_fail` belum diseragamkan~~ — ✅ **DITUTUP 2026-08-04**
 Jalur upload YouTube gagal adalah satu-satunya notifikasi yang tak bisa menjawab pertanyaan penentu
 tenant — **perlu bertindak, atau cukup ditunggu?** — padahal `youtube_publisher.publish()` SUDAH
@@ -353,6 +389,30 @@ Setiap kelas wajib menjawab tiga pertanyaan tenant, dalam bahasa awam & dwibahas
 sebab teknis dianggap sudah lewat. Pengecualian tunggal yang sudah diketok owner: rem dilepas otomatis
 saat **langganan aktif kembali** (pembayaran/aktivasi admin) — konteks langganan, bukan kegagalan
 teknis. Lihat `PAYMENT_AND_TENANT_GATE_ARCHITECTURE.md` §10b K2.
+
+### §9a JALUR PEMULIHAN per kelas — ditentukan oleh SEBAB, bukan oleh gerbang uji *(dipatri 2026-08-06)*
+| Kelas | Yang ditawarkan panel | Kenapa |
+|---|---|---|
+| `QUOTA_EXHAUSTED` · `ACCOUNT_BILLING` · `AUTH_INVALID` · `MODEL_UNAVAILABLE` | **"Jalankan uji & pulihkan"** (selama gerbang uji mengizinkan) | tenant harus memperbaiki sesuatu dulu; **uji MEMBUKTIKAN perbaikannya berhasil**, dan keberhasilan itu sendiri yang memutus hitungan kegagalan |
+| `RATE_LIMIT` · `TRANSIENT` | **"Pulihkan produksi"** + peringatan jujur | uji **tidak membuktikan apa pun** di sini dan **memanggil penyedia yang sedang menolak** ⇒ dijamin gagal sambil MEMBAKAR sisa jatah tenant |
+| `UNKNOWN` / kelas kosong (rem yang menyala sebelum kelas dicatat) | **"Pulihkan produksi"** + peringatan jujur | kita tak tahu apa yang akan dibuktikan uji; memaksanya = menebak dengan jatah tenant |
+
+**Peringatan jujur = bagian dari kontrak, bukan hiasan:** tombol pemulih WAJIB disertai kalimat
+*"Tekan setelah penyebabnya lewat. Bila belum, produksi akan gagal lagi dan mesin berhenti lagi."*
+Tanpa itu insiden 3-Agu (tenant menekan tanpa memperbaiki apa pun) lahir kembali dalam bentuk lain.
+
+**Kenapa aturan lama dipersempit — dan kenapa aman.** Aturan sebelumnya: *"selama uji masih boleh
+dijalankan, ITU jalur yang ditawarkan"* — tombol pemulih disembunyikan. Untuk sebab yang pulih sendiri
+itu **jebakan**: rem menyala karena jatah HARIAN penyedia habis, uji = satu produksi NYATA ke penyedia
+yang jatahnya sedang habis ⇒ pasti gagal + membakar sisa jatah. **Terukur:** channel tenant BERBAYAR
+(langganan aktif, karena itu "masih boleh menguji") berhenti **1-Agu s/d 6-Agu** tanpa jalan keluar
+yang berfungsi. Melepas rem sendiri **tidak memanggil AI sama sekali** (`api/channels/[id]/resume`).
+Mempersempitnya aman karena **akar insiden 3-Agu sudah ditutup di MESIN oleh migrasi 0197** (§8c):
+pelepasan rem menyetel `production_resumed_at` dalam SATU pernyataan dan hitungan kegagalan hanya
+menghitung yang SESUDAHnya ⇒ rem-menyala-lagi-dalam-detik **mustahil secara struktur**. Aturan UI itu
+ternyata tambalan penyeimbang untuk bug yang sudah diperbaiki.
+**Dijaga uji:** `tests/test_pemulihan_tak_menjebak.py` (12 uji, dua arah) + `tests/test_pemulihan_channel.py`
+(aturan lama dipersempit, bukan dihapus — pelajaran 3-Agu tetap terkunci di sana).
 
 ⚠️ **Jangan tertukar:** `direct_jobs.error` kini bisa berisi **kode gerbang** `GATE:*` (penolakan
 langganan/jatah uji — [B24]), yang **bukan** `ErrorClass` dan bukan kegagalan AI. Penerjemahnya
