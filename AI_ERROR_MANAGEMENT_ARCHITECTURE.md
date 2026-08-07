@@ -79,6 +79,13 @@ Klasifikasi menempel pada **transport yang menerima error**, bukan merek model. 
 | **SEMUA penyedia suara** | tak menyelesaikan permintaan dalam batas waktu | TRANSIENT | ✅ AKTIF (2026-08-01) | direproduksi 01-Agu: render Edge menggantung belasan menit; tanpa batas waktu satu utas pekerja mati selamanya tanpa error |
 | **edge_tts** | penanda kalimat vendor mencakup < `tts_cakupan_min_pct` naskah | TRANSIENT | ✅ AKTIF (2026-08-01) | sintesis berhenti di tengah tanpa error; teks 581 huruf → audio 27,0 dtk vs 40,8 dtk saat diulang |
 | **Anthropic (LLM)** | ? | ? | ⏳ menunggu sampel | — |
+| **Cloudflare Workers AI (jalur GAMBAR)** | ? | ? | ⏳ **BELUM DIGOLONGKAN SAMA SEKALI** | **6 dari 10 channel memakainya** (`cf-flux-schnell`, diverifikasi ke DB 08-Agu). Adaptornya melempar `Cloudflare image HTTP {status}: {body}` — status & isi balasan LENGKAP (sejak 08-Agu tak lagi dipotong), tapi **tak pernah dipetakan ke kelas**. Sampai 07-Agu sebabnya bahkan dibuang sebelum tercatat, jadi **nol sampel** — mustahil dipetakan tanpa melanggar aturan emas §6. Perbaikan 08-Agu mulai menyimpannya; pemetaan menunggu sampel nyata. |
+| **Gemini (jalur GAMBAR)** | ? | ? | ⏳ belum digolongkan | **nol channel memakainya** (diverifikasi DB 08-Agu) — prioritas rendah, dicatat agar tak terlihat "tercakup" |
+
+> **Jujur soal cakupan registry ini:** dari ±15 titik galat di jalur gambar, **hanya 2 yang menghasilkan
+> kelas** (submit fal · panggilan gambar OpenAI). Tiga belas sisanya jatuh ke `UNKNOWN` — aman (retryable),
+> tapi berarti keputusan "mengulang itu sia-sia atau tidak" hanya bisa diambil pada 2 titik itu. Tabel ini
+> dulu tak menyebutkannya, sehingga terbaca seolah jalur gambar sudah tercakup. Sekarang disebut apa adanya.
 
 > Baris ⏳ = belum di-fast-fail → jatuh ke `UNKNOWN`/streak-3 (aman). Naikkan ke ✅ hanya setelah `classify_error()` adapter diisi + diuji + bukti sampel dicatat.
 
@@ -375,6 +382,46 @@ dijawab** sebelum celah ini ditutup — waktunya belum benar-benar kita punya.
 > dibicarakan** — dan tetap **KEPUTUSAN OWNER** (§0.6 perilaku-saat-gagal), belum diketok. Ingat batasan
 > yang sudah tertulis di §9: *"pemulihan = keputusan TENANT, bukan sistem"* — mengubahnya butuh ketok
 > baru, bukan disimpulkan dari tersedianya data.
+
+### 8i. ~~ADEGAN GAMBAR GAGAL DISAMARKAN JADI MASALAH DURASI~~ — ✅ **DITUTUP 2026-08-08**
+
+**Rantai kerusakannya** (dipetakan ujung-ke-ujung 07/08-Agu, atas perintah owner "pahami petanya dulu"):
+penyedia menolak/kehabisan kredit → penangkap adegan **membuang sebabnya** & mencoba tulis-ulang 3×
+(sia-sia bila kredit habis) → adegan dilewati, perakit tetap melapor **"✅ berhasil"** → pipeline hanya
+memeriksa "NOL klip", kekurangan sebagian **lolos** → perender menyusun durasi dari **JUMLAH klip** →
+video lebih pendek dari narasi → QC menamainya **"Durasi kependekan"** → masuk gudang sebagai stok →
+**menyumbat slot 72 jam** → channel diam 3 hari.
+
+**Terukur di produksi:** 23 adegan dilewati · **12 dari 180 render kehilangan gambar** (terparah 34,4 dtk;
+7 di antaranya dari jalur kode lama yang mati sejak 17-Jun) · run RETRO REWIND 03-Agu: **berkas 36,7 dtk
+sementara narasinya 58,3 dtk** ⇒ ±21 detik cerita tenant tidak ikut. Sebaran penyedia: **17 dari 23
+kegagalan di OpenAI (berbayar)**, 6 di Cloudflare (gratis) — dugaan awal "hanya tingkat gratisan" SALAH.
+
+**KENAPA INI BUKAN MASALAH DURASI — dan kenapa belasan perbaikan durasi tak pernah menuntaskannya:**
+pada run itu SELURUH rantai durasi benar (naskah 167 kata dari resep 133-163 · gerbang hulu lolos ·
+audio nyata 55,8 dtk · gerbang pra-visual lolos · perender menghitung 58,3 dtk). Yang hilang **gambarnya**.
+Label "durasi" mengarahkan setiap sesi memperbaiki rantai yang **tidak bersalah**.
+
+**Perbaikannya (semua MEMBUANG sesuatu, tak ada yang menambah beban baru):**
+1. Sebab kegagalan adegan **disimpan** (`AIImageProvider.scene_errors`) — dulu dibuang satu baris setelah dibuat.
+2. Kelas yang **mustahil sembuh** (FAST_FAIL) **tidak diulang 3×** — aturan yang sudah berlaku di jalur
+   penulis naskah, di sini hanya diikuti. Mengulang hanya membakar sisa jatah tenant.
+3. Perakit berhenti melapor "berhasil" saat adegan kurang; sebab penyedia diteruskan.
+4. `Pipeline._periksa_kelengkapan_klip` — klip < bagian naskah (`beat_durations`) ⇒ **GAGAL JUJUR**
+   dengan sebab penyedia. Tanpa `beat_durations` → **DIAM, tidak menebak**.
+5. **10 pemotongan balasan penyedia dicabut** di adaptor (250/300 huruf) — memotong justru angka, jam
+   pulih, dan tautan perbaikannya.
+
+**Yang SENGAJA tidak dilakukan:** menerjemahkan/merapikan pesan penyedia (ketok owner 08-Agu: "AI provider
+tidak menulis pesan tidak rapi; akan ada ratusan model — jangan terjemahkan"). Pesan penyedia diteruskan
+**apa adanya**; kita hanya menambahkan penunjuk **TEMPAT** — *"Kegagalan terjadi di layanan AI Anda"* —
+bukan menebak **APA** yang terjadi ("menolak" keliru untuk penyedia yang menggantung / server rusak /
+model dipensiunkan).
+
+**Bukti:** merah dibuktikan lebih dulu (9 gagal) · suite **813 lulus** (dari 802), nol regresi ·
+uji `tests/test_adegan_hilang_tak_disamarkan.py` (11 uji, termasuk **anti-regresi klip lengkap**).
+**Angka "/6" di log perakit = literal mati** (log yang sama mencetak "7/6" & "8/6") — pemeriksaan
+SENGAJA tidak memakai hitungan itu.
 
 ### 8b. ~~`notify_publish_fail` belum diseragamkan~~ — ✅ **DITUTUP 2026-08-04**
 Jalur upload YouTube gagal adalah satu-satunya notifikasi yang tak bisa menjawab pertanyaan penentu

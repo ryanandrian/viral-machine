@@ -328,10 +328,21 @@ class VisualAssembler:
                     )
                 )
 
+            # [2026-08-08] ADEGAN YANG GAGAL TIDAK BOLEH LEWAT SEBAGAI "BERHASIL".
+            # Dulu baris di bawah mencetak "✅ berhasil" meski sebagian adegan dilewati — kerusakan
+            # lolos ke hilir, perender menyusun durasi dari JUMLAH klip, dan videonya keluar lebih
+            # pendek dari narasi (terukur 3-Agu: berkas 36,7 dtk vs narasi 58,3 dtk). Sebab dari
+            # penyedia disimpan di sini supaya pipeline bisa menyebutkannya apa adanya ke tenant.
+            _gagal = list(getattr(provider, "scene_errors", []) or [])
+            if _gagal:
+                self.last_error = _gagal[-1]
+                logger.error(f"[VisualAssembler] ⚠️ {len(_gagal)} adegan GAGAL dibuat — sebab terakhir: "
+                             f"{_gagal[-1]}")
             if clips:
                 logger.info(
-                    f"[VisualAssembler] ✅ AI Image generated: "
+                    f"[VisualAssembler] {'⚠️ SEBAGIAN' if _gagal else '✅'} AI Image: "
                     f"{len(clips)} clips via {visual_mode}"
+                    + (f" ({len(_gagal)} adegan gagal)" if _gagal else "")
                 )
 
             return [clip.path for clip in clips]
@@ -423,11 +434,19 @@ class VisualAssembler:
 
         except Exception as e:
             # [§8f] ERROR, bukan warning: frame pertama = tuas viral, turunnya BUKAN peristiwa kecil.
-            # Sebabnya direkam agar terbawa ke laporan run (dulu hilang di worker.log → 4 kejadian
-            # tak pernah diketahui siapa pun, 2 di antaranya bug kita sendiri).
+            #
+            # ⚠️ KOREKSI 2026-08-08 — KLAIM LAMA DI SINI TIDAK BENAR. Komentar & log versi 05-Agu
+            # berbunyi "Sebab direkam ke laporan run". **Tidak sampai ke mana pun.** Sebabnya hanya
+            # masuk `result["steps"]` di memori, dan `steps` TIDAK PERNAH ditulis ke tabel mana pun
+            # (diverifikasi: nol penyebutan di producer & supabase_writer). Jadi selama tiga hari
+            # kegagalan ini tetap tak terlihat siapa pun — persis keadaan sebelum "diperbaiki".
+            # §8f di dokumen SSOT memang masih menulis "BELUM diperbaiki"; dokumennya benar, kalimat
+            # di kode inilah yang mengklaim lebih. Klaim itu dicabut; nilainya tetap direkam supaya
+            # siap dipakai saat jalur penyimpanannya dibangun (menunggu ketok owner, §8f).
             self.hook_frame_error = str(e)
             logger.error(f"[s6c7] FRAME PERTAMA GAGAL dibuat ({e}) — video tetap dibuat dengan klip "
-                         f"biasa, tapi pembukanya LEBIH LEMAH. Sebab direkam ke laporan run.")
+                         f"biasa, tapi pembukanya LEBIH LEMAH. Sebab BARU tercatat di log ini saja "
+                         f"(belum tersimpan ke laporan run — §8f masih terbuka).")
             return None
 
     # ──────────────────────────────────────────────

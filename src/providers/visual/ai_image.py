@@ -15,6 +15,12 @@ import httpx
 from loguru import logger
 
 from src.providers.visual.base import VisualProvider, VideoClip, VisualError, classify_visual_error
+from src.exceptions import FAST_FAIL
+
+# Kelas yang MUSTAHIL sembuh dengan diulang (kredit/tagihan/kunci/model). Sumbernya SATU
+# (`src/exceptions.py`) — disalin sebagai nilai string persis seperti `producer._FAST_FAIL_VALUES`,
+# supaya tak ada daftar kedua yang bisa bergeser diam-diam.
+_FAST_FAIL_VALUES = frozenset(ec.value for ec in FAST_FAIL)
 
 
 # Katalog model image = DB (ai_models, component='image') — admin-managed via migration/DB.
@@ -114,6 +120,10 @@ class AIImageProvider(VisualProvider):
                 f"Set visual_api_key (OpenAI key) di tenant_configs Supabase."
             )
 
+        # Sebab tiap adegan yang GAGAL dibuat — dibaca perakit lalu diteruskan ke laporan run.
+        # Tanpa ini, kegagalan penyedia tenant sampai ke layar sebagai "durasi kependekan".
+        self.scene_errors: list[str] = []
+
         logger.info(
             f"[AIImage] Initialized: model={self.ai_model} niche={self.niche}"
         )
@@ -161,6 +171,22 @@ class AIImageProvider(VisualProvider):
                 await self._generate_image(positive_prompt, negative_prompt, img_path)
                 return (i, img_path, f"ai_generated:{self.ai_model}")
             except Exception as e:
+                # [2026-08-08] SEBAB WAJIB DISIMPAN. Dulu galat ini hanya dipakai sebagai bahan
+                # tulis-ulang lalu HILANG — dan karena tulis-ulangnya sendiri selalu gagal (kunci
+                # model tak pernah diserahkan), sebab sebenarnya tak pernah sampai ke siapa pun.
+                # Akibatnya kegagalan penyedia tenant (kredit habis) muncul di layar sebagai
+                # "Durasi kependekan" ⇒ tenant menyalahkan MesinViral untuk kesalahan akun sendiri.
+                _kelas = getattr(e, "error_class", None)
+                _kelas_str = str(getattr(_kelas, "value", _kelas) or "")
+                if _kelas_str in _FAST_FAIL_VALUES:
+                    # Kredit/tagihan/kunci/model: menulis ulang prompt MUSTAHIL menolong, dan tiap
+                    # percobaan membakar sisa jatah tenant. Aturan sama sudah berlaku di jalur
+                    # penulis naskah (`_RETRY_OK`) — di sini hanya diikuti, bukan dibuat baru.
+                    logger.error(f"[AIImage] Scene {i+1} GAGAL ({_kelas_str}) — 2 percobaan berikutnya "
+                                 f"DILEWATI (mengulang tak mungkin menolong & membakar jatah tenant). "
+                                 f"Sebab: {e}")
+                    self.scene_errors.append(str(e))
+                    return (i, None, "")
                 rejection_history = [{"prompt": positive_prompt, "rejection": str(e)}]
                 safe_positive = positive_prompt
                 for attempt in range(2, 4):  # attempt 2 dan 3
@@ -181,7 +207,12 @@ class AIImageProvider(VisualProvider):
                     except Exception as retry_err:
                         rejection_history.append({"prompt": safe_positive, "rejection": str(retry_err)})
                         logger.warning(f"[AIImage] Scene {i+1} attempt {attempt} gagal: {retry_err}")
-                logger.error(f"[AIImage] Scene {i+1} GAGAL setelah 3 attempt — scene di-skip")
+                # Sebab TERAKHIR yang disimpan — bukan yang pertama: itu hasil percobaan paling akhir,
+                # dan itulah keadaan penyedia saat kita menyerah.
+                _sebab_akhir = (rejection_history[-1].get("rejection") if rejection_history else str(e))
+                logger.error(f"[AIImage] Scene {i+1} GAGAL setelah 3 attempt — scene di-skip. "
+                             f"Sebab: {_sebab_akhir}")
+                self.scene_errors.append(str(_sebab_akhir))
                 return (i, None, "")
 
         # ── Phase 1: generate SEMUA image KONKUREN (I/O-bound — decisions_production_scaling §5: 10→2mnt).
@@ -397,35 +428,35 @@ class AIImageProvider(VisualProvider):
             r = await client.post(url, json=body, headers=headers)
             if r.status_code not in (200, 201, 202):
                 # [§8e-B langkah 4] idem jalur video: bawa MAKNA-nya (sampel worker.log 14-Jul).
-                _pesan = f"fal image submit HTTP {r.status_code}: {r.text[:300]}"
+                _pesan = f"fal image submit HTTP {r.status_code}: {r.text}"
                 _ec, _human = classify_visual_error(VisualError(_pesan))
                 raise VisualError(_pesan, error_class=_ec, human_message=_human)
             sub = r.json()
             status_url, response_url = sub.get("status_url"), sub.get("response_url")
             if not (status_url and response_url):
-                raise VisualError(f"fal image submit: respons tanpa status_url/response_url ({str(sub)[:250]})")
+                raise VisualError(f"fal image submit: respons tanpa status_url/response_url ({str(sub)})")
             waited = 0.0
             while True:
                 await asyncio.sleep(_interval)
                 waited += _interval
                 s = await client.get(status_url, headers=headers)
                 if s.status_code >= 400:
-                    raise VisualError(f"fal image status HTTP {s.status_code}: {s.text[:300]}")
+                    raise VisualError(f"fal image status HTTP {s.status_code}: {s.text}")
                 status = (s.json() or {}).get("status", "")
                 if status == "COMPLETED":
                     break
                 if status not in ("IN_QUEUE", "IN_PROGRESS"):
-                    raise VisualError(f"fal image job status tak dikenal/gagal: '{status}' ({s.text[:250]})")
+                    raise VisualError(f"fal image job status tak dikenal/gagal: '{status}' ({s.text})")
                 if waited >= _timeout:
                     raise VisualError(f"fal image timeout >{int(_timeout)}s (status terakhir: {status})")
             res = await client.get(response_url, headers=headers)
             if res.status_code != 200:
-                raise VisualError(f"fal image result HTTP {res.status_code}: {res.text[:300]}")
+                raise VisualError(f"fal image result HTTP {res.status_code}: {res.text}")
             data = res.json() or {}
             imgs = data.get("images") or []
             img_url = (imgs[0] or {}).get("url", "") if imgs else ""
             if not img_url:
-                raise VisualError(f"fal image result: respons tanpa images[0].url ({str(data)[:250]})")
+                raise VisualError(f"fal image result: respons tanpa images[0].url ({str(data)})")
             v = await client.get(img_url)
             if v.status_code != 200 or not v.content:
                 raise VisualError(f"Unduh gambar fal gagal HTTP {v.status_code} ({img_url[:120]})")
@@ -500,7 +531,7 @@ class AIImageProvider(VisualProvider):
         async with httpx.AsyncClient(timeout=180) as client:
             r = await client.post(url, json=body, headers={"x-goog-api-key": self.api_key})
         if r.status_code != 200:
-            raise VisualError(f"Gemini image HTTP {r.status_code}: {r.text[:300]}")
+            raise VisualError(f"Gemini image HTTP {r.status_code}: {r.text}")
         data = r.json()
         img_b64 = None
         for c in data.get("candidates", []):
@@ -513,7 +544,7 @@ class AIImageProvider(VisualProvider):
         if not img_b64:
             # Penolakan content-policy Google datang sbg finishReason/promptFeedback — angkat sbg error
             # agar jalur rejection-rewrite 3-percobaan yang ADA menangani (pola sama provider lain).
-            raise VisualError(f"Gemini image: respons tanpa gambar (feedback: {str(data)[:250]})")
+            raise VisualError(f"Gemini image: respons tanpa gambar (feedback: {str(data)})")
         import base64 as _b64
         output_path.write_bytes(_b64.b64decode(img_b64))
         # B2 cost-tracking: usageMetadata token NYATA bila ada (gemini image ditagih per-token output). Fail-soft.
@@ -550,11 +581,11 @@ class AIImageProvider(VisualProvider):
         async with httpx.AsyncClient(timeout=120) as client:
             r = await client.post(url, json=body, headers={"Authorization": f"Bearer {token}"})
         if r.status_code != 200:
-            raise VisualError(f"Cloudflare image HTTP {r.status_code}: {r.text[:300]}")
+            raise VisualError(f"Cloudflare image HTTP {r.status_code}: {r.text}")
         data = r.json()
         img_b64 = ((data.get("result") or {}).get("image")) or ""
         if not (data.get("success") and img_b64):
-            raise VisualError(f"Cloudflare image: respons tanpa gambar ({str(data)[:250]})")
+            raise VisualError(f"Cloudflare image: respons tanpa gambar ({str(data)})")
         import base64 as _b64
         output_path.write_bytes(_b64.b64decode(img_b64))
 

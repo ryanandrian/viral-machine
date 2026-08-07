@@ -456,6 +456,14 @@ class Pipeline:
                 # SENGAJA tanpa `error_class`: itu memicu FAST_FAIL (rem setelah 1 gagal) = keputusan
                 # produk, menunggu ketok owner (§8e). Pola sama dgn niche_selector.last_error di STEP 1.
                 raise VisualError(self._pesan_gagal_visual(), step="visual")
+            # [2026-08-08] Klip SEBAGIAN = kerusakan yang selama ini lolos. Sampai hari ini pipeline
+            # hanya memeriksa "NOL klip"; kekurangan sebagian diteruskan ke perender, yang menyusun
+            # durasi dari JUMLAH klip → video lebih pendek dari narasi → cerita tenant terpotong,
+            # lalu diberi label "durasi". Sebabnya diambil dari perakit (sebab penyedia yang NYATA).
+            _kurang = self._periksa_kelengkapan_klip(
+                clips, script, getattr(self.visual_assembler, "last_error", None))
+            if _kurang:
+                raise VisualError(_kurang, step="visual")
             clip_count = len(clips)
             result["steps"]["visuals"] = {"status": "ok", "clips": clip_count}
             # [§8f 2026-08-05] Frame pertama gagal = video TETAP terbit tapi pembukanya lebih lemah.
@@ -853,6 +861,37 @@ class Pipeline:
         except Exception as e:
             logger.warning(f"[Pipeline] Thumbnail copy gagal: {e}")
             return ""
+
+    def _periksa_kelengkapan_klip(self, clips, script: dict, sebab: str | None) -> str | None:
+        """Klip yang jadi WAJIB menutupi seluruh bagian naskah. Kurang = video lebih pendek dari
+        narasinya ⇒ **cerita tenant terpotong di tengah kalimat**.
+
+        Kenapa ini ada (dipetakan 07/08-Agu, run nyata RETRO REWIND 03-Agu):
+        satu adegan gagal dibuat → perakit dulu tetap melapor sukses → perender menyusun durasi dari
+        JUMLAH klip, bukan isinya → berkas jadi **36,7 dtk sementara narasinya 58,3 dtk** (±21 detik
+        cerita hilang) → QC menamainya "Durasi kependekan" ⇒ tenant menyalahkan MesinViral untuk
+        kegagalan yang terjadi di akun penyedia AI-nya sendiri.
+
+        Jumlah yang seharusnya diambil dari `beat_durations` — data yang SUDAH ada di tangan, bukan
+        dari hitungan klip berpenyebut tetap (angka "/6" di log adalah literal mati; log yang sama
+        juga pernah mencetak "7/6" dan "8/6").
+
+        Return: kalimat kegagalan bila kurang · **None bila lengkap ATAU bila jumlah seharusnya
+        tidak bisa dipastikan** — tanpa `beat_durations` kita DIAM, tidak menebak.
+        """
+        _bagian = script.get("beat_durations") or []
+        if not _bagian or len(clips) >= len(_bagian):
+            return None
+        _kurang = len(_bagian) - len(clips)
+        _dasar = (f"{_kurang} dari {len(_bagian)} bagian video gagal dibuat gambarnya — videonya akan "
+                  f"lebih pendek dari narasinya (cerita terpotong), jadi produksi dihentikan.")
+        _s = (sebab or "").strip()
+        if not _s:
+            return _dasar
+        # Menyebut TEMPATNYA, bukan menebak APA yang terjadi: "menolak" keliru untuk penyedia yang
+        # menggantung / servernya rusak / modelnya dipensiunkan. Yang pasti benar untuk semuanya:
+        # kegagalannya terjadi di layanan AI milik tenant, bukan di MesinViral.
+        return f"{_dasar} Kegagalan terjadi di layanan AI Anda — keterangannya: {_s}"
 
     def _pesan_gagal_visual(self) -> str:
         """[ERROR-MGMT §8e] Pesan kegagalan visual yang MEMBAWA sebab nyata penyedia.
