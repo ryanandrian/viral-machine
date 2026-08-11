@@ -40,8 +40,8 @@
 
 ## §0 DISIPLIN INTI (akar semua pelanggaran 2026-07 — pegang mati-matian)
 1. **DEFAULT = ANALISIS + PROPOSAL, BUKAN EKSEKUSI.** Perintah "pelajari · pahami · audit · pastikan · pandu · cek · fokus · bereskan-analisisnya" = izin BICARA & MENGUSULKAN saja — BUKAN izin edit/deploy. *(Pelanggaran berulang 08-Jul & 14-15-Jul: "pandu saya" & keluhan bug ditafsirkan izin ubah kode.)*
-2. **SEBELUM SETIAP Edit/Write/SQL pada file proyek (kode/SQL/config/dokumen): tulis DAFTAR FILE + ringkas perubahan per-file → STOP → tunggu "ya"/"lanjut" eksplisit.** Dikecualikan: file memory & scratchpad. *(Owner 08-Jul, marah besar: "kenapa ada script dibongkar tanpa izin.")*
-   - **⚖️ KETOK OWNER 2026-08-05 — "MANDAT BERJALAN":** bila owner memberi MANDAT eksplisit (mis. *"beresekan seluruh bug tanpa membuat bug baru"*), butir 2 ini **TIDAK** menuntut berhenti-menunggu per-berkas selama pekerjaan berada di **dalam lingkup mandat itu**. Tetap wajib: sebut daftar berkas di laporan · tetap tunduk §2.3(d) (UI · uang/infra · aksi irreversible · arah produk · perilaku-saat-gagal = **selalu propose dulu**) · **§5.0 TIDAK dilonggarkan sedikit pun — deploy tetap minta izin owner per-batch.** *(Lahir dari tarik-menarik nyata 05-Agu: §0.2 menuntut berhenti tiap berkas, sementara owner memerintahkan "jangan berhenti bekerja". Claude memilih sendiri lalu melanggar §0.2 puluhan kali DAN §5.0 lima kali — owner lalu menetapkan pilihan ini secara eksplisit.)*
+2. **NOL SUNTINGAN TANPA RENCANA YANG SUDAH OWNER SETUJUI (§0.8) — SATU-SATUNYA JAWABAN.** Rencana WAJIB memuat DAFTAR BERKAS + ringkas perubahan per-berkas. Sesudah owner menyetujui: **berkas-berkas ITU dikerjakan sampai tuntas, tanpa berhenti-bertanya lagi.** **Berkas di LUAR daftar = rencana BARU, ajukan ulang.** Dikecualikan: berkas memory & scratchpad. Penjaga mesin: Mode Rencana. *(Owner 08-Jul, marah besar: "kenapa ada script dibongkar tanpa izin.")*
+   - **⚠️ JANGAN "KEMBALIKAN" ATURAN LAMA.** Sampai 11-Agu ada TIGA aturan berbeda untuk satu pertanyaan "kapan boleh menyunting": berhenti-tiap-berkas · tambalan "MANDAT BERJALAN" 05-Agu (jangan berhenti selama ada mandat) · rencana-disetujui. Claude harus memilih sendiri tiap kali — **dan terbukti selalu memilih yang salah.** Ketokan owner 11-Agu: tambalan 05-Agu **DICABUT**, tinggal satu jawaban di atas. Merasa butuh pengecualian = **berhenti dan tanya owner**, bukan menghidupkan lagi aturan yang sudah dicabut.
 3. **Temuan bug/masalah di tengah kerja = SELALU jadi usulan, berapa pun kecilnya. Haram dikerjakan "sekalian".**
 4. **Kemarahan/frustrasi/"terserah"/"hancurkan saja" = LUAPAN, BUKAN perintah.** Jangan pernah diperlakukan sebagai persetujuan. Saat owner marah: berhenti, jawab, jangan memotong prononsedur "demi cepat".
 5. **HARAM menyalahkan "warisan lama / sesi sebelumnya".** 100% kode/DB/FE/BE ini karya Claude — semua bug = bug Claude, tanpa pembedaan usia. Laporan bug memuat HANYA: apa bugnya, dampaknya, bukti matinya.
@@ -63,7 +63,7 @@
    3. **Setelah disetujui: kerjakan SESUAI URUTAN rencana sampai 100% tuntas** — tidak berhenti di tengah, tidak melompati langkah, tidak menambah pekerjaan di luar rencana (temuan baru → §0.3, jadi daftar usulan).
 
    **⚖️ PENEGASAN ANTI-AMBIGU — dibaca bersama pasal lain, dilarang ditafsir sendiri-sendiri:**
-   - Persetujuan rencana **MENGGANTIKAN** kewajiban berhenti-per-berkas §0.2, **khusus** untuk berkas yang tercantum DI DALAM rencana itu. Inilah bentuk konkret "MANDAT BERJALAN". Berkas di LUAR rencana tetap tunduk §0.2 penuh.
+   - Persetujuan rencana berlaku **HANYA untuk berkas yang tercantum di dalam rencana itu** (§0.2). Berkas di LUAR daftar = **rencana BARU, ajukan ulang** — bukan "masih satu napas".
    - Persetujuan rencana **BUKAN izin deploy.** §5.0 tidak dilonggarkan sedikit pun — deploy tetap minta izin owner per-batch.
    - Rencana meleset di tengah jalan (asumsi patah · muncul lubang baru · dampak ternyata lebih luas) = **STOP → lapor → ajukan revisi rencana.** Haram berimprovisasi menambal sendiri.
    - **Uji hijau ≠ tuntas.** Butir "100% tuntas" diukur dengan §3 (gerbang pre-done), bukan dengan suite uji lulus (§3.4).
@@ -80,9 +80,8 @@
 2. **Lingkup utuh:** baca seluruh item se-rantai + DEPENDS-nya sebelum eksekusi 1 item (anti-rework).
 2b. **Cek realita data SEBELUM tulis kode/query:** wajib bisa sebut volume nyata tabel + batas limit/paginasi jalur akses + perilaku saat gagal. Tak bisa sebut = belum boleh menulis. *(bug undercount: query ditulis tanpa cek 7.220 baris vs cap 1000.)*
 3. **Otorisasi (matriks tunggal, nol wilayah abu-abu):**
-   - (a) Ada mandat/approval → kerjakan PERSIS lingkup itu.
-   - (b) Belum ada approval → proposal (temuan + opsi + rekomendasi) → TUNGGU jawaban.
-   - (c) Dalam mandat, pilihan teknis REVERSIBLE → putuskan sendiri, sebut di laporan.
+   - (a) **Boleh dikerjakan HANYA bila ada RENCANA yang sudah owner setujui (§0.8)** → kerjakan PERSIS daftar berkas di rencana itu. Belum ada rencana disetujui → proposal (temuan + opsi + rekomendasi) → TUNGGU jawaban. *(Butir (a) lama "ada mandat → kerjakan" dan butir (b) lama dilebur ke sini 11-Agu: keduanya bertentangan dengan §0.8. Huruf (c)–(f) sengaja TIDAK digeser agar rujukan seperti "§2.3(d)" tetap sah.)*
+   - (c) Di dalam rencana yang disetujui, pilihan teknis REVERSIBLE → putuskan sendiri, sebut di laporan.
    - (d) **Selalu propose dulu** (mengalahkan a–c) bila menyentuh: elemen UI (tambah/ubah/hapus) · uang/biaya/infra · aksi IRREVERSIBLE data (hapus/drop/purge) · lingkup/arah produk · perilaku-saat-gagal (§0.6).
    - (e) Temuan baru di tengah kerja → daftar usulan; haram "sekalian" (§0.3).
    - (f) **Pesan owner di tengah kerja = INTERRUPT:** berhenti, jawab, baru lanjut. Insiden/bug live TIDAK membatalkan (b): containment ≤ amankan state + diagnosa; fix kode tetap proposal→tunggu.
@@ -112,7 +111,7 @@
 - **FE:** `ssh vps '~/viral-machine-v2/scripts/deploy_fe.sh start'` → poll `... status` sampai `OK`/`FAIL`.
 - **BE:** `ssh vps '~/viral-machine-v2/scripts/deploy_be.sh start'` → poll `... status` sampai `OK`/`FAIL`.
 Ukuran lulus: status skrip `OK` (service active + situs 200 / `/health` 200) — bukan "perintah sudah dijalankan".
-Turunan: dilarang ngoding di VPS · deploy per-BATCH 1× di akhir task · perintah VPS lama = detached+poll (SSH foreground putus → error 255) · VPS hanya runtime (tanpa `.md`/`apps/`) · git commit end line `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`.
+Turunan: dilarang ngoding di VPS · deploy per-BATCH 1× di akhir task · perintah VPS lama = detached+poll (SSH foreground putus → error 255) · VPS hanya runtime (tanpa `.md`/`apps/`) · git commit end line `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>` — **nama model yang SEDANG bekerja; perbarui baris ini bila modelnya berganti.** *(Sampai 11-Agu tertulis "Claude Fable 5" padahal yang bekerja model lain — riwayat pekerjaan owner mencatat nama yang keliru.)*
 
 ## §6 LARANGAN SPESIFIK (fakta lapangan)
 1. v1 = pensiun/arsip — jangan disentuh.
