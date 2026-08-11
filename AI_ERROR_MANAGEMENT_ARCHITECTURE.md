@@ -9,7 +9,20 @@
 
 > **Status:** ✅ **LIVE PRODUKSI 2026-07-18 01:04** (izin owner "deploy BE", commit `99b1c32`, mv-worker/webhook active, health 200; verifikasi: nol error import/ErrorClass, 3 thread produksi start bersih). Taksonomi + adapter EL-direct terverifikasi + circuit-breaker semantik + persistensi migr 0170.
 > **Fungsi dokumen:** peta + tata-kelola. **Kode = otoritatif; dokumen = peta + bukti.** Kontradiksi → kode menang; perbarui dokumen SAAT ITU.
-> **Aturan emas:** sebuah kode error masuk registry **HANYA bila ada bukti sampel nyata** (log kita / respons asli). Belum terbukti → `UNKNOWN` = aman (retryable, perilaku lama). **Update kode + dokumen dalam commit yang SAMA** (anti-drift, disiplin CLAUDE.md §3.7).
+> **⚖️ ATURAN EMAS — DIPERBARUI 2026-08-11 (ketok owner): SUMBERNYA DOKUMEN RESMI PENYEDIA, BUKAN MENUNGGU KERUSAKAN.**
+> Pemetaan kode error **WAJIB diambil dari dokumentasi resmi penyedia, dan WAJIB dibaca SEBELUM penyedia itu
+> dipakai produksi.** Setiap penyedia AI besar menerbitkan tabel kode galatnya. **Menunggu tenant rusak dulu baru
+> memetakan = PELANGGARAN.** Tiap baris pemetaan wajib mencantumkan **tautan sumber + tanggal dibaca** (§4 kolom Bukti).
+> **Sampel nyata tetap dipakai — tapi bukan sebagai IZIN memetakan**, melainkan untuk memastikan **BENTUK jawaban di
+> kabel** (mis. Cloudflare mengirim galat sebagai DAFTAR `{"errors":[{"code":…}]}`, bentuk yang classifier lama tak mengerti).
+> **Yang HARAM adalah MENEBAK:** dari ingatan, dari pola penyedia lain, atau dari kode HTTP semata.
+> **Bukti kenapa menebak berbahaya:** Cloudflare memakai **HTTP 429 untuk DUA hal berlawanan** — `3036` jatah gratis
+> harian habis (**berhenti**, pulih besok UTC) vs `3040` kapasitas penuh sesaat (**ulangi**). Menebak "429 = jatah habis"
+> akan menghentikan produksi channel tenant atas dasar yang **salah**. Pola sama di Gemini: `quota_exceeded` (harian,
+> berhenti) vs `rate_limit_exceeded` (per-menit, ulangi). Sampel tunggal pun tak menyelamatkan — ia hanya menampakkan
+> satu dari dua, dan yang kedua tak akan pernah kita duga.
+> Kode yang **tidak ada di dokumen resmi dan tanpa sampel** → `UNKNOWN` = aman (retryable, perilaku lama).
+> **Update kode + dokumen dalam commit yang SAMA** (anti-drift, disiplin CLAUDE.md §3.7).
 
 ---
 
@@ -79,8 +92,8 @@ Klasifikasi menempel pada **transport yang menerima error**, bukan merek model. 
 | **SEMUA penyedia suara** | tak menyelesaikan permintaan dalam batas waktu | TRANSIENT | ✅ AKTIF (2026-08-01) | direproduksi 01-Agu: render Edge menggantung belasan menit; tanpa batas waktu satu utas pekerja mati selamanya tanpa error |
 | **edge_tts** | penanda kalimat vendor mencakup < `tts_cakupan_min_pct` naskah | TRANSIENT | ✅ AKTIF (2026-08-01) | sintesis berhenti di tengah tanpa error; teks 581 huruf → audio 27,0 dtk vs 40,8 dtk saat diulang |
 | **Anthropic (LLM)** | ? | ? | ⏳ menunggu sampel | — |
-| **Cloudflare Workers AI (jalur GAMBAR)** | ? | ? | ⏳ **BELUM DIGOLONGKAN SAMA SEKALI** | **6 dari 10 channel memakainya** (`cf-flux-schnell`, diverifikasi ke DB 08-Agu). Adaptornya melempar `Cloudflare image HTTP {status}: {body}` — status & isi balasan LENGKAP (sejak 08-Agu tak lagi dipotong), tapi **tak pernah dipetakan ke kelas**. Sampai 07-Agu sebabnya bahkan dibuang sebelum tercatat, jadi **nol sampel** — mustahil dipetakan tanpa melanggar aturan emas §6. Perbaikan 08-Agu mulai menyimpannya; pemetaan menunggu sampel nyata. |
-| **Gemini (jalur GAMBAR)** | ? | ? | ⏳ belum digolongkan | **nol channel memakainya** (diverifikasi DB 08-Agu) — prioritas rendah, dicatat agar tak terlihat "tercakup" |
+| **Cloudflare Workers AI (jalur GAMBAR)** | `3036`·`3040`·`3023`·`5035`·`5016`·`5018`/`3041`·`5007`/`3042`·`3007`/`3008`·`3003`/`5004`/`3006` | QUOTA_EXHAUSTED · TRANSIENT · ACCOUNT_BILLING · ACCOUNT_BILLING · AUTH_INVALID · AUTH_INVALID · MODEL_UNAVAILABLE · TRANSIENT · **milik KITA** | ⏳ **belum di KODE — pemetaan SUDAH bersumber dokumen resmi** | **7 dari 11 channel memakainya** (`cf-flux-schnell`, 6 aktif; diverifikasi DB **11-Agu**). Sumber: [Workers AI Errors](https://developers.cloudflare.com/workers-ai/platform/errors/) + [Limits](https://developers.cloudflare.com/workers-ai/platform/limits/), dibaca **2026-08-11**. ⚠️ **`3036` (jatah harian 10.000 neuron habis → BERHENTI) dan `3040` (kapasitas penuh sesaat → ULANGI) sama-sama HTTP 429** — memetakan dari status HTTP saja = bug. ⚠️ Balasannya berbentuk **DAFTAR** `{"errors":[{"code":…}]}` → kode dibaca dari JSON di titik terima, bukan string-scan. ⚠️ `3003`/`5004`/`3006` = Cloudflare menyatakan **permintaan KITA** cacat → **haram ditimpakan ke tenant**. *(Catatan sejarah: baris ini sampai 11-Agu berbunyi "pemetaan menunggu sampel nyata" — itu pembacaan yang SALAH atas aturan emas, dan owner mematahkannya: "kenapa harus menunggu masalah muncul, memangnya penyedia besar tidak menyediakan panduan API-nya?")* |
+| **Gemini (jalur GAMBAR)** | — | — | ⏳ belum digolongkan | **nol channel memakainya untuk GAMBAR** (diverifikasi DB 11-Agu; Abyss ID memakai Gemini untuk **naskah**, gambarnya Cloudflare) — prioritas rendah, dicatat agar tak terlihat "tercakup". Tabel resmi untuk jalur naskah: [Gemini API errors](https://ai.google.dev/gemini-api/docs/api-errors) — `quota_exceeded` (harian → BERHENTI) vs `rate_limit_exceeded` (per-menit → ULANGI) · `failed_precondition` (tagihan) · `authentication` · `model_not_found`. |
 
 > **Jujur soal cakupan registry ini:** dari ±15 titik galat di jalur gambar, **hanya 2 yang menghasilkan
 > kelas** (submit fal · panggilan gambar OpenAI). Tiga belas sisanya jatuh ke `UNKNOWN` — aman (retryable),
@@ -89,15 +102,24 @@ Klasifikasi menempel pada **transport yang menerima error**, bukan merek model. 
 
 > Baris ⏳ = belum di-fast-fail → jatuh ke `UNKNOWN`/streak-3 (aman). Naikkan ke ✅ hanya setelah `classify_error()` adapter diisi + diuji + bukti sampel dicatat.
 
-## §5 Checklist onboarding provider baru (5 langkah)
-1. **Tangkap sampel error NYATA** (dari worker.log atau reproduksi) — simpan byte respons (status + body).
-2. **Catat** kode + message di §4 (kolom Bukti = tanggal/lokasi log).
-3. **Petakan** kode → ErrorClass (hanya yang jelas billing/quota/auth; ragu → biarkan UNKNOWN).
-4. **Implement** `classify_error()` di adapter transport-nya (pola `_classify_el_error`), raise dgn `error_class`+`human_message`. Bila error ditelan lapisan atas, pastikan propagasi (pola `last_*` tts_engine).
-5. **Uji** (unit classifier dgn string sampel + persistensi + keputusan) → set status ✅ + commit kode & dokumen BERSAMAAN.
+## §5 Checklist onboarding provider baru (6 langkah) — *urutan diubah 2026-08-11: dokumen resmi DULU*
+> **Langkah 1 WAJIB SELESAI SEBELUM penyedia/model dinyalakan untuk tenant.** Menyalakan penyedia yang
+> tabel galatnya belum dipetakan = menanam bug yang menunggu tenant menemukannya.
+1. **BACA DOKUMEN GALAT RESMI penyedia** — wajib, sebelum dipakai produksi. Catat **tautan + tanggal dibaca**.
+2. **Petakan SELURUH kode terdokumentasi** → ErrorClass. **Wajib memisahkan "berhenti" vs "ulangi" walau
+   kode HTTP-nya SAMA** (Cloudflare `3036` vs `3040`, keduanya 429 — lihat Aturan Emas §1).
+3. **Tangkap sampel nyata bila ada** — untuk memastikan **BENTUK** jawaban di kabel (daftar? objek? di mana kodenya?).
+   Tidak ada sampel **BUKAN** alasan menunda pemetaan; ia hanya menuntut pembacaan bentuk yang tahan banting.
+4. **Catat di §4** — kolom Bukti = tautan dokumen + tanggal (+ sampel bila ada).
+5. **Implement** `classify_error()` di adapter transport-nya (pola `_classify_el_error`), raise dgn
+   `error_class` + `human_message` + **penanda ASAL** (milik KITA vs milik PENYEDIA — bila dokumen resmi
+   menyatakan permintaannya cacat, itu kesalahan KITA dan **haram ditimpakan ke tenant**).
+   Bila error ditelan lapisan atas, pastikan propagasi (pola `last_*` tts_engine).
+6. **Uji** (unit classifier + persistensi + keputusan berhenti/ulangi) → set status ✅ + commit kode & dokumen BERSAMAAN.
 
 ## §6 Tata-kelola (anti-drift, anti-asumsi)
-- HANYA kode ber-bukti-sampel yang dipetakan; sisanya `UNKNOWN`.
+- Pemetaan bersumber **dokumen resmi penyedia (WAJIB)** + sampel nyata (untuk bentuk kabel). **HARAM MENEBAK**; di luar keduanya → `UNKNOWN`.
+- **Penyedia/model baru TIDAK boleh dinyalakan sebelum tabel galatnya dipetakan** (§5 langkah 1–2).
 - Kode = otoritatif; dokumen = peta + bukti; sinkron dalam commit yang sama.
 - Circuit-breaker TIDAK boleh string-sniffing — hanya baca `error_class` terstruktur.
 - Menambah/menghapus kelas fast-fail = ubah `FAST_FAIL` (`src/exceptions.py`) saja.
