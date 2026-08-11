@@ -29,6 +29,19 @@
    **Kenapa berbentuk FORMAT, bukan "telusuri dengan teliti":** bukti 04/05-Agu — aturan berupa PENILAIAN ("sudah cukup teliti belum?") dilanggar berulang, sementara aturan berupa FORMAT (dwibahasa · skrip deploy · redact rahasia · trailer commit) dipatuhi tanpa diingatkan. Lima rantai mengubah penilaian menjadi daftar ya/tidak.
    *(Lahir 05-Agu: dalam SATU penyelidikan panel tenant — tepat setelah owner menegaskan "pahami 100%" — Claude mengusulkan perbaikan DUA KALI dan menggugurkan keduanya sendiri. Usulan-1 hanya menelusuri mata 1-2; usulan-2 melewatkan mata 3 & 5 — padahal justru di mata 3 letak sebabnya (Test Channel TIDAK PERNAH membuat baris `content_inventory`) dan di mata 5 letak cakupannya (8 run, bukan 2). Bila owner menjawab "ya", perbaikan akan dibangun di atas model yang SALAH. Owner: "ini biang kerok seluruh kerusakan sistem".)*
 
+8. **🧭 SETIAP PERBAIKAN BUG = RENCANA DISETUJUI DULU, LALU DIKERJAKAN TUNTAS 100%.** *(ketok owner 2026-08-11)* Urutan ini mengikat, tanpa kecuali:
+   1. **Rencana matang** — sudah dipastikan VALID (Lima Rantai §0.7 lengkap berikut buktinya) DAN sudah dipastikan **tidak akan menanam bug baru** (Daftar Lubang §2.6 **KOSONG** · dampak di kelima permukaan §2.1 disebut satu per satu, termasuk yang TIDAK tersentuh).
+   2. **Ajukan → TUNGGU persetujuan owner.** Tanpa persetujuan: nol baris disentuh.
+   3. **Setelah disetujui: kerjakan SESUAI URUTAN rencana sampai 100% tuntas** — tidak berhenti di tengah, tidak melompati langkah, tidak menambah pekerjaan di luar rencana (temuan baru → §0.3, jadi daftar usulan).
+
+   **⚖️ PENEGASAN ANTI-AMBIGU — dibaca bersama pasal lain, dilarang ditafsir sendiri-sendiri:**
+   - Persetujuan rencana **MENGGANTIKAN** kewajiban berhenti-per-berkas §0.2, **khusus** untuk berkas yang tercantum DI DALAM rencana itu. Inilah bentuk konkret "MANDAT BERJALAN". Berkas di LUAR rencana tetap tunduk §0.2 penuh.
+   - Persetujuan rencana **BUKAN izin deploy.** §5.0 tidak dilonggarkan sedikit pun — deploy tetap minta izin owner per-batch.
+   - Rencana meleset di tengah jalan (asumsi patah · muncul lubang baru · dampak ternyata lebih luas) = **STOP → lapor → ajukan revisi rencana.** Haram berimprovisasi menambal sendiri.
+   - **Uji hijau ≠ tuntas.** Butir "100% tuntas" diukur dengan §3 (gerbang pre-done), bukan dengan suite uji lulus (§3.4).
+
+   **Penjaga mesin:** sesi dimulai dalam **Mode Rencana** (`defaultMode: "plan"`) — alat menolak suntingan sampai owner menyetujui rencana. Gerbang commit menolak kode yang ujinya merah atau yang dokumennya tak ikut diperbarui.
+
 ## §1 SUMBER KEBENARAN
 1. **Daftar kerja = HANYA `SISA_KERJA_GO_LIVE.md`.** Marker `[ ]`/⬜ di dokumen lain = bukan daftar kerja. Rencana/bukti/audit/tracker ditulis DI DALAM item terkait file itu — **DILARANG bikin file .md baru** (default nol; bila isi terlalu besar → usulkan → tunggu ketok). *(44 file .md sudah menumpuk — teguran 15-Jul.)*
 2. **Fakta perilaku sistem = KODE + DB LIVE** (introspeksi langsung: grep/baca kode, query DB, ssh). Dokumen = peta yang BISA BASI; anchor `file:baris` wajib di-grep ulang sebelum dipakai. Klaim apa pun dari fakta, bukan tebakan; tak yakin → verifikasi, jangan karang.

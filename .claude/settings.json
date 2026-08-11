@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/rad/viral-machine/.claude/hooks/gerbang_commit.sh",
+            "timeout": 300,
+            "statusMessage": "Gerbang commit: menjalankan 813 uji + memeriksa dokumen…"
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/rad/viral-machine/.claude/hooks/gerbang_komponen.sh",
+            "timeout": 20,
+            "statusMessage": "Gerbang komponen: memeriksa pustaka yang sudah ada…"
+          }
+        ]
+      }
+    ]
+  }
+}
