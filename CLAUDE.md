@@ -1,5 +1,33 @@
 # ⚖️ ATURAN KERJA — SATU-SATUNYA SUMBER (auto-dimuat PERTAMA tiap sesi)
 
+## §00 DELAPAN ATURAN OWNER — KETOKAN 2026-08-11
+> **BERLAKU DI SETIAP SESI BARU DAN SETIAP KALI PASCA-COMPACTING, TANPA PENGECUALIAN.**
+> **TIDAK ADA SATU PUN ALASAN YANG SAH UNTUK MELANGGARNYA.** Bukan "mandat berjalan", bukan "sudah
+> jelas perbaikannya", bukan "cuma sedikit", bukan "owner sedang buru-buru", bukan "sudah pernah
+> begini sebelumnya", bukan "biar tidak bolak-balik".
+> **Melanggar = BERHENTI dan katakan "saya melanggar aturan nomor N" — BUKAN menjelaskan kenapa.**
+> Penjelasan atas pelanggaran = alasan. Owner sudah menyatakan menolak alasan apa pun.
+
+| # | Aturan (kata owner) | Penjaganya | Rincian |
+|---|---|---|---|
+| 1 | **Tanpa asumsi** dalam analisa maupun saat membuat/mengubah/menghapus kode & migrasi DB | FORMAT: Lima Rantai + Daftar Lubang; yang belum diperiksa WAJIB ditulis "BELUM DIPERIKSA" | §0.7 · §2.6 |
+| 2 | **Bukan asal kerja** — selalu upaya terbaik, standar kelas dunia | Tidak ada penjaga mesin. Ini penilaian — owner pemeriksa terakhirnya | ⭐ STANDAR MUTU |
+| 3 | **Tidak buru-buru menyimpulkan/melapor/merekomendasi** sebelum paham 100% seluruh alur & alur lain yang tersambung (mesin · basis data · seluruh layar) | FORMAT: kelima permukaan §2.1 disebut satu per satu, termasuk yang TIDAK tersentuh | §2.1 · §0.7 |
+| 4 | **Nol bug baru** di setiap perubahan | MESIN: penyimpanan pekerjaan DITOLAK bila pemeriksaan otomatis merah | §3.8 · gerbang commit |
+| 5 | **Seluruh dokumen terkait ikut diperbarui** agar dokumen tetap bisa dipegang sebagai SSOT | MESIN: penyimpanan DITOLAK bila kode berubah tanpa dokumen ikut | §3.7 · gerbang commit |
+| 6 | **Pakai pustaka komponen yang sudah ada**, jangan bikin komponen baru | MESIN: pembuatan berkas komponen baru DIBLOKIR | §2.3(d) · gerbang komponen |
+| 7 | **Rencana matang → diajukan → disetujui → dikerjakan berurutan sampai 100% tuntas** | MESIN: sesi mulai terkunci; nol suntingan sampai owner menyetujui rencana | §0.8 |
+| 8 | **Bahasa yang owner pahami** — nol istilah teknis, jelaskan dampaknya | FORMAT: owner menolak laporan yang memuat istilah teknis | §4.1 |
+
+> **HARAM mematikan, melewati, atau mengakali penjaga mana pun** (termasuk `--no-verify`, memindah
+> berkas ke folder lain, menyunting setelan penjaga, menonaktifkan hook). Penjaga menghalangi =
+> **berhenti dan lapor kepada owner.** Keberadaan penjaga dijaga `tests/test_gerbang_tetap_terpasang.py`.
+>
+> **Penjaga mesin menangkap REGRESI, bukan salah-nalar.** Bukti: cacat yang dikirim pada commit
+> `0d64f79` lolos seluruh 813 pemeriksaan otomatis karena logikanya salah, bukan rusak. Karena itu
+> aturan 1, 2, 3 tetap sepenuhnya di tangan Claude — dan justru di situlah pelanggaran paling mahal.
+
+
 > **File ini = seluruh aturan kerja, lengkap & mandiri.** Tidak ada aturan yang tercecer di file lain.
 > Tidak perlu membuka file lain untuk patuh. Baca tuntas di awal SETIAP sesi (dan setiap pasca-compaction).
 > **Cara pakai:** sebelum menyentuh apa pun → §2. Sebelum "selesai"/deploy → §3. Satu butir gagal → STOP.
