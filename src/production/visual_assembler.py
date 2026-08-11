@@ -81,6 +81,10 @@ class VisualAssembler:
         # run BARU adalah bug yang jauh lebih menyesatkan daripada tanpa sebab sama sekali.
         self.last_error = None
         self.hook_frame_error = None      # [§8f] idem: sebab run LAMA tak boleh menempel di run BARU
+        # [2026-08-11] Kelas + ASAL sebab visual. `last_milik_kita=True` ⇒ hilir HARAM menempeli
+        # "Kegagalan terjadi di layanan AI Anda". Dibersihkan tiap run, alasan sama dgn di atas.
+        self.last_error_class = None
+        self.last_milik_kita = False
 
         run_config  = self._load_run_config(tenant_config)
         visual_mode = run_config.get("visual_mode") or ""
@@ -261,6 +265,8 @@ class VisualAssembler:
                 "llm_library":            run_config.get("llm_library") or "",
                 "llm_provider":           run_config.get("llm_provider") or "",
                 "llm_models":             run_config.get("llm_models") or {},
+                "llm_model":              run_config.get("llm_model") or "",   # [11-Agu] lihat _load_run_config
+
                 "niche_visual_style":     run_config.get("niche_visual_style") or {},
                 "niche_visual_fallbacks": run_config.get("niche_visual_fallbacks") or [],
                 "image_quality":          run_config.get("image_quality") or "",
@@ -334,10 +340,21 @@ class VisualAssembler:
             # pendek dari narasi (terukur 3-Agu: berkas 36,7 dtk vs narasi 58,3 dtk). Sebab dari
             # penyedia disimpan di sini supaya pipeline bisa menyebutkannya apa adanya ke tenant.
             _gagal = list(getattr(provider, "scene_errors", []) or [])
+            _rinci = list(getattr(provider, "scene_failures", []) or [])
             if _gagal:
-                self.last_error = _gagal[-1]
-                logger.error(f"[VisualAssembler] ⚠️ {len(_gagal)} adegan GAGAL dibuat — sebab terakhir: "
-                             f"{_gagal[-1]}")
+                # [2026-08-11] PILIH sebab yang PALING BISA DIKERJAKAN TENANT, jangan "yang terakhir
+                # kebetulan terjadi". Urutan: (1) kegagalan penyedia yang menuntut tindakan tenant
+                # (kredit/tagihan/kunci/model = FAST_FAIL) · (2) kegagalan penyedia lainnya ·
+                # (3) kegagalan MILIK KITA. Dulu `_gagal[-1]` dipakai apa adanya, sehingga bug
+                # MesinViral bisa mengubur jatah-habis milik tenant — atau sebaliknya.
+                _pilih = self._pilih_sebab_adegan(_rinci)
+                self.last_error = _pilih["sebab"] if _pilih else _gagal[0]
+                self.last_error_class = (_pilih or {}).get("kelas") or None
+                self.last_milik_kita = bool((_pilih or {}).get("milik_kita", False))
+                logger.error(
+                    f"[VisualAssembler] ⚠️ {len(_gagal)} adegan GAGAL dibuat — sebab terpilih "
+                    f"(kelas={self.last_error_class or 'unknown'}, "
+                    f"milik_kita={self.last_milik_kita}): {self.last_error}")
             if clips:
                 logger.info(
                     f"[VisualAssembler] {'⚠️ SEBAGIAN' if _gagal else '✅'} AI Image: "
@@ -453,6 +470,27 @@ class VisualAssembler:
     # Config loader
     # ──────────────────────────────────────────────
 
+    @staticmethod
+    def _pilih_sebab_adegan(rinci: list[dict]) -> dict | None:
+        """Dari beberapa adegan yang gagal, pilih sebab yang PALING BISA DIKERJAKAN TENANT.
+
+        Urutan sengaja: kegagalan penyedia yang menuntut tindakan tenant (kredit/tagihan/kunci/
+        model) DULU, lalu kegagalan penyedia lain, baru kegagalan milik kita. Alasannya: satu run
+        bisa gagal karena dua hal berbeda sekaligus, dan menampilkan yang salah membuat tenant
+        mengejar masalah yang bukan penyebabnya. Kegagalan MILIK KITA ditaruh paling belakang —
+        bukan disembunyikan (tetap ditampilkan bila hanya itu yang ada), tapi tak boleh menutupi
+        hal yang tenant sendiri bisa selesaikan.
+        """
+        if not rinci:
+            return None
+        from src.exceptions import FAST_FAIL
+        _ff = frozenset(ec.value for ec in FAST_FAIL)
+        _penyedia = [r for r in rinci if not r.get("milik_kita")]
+        for r in _penyedia:
+            if (r.get("kelas") or "") in _ff:
+                return r
+        return _penyedia[0] if _penyedia else rinci[0]
+
     def _load_run_config(self, tenant_config: TenantConfig) -> dict:
         """Baca config dari Supabase, fallback ke defaults."""
         try:
@@ -465,6 +503,17 @@ class VisualAssembler:
                 "llm_library":            getattr(rc, "llm_library", None) or "",
                 "llm_provider":           getattr(rc, "llm_provider", None) or "",
                 "llm_models":             getattr(rc, "llm_models", None) or {},
+                # [2026-08-11] KUNCI YANG SELAMA INI TIDAK PERNAH DISERAHKAN — akar rusaknya
+                # pemulihan gambar sejak 13-Jun. `ai_image._ai_rewrite_on_rejection` memilih model
+                # dengan `llm_models["rewrite"] or llm_model`; baris `llm_model` TIDAK ADA di sini,
+                # jadi cabang kedua selalu "". Berpasangan dengan penjaga koherensi B11-G3
+                # (`tenant_config._apply_channel_overlay`) yang SENGAJA membuang `llm_models` bila
+                # penyedia channel ≠ penyedia tenant — dua-duanya benar sendiri-sendiri, bertemu
+                # hasilnya kosong ⇒ "Model untuk 'Groq' tidak ditentukan" (49× di worker.log).
+                # Nilainya sudah ADA & sudah ter-overlay per-channel (`_CHANNEL_OVERLAY_FIELDS`
+                # memuat llm_model + llm_library) sehingga model SELALU se-penyedia dengan library.
+                # Diverifikasi ke DB 11-Agu: 7/7 channel punya pasangan library↔model yang cocok.
+                "llm_model":              getattr(rc, "llm_model", None) or "",
                 "niche_visual_style":     getattr(rc, "niche_visual_style", {}) or {},
                 "niche_visual_fallbacks": getattr(rc, "niche_visual_fallbacks", []) or [],
                 "is_developer":           getattr(rc, "is_developer", False),
@@ -478,6 +527,7 @@ class VisualAssembler:
                 "llm_library":            "",
                 "llm_provider":           "",
                 "llm_models":             {},
+                "llm_model":              "",   # bentuk dict WAJIB sama dgn cabang sukses
                 "niche_visual_style":     {},
                 "niche_visual_fallbacks": [],
                 "is_developer":           False,

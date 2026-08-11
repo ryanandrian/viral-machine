@@ -92,8 +92,8 @@ Klasifikasi menempel pada **transport yang menerima error**, bukan merek model. 
 | **SEMUA penyedia suara** | tak menyelesaikan permintaan dalam batas waktu | TRANSIENT | ✅ AKTIF (2026-08-01) | direproduksi 01-Agu: render Edge menggantung belasan menit; tanpa batas waktu satu utas pekerja mati selamanya tanpa error |
 | **edge_tts** | penanda kalimat vendor mencakup < `tts_cakupan_min_pct` naskah | TRANSIENT | ✅ AKTIF (2026-08-01) | sintesis berhenti di tengah tanpa error; teks 581 huruf → audio 27,0 dtk vs 40,8 dtk saat diulang |
 | **Anthropic (LLM)** | ? | ? | ⏳ menunggu sampel | — |
-| **Cloudflare Workers AI (jalur GAMBAR)** | `3036`·`3040`·`3023`·`5035`·`5016`·`5018`/`3041`·`5007`/`3042`·`3007`/`3008`·`3003`/`5004`/`3006` | QUOTA_EXHAUSTED · TRANSIENT · ACCOUNT_BILLING · ACCOUNT_BILLING · AUTH_INVALID · AUTH_INVALID · MODEL_UNAVAILABLE · TRANSIENT · **milik KITA** | ⏳ **belum di KODE — pemetaan SUDAH bersumber dokumen resmi** | **7 dari 11 channel memakainya** (`cf-flux-schnell`, 6 aktif; diverifikasi DB **11-Agu**). Sumber: [Workers AI Errors](https://developers.cloudflare.com/workers-ai/platform/errors/) + [Limits](https://developers.cloudflare.com/workers-ai/platform/limits/), dibaca **2026-08-11**. ⚠️ **`3036` (jatah harian 10.000 neuron habis → BERHENTI) dan `3040` (kapasitas penuh sesaat → ULANGI) sama-sama HTTP 429** — memetakan dari status HTTP saja = bug. ⚠️ Balasannya berbentuk **DAFTAR** `{"errors":[{"code":…}]}` → kode dibaca dari JSON di titik terima, bukan string-scan. ⚠️ `3003`/`5004`/`3006` = Cloudflare menyatakan **permintaan KITA** cacat → **haram ditimpakan ke tenant**. *(Catatan sejarah: baris ini sampai 11-Agu berbunyi "pemetaan menunggu sampel nyata" — itu pembacaan yang SALAH atas aturan emas, dan owner mematahkannya: "kenapa harus menunggu masalah muncul, memangnya penyedia besar tidak menyediakan panduan API-nya?")* |
-| **Gemini (jalur GAMBAR)** | — | — | ⏳ belum digolongkan | **nol channel memakainya untuk GAMBAR** (diverifikasi DB 11-Agu; Abyss ID memakai Gemini untuk **naskah**, gambarnya Cloudflare) — prioritas rendah, dicatat agar tak terlihat "tercakup". Tabel resmi untuk jalur naskah: [Gemini API errors](https://ai.google.dev/gemini-api/docs/api-errors) — `quota_exceeded` (harian → BERHENTI) vs `rate_limit_exceeded` (per-menit → ULANGI) · `failed_precondition` (tagihan) · `authentication` · `model_not_found`. |
+| **Cloudflare Workers AI (jalur GAMBAR)** | `3036`·`3040`·`3023`·`5035`·`5016`·`5018`/`3041`·`5007`/`3042`·`3007`/`3008`·`3003`/`5004`/`3006` | QUOTA_EXHAUSTED · TRANSIENT · ACCOUNT_BILLING · ACCOUNT_BILLING · AUTH_INVALID · AUTH_INVALID · MODEL_UNAVAILABLE · TRANSIENT · **milik KITA** | ✅ **AKTIF 11-Agu** (`classify_cloudflare_error`, dijaga `tests/test_setelan_ai_tak_pernah_hilang.py`) | **7 dari 11 channel memakainya** (`cf-flux-schnell`, 6 aktif; diverifikasi DB **11-Agu**). Sumber: [Workers AI Errors](https://developers.cloudflare.com/workers-ai/platform/errors/) + [Limits](https://developers.cloudflare.com/workers-ai/platform/limits/), dibaca **2026-08-11**. ⚠️ **`3036` (jatah harian 10.000 neuron habis → BERHENTI) dan `3040` (kapasitas penuh sesaat → ULANGI) sama-sama HTTP 429** — memetakan dari status HTTP saja = bug. ⚠️ Balasannya berbentuk **DAFTAR** `{"errors":[{"code":…}]}` → kode dibaca dari JSON di titik terima, bukan string-scan. ⚠️ `3003`/`5004`/`3006` = Cloudflare menyatakan **permintaan KITA** cacat → **haram ditimpakan ke tenant**. *(Catatan sejarah: baris ini sampai 11-Agu berbunyi "pemetaan menunggu sampel nyata" — itu pembacaan yang SALAH atas aturan emas, dan owner mematahkannya: "kenapa harus menunggu masalah muncul, memangnya penyedia besar tidak menyediakan panduan API-nya?")* |
+| **Gemini (jalur GAMBAR)** | `quota_exceeded`·`rate_limit_exceeded`·`failed_precondition`·`authentication`/`unauthenticated`·`permission_denied`·`model_not_found`/`not_found`·`service_unavailable`/`unavailable`/`deadline_exceeded`/`api_error`/`internal`·`resource_exhausted`·`invalid_request`/`invalid_argument` | QUOTA_EXHAUSTED · RATE_LIMIT · ACCOUNT_BILLING · AUTH_INVALID · AUTH_INVALID · MODEL_UNAVAILABLE · TRANSIENT · **RATE_LIMIT (konservatif)** · **milik KITA** | ✅ **AKTIF 11-Agu** (`classify_gemini_error`) | **nol channel memakainya untuk GAMBAR** (diverifikasi DB 11-Agu; Abyss ID memakai Gemini untuk **naskah**, gambarnya Cloudflare) — prioritas rendah, dicatat agar tak terlihat "tercakup". Tabel resmi untuk jalur naskah: [Gemini API errors](https://ai.google.dev/gemini-api/docs/api-errors) — `quota_exceeded` (harian → BERHENTI) vs `rate_limit_exceeded` (per-menit → ULANGI) · `failed_precondition` (tagihan) · `authentication` · `model_not_found`. |
 
 > **Jujur soal cakupan registry ini:** dari ±15 titik galat di jalur gambar, **hanya 2 yang menghasilkan
 > kelas** (submit fal · panggilan gambar OpenAI). Tiga belas sisanya jatuh ke `UNKNOWN` — aman (retryable),
@@ -444,6 +444,61 @@ model dipensiunkan).
 uji `tests/test_adegan_hilang_tak_disamarkan.py` (11 uji, termasuk **anti-regresi klip lengkap**).
 **Angka "/6" di log perakit = literal mati** (log yang sama mencetak "7/6" & "8/6") — pemeriksaan
 SENGAJA tidak memakai hitungan itu.
+
+### 8j. ~~PEMULIHAN GAMBAR MATI 2 BULAN · SEBAB PENYEDIA DIBUANG · SALAH KITA DITIMPAKAN KE TENANT~~ — ✅ **DITUTUP 2026-08-11**
+
+**Satu baris setelan yang tidak pernah diserahkan**, bertemu satu penjaga yang benar, menghasilkan
+tiga kerusakan sekaligus — dan menyembunyikan diri selama dua bulan.
+
+**Rantainya (terverifikasi ujung-ke-ujung):**
+1. `visual_assembler._load_run_config` menyerahkan `llm_models` tapi **TIDAK** `llm_model`.
+2. `ai_image._ai_rewrite_on_rejection` memilih model dengan `llm_models["rewrite"] or llm_model`
+   → cabang kedua **selalu `""`**.
+3. Penjaga koherensi [B11]-G3 (`_apply_channel_overlay`) **sengaja membuang** `llm_models` bila
+   penyedia channel ≠ penyedia tenant — **benar, dan justru itu yang mengosongkan cabang pertama.**
+   Dua aturan yang masing-masing benar, bertemu → **kosong melompong.**
+4. Hasilnya: `"Model untuk 'Groq' tidak ditentukan"` — **49 kejadian** di worker.log, 8 pada 11-Agu.
+
+**Akibat terukur:**
+- **17 dari 18 tenant** pemulihan gambarnya MATI. Satu-satunya yang hidup = channel owner sendiri
+  (`RAD The Explorer`, satu-satunya dengan `llm_models['rewrite']` terisi) — **itu sebabnya kerusakan
+  ini tak pernah terlihat dari tempat owner menguji.**
+- **28 adegan mati** setelah 3 percobaan; pemulihan **berhasil hanya 1×** (di channel owner itu).
+- Percobaan 2 & 3 **tak pernah sampai ke penyedia gambar** — mati di penulis-ulang prompt. Jadi
+  dugaan "mesin membakar jatah tenant dengan 3× percobaan" **TIDAK benar**; yang terbakar adalah
+  **video yang sebenarnya bisa diselamatkan** (kedua galat Cloudflare nyata = prompt ditolak, yaitu
+  persis keadaan yang penulis-ulang diciptakan untuk mengatasinya).
+- Sebab **TERAKHIR** dipakai sebagai sebab yang ditampilkan (cacat yang dikirim `0d64f79`) → karena
+  percobaan 2-3 memanggil penulis-ulang lebih dulu, sebab terakhir hampir selalu **galat KITA**,
+  lalu ditempeli *"Kegagalan terjadi di layanan AI Anda"*. **Kejadian nyata 11-Agu 12:21.**
+  Terukur **75 kegagalan MILIK KITA** di worker.log (49 setelan rewrite · 16 berkas tak ada · 10 FFmpeg).
+- **35 kegagalan penyedia gambar** (13 Jun · 13 Jul · 9 Agu) sebabnya **tak pernah tersimpan di mana
+  pun** — baris log percobaan-1 hanya menyebut BAHWA gagal. **Inilah sebabnya "jatah Cloudflare habis"
+  tak bisa dibuktikan ADA maupun TIDAK ADA** selama ini; bukan karena tidak terjadi.
+
+**Yang diperbaiki:**
+| # | Perbaikan | Berkas |
+|---|---|---|
+| 1 | `llm_model` diserahkan (2 lapis: `_load_run_config` + dict `_try_ai_image`; kedua cabang dict dibuat identik) | `visual_assembler.py` |
+| 2 | Setelan kosong = **gagal jujur** menyebut apa yang kurang + `milik_kita=True`, bukan `""` diteruskan diam-diam | `ai_image.py` |
+| 3 | Pemetaan galat **Cloudflare & Gemini** dari dokumen resmi (§4) — termasuk **3036 berhenti vs 3040 ulangi, dua-duanya 429** | `base.py`, `ai_image.py` |
+| 4 | `PipelineError.milik_kita` — asal ditandai **di titik raise**, tak lagi ditebak dari teks | `exceptions.py` |
+| 5 | Sebab **PERTAMA** yang dipakai (jawaban penyedia), sebab terakhir tetap di log utk diagnosa | `ai_image.py` |
+| 6 | Sebab percobaan-1 **ikut dicatat** di log (menutup lubang 35 sebab terbuang) | `ai_image.py` |
+| 7 | Beberapa adegan gagal → dipilih sebab yang **paling bisa dikerjakan tenant** (FAST_FAIL penyedia dulu, galat kita paling belakang — belakang, bukan disembunyikan) | `visual_assembler.py` |
+| 8 | Pesan tenant: galat milik kita → *"Penyebabnya ada di MesinViral, BUKAN di layanan AI Anda"* | `pipeline.py` |
+| 9 | Nama penyedia di log dibetulkan: dulu mencetak `llm_provider` (legacy, "openai") padahal yang dipakai `llm_library` ("groq") | `ai_image.py` |
+
+**Bukti runtime (bukan hanya uji hijau):** ke-7 channel aktif diuji dengan config produksi nyata →
+**7/7 memilih model perbaikan yang cocok dengan penyedianya sendiri** (gemini→`gemini-2.5-flash`,
+groq→`llama-3.3-70b`/`llama-3.1-8b`, openai→`gpt-4o-mini`). Sebelum perbaikan: **6 dari 7 kosong.**
+Suite **852 lulus**, nol regresi. Penjaga permanen: `tests/test_setelan_ai_tak_pernah_hilang.py` (26 uji).
+
+**⚠️ MASIH TERBUKA — butuh ketok owner, sengaja TIDAK diputuskan sendiri:** Cloudflare `3036` (jatah
+gratis harian) dipetakan QUOTA_EXHAUSTED = **FAST_FAIL (berhenti)**, sesuai rencana yang disetujui.
+Tapi jatah itu **pulih sendiri keesokan hari UTC** — apakah ia juga layak masuk `SELF_HEALING`
+(produksi lanjut sendiri besok, tanpa tenant menekan apa pun) adalah **keputusan produk** (§0.6),
+bukan keputusan Claude. Hari ini: berhenti + beri tahu tenant.
 
 ### 8b. ~~`notify_publish_fail` belum diseragamkan~~ — ✅ **DITUTUP 2026-08-04**
 Jalur upload YouTube gagal adalah satu-satunya notifikasi yang tak bisa menjawab pertanyaan penentu

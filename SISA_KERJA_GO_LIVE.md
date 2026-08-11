@@ -707,7 +707,7 @@ memutus hitungan). **JANGAN diterapkan ulang. JANGAN dibuat migrasi yang mengula
 | ~~Registry §4: baris ⏳ fal & OpenAI billing~~ | Sampel NYATA sudah ditemukan & dicatat 4-Agu (fal 403 saldo habis ×6 · billing hard limit ×1). Menaikkan ke ✅ = **§8e-B**, butuh ketok owner. |
 | Registry §4: Anthropic | Belum ada sampel error nyata. Aturan emas: jangan menebak. |
 | ~~`MEMORY.md` mendekati batas baca~~ | ✅ **SELESAI 3-Agu** — 20,6KB → 12,4KB, 18 penunjuk terverifikasi utuh |
-| **§8e-B: kelas error jalur GAMBAR/VIDEO** | ⛔ **BUTUH KETOK OWNER.** Mengisi `error_class` di jalur visual = kelas `QUOTA_EXHAUSTED`/`ACCOUNT_BILLING` masuk `FAST_FAIL` → **channel direm setelah 1 kegagalan, bukan 3**. Hemat biaya tenant, TAPI salah golong = channel berhenti padahal cukup ditunggu. Perilaku-saat-gagal = keputusan produk (§0.6). Bagian TEKS-nya (§8e-A) sudah tuntas & aman. |
+| ~~**§8e-B: kelas error jalur GAMBAR/VIDEO**~~ | ✅ **SELESAI 11-Agu — DIKETOK OWNER** (SSOT §8j). Kekhawatiran lama ("salah golong → channel berhenti padahal cukup ditunggu") **tertutup oleh sumber pemetaannya**: bukan tebakan, tapi tabel resmi Cloudflare & Gemini — dan kasus "cukup ditunggu" (`3040` kapasitas sesaat · `3007`/`3008` timeout · `resource_exhausted` Gemini yang ambigu) sengaja **TIDAK** ikut FAST_FAIL, jadi toleransi 3-kegagalan mereka utuh. Ketokan owner: rem cepat **DINYALAKAN** — alasannya nama baik MesinViral, karena tanpa itu tenant melihat **3 produksi gagal berturut-turut** (sekaligus membakar jatah naskah+suaranya) dan menyimpulkan MesinViral yang rusak, alih-alih membaca kalimat penyedianya sendiri sekali dan berhenti. |
 
 **REALISASI 2026-08-04 (perintah owner "jangan berhenti sebelum zero bug"):** 3 benang diluruskan, semuanya
 dengan **merah dibuktikan lebih dulu** (uji gagal tanpa perbaikan) — (1) **§8e-A** jalur gambar/video berhenti
@@ -718,6 +718,21 @@ angka tebakan. Suite **623 → 641 lulus, nol regresi**; nol tulisan ke DB; nol 
 **KOREKSI JUJUR:** putaran ini juga MENGGUGURKAN satu "temuan" Claude sendiri (404 Gemini) — sampel ujinya
 DIKARANG, teks produksinya sudah tertangani sejak 22-Jul. Dari 5 sampel error nyata yang diuji ke kode
 berjalan, **4 sudah benar sejak lama.** Pelajaran mengikat → memory `feedback_sampel_uji_wajib_dari_produksi`.
+
+**REALISASI 2026-08-11 (rencana disetujui owner — SSOT `AI_ERROR_MANAGEMENT_ARCHITECTURE.md §8j):**
+Pemulihan gambar **MATI 2 bulan** karena **satu baris setelan yang tak pernah diserahkan** (`llm_model`),
+bertemu penjaga koherensi [B11]-G3 yang benar → nama model perbaikan **kosong melompong** ⇒ 49× *"Model
+untuk 'Groq' tidak ditentukan"*. **17 dari 18 tenant terdampak; satu-satunya yang sehat = channel owner
+sendiri** — itulah sebabnya kerusakan ini tak pernah terlihat dari tempat owner menguji. Terukur: **28
+adegan mati**, pemulihan berhasil **1×**, dan **35 kegagalan penyedia yang sebabnya tak pernah tersimpan**
+(itu sebabnya "jatah Cloudflare habis" tak bisa dibuktikan ada MAUPUN tidak ada). Sekaligus ditutup: cacat
+`0d64f79` yang membuat MesinViral **menuduh penyedia AI tenant atas bug MesinViral** (kejadian nyata 11-Agu
+12:21; **75 kegagalan di worker.log milik KITA**). **Aturan emas §1 dibalik atas ketok owner:** pemetaan galat
+wajib dari **dokumen resmi penyedia SEBELUM dipakai**, bukan menunggu kerusakan — dokumen itu menyelamatkan
+kita dari bug yang hampir saya tanam (Cloudflare `3036` berhenti vs `3040` ulangi, **dua-duanya HTTP 429**).
+Bukti runtime: **7/7 channel aktif** kini memilih model perbaikan yang cocok dengan penyedianya (sebelumnya
+6 dari 7 kosong). Suite **826 → 852 lulus, nol regresi.** Penjaga permanen `tests/test_setelan_ai_tak_pernah_hilang.py`
+(26 uji) membuat **model AI baru tak bisa dinyalakan tanpa tabel galatnya**. Nol migrasi DB · nol komponen FE baru.
 
 ### [B25] REM DARURAT: simpan sebabnya & katakan apa artinya — 🟢 A–D SELESAI + TERVALIDASI (2026-08-03)
 - **SPEC/SSOT = `AI_ERROR_MANAGEMENT_ARCHITECTURE.md` §8a (celah, kini TERTUTUP) + §9 (kontrak tampilan per-KELAS).** WAJIB baca §9 sebelum menyentuh UI kegagalan produksi.

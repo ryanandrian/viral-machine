@@ -70,13 +70,23 @@ class PipelineError(Exception):
     category: str = "pipeline"
 
     def __init__(self, message: str = "", *, step: str | None = None, category: str | None = None,
-                 error_class: "ErrorClass" = ErrorClass.UNKNOWN, human_message: str | None = None):
+                 error_class: "ErrorClass" = ErrorClass.UNKNOWN, human_message: str | None = None,
+                 milik_kita: bool = False):
         super().__init__(message)
         self.step = step
         if category:
             self.category = category
         self.error_class = error_class
         self.human_message = human_message
+        # [2026-08-11] ASAL-USUL, DITANDAI DI TITIK RAISE — bukan ditebak dari teks di hilir.
+        # `milik_kita=True` berarti kegagalan ini milik MesinViral (setelan kurang, permintaan cacat,
+        # berkas hilang, FFmpeg), BUKAN milik penyedia AI tenant. Permukaan mana pun HARAM menempeli
+        # kalimat "Kegagalan terjadi di layanan AI Anda" pada error ber-`milik_kita=True`.
+        # Lahir dari cacat yang dikirim pada commit 0d64f79: asal-usul ditebak dari sebab TERAKHIR,
+        # sehingga 75 kegagalan MILIK KITA di worker.log (49 setelan rewrite · 16 berkas tak ada ·
+        # 10 FFmpeg) ditimpakan kepada penyedia AI tenant. Dokumen resmi penyedia bahkan menyatakan
+        # sendiri kelompok ini (mis. Cloudflare 3003/5004/3006 = permintaan KITA cacat).
+        self.milik_kita = milik_kita
 
 
 class ConfigError(PipelineError):

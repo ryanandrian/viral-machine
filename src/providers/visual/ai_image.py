@@ -14,8 +14,23 @@ from pathlib import Path
 import httpx
 from loguru import logger
 
-from src.providers.visual.base import VisualProvider, VideoClip, VisualError, classify_visual_error
-from src.exceptions import FAST_FAIL
+from src.providers.visual.base import (
+    VisualProvider, VideoClip, VisualError, classify_visual_error,
+    classify_cloudflare_error, classify_gemini_error,
+)
+from src.exceptions import FAST_FAIL, ErrorClass
+
+
+def _json_aman(resp):
+    """JSON balasan bila bisa diurai; `None` bila bukan JSON (mis. halaman HTML dari proxy).
+
+    Penilai galat HARAM ikut melempar exception — kalau ia gagal, sebab ASLI-nya hilang dan kita
+    kembali ke kebutaan yang baru dibayar mahal (35 sebab terbuang, Jun–Agu 2026).
+    """
+    try:
+        return resp.json()
+    except Exception:
+        return None
 
 # Kelas yang MUSTAHIL sembuh dengan diulang (kredit/tagihan/kunci/model). Sumbernya SATU
 # (`src/exceptions.py`) — disalin sebagai nilai string persis seperti `producer._FAST_FAIL_VALUES`,
@@ -122,7 +137,12 @@ class AIImageProvider(VisualProvider):
 
         # Sebab tiap adegan yang GAGAL dibuat — dibaca perakit lalu diteruskan ke laporan run.
         # Tanpa ini, kegagalan penyedia tenant sampai ke layar sebagai "durasi kependekan".
+        # Sejak 11-Agu isinya = sebab PERTAMA (jawaban penyedia), bukan sebab terakhir.
         self.scene_errors: list[str] = []
+        # Versi terstruktur: {"sebab", "kelas", "milik_kita"}. `milik_kita` menentukan boleh-tidaknya
+        # kalimat "Kegagalan terjadi di layanan AI Anda" dipasang di hilir — dulu ditebak dari teks,
+        # dan itulah cacat yang dikirim pada `0d64f79`.
+        self.scene_failures: list[dict] = []
 
         logger.info(
             f"[AIImage] Initialized: model={self.ai_model} niche={self.niche}"
@@ -186,14 +206,27 @@ class AIImageProvider(VisualProvider):
                                  f"DILEWATI (mengulang tak mungkin menolong & membakar jatah tenant). "
                                  f"Sebab: {e}")
                     self.scene_errors.append(str(e))
+                    self.scene_failures.append({
+                        "sebab": str(e), "kelas": _kelas_str,
+                        "milik_kita": bool(getattr(e, "milik_kita", False)),
+                    })
                     return (i, None, "")
                 rejection_history = [{"prompt": positive_prompt, "rejection": str(e)}]
                 safe_positive = positive_prompt
+                # [2026-08-11] SEBAB PERCOBAAN-1 WAJIB IKUT TERCATAT. Baris log lama hanya menyebut
+                # BAHWA percobaan 1 gagal, tanpa sebabnya — sementara satu-satunya salinan sebab itu
+                # hidup di `rejection_history` (memori) lalu hilang. Terukur: 35 kegagalan penyedia
+                # gambar (13 Jun · 13 Jul · 9 Agu) sebabnya TAK PERNAH tersimpan di mana pun, dan
+                # itulah kenapa jatah-habis Cloudflare tak bisa dibuktikan ada ATAU tidak ada.
+                # Nama penyedia juga dibetulkan: dulu mencetak `llm_provider` (kolom legacy, mis.
+                # "openai") padahal yang dipakai `llm_library` (mis. "groq") → log menyebut penyedia
+                # yang SALAH di kejadian yang sama dengan galatnya.
+                _penyedia = self.llm_library or self.llm_provider or "?"
                 for attempt in range(2, 4):  # attempt 2 dan 3
                     try:
                         logger.warning(
                             f"[AIImage] Scene {i+1} attempt {attempt-1} gagal — "
-                            f"rewrite via {self.llm_provider} (attempt {attempt}/3)"
+                            f"rewrite via {_penyedia} (attempt {attempt}/3). Sebab: {e}"
                         )
                         rewritten_main = await self._ai_rewrite_on_rejection(
                             original_keyword=keyword, section_index=i,
@@ -207,12 +240,26 @@ class AIImageProvider(VisualProvider):
                     except Exception as retry_err:
                         rejection_history.append({"prompt": safe_positive, "rejection": str(retry_err)})
                         logger.warning(f"[AIImage] Scene {i+1} attempt {attempt} gagal: {retry_err}")
-                # Sebab TERAKHIR yang disimpan — bukan yang pertama: itu hasil percobaan paling akhir,
-                # dan itulah keadaan penyedia saat kita menyerah.
+                # [DIBALIK 2026-08-11] Sebab PERTAMA yang disimpan, bukan yang terakhir.
+                # Alasan: percobaan 2 & 3 memanggil penulis-ulang prompt LEBIH DULU, jadi sebab
+                # TERAKHIR hampir selalu galat MILIK KITA (mis. setelan rewrite kurang) — dan
+                # itu dipakai hilir sebagai "kegagalan di layanan AI Anda" ⇒ MesinViral menuduh
+                # penyedia tenant atas bug MesinViral. Cacat itu dikirim pada commit `0d64f79` dan
+                # terukur: 75 kegagalan di worker.log MILIK KITA. Sebab PERTAMA = jawaban penyedia
+                # yang sebenarnya, satu-satunya yang berguna bagi tenant.
+                # Sebab terakhir tetap dilaporkan di log (untuk diagnosa kita), tapi TIDAK dipakai
+                # sebagai sebab yang ditampilkan.
+                _sebab_pertama = str(e)
                 _sebab_akhir = (rejection_history[-1].get("rejection") if rejection_history else str(e))
                 logger.error(f"[AIImage] Scene {i+1} GAGAL setelah 3 attempt — scene di-skip. "
-                             f"Sebab: {_sebab_akhir}")
-                self.scene_errors.append(str(_sebab_akhir))
+                             f"Sebab PERTAMA (dari penyedia, inilah yang dipakai): {_sebab_pertama} "
+                             f"| sebab terakhir (diagnosa internal): {_sebab_akhir}")
+                self.scene_errors.append(_sebab_pertama)
+                self.scene_failures.append({
+                    "sebab": _sebab_pertama,
+                    "kelas": _kelas_str or ErrorClass.UNKNOWN.value,
+                    "milik_kita": bool(getattr(e, "milik_kita", False)),
+                })
                 return (i, None, "")
 
         # ── Phase 1: generate SEMUA image KONKUREN (I/O-bound — decisions_production_scaling §5: 10→2mnt).
@@ -329,6 +376,20 @@ class AIImageProvider(VisualProvider):
         from src.providers.llm import build_llm_provider, LLMError
 
         rewrite_model = self.llm_models.get("rewrite") or self.llm_model_flat
+        if not rewrite_model:
+            # [2026-08-11] GAGAL JUJUR, BUKAN DIAM. Dulu "" diteruskan ke factory, lalu muncul
+            # sebagai "Model untuk '<Penyedia>' tidak ditentukan" — pesan yang tak menyebut SIAPA
+            # yang lupa menyerahkannya, lalu ditempeli "Kegagalan terjadi di layanan AI Anda" ⇒
+            # tenant memeriksa akun AI-nya yang sebenarnya sehat. Bersembunyi 2 bulan (49 kejadian).
+            # Sekarang: sebut persis apa yang kurang DAN tandai `milik_kita=True` di titik lahir.
+            raise VisualError(
+                "Setelan internal MesinViral belum lengkap: nama model AI untuk perbaikan prompt "
+                "gambar tidak diserahkan ke pembuat gambar "
+                f"(llm_models['rewrite'] dan llm_model dua-duanya kosong; penyedia="
+                f"'{self.llm_library or self.llm_provider or '?'}'). Ini kesalahan MesinViral, "
+                "BUKAN kesalahan akun AI tenant.",
+                error_class=ErrorClass.UNKNOWN, milik_kita=True,
+            )
         try:
             provider = build_llm_provider({
                 "llm_library":  self.llm_library,
@@ -531,7 +592,13 @@ class AIImageProvider(VisualProvider):
         async with httpx.AsyncClient(timeout=180) as client:
             r = await client.post(url, json=body, headers={"x-goog-api-key": self.api_key})
         if r.status_code != 200:
-            raise VisualError(f"Gemini image HTTP {r.status_code}: {r.text}")
+            # [2026-08-11 · AI_ERROR_MGMT §5 langkah 1-2] Nol channel memakai Gemini untuk GAMBAR
+            # per 11-Agu, tapi jalurnya ADA — aturan menuntut dipetakan SEBELUM ada yang menyalakan.
+            # `resource_exhausted` sengaja → RATE_LIMIT (boleh diulang): ia menaungi jatah-harian DAN
+            # batas-per-menit, dan salah-rem lebih mahal daripada satu percobaan tambahan.
+            _ec, _pesan, _kita = classify_gemini_error(_json_aman(r))
+            raise VisualError(f"Gemini image HTTP {r.status_code}: {r.text}",
+                              error_class=_ec, human_message=_pesan, milik_kita=_kita)
         data = r.json()
         img_b64 = None
         for c in data.get("candidates", []):
@@ -581,11 +648,18 @@ class AIImageProvider(VisualProvider):
         async with httpx.AsyncClient(timeout=120) as client:
             r = await client.post(url, json=body, headers={"Authorization": f"Bearer {token}"})
         if r.status_code != 200:
-            raise VisualError(f"Cloudflare image HTTP {r.status_code}: {r.text}")
+            # [2026-08-11 · AI_ERROR_MGMT §1+§4] Kode dibaca dari JSON, BUKAN string-scan: balasan
+            # Cloudflare berbentuk DAFTAR `{"errors":[{"code":…}]}`. Krusial: 3036 (jatah harian
+            # habis → BERHENTI) dan 3040 (kapasitas sesaat → ULANGI) dua-duanya HTTP 429.
+            _ec, _pesan, _kita = classify_cloudflare_error(_json_aman(r))
+            raise VisualError(f"Cloudflare image HTTP {r.status_code}: {r.text}",
+                              error_class=_ec, human_message=_pesan, milik_kita=_kita)
         data = r.json()
         img_b64 = ((data.get("result") or {}).get("image")) or ""
         if not (data.get("success") and img_b64):
-            raise VisualError(f"Cloudflare image: respons tanpa gambar ({str(data)})")
+            _ec, _pesan, _kita = classify_cloudflare_error(data)
+            raise VisualError(f"Cloudflare image: respons tanpa gambar ({str(data)})",
+                              error_class=_ec, human_message=_pesan, milik_kita=_kita)
         import base64 as _b64
         output_path.write_bytes(_b64.b64decode(img_b64))
 

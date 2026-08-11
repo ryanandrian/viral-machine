@@ -461,9 +461,16 @@ class Pipeline:
             # durasi dari JUMLAH klip → video lebih pendek dari narasi → cerita tenant terpotong,
             # lalu diberi label "durasi". Sebabnya diambil dari perakit (sebab penyedia yang NYATA).
             _kurang = self._periksa_kelengkapan_klip(
-                clips, script, getattr(self.visual_assembler, "last_error", None))
+                clips, script, getattr(self.visual_assembler, "last_error", None),
+                bool(getattr(self.visual_assembler, "last_milik_kita", False)))
             if _kurang:
-                raise VisualError(_kurang, step="visual")
+                # Kelas + asal ikut dibawa: rem darurat & layar membaca `error_class`, dan penanda
+                # asal menjaga agar galat kita tak pernah dilabeli milik penyedia tenant.
+                _kls = getattr(self.visual_assembler, "last_error_class", None)
+                raise VisualError(
+                    _kurang, step="visual",
+                    error_class=ErrorClass(_kls) if _kls in {e.value for e in ErrorClass} else ErrorClass.UNKNOWN,
+                    milik_kita=bool(getattr(self.visual_assembler, "last_milik_kita", False)))
             clip_count = len(clips)
             result["steps"]["visuals"] = {"status": "ok", "clips": clip_count}
             # [§8f 2026-08-05] Frame pertama gagal = video TETAP terbit tapi pembukanya lebih lemah.
@@ -862,7 +869,8 @@ class Pipeline:
             logger.warning(f"[Pipeline] Thumbnail copy gagal: {e}")
             return ""
 
-    def _periksa_kelengkapan_klip(self, clips, script: dict, sebab: str | None) -> str | None:
+    def _periksa_kelengkapan_klip(self, clips, script: dict, sebab: str | None,
+                                  milik_kita: bool = False) -> str | None:
         """Klip yang jadi WAJIB menutupi seluruh bagian naskah. Kurang = video lebih pendek dari
         narasinya ⇒ **cerita tenant terpotong di tengah kalimat**.
 
@@ -889,8 +897,20 @@ class Pipeline:
         if not _s:
             return _dasar
         # Menyebut TEMPATNYA, bukan menebak APA yang terjadi: "menolak" keliru untuk penyedia yang
-        # menggantung / servernya rusak / modelnya dipensiunkan. Yang pasti benar untuk semuanya:
-        # kegagalannya terjadi di layanan AI milik tenant, bukan di MesinViral.
+        # menggantung / servernya rusak / modelnya dipensiunkan.
+        #
+        # [DIPERBAIKI 2026-08-11] TAPI "di layanan AI Anda" TIDAK selalu benar, dan versi 0d64f79
+        # memasangnya TANPA SYARAT — sehingga galat MILIK KITA ditimpakan ke penyedia tenant.
+        # Terukur di worker.log: 75 kegagalan MILIK KITA (49 setelan rewrite · 16 berkas tak ada ·
+        # 10 FFmpeg), dan satu kejadian nyata 11-Agu 12:21 berbunyi "Kegagalan terjadi di layanan AI
+        # Anda — keterangannya: Model untuk 'Groq' tidak ditentukan" — padahal itu setelan MesinViral
+        # yang kurang. Tenant akan memeriksa akun AI-nya yang sehat, lalu menyimpulkan MesinViral rusak.
+        #
+        # Sekarang asal-usulnya DIBACA dari penanda yang dipasang di titik lahir galat
+        # (`PipelineError.milik_kita`), bukan ditebak dari teks.
+        if bool(milik_kita):
+            return (f"{_dasar} Penyebabnya ada di MesinViral, BUKAN di layanan AI Anda — "
+                    f"keterangan teknis: {_s}")
         return f"{_dasar} Kegagalan terjadi di layanan AI Anda — keterangannya: {_s}"
 
     def _pesan_gagal_visual(self) -> str:
