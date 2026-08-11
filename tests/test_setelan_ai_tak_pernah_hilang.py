@@ -146,11 +146,23 @@ class TestC_PemetaanSesuaiDokumenResmi(unittest.TestCase):
         return vbase.classify_cloudflare_error({"success": False,
                                                 "errors": [{"code": kode, "message": pesan}]})
 
-    def test_3036_jatah_harian_habis_BERHENTI(self):
+    def test_3036_jatah_harian_PULIH_SENDIRI_jangan_dibohongi(self):
+        """REGRESI YANG PERNAH DIKIRIM (11-Agu, dikoreksi jam yang sama).
+
+        `3036` = jatah GRATIS harian 10.000 neuron. Sempat dipetakan QUOTA_EXHAUSTED, dan itu membuat
+        panel tenant berkata *"Kredit penyedia AI Anda habis · Ini TIDAK akan pulih sendiri · Isi ulang
+        saldo"* sementara Telegram berkata *"Penyebabnya TIDAK pulih sendiri"* — padahal jatah ini
+        pulih tengah malam UTC, tak ada kredit yang terlibat, dan tenant malah DIPAKSA menekan tombol
+        pemulihan untuk sesuatu yang sudah benar sendiri (persis insiden channel berbayar mati ±44 jam).
+        """
         kelas, pesan, kita = self._cf(3036, "You have used up your daily free allocation of 10,000 neurons")
-        self.assertEqual(kelas, ErrorClass.QUOTA_EXHAUSTED)
-        self.assertIn(kelas, FAST_FAIL, "jatah harian habis WAJIB berhenti — mengulang percuma")
-        self.assertFalse(kita, "jatah tenant habis = milik tenant, bukan milik kita")
+        self.assertIn(kelas, SELF_HEALING,
+                      "jatah harian PULIH SENDIRI — kelas yang tidak SELF_HEALING membuat layar & "
+                      "Telegram sama-sama berkata 'tidak akan pulih sendiri'. Itu bohong.")
+        self.assertNotIn(kelas, FAST_FAIL,
+                         "kelas FAST_FAIL disajikan ke tenant sebagai 'ada yang harus Anda kerjakan' "
+                         "— untuk jatah harian TIDAK ADA yang perlu dikerjakan")
+        self.assertFalse(kita, "jatah tenant habis = di sisi tenant, bukan bug MesinViral")
         self.assertIn("neurons", pesan or "", "pesan penyedia wajib diteruskan apa adanya")
 
     def test_3040_kapasitas_sesaat_ULANGI(self):
@@ -162,10 +174,33 @@ class TestC_PemetaanSesuaiDokumenResmi(unittest.TestCase):
         self.assertIn(kelas, SELF_HEALING, "kapasitas sesaat pulih sendiri")
         self.assertFalse(kita)
 
-    def test_3036_dan_3040_TIDAK_sama(self):
+    def test_3036_dan_3040_tetap_dibedakan(self):
+        """Keduanya pulih sendiri, tapi bukan hal yang sama: 3036 pulih saat GANTI HARI, 3040 dalam
+        hitungan menit. Tenant membaca anjuran yang berbeda untuk keduanya."""
         self.assertNotEqual(self._cf(3036)[0], self._cf(3040)[0],
-                            "dua kode 429 yang berlawanan dipetakan sama = bug yang dokumen resmi "
-                            "justru menyelamatkan kita darinya")
+                            "3036 (ganti hari) dan 3040 (hitungan menit) disamakan — anjuran ke tenant "
+                            "jadi salah satu di antaranya")
+
+    def test_SEMUA_gejala_jatah_harian_satu_rak(self):
+        """⛔ INVARIAN YANG DILANGGAR MALAM INI (teguran owner: "satu gejala, tiga perlakuan berbeda").
+
+        Gejala IDENTIK — jatah gratis harian tenant habis — pernah ditangani 3 cara berbeda tergantung
+        penyedia & komponennya: jalur naskah benar, jalur gambar berbohong. Uji ini memastikan gejala
+        yang sama selalu mendarat di rak yang sama, penyedia apa pun.
+        """
+        from src.providers.llm.adapters import _classify_openai_compat_error
+        GROQ_HARIAN = ("Error code: 429 - {'error': {'message': 'Rate limit reached for model `x` "
+                       "on tokens per day (TPD): Limit 100000, Used 99988.'}}")   # sampel nyata, 8 kejadian
+        kelas_groq, _ = _classify_openai_compat_error(Exception(GROQ_HARIAN))
+        kelas_cf, _, _ = self._cf(3036)
+        kelas_gm, _, _ = vbase.classify_gemini_error({"error": {"status": "quota_exceeded"}})
+        self.assertEqual({kelas_groq, kelas_cf, kelas_gm}, {kelas_groq},
+                         f"jatah harian ditangani BEDA-BEDA: groq={kelas_groq.value} "
+                         f"cloudflare={kelas_cf.value} gemini={kelas_gm.value}. Satu gejala WAJIB satu "
+                         f"perlakuan — kalau tidak, tenant di satu penyedia dibohongi sementara di "
+                         f"penyedia lain tidak.")
+        for k in (kelas_groq, kelas_cf, kelas_gm):
+            self.assertIn(k, SELF_HEALING, "jatah harian pulih sendiri di SEMUA penyedia")
 
     def test_permintaan_kita_cacat_ditandai_milik_kita(self):
         for kode in (3003, 5004, 3006):
@@ -187,17 +222,29 @@ class TestC_PemetaanSesuaiDokumenResmi(unittest.TestCase):
         self.assertEqual(vbase.classify_cloudflare_error("bukan json")[0], ErrorClass.UNKNOWN)
 
     def test_bentuk_DAFTAR_cloudflare_terbaca(self):
-        """Cloudflare mengirim galat sebagai DAFTAR. Penilai lama (dirancang utk objek) buta total."""
-        kelas, _, _ = vbase.classify_cloudflare_error({"errors": [{"code": 3036, "message": "x"}]})
-        self.assertEqual(kelas, ErrorClass.QUOTA_EXHAUSTED,
-                         "kode di dalam `errors: [...]` tidak terbaca — inilah bentuk NYATA Cloudflare")
+        """Cloudflare mengirim galat sebagai DAFTAR. Penilai lama (dirancang utk objek) buta total.
 
-    def test_gemini_harian_vs_permenit_dibedakan(self):
+        Yang dijaga di sini HANYA: kodenya terbaca dari dalam `errors: [...]`. Kelasnya sengaja tidak
+        dipatok di sini — itu urusan uji pemetaan di atas. (Uji ini pernah memakainya sebagai patokan
+        kelas, lalu ikut MERAH ketika pemetaan 3036 dikoreksi — alat ukur yang mengikat dua hal
+        sekaligus menyembunyikan yang mana yang sebenarnya rusak.)
+        """
+        kelas, _, _ = vbase.classify_cloudflare_error({"errors": [{"code": 3036, "message": "x"}]})
+        self.assertNotEqual(kelas, ErrorClass.UNKNOWN,
+                            "kode di dalam `errors: [...]` tidak terbaca — inilah bentuk NYATA Cloudflare")
+        from src.providers.galat_registry import PENYEDIA
+        self.assertEqual(kelas, PENYEDIA['cloudflare']['kode'][3036],
+                         "kode terbaca tapi tak dipetakan sesuai tabel resmi")
+
+    def test_gemini_harian_dan_permenit_dua_duanya_pulih_sendiri(self):
+        """Keduanya pulih sendiri (harian: ganti hari · per-menit: hitungan detik) — yang WAJIB sama
+        adalah 'tenant tidak perlu berbuat apa-apa'. Membedakan lamanya menunggu adalah pekerjaan rak
+        "jatah harian" (menunggu ketok owner), bukan alasan menaruh yang harian di rak "isi ulang saldo"."""
         q = vbase.classify_gemini_error({"error": {"status": "quota_exceeded", "message": "m"}})
         r = vbase.classify_gemini_error({"error": {"status": "rate_limit_exceeded", "message": "m"}})
-        self.assertEqual(q[0], ErrorClass.QUOTA_EXHAUSTED)
-        self.assertEqual(r[0], ErrorClass.RATE_LIMIT)
+        self.assertIn(q[0], SELF_HEALING, "jatah harian Gemini pulih sendiri saat jatah berganti")
         self.assertIn(r[0], SELF_HEALING)
+        self.assertNotIn(q[0], FAST_FAIL, "jangan suruh tenant memperbaiki yang tak perlu diperbaiki")
 
     def test_gemini_resource_exhausted_konservatif(self):
         """RESOURCE_EXHAUSTED menaungi harian DAN per-menit. Tanpa kode spesifik → pilih yang boleh

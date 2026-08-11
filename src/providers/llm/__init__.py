@@ -53,6 +53,10 @@ def build_llm_provider(cfg: dict) -> LLMProvider:
         display_name=spec.get("display_name") or provider_key,
         base_url=spec.get("base_url"),
         param_schema=spec.get("request_param_schema") or {},
+        # [2026-08-12] Identitas vendor diteruskan supaya penilai galat tahu TABEL siapa yang dipakai
+        # (`galat_registry`). Nilainya sudah ada di sini — dipakai memilih adaptor & spec — hanya
+        # belum pernah diserahkan ke bawah. Tanpa ini penilai menebak vendor dari nama tampilan.
+        provider_key=provider_key,
     )
 
 

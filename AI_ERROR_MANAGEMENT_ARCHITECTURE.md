@@ -23,6 +23,13 @@
 > satu dari dua, dan yang kedua tak akan pernah kita duga.
 > Kode yang **tidak ada di dokumen resmi dan tanpa sampel** → `UNKNOWN` = aman (retryable, perilaku lama).
 > **Update kode + dokumen dalam commit yang SAMA** (anti-drift, disiplin CLAUDE.md §3.7).
+> **📍 LETAKNYA SATU: `src/providers/galat_registry.py`** (sejak 12-Agu, ketok owner: *"pastikan tidak
+> ada jalur lain yang menghandle AI error management"*). Sebelumnya EMPAT penilai tersebar → gejala
+> IDENTIK ditangani berbeda-beda per vendor/komponen. **Menambah vendor/model = menambah BARIS DATA di
+> berkas itu, NOL koding.** Tiap baris membawa `sumber` + `dibaca`. Penilai kedua di berkas lain =
+> **uji MERAH** (`tests/test_galat_generik.py`).
+> **🔀 AGREGATOR** (fal.ai; blackbox.ai dsb. ke depan) meneruskan galat vendor DI BALIKNYA → ditandai
+> `agregator: True`; tipe `downstream_service_*` memicu penyisiran ulang lintas-vendor.
 
 ---
 
@@ -111,8 +118,9 @@ Klasifikasi menempel pada **transport yang menerima error**, bukan merek model. 
 3. **Tangkap sampel nyata bila ada** — untuk memastikan **BENTUK** jawaban di kabel (daftar? objek? di mana kodenya?).
    Tidak ada sampel **BUKAN** alasan menunda pemetaan; ia hanya menuntut pembacaan bentuk yang tahan banting.
 4. **Catat di §4** — kolom Bukti = tautan dokumen + tanggal (+ sampel bila ada).
-5. **Implement** `classify_error()` di adapter transport-nya (pola `_classify_el_error`), raise dgn
-   `error_class` + `human_message` + **penanda ASAL** (milik KITA vs milik PENYEDIA — bila dokumen resmi
+5. **Tambahkan BARIS DATA** di `src/providers/galat_registry.PENYEDIA` (bukan menulis penilai baru —
+   penilainya sudah generik & satu). Adapter transportnya cukup raise dgn `error_class` +
+   `human_message` + **penanda ASAL** (milik KITA vs milik PENYEDIA — bila dokumen resmi
    menyatakan permintaannya cacat, itu kesalahan KITA dan **haram ditimpakan ke tenant**).
    Bila error ditelan lapisan atas, pastikan propagasi (pola `last_*` tts_engine).
 6. **Uji** (unit classifier + persistensi + keputusan berhenti/ulangi) → set status ✅ + commit kode & dokumen BERSAMAAN.
@@ -120,6 +128,13 @@ Klasifikasi menempel pada **transport yang menerima error**, bukan merek model. 
 ## §6 Tata-kelola (anti-drift, anti-asumsi)
 - Pemetaan bersumber **dokumen resmi penyedia (WAJIB)** + sampel nyata (untuk bentuk kabel). **HARAM MENEBAK**; di luar keduanya → `UNKNOWN`.
 - **Penyedia/model baru TIDAK boleh dinyalakan sebelum tabel galatnya dipetakan** (§5 langkah 1–2).
+- **NOL JALUR KEDUA:** pemetaan penanda→kelas HANYA di `galat_registry.py`. Tabel anjuran per-KELAS
+  (mis. `_VISUAL_HUMAN`, `_OPENAI_COMPAT_HUMAN`) tetap sah di adapter karena kalimatnya khas-komponen.
+  Dijaga `tests/test_galat_generik.py` (dibuktikan merah untuk 3 bentuk pelanggaran).
+- **Jaring HTTP generik SENGAJA SEMPIT** (401·402·403·404·429 + 413=milik-kita). 5xx/408/422/409
+  DIKELUARKAN: keputusan owner "yang RAGU tetap UNKNOWN" tetap berlaku; vendor yang dokumennya
+  menyebut arti status itu tertangani lewat tabelnya sendiri. Melebarkannya = ubah perilaku-saat-gagal
+  = **butuh ketok owner**.
 - Kode = otoritatif; dokumen = peta + bukti; sinkron dalam commit yang sama.
 - Circuit-breaker TIDAK boleh string-sniffing — hanya baca `error_class` terstruktur.
 - Menambah/menghapus kelas fast-fail = ubah `FAST_FAIL` (`src/exceptions.py`) saja.
@@ -493,6 +508,28 @@ tiga kerusakan sekaligus — dan menyembunyikan diri selama dua bulan.
 **7/7 memilih model perbaikan yang cocok dengan penyedianya sendiri** (gemini→`gemini-2.5-flash`,
 groq→`llama-3.3-70b`/`llama-3.1-8b`, openai→`gpt-4o-mini`). Sebelum perbaikan: **6 dari 7 kosong.**
 Suite **852 lulus**, nol regresi. Penjaga permanen: `tests/test_setelan_ai_tak_pernah_hilang.py` (26 uji).
+
+**🔁 KOREKSI & PENYATUAN 12-Agu (lanjutan langsung §8j).** Beberapa jam setelah §8j dikirim, ditemukan
+bahwa `3036` (jatah GRATIS harian) dipetakan QUOTA_EXHAUSTED — dan itu membuat **layar tenant DAN
+Telegram** sama-sama berkata *"Kredit habis · TIDAK akan pulih sendiri · Isi ulang saldo"* untuk jatah
+yang pulih tengah malam UTC, sekaligus **memaksa tenant menekan tombol pemulihan** untuk sesuatu yang
+sudah benar sendiri (bentuk persis insiden channel berbayar mati ±44 jam). Owner: *"satu gejala, tiga
+perlakuan berbeda — ini perbuatan goblok."* Yang dikerjakan:
+- `3036`/Gemini `quota_exceeded` → **RATE_LIMIT**, rak yang SUDAH dipakai gejala identik di jalur naskah
+  (Groq `tokens per day`, 8 sampel nyata). Nol rak baru, nol tampilan disentuh.
+- **EMPAT penilai tersebar → SATU** (`galat_registry.py`, data + penilai generik). Adapter lama menjadi
+  pembungkus tipis; tanda tangan dijaga → nol titik panggil berubah, uji-uji lama tetap hijau.
+- **Seluruh 9 penyedia katalog dipetakan dari dokumen RESMI** (tautan + tanggal di tiap baris), termasuk
+  yang sebelumnya NOL golongan: **Anthropic** (punya `billing_error` 402 tersendiri), **OpenAI TTS**,
+  **Edge TTS** (6 channel aktif; diakui terang tak punya dokumen resmi), **fal.ai** (AGREGATOR).
+- **OpenAI:** dua kode terdokumentasi yang belum pernah kita kenali — `credit_balance_exhausted`
+  (saldo → tindak) vs `organization_usage_limit_exceeded` (batas pakai → pulih). 4 channel aktif.
+- **`milik_kita` diseragamkan** ke jalur naskah & suara (dulu hanya gambar): setelan kurang / pustaka
+  belum terpasang = pihak KITA, haram ditimpakan ke tenant.
+- **Pagar:** `tests/test_galat_generik.py` (16 uji) — penyedia aktif di katalog DB wajib punya baris ·
+  nol penilai kedua · jatah berkala wajib pulih-sendiri · saldo berbayar wajib menuntut tindakan ·
+  jaring generik tak boleh merem cepat · terusan agregator terbaca. **Dibuktikan MERAH** untuk 3 bentuk
+  pelanggaran, lalu hijau lagi. Suite **853 → 869 lulus, nol regresi.**
 
 **⚠️ MASIH TERBUKA — butuh ketok owner, sengaja TIDAK diputuskan sendiri:** Cloudflare `3036` (jatah
 gratis harian) dipetakan QUOTA_EXHAUSTED = **FAST_FAIL (berhenti)**, sesuai rencana yang disetujui.

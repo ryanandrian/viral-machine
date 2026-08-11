@@ -734,6 +734,17 @@ Bukti runtime: **7/7 channel aktif** kini memilih model perbaikan yang cocok den
 6 dari 7 kosong). Suite **826 → 852 lulus, nol regresi.** Penjaga permanen `tests/test_setelan_ai_tak_pernah_hilang.py`
 (26 uji) membuat **model AI baru tak bisa dinyalakan tanpa tabel galatnya**. Nol migrasi DB · nol komponen FE baru.
 
+**REALISASI 2026-08-12 — PENYATUAN GALAT AI (SSOT §8j lanjutan):** EMPAT penilai galat tersebar jadi
+**SATU** (`src/providers/galat_registry.py`) — sebab "setiap perbaikan menambah kekusutan": vendor baru
+dulu berarti menulis penilai baru. Sekarang **vendor/model baru = menambah baris data, nol koding**, dan
+agregator (fal.ai kini; blackbox.ai dsb. nanti) ditandai satu penanda sehingga galat vendor di baliknya
+ikut terbaca. Seluruh **9 penyedia katalog** dipetakan dari **dokumen RESMI** + tanggal baca, termasuk 3
+yang sebelumnya NOL golongan (Anthropic · OpenAI TTS · Edge TTS). Sekaligus **mengoreksi cacat yang saya
+kirim sendiri jam sebelumnya**: jatah gratis harian Cloudflare masuk rak "kredit habis" ⇒ layar & Telegram
+sama-sama berkata "tidak akan pulih sendiri, isi ulang saldo" untuk jatah yang pulih tengah malam.
+Pagar `tests/test_galat_generik.py` (16 uji) **dibuktikan merah** untuk 3 bentuk pelanggaran. Suite
+**869 lulus, nol regresi.** Nol migrasi DB · nol perubahan tampilan · nol komponen baru.
+
 ### [B25] REM DARURAT: simpan sebabnya & katakan apa artinya — 🟢 A–D SELESAI + TERVALIDASI (2026-08-03)
 - **SPEC/SSOT = `AI_ERROR_MANAGEMENT_ARCHITECTURE.md` §8a (celah, kini TERTUTUP) + §9 (kontrak tampilan per-KELAS).** WAJIB baca §9 sebelum menyentuh UI kegagalan produksi.
 - **SEBAB:** rem darurat MEMBUANG kelas error yang sudah diketahui sistem → layar & Telegram cuma bisa menebak ("mis. saldo/kredensial AI") → tenant tak pernah tahu **apakah sebabnya pulih sendiri**. Dampak terukur pada tenant BERBAYAR: **Bang Us-Dat mati ±44 jam** menunggu jatah harian yang sudah pulih keesokan harinya; BISIK NUSANTARA pola yang sama sehari kemudian.

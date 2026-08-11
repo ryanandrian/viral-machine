@@ -66,7 +66,8 @@ class EdgeTTSProvider(TTSProvider):
         self.voice = config.get("tts_voice")
         if not self.voice:
             raise TTSError(
-                "Edge TTS: voice belum ter-resolve. Set voice di Channel (channels.voice_key, §10.B FINAL)."
+                "Edge TTS: voice belum ter-resolve. Set voice di Channel (channels.voice_key, §10.B FINAL).",
+                milik_kita=True,      # setelan kurang = pihak KITA, bukan akun tenant
             )
         # LAJU BICARA = HANYA baseline suara dari katalog (kenop admin yang terlihat di layar).
         # Lapisan `tts_voice_settings[niche].speed` TIDAK LAGI DIBACA — lihat catatan di atas: itu lubang
@@ -107,7 +108,8 @@ class EdgeTTSProvider(TTSProvider):
         try:
             import edge_tts
         except ImportError:
-            raise TTSError("edge-tts tidak terinstall. Jalankan: pip install edge-tts")
+            raise TTSError("edge-tts tidak terinstall. Jalankan: pip install edge-tts",
+                           milik_kita=True)   # pemasangan di sisi KITA
 
         logger.info(f"[EdgeTTS] voice={self.voice} rate={self.rate} chars={len(text)}")
 
@@ -168,7 +170,13 @@ class EdgeTTSProvider(TTSProvider):
             return output_path
 
         except Exception as e:
-            raise TTSError(f"Edge TTS generation failed: {e}") from e
+            # [2026-08-12] Edge TTS TIDAK punya dokumen galat resmi (layanan Microsoft tanpa kunci
+            # lewat pustaka komunitas) — Aturan Emas §1 tak bisa dipenuhi di sini, dan itu dicatat
+            # terang alih-alih dikarang. Tanpa kunci/saldo/jatah, satu-satunya kegagalan wajar =
+            # jaringan/layanan → gangguan sesaat (boleh diulang, pulih sendiri). Dulu galat ini tak
+            # bergolongan sama sekali: 6 channel aktif memakainya.
+            raise TTSError(f"Edge TTS generation failed: {e}",
+                           error_class=ErrorClass.TRANSIENT) from e
 
     def get_word_timestamps(self) -> list[dict] | None:
         """

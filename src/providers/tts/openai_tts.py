@@ -43,14 +43,16 @@ class OpenAITTSProvider(TTSProvider):
         if not self.api_key:
             raise TTSError(
                 "OpenAI TTS membutuhkan API key. "
-                "Set tts_api_key atau visual_api_key di tenant_configs Supabase."
+                "Set tts_api_key atau visual_api_key di tenant_configs Supabase.",
+                milik_kita=True,      # setelan kurang = pihak KITA, bukan akun tenant
             )
         # F1-05: voice ter-resolve di config layer. NO map hardcode/fallback (perbaiki bug:
         # self.voice dulu TAK ter-set bila tts_voice ADA → AttributeError saat generate).
         self.voice = config.get("tts_voice")
         if not self.voice:
             raise TTSError(
-                "OpenAI TTS: voice belum ter-resolve. Set voice di Channel (channels.voice_key, §10.B FINAL)."
+                "OpenAI TTS: voice belum ter-resolve. Set voice di Channel (channels.voice_key, §10.B FINAL).",
+                milik_kita=True,
             )
         self.model = config.get("tts_model") or "tts-1"  # standard default
         # base_url dari ai_providers → vendor TTS ber-protokol OpenAI audio.speech (mis. Groq PlayAI)
@@ -110,7 +112,16 @@ class OpenAITTSProvider(TTSProvider):
         except TTSError:
             raise
         except Exception as e:
-            raise TTSError(f"OpenAI TTS generation failed: {e}") from e
+            # [2026-08-12] Dulu NOL galat digolongkan di jalur ini — kunci salah, saldo habis, dan
+            # gangguan sesaat semuanya jadi "tak dikenal": diulang 3x lalu channel berhenti dengan
+            # pesan yang tak bisa tenant kerjakan. Vendornya sama dengan OpenAI naskah, jadi tabel
+            # galatnya pun sama (registry: alias "openai_tts" -> "openai").
+            from src.providers.galat_registry import golongkan
+            _p = golongkan("openai_tts",
+                           status=getattr(e, "status_code", None) or getattr(e, "status", None),
+                           kode=getattr(e, "code", None) or getattr(e, "type", None), teks=str(e))
+            raise TTSError(f"OpenAI TTS generation failed: {e}",
+                           error_class=_p.kelas, milik_kita=_p.milik_kita) from e
 
     def get_word_timestamps(self) -> list[dict] | None:
         # OpenAI TTS belum support word-level timestamps

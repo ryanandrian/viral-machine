@@ -21,26 +21,22 @@ import re
 from src.exceptions import ErrorClass
 
 
-# [ERROR-MGMT] Classifier transport OpenAI-COMPATIBLE (SPEC AI_ERROR_MANAGEMENT_ARCHITECTURE.md
-# §4 registry; pola persis _classify_el_error). HANYA kode ber-BUKTI-SAMPEL nyata. Kode lain → UNKNOWN (aman).
-# Token = string PASTI muncul di str(exc) (SDK cetak body vendor utuh). Bukti sampel:
-#   • `invalid_api_key` (401) · `model_not_found` (404) — worker.log 20-Jul (insiden MVT via Groq).
-#   • `is no longer available` (Gemini 404 model dipensiunkan) — production_runs 21/22-Jul (insiden riandipantria `gemini-2.5-flash`).
-#   • `insufficient_quota` — worker.log 09-Jul (OpenAI) · `exceeded your current quota` — production_runs 21-Jul (OpenAI, insiden riandipantria).
-# CATATAN 429: HANYA token quota di atas → fast-fail; 429 rate-limit throttle (pesan "Rate limit reached") TIDAK di-map → UNKNOWN/retryable (jangan salah-rem).
-# 429 ditangani GENERIK di bawah (lapis 2), bukan lewat kalimat khas vendor — katalog model akan terus
-# bertambah dan aturan ber-kalimat akan diam-diam gagal pada vendor berikutnya. Bukti sampel yang
-# melatarbelakanginya (Groq llama-3.3-70b, 2026-08-01): "Rate limit reached ... on tokens per day (TPD):
-# Limit 100000, Used 97156 ... try again in 35m51s" — kuota HARIAN tingkat gratis. SENGAJA bukan
-# QUOTA_EXHAUSTED: kelas itu masuk FAST_FAIL yang MENGHENTIKAN channel dan menuntut "Jalankan Ulang"
-# manual, sedangkan kuota harian pulih sendiri — tenant tingkat gratis akan terpaksa menekannya tiap hari.
-_OPENAI_COMPAT_ERROR_MAP = {
-    "invalid_api_key": ErrorClass.AUTH_INVALID,
-    "model_not_found": ErrorClass.MODEL_UNAVAILABLE,
-    "is no longer available": ErrorClass.MODEL_UNAVAILABLE,
-    "insufficient_quota": ErrorClass.QUOTA_EXHAUSTED,
-    "exceeded your current quota": ErrorClass.QUOTA_EXHAUSTED,
-}
+# [ERROR-MGMT] Penggolongan galat transport OpenAI-compatible.
+# ⚠️ TABEL KODENYA TIDAK LAGI DI SINI — seluruh pemetaan pindah ke `src/providers/galat_registry.py`,
+# satu-satunya tempat pemetaan galat penyedia AI (ketok owner 12-Agu: "pastikan tidak ada jalur lain
+# yang menghandle AI error management"). Menambah vendor/model = menambah DATA di registry, nol koding.
+# Latar yang tetap penting dan sudah dipindahkan ke registry sebagai catatan per-vendor:
+#   • Batas HARIAN tingkat gratis (Groq `tokens per day`, sampel nyata 01-Agu ×8) SENGAJA bukan
+#     QUOTA_EXHAUSTED — kelas itu FAST_FAIL yang MENGHENTIKAN channel & menuntut "Jalankan Ulang"
+#     manual, sedangkan jatah harian pulih sendiri; tenant gratis akan terpaksa menekannya tiap hari.
+#   • Kode yang sama bisa berbeda arti antar vendor (`quota_exceeded`: harian di Gemini, bulanan di
+#     ElevenLabs) — itu sebabnya penilai WAJIB tahu identitas vendornya.
+# [2026-08-12] TABEL KODE DIPINDAH ke `src/providers/galat_registry.py` — SATU-SATUNYA tempat pemetaan
+# galat penyedia AI (ketok owner: "pastikan tidak ada jalur lain yang menghandle AI error management").
+# Yang TINGGAL di berkas ini hanyalah ANJURAN untuk tenant per-golongan (di bawah), karena anjuran itu
+# khas-komponen: "penulis naskah" berbeda kalimatnya dari "pembuat gambar" walau golongannya sama.
+# Keluarga openai-compatible = penyedia yang memakai adaptor ini (katalog DB: openai · groq · gemini).
+_KELUARGA_COMPAT: tuple[str, ...] = ("openai", "groq", "gemini")
 _OPENAI_COMPAT_HUMAN = {
     ErrorClass.AUTH_INVALID: "Kunci API AI (penulis naskah) ditolak penyedia. Periksa/perbarui kunci di halaman Integrasi, lalu pastikan Akun (kunci) di setting channel sepadan dengan penyedianya.",
     ErrorClass.MODEL_UNAVAILABLE: "Model AI ini sudah tidak tersedia di penyedianya (dipensiunkan/tak bisa diakses). Pilih model lain di setting channel.",
@@ -59,44 +55,66 @@ _HUMAN_KUOTA_HARIAN = ("Jatah HARIAN penyedia AI (penulis naskah) sudah terpakai
 _RX_HARIAN = re.compile(r"per day|daily limit|/day|harian", re.I)
 
 
-def _classify_openai_compat_error(exc: Exception) -> tuple[ErrorClass, str | None]:
-    """Petakan error transport OpenAI-compatible → (ErrorClass, human_message).
+def _classify_openai_compat_error(exc: Exception, penyedia: str = "") -> tuple[ErrorClass, str | None]:
+    """Galat transport OpenAI-compatible → (ErrorClass, anjuran untuk tenant).
 
-    DUA LAPIS, dari yang PALING SPESIFIK ke yang PALING UMUM — supaya berlaku untuk penyedia yang
-    BELUM ADA hari ini juga (katalog model akan terus bertambah; aturan yang hanya mengenali kalimat
-    khas satu vendor akan diam-diam gagal pada vendor berikutnya):
+    Pembungkus tipis di atas `galat_registry.golongkan()` — penggolongannya milik registry, yang
+    tinggal di sini hanya ANJURAN khas komponen "penulis naskah". `penyedia` = `ai_providers.
+    provider_key`; bila pemanggil tak menyebutkannya, seluruh keluarga adaptor ini dicoba.
 
-      1. Kode vendor ber-BUKTI-SAMPEL (tabel di atas) — ini yang membedakan "kredit habis" (fast-fail,
-         menghentikan channel) dari "terlalu cepat" (cukup ditunggu). Salah kelas di sini = channel
-         tenant berhenti padahal cukup menunggu, atau sebaliknya.
-      2. **HTTP 429 apa pun** → RATE_LIMIT. 429 adalah standar HTTP untuk "terlalu banyak permintaan",
-         bukan istilah milik satu vendor. Sebelum ini, 429 yang kalimatnya tak dikenal jatuh ke UNKNOWN:
-         mesin menunggu beberapa detik lalu menyerah dengan pesan "kesalahan tak dikenal" — padahal
-         penyedianya hanya minta ditunggu. Lapis ini menangkapnya untuk vendor mana pun.
+    Tanda tangan lama (satu argumen) SENGAJA tetap sah — dipakai uji-uji yang sudah ada.
     """
+    from src.providers.galat_registry import golongkan
+
     blob = str(exc)
-    for tok, ec in _OPENAI_COMPAT_ERROR_MAP.items():
-        if tok in blob:
-            return ec, _OPENAI_COMPAT_HUMAN.get(ec)
-    # Status HTTP dibaca dari atribut SDK bila ada (openai/groq/anthropic sama-sama menyediakannya),
+    # Status HTTP dari atribut SDK bila ada (openai/groq/anthropic sama-sama menyediakannya),
     # else dari teks — SDK selalu mencetak "Error code: NNN".
     _status = getattr(exc, "status_code", None) or getattr(exc, "status", None)
-    if _status == 429 or "Error code: 429" in blob or "429 Too Many Requests" in blob:
-        _pesan = (_HUMAN_KUOTA_HARIAN if _RX_HARIAN.search(blob)
-                  else _OPENAI_COMPAT_HUMAN.get(ErrorClass.RATE_LIMIT))
-        return ErrorClass.RATE_LIMIT, _pesan
-    return ErrorClass.UNKNOWN, None
+    if _status is None:
+        # Bentuk yang dipakai vendor/SDK berbeda-beda: "Error code: 429" (SDK OpenAI-compat),
+        # "429 Too Many Requests" (HTTP mentah), "HTTP 503" (transport kita). Regresi nyata:
+        # versi pertama hanya membaca bentuk PERTAMA, sehingga 429 mentah jatuh ke UNKNOWN.
+        _m = re.search(r"Error code: (\d{3})|HTTP (\d{3})|\b(\d{3}) (?:Too Many|Service|Internal|Bad|Unauthorized|Forbidden|Not Found)", blob)
+        _status = int(next((g for g in _m.groups() if g), 0)) or None if _m else None
+    _kode = getattr(exc, "code", None) or getattr(exc, "type", None)
+
+    # Vendor yang dicoba: yang diberitahu pemanggil, else seluruh keluarga adaptor ini. Vendor SPESIFIK
+    # penting karena kode yang sama bisa berarti hal berbeda antar vendor (mis. `quota_exceeded` =
+    # jatah HARIAN di Gemini tapi jatah BULANAN di ElevenLabs) — menebaknya = menasihati tenant salah.
+    _kandidat = (penyedia,) if penyedia else _KELUARGA_COMPAT
+    for nama in _kandidat:
+        p = golongkan(nama, status=_status, kode=_kode, teks=blob)
+        if p.dasar.startswith(("kode/teks-vendor", "terusan-agregator")):
+            return p.kelas, _anjuran(p.kelas, blob)
+
+    # Tak ada kode vendor yang cocok → jaring generik (batas berkala · semantik HTTP).
+    p = golongkan(penyedia or "", status=_status, kode=_kode, teks=blob)
+    return p.kelas, (_anjuran(p.kelas, blob) if p.kelas is not ErrorClass.UNKNOWN else None)
+
+
+def _anjuran(kelas: ErrorClass, blob: str) -> str | None:
+    """Anjuran untuk tenant — khas komponen 'penulis naskah'. Golongan datang dari registry;
+    kalimat anjurannya tinggal di sini karena beda komponen beda tindakan."""
+    if kelas is ErrorClass.RATE_LIMIT and _RX_HARIAN.search(blob):
+        return _HUMAN_KUOTA_HARIAN
+    return _OPENAI_COMPAT_HUMAN.get(kelas)
 
 
 class _BaseAdapter(LLMProvider):
     """Adapter dibangun oleh factory dari spec DB (ai_providers) + key tenant."""
 
     def __init__(self, *, api_key: str = "", display_name: str = "",
-                 base_url: str | None = None, param_schema: dict | None = None):
+                 base_url: str | None = None, param_schema: dict | None = None,
+                 provider_key: str = ""):
         self.api_key = api_key or ""
         self.display_name = display_name or "LLM provider"
         self.base_url = base_url or None
         self.param_schema = param_schema or {}
+        # [2026-08-12] IDENTITAS vendor (`ai_providers.provider_key`) — bukan nama tampilan.
+        # Wajib ada karena kode galat yang SAMA berarti hal BERBEDA antar vendor: `quota_exceeded`
+        # = jatah HARIAN di Gemini (pulih besok) tapi jatah BULANAN di ElevenLabs (harus upgrade).
+        # Tanpa identitas ini penilai harus menebak, dan menebak = menasihati tenant salah.
+        self.provider_key = (provider_key or "").strip().lower()
 
     @property
     def provider_name(self) -> str:
@@ -130,9 +148,9 @@ class AnthropicMessagesAdapter(_BaseAdapter):
     def complete(self, *, system, user, model, temperature=0.7, max_tokens=2000,
                  as_json=False) -> str:
         if not self.api_key:
-            raise LLMError(f"Provider '{self.display_name}' butuh API key (BYOK).")
+            raise LLMError(f"Provider '{self.display_name}' butuh API key (BYOK).", milik_kita=True)
         if not model:
-            raise LLMError(f"Model untuk '{self.display_name}' tidak ditentukan.")
+            raise LLMError(f"Model untuk '{self.display_name}' tidak ditentukan.", milik_kita=True)
         # [Fix 2026-07-20] model_key katalog → model_id resmi vendor — SATU pintu utk seluruh
         # pemanggil produksi (menyamakan jalur produksi dgn jalur Uji admin: lolos Uji = pasti jalan).
         model = _catalog.resolve_model_id(model)
@@ -182,7 +200,13 @@ class AnthropicMessagesAdapter(_BaseAdapter):
         except LLMError:
             raise
         except Exception as e:
-            raise LLMError(f"Provider '{self.display_name}' gagal: {e}") from e
+            # [2026-08-12] Dulu galat Anthropic TIDAK PERNAH digolongkan — seluruh kegagalan jadi
+            # "tak dikenal": diulang 3x walau kunci salah, dan tenant tak diberi tahu apa pun yang
+            # bisa dikerjakan. Anthropic satu-satunya vendor dengan kode TAGIHAN tersendiri (402
+            # `billing_error`); tanpa penggolongan, itu ikut hilang.
+            _ec, _human = _classify_openai_compat_error(e, self.provider_key)
+            raise LLMError(f"Provider '{self.display_name}' gagal: {e}",
+                           error_class=_ec, human_message=_human) from e
 
 
 class OpenAIChatAdapter(_BaseAdapter):
@@ -223,9 +247,9 @@ class OpenAIChatAdapter(_BaseAdapter):
     def complete(self, *, system, user, model, temperature=0.7, max_tokens=2000,
                  as_json=False) -> str:
         if not self.api_key:
-            raise LLMError(f"Provider '{self.display_name}' butuh API key (BYOK).")
+            raise LLMError(f"Provider '{self.display_name}' butuh API key (BYOK).", milik_kita=True)
         if not model:
-            raise LLMError(f"Model untuk '{self.display_name}' tidak ditentukan.")
+            raise LLMError(f"Model untuk '{self.display_name}' tidak ditentukan.", milik_kita=True)
         # [Fix 2026-07-20] model_key katalog → model_id resmi vendor — SATU pintu utk seluruh
         # pemanggil produksi (menyamakan jalur produksi dgn jalur Uji admin: lolos Uji = pasti jalan).
         model = _catalog.resolve_model_id(model)
@@ -293,7 +317,7 @@ class OpenAIChatAdapter(_BaseAdapter):
         except Exception as e:
             # [ERROR-MGMT 2026-07-20] klasifikasi ber-bukti-sampel → error_class + pesan manusiawi
             # mengalir terstruktur (rem-cepat FAST_FAIL di hilir membaca MAKNA, bukan teks).
-            _ec, _human = _classify_openai_compat_error(e)
+            _ec, _human = _classify_openai_compat_error(e, self.provider_key)
             raise LLMError(f"Provider '{self.display_name}' gagal: {e}",
                            error_class=_ec, human_message=_human) from e
 
@@ -318,9 +342,9 @@ class FalAnyLlmAdapter(_BaseAdapter):
     def complete(self, *, system, user, model, temperature=0.7, max_tokens=2000,
                  as_json=False) -> str:
         if not self.api_key:
-            raise LLMError(f"Provider '{self.display_name}' butuh API key (BYOK).")
+            raise LLMError(f"Provider '{self.display_name}' butuh API key (BYOK).", milik_kita=True)
         if not model:
-            raise LLMError(f"Model untuk '{self.display_name}' tidak ditentukan.")
+            raise LLMError(f"Model untuk '{self.display_name}' tidak ditentukan.", milik_kita=True)
         model = _catalog.resolve_model_id(model)
         sistem = system or ""
         if as_json:
@@ -342,7 +366,7 @@ class FalAnyLlmAdapter(_BaseAdapter):
                     detail = e.read()[:300].decode("utf-8", "replace")
                 except Exception:
                     detail = ""
-            _ec, _human = _classify_openai_compat_error(e)
+            _ec, _human = _classify_openai_compat_error(e, self.provider_key)
             raise LLMError(f"Provider '{self.display_name}' gagal: {e} {detail}".strip(),
                            error_class=_ec, human_message=_human) from e
         # fal membalas 200 dengan field `error` terisi bila model menolak → tetap GAGAL JUJUR.

@@ -18,11 +18,11 @@ from src.exceptions import ErrorClass
 # [ERROR-MGMT 2026-07-18] Classifier transport ElevenLabs-DIRECT (SPEC AI_ERROR_MANAGEMENT_ARCHITECTURE.md
 # §4 registry). HANYA kode terverifikasi dari log kita (16-Jun quota_exceeded, 17-Jul payment_issue).
 # Kode belum-terbukti → UNKNOWN (aman). CATATAN: ElevenLabs-VIA-fal BUKAN di sini — itu milik adapter fal.
-_EL_ERROR_MAP = {
-    "payment_issue":    ErrorClass.ACCOUNT_BILLING,
-    "payment_required": ErrorClass.ACCOUNT_BILLING,
-    "quota_exceeded":   ErrorClass.QUOTA_EXHAUSTED,
-}
+# [2026-08-12] TABEL KODE PINDAH ke `src/providers/galat_registry.py` (satu-satunya tempat pemetaan
+# galat penyedia AI). Tabel lama hanya punya 3 kode dari sampel; dokumen resmi ElevenLabs menyebut
+# jauh lebih banyak (`insufficient_credits` 402 · `concurrent_limit_exceeded` · `subscription_required`
+# 403 · `voice_not_found` 404 · `system_busy` · `invalid_api_key`). Yang tinggal di sini: ANJURAN
+# untuk tenant, karena kalimatnya khas komponen SUARA.
 # Kalimat kurasi (dari pesan provider asli terverifikasi) — dipakai bila message terstruktur tak terbaca.
 _EL_HUMAN = {
     ErrorClass.ACCOUNT_BILLING: "Langganan ElevenLabs bermasalah: pembayaran gagal/belum lunas. Selesaikan tagihan (invoice) di ElevenLabs, lalu Jalankan Ulang.",
@@ -31,9 +31,13 @@ _EL_HUMAN = {
 
 
 def _classify_el_error(exc: Exception) -> tuple[ErrorClass, str | None]:
-    """Petakan error SDK ElevenLabs → (ErrorClass, human_message). Bebas asumsi:
-    kode dideteksi via body terstruktur BILA ada, else string-scan token PASTI di str(exc).
-    Tak cocok → (UNKNOWN, None) = aman (perilaku lama)."""
+    """Galat SDK ElevenLabs → (ErrorClass, anjuran). Pembungkus tipis di atas registry tunggal.
+
+    Kode dibaca dari body terstruktur bila ada, else dari teks. Pesan PENYEDIA diutamakan apa adanya
+    (owner 08-Agu: jangan diterjemahkan); anjuran kita hanya dipakai bila penyedia tak berpesan.
+    """
+    from src.providers.galat_registry import golongkan
+
     detail = {}
     body = getattr(exc, "body", None)
     if isinstance(body, dict):
@@ -41,19 +45,14 @@ def _classify_el_error(exc: Exception) -> tuple[ErrorClass, str | None]:
         if isinstance(d, dict):
             detail = d
     blob = str(exc)
-    # kode: struktur dulu, lalu string-scan token pasti (kedua sumber = kode yang sama)
-    code = str(detail.get("code") or detail.get("status") or "")
-    ec = _EL_ERROR_MAP.get(code)
-    if ec is None:
-        for tok, cls in _EL_ERROR_MAP.items():
-            if tok in blob:
-                ec = cls
-                break
-    if ec is None:
-        return ErrorClass.UNKNOWN, None
-    provider_msg = detail.get("message") if isinstance(detail.get("message"), str) else None
-    human = provider_msg or _EL_HUMAN.get(ec)
-    return ec, human
+    kode = str(detail.get("code") or detail.get("status") or "") or None
+    status = getattr(exc, "status_code", None) or getattr(exc, "status", None)
+    pesan_penyedia = detail.get("message") if isinstance(detail.get("message"), str) else None
+
+    p = golongkan("elevenlabs", status=status, kode=kode, teks=blob, pesan=pesan_penyedia)
+    if p.kelas is ErrorClass.UNKNOWN and not p.milik_kita:
+        return ErrorClass.UNKNOWN, pesan_penyedia
+    return p.kelas, (pesan_penyedia or _EL_HUMAN.get(p.kelas))
 
 
 def _chars_to_words(
