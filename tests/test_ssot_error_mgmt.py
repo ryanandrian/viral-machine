@@ -145,5 +145,97 @@ class TestTakAdaAnchorBarisBasi(unittest.TestCase):
         self.assertFalse(sisa, f"Anchor baris muncul lagi (selalu basi, menyesatkan): {sisa}")
 
 
+# ── [12-Agu] TABEL §4 vs REGISTRY — DUA ARAH ────────────────────────────────────────────────────
+#
+# KENAPA BLOK INI LAHIR. Owner: *"bukankah hal ini sudah dijaga mesin???"* — penjaganya ADA, dan
+# hijau, tapi **tabel §4 tak pernah masuk daftar periksanya.** Akibatnya dokumen bisa MENYATAKAN
+# jatah gratis harian sebagai "kredit habis" sementara mesin menggolongkannya pulih-sendiri, dan
+# tak satu pun alarm berbunyi. Lebih buruk: Claude membaca hijau itu lalu melapor "dokumen sudah
+# sejalan dengan kode" — mempercayai alarm untuk sesuatu yang tidak diukurnya.
+#
+# Cacat bentuknya: penjaga versi lama memeriksa **satu arah** — "apa yang disebut dokumen memang
+# ada?" — tapi tidak pernah sebaliknya: "apa yang ADA sudah disebut dokumen?" Karena itu segala
+# yang BARU (penyedia baru, penjaga baru) bisa hilang dari dokumen tanpa jejak. Blok ini menjaga
+# KEDUA arah, dan hanya mungkin sejak pemetaan menjadi DATA di satu tempat.
+
+from src.providers import galat_registry as _reg  # noqa: E402
+
+
+def _bagian_penyedia() -> str:
+    """Isi §4 saja (tabel penyedia)."""
+    return _bagian("## §4 REGISTRY", "## §5 ")
+
+
+class TestTabelPenyediaSelarasRegistry(unittest.TestCase):
+
+    def _rows(self) -> str:
+        return _baris_tabel(_bagian_penyedia())
+
+    def test_setiap_penyedia_registry_ada_di_tabel(self):
+        rows = self._rows()
+        hilang = [n for n, s in _reg.PENYEDIA.items()
+                  if "alias" not in s and f"`{n}`" not in rows]
+        self.assertFalse(
+            hilang,
+            f"penyedia sudah dipetakan di kode tapi TIDAK ADA di tabel §4: {hilang}. Dokumen jadi "
+            f"peta yang bolong — pembacanya akan menyimpulkan penyedia itu belum tertangani.")
+
+    def test_tak_ada_penyedia_hantu_di_tabel(self):
+        rows = self._rows()
+        disebut = set(re.findall(r"^\|\s*`([a-z0-9_]+)`", rows, re.M))
+        hantu = sorted(disebut - set(_reg.PENYEDIA))
+        self.assertFalse(hantu, f"tabel §4 menyebut penyedia yang TIDAK ADA di registry: {hantu}")
+
+    def test_sumber_dan_tanggal_baca_cocok(self):
+        """Aturan Emas §1 menuntut tiap pemetaan membawa tautan + tanggal. Kalau angkanya beda antara
+        dokumen dan data, salah satunya bohong — dan pembaca tak tahu yang mana."""
+        rows = self._rows()
+        for nama, spek in _reg.PENYEDIA.items():
+            if "alias" in spek:
+                continue
+            baris = [b for b in rows.split("\n") if f"`{nama}`" in b]
+            self.assertTrue(baris, f"{nama}: barisnya tak ditemukan di §4")
+            b = baris[0]
+            with self.subTest(nama):
+                self.assertIn(spek.get("dibaca", "—"), b,
+                              f"{nama}: tanggal baca dokumen di §4 tak cocok dengan registry")
+                if spek.get("sumber"):
+                    self.assertIn(spek["sumber"], b,
+                                  f"{nama}: tautan sumber di §4 tak cocok dengan registry")
+                else:
+                    self.assertIn("TIDAK ADA dokumen resmi", b,
+                                  f"{nama}: tanpa dokumen resmi, tapi §4 tidak mengakuinya terang")
+
+    def test_rincian_kode_tidak_disalin_ke_dokumen(self):
+        """Salinan itulah yang melenceng. §4 wajib MENUNJUK registry, bukan menyalin pemetaannya."""
+        bagian = _bagian_penyedia()
+        self.assertIn("galat_registry.py", bagian,
+                      "§4 tidak menunjuk sumber tunggalnya — pembaca akan menyalin ulang & melenceng lagi")
+
+
+class TestPenjagaNyataDisebutDokumen(unittest.TestCase):
+    """ARAH SEBALIKNYA. Penjaga versi lama hanya memastikan berkas yang DIRUJUK dokumen ada; penjaga
+    yang BARU dibuat bisa tak pernah disebut. Nyata: tiga penjaga hidup, dokumen menyebut satu."""
+
+    def test_semua_penjaga_topik_ini_disebut(self):
+        t = _teks()
+        akar = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        penanda = ("galat_registry", "classify_visual_error", "_classify_openai_compat_error",
+                   "_classify_el_error", "classify_cloudflare_error")
+        hilang = []
+        for nama in sorted(os.listdir(os.path.join(akar, "tests"))):
+            if not (nama.startswith("test_") and nama.endswith(".py")):
+                continue
+            isi = open(os.path.join(akar, "tests", nama), encoding="utf-8", errors="ignore").read()
+            if any(k in isi for k in penanda) and f"tests/{nama}" not in t:
+                hilang.append(f"tests/{nama}")
+        self.assertFalse(
+            hilang,
+            f"penjaga HIDUP untuk topik ini tidak disebut dokumen: {hilang}.\nSesi berikutnya akan "
+            f"menyangka topik ini kurang terjaga, lalu membangun penjaga kembar — atau lebih buruk, "
+            f"menganggap dokumen sudah lengkap padahal bolong.")
+
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

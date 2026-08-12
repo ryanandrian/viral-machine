@@ -73,7 +73,7 @@ Klasifikasi menempel pada **transport yang menerima error**, bukan merek model. 
 > — nama bertahan melewati penyuntingan, nomor tidak. (CLAUDE.md §1.2 mewajibkan grep ulang; kalau
 > tetap wajib di-grep, nomornya tak menambah nilai apa pun.)
 
-1. Adapter tangkap error provider → `_classify_el_error()` (`src/providers/tts/elevenlabs.py`) → `raise TTSError(..., error_class=, human_message=)`.
+1. Adapter tangkap error provider → **penilai TUNGGAL** `galat_registry.golongkan()` (dipanggil lewat pembungkus tipis tiap adapter, mis. `_classify_el_error` di `src/providers/tts/elevenlabs.py`) → `raise TTSError(..., error_class=, human_message=, milik_kita=)`. **Sejak 12-Agu tak ada lagi penilai per-vendor** — satu jalur untuk naskah · suara · gambar · video (dijaga `tests/test_galat_generik.py`).
 2. `tts_engine.generate()` **menelan** error TTS (return `"",[]`) TAPI menyimpan `last_error/last_error_class/last_human_error` (`src/production/tts_engine.py` except).
 3. `pipeline` STEP 5 lihat audio kosong → `raise TTSError(last_human_error or last_error, error_class=last_error_class, human_message=...)` (`src/orchestrator/pipeline.py`, cari `raise TTSError`).
 4. `pipeline` except → `result["error_class"]` + `result["human_error"]` (`pipeline.py`, cari `result["error_class"]`).
@@ -81,33 +81,46 @@ Klasifikasi menempel pada **transport yang menerima error**, bukan merek model. 
 6. Circuit-breaker: `inventory.latest_failure(cid)` → bila `error_class ∈ FAST_FAIL` **rem di streak≥1**; else streak≥`PRODUCER_FAIL_STREAK_STOP`(3) (`producer.py` plan_and_submit).
 7. **PESAN SERAGAM SEMUA PERMUKAAN (SSOT tampilan — ditegakkan 2026-07-22):** teks yang tampil ke manusia = **`human_error or error`** yang IDENTIK di setiap permukaan, tak boleh ada jalur bercerita sendiri: (a) `production_runs.error_message` — KETIGA jalur producer (`_record_production_run` scheduled · insert direct-publish · insert direct-test); (b) tabel `videos` (`pipeline` crash-path `write_failed_run`, var `human_err`); (c) Telegram `notify_failure` (var `human_err` sama); (d) FE drawer Runs + halaman detail (baca `production_runs.error_message`). ⚠️ Circuit-break `notify_circuit_break` juga pakai `error_message`. **Sebelum 22-Jul MENYIMPANG:** jalur direct-test & `notify_failure` mengirim `str(e)` mentah → Telegram/DB bisa beda dari layar (celah tampak hanya utk error TERKLASIFIKASI; unknown kebetulan sama). Kini kanonik. `notify_publish_fail` (jalur upload YouTube gagal, `_yt_err`) = konteks berbeda, belum diseragamkan (dicatat jujur — bukan crash produksi).
 
-## §4 REGISTRY per-adapter (titik "inject" — tabel HIDUP)
-| Provider/Transport | Kode mentah | → ErrorClass | Status | Bukti |
-|---|---|---|---|---|
-| **ElevenLabs (direct)** | `payment_issue`, `payment_required` | ACCOUNT_BILLING | ✅ AKTIF | worker.log 2026-07-17 (RAD) |
-| **ElevenLabs (direct)** | `quota_exceeded` | QUOTA_EXHAUSTED | ✅ AKTIF | worker.log 2026-06-16 |
-| **Google OAuth (YouTube)** | `invalid_grant` | AUTH_INVALID | ✅ AKTIF | OAuth2 RFC 6749 (refresh token dicabut/kedaluwarsa); klasifikasi di `youtube_publisher._get_credentials` + `channel_analytics._load_credentials` → `mark_youtube_account_invalid` (status='invalid' → gerbang `channel_missing` menutup → produksi berhenti). RefreshError LAIN = transien (tak ditandai). [B11] 3.2 2026-07-18 |
-| **OpenAI-compatible (LLM: OpenAI/Groq/dst via `openai_chat`)** | `invalid_api_key` (401) | AUTH_INVALID | ✅ AKTIF | worker.log 2026-07-20 (insiden MVT; classifier `_classify_openai_compat_error` adapters.py + rem-cepat no-retry di niche_selector + propagasi last_* → production_runs.error_class; uji 6/6) |
-| **OpenAI-compatible (LLM)** | `model_not_found` (404) | **MODEL_UNAVAILABLE (kelas BARU 20-Jul, masuk FAST_FAIL)** | ✅ AKTIF | worker.log 2026-07-20 (MVT llama-4-scout — model dipensiunkan vendor, terbukti via fasilitas Uji admin dgn model_id resmi; pesan manusiawi "pilih model lain di setting channel") |
-| **OpenAI (LLM/image)** | `insufficient_quota` · `exceeded your current quota` | QUOTA_EXHAUSTED | ✅ AKTIF (22-Jul) | worker.log 09-Jul + production_runs 21-Jul (riandipantria) — uji 6/6 |
-| **Google Gemini (AI Studio, adapter `openai_chat`)** | `is no longer available` (404 model dipensiunkan) | MODEL_UNAVAILABLE | ✅ AKTIF (22-Jul) | production_runs 21/22-Jul (riandipantria `gemini-2.5-flash` ditutup Google utk user baru) |
-| **SEMUA transport OpenAI-compatible** | **HTTP 429 apa pun** (status SDK, else `Error code: 429`) | RATE_LIMIT | ✅ AKTIF (2026-08-01) | Groq llama-3.3 TPD: "Rate limit reached ... tokens per day (TPD): Limit 100000, Used 97156 ... try again in 35m51s" (uji rantai penuh 01-Agu). **Aturan LEVEL-TRANSPORT, bukan kalimat vendor** (§2): katalog model akan terus bertambah dan aturan ber-kalimat diam-diam gagal pada vendor berikutnya. §1 sendiri mendefinisikan RATE_LIMIT = "throttle sesaat (429)". Pesan manusiawi punya DUA varian: batas HARIAN (bila pesan menyebut per-day/daily/harian) vs sesaat — tindakan tenantnya berbeda. TIDAK masuk FAST_FAIL → channel tidak direm (kekhawatiran lama "salah-rem" berlaku utk QUOTA_EXHAUSTED, bukan RATE_LIMIT) |
-| **OpenAI (jalur GAMBAR)** | `billing_hard_limit_reached` | ACCOUNT_BILLING | ✅ **AKTIF (2026-08-05)** | worker.log **2026-07-29 11:32:40** `visual_assembler._generate_hook_frame`: `Error code: 400 - {'message': 'Billing hard limit has been reached.', 'code': 'billing_hard_limit_reached'}`. Diimplement `classify_visual_error` (`providers/visual/base.py`, pola `_classify_el_error`) + dibungkus di `_generate_dalle`; uji `test_kelas_error_visual.py`. *(Baris ini pernah berbunyi "belum ada sampel" — salah, dikoreksi 04-Agu.)* |
-| **fal (agregator: gambar & video)** | `Exhausted balance` · `User is locked` (403) | QUOTA_EXHAUSTED | ✅ **AKTIF (2026-08-05)** | worker.log **2026-07-14 19:54/19:56/19:57** (6 kejadian): `fal submit HTTP 403: {"detail":"User is locked. Reason: Exhausted balance. Top up your balance at fal.ai/dashboard/billing."}` → saldo penyedia HABIS. Diimplement di KEDUA transport (`ai_video._generate_fal` & `ai_image._generate_fal`) lewat `classify_visual_error` yang sama (satu sumber, tabel TIDAK disalin — dijaga uji) |
-| **edge_tts** | — gratis, tak ada billing | — | n/a | — |
-| **SEMUA penyedia suara** | audio jauh lebih pendek dari ramalan (`tts_potong_ambang_pct`) | TRANSIENT | ✅ AKTIF (2026-08-01) | narasi TERPUTUS; laju terukur 1 dari 73 render. Berlaku per potongan pada naskah panjang |
-| **SEMUA penyedia suara** | tak menyelesaikan permintaan dalam batas waktu | TRANSIENT | ✅ AKTIF (2026-08-01) | direproduksi 01-Agu: render Edge menggantung belasan menit; tanpa batas waktu satu utas pekerja mati selamanya tanpa error |
-| **edge_tts** | penanda kalimat vendor mencakup < `tts_cakupan_min_pct` naskah | TRANSIENT | ✅ AKTIF (2026-08-01) | sintesis berhenti di tengah tanpa error; teks 581 huruf → audio 27,0 dtk vs 40,8 dtk saat diulang |
-| **Anthropic (LLM)** | ? | ? | ⏳ menunggu sampel | — |
-| **Cloudflare Workers AI (jalur GAMBAR)** | `3036`·`3040`·`3023`·`5035`·`5016`·`5018`/`3041`·`5007`/`3042`·`3007`/`3008`·`3003`/`5004`/`3006` | QUOTA_EXHAUSTED · TRANSIENT · ACCOUNT_BILLING · ACCOUNT_BILLING · AUTH_INVALID · AUTH_INVALID · MODEL_UNAVAILABLE · TRANSIENT · **milik KITA** | ✅ **AKTIF 11-Agu** (`classify_cloudflare_error`, dijaga `tests/test_setelan_ai_tak_pernah_hilang.py`) | **7 dari 11 channel memakainya** (`cf-flux-schnell`, 6 aktif; diverifikasi DB **11-Agu**). Sumber: [Workers AI Errors](https://developers.cloudflare.com/workers-ai/platform/errors/) + [Limits](https://developers.cloudflare.com/workers-ai/platform/limits/), dibaca **2026-08-11**. ⚠️ **`3036` (jatah harian 10.000 neuron habis → BERHENTI) dan `3040` (kapasitas penuh sesaat → ULANGI) sama-sama HTTP 429** — memetakan dari status HTTP saja = bug. ⚠️ Balasannya berbentuk **DAFTAR** `{"errors":[{"code":…}]}` → kode dibaca dari JSON di titik terima, bukan string-scan. ⚠️ `3003`/`5004`/`3006` = Cloudflare menyatakan **permintaan KITA** cacat → **haram ditimpakan ke tenant**. *(Catatan sejarah: baris ini sampai 11-Agu berbunyi "pemetaan menunggu sampel nyata" — itu pembacaan yang SALAH atas aturan emas, dan owner mematahkannya: "kenapa harus menunggu masalah muncul, memangnya penyedia besar tidak menyediakan panduan API-nya?")* |
-| **Gemini (jalur GAMBAR)** | `quota_exceeded`·`rate_limit_exceeded`·`failed_precondition`·`authentication`/`unauthenticated`·`permission_denied`·`model_not_found`/`not_found`·`service_unavailable`/`unavailable`/`deadline_exceeded`/`api_error`/`internal`·`resource_exhausted`·`invalid_request`/`invalid_argument` | QUOTA_EXHAUSTED · RATE_LIMIT · ACCOUNT_BILLING · AUTH_INVALID · AUTH_INVALID · MODEL_UNAVAILABLE · TRANSIENT · **RATE_LIMIT (konservatif)** · **milik KITA** | ✅ **AKTIF 11-Agu** (`classify_gemini_error`) | **nol channel memakainya untuk GAMBAR** (diverifikasi DB 11-Agu; Abyss ID memakai Gemini untuk **naskah**, gambarnya Cloudflare) — prioritas rendah, dicatat agar tak terlihat "tercakup". Tabel resmi untuk jalur naskah: [Gemini API errors](https://ai.google.dev/gemini-api/docs/api-errors) — `quota_exceeded` (harian → BERHENTI) vs `rate_limit_exceeded` (per-menit → ULANGI) · `failed_precondition` (tagihan) · `authentication` · `model_not_found`. |
+## §4 REGISTRY penyedia — **DIJAGA MESIN, bukan disalin tangan**
 
-> **Jujur soal cakupan registry ini:** dari ±15 titik galat di jalur gambar, **hanya 2 yang menghasilkan
-> kelas** (submit fal · panggilan gambar OpenAI). Tiga belas sisanya jatuh ke `UNKNOWN` — aman (retryable),
-> tapi berarti keputusan "mengulang itu sia-sia atau tidak" hanya bisa diambil pada 2 titik itu. Tabel ini
-> dulu tak menyebutkannya, sehingga terbaca seolah jalur gambar sudah tercakup. Sekarang disebut apa adanya.
+> **📍 RINCIAN KODE ADA DI `src/providers/galat_registry.py`, BUKAN DI SINI.** Sampai 12-Agu tabel ini
+> MENYALIN pemetaan kode dari kode program — dan salinan itulah yang melenceng: dua baris sempat
+> menyatakan jatah gratis harian sebagai "kredit habis", bertentangan dengan mesin yang berjalan.
+> Owner: *"bukankah hal ini sudah dijaga mesin???"* — penjaganya ADA, tapi **tabel ini tak pernah
+> masuk daftar periksanya**, jadi hijau padahal isinya salah. Sejak sekarang tabel di bawah
+> **dibandingkan otomatis** dengan data registry oleh `tests/test_ssot_error_mgmt.py`:
+> penyedia hilang · sumber/tanggal tak cocok · penyedia hantu = **uji MERAH, commit DITOLAK.**
 
-> Baris ⏳ = belum di-fast-fail → jatuh ke `UNKNOWN`/streak-3 (aman). Naikkan ke ✅ hanya setelah `classify_error()` adapter diisi + diuji + bukti sampel dicatat.
+| Penyedia (`provider_key`) | Penanda dipetakan | Sumber | Dibaca |
+|---|---|---|---|
+| `anthropic` | 11 | [dokumen resmi](https://platform.claude.com/docs/en/api/errors) | 2026-08-12 |
+| `cloudflare` | 17 | [dokumen resmi](https://developers.cloudflare.com/workers-ai/platform/errors/) | 2026-08-11 |
+| `edge_tts` | 4 | **TIDAK ADA dokumen resmi** | 2026-08-12 |
+| `elevenlabs` | 17 | [dokumen resmi](https://elevenlabs.io/docs/eleven-api/resources/errors) | 2026-08-12 |
+| `fal` · **AGREGATOR** | 23 | [dokumen resmi](https://fal.ai/docs/documentation/model-apis/errors) | 2026-08-12 |
+| `gemini` | 19 | [dokumen resmi](https://ai.google.dev/gemini-api/docs/api-errors) | 2026-08-11 |
+| `groq` | 1 | [dokumen resmi](https://console.groq.com/docs/errors) | 2026-08-12 |
+| `openai` (alias: `openai_tts`) | 9 | [dokumen resmi](https://developers.openai.com/api/docs/guides/error-codes) | 2026-08-12 |
+
+> **Cara membaca:** "Penanda dipetakan" = jumlah kode/kalimat/penanda-milik-kita yang dikenali untuk
+> penyedia itu. Rincian per-kode + alasan tiap pilihan ada di registry, satu tempat, berikut catatan
+> keterbatasannya. Menambah vendor/model = **menambah baris data di registry** (§5), lalu baris di
+> tabel ini wajib menyusul — dituntut mesin, bukan ingatan.
+
+> **Keterbatasan yang diakui terang (bukan kelalaian kita):** `groq` tidak menerbitkan kode galat
+> rinci — hanya status HTTP + kalimat; batas HARIAN vs PER-MENIT hanya terbaca dari kalimatnya.
+> `edge_tts` tidak punya dokumen galat resmi sama sekali (layanan tanpa kunci lewat pustaka
+> komunitas) — dipetakan hanya sejauh yang jujur: gangguan jaringan = sesaat, setelan kurang = milik kita.
+
+> **Jaring HTTP generik** (401·402·403·404·429, plus 413 = permintaan KITA cacat) berlaku untuk
+> penyedia **yang belum ada hari ini** sekalipun, supaya vendor baru langsung berperilaku waras.
+> 5xx/408/422/409 SENGAJA DIKELUARKAN — keputusan owner "yang RAGU tetap UNKNOWN" tetap berlaku.
+
+> **Bukti sampel produksi** (sejarah, tidak ikut berubah): fal 403 `Exhausted balance`/`User is locked`
+> ×6 (worker.log 14-Jul) · OpenAI `billing_hard_limit_reached` (29-Jul) · OpenAI `insufficient_quota`
+> (09-Jul) · `exceeded your current quota` (21-Jul) · Gemini `is no longer available` (21/22-Jul) ·
+> `invalid_api_key`/`model_not_found` (20-Jul) · Groq `tokens per day (TPD)` ×8 (01-Agu) ·
+> ElevenLabs `payment_issue` (17-Jul) / `quota_exceeded` (16-Jun) · Google OAuth `invalid_grant`.
 
 ## §5 Checklist onboarding provider baru (6 langkah) — *urutan diubah 2026-08-11: dokumen resmi DULU*
 > **Langkah 1 WAJIB SELESAI SEBELUM penyedia/model dinyalakan untuk tenant.** Menyalakan penyedia yang
@@ -141,6 +154,14 @@ Klasifikasi menempel pada **transport yang menerima error**, bukan merek model. 
 
 ## §7 Verifikasi — berkas uji NYATA (diperbaiki 2026-08-03)
 > ⚠️ **KOREKSI.** Versi lama mengklaim bukti dari `tests/test_errmgmt.py` **13/13** — berkas itu
+> **Penjaga yang HIDUP untuk topik ini (wajib lengkap — arah sebaliknya ikut dijaga sejak 12-Agu:**
+> **yang ada di repo WAJIB disebut di sini, bukan hanya sebaliknya):**
+> `tests/test_ssot_error_mgmt.py` (dokumen vs kode + tabel §4 vs registry) ·
+> `tests/test_galat_generik.py` (satu jalur · katalog DB lengkap · jatah berkala · agregator) ·
+> `tests/test_setelan_ai_tak_pernah_hilang.py` (setelan AI tak hilang · salah kita jangan ditimpakan) ·
+> `tests/test_kelas_error_visual.py` · `tests/test_error_429_generik.py` ·
+> `tests/test_openai_compat_error_classes.py`
+
 > **TIDAK ADA di repo**. Entah berganti nama entah tak pernah di-commit; yang jelas, selama berbulan-bulan
 > dokumen SSOT ini menyandarkan buktinya pada berkas yang tak bisa dijalankan siapa pun. Diganti dengan
 > daftar berkas yang benar-benar ada beserta angka yang benar-benar dijalankan.
@@ -616,6 +637,20 @@ langganan/jatah uji — [B24]), yang **bukan** `ErrorClass` dan bukan kegagalan 
 terpisah (`components/gate-message.tsx`). Dokumen ini hanya mengatur kegagalan AI.
 
 ## §10 PENJAGA ANTI-DRIFT (supaya dokumen ini TETAP SSOT)
+
+> **Tiga penjaga, dan batas masing-masing — ditulis supaya hijau tak pernah lagi dibaca sebagai
+> "dokumen sudah sejalan":**
+> 1. `tests/test_ssot_error_mgmt.py` — taksonomi §1 vs `ErrorClass`, daftar FAST_FAIL, anjuran
+>    per-golongan, larangan menyebut vendor di UI, **dan sejak 12-Agu tabel §4 vs `galat_registry`
+>    (dua arah)** + kelengkapan daftar penjaga di §7/§10 (dua arah).
+> 2. `tests/test_galat_generik.py` — nol penilai kedua · penyedia aktif di katalog DB wajib
+>    terpetakan · jatah berkala wajib pulih-sendiri · jaring generik tak boleh merem cepat.
+> 3. `tests/test_setelan_ai_tak_pernah_hilang.py` — setelan AI wajib diserahkan · sebab PERTAMA
+>    yang dipakai · galat milik kita tak boleh dilabeli "layanan AI Anda".
+>
+> ⚠️ **YANG TIDAK DIJAGA SIAPA PUN:** apakah pemetaan sebuah kode memang BENAR menurut dokumen
+> vendornya. Mesin bisa memastikan tabel & kode sinkron; ia tidak bisa membaca dokumen vendor
+> untuk Anda. Itu tetap pekerjaan manusia — dan di situlah §1 Aturan Emas berlaku.
 
 Audit 2026-08-03 menemukan dokumen ini menyimpang dari kode di **empat** tempat sekaligus — dua di
 antaranya membuatnya **menyatakan perilaku yang salah** (kelas hilang, daftar FAST_FAIL kurang satu),
