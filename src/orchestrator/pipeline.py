@@ -685,6 +685,18 @@ class Pipeline:
                     # ──────────────────────────────────────────────────
 
                     # s81: Notifikasi Telegram sukses publish
+                    # [2026-08-12] LAMA PRODUKSI DIISI DI SINI — dulu pesannya SELALU "0m 0s".
+                    # Sebabnya bukan salah hitung tapi salah URUTAN: notifikasi ini membaca
+                    # `result["elapsed_seconds"]`, sementara angka itu baru ditulis ±70 baris di
+                    # BAWAH (blok penutup run). Jadi yang terbaca selalu nilai bawaan 0.
+                    # Angkanya diisi di sini, bukan notifikasinya dipindah ke bawah: memindahkannya
+                    # akan menggeser urutan notifikasi terhadap penulisan DB & langkah lain — risiko
+                    # yang tak sepadan untuk satu angka. Blok penutup tetap menimpanya dengan nilai
+                    # final (beda beberapa milidetik) → catatan DB tak berubah perilakunya.
+                    try:
+                        result["elapsed_seconds"] = round(time.time() - start_time, 1)
+                    except Exception:
+                        pass                      # angka hiasan; jangan sampai menggagalkan run
                     try:
                         self.telegram.notify_success(result, run_config=run_config)
                     except Exception as _te:

@@ -200,7 +200,10 @@ def _on_loop_error(sb, e: Exception) -> None:
         from src.utils.telegram_notifier import TelegramNotifier
         TelegramNotifier().notify_admin(
             f"🛑 <b>Penyimpanan S3/NEO BERMASALAH</b> ({_s3_fail_streak}× gagal beruntun)\n"
-            f"💥 <code>{str(e)[:200]}</code>\n"
+            # [2026-08-12] DIBERSIHKAN + tak lagi dipotong senyap. Balasan galat S3 berbentuk XML
+            # (`<Error><Code>…`); tanpa dibersihkan, Telegram MENOLAK seluruh pesan dan owner tidak
+            # menerima apa pun — justru pada alarm paling penting (semua channel berhenti).
+            f"💥 <code>{TelegramNotifier.aman(e)}</code>\n"
             f"⚠️ Produksi & publish SEMUA channel akan gagal sampai pulih — cek akun/endpoint NEO BiznetGio.")
         _state_epoch_set(sb, "s3_failure_alerted_at")
     except Exception as _ae:

@@ -756,6 +756,21 @@ benar. Batas jujur: kegagalan lama ber-kelas `unknown` tak ikut tersembuhkan —
 bukan penyembuhan ke belakang. Suite **880 lulus**, pagar dibuktikan merah dua arah. Nol DB · nol
 tampilan · nol komponen baru.
 
+**REALISASI 2026-08-12 — PEMBERITAHUAN TELEGRAM BISA DITINDAK (owner menunjukkan 3 pesan nyata):**
+(1) Pesan "calon pelanggan panas" dulu hanya kode mesin + istilah Inggris → kini nama, email, channel,
+alasan panas (**sudah pernah produksi video**), umur lapse, jumlah email pengingat, tautan admin.
+(2) Pesan "video terbit" dulu jauh lebih miskin dari pesan video uji — sebabnya penerbit tak pernah
+diserahkan angka produksi yang **sudah ada di metadata item** (durasi · ukuran · skor · jumlah kata);
+kini diserahkan, **nol kueri baru**. (3) `⏰ Runtime: 0m 0s` — bukan salah hitung tapi salah URUTAN:
+angka dibaca di pipeline baris ~689, ditulis ±70 baris di bawah; kini diisi sebelum dikirim.
+(4) Nomor produksi internal (`run_id`) **dicabut dari mata tenant** di 4 pesan; tetap dicatat di log.
+(5) `notify_failure` masih memotong pesan galat **senyap** di 250 huruf — pola yang sudah diketok
+terlarang (§8h); kini memakai pemendek yang MENGUMUMKAN, sama dengan fungsi sebelahnya.
+(6) Nilai yang diselipkan ke pesan OWNER kini dibersihkan (`TelegramNotifier.aman`) — tanpa itu teks
+galat ber-`<`/`&` (balasan S3 berbentuk XML) membuat Telegram menolak pesannya dan **alarm terpenting
+hilang tanpa jejak**; bahaya ini belum pernah terjadi (nol pesan ditolak sepanjang log), ditutup karena murah.
+Suite **880 → 893 lulus**, pagar dibuktikan merah 4 bentuk pelanggaran. Nol DB · nol tampilan · nol komponen baru.
+
 ### [B25] REM DARURAT: simpan sebabnya & katakan apa artinya — 🟢 A–D SELESAI + TERVALIDASI (2026-08-03)
 - **SPEC/SSOT = `AI_ERROR_MANAGEMENT_ARCHITECTURE.md` §8a (celah, kini TERTUTUP) + §9 (kontrak tampilan per-KELAS).** WAJIB baca §9 sebelum menyentuh UI kegagalan produksi.
 - **SEBAB:** rem darurat MEMBUANG kelas error yang sudah diketahui sistem → layar & Telegram cuma bisa menebak ("mis. saldo/kredensial AI") → tenant tak pernah tahu **apakah sebabnya pulih sendiri**. Dampak terukur pada tenant BERBAYAR: **Bang Us-Dat mati ±44 jam** menunggu jatah harian yang sudah pulih keesokan harinya; BISIK NUSANTARA pola yang sama sehari kemudian.

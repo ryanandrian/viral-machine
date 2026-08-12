@@ -423,7 +423,9 @@ def _apply_settlement(sb, order: dict, txn: str | None, fraud, payment_type=None
                     try:
                         from src.utils.telegram_notifier import TelegramNotifier
                         TelegramNotifier().notify_admin(
-                            f"🤝⚠️ Komisi agen GAGAL tercatat utk order {order_id}: {_pe}\n"
+                            # [2026-08-12] nilai dibersihkan: pesan admin dikirim sebagai HTML,
+                            # dan teks galat bisa memuat < > & → Telegram menolak, alarm UANG hilang.
+                            f"🤝⚠️ Komisi agen GAGAL tercatat utk order {TelegramNotifier.aman(order_id)}: {TelegramNotifier.aman(_pe)}\n"
                             f"Pembayaran tenant AMAN & aktif. Bereskan lalu catat manual/ulang.")
                     except Exception:
                         pass
@@ -439,7 +441,9 @@ def _apply_settlement(sb, order: dict, txn: str | None, fraud, payment_type=None
             logger.error(f"[Partner] GAGAL reversal komisi order={order_id}: {_pe}")
             try:
                 from src.utils.telegram_notifier import TelegramNotifier
-                TelegramNotifier().notify_admin(f"🤝⚠️ Tarik-balik komisi GAGAL utk refund order {order_id}: {_pe}")
+                TelegramNotifier().notify_admin(
+                    f"🤝⚠️ Tarik-balik komisi GAGAL utk refund order {TelegramNotifier.aman(order_id)}: "
+                    f"{TelegramNotifier.aman(_pe)}")
             except Exception:
                 pass
 

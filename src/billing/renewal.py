@@ -85,6 +85,55 @@ def next_status(row: dict, now: datetime, grace_days: int) -> str | None:
 
 
 # ── B9: segmentasi lead (dari perilaku NYATA) ───────────────────────────────
+def _kabari_owner_lead_panas(sb, tenant_id: str, row: dict, langkah: int, hari_lewat) -> None:
+    """Kabari OWNER bahwa ada calon pelanggan yang layak dihubungi sendiri — dengan bahan yang
+    bisa langsung dipakai menghubunginya.
+
+    [2026-08-12] Sebelumnya pesannya berbunyi:
+        "🔥 Lead PANAS (trial-lapse) tenant c37d2ee3-… — layak outreach personal (nurture step 3)."
+    Owner: *"isinya hanya anda dan Tuhan yang mengerti"* — dan ia benar: sebuah kode mesin plus tiga
+    istilah Inggris, tanpa nama, tanpa kontak, tanpa tautan. Tidak ada yang bisa ia kerjakan dengan itu.
+    Padahal SEMUA bahannya sudah di tangan pada titik ini:
+      • `display_handle` — terisi pada 18/18 tenant (diverifikasi ke DB 12-Agu)
+      • alamat email — lewat `tenant_email()`, helper yang SUDAH dipakai 3 baris di atas untuk
+        mengirim email nurture ke orang yang sama (jadi terbukti jalan di jalur ini)
+      • `hari_lewat` — sudah dihitung pemanggil (umur sejak masa coba berakhir)
+      • arti "panas" — `_compute_lead_temp`: tenant ini SUDAH PERNAH MEMPRODUKSI VIDEO. Itu sinyal
+        beli terkuat yang kita punya, dan justru itu yang dulu tidak disebutkan.
+    Nama channel dibaca dari tabel `channels` (bukan `tenant_configs.channel_name` — kolom itu kosong
+    pada 17 dari 18 tenant). Fail-soft: satu kueri, pada jalur yang jarang jalan; gagal → dilewati.
+    """
+    from src.utils.telegram_notifier import TelegramNotifier
+    from src.utils.email import tenant_email
+
+    A = TelegramNotifier.aman          # bersihkan NILAI (pesan admin dikirim sebagai HTML)
+    nama = (row.get("display_handle") or "").strip()
+    email = ""
+    try:
+        email = tenant_email(tenant_id, sb) or ""
+    except Exception:
+        pass
+    channel = ""
+    try:
+        _ch = (sb.table("channels").select("channel_name").eq("tenant_id", tenant_id)
+               .limit(1).execute().data or [])
+        channel = ((_ch[0].get("channel_name") if _ch else "") or "").strip()
+    except Exception:
+        pass
+
+    baris = ["🔥 <b>Calon pelanggan panas — layak Anda hubungi sendiri</b>"]
+    baris.append(f"• <b>{A(nama)}</b>" + (f" — channel <b>{A(channel)}</b>" if channel else "")
+                 if nama else (f"• Channel <b>{A(channel)}</b>" if channel else "• (nama belum diisi)"))
+    if email:
+        baris.append(f"• Email: {A(email)}")
+    baris.append("• <b>Sudah pernah memproduksi video</b> selama masa coba — itu sebabnya panas")
+    if hari_lewat is not None:
+        baris.append(f"• Masa coba berakhir <b>{int(hari_lewat)} hari lalu</b>, belum berlangganan")
+    baris.append(f"• Sudah {int(langkah)}× dikirimi email pengingat")
+    baris.append("👉 https://mesinviral.com/admin/tenants")
+    TelegramNotifier().notify_admin("\n".join(baris))
+
+
 def _compute_lead_temp(sb, tenant_id: str) -> str:
     """🔥hot = sudah produksi (production_runs/videos) · 🌤️warm = ada channel/kredensial tapi belum produksi ·
     ❄️cold = nyaris tak setup. Dihitung sekali saat masuk trial_expired/suspended. Fail-soft → 'cold'."""
@@ -317,10 +366,9 @@ def sweep_subscriptions(sb) -> dict:
                         # lead PANAS → alert admin utk outreach personal (Telegram)
                         if (step_upd.get("lead_temp") or r.get("lead_temp")) == "hot":
                             try:
-                                from src.utils.telegram_notifier import TelegramNotifier
-                                TelegramNotifier().notify_admin(f"🔥 Lead PANAS (trial-lapse) tenant <code>{tid}</code> — layak outreach personal (nurture step {due}).")
-                            except Exception:
-                                pass
+                                _kabari_owner_lead_panas(sb, tid, r, due, since)
+                            except Exception as _le:
+                                logger.debug(f"[Billing] kabar lead panas gagal (non-fatal): {_le}")
                         sb.table("tenant_configs").update(step_upd).eq("tenant_id", tid).execute()
                         nurtured += 1
 

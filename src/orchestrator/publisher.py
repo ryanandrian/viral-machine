@@ -102,13 +102,25 @@ def publish_due_for_channel(sb, channel_row: dict, now_utc: datetime | None = No
         try:
             from src.utils.telegram_notifier import TelegramNotifier
             _meta = item.get("metadata") or {}
+            _sc = _meta.get("script") or {}
+            # [2026-08-12] ANGKA PRODUKSI IKUT DISERAHKAN. Owner: "mengapa pesan published tidak
+            # selengkap pesan video uji?" — sebabnya pesan uji dikirim di dalam mesin produksi
+            # (semua angka masih di tangan), sedangkan di sini hanya tautan/judul/niche yang
+            # diserahkan. Padahal angkanya SUDAH ADA di metadata item ini (diverifikasi pada baris
+            # nyata: duration_secs · size_mb · viral_score · script.word_count) — nol kueri baru.
+            # `beat_durations` = jumlah bagian naskah = jumlah adegan (bukan literal mati "/6").
+            _beats = _sc.get("beat_durations") or []
             TelegramNotifier().notify_published(
-                tenant_id    = channel_row["tenant_id"],
-                url          = (_yt or {}).get("url", ""),
-                title        = (_yt or {}).get("title") or ((_meta.get("script") or {}).get("title", "")),
-                niche        = item.get("niche") or channel_row.get("niche", ""),
-                run_id       = _meta.get("run_id", ""),
-                channel_name = channel_row.get("channel_name", ""),   # [B11] multi-channel: sebut channel
+                tenant_id     = channel_row["tenant_id"],
+                url           = (_yt or {}).get("url", ""),
+                title         = (_yt or {}).get("title") or _sc.get("title", ""),
+                niche         = item.get("niche") or channel_row.get("niche", ""),
+                channel_name  = channel_row.get("channel_name", ""),   # [B11] multi-channel: sebut channel
+                duration_secs = _meta.get("duration_secs"),
+                size_mb       = _meta.get("size_mb"),
+                clips         = len(_beats) if _beats else None,
+                hook_score    = _meta.get("viral_score"),
+                words         = _sc.get("word_count"),
             )
         except Exception as _te:
             logger.warning(f"[Publisher] notify_published gagal (non-fatal): {_te}")

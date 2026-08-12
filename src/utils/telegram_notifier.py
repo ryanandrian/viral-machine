@@ -103,28 +103,29 @@ class TelegramNotifier:
         clips = result.get("steps", {}).get("visuals", {}).get("clips", 0)
         ts    = result.get("steps", {}).get("tts", {}).get("timestamps", 0)
 
+        # [2026-08-12] ISTILAH INGGRIS DIGANTI + NOMOR INTERNAL DICABUT.
+        # Owner: *"di bawah url ada kode yang tidak dipahami siapapun"* — itu `run_id`, identitas
+        # produksi internal, dicetak mentah ke mata tenant. Tautan videonya sudah menjadi identitas
+        # yang berarti; nomor itu hanya berguna untuk diagnosa kita, dan diagnosa dibaca dari log/DB,
+        # bukan dari Telegram tenant. "Hook score"/"clips"/"Published"/"Runtime" → bahasa Indonesia
+        # (§4.1: nol istilah teknis pada teks yang dibaca manusia non-teknis).
         is_test = result.get("run_kind") in ("test", "admin_test")
+        _rinci = [
+            f"🎬 <i>{self._escape(title)}</i>",
+            f"🎯 Skor daya-tarik: <b>{hook_score}/100</b>  |  🏷 Niche: {niche}",
+            f"⏱ Durasi: {duration_str}  |  💾 {size_mb} MB  |  🎞 {clips} adegan",
+        ]
         if is_test:
             lines = [
-                f"🧪 <b>[{channel}] VIDEO UJI (PRIVATE)</b>",
-                "⚠️ <i>Pratinjau konfigurasi via tombol \"Test now\" — di-upload PRIVAT di YouTube (bukan publikasi publik) & memakai kredit AI (BYOK) Anda.</i>",
-                f"🎬 <i>{self._escape(title)}</i>",
-                f"🎯 Hook score: <b>{hook_score}/100</b>  |  🏷 Niche: {niche}",
-                f"⏱ Durasi: {duration_str}  |  💾 {size_mb} MB  |  🎞 {clips} clips",
+                f"🧪 <b>[{channel}] VIDEO UJI (PRIVAT)</b>",
+                "⚠️ <i>Pratinjau konfigurasi via tombol \"Uji sekarang\" — di-upload PRIVAT di YouTube (bukan publikasi publik) & memakai kredit AI (BYOK) Anda.</i>",
+                *_rinci,
             ]
         else:
-            lines = [
-                f"✅ <b>[{channel}] Video Published!</b>",
-                f"🎬 <i>{self._escape(title)}</i>",
-                f"🎯 Hook score: <b>{hook_score}/100</b>  |  🏷 Niche: {niche}",
-                f"⏱ Durasi: {duration_str}  |  💾 {size_mb} MB  |  🎞 {clips} clips",
-            ]
+            lines = [f"✅ <b>[{channel}] Video terbit</b>", *_rinci]
         if video_id:
             lines.append(f"🔗 {url}")
-        lines += [
-            f"⏰ Runtime: {elapsed}  |  📝 {ts} kata",
-            f"<code>{result.get('run_id', '')}</code>",
-        ]
+        lines.append(f"⏰ Lama produksi: {elapsed}  |  📝 {ts} kata")
 
         return self._send(chat_id, "\n".join(lines))
 
@@ -162,7 +163,10 @@ class TelegramNotifier:
         if url:
             lines.append(f"👀 Pratinjau: {url}")
         lines.append("👉 Tinjau lalu putuskan: <b>Terbitkan</b> atau <b>Buat ulang</b>.")
-        lines.append(f"<code>{run_id}</code>")
+        # [2026-08-12] Nomor produksi internal (`run_id`) TIDAK lagi dicetak ke mata tenant — tak ada
+        # gunanya bagi mereka. Parameternya TETAP ada (pemanggil menyerahkannya) dan kini dipakai di
+        # LOG, supaya kaitan pesan↔run tetap bisa ditelusuri saat diagnosa — bukan parameter mati.
+        logger.info(f"[Telegram] catatan QC dikirim ke tenant={tenant_id} run={run_id}")
         return self._send(chat_id, "\n".join(lines))
 
     @staticmethod
@@ -262,6 +266,21 @@ class TelegramNotifier:
             logger.warning(f"[Telegram] notify_tenant gagal (non-fatal): {e}")
             return False
 
+    @classmethod
+    def aman(cls, nilai) -> str:
+        """Bersihkan NILAI sebelum diselipkan ke pesan ADMIN. Pakai ini, jangan `str()` mentah.
+
+        [2026-08-12] Kenapa perlu: pesan dikirim dengan `parse_mode=HTML`. Bila nilai yang diselipkan
+        memuat `<`, `>` atau `&` — sangat mungkin pada teks galat penyimpanan, yang balasannya
+        berbentuk XML — Telegram MENOLAK seluruh pesannya dan owner **tidak menerima apa pun**.
+        Alarm terpenting (penyimpanan mati = semua channel berhenti) justru yang paling berisiko hilang.
+        Jalur ke TENANT sudah dibersihkan sejak lama (`notify_tenant`); jalur ke OWNER belum.
+        Yang dibersihkan hanya NILAI, bukan templatnya — templat memang memuat `<b>`/`<code>` yang sah.
+        Catatan jujur: bahaya ini BELUM pernah terjadi (nol pesan ditolak sepanjang riwayat log) —
+        ditutup karena murah, bukan karena sudah menimbulkan kerusakan.
+        """
+        return cls._escape(str(nilai))
+
     def notify_admin(self, text: str) -> bool:
         """Notif ke ADMIN PLATFORM (owner/tim) — mis. LEAD PANAS layak outreach personal (LIFECYCLE nurture).
         chat_id dari company_profile.admin_telegram_chat_id (no-hardcode, editable owner di /admin/company-profile);
@@ -314,21 +333,47 @@ class TelegramNotifier:
         return ""   # tak ada fallback sistem — tenant belum set chat_id → notif di-skip
 
     def notify_published(self, tenant_id: str, url: str, title: str = "",
-                         niche: str = "", run_id: str = "", channel_name: str = "") -> bool:
+                         niche: str = "", channel_name: str = "",
+                         duration_secs: float | None = None, size_mb: float | None = None,
+                         clips: int | None = None, hook_score: float | None = None,
+                         words: int | None = None) -> bool:
         """OPSI C: laporan SUKSES dikirim saat PUBLISHER benar-benar mempublish (on-schedule),
         BUKAN saat producer stok. Chat_id resolve dari tenant_configs.
-        [B11] Batch 1.5: channel_name PER-CHANNEL — tenant multi-channel tahu channel mana yang terbit."""
+        [B11] Batch 1.5: channel_name PER-CHANNEL — tenant multi-channel tahu channel mana yang terbit.
+
+        [2026-08-12] DILENGKAPI + NOMOR INTERNAL DICABUT. Owner: *"mengapa pesan published tidak
+        selengkap pesan video uji?"* Sebabnya bukan pilihan redaksi: pesan uji dikirim DI DALAM mesin
+        produksi (semua angka masih di tangan), sedangkan pesan ini dikirim JAUH KEMUDIAN oleh
+        penerbit — dan penerbit dulu hanya diberi tautan/judul/niche. Angkanya SUDAH ADA di
+        `content_inventory.metadata` (terbukti pada baris nyata: `duration_secs` 54.5 · `size_mb`
+        24.7 · `viral_score` 79.8 · `script.word_count`) — hanya belum pernah diserahkan.
+        Semua angka OPSIONAL: bila datanya tak ada, barisnya tak muncul (baris lama tetap aman).
+        `run_id` DICABUT dari tanda tangan: ia dicetak mentah ke mata tenant tanpa guna, dan
+        membiarkannya sebagai parameter tak-terpakai = fosil (§3.2).
+        ⚠️ Lama produksi TIDAK ditampilkan di sini — angka itu tidak ada di data yang dipegang
+        penerbit, dan menambah kueri DB demi satu angka hiasan tak sepadan.
+        """
         chat_id = self._chat_id_for_tenant(tenant_id)
         if not chat_id:
             return False
-        head = (f"✅ <b>[{self._escape(str(channel_name))}] Video Published!</b>"
-                if channel_name else "✅ <b>Video Published!</b>")
+        head = (f"✅ <b>[{self._escape(str(channel_name))}] Video terbit</b>"
+                if channel_name else "✅ <b>Video terbit</b>")
+        _angka = []
+        if duration_secs:
+            _angka.append(f"⏱ Durasi: {self._fmt_duration(duration_secs)}")
+        if size_mb:
+            _angka.append(f"💾 {size_mb} MB")
+        if clips:
+            _angka.append(f"🎞 {clips} adegan")
+        if words:
+            _angka.append(f"📝 {words} kata")
         lines = [
             head,
             f"🎬 <i>{self._escape(str(title)[:120])}</i>" if title else "",
             f"🏷 Niche: {self._escape(str(niche))}" if niche else "",
+            f"🎯 Skor daya-tarik: <b>{round(float(hook_score))}/100</b>" if hook_score else "",
+            "  |  ".join(_angka) if _angka else "",
             f"🔗 {url}" if url else "",
-            f"<code>{run_id}</code>" if run_id else "",
         ]
         return self._send(chat_id, "\n".join(l for l in lines if l))
 
@@ -373,15 +418,18 @@ class TelegramNotifier:
         # Ruang untuk pesan galat = sisa jatah Telegram SETELAH bagian tetap — bukan angka yang
         # diketik sendiri. Dulu `str(error)[:200]` memotong diam-diam: 200 tak melindungi apa pun
         # (batas nyatanya 4096) dan potongannya tak diumumkan, jadi pesan setengah terbaca utuh.
-        _tetap = (f"📤 <b>[{channel}] Upload YouTube GAGAL</b>\n"
-                  f"💥 Error: <code></code>\n{anjuran}\n<code>{run_id}</code>")
+        # [2026-08-12] Nomor produksi internal dicabut dari mata tenant — templat pengukur di bawah
+        # WAJIB ikut berubah, kalau tidak sisa jatah dihitung terlalu pelit dan ekor pesan penyedia
+        # terpotong tanpa sebab.
+        _tetap = (f"📤 <b>[{channel}] Unggah ke YouTube GAGAL</b>\n"
+                  f"💥 Sebab: <code></code>\n{anjuran}")
         _galat = self._escape(ringkas_diumumkan(str(error), max(0, BATAS_TELEGRAM - len(_tetap))))
         text = (
-            f"📤 <b>[{channel}] Upload YouTube GAGAL</b>\n"
-            f"💥 Error: <code>{_galat}</code>\n"
-            f"{anjuran}\n"
-            f"<code>{run_id}</code>"
+            f"📤 <b>[{channel}] Unggah ke YouTube GAGAL</b>\n"
+            f"💥 Sebab: <code>{_galat}</code>\n"
+            f"{anjuran}"
         )
+        logger.info(f"[Telegram] kabar gagal-unggah ke tenant={tenant_id} run={run_id}")
         return self._send(chat_id, text)
 
     def notify_failure(self, run_id: str, tenant_id: str, niche: str,
@@ -397,13 +445,26 @@ class TelegramNotifier:
         channel = self._channel_name(run_config, {"tenant_id": tenant_id})
         elapsed = self._fmt_elapsed(elapsed_seconds)
 
+        # [2026-08-12] TIGA hal dibetulkan sekaligus, semuanya kelas yang sama dengan yang sudah
+        # diketok owner:
+        #  (1) `str(error)[:250]` = pemotongan SENYAP — pola yang dilarang (§8h: 13 pemotongan
+        #      dicabut 06-Agu; "jangan pasang batas panjang pesan"). Fungsi sebelahnya
+        #      (`notify_publish_fail`) sudah memakai cara yang benar: hitung sisa jatah Telegram
+        #      lalu UMUMKAN bila memang harus dipendekkan. Di sini masih tertinggal.
+        #  (2) "Pipeline"/"Runtime" = istilah teknis pada teks yang dibaca tenant (§4.1).
+        #  (3) Nomor produksi internal dicabut dari mata tenant; tetap dicatat di log kita.
+        _tetap = (f"❌ <b>[{channel}] Produksi GAGAL</b>\n"
+                  f"🏷 Niche: {niche}\n"
+                  f"💥 Sebab: <code></code>\n"
+                  f"⏰ Lama produksi: {elapsed}")
+        _galat = self._escape(ringkas_diumumkan(str(error), max(0, BATAS_TELEGRAM - len(_tetap))))
         text = (
-            f"❌ <b>[{channel}] Pipeline GAGAL!</b>\n"
+            f"❌ <b>[{channel}] Produksi GAGAL</b>\n"
             f"🏷 Niche: {niche}\n"
-            f"💥 Error: <code>{self._escape(str(error)[:250])}</code>\n"
-            f"⏰ Runtime: {elapsed}\n"
-            f"<code>{run_id}</code>"
+            f"💥 Sebab: <code>{_galat}</code>\n"
+            f"⏰ Lama produksi: {elapsed}"
         )
+        logger.info(f"[Telegram] kabar gagal-produksi ke tenant={tenant_id} run={run_id}")
         return self._send(chat_id, text)
 
     # ──────────────────────────────────────────────────────────

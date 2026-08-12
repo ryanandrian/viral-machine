@@ -1,5 +1,21 @@
 # 🔄 LIFECYCLE & NURTURE ARCHITECTURE — MesinViral
 
+
+> **🔔 PESAN "CALON PELANGGAN PANAS" DIBETULKAN 2026-08-12.** Sebelumnya owner menerima:
+> *"🔥 Lead PANAS (trial-lapse) tenant `c37d2ee3-…` — layak outreach personal (nurture step 3)."*
+> Owner: *"isinya hanya anda dan Tuhan yang mengerti"* — dan benar: satu kode mesin + tiga istilah
+> Inggris, **tanpa nama, tanpa kontak, tanpa tautan.** Tidak ada yang bisa ia kerjakan dengan itu.
+> Padahal seluruh bahannya SUDAH di tangan pada titik itu: `display_handle` (terisi 18/18 tenant,
+> diverifikasi ke DB), alamat email lewat `tenant_email()` — helper yang dipakai **tiga baris di atas**
+> untuk mengirim email nurture ke orang yang sama — dan umur sejak masa coba berakhir yang sudah dihitung.
+> **Arti "panas" pun tak pernah disebut:** `_compute_lead_temp` menandai panas bila tenant **SUDAH
+> PERNAH MEMPRODUKSI VIDEO** — sinyal beli terkuat yang kita punya. Kini pesannya memuat nama · email ·
+> nama channel (dibaca dari tabel `channels`; `tenant_configs.channel_name` kosong pada 17/18 tenant) ·
+> alasan panas · umur lapse · jumlah email pengingat · tautan `/admin/tenants`.
+> Nilai dibersihkan lewat `TelegramNotifier.aman()` — pesan admin dikirim sebagai HTML, dan nilai
+> mentah ber-`<`/`&` membuat Telegram MENOLAK seluruh pesan (owner tak menerima apa pun).
+> Dijaga `tests/test_notifikasi_owner_dan_tenant.py`.
+
 > **🔒 CLOSED — SPEC FINAL (2026-07-03).** Seluruh fitur (termasuk **item 14** tombol aksi-manual admin) **SELESAI + deployed + tervalidasi**; dokumen direkonsiliasi ke realita DB/BE/FE (audit verifikator 2026-07-03). **BEKU sebagai referensi** — status hidup & sisa aksi = **`SISA_KERJA_GO_LIVE.md`** (HUB, item [B9]). Sisa = verifikasi data-nyata otomatis (revoke token / purge S3 / email-hapus saat tenant nyata lewat siklus). Jangan pakai marker doc ini sbg daftar kerja.
 >
 > **Sumber kebenaran TUNGGAL** untuk *tindak-lanjut siklus-hidup tenant* **setelah** gate langganan: (1) selamatkan
