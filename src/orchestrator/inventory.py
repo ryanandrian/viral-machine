@@ -152,8 +152,34 @@ def recent_nonready_streak(channel_id: str, limit: int = 12, sejak: str | None =
     tenant melihat channelnya "dipulihkan lalu mati lagi" berulang-ulang (dilaporkan owner
     2026-08-03 pada BISIK NUSANTARA; log membuktikan rem menyala 2× tanpa SATU PUN percobaan
     produksi baru). Pola identik dengan insiden 8-Jul di atas — sebab berbeda, akibat sama.
+
+    [2026-08-12] KEGAGALAN YANG PULIH SENDIRI TIDAK DIHITUNG — netral, seperti `discarded`.
+
+    Sebab, terukur: Bang Us-Dat direm 01-Agu 12:00 karena jatah token HARIAN Groq habis. Jatahnya
+    pulih keesokan pagi — terbukti, 02-Agu produksinya BERHASIL dua kali. Tapi status "berhenti"
+    menempel sampai 12-Agu: **11 hari channel tenant BERBAYAR menganggur untuk sebab yang sembuh
+    dalam beberapa jam.** Pola sama pernah membuatnya mati 44 jam (§8a).
+
+    Yang membuatnya BUG — bukan sekadar kurang nyaman — adalah mesin mengatakan dua hal yang saling
+    membatalkan kepada tenant yang sama: layar berbunyi *"batas seperti ini pulih sendiri, Anda tidak
+    perlu mengubah apa pun"*, sementara channelnya tetap mati sampai tenant menekan tombol. Tenant
+    yang MEMPERCAYAI kalimat kita justru yang paling dirugikan.
+
+    Keputusan owner [B25] ("pemulihan = keputusan TENANT; sistem tak pernah melepas rem sendiri")
+    TIDAK dibalik: ia lahir untuk sebab yang MENUNTUT tindakan tenant (saldo, kunci, model). Untuk
+    sebab yang tak menuntut apa pun, remnya memang tak seharusnya menyala — jadi tak ada rem yang
+    perlu dilepas sendiri.
+
+    NETRAL, bukan pemutus streak — dua-arah, sengaja:
+      • bila MEMUTUS: kegagalan NYATA sebelumnya ikut dimaafkan → channel rusak tak pernah direm.
+      • bila DIHITUNG: channel direm untuk sebab yang sudah sembuh → kasus Bang Us-Dat terulang.
+      • netral = seolah percobaan itu tak pernah terjadi. Kegagalan nyata tetap menumpuk apa adanya.
+    Kelas KOSONG (run lama, sebelum kelas disimpan) tetap DIHITUNG → perilaku lama dipertahankan.
     """
-    q = (_sb().table("production_runs").select("status")
+    from src.exceptions import SELF_HEALING
+    _pulih = frozenset(ec.value for ec in SELF_HEALING)
+
+    q = (_sb().table("production_runs").select("status,error_class")
          .eq("channel_id", channel_id))
     if sejak:
         q = q.gt("created_at", sejak)
@@ -162,6 +188,8 @@ def recent_nonready_streak(channel_id: str, limit: int = 12, sejak: str | None =
     for row in (res.data or []):
         st = row["status"]
         if st in ("failed", "qc_failed"):
+            if (row.get("error_class") or "") in _pulih:
+                continue          # pulih sendiri → netral: tak menambah, tak memutus
             streak += 1
         elif st == "success":
             break

@@ -610,6 +610,27 @@ teknis. Lihat `PAYMENT_AND_TENANT_GATE_ARCHITECTURE.md` §10b K2.
 
 ### §9a JALUR PEMULIHAN per kelas — ditentukan oleh SEBAB, bukan oleh gerbang uji *(dipatri 2026-08-06)*
 | Kelas | Yang ditawarkan panel | Kenapa |
+> **🔧 DITUTUP 2026-08-12 — SEBAB YANG PULIH SENDIRI TIDAK LAGI MENGEREM CHANNEL.**
+> Cacat: layar tenant berkata *"batas seperti ini pulih sendiri, Anda tidak perlu mengubah apa pun"*
+> sementara channelnya **tetap mati sampai tenant menekan tombol** — dua pernyataan yang saling
+> membatalkan, dan tenant yang MEMPERCAYAI kalimat kita justru paling dirugikan.
+> **Terukur:** Bang Us-Dat direm 01-Agu 12:00 (jatah token HARIAN Groq habis), jatahnya pulih
+> keesokan pagi — 02-Agu produksinya BERHASIL 2× — tapi status berhenti menempel **11 hari**.
+> Pola sama pernah membuatnya mati **44 jam** (§8a).
+> **Perbaikan:** `inventory.recent_nonready_streak` tidak lagi menghitung kegagalan ber-kelas
+> `SELF_HEALING`. **NETRAL, bukan pemutus** — dua arah sengaja: memutus = kegagalan NYATA sebelumnya
+> ikut dimaafkan (rem lumpuh); menghitung = channel direm untuk sebab yang sudah sembuh. Kelas
+> KOSONG (run lama) tetap dihitung → perilaku lama dipertahankan.
+> **Keputusan owner [B25] TIDAK dibalik:** ia lahir untuk sebab yang MENUNTUT tindakan tenant
+> (saldo · kunci · model). Untuk sebab yang tak menuntut apa pun, remnya memang tak seharusnya
+> menyala — jadi tak ada rem yang perlu dilepas sendiri. Lingkupnya dikembalikan, bukan dicabut.
+> **Bukti data NYATA:** Abyss ID (sebab `model_unavailable`) hitungan tetap 10 → rem TETAP menyala,
+> benar. **Batas jujur:** kegagalan Bang Us-Dat 01-Agu tersimpan ber-kelas `unknown` (penggolongan
+> jatah harian Groq aktif setelahnya) → perbaikan ini **mencegah kejadian berikutnya, tidak
+> menyembuhkan yang sudah tercatat**; channel itu tetap butuh satu tekanan tombol tenant.
+> **Dijaga** `tests/test_pemulihan_channel.py` (kelas `TestSebabPulihSendiriTakMengeremChannel`),
+> dibuktikan merah dua arah.
+
 |---|---|---|
 | `QUOTA_EXHAUSTED` · `ACCOUNT_BILLING` · `AUTH_INVALID` · `MODEL_UNAVAILABLE` | **"Jalankan uji & pulihkan"** (selama gerbang uji mengizinkan) | tenant harus memperbaiki sesuatu dulu; **uji MEMBUKTIKAN perbaikannya berhasil**, dan keberhasilan itu sendiri yang memutus hitungan kegagalan |
 | `RATE_LIMIT` · `TRANSIENT` | **"Pulihkan produksi"** + peringatan jujur | uji **tidak membuktikan apa pun** di sini dan **memanggil penyedia yang sedang menolak** ⇒ dijamin gagal sambil MEMBAKAR sisa jatah tenant |

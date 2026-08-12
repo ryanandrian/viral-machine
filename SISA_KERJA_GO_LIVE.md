@@ -745,6 +745,17 @@ sama-sama berkata "tidak akan pulih sendiri, isi ulang saldo" untuk jatah yang p
 Pagar `tests/test_galat_generik.py` (16 uji) **dibuktikan merah** untuk 3 bentuk pelanggaran. Suite
 **869 lulus, nol regresi.** Nol migrasi DB · nol perubahan tampilan · nol komponen baru.
 
+**REALISASI 2026-08-12 — SEBAB YANG PULIH SENDIRI BERHENTI MEMATIKAN CHANNEL (SSOT §9a):**
+Layar berkata *"pulih sendiri, Anda tidak perlu mengubah apa pun"*, tapi channelnya tetap mati sampai
+tenant menekan tombol. Bang Us-Dat: jatah token harian Groq habis 01-Agu, pulih keesokan pagi
+(02-Agu produksi BERHASIL 2×), status berhenti menempel **11 hari** — pola yang pernah membuatnya
+mati 44 jam. Kini kegagalan yang pulih sendiri **netral** dalam hitungan rem (bukan pemutus, supaya
+rem tidak lumpuh untuk sebab nyata). Keputusan [B25] tidak dibalik — lingkupnya dikembalikan ke sebab
+yang memang menuntut tindakan tenant. Bukti data nyata: Abyss ID (`model_unavailable`) tetap direm,
+benar. Batas jujur: kegagalan lama ber-kelas `unknown` tak ikut tersembuhkan — pencegahan ke depan,
+bukan penyembuhan ke belakang. Suite **880 lulus**, pagar dibuktikan merah dua arah. Nol DB · nol
+tampilan · nol komponen baru.
+
 ### [B25] REM DARURAT: simpan sebabnya & katakan apa artinya — 🟢 A–D SELESAI + TERVALIDASI (2026-08-03)
 - **SPEC/SSOT = `AI_ERROR_MANAGEMENT_ARCHITECTURE.md` §8a (celah, kini TERTUTUP) + §9 (kontrak tampilan per-KELAS).** WAJIB baca §9 sebelum menyentuh UI kegagalan produksi.
 - **SEBAB:** rem darurat MEMBUANG kelas error yang sudah diketahui sistem → layar & Telegram cuma bisa menebak ("mis. saldo/kredensial AI") → tenant tak pernah tahu **apakah sebabnya pulih sendiri**. Dampak terukur pada tenant BERBAYAR: **Bang Us-Dat mati ±44 jam** menunggu jatah harian yang sudah pulih keesokan harinya; BISIK NUSANTARA pola yang sama sehari kemudian.

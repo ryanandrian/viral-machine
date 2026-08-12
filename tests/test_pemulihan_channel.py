@@ -285,11 +285,14 @@ class TestPemulihanMemutusHitungan(unittest.TestCase):
                 return _QRuns(TestPemulihanMemutusHitungan.RUNS)
         return SB()
 
-    def test_tanpa_titik_pemulihan_streak_penuh(self):
-        # Perilaku lama — inilah yang mengerem berulang.
+    def test_tanpa_titik_pemulihan_hanya_kegagalan_NYATA_dihitung(self):
+        """Tanpa titik pemulihan, seluruh periode terbaca — TAPI sejak 12-Agu kegagalan yang PULIH
+        SENDIRI netral. Contoh data ini memang 3 kegagalan, dan 2 di antaranya `rate_limit`
+        (jatah harian habis) → yang dihitung tinggal 1. Dulu 3, dan itulah yang mengerem channel
+        Bang Us-Dat selama 11 hari untuk sebab yang sembuh keesokan paginya."""
         with patch("src.orchestrator.inventory._sb", return_value=self._stub()):
             from src.orchestrator import inventory
-            self.assertEqual(inventory.recent_nonready_streak("C1"), 3)
+            self.assertEqual(inventory.recent_nonready_streak("C1"), 1)
 
     def test_sesudah_pemulihan_hitungan_nol(self):
         with patch("src.orchestrator.inventory._sb", return_value=self._stub()):
@@ -299,11 +302,12 @@ class TestPemulihanMemutusHitungan(unittest.TestCase):
                 "kegagalan sebelum pemulihan masih dihitung → channel direm ulang seketika")
 
     def test_kegagalan_BARU_tetap_dihitung(self):
-        # Rem tidak boleh lumpuh: periode yang belum ditutup tetap dihukum.
+        # Rem tidak boleh lumpuh: periode yang belum ditutup tetap dihukum — tapi HANYA untuk
+        # kegagalan yang memang menuntut tindakan. 1 dari 3 di contoh data ini (`unknown`).
         with patch("src.orchestrator.inventory._sb", return_value=self._stub()):
             from src.orchestrator import inventory
             self.assertEqual(
-                inventory.recent_nonready_streak("C1", sejak="2026-08-01T00:00:00+00:00"), 3)
+                inventory.recent_nonready_streak("C1", sejak="2026-08-01T00:00:00+00:00"), 1)
 
     def test_rem_cepat_membaca_periode_yang_sama(self):
         # Dua pengambil keputusan tak boleh membaca dunia yang berbeda.
@@ -483,6 +487,81 @@ class TestAntiDriftTigaTempat(unittest.TestCase):
             self.assertNotIn(merek, badan.lower(),
                              f"Nama penyedia '{merek}' muncul di peta layar — layar akan basi "
                              f"pada penyedia berikutnya. Petakan per KELAS.")
+
+
+class TestSebabPulihSendiriTakMengeremChannel(unittest.TestCase):
+    """⛔ BUG YANG DITUTUP 12-Agu — DUA ARAH, keduanya wajib.
+
+    Bang Us-Dat: jatah token HARIAN Groq habis 01-Agu 12:00 → 3 kegagalan → channel DIREM. Jatahnya
+    pulih keesokan pagi (terbukti: 02-Agu produksi BERHASIL 2×), tapi status berhenti menempel
+    **11 hari**. Pola sama pernah membuatnya mati 44 jam.
+
+    Yang membuatnya BUG: layar tenant berkata *"pulih sendiri, Anda tidak perlu mengubah apa pun"*
+    sementara channelnya menuntut tenant menekan tombol. Dua pernyataan yang saling membatalkan.
+
+    ARAH KEDUA sama pentingnya: rem TIDAK BOLEH lumpuh. Channel yang gagal karena sebab nyata wajib
+    tetap berhenti — kalau tidak, tenant membakar jatah/biaya tanpa hasil dan tak pernah diberi tahu.
+    """
+
+    def _stub(self, runs):
+        class SB:
+            def table(_self, _n):
+                return _QRuns(runs)
+        return SB()
+
+    def _streak(self, runs):
+        with patch("src.orchestrator.inventory._sb", return_value=self._stub(runs)):
+            from src.orchestrator import inventory
+            return inventory.recent_nonready_streak("C1")
+
+    @staticmethod
+    def _run(kelas, i=0, status="failed"):
+        return {"created_at": f"2026-08-02T1{i}:00:00+00:00", "status": status,
+                "error_class": kelas, "error_message": "x"}
+
+    def test_tiga_kegagalan_pulih_sendiri_TIDAK_mengerem(self):
+        for kelas in ("rate_limit", "transient"):
+            with self.subTest(kelas):
+                runs = [self._run(kelas, i) for i in (9, 8, 7)]
+                self.assertEqual(
+                    self._streak(runs), 0,
+                    f"'{kelas}' pulih sendiri tapi masih dihitung → channel direm untuk sebab yang "
+                    f"sembuh sendiri, lalu menunggu tenant menekan tombol yang layarnya sendiri "
+                    f"bilang tak perlu ditekan (kasus Bang Us-Dat, 11 hari)")
+
+    def test_rem_TIDAK_lumpuh_untuk_sebab_nyata(self):
+        """Arah kedua. Sebab yang menuntut tindakan tenant WAJIB tetap menumpuk."""
+        for kelas in ("quota_exhausted", "account_billing", "auth_invalid",
+                      "model_unavailable", "unknown"):
+            with self.subTest(kelas):
+                runs = [self._run(kelas, i) for i in (9, 8, 7)]
+                self.assertEqual(self._streak(runs), 3,
+                                 f"'{kelas}' menuntut tindakan tenant — rem WAJIB tetap menyala")
+
+    def test_campuran_hanya_yang_nyata_dihitung(self):
+        runs = [self._run("rate_limit", 9), self._run("unknown", 8),
+                self._run("transient", 7), self._run("auth_invalid", 6)]
+        self.assertEqual(self._streak(runs), 2,
+                         "yang pulih sendiri harus NETRAL: tak menambah, dan tak memaafkan "
+                         "kegagalan nyata sebelumnya")
+
+    def test_pulih_sendiri_TIDAK_memutus_hitungan(self):
+        """Netral, bukan pemutus. Kalau ia memutus, kegagalan nyata sebelumnya ikut dimaafkan dan
+        channel yang benar-benar rusak tak pernah direm."""
+        runs = [self._run("unknown", 9), self._run("rate_limit", 8), self._run("unknown", 7),
+                self._run("unknown", 6)]
+        self.assertEqual(self._streak(runs), 3,
+                         "kegagalan pulih-sendiri di tengah MEMUTUS hitungan → rem lumpuh")
+
+    def test_sukses_TETAP_memutus_hitungan(self):
+        runs = [self._run("unknown", 9), self._run(None, 8, status="success"),
+                self._run("unknown", 7)]
+        self.assertEqual(self._streak(runs), 1, "run SUKSES wajib tetap memutus hitungan")
+
+    def test_kelas_kosong_TETAP_dihitung(self):
+        """Run lama (sebelum kelas disimpan) tak boleh mendadak dimaafkan — perilaku lama dijaga."""
+        runs = [self._run(None, 9), self._run("", 8), self._run(None, 7)]
+        self.assertEqual(self._streak(runs), 3)
 
 
 if __name__ == "__main__":
