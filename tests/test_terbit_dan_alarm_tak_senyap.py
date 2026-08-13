@@ -1,7 +1,8 @@
-"""PENERBITAN TAK BOLEH HILANG, DAN ALARM TAK BOLEH LUPA — dua janji yang dijaga berkas ini.
+"""PENERBITAN TAK BOLEH HILANG · ALARM TAK BOLEH LUPA · KEMATIAN TAK BOLEH BISU — tiga janji.
 
-Ditulis 2026-08-13 sesudah dua kejadian NYATA yang keduanya bermuara pada hal yang sama:
-**keadaan penting disimpan di ingatan proses, sementara proses ini bisa mati kapan saja.**
+Ditulis 2026-08-13 sesudah kejadian NYATA yang semuanya bermuara pada hal yang sama:
+**keadaan penting disimpan di ingatan proses, sementara proses ini bisa mati kapan saja** — dan
+proses ini memang mati mendadak **11 kali** (10 di antaranya dalam 18 hari terakhir).
 
 ──────────────────────────────────────────────────────────────────────────────────────────────────
 A. KABAR "PULIH" YANG TIDAK PERNAH DATANG
@@ -32,7 +33,9 @@ B. VIDEO YANG TERBIT TAPI TIDAK PERNAH TERCATAT
 """
 import importlib
 import inspect
+import sys
 import io
+import os
 import re
 import tokenize
 from datetime import datetime, timedelta, timezone
@@ -51,6 +54,18 @@ def _kode(obj) -> str:
     """
     toks = [t for t in tokenize.generate_tokens(io.StringIO(inspect.getsource(obj)).readline)
             if t.type != tokenize.COMMENT]
+    return tokenize.untokenize(toks)
+
+
+def _kode_berkas(path: str) -> str:
+    """Isi berkas TANPA komentar. Dipakai uji urutan/larangan supaya menilai KODE.
+
+    Ditulis setelah sabotase LOLOS: mematikan perekam kematian dengan cara menjadikannya komentar
+    (`# faulthandler.enable()`) tetap membuat pencarian teks menemukan kalimatnya — penjaganya hijau
+    padahal perekamnya mati. Ini kali KEEMPAT komentar menipu alat ukur di proyek ini.
+    """
+    toks = [t for t in tokenize.generate_tokens(io.StringIO(
+        open(path, encoding="utf-8").read()).readline) if t.type != tokenize.COMMENT]
     return tokenize.untokenize(toks)
 
 
@@ -448,3 +463,149 @@ class TestC_JejakUnggahanDiPenerbit:
         db.gagal_tabel = {"content_inventory"}
         with pytest.raises(Exception):
             publisher._tandai_meta(db, {"id": 9, "metadata": {}}, {"x": 1}, wajib=True)
+
+
+# ══ D. KEMATIAN MENDADAK TAK BOLEH BISU ══════════════════════════════════════════════════════════
+#
+# Mesin produksi mati mendadak 11 kali — 1 kali 3-Jul, lalu 10 kali dalam 18 hari sejak 27-Jul.
+# Server menghidupkannya lagi dalam 10 detik, jadi dari luar semuanya tampak normal dan TIDAK ADA
+# yang pernah diberi tahu. Catatan inti sistem menunjuk kematian terjadi di dalam mesin bahasa
+# Python sendiri (satu melompat ke alamat kosong), BUKAN di pustaka gambar/font — dugaan itu dicabut
+# setelah diuji: hanya 4 dari 10 kematian punya jejak render di dekatnya.
+#
+# Kerusakan terukurnya kecil (3 produksi mati di tengah dalam 2 bulan, satu sudah diperbaiki), tapi
+# SEBABNYA tidak diketahui dan lajunya naik tajam. Bagian D tidak menyembuhkan — ia membuat kematian
+# BERIKUTNYA berbicara.
+
+def _muat_worker(monkeypatch, tmp_path):
+    """Titik-mulai mesin dengan penanda keadaan diarahkan ke berkas sementara — uji tidak boleh
+    menyentuh penanda milik server."""
+    import importlib
+    import sys as _sys
+    akar = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if os.path.join(akar, "scripts") not in _sys.path:
+        _sys.path.insert(0, os.path.join(akar, "scripts"))
+    w = importlib.import_module("worker_decoupled")
+    monkeypatch.setattr(w, "_BERKAS_KEADAAN", str(tmp_path / "keadaan.json"))
+    monkeypatch.setattr(w, "_JEDA_KABAR_JAM", 1.0)
+    return w
+
+
+class TestD_KematianMendadakBersuara:
+
+    def test_perekam_kematian_BENAR_BENAR_menyala(self):
+        """BUKTI PERILAKU, bukan pencarian teks. Versi pertama uji ini memakai pencarian teks dan
+        SABOTASE-NYA LOLOS: perekam dimatikan dengan menjadikannya komentar, dan kalimatnya masih
+        ketemu. Sekarang: titik-mulai mesin dimuat di penerjemah BERSIH (di luar pytest, yang punya
+        perekamnya sendiri dan akan memalsukan hasil), lalu ditanya apakah perekamnya hidup."""
+        import subprocess
+        akar = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        hasil = subprocess.run(
+            [sys.executable, "-c",
+             "import sys; sys.path.insert(0, %r); sys.path.insert(0, %r); "
+             "import worker_decoupled, faulthandler; print(faulthandler.is_enabled())"
+             % (akar, os.path.join(akar, "scripts"))],
+            capture_output=True, text=True, timeout=120, cwd=akar)
+        assert "True" in hasil.stdout, (
+            "PEREKAM KEMATIAN TIDAK HIDUP setelah titik-mulai mesin dimuat — kematian mendadak akan "
+            f"kembali bisu total.\nkeluaran: {hasil.stdout!r}\ngalat: {hasil.stderr[-400:]!r}")
+
+    def test_perekam_dinyalakan_SEBELUM_bagian_mesin(self):
+        akar = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        src = _kode_berkas(os.path.join(akar, "scripts", "worker_decoupled.py"))
+        i_nyala = src.find("faulthandler.enable()")
+        i_main = src.find("def main()")
+        assert 0 <= i_nyala < i_main, ("perekam kematian tidak dinyalakan di titik mulai — kematian "
+                                      "yang terjadi sebelum baris itu tetap tanpa keterangan")
+
+    def test_empat_keadaan_dibedakan_dengan_benar(self, monkeypatch, tmp_path):
+        """Inti bagian D. Keadaan KETIGA ('jalan pertama kali') wajib ada: tanpanya, pemasangan
+        pertama akan selalu melapor kematian yang tak pernah terjadi."""
+        w = _muat_worker(monkeypatch, tmp_path)
+        kabar = []
+        assert w.periksa_kematian_sebelumnya(kabar.append) == "pertama"
+        assert kabar == [], "melapor kematian pada jalan PERTAMA — alarm palsu"
+        w._tulis_keadaan("bersih")
+        assert w.periksa_kematian_sebelumnya(kabar.append) == "wajar"
+        assert kabar == [], "restart wajar (deploy) dilaporkan sebagai kematian"
+        # keadaan masih "jalan" (tak pernah ditutup) → mesin sebelumnya mati mendadak
+        assert w.periksa_kematian_sebelumnya(kabar.append) == "mendadak"
+        assert len(kabar) == 1, "kematian mendadak TIDAK dikabari — inilah keadaan hari ini"
+
+    def test_mati_berulang_tidak_membanjiri_owner(self, monkeypatch, tmp_path):
+        """Mesin yang mati berulang dihidupkan tiap 10 detik. Tanpa jeda, itu teror, bukan kabar."""
+        w = _muat_worker(monkeypatch, tmp_path)
+        kabar = []
+        w._tulis_keadaan("jalan")
+        assert w.periksa_kematian_sebelumnya(kabar.append) == "mendadak"
+        for _ in range(5):
+            assert w.periksa_kematian_sebelumnya(kabar.append) == "mendadak-ditahan"
+        assert len(kabar) == 1, f"owner dibanjiri {len(kabar)} kabar untuk kematian beruntun"
+
+    def test_penanda_bersih_ditulis_SESUDAH_baris_penutup(self):
+        """Urutannya yang menentukan. Diverifikasi pada data nyata: baris penutup TIDAK PERNAH
+        tercapai pada 11 kematian mendadak, dan SELALU tercapai pada restart wajar (4/4)."""
+        akar = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        src = _kode_berkas(os.path.join(akar, "scripts", "worker_decoupled.py"))
+        i_penutup = src.find('"[WorkerV2] shutdown selesai"')
+        i_bersih = src.find('_tulis_keadaan("bersih")')
+        assert 0 <= i_penutup < i_bersih, ("penanda 'berhenti wajar' ditulis sebelum mesin benar-benar "
+                                          "selesai → kematian di tengah pembersihan akan terbaca wajar")
+
+    def test_diperiksa_SEBELUM_bagian_mesin_dinyalakan(self):
+        akar = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        src = _kode_berkas(os.path.join(akar, "scripts", "worker_decoupled.py"))
+        blok = src[src.find("def main()"):]
+        i_periksa = blok.find("periksa_kematian_sebelumnya")
+        i_thread = blok.find("threading.Thread(")
+        assert 0 <= i_periksa < i_thread, "kabar kematian menunggu mesin siap — seharusnya lebih dulu"
+
+    def test_penanda_TIDAK_menambah_beban_basis_data(self):
+        """Keputusan yang diminta owner: *"pastikan ini tidak memberatkan mesin itu sendiri"*.
+        Penanda hidup di berkas — nol tulisan tambahan ke basis data."""
+        akar = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        src = _kode_berkas(os.path.join(akar, "scripts", "worker_decoupled.py"))
+        awal = src.find("def _baca_keadaan")
+        akhir = src.find("def main()")
+        blok = src[awal:akhir]
+        for terlarang in ("supabase", "create_client", "system_state", ".table("):
+            assert terlarang not in blok, (f"penanda keadaan menyentuh basis data ({terlarang}) — "
+                                          f"itu menambah beban DAN bisa ikut mati saat DB bermasalah")
+
+    def test_penanda_tidak_di_tmp_yang_bisa_terhapus(self):
+        """`/tmp` bisa dibersihkan saat server dinyalakan ulang → penanda hilang → alarm palsu."""
+        akar = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        src = _kode_berkas(os.path.join(akar, "scripts", "worker_decoupled.py"))
+        m = re.search(r'WORKER_EXIT_MARKER",\s*"([^"]+)"', src)
+        assert m, "letak penanda keadaan tak ditemukan"
+        assert not m.group(1).startswith("/tmp/"), f"penanda di {m.group(1)} — bisa terhapus saat reboot"
+
+    def test_berkas_penanda_RUSAK_tidak_melapor_palsu(self, monkeypatch, tmp_path):
+        w = _muat_worker(monkeypatch, tmp_path)
+        open(w._BERKAS_KEADAAN, "w").write("ini bukan json {{{")
+        kabar = []
+        assert w.periksa_kematian_sebelumnya(kabar.append) == "pertama"
+        assert kabar == [], "berkas rusak dibaca sebagai kematian → alarm palsu"
+
+    def test_gagal_menulis_penanda_TIDAK_menghentikan_mesin(self, monkeypatch, tmp_path):
+        """Perbaikan ini urusan pencatatan. Ia tidak boleh, dalam keadaan apa pun, menghentikan
+        produksi tenant."""
+        w = _muat_worker(monkeypatch, tmp_path)
+        monkeypatch.setattr(w, "_BERKAS_KEADAAN", "/jalur/yang/tidak/ada/keadaan.json")
+        w._tulis_keadaan("bersih")           # tak boleh melempar galat
+        kabar = []
+        assert w.periksa_kematian_sebelumnya(kabar.append) == "pertama"
+
+    def test_kabar_ke_owner_nol_istilah_teknis(self, monkeypatch, tmp_path):
+        """§4.1 — owner non-teknis. Kabar ini muncul persis saat ia sedang cemas; ia harus menjawab
+        'apa artinya bagi saya', bukan menyodorkan nama sinyal atau kode."""
+        w = _muat_worker(monkeypatch, tmp_path)
+        kabar = []
+        w._tulis_keadaan("jalan")
+        w.periksa_kematian_sebelumnya(kabar.append)
+        teks = kabar[0]
+        for terlarang in ("SIGSEGV", "segfault", "faulthandler", "signal 11", "core dump",
+                          "traceback", "thread"):
+            assert terlarang.lower() not in teks.lower(), f"kabar memuat istilah teknis: {terlarang}"
+        assert "berhenti" in teks.lower() and "hidup kembali" in teks.lower(), (
+            "kabar tidak menjelaskan apa yang terjadi dalam bahasa biasa")
