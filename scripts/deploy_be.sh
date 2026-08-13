@@ -55,6 +55,36 @@ case "${1:-}" in
         exit 1
       fi
     fi
+    # ── [2026-08-13] PENYAPU LOG: pasang dari repo + periksa hasilnya ────────────────────────
+    # Sebab langkah ini ada: aturan pemangkas log dulu HANYA hidup di server (ditulis 24-Apr, era
+    # v1). Saat proyek pindah ke v2 (17-Jun) aturannya tertinggal menunjuk folder lama, dan selama
+    # DUA BULAN melapor "does not exist -- skipping" tanpa satu pun telinga mendengar. Berkasnya di
+    # luar repo → tak terversikan, tak terperiksa, tak terlihat saat melenceng.
+    # Sekarang: ikut terkirim tiap deploy (selamat dari pembangunan ulang server) DAN hasilnya
+    # diperiksa. Gagal di sini TIDAK menggagalkan deploy — tapi WAJIB kelihatan, bukan diam.
+    LOGROTATE_SRC="$BE_ROOT/scripts/logrotate-viral-machine.conf"
+    LOGROTATE_DST="/etc/logrotate.d/viral-machine"
+    if [ -f "$LOGROTATE_SRC" ]; then
+      if ! sudo cmp -s "$LOGROTATE_SRC" "$LOGROTATE_DST" 2>/dev/null; then
+        echo "[deploy_be] aturan pemangkas log berubah → memasang"
+        sudo install -o root -g root -m 644 "$LOGROTATE_SRC" "$LOGROTATE_DST" \
+          && sudo logrotate -d "$LOGROTATE_DST" >/dev/null 2>&1 \
+          && echo "[deploy_be] aturan pemangkas log terpasang & lolos jalan-kering" \
+          || echo "[deploy_be] PERINGATAN: aturan pemangkas log GAGAL dipasang/diuji"
+      fi
+    else
+      echo "[deploy_be] PERINGATAN: $LOGROTATE_SRC tidak ada di repo"
+    fi
+    # Alarm ukuran: kalau pemangkas diam-diam berhenti bekerja lagi, INI yang menyalakan lampunya.
+    WORKER_LOG="$BE_ROOT/worker.log"
+    LOG_MAX_MB="${DEPLOY_LOG_MAX_MB:-200}"
+    if [ -f "$WORKER_LOG" ]; then
+      LOG_MB=$(( $(stat -c %s "$WORKER_LOG") / 1048576 ))
+      if [ "$LOG_MB" -gt "$LOG_MAX_MB" ]; then
+        echo "[deploy_be] PERINGATAN: worker.log ${LOG_MB}MB (> ${LOG_MAX_MB}MB) — pemangkas log kemungkinan tidak bekerja"
+      fi
+    fi
+
     sudo systemctl restart mv-worker mv-webhook
     sleep 8
     W="$(systemctl is-active mv-worker || true)"

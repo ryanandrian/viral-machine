@@ -750,9 +750,13 @@ class Pipeline:
                 logger.info("PUBLISH SKIPPED | publish=False")
 
             # ── CLEANUP: Log lama ───────────────────────────────────
+            # [2026-08-13] Lama simpan dari SETELAN, bukan angka mati di kode (§3.3). Nilai bawaan
+            # sama persis dengan angka lama (30/7) → perilaku tidak berubah tanpa ada yang mengubah
+            # setelannya. Pola env mengikuti yang sudah dipakai: BUFFER_TTL_HOURS, FAILED_TTL_HOURS,
+            # LOG_RETENTION_DAYS.
             log_cleanup = self.storage_cleaner.cleanup_old_logs(
-                max_age_days_json=30,
-                max_age_days_audio=7,
+                max_age_days_json=int(os.getenv("WORKDIR_TTL_DAYS_BESAR", "30")),
+                max_age_days_audio=int(os.getenv("WORKDIR_TTL_DAYS", "7")),
             )
             result["storage"]["log_cleanup"] = log_cleanup
 

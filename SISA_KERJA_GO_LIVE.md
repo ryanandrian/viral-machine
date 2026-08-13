@@ -771,6 +771,32 @@ galat ber-`<`/`&` (balasan S3 berbentuk XML) membuat Telegram menolak pesannya d
 hilang tanpa jejak**; bahaya ini belum pernah terjadi (nol pesan ditolak sepanjang log), ditutup karena murah.
 Suite **880 → 893 lulus**, pagar dibuktikan merah 4 bentuk pelanggaran. Nol DB · nol tampilan · nol komponen baru.
 
+**REALISASI 2026-08-13 — LOG & PENYAPUNYA DITUNTASKAN (ketok owner: "tidak boleh ada lagi issue
+terkait log dan log sweeper di seluruh area mesinviral v2"):** Tiga cacat, satu pola — **kegagalan
+yang melapor ke ruang kosong.**
+**(1) Penyapu log menyapu alamat yang salah selama 2 bulan.** Aturan `/etc/logrotate.d/viral-machine`
+ditulis **24-Apr** (era v1) menunjuk `/home/rad4vm/viral-machine/logs/*.log`; proyek pindah ke v2
+**17-Jun** dan aturannya tertinggal. Tiap hari ia melapor *"does not exist -- skipping"* — folder itu
+memang **tidak ada** — sementara `worker.log` tumbuh ke **48 MB tanpa satu pun berkas hasil putaran**.
+**Akar strukturalnya: berkas setelan ada DI LUAR repo** → tak terversikan, tak terperiksa, tak
+terlihat saat melenceng. Kini hidup di `scripts/logrotate-viral-machine.conf`, **dipasang
+`deploy_be.sh`**, dan deploy **MEMPERINGATKAN** bila `worker.log` melewati batas — kegagalan senyap
+jadi kegagalan yang menyalakan lampu. Dua baris wajib ditemukan lewat **jalan-kering, bukan
+penalaran**: `su root root` (tanpa itu logrotate menolak: *parent directory has insecure permissions*
+— usulan pertama pun akan gagal diam-diam) dan `copytruncate` (systemd memegang berkas terus).
+**(2) Mesin terlalu berisik** — channel tak aktif dicatat ulang tiap **15,6 detik** (terukur):
+**9.950 baris/24 jam = 44% isi log**. Kini dicatat sekali; penanda dihapus saat channel kembali aktif
+sehingga **perubahan keadaan tetap tercatat**. Alur keputusan produksi **tidak disentuh** (dijaga uji).
+**(3) Daftar sapuan berkas kerja tertinggal saat format berganti** — penyapu hanya kenal
+`.json`/`.mp3`/`.srt`; produksi menulis `.ass` (subtitle, dulu `.srt`), `.txt`, `.jpg`, `.mp4`.
+Terukur **634 dari 808 berkas >7 hari, ±73 MB**, tertua **16/17-Jun**. Ditambahkan ke penyapu yang
+**SUDAH ADA** (bukan penyapu kedua); `.mp4` sengaja berambang panjang — satu-satunya berkas yang
+kehilangannya tak bisa dipulihkan. Lama simpan dipindah dari angka mati ke setelan (§3.3).
+Pagar `tests/test_log_tidak_membanjir.py` (14 uji) **dibuktikan merah 4 bentuk pelanggaran**.
+Suite **893 → 907 lulus**. Nol DB · nol tampilan · nol komponen baru.
+**MASIH KETOKAN OWNER:** batas jurnal sistem (`SystemMaxUse` belum pernah disetel → memakai bawaan
+±5,8 GB; kini terpakai 2,1 GB). Bukan bom, tapi angkanya tak pernah dipilih siapa pun.
+
 ### [B25] REM DARURAT: simpan sebabnya & katakan apa artinya — 🟢 A–D SELESAI + TERVALIDASI (2026-08-03)
 - **SPEC/SSOT = `AI_ERROR_MANAGEMENT_ARCHITECTURE.md` §8a (celah, kini TERTUTUP) + §9 (kontrak tampilan per-KELAS).** WAJIB baca §9 sebelum menyentuh UI kegagalan produksi.
 - **SEBAB:** rem darurat MEMBUANG kelas error yang sudah diketahui sistem → layar & Telegram cuma bisa menebak ("mis. saldo/kredensial AI") → tenant tak pernah tahu **apakah sebabnya pulih sendiri**. Dampak terukur pada tenant BERBAYAR: **Bang Us-Dat mati ±44 jam** menunggu jatah harian yang sudah pulih keesokan harinya; BISIK NUSANTARA pola yang sama sehari kemudian.

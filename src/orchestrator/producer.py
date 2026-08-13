@@ -21,7 +21,14 @@ from src.exceptions import FAST_FAIL
 
 # [ERROR-MGMT] nilai string ErrorClass yang memicu rem-segera (persis set FAST_FAIL exceptions.py).
 _FAST_FAIL_VALUES = frozenset(ec.value for ec in FAST_FAIL)
+
 from src.utils import s3_buffer
+
+# [2026-08-13] Channel yang sudah dicatat "langganan tidak aktif" — supaya tidak dicatat ulang tiap
+# siklus (±15,6 detik). Isinya hanya id channel (11 channel hari ini), jadi tak ada beban memori
+# berarti. Sengaja di tingkat proses: pekerja hidup terus, dan bila ia direstart wajar bila keadaan
+# itu dicatat sekali lagi — satu baris per restart, bukan ribuan per hari.
+_SKIP_SUDAH_DICATAT: set[str] = set()
 
 
 def _yt_video_id(url: str) -> str | None:
@@ -596,8 +603,20 @@ def plan_and_submit(sb, pool: ThreadPoolExecutor, sem: threading.Semaphore) -> i
             continue
         # Phase 8a — gate monetisasi: jangan produksi (buang compute) utk tenant suspended/cancelled.
         if not gate_for_channel(sb, ch)["can_produce"]:
-            logger.info(f"[Producer] skip ch={cid} tenant={ch.get('tenant_id')} — subscription tidak aktif")
+            # [2026-08-13] DICATAT SEKALI, bukan tiap siklus. Terukur: siklus berulang tiap 15,6
+            # detik, dan channel yang langganannya mati dicatat ULANG setiap kali — 9.950 baris
+            # dalam 24 jam untuk 2 channel, 44% dari seluruh isi log. Akibatnya bukan disk penuh
+            # (masih 44 GB kosong) melainkan SINYAL TENGGELAM: setiap diagnosa harus mengaduk
+            # berkas puluhan MB berisi pengulangan yang sama, dan itu dibayar waktu + kredit owner.
+            # Penanda dihapus lagi begitu channel kembali memenuhi syarat (baris di bawah), jadi
+            # PERUBAHAN KEADAAN tetap tercatat — yang hilang hanya pengulangannya.
+            # Hanya baris pencatatan yang disentuh: syarat & `continue` TIDAK diubah, sehingga
+            # channel mana yang berproduksi mustahil ikut berubah.
+            if cid not in _SKIP_SUDAH_DICATAT:
+                logger.info(f"[Producer] skip ch={cid} tenant={ch.get('tenant_id')} — subscription tidak aktif")
+                _SKIP_SUDAH_DICATAT.add(cid)
             continue
+        _SKIP_SUDAH_DICATAT.discard(cid)   # kembali aktif → kelak dicatat lagi bila mati lagi
         # F1-08 GERBANG AKTIVASI: channel belum lengkap (niche/model/voice/credential/OAuth) → skip
         # (no-fallback: jangan produksi pakai default diam-diam). FAIL-OPEN bila cek error transient
         # (lindungi channel sehat — mis. ryan — dari berhenti karena gangguan sesaat).

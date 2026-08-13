@@ -78,10 +78,28 @@ class StorageCleaner:
         cutoff_audio = datetime.now() - timedelta(days=max_age_days_audio)
         deleted_count = 0
         freed_bytes   = 0
+        # [2026-08-13] DAFTAR POLA DISUSULKAN — dulu tertinggal saat format berkas berganti.
+        # Terukur di server (13-Agu): 634 dari 808 berkas lebih tua dari 7 hari, ±73 MB sisa nyata.
+        #   • `.ass` 188 berkas — subtitle. Dulu berformat `.srt` (ADA di daftar); saat berganti ke
+        #     `.ass`, daftar ini TIDAK ikut diperbarui → menumpuk sejak 16-Jun.
+        #   • `.txt` 188 berkas — daftar klip untuk penyambung video, sisa sesudah render.
+        #   • `.jpg` 111 berkas — gambar mini; sudah terunggah ke YouTube & tersimpan di S3.
+        #   • `.mp4`   2 berkas, 52,9 MB — tertua 17-Jun (hari pindahan v1→v2).
+        # `.srt` DIPERTAHANKAN: berkas lama mungkin masih ada, dan menghapus pola = meninggalkan sampah.
+        #
+        # ⚠️ KENAPA `.mp4` MEMAKAI AMBANG PANJANG (bukan 7 hari): video adalah satu-satunya berkas di
+        # sini yang KEHILANGANNYA tak bisa dipulihkan. Sudah diverifikasi bahwa penerbitan mengunduh
+        # dari S3 ke folder sementara — TIDAK pernah membaca folder ini (satu-satunya pembacanya =
+        # blok uji manual era v1) — jadi salinan lokal memang sisa. Ambang panjang tetap dipakai
+        # sebagai jarak aman: umur simpan stok 72 jam, jadi ambang ini belasan kali lipat di atasnya.
         patterns = {
             "*.json": cutoff_json,
             "*.mp3":  cutoff_audio,
             "*.srt":  cutoff_audio,
+            "*.ass":  cutoff_audio,
+            "*.txt":  cutoff_audio,
+            "*.jpg":  cutoff_audio,
+            "*.mp4":  cutoff_json,      # sengaja se-longgar json, bukan 7 hari
         }
         for pattern, cutoff in patterns.items():
             for f in self.base_dir.glob(pattern):
