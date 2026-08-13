@@ -149,7 +149,10 @@ Supaya desain D18 & E2.3 koheren, pahami model niche-nya:
 
 5. **Common Categories — quick-edit cards:**
    - **Subscription Tiers:** 3 row Starter/Pro/Scale, inline IDR+USD, "Save all".
-   - **Add-ons:** Custom niche public-90d, Custom niche private, Voice pack, Niche audit, Concierge setup, Priority queue.
+   - **Add-ons:** Custom niche public-90d, Custom niche private, Voice pack, Niche audit, Concierge setup, ~~Priority queue~~.
+     > ⛔ **"Priority queue" DICABUT 2026-08-13 (ketok owner)** — tak pernah ada barangnya; sudah dihapus
+     > dari halaman jual bersama Webhook & akses API. Butir 8 "API Documentation Panel" di bawah ikut
+     > gugur. Rujukan hidup: `DESAIN_PRODUK_SAAS.md` §4. **Jangan dibangun.**
    - **Discounts:** Annual prepay % off, First-month promo, Referral discount.
 
 6. **🆕 Promo/Seasonal Scheduler** (timeline): calendar upcoming pricing changes (Black Friday, Anniversary), drag-to-reschedule, "Create campaign" wizard (discount % + duration + applicable plans).

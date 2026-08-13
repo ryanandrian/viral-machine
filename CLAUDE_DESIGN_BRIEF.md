@@ -1140,6 +1140,10 @@ Sama dengan B1 tapi simpler:
      - "Send test email" button
      - Email format preview thumbnail
 
+   - ⛔ **DICABUT 2026-08-13 (ketok owner) — JANGAN DIBANGUN.** Kartu **Webhook** di bawah, kolom
+     **Webhook** pada tabel event, dan bagian **Quiet Hours** di butir 5 = rancangan yang tak pernah
+     jadi barang. Ketiga janji "Webhook · akses API · antrean prioritas" plus "quiet hours" sudah
+     dihapus dari halaman jual. Rujukan hidup: `DESAIN_PRODUK_SAAS.md` §4.
    - **🔗 Webhook** card (Enterprise badge):
      - URL input + HMAC secret (untuk verification)
      - "Test webhook" button + last delivery status indicator

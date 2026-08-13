@@ -167,6 +167,19 @@
 
 > 🔄 **UPDATE 2026-06-14 (owner):** tangga tier V2 = **Trial → Starter → Pro → Business** (tier tertinggi = **Business**; nama lama "Scale"/"agency" disatukan ke **Business** di FE+DB+pricing+caps). **Enterprise = ditunda ke V3** (kolom Enterprise di tabel = referensi masa depan, BUKAN self-serve V2). **Caps per-tier (channel + video/hari) = ADMIN-EDITABLE via `plan_limits` (DB), no-hardcode** — disesuaikan kondisi pasar tanpa redeploy. Trial = BYOK time-boxed (lihat §3 update).
 
+> ✅ **KETOK OWNER 2026-08-13 — ISI PAKET DIRAPIKAN (hanya DB `plan_limits`, nol kode, nol deploy).**
+> Tiga janji yang **tidak pernah ada barangnya** dicabut dari seluruh halaman jual: **Webhook · akses API ·
+> antrean prioritas**. Menyusul dicabut: **quiet hours** (juga tak pernah dibangun) — diganti dua janji
+> yang MEMANG ditegakkan mesin: **10 channel** dan **5 video/hari**. Ditambah: **Niche Studio kini ikut
+> untuk paket Pro** (sebelumnya Business saja) — satu saklar `plan_limits.niche_studio`, dan halaman harga
+> membacanya sendiri, jadi nyala fiturnya + tulisan di kartu harga berubah bersamaan.
+> **Isi kartu Business kini DITURUNKAN dari kenop hidup** (`max_channels`/`max_videos_per_day`), bukan
+> diketik tangan — supaya tulisan dan kenyataan tak bisa lagi berbeda.
+> **Keadaan hidup terverifikasi 13-Agu:** trial 1ch/1vid · starter 1ch/1vid · **pro 3ch/3vid + Niche Studio**
+> · **business 10ch/5vid + Niche Studio**.
+> ⛔ **JANGAN dihidupkan lagi** rancangan Webhook / akses API / antrean prioritas / quiet hours di
+> `CLAUDE_DESIGN_BRIEF.md` & `CLAUDE_DESIGN_ADDENDUM_v3.md` — keduanya rancangan, bukan barang jadi.
+
 ### Struktur Paket (REVISI berdasarkan market data Juni 2026)
 
 | | **Starter** | **Pro** | **Business** | **Enterprise** |
