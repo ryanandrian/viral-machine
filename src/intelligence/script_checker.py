@@ -25,7 +25,10 @@ kode akan mati sejak niche kesepuluh.)
 ═══ APA YANG DIPERIKSA ═══
 
 1. `kalimat_menggantung` — naskah tidak berakhir di tanda baca akhir → penonton mendengar potongan.
-2. `elipsis` — tanda "..." memakan >1 detik hening TERUKUR dan merusak takaran durasi.
+2. `elipsis` — LEBIH dari jatahnya (1 per naskah). Biayanya kecil & TERUKUR per suara (0,16–0,38
+   dtk — setara satu koma, 4–8× lebih murah dari titik akhir kalimat), jadi ini soal GAYA, bukan
+   durasi: narasi yang menggantung berulang terdengar lemah. *(Angka lama ">1 detik" di baris ini
+   SALAH — dikoreksi 13-Agu dari tabel kalibrasi hidup `tts_pace_calibration`.)*
 3. `frasa_berulang` — frasa 3-kata yang sama muncul ≥3× (mis. "peradaban ini" 8× dalam satu naskah
    long-form) → terdengar seperti mesin, dan itu profil yang didemonetisasi YouTube (risiko #1 produk).
 4. `kata_terlarang_niche` — kata dari `narration_persona.avoid` niche itu sendiri.
@@ -58,6 +61,12 @@ _TANDA_AKHIR = ".!?…\"'”’)"
 _MIN_KATA_ASING = 2
 _PISAH = "\"'“”‘’«»()[]{}.,;:!?…—–-"
 _RX_KATA = re.compile(r"[A-Za-zÀ-ÿ']+")
+
+# Jatah elipsis per naskah — SATU angka untuk dua tempat: perintah ke penulis (`script_engine`) dan
+# pemeriksaan di sini. Dulu keduanya berbeda (prompt "jangan pernah" vs prompt lain "pakai sesekali"),
+# dan itulah pertengkaran yang diperbaiki 13-Agu. Mengubah angka ini WAJIB mengubah teks perintah di
+# `script_engine` juga — dijaga `tests/test_larangan_naskah.py`.
+_MAKS_ELIPSIS = 1
 # Penutup KALIMAT sebenarnya — sengaja BUKAN `_TANDA_AKHIR` (yang juga memuat kutip & kurung untuk
 # memeriksa akhir naskah). Menghitung kalimat dengan tanda kutip akan melipatgandakan hitungannya.
 _TANDA_KALIMAT = ".!?…"
@@ -69,13 +78,19 @@ def _temuan(jenis: str, parah: bool, pesan: str, bukti: str = "") -> dict:
 
 def periksa_naskah(teks: str, niche_profile: dict | None = None,
                    content_language: str | None = None,
-                   beat_keys: list | None = None) -> list[dict]:
+                   beat_keys: list | None = None,
+                   teks_ajakan_channel: str | None = None) -> list[dict]:
     """Periksa satu naskah final. Mengembalikan daftar temuan (kosong = bersih).
 
     `niche_profile` = baris niche dari DB (dipakai `narration_persona.avoid`). None → cek kata
     terlarang dilewati (tidak mengarang daftar sendiri).
     `content_language` = locale konten channel; non-`en*` menghidupkan cek bahasa asing.
     `beat_keys` = nama bagian aktif, untuk mendeteksi labelnya bocor jadi ucapan narator.
+    `teks_ajakan_channel` = teks CTA yang DITULIS SENDIRI oleh pemilik channel (Branded → CTA).
+        Kata yang berasal dari kalimatnya sendiri TIDAK dihitung melanggar "kata terlarang niche":
+        tanpa ini, tenant yang menyalakan mode ajakan bisa ditolak mesin karena memakai kata yang
+        ia ketik sendiri — mesin seolah membatalkan setelan tenant tanpa memberi tahu. Yang TIDAK
+        dikecualikan: kata terlarang di bagian naskah lain. Larangan niche tetap berkuasa penuh.
     """
     t = (teks or "").strip()
     out: list[dict] = []
@@ -113,13 +128,28 @@ def periksa_naskah(teks: str, niche_profile: dict | None = None,
                 f"±{_DUR['words_per_sentence']:.0f}, batas {_maks}) — narator membaca tanpa jeda "
                 f"sampai kehabisan napas. Pecah jadi kalimat-kalimat utuh.", t[:120]))
 
-    # 2. elipsis (biaya hening TERUKUR >1 detik per tanda)
+    # 2. elipsis — JATAH, bukan larangan mutlak (2026-08-13)
+    #
+    # DULU: setiap tanda '...' ditandai cacat, karena prompt melarangnya mutlak. Tapi prompt yang SAMA
+    # di tempat lain justru MENYURUH memakainya untuk ketegangan ("Ellipsis (…) sparingly for
+    # suspense") — mesin bertengkar dengan dirinya sendiri, dan penulis naskah menerima dua perintah
+    # yang saling membatalkan.
+    #
+    # Sekaligus: alasan larangannya SALAH. Prompt mengklaim ">1 detik per tanda". Angka TERLATIH per
+    # suara di `tts_pace_calibration` (hidup, dibaca 13-Agu): Ardi 0,156 · Guy 0,204 · Gadis 0,288 ·
+    # Jenny 0,300 · Christopher 0,376 detik — **setara satu koma**, dan 4–8× LEBIH MURAH daripada
+    # titik akhir kalimat (0,85–1,37 dtk). Jadi elipsis tak pernah jadi risiko durasi; membatasinya
+    # murni soal GAYA (narasi yang menggantung terdengar lemah).
+    #
+    # Karena itu: satu tanda = SAH (alat drama di klimaks). Lebih dari itu = temuan.
+    # Jatahnya sengaja SAMA dengan yang diperintahkan prompt — bila salah satu diubah, yang lain
+    # WAJIB ikut, dan uji `tests/test_larangan_naskah.py` menjaga keduanya tetap satu angka.
     n_ell = t.count("…") + t.count("...")
-    if n_ell:
+    if n_ell > _MAKS_ELIPSIS:
         out.append(_temuan("elipsis", False,
-                           f"{n_ell} tanda '...' — prompt melarangnya: ia menambah keheningan "
-                           f"(terukur 0,16–0,38 dtk per tanda, tergantung suara) dan membuat narasi "
-                           f"terdengar menggantung.", ""))
+                           f"{n_ell} tanda '...' — jatahnya {_MAKS_ELIPSIS} per naskah (hanya di "
+                           f"klimaks). Biayanya kecil (terukur 0,16–0,38 dtk per tanda, tergantung "
+                           f"suara), tapi dipakai berulang membuat narasi terdengar menggantung.", ""))
 
     # 3. frasa berulang (3-kata, ≥3 kemunculan)
     kata = [w.lower() for w in _RX_KATA.findall(t)]
@@ -140,8 +170,10 @@ def periksa_naskah(teks: str, niche_profile: dict | None = None,
         # menandai "Kekerasan itu tercatat pada tahun 1965." sebagai pelanggaran → naskah sah DITOLAK
         # dan satu putaran retry terbuang. Cacat ini ditanam hari yang sama saat modul dibuat.
         rendah = t.lower()
+        _izin = (teks_ajakan_channel or "").lower()
         kena = [f for f in frasa
-                if re.search(rf"(?<![0-9a-zà-ÿ]){re.escape(f)}(?![0-9a-zà-ÿ])", rendah)]
+                if re.search(rf"(?<![0-9a-zà-ÿ]){re.escape(f)}(?![0-9a-zà-ÿ])", rendah)
+                and not (_izin and re.search(rf"(?<![0-9a-zà-ÿ]){re.escape(f)}(?![0-9a-zà-ÿ])", _izin))]
         if kena:
             out.append(_temuan("kata_terlarang_niche", True,
                                f"{len(kena)} kata/frasa yang DILARANG niche ini masih dipakai.",

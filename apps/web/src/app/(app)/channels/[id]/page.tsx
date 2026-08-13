@@ -1288,11 +1288,24 @@ export default function ChannelDetailPage() {
         <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 560 }}>
           <h3 className="card-title" style={{ marginBottom: "0.35rem", display: "flex", alignItems: "center", gap: "0.5rem" }}><Bi id="Branded (CTA · logo · link)" en="Branded (CTA · logo · link)" />{tanda(dirty.brand)}</h3>
           <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1.25rem" }}><Bi id="Sentuhan brand opsional di video & deskripsi (semua boleh kosong = tanpa branding)." en="Optional brand touches in video & description (all blank = no branding)." /></p>
-          <div className="fld-row"><div className="k">CTA<div className="sub"><Bi id="implicit=tanpa brand · soft-sell=sebut halus" en="implicit=no brand · soft-sell=subtle" /></div></div>
-            <div className="radio-row">{[["implicit", "Implicit"], ["soft_sell", "Soft-sell"]].map(([v, l]) => <span key={v} className={`radio-pill${ctaMode === v ? " sel" : ""}`} onClick={() => setCtaMode(v)}>{l}</span>)}</div></div>
+          {/* [2026-08-13] MODE KETIGA `explicit`. Sebelumnya hanya ada dua, dan KEDUANYA melarang
+              meminta apa pun kepada penonton — jadi tak ada satu pun cara mengubah penonton jadi
+              pengikut. Larangan ajakan GENERIK tetap berlaku penuh di mesin naskah; mode ini hanya
+              membuka SATU pintu sempit: ajakan yang khas video ini + alasannya, MENGGANTIKAN kalimat
+              penutup (bukan menambah — jatah detik bagian penutup tidak berubah). */}
+          <div className="fld-row"><div className="k">CTA<div className="sub"><Bi id="implicit=tanpa ajakan · soft-sell=sebut brand halus · ajakan=satu ajakan khas video ini" en="implicit=no ask · soft-sell=subtle brand · ask=one video-specific ask" /></div></div>
+            <div className="radio-row">{[["implicit", "Implicit"], ["soft_sell", "Soft-sell"], ["explicit", "Ajakan"]].map(([v, l]) => <span key={v} className={`radio-pill${ctaMode === v ? " sel" : ""}`} onClick={() => setCtaMode(v)}>{l}</span>)}</div></div>
           {ctaMode === "soft_sell" && <>
             <div className="fld-row"><div className="k"><Bi id="Nama brand" en="Brand name" /></div><input className="input" value={brandName} onChange={(e) => setBrandName(e.target.value)} style={{ maxWidth: 280 }} /></div>
             <div className="fld-row"><div className="k"><Bi id="Teks CTA" en="CTA text" /></div><input className="input" value={ctaText} onChange={(e) => setCtaText(e.target.value)} placeholder="Follow for more" style={{ maxWidth: 280 }} /></div>
+          </>}
+          {ctaMode === "explicit" && <>
+            <div className="fld-row"><div className="k"><Bi id="Arahan ajakan" en="Ask direction" /><div className="sub"><Bi id="Apa yang penonton dapat berikutnya — mesin menulis kalimatnya sendiri, khas tiap video. Kosong = mesin memilih sendiri." en="What the viewer gets next — the engine writes the line itself, specific to each video. Blank = engine decides." /></div></div>
+              <input className="input" value={ctaText} onChange={(e) => setCtaText(e.target.value)} placeholder="mis. besok bahas sunnah bangun tidur" style={{ maxWidth: 360 }} /></div>
+            <p className="muted" style={{ fontSize: "var(--text-xs)", margin: "-0.5rem 0 0.75rem" }}>
+              <Bi id="Ajakan generik tetap dilarang mesin (“jangan lupa subscribe”, “smash like”) — yang diizinkan hanya ajakan yang masuk akal khusus untuk video itu."
+                  en="Generic asks stay blocked (“don't forget to subscribe”, “smash like”) — only an ask that makes sense for that specific video is allowed." />
+            </p>
           </>}
           <div className="fld-row"><div className="k"><Bi id="Logo brand" en="Brand logo" /><div className="sub"><Bi id="PNG transparan · maks 220×220px · overlay di video" en="transparent PNG · max 220×220px · video overlay" /></div></div>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: 360 }}>

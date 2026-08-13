@@ -97,7 +97,8 @@ def test_artefak_sambungan_per_segmen_tertangkap():
 
 
 def test_ringkasan_menyebut_jenis_dan_bukti():
-    t = periksa_naskah("Kota itu jatuh... and the penduduk", content_language="id-ID")
+    # [13-Agu] dua elipsis: sejak P4 satu tanda ada DI DALAM jatah dan tidak lagi jadi temuan.
+    t = periksa_naskah("Kota itu jatuh... and the penduduk... tetap", content_language="id-ID")
     r = ringkas_temuan(t)
     assert "elipsis" in r and "bahasa_asing" in r and "kalimat_menggantung" in r
 

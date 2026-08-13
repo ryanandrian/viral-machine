@@ -21,7 +21,10 @@ def _j(t):
 
 
 def test_elipsis_tidak_dituduh_artefak_sambungan():
-    t = "Tapi tunggu... ini belum selesai. Ada satu hal lagi yang harus kamu tahu sekarang."
+    # [13-Agu] DUA tanda, bukan satu: sejak P4 elipsis punya JATAH 1 per naskah (klimaks), jadi satu
+    # tanda memang TIDAK lagi ditandai. Maksud uji ini tak berubah — ia menguji bahwa tanda elipsis
+    # tidak dihitung dua kali sebagai "sisa penggabungan"; prasyaratnya cukup dibuat melebihi jatah.
+    t = "Tapi tunggu... ini belum selesai... Ada satu hal lagi yang harus kamu tahu sekarang."
     j = _j(t)
     assert "elipsis" in j, "elipsis-nya sendiri malah tak terdeteksi"
     assert "artefak_sambungan" not in j, f"elipsis dituduh sisa penggabungan: {j}"

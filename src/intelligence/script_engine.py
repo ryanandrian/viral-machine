@@ -462,7 +462,7 @@ def _refit_naskah(provider, model, script: dict, beats: list, resep: dict, vonis
             "still be there.\n"
             f"2. How: {cara}\n"
             "3. Do NOT change the first sentence.\n"
-            "4. Keep the same language, tone and style. Whole sentences only. NEVER use '...'. "
+            "4. Keep the same language, tone and style. Whole sentences only. Ellipsis: at most ONE ellipsis in the whole script (climax only). "
             "Commas sparingly.\n"
             "5. Return the SAME section keys, nothing else.\n"
             + (f"6. Your previous attempt DELETED these and they MUST be back: "
@@ -654,7 +654,7 @@ def _generate_per_beat(provider, model, topic, niche, beats: list, resep: dict,
             f"Write ONLY the [{peran}] part of this video narration ({i+1} of {len(beats)}).\n"
             + (f"WHAT THIS PART MUST DO: {_hint_beat[b]}\n" if _hint_beat.get(b) else "")
             + f"Length: about {w} words in about {s_t} sentence(s). Count before answering.\n"
-            "RULES: whole sentences only · NEVER use '...' (it burns over a second of silence) · "
+            "RULES: whole sentences only · ellipsis: at most ONE ellipsis in the whole script (climax only) · "
             "commas sparingly · do not name or number the section · "
             + ("this is the FINAL part: close it in a way that leaves curiosity, no new facts.\n"
                if terakhir else "do NOT conclude or summarise — that belongs to a later part.\n")
@@ -746,7 +746,7 @@ def _generate_per_beat(provider, model, topic, niche, beats: list, resep: dict,
                 f"(sekarang {len(teks.split())} — tambah ±{_kurang} kata).\n"
                 "ATURAN MUTLAK: jangan hilangkan satu fakta pun (angka, tahun, nama, peristiwa) · "
                 "perinci fakta yang SUDAH ada, jangan menambah fakta baru · jangan mengulang · "
-                f"bahasa & nada persis sama · sekitar {s_t} kalimat · kalimat utuh · TANPA tanda '...'.\n\n"
+                f"bahasa & nada persis sama · sekitar {s_t} kalimat · kalimat utuh · tanda '...' maksimal SATU di seluruh naskah (hanya di klimaks).\n\n"
                 f"NASKAH:\n{teks}\n\nBalas JSON saja: {{\"text\": \"...\"}}"
             )
             try:
@@ -787,7 +787,7 @@ def _generate_per_beat(provider, model, topic, niche, beats: list, resep: dict,
                 "ATURAN MUTLAK: pertahankan SEMUA fakta (angka, tahun, nama, peristiwa) · buang kata "
                 "berlebih dan hiasan yang tak menambah informasi · gabungkan kalimat yang mengatakan "
                 "hal sama · JANGAN membuang kalimat yang membawa fakta · "
-                f"bahasa & nada persis sama · sekitar {s_t} kalimat · kalimat utuh · TANPA tanda '...'.\n\n"
+                f"bahasa & nada persis sama · sekitar {s_t} kalimat · kalimat utuh · tanda '...' maksimal SATU di seluruh naskah (hanya di klimaks).\n\n"
                 f"NASKAH:\n{teks}\n\nBalas JSON saja: {{\"text\": \"...\"}}"
             )
             try:
@@ -1160,6 +1160,48 @@ Apply each technique above precisely. Fresh thinking only — not a revision of 
     if insights_block:
         insights_section = f"\n{insights_block}\n"
 
+    # ── [2026-08-13] MODE KETIGA: `explicit` — SATU ajakan yang benar-benar meminta ────────────────
+    #
+    # KENAPA ADA. Sampai hari ini hanya ada dua mode: `implicit` (10 channel) dan `soft_sell` (1) —
+    # dua-duanya melarang meminta apa pun. Larangan itu benar untuk ajakan GENERIK ("smash the like
+    # button" sudah mati dan menurunkan mutu yang dirasakan), tapi ia dipukul rata ke SEMUA bentuk
+    # ajakan. Akibatnya tak ada satu pun cara bagi tenant untuk mengubah penonton jadi pengikut —
+    # persis keluhan "views naik, subscriber diam".
+    #
+    # YANG DIIZINKAN mode ini: SATU ajakan yang HANYA masuk akal untuk video ini. Yang TETAP HARAM:
+    # ajakan generik, "smash/hit/tekan", dan kalimat perintah kosong — pagar aslinya tidak dilonggarkan
+    # sedikit pun, hanya dibuka satu pintu sempit yang dijaga.
+    #
+    # ⛔ DURASI (§7.3 — gerbang terkunci): ajakan ini WAJIB MENGGANTI penutup, bukan menambahnya.
+    # Bagian CTA sudah punya jatah detiknya sendiri di DNA niche (umumnya 3 dtk); menambah kalimat di
+    # luar jatah = menambah durasi yang tidak dianggarkan. Terukur pada kalibrasi hidup: satu kalimat
+    # ±10 kata = ±4,4 dtk pada suara Ardi — 7% dari preset 60 dtk, memakan jatah yang seharusnya
+    # untuk isi cerita.
+    cta_block = ""
+    if cta_mode == "explicit":
+        _teks_ajakan = (brand_cta_text or "").strip()
+        cta_block = f"""
+EXPLICIT-CTA MODE (dipilih pemilik channel): pada bagian CTA — dan HANYA di situ — kamu BOLEH
+menuliskan SATU ajakan yang benar-benar meminta sesuatu dari penonton.
+SYARAT MUTLAK, semuanya sekaligus:
+  1. Ajakan itu HANYA masuk akal untuk video/topik/channel INI. Kalau kalimatnya bisa ditempel di
+     video mana pun, ia GAGAL — tulis ulang.
+  2. Sebutkan ALASANNYA dalam kalimat yang sama (apa yang penonton dapat berikutnya).
+  3. MENGGANTIKAN kalimat penutup, BUKAN menambah kalimat baru — jatah kata bagian CTA tidak berubah.
+  4. TETAP HARAM: 'smash', 'hit the bell', 'jangan lupa', dan ajakan generik tanpa alasan.
+{("  5. Arahan pemilik channel (pakai maknanya, jangan salin mentah): " + _teks_ajakan) if _teks_ajakan else ""}
+"""
+
+    # Klausa pengecualian di daftar FORBIDDEN — SENGAJA hanya disisipkan saat modenya aktif.
+    # Versi pertama menuliskannya permanen ("berlaku hanya bila EXPLICIT-CTA MODE muncul di atas");
+    # uji `test_blok_izin_HANYA_muncul_di_mode_explicit` menangkapnya: kalimatnya tetap terbaca di
+    # mode implicit, dan model lemah bisa menyangka pintunya terbuka. Sekarang: tidak ada modenya,
+    # tidak ada kalimatnya.
+    cta_kecuali = ("" if cta_mode != "explicit" else
+                   "              (EXCEPTION — EXPLICIT-CTA MODE is active above: exactly ONE ask is\n"
+                   "               allowed, under the conditions listed there. Generic asks stay\n"
+                   "               forbidden even then.)")
+
     # Branded Content §6 — soft-sell: izinkan SATU sebutan brand halus di CTA (anti-hard-sell TETAP).
     soft_sell_block = ""
     if cta_mode == "soft_sell" and brand_name:
@@ -1203,7 +1245,7 @@ Maksimal SATU sebutan brand di seluruh script.{(' Arahan brand: ' + brand_cta_te
             f"before answering.\n"
             f"  2. About {_r['kalimat']} sentences — do NOT exceed. Every sentence end adds real SILENCE to the "
             f"video; flowing sentences beat many short ones.\n"
-            f"  3. NEVER use '...' (ellipsis): one ellipsis burns >1 second of silence.\n"
+            f"  3. Ellipsis (…/...): AT MOST ONE in the whole script, at the climax only.\n"
             f"  4. Commas sparingly — each one adds a short pause.\n"
             f"{_emph}\n"
             "The BEAT PLAN above splits these words across beats; the two numbers here are the authority "
@@ -1247,7 +1289,7 @@ HOOK FORMULA: {profile['hook_style']}
 {("THIS NICHE LIVES AROUND: " + ", ".join(str(k) for k in (niche_data.get('keywords') or [])[:8])) if niche_data.get('keywords') else ""}
 {("WHAT THIS NICHE IS: " + _deskripsi_niche(niche_data, content_language)) if _deskripsi_niche(niche_data, content_language) else ""}
 {("🎯 NICHE EMOTIONAL QUALITY BAR (aim for this from the first draft — it is how this script is scored): " + niche_data.get('emotion_scoring_criteria','')) if niche_data.get('emotion_scoring_criteria') else ""}
-{insights_section}{soft_sell_block}{feedback_block}{beat_plan}
+{insights_section}{cta_block}{soft_sell_block}{feedback_block}{beat_plan}
 Follow the BEAT PLAN above — write ONLY the active beats (others = empty ""). The numbered guide below is craft reference per section:
 
 1. HOOK ({section_timing['hook']}s ~{words['hook']} words)
@@ -1275,7 +1317,8 @@ Follow the BEAT PLAN above — write ONLY the active beats (others = empty ""). 
 5. CORE FACTS ({section_timing['core_facts']}s ~{words['core_facts']} words)
    JOB: Facts 2 and 3 — each more surprising than the last. Maximum information density.
    MUST: At least 2 distinct, specific, verifiable facts. Each sentence adds new information.
-   FORBIDDEN: Repeating anything said before. Vague claims without specifics.
+   FORBIDDEN: Restating a fact already given (accidental repetition). Vague claims without specifics.
+   (The ONE deliberate exception lives in the CTA below — a closing echo of the opening line.)
 
 6. CURIOSITY BRIDGE ({section_timing['curiosity_bridge']}s ~{words['curiosity_bridge']} words)
    JOB: Create maximum anticipation for the climax. They must feel they cannot stop now.
@@ -1308,9 +1351,13 @@ Follow the BEAT PLAN above — write ONLY the active beats (others = empty ""). 
      - Open question: 'What does it mean that you now know this — and most people never will?'
      - Implication drop: 'The next discovery in this field makes this one look like a footnote.'
      - Identity shift: 'You just understood something that took scientists decades to accept.'
+     - Bookend echo: repeat the opening line ONE time, now carrying the meaning it lacked at the
+       start. This is the ONLY sanctioned repetition in the whole script. It REPLACES the closing
+       line — never add it on top, because every extra word is real runtime taken from the story.
    FORBIDDEN: 'Follow', 'Subscribe', 'Like', 'Hit the bell', 'Smash the like button',
               any sentence beginning with an imperative verb directed at the viewer,
               any phrase that sounds like a creator asking for something from the audience.
+{cta_kecuali}
    QUALITY BAR: Read it aloud as if speaking to one person you respect.
    If it sounds like a pitch — delete it and rewrite. If it sounds like a genuine thought — keep it.
 
@@ -1321,9 +1368,9 @@ WRITING RULES — every single one non-negotiable:
 - Every section transition must feel inevitable — not a gear shift, a deepening
 - Zero filler: "basically", "literally", "you know", "kind of", "amazing", "incredible"
 TTS DELIVERY RULES — write for the human ear, not the eye:
-- ⏱ DURATION-CRITICAL: each em-dash (—) and ellipsis (…) becomes ≈0.6–1.0s of SILENCE when spoken — they EAT runtime. Over-using pauses is the #1 reason a video runs too long. Use them DELIBERATELY: at most ~1 per beat, only where the drama truly earns it.
+- ⏱ Em-dash (—) and ellipsis (…) each add a real pause when spoken — MEASURED 0.09–0.42s (em-dash) and 0.16–0.38s (ellipsis) depending on the voice. That is roughly one comma. Use them DELIBERATELY, not as decoration.
 - Em-dash (—) for ONE key mid-sentence pause per beat: "It survived — against all odds."
-- Ellipsis (…) sparingly for suspense: "No one knew what was coming…"
+- Ellipsis (…): AT MOST ONE in the entire script, and only at the climax: "No one knew what was coming…"
 - Short standalone sentences for emphasis (these read FAST — safe for runtime): "It was real. Completely real."
 - ALWAYS "heard of" not "heard about": "You've never heard of this discovery."
 - Sentence fragments for impact, used sparingly: "Thirteen billion years. Vanished."
@@ -1927,7 +1974,7 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                         f"Every sentence end and every ellipsis costs real silence, so prefer FEWER, "
                         f"FULLER sentences over many short ones — but every sentence must still END "
                         f"with a period, and none may run past ~{_ambang.angka('script_maks_kata_per_kalimat', 32)} "
-                        f"words. A wall of text with no periods is unusable. Never use '...'."
+                        f"words. A wall of text with no periods is unusable. Ellipsis: at most ONE ellipsis in the whole script (climax only)."
                         + (f" OFF-BUDGET BEATS (fix exactly these): {'; '.join(_offb)}." if _offb else "")]
                     logger.info(f"[ScriptEngine] durasi: {_f['words']}w/{_f['sentence']}kal → "
                                 f"{_v['video_prediksi']:.1f}s di luar {_lo:.0f}-{_hi:.0f}s → retry")
@@ -1947,7 +1994,8 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                                                              periksa_naskah as _periksa,
                                                              ringkas_temuan as _ringkas)
                 _cacat = _periksa(script.get("full_script") or "", niche_profile=niche_profile,
-                                  content_language=_clang, beat_keys=active_beats)
+                                  content_language=_clang, beat_keys=active_beats,
+                                  teks_ajakan_channel=_brand_cta)
                 script["mechanical_issues"] = _cacat
                 if _cacat:
                     logger.info(f"[ScriptEngine] pemeriksa mekanis: {_ringkas(_cacat)}")
@@ -2079,7 +2127,8 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                 from src.intelligence.script_checker import periksa_naskah as _periksa2
                 from src.intelligence.script_checker import ringkas_temuan as _ringkas2
                 _c2 = _periksa2(best_script.get("full_script") or "", niche_profile=niche_profile,
-                                content_language=_clang, beat_keys=active_beats)
+                                content_language=_clang, beat_keys=active_beats,
+                                teks_ajakan_channel=_brand_cta)
                 best_script["mechanical_issues"] = _c2
                 logger.info(f"[ScriptEngine] periksa ulang naskah akhir: {_ringkas2(_c2)}")
             except Exception as _ce2:
@@ -2113,7 +2162,7 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                         "not opinions:\n" + _daftar + "\n\n"
                         "ABSOLUTE RULES: keep every FACT (numbers, years, names, events) · keep the "
                         "SAME language, tone and style · keep the word count within ±5% · whole "
-                        "sentences only · NEVER use '...' · do not change the first sentence · return "
+                        "sentences only · ellipsis: at most ONE ellipsis in the whole script (climax only) · do not change the first sentence · return "
                         "the SAME section keys and nothing else.\n\n"
                         f"SCRIPT (JSON):\n{json.dumps(_isi, ensure_ascii=False, indent=1)}\n\n"
                         "Reply with JSON only, exactly these keys: " + ", ".join(_isi)
@@ -2126,7 +2175,7 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                     if all(_baru.values()):
                         _tb = " ".join(_baru[b] for b in _isi)
                         _c_baru = _pn(_tb, niche_profile=niche_profile, content_language=_clang,
-                                      beat_keys=active_beats)
+                                      beat_keys=active_beats, teks_ajakan_channel=_brand_cta)
                         # HITUNG PARAH TERPISAH DARI TOTAL. Sampai 2026-08-02 keduanya dijadikan satu
                         # angka (`len(_c_baru)`, dinamai `_parah_baru` padahal isinya TOTAL), lalu
                         # dibandingkan dengan total lama. Akibatnya perbaikan yang membuang dua cacat

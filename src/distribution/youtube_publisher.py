@@ -242,9 +242,15 @@ class YouTubePublisher:
         """CTA deskripsi (footer) = ikut Branded channel (`cta_mode`), BUKAN hardcode per-niche (5C).
         `implicit` → "" (TANPA baris CTA — selaras filosofi narasi yg melarang follow/subscribe);
         `soft_sell` → `brand_cta_text` channel (kosong → ""). CTA NARASI (beat) & mode di script_engine
-        TIDAK disentuh — ini hanya footer deskripsi."""
+        TIDAK disentuh — ini hanya footer deskripsi.
+
+        [2026-08-13] `explicit` → SAMA dengan soft_sell di sini: memakai `brand_cta_text` channel.
+        Sengaja satu jalur, bukan dua: teks footer memang milik pemilik channel apa pun modenya, dan
+        yang membedakan kedua mode itu ada di NARASI (soft_sell = sebutan brand halus · explicit =
+        satu ajakan yang meminta). Membedakannya di sini hanya akan melahirkan dua tempat yang harus
+        diingat tanpa memberi apa pun."""
         mode = (getattr(tenant_config, "cta_mode", "implicit") or "implicit").lower()
-        if mode == "soft_sell":
+        if mode in ("soft_sell", "explicit"):
             return (getattr(tenant_config, "brand_cta_text", None) or "").strip()
         return ""
 

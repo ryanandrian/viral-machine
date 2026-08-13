@@ -220,6 +220,43 @@ bukan membaca kode.
 | em-dash Gadis | 1,262 dtk (dari 6 naskah) | **0,400** |
 | ElevenLabs Adam | belum pernah terkalibrasi | koma **0,116** · em-dash **0,169** · kalimat **0,545** |
 
+### 🗣️ LARANGAN NASKAH DINILAI ULANG — 3 dilonggarkan, 1 DICABUT setelah diukur *(2026-08-13)*
+
+Owner meminta seluruh larangan yang tertanam di kode dinilai "dari sudut pandang kebutuhan viral",
+lalu memperingatkan: *"perubahan anda jika salah bisa merusak metode preset durasi quality"*.
+**Peringatan itu terbukti benar** — satu usulan diukur dan dicabut. Yang berjalan:
+
+| # | Perubahan | Dampak durasi (diukur, bukan diperkirakan) |
+|---|---|---|
+| **P4** | **Elipsis: dari "jangan pernah" → JATAH 1 per naskah (klimaks).** Mesin dulu **bertengkar dengan dirinya sendiri**: satu prompt melarang mutlak (*"NEVER use '...'"*), prompt lain di berkas yang sama menyuruh memakainya untuk ketegangan (*"Ellipsis (…) sparingly for suspense"*), dan pemeriksa menandai SETIAP tanda. Alasan larangannya juga **salah**: prompt mengklaim ">1 detik", padahal tabel di atas menunjukkan **0,156–0,376 dtk** — setara satu koma. | **+0,5%** pada preset 60 dtk (30× di bawah ambang QC). Jatahnya **satu angka** (`script_checker._MAKS_ELIPSIS`) yang dipakai prompt & pemeriksa sekaligus. |
+| **P3** | **Gema penutup (bookend) diizinkan SEKALI** — menutup dengan kalimat pembuka yang kini bermakna lain. Dulu terlarang oleh *"FORBIDDEN: Repeating anything said before"*. | **0%** — prompt mewajibkannya **MENGGANTI** kalimat penutup. Kalau ditambahkan: ±10 kata = **±4,4 dtk** (7% dari preset 60) → memakan jatah cerita. Dijaga uji. |
+| **P1** | **Mode CTA ketiga `explicit`** (opt-in per channel). Dulu hanya `implicit` & `soft_sell` — **keduanya melarang meminta apa pun**, jadi tak ada satu pun cara mengubah penonton jadi pengikut. Yang diizinkan: SATU ajakan yang khas video itu + alasannya. Ajakan generik tetap terlarang di semua mode. | **0%** — ajakan hidup di dalam jatah detik bagian penutup (`section_timing.cta`), menggantikan penutup implisit. |
+
+**Titik gesek yang ikut ditutup:** daftar `avoid` niche ditegakkan sebagai kata terlarang oleh
+pemeriksa. Tanpa perbaikan, tenant yang menyalakan mode ajakan bisa ditolak mesin **karena memakai
+kata yang ia ketik sendiri** di teks CTA channel. Kini kata yang berasal dari teks CTA tenant tidak
+dituduh melanggar — tapi larangan niche **tetap berkuasa penuh di bagian naskah lain** (diuji dua arah).
+
+**🔴 P2 DICABUT — jangan dihidupkan tanpa rencananya sendiri.** Usulan "panjang kalimat & sudut pandang
+pindah ke DNA niche". Rumus anggaran (`duration_model.resep`) memakai **`words_per_sentence` sebagai
+PENYEBUT**, dan angka itu **dilatih per-suara dari naskah nyata**. Mengubah perintah panjang kalimat
+tanpa ikut mengubah rumusnya, preset 60 dtk suara Ardi:
+
+| Niche minta | Durasi nyata | Selisih |
+|---|---|---|
+| 11,5 (apa adanya) | 60,0 dtk | ±0% |
+| 15 kata | 55,3 dtk | −7,9% |
+| 20 kata | 51,3 dtk | **−14,4%** |
+| 25 kata | 49,0 dtk | **−18,4% → QC MENOLAK** |
+| 30 kata | 47,4 dtk | **−21,0%** |
+
+Toleransi naskah 12% · QC 15%. **Bahaya kedua:** `words_per_sentence` dilatih per-SUARA lintas-niche
+(`niche='*'`) ⇒ satu niche berkalimat panjang **menggeser durasi semua niche lain di suara itu**.
+Mengerjakannya menuntut: panjang kalimat niche ikut masuk rumus anggaran **DAN** kalibrasi dipisah
+per-niche **DAN** dibuktikan dengan render nyata.
+**Dijaga:** `tests/test_larangan_naskah.py` (22 uji; 3 sabotase dibuktikan merah — termasuk sabotase
+"gema jadi tambahan" yang langsung menyalakan penjaga durasi).
+
 ### YANG DICABUT — jangan dipasang kembali
 
 | Dicabut | Bukti kenapa |
