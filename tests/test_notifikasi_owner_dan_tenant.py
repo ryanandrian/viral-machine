@@ -234,5 +234,94 @@ class TestNolPemotonganSenyap(unittest.TestCase):
                                 "jalur kegagalan tak semuanya memakai pemendek yang mengumumkan")
 
 
+# ── 6. Kegagalan TERBIT: tenant dapat MAKNA, kami dapat KODE ────────────────────────────────────
+#
+# KENAPA BLOK INI LAHIR (13-Agu 2026, pesan yang owner terima sendiri pukul 06:00):
+#   "❌ [RAD The Explorer] Publish gagal, akan diulang: download gagal
+#    (a410251c-.../410d4538-.../a410251c-..._1786489240.mp4): An error occurred (403) when calling
+#    the HeadObject operation: Forbidden"
+# Owner: *"pesan errornya tidak jelas hanya kode saja. ANEH"*.
+# Tiga cacat sekaligus, dan yang ketiga paling berat: sebabnya adalah **akun penyimpanan KAMI yang
+# diblokir karena tagihan belum dibayar** — 100% milik kita — tapi pesannya membiarkan tenant
+# mengira dirinyalah yang bermasalah. Jalur kegagalan AI sudah lewat mesin penggolong sejak 11-Agu;
+# jalur TERBIT satu-satunya yang belum ikut, dan ini menutupnya.
+
+class TestPesanGagalTerbit(unittest.TestCase):
+
+    PUBLISHER = os.path.join(AKAR, "src", "orchestrator", "publisher.py")
+
+    def test_galat_mentah_tak_pernah_masuk_pesan_tenant(self):
+        """Dijaga lewat POHON SINTAKS: cari panggilan `_notify(...)` yang menyisipkan objek galat
+        (`{e}`) ke dalam teksnya. Itu bentuk persis cacat 06:00 — dan satu-satunya cara ia lahir
+        kembali."""
+        import ast
+        langgar = []
+        pohon = ast.parse(_teks(self.PUBLISHER))
+        for n in ast.walk(pohon):
+            if not (isinstance(n, ast.Call) and getattr(n.func, "id", "") == "_notify"):
+                continue
+            for arg in n.args:
+                if not isinstance(arg, ast.JoinedStr):
+                    continue
+                for bagian in arg.values:
+                    if isinstance(bagian, ast.FormattedValue) and \
+                            getattr(bagian.value, "id", "") in ("e", "error", "exc", "_e"):
+                        langgar.append(f"publisher.py:{n.lineno}: galat mentah disisipkan ke pesan tenant")
+        self.assertFalse(
+            langgar,
+            "GALAT MENTAH KEMBALI KE PESAN TENANT:\n  " + "\n  ".join(langgar)
+            + "\n\nYang tenant terima jadi seperti 13-Agu 06:00: kode HTTP + nama berkas internal, "
+              "untuk kegagalan yang sebenarnya MILIK KITA. Golongkan dulu lewat `galat_registry`.")
+
+    def test_kegagalan_penyimpanan_MENGAKU_milik_kita(self):
+        """Kalimat untuk tenant wajib menyebut ini di sisi MesinViral — bukan menggantung."""
+        from src.providers.galat_registry import golongkan_penyimpanan
+        from botocore.exceptions import ClientError
+        p = golongkan_penyimpanan(ClientError({"Error": {"Code": "403", "Message": "Forbidden"}},
+                                              "HeadObject"))
+        self.assertIsNotNone(p, "galat penyimpanan tak dikenali → jatuh ke jalur galat mentah lagi")
+        self.assertTrue(p.milik_kita, "kegagalan penyimpanan KAMI ditandai bukan milik kita")
+        self.assertIn("MesinViral", p.pesan_tenant,
+                      "pesan tidak mengaku ini di sisi kami — tenant akan menyalahkan dirinya")
+
+    def test_pesan_tenant_nol_kode_dan_nol_nama_berkas(self):
+        from src.providers.galat_registry import golongkan_penyimpanan
+        from botocore.exceptions import ClientError
+        from src.utils.s3_buffer import BufferError
+        try:
+            try:
+                raise ClientError({"Error": {"Code": "403", "Message": "Forbidden"}}, "HeadObject")
+            except Exception as dalam:
+                raise BufferError("download gagal (a410251c-cb09-492f-8342/410d4538/x_1786489240.mp4): "
+                                  f"{dalam}") from dalam
+        except Exception as e:
+            pesan = golongkan_penyimpanan(e).pesan_tenant
+        for terlarang in ("403", "HeadObject", "Forbidden", "An error occurred", ".mp4",
+                          "download gagal"):
+            self.assertNotIn(terlarang, pesan, f"pesan tenant masih memuat {terlarang!r}")
+        self.assertFalse(_RX_UUID.search(pesan), "nama berkas/UUID internal bocor ke tenant")
+
+    def test_kode_asli_TETAP_tercatat_untuk_kami(self):
+        """Membersihkan pesan tenant TIDAK boleh berarti membuang buktinya. Kode aslinya wajib tetap
+        ada di catatan server — di situlah kami mendiagnosa."""
+        src = _teks(self.PUBLISHER)
+        i = src.find("golongkan_penyimpanan")
+        self.assertGreater(i, 0, "penggolong penyimpanan tak dipakai di jalur terbit")
+        cuplik = src[max(0, i - 600):i + 900]
+        self.assertRegex(cuplik, r"logger\.error\(.*\{e\}|logger\.error\(.*_pen\.kode",
+                         "kode galat asli tak lagi tercatat di catatan server")
+
+    def test_berkas_hilang_TIDAK_dijanjikan_terbit_otomatis(self):
+        """Berkasnya benar-benar tidak ada ⇒ mengulang dijamin gagal. Menjanjikan 'akan terbit
+        otomatis' di keadaan itu = berbohong kepada tenant."""
+        from src.providers.galat_registry import golongkan_penyimpanan
+        from botocore.exceptions import ClientError
+        p = golongkan_penyimpanan(ClientError({"Error": {"Code": "NoSuchKey", "Message": "x"}},
+                                              "GetObject"))
+        self.assertTrue(p.berkas_hilang)
+        self.assertNotIn("akan terbit otomatis", p.pesan_tenant)
+        self.assertIn("MesinViral", p.pesan_tenant)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

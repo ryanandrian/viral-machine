@@ -361,4 +361,104 @@ def golongkan(penyedia: str, *, status: int | None = None, kode=None,
     return Putusan(_AMAN, pesan, False, "tak-dikenal")
 
 
-__all__ = ["Putusan", "PENYEDIA", "golongkan", "penyedia_terpetakan"]
+# ═══════════════════════════════════════════════════════════════════════════════════════════════
+# PENYIMPANAN MILIK KITA (S3/NEO BiznetGio) — BUKAN penyedia AI tenant.
+#
+# KENAPA ADA DI BERKAS INI. Berkas ini adalah SATU-SATUNYA rumah yang sah untuk mengubah galat
+# mentah menjadi golongan (dijaga `tests/test_galat_generik.py` — pemetaan di berkas lain =
+# pelanggaran). Penyimpanan bukan penyedia AI, karena itu ia TIDAK masuk `PENYEDIA` (tabel §4
+# dokumen = penyedia AI tenant, dan mencampurnya akan membuat dokumen itu berbohong). Ia berdiri
+# sendiri di bawah ini.
+#
+# KENAPA LAHIR (terukur, 13-Agu 2026). Akun penyimpanan kami diblokir penyedia 04:24–10:21 karena
+# tagihan belum dibayar. Pukul 06:00 jam tayang tiba, video tak bisa diambil, dan tenant menerima
+# pesan ini apa adanya:
+#     "❌ [RAD The Explorer] Publish gagal, akan diulang: download gagal
+#      (a410251c-.../410d4538-.../a410251c-..._1786489240.mp4): An error occurred (403) when
+#      calling the HeadObject operation: Forbidden"
+# Tiga cacat sekaligus: kode mentah yang tak bisa ditindak · nama berkas internal bocor · dan yang
+# paling tidak adil — **kegagalan ini 100% MILIK KITA**, tapi pesannya membiarkan tenant mengira
+# dirinyalah yang bermasalah. Owner: *"pesan errornya tidak jelas hanya kode saja. ANEH"*.
+#
+# ATURAN YANG MENGIKAT: apa pun kodenya, penyimpanan ini milik MesinViral ⇒ `milik_kita=True`
+# SELALU, dan kalimat untuk tenant tidak pernah memuat kode/nama berkas. Kode aslinya tetap utuh
+# di catatan server + alarm ADMIN (§9: tenant dapat MAKNA, kami dapat KODE).
+# ═══════════════════════════════════════════════════════════════════════════════════════════════
+_PENYIMPANAN_KODE: dict[str, ErrorClass] = {
+    # Dari dokumen resmi galat S3 (kosakata yang sama dipakai NEO BiznetGio karena ber-antarmuka S3):
+    # https://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html — dibaca 2026-08-13.
+    "accountproblem":        ErrorClass.ACCOUNT_BILLING,   # akun kami diblokir (sampel NYATA 13-Agu)
+    "accessdenied":          ErrorClass.AUTH_INVALID,
+    "invalidaccesskeyid":    ErrorClass.AUTH_INVALID,
+    "signaturedoesnotmatch": ErrorClass.AUTH_INVALID,
+    "nosuchbucket":          ErrorClass.AUTH_INVALID,
+    "403":                   ErrorClass.AUTH_INVALID,      # bentuk yang benar-benar muncul 13-Agu
+    "slowdown":              ErrorClass.RATE_LIMIT,
+    "requesttimeout":        ErrorClass.TRANSIENT,
+    "requesttimetooskewed":  ErrorClass.TRANSIENT,
+    "internalerror":         ErrorClass.TRANSIENT,
+    "serviceunavailable":    ErrorClass.TRANSIENT,
+    "503":                   ErrorClass.TRANSIENT,
+    "500":                   ErrorClass.TRANSIENT,
+}
+# Berkasnya benar-benar tidak ada — satu-satunya golongan yang TIDAK boleh dijanjikan "terbit
+# otomatis nanti", karena mengulangnya dijamin gagal lagi. Kalimatnya sengaja berbeda.
+_PENYIMPANAN_HILANG: frozenset[str] = frozenset({"nosuchkey", "404"})
+
+_RX_KODE_S3 = re.compile(r"An error occurred \(([^)]{1,60})\)")
+
+_PESAN_TERTUNDA = (
+    "Penerbitan tertunda karena gangguan penyimpanan di sisi MesinViral. Video Anda aman dan akan "
+    "terbit otomatis di jam tayang berikutnya — tidak ada yang perlu Anda lakukan."
+)
+_PESAN_HILANG = (
+    "Video ini tidak lagi ditemukan di penyimpanan MesinViral, jadi penerbitannya tidak bisa "
+    "dilanjutkan. Ini masalah di sisi kami, bukan di akun Anda — tim kami sudah dikabari. "
+    "Tidak ada yang perlu Anda lakukan."
+)
+
+
+class PutusanPenyimpanan(NamedTuple):
+    """Hasil penggolongan galat penyimpanan KITA. `pesan_tenant` = siap kirim, nol kode."""
+    kelas: ErrorClass
+    kode: str                 # kode S3 apa adanya (untuk catatan/alarm admin, BUKAN untuk tenant)
+    pesan_tenant: str
+    berkas_hilang: bool
+    milik_kita: bool = True   # selalu: bucket, kunci, dan tagihannya milik MesinViral
+
+
+def _rantai(exc, batas: int = 6) -> list:
+    """Galat penyimpanan sampai ke pemanggil terbungkus (`BufferError(...) from e`), jadi golongannya
+    HARAM dinilai dari lapisan terluar saja — itulah sebab kode 403 sempat lolos ke tenant."""
+    keluar, e = [], exc
+    for _ in range(batas):
+        if e is None:
+            break
+        keluar.append(e)
+        e = getattr(e, "__cause__", None) or getattr(e, "__context__", None)
+    return keluar
+
+
+def golongkan_penyimpanan(exc) -> PutusanPenyimpanan | None:
+    """Galat ini milik penyimpanan KITA? → putusan siap-pakai. Bukan? → None (penilai lain lanjut).
+
+    Dikenali dari DUA penanda, bukan satu: pustaka `botocore` di rantai sebab, atau `BufferError`
+    (pembungkus `src/utils/s3_buffer.py`). Nama kelas dipakai — bukan `import` — supaya berkas
+    registry ini tidak tergantung pada lapisan penyimpanan (arah ketergantungan tetap satu arah).
+    """
+    rantai = _rantai(exc)
+    if not any(type(x).__module__.startswith(("botocore", "boto3")) or type(x).__name__ == "BufferError"
+               for x in rantai):
+        return None
+    teks = " | ".join(str(x) for x in rantai)
+    m = _RX_KODE_S3.search(teks)
+    kode = (m.group(1) if m else "").strip()
+    tok = kode.lower().replace(" ", "")
+    if tok in _PENYIMPANAN_HILANG:
+        return PutusanPenyimpanan(_AMAN, kode or "NoSuchKey", _PESAN_HILANG, True)
+    kelas = _PENYIMPANAN_KODE.get(tok, ErrorClass.TRANSIENT)
+    return PutusanPenyimpanan(kelas, kode or "tak-bernama", _PESAN_TERTUNDA, False)
+
+
+__all__ = ["Putusan", "PENYEDIA", "golongkan", "penyedia_terpetakan",
+           "PutusanPenyimpanan", "golongkan_penyimpanan"]

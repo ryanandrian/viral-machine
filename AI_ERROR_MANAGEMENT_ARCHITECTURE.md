@@ -122,6 +122,27 @@ Klasifikasi menempel pada **transport yang menerima error**, bukan merek model. 
 > `invalid_api_key`/`model_not_found` (20-Jul) · Groq `tokens per day (TPD)` ×8 (01-Agu) ·
 > ElevenLabs `payment_issue` (17-Jul) / `quota_exceeded` (16-Jun) · Google OAuth `invalid_grant`.
 
+### §4b PENYIMPANAN MILIK KITA (S3/NEO) — bukan penyedia AI tenant *(ditambah 2026-08-13)*
+
+Penyimpanan video **milik MesinViral**, bukan milik tenant. Karena itu ia **TIDAK** masuk tabel §4
+di atas (tabel itu = penyedia AI tenant; mencampurnya membuat dokumen ini berbohong), tapi
+penggolongannya **tetap hidup di satu rumah yang sama**: `src/providers/galat_registry.py` →
+`golongkan_penyimpanan()` + `_PENYIMPANAN_KODE`. Pemetaan di berkas lain = pelanggaran (§6, dijaga
+`tests/test_galat_generik.py`).
+
+| Hal | Ketetapan |
+|---|---|
+| Sumber pemetaan | [Dokumen galat resmi S3](https://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html) — dibaca **2026-08-13**. NEO BiznetGio ber-antarmuka S3, kosakata galatnya sama. |
+| Asal-usul | **`milik_kita=True` SELALU** — bucket, kunci, dan tagihannya milik kita. Haram ditimpakan ke tenant dalam bentuk apa pun. |
+| Kalimat ke tenant | Dua bentuk saja: **(a)** gangguan → *"tertunda … video Anda aman … terbit otomatis di jam tayang berikutnya"*; **(b)** `NoSuchKey`/404 (berkas benar-benar hilang) → kalimat BERBEDA yang **tidak** menjanjikan terbit otomatis, karena mengulang dijamin gagal. |
+| Kode asli | Tetap utuh di catatan server + alarm ADMIN. Kontraknya §9: **tenant dapat MAKNA, kami dapat KODE.** |
+| Rem channel | **TIDAK terpengaruh.** Rem menghitung dari `production_runs`; kegagalan terbit tidak membuat baris run. Jadi tagihan penyimpanan KITA tak pernah bisa mematikan channel tenant. |
+
+**Sampel produksi yang melahirkannya (13-Agu 2026):** akun kami diblokir penyedia 04:24–10:21 karena
+tagihan belum dibayar (`AccountProblem` ×13, tiap 30 menit). Pukul 06:00 jam tayang tiba dan tenant
+menerima galat mentah `403 HeadObject Forbidden` lengkap dengan nama berkas internal — untuk
+kegagalan yang 100% milik kita. Owner: *"pesan errornya tidak jelas hanya kode saja. ANEH"*.
+
 ## §5 Checklist onboarding provider baru (6 langkah) — *urutan diubah 2026-08-11: dokumen resmi DULU*
 > **Langkah 1 WAJIB SELESAI SEBELUM penyedia/model dinyalakan untuk tenant.** Menyalakan penyedia yang
 > tabel galatnya belum dipetakan = menanam bug yang menunggu tenant menemukannya.
@@ -603,6 +624,16 @@ Setiap kelas wajib menjawab tiga pertanyaan tenant, dalam bahasa awam & dwibahas
 | `MODEL_UNAVAILABLE` | ❌ | pilih model lain → tautan Pengaturan Channel |
 | `UNKNOWN` | ❓ | tampilkan pesan apa adanya + ajak hubungi dukungan |
 
+**⚠️ KECUALIAN YANG MENGIKAT — kegagalan MILIK KITA tidak memakai anjuran di atas** *(13-Agu 2026)*.
+Tabel ini menganggap penyebabnya ada di **akun penyedia AI tenant**. Bila penandanya `milik_kita=True`
+(setelan kurang, permintaan kita cacat, FFmpeg, **atau penyimpanan kita** — §4b), seluruh anjuran itu
+menjadi **salah alamat**: menyuruh tenant "isi ulang kredit" atas tagihan penyimpanan KAMI adalah
+kesalahan yang menagih orang yang tak berutang. Kalimatnya wajib **mengaku di sisi MesinViral** dan
+tidak meminta tenant mengerjakan apa pun.
+**Sampel yang melahirkannya:** 13-Agu 06:00, tenant menerima `403 HeadObject Forbidden` + nama berkas
+internal, padahal sebabnya akun penyimpanan kami diblokir karena tagihan.
+**Dijaga:** `tests/test_notifikasi_owner_dan_tenant.py` (kelas `TestPesanGagalTerbit`).
+
 **Pemulihan produksi = keputusan TENANT, bukan sistem.** Sistem tidak pernah melepas rem sendiri karena
 sebab teknis dianggap sudah lewat. Pengecualian tunggal yang sudah diketok owner: rem dilepas otomatis
 saat **langganan aktif kembali** (pembayaran/aktivasi admin) — konteks langganan, bukan kegagalan
@@ -668,6 +699,12 @@ terpisah (`components/gate-message.tsx`). Dokumen ini hanya mengatur kegagalan A
 >    terpetakan · jatah berkala wajib pulih-sendiri · jaring generik tak boleh merem cepat.
 > 3. `tests/test_setelan_ai_tak_pernah_hilang.py` — setelan AI wajib diserahkan · sebab PERTAMA
 >    yang dipakai · galat milik kita tak boleh dilabeli "layanan AI Anda".
+> 4. `tests/test_terbit_dan_alarm_tak_senyap.py` *(13-Agu)* — jalur TERBIT & alarm penyimpanan:
+>    galat mentah tak boleh masuk pesan tenant (§4b) · status alarm penyimpanan wajib **selamat dari
+>    restart** · stok yang nyangkut di "sedang diterbitkan" wajib punya penyapu, dan keadaan yang
+>    **tak bisa dipastikan wajib dilaporkan, bukan diterbitkan ulang**.
+> 5. `tests/test_notifikasi_owner_dan_tenant.py` — bentuk pesan ke owner & tenant (nol kode mesin,
+>    nol istilah teknis, nol potongan senyap) + sejak 13-Agu: kegagalan terbit **mengaku milik kita**.
 >
 > ⚠️ **YANG TIDAK DIJAGA SIAPA PUN:** apakah pemetaan sebuah kode memang BENAR menurut dokumen
 > vendornya. Mesin bisa memastikan tabel & kode sinkron; ia tidak bisa membaca dokumen vendor
@@ -686,6 +723,37 @@ Bila salah satu bergeser tanpa yang lain, uji MERAH sebelum sempat menyesatkan s
 - dokumen tidak boleh memuat anchor `file:baris` (aturan §3 — nomor baris selalu basi)
 
 ## §11 CHANGELOG
+- **2026-08-13** — **JALUR TERBIT & ALARM PENYIMPANAN: tiga kegagalan senyap ditutup** (ketok owner
+  "kerjakan A, B, C sampai tuntas"). Ketiganya berakar pada hal yang sama: **keadaan penting disimpan
+  di ingatan proses, sementara proses itu bisa mati kapan saja.**
+  **(A) Kabar "penyimpanan PULIH" yang tak pernah datang.** Akun penyimpanan diblokir penyedia
+  04:24–10:21 (tagihan). Alarm bahaya terkirim 04:54 ✅; penyimpanan pulih, kabar pulih **tak pernah
+  terkirim** — terukur: hari itu hanya 2 notifikasi keluar dari mesin. Sebabnya hitungan gagal hidup
+  di ingatan proses, dan ingatan itu terhapus DUA kali (mesin mati mendadak 07:54, restart 10:21) →
+  saat pulih, hitungannya < ambang → mesin menyimpulkan "tak pernah ada masalah". Alarm bahaya
+  selamat dari restart, kabar pulih tidak. Kini status alarm hidup di `system_state` (pola yang sudah
+  terbukti di alarm drift durasi, ketok owner 16-Jul). Penanda "sedang alarm" dinyalakan **hanya bila
+  alarm benar-benar terkirim** → tak pernah mengabarkan akhir dari sesuatu yang tak punya awal.
+  **(B) Pesan gagal-terbit berhenti melempar kode** → §4b + kecualian §9. Tenant dapat MAKNA, kami
+  dapat KODE.
+  **(C) Stok yang nyangkut di "sedang diterbitkan" akhirnya punya penyapu.** Korban nyata: 12-Agu
+  19:00 mesin mati 7 detik setelah unggahan selesai; video `xa3Rbi-SbXM` **hidup, PUBLIK, 1.024
+  penonton** di channel tenant BERBAYAR, sementara bagi sistem kita ia tidak pernah ada — `videos`
+  tanpa barisnya, tautan YouTube kosong, tenant tak dikabari, aset kekal karena status itu justru
+  DILINDUNGI penyapu-yatim, dan mesin pembelajaran tak pernah melihatnya. Penyapu baru memutuskan
+  dari **jejak unggahan**, bukan tebakan: nomor YouTube ada → pembukuan dituntaskan · unggahan belum
+  pernah dimulai → kembali ke stok · **unggahan sudah dimulai tapi nomor tak tercatat → TIDAK
+  diterbitkan ulang, dilaporkan ke owner** (rencana pertama hendak menerbitkan ulang di keadaan ini —
+  itu berisiko VIDEO KEMBAR, karena unggahan bertahap punya celah sempit di mana YouTube sudah
+  menerima tapi kita belum tahu nomornya).
+  **Kecelakaan yang ikut diperbaiki:** uji pertama versi ini **menulis ke baris PRODUKSI** karena
+  penyapu memakai `inventory.mark_published()` yang membuat klien Supabase-nya sendiri dari env
+  (baris inv=231 berubah status dari sebuah uji lokal). Penyapu kini memakai `sb` yang diberikan —
+  seragam dengan seluruh berkas itu — dan berkas uji memasang pagar yang **menolak sambungan
+  sungguhan**, sehingga kecelakaan senyap itu berubah menjadi kegagalan uji yang lantang.
+  **Bukti:** 41 uji baru (23 + 18), keduanya dibuktikan **merah lebih dulu** dengan sabotase sengaja
+  (galat mentah dikembalikan ke pesan tenant → merah; penyapu dikembalikan memakai sambungan sendiri
+  → merah). Suite 907 → **935**. Nol migrasi DB.
 - **2026-08-04 (2)** — **§8e-A DITUTUP: jalur visual berhenti membuang sebabnya.** Sampel yang menuntunnya
   (worker.log 14-Jul, 6 kejadian): penyedia video menjawab *"User is locked. Reason: Exhausted balance.
   Top up your balance at fal.ai/dashboard/billing"* — sebab yang tenant bisa bereskan dalam 2 menit —

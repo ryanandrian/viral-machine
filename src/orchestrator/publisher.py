@@ -58,6 +58,29 @@ def _tenant_timezone(sb, tenant_id: str) -> str:
         return "UTC"
 
 
+def _tandai_meta(sb, item: dict, tambahan: dict, *, wajib: bool = False) -> None:
+    """Gabungkan penanda ke `metadata` baris stok — baca-gabung-tulis, JANGAN menimpa isi lain.
+
+    Isi metadata dipakai di banyak tempat (naskah, angka produksi, kunci aset). Menulis dict baru
+    apa adanya akan membuang semuanya, jadi selalu digabung dari salinan yang sudah ada.
+
+    `wajib=True` = gagal menulis berarti RAISE, dan itu memang yang diinginkan: pemanggil akan
+    membatalkan penerbitan lalu mengembalikan videonya ke stok (aman, belum ada yang diunggah).
+    Kebalikannya — melanjutkan unggahan tanpa penanda — meninggalkan video yang mungkin sudah naik
+    tapi tak bisa dikenali penyapu ⇒ risiko video kembar. Diam-diam melanjutkan = TIDAK BOLEH.
+    """
+    meta = dict(item.get("metadata") or {})
+    meta.update(tambahan)
+    try:
+        sb.table("content_inventory").update({"metadata": meta}).eq("id", item["id"]).execute()
+        item["metadata"] = meta          # salinan di memori ikut, supaya tak ada dua versi
+    except Exception as e:
+        if wajib:
+            raise
+        logger.error(f"[Publisher] tulis penanda {sorted(tambahan)} inv={item.get('id')} GAGAL: {e} "
+                     f"— penyapu akan menandainya perlu ditinjau manusia (bukan diterbitkan ulang)")
+
+
 def publish_due_for_channel(sb, channel_row: dict, now_utc: datetime | None = None) -> str | None:
     """Cek slot channel; bila jatuh tempo → ambil ready → publish dari buffer. Return status."""
     now_utc = now_utc or datetime.now(ZoneInfo("UTC"))
@@ -127,6 +150,10 @@ def publish_due_for_channel(sb, channel_row: dict, now_utc: datetime | None = No
         return "published"
     except Exception as e:
         inventory.revert_to_ready(item["id"])           # kembalikan ke buffer (publish ulang saat pulih)
+        # Percobaan ini SELESAI dan kita tahu ia tidak tuntas → cabut jejak "sedang mengunggah",
+        # supaya penanda basi tidak membuat penyapu menganggap percobaan BERIKUTNYA ambigu.
+        # `yt_video_id` (bila sudah ada) SENGAJA dibiarkan — itu bukti unggahan memang berhasil.
+        _tandai_meta(sb, item, {"yt_upload_started_at": None})
         _ch_label = channel_row.get("channel_name") or channel_id   # [B11] sebut NAMA channel
         # [B11] 3.2 — koneksi YouTube putus PERMANEN (invalid_grant): mark_youtube_account_invalid
         # SUDAH menandai koneksi invalid + notif tenant SEKALI (produksi channel otomatis berhenti
@@ -136,8 +163,32 @@ def publish_due_for_channel(sb, channel_row: dict, now_utc: datetime | None = No
         if getattr(e, "error_class", None) == ErrorClass.AUTH_INVALID:
             logger.error(f"[Publisher] publish DITAHAN inv={item['id']} ch={_ch_label} — koneksi YouTube putus (sambungkan ulang)")
             return "auth_invalid"
+        # Kode mentah TETAP utuh di catatan server — inilah tempatnya, bukan di layar tenant.
         logger.error(f"[Publisher] publish gagal inv={item['id']} ({e}) — revert ready")
-        _notify(tenant_id, f"❌ [{_ch_label}] Publish gagal, akan diulang: {e}",
+        # ── [2026-08-13] PESAN TENANT LEWAT GOLONGAN, BUKAN GALAT MENTAH ────────────────────────
+        # Dulu baris ini menempelkan `{e}` apa adanya. Yang tenant terima 13-Agu 06:00:
+        #   "Publish gagal, akan diulang: download gagal (a410251c-.../..._1786489240.mp4):
+        #    An error occurred (403) when calling the HeadObject operation: Forbidden"
+        # Kode yang tak bisa ditindak + nama berkas internal bocor + kegagalan MILIK KITA (akun
+        # penyimpanan kami diblokir karena tagihan) dibiarkan terbaca seolah salah tenant.
+        # Sekarang: golongan dulu (SATU rumah pemetaan = `galat_registry`), kalimatnya bicara MAKNA.
+        from src.providers.galat_registry import golongkan_penyimpanan
+        _pen = golongkan_penyimpanan(e)
+        if _pen is not None:
+            # Milik kita ⇒ WAJIB mengaku. Kode aslinya sudah di catatan + alarm admin (janitor).
+            logger.error(f"[Publisher] sebab MILIK KITA (penyimpanan {_pen.kode}, kelas "
+                         f"{_pen.kelas.value}) inv={item['id']} — tenant TIDAK dituduh")
+            _ikon = "❌" if _pen.berkas_hilang else "⏳"
+            _notify(tenant_id, f"{_ikon} [{_ch_label}] {_pen.pesan_tenant}",
+                    sb=sb, once_key=f"fail:{item['id']}:{slot_dt.isoformat()}")
+            return "failed"
+        # Bukan penyimpanan: pakai kalimat manusiawi yang sudah dinormalkan adapter (bila ada).
+        # Tanpa itu pun tenant tidak diberi kode — hanya kejujuran + apa yang terjadi berikutnya.
+        _manusia = (getattr(e, "human_message", None) or "").strip()
+        _notify(tenant_id,
+                f"❌ [{_ch_label}] Penerbitan gagal dan akan diulang otomatis di jam tayang "
+                f"berikutnya. " + (_manusia if _manusia else
+                                   "Rinciannya sudah tercatat di sistem untuk kami periksa."),
                 sb=sb, once_key=f"fail:{item['id']}:{slot_dt.isoformat()}")
         return "failed"
 
@@ -159,8 +210,25 @@ def _publish_from_buffer(sb, channel_row: dict, item: dict) -> None:
         thumb_path = os.path.join(tmp, "thumb.jpg")
         s3_buffer.download(meta["thumb_s3"], thumb_path)
 
+    # ── [2026-08-13] JEJAK UNGGAHAN — inilah yang membuat kematian mendadak bisa dipulihkan ──────
+    # Bukti kejadiannya (12-Agu 19:00): unggahan SELESAI (video xa3Rbi-SbXM hidup, publik, 1.024
+    # penonton di channel BISIK NUSANTARA), lalu mesin mati 7 detik kemudian — sebelum pembukuan.
+    # Akibatnya baris stok tertinggal di status 'publishing' PERMANEN (tak ada penyapu untuk status
+    # itu), `videos` tak punya barisnya, mesin pembelajaran tak pernah melihatnya, dan asetnya justru
+    # kebal dari pembersihan.
+    # Dua penanda di bawah membuat penyapu bisa memutuskan TANPA MENEBAK:
+    #   • `yt_upload_started_at` ditulis SEBELUM unggah, dan WAJIB berhasil (fail-loud) — kalau
+    #     penanda ini gagal ditulis kita batalkan penerbitan, sebab tanpa penanda, penyapu bisa
+    #     menyimpulkan "belum pernah diunggah" pada video yang sebenarnya SUDAH naik ⇒ video kembar.
+    #   • `yt_video_id` ditulis SEGERA setelah unggah berhasil (fail-soft, tapi lantang di catatan)
+    #     → penyapu cukup merapikan pembukuan, tak perlu bertanya ke YouTube.
+    _tandai_meta(sb, item, {"yt_upload_started_at": datetime.now(ZoneInfo("UTC")).isoformat()},
+                 wajib=True)
     yt = YouTubePublisher().publish(video_path, script, tc,
                                     thumbnail_path=thumb_path, content_type="short")
+    if yt.get("video_id"):
+        _tandai_meta(sb, item, {"yt_video_id": yt["video_id"],
+                                "yt_url": yt.get("url") or f"https://youtu.be/{yt['video_id']}"})
     if not yt.get("video_id"):
         # [B11] 3.2 — bawa error_class (mis. AUTH_INVALID dari invalid_grant) ke pemanggil, bukan
         # RuntimeError generik yang membuang makna. error_class None → UNKNOWN (perilaku lama).
