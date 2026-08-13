@@ -400,6 +400,9 @@ class VisualAssembler:
             base_style = niche_vs.get("base_style", "documentary photography style, cinematic")
             color_pal  = niche_vs.get("color_palette", "natural cinematic colors")
             atmosphere = niche_vs.get("atmosphere", "dramatic cinematic atmosphere")
+            # [14-Agu] Gaya dari NICHE, bukan patri. Bawaan 'photorealistic' → prompt frame pembuka
+            # SAMA PERSIS dengan sebelumnya untuk 47 niche lama (dijaga uji).
+            gaya       = (niche_vs.get("render_style") or "photorealistic").strip()
 
             prompt = (
                 f"Cinematic vertical 9:16 hero image. "
@@ -408,7 +411,7 @@ class VisualAssembler:
                 f"Color palette: {color_pal}. "
                 f"Atmosphere: {atmosphere}. "
                 f"Single striking focal point that stops the scroll instantly. "
-                f"Photorealistic. "
+                f"{gaya.capitalize()}. "
                 f"No text, no words, no letters, no numbers, no signs, no typography. No people."
             )
             provider  = build_visual_provider(config.get("visual_provider") or "ai_image:", config)   # F5-06: registry

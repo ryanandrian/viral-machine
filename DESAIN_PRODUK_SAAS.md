@@ -377,6 +377,49 @@ Engine "Music" (platform-managed, BUKAN BYOK)
 
 ---
 
+## 5b. ⚖️ LARANGAN KONTEN — 3 LAPIS (KETETOKAN OWNER 2026-08-13/14, SSOT)
+
+> **Aturan pegangan, dipatri sebagai prinsip:**
+> **Patri di kode HANYA yang merugikan MesinViral — hukum, izin menerbitkan, atau nama baik.**
+> **Sisanya milik niche. Selera tidak pernah milik mesin.**
+
+Latar keputusan: makin banyak yang kita saring, makin MesinViral terlihat sebagai **penerbit**, bukan
+**alat** — dan itu justru **menambah** tanggung jawab hukum kita. Karena itu lapisan kita sengaja kecil.
+
+| Lapis | Isi | Siapa yang menentukan |
+|---|---|---|
+| **🔒 1 — PATRI (kode)** | 5 larangan di bawah. Tak bisa dibatalkan setelan apa pun | **Tidak seorang pun** |
+| **🎛️ 2 — DNA NICHE** | Tingkat aniconism · aurat & adab · alkohol/berhala · gaya rupa · kata terlarang narator | **Pemilik niche**, terlihat & bisa diubah |
+| **🎨 3 — BEBAS** | Selera: warna, kamera, irama, musik | Tenant |
+
+### 5 patri (tidak bisa dibatalkan)
+
+| # | Larangan | Kenapa tak bisa diserahkan ke disclaimer |
+|---|---|---|
+| 1 | Penggambaran **Allah SWT** | Ketetapan owner |
+| 2 | Wajah/wujud **Nabi Muhammad Rasulullah ﷺ** | Ketetapan owner |
+| 3 | **Tulisan Arab / teks Al-Qur'an yang TERBACA** di gambar | Mesin gambar **selalu mengacak huruf Arab** ⇒ kecelakaan otomatis, bukan pilihan tenant |
+| 4 | **Keselamatan anak** | **Pidana** — tak ada Syarat & Ketentuan yang memindahkannya |
+| 5 | **Konten seksual / ketelanjangan** | Mengancam **izin penerbitan Google milik MesinViral** — aset kita, bukan aset tenant |
+
+> ⛔ **Cakupan sengaja TIDAK diperluas** ke nabi/malaikat lain (ketok owner: *"cukup Nabi Muhammad
+> Rasulullah SAW dan Allah SWT saja"*). Hak cipta · SARA · judi · klaim medis/finansial · gore ·
+> simbol kebencian **sengaja BUKAN patri** — semuanya tertutup disclaimer + penyaring vendor + DNA niche.
+
+### Tanggung jawab konten = tenant
+
+Sudah tertulis dwibahasa di `/terms`. **Yang masih kurang & belum dikerjakan:** (a) persetujuannya
+**tidak terekam** per tenant (nol kolom) sehingga tak bisa dibuktikan · (b) tidak tampil di layar
+tempat tenant berkarya. Keduanya menguatkan posisi ini justru karena patrinya sedikit.
+
+### Batas yang diakui terang
+
+- **Gambar yang diunggah tenant sendiri** (logo brand) tidak melewati pintu mana pun — bukan buatan
+  mesin ⇒ tetap tanggung jawab tenant. Menutupnya = pekerjaan tersendiri (pemeriksaan berkas unggah).
+- Patri menang atas **setelan mana pun**; ia **tidak** menjamin mesin gambar pihak ketiga tak keliru.
+
+**Penegakan teknis + bukti ukur = `SISA_KERJA_GO_LIVE.md [B28]`; penjaga = `tests/test_patri_larangan.py`.**
+
 ## 6. FLEKSIBILITAS KONFIGURASI TENANT (3 Lapis)
 
 | Lapis | Siapa | Apa yang Bisa Diatur |

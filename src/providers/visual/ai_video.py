@@ -187,6 +187,23 @@ class AIVideoProvider(VisualProvider):
     _TRANSPORTS = {"fal": "_generate_fal"}
 
     async def _generate_video(self, prompt: str, out_path: Path, chosen_duration: float | None) -> float | None:
+        # ══ PINTU TUNGGAL PATRI — kembar `ai_image._generate_image` ════════════════════════════
+        # DIPASANG SEBELUM PEMBAGIAN KE VENDOR (`_TRANSPORTS`), dan itu disengaja: vendor/model
+        # BARU yang ditambahkan kelak **otomatis terikat patri tanpa menyentuh baris ini**. Kalau
+        # patri dipasang di dalam tiap transport, penyedia berikutnya akan masuk tanpa patri — persis
+        # cara larangan tenant bocor 2 bulan di FLUX.
+        # Jalur video TIDAK punya kanal larangan sama sekali → patri wajib lewat prompt positif.
+        from src.providers.visual import patri as _patri
+        _vonis = _patri.periksa_prompt(prompt)
+        if _vonis == "kuatkan":
+            prompt = _patri.kuatkan(prompt)
+        elif _vonis:
+            raise VisualError(
+                f"Prompt video ditahan penjaga MesinViral: {_vonis}. Adegan ini tidak dikirim ke "
+                f"penyedia. Larangan ini tidak bisa dimatikan oleh setelan niche mana pun."
+            )
+        prompt, _ = _patri.tempel(prompt, "", kanal_negatif=False)
+
         platform = self.model_config["platform"]
         method = self._TRANSPORTS.get(platform)
         if not method:

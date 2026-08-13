@@ -37,9 +37,39 @@ const isStrDict = (v: unknown): v is Record<string, string> =>
 
 // Validasi patch DNA (subset field boleh). Return errors per-field (kosong = valid).
 // Dipakai SERVER (tolak + pesan — pengganti silent-skip) dan KLIEN (disable Simpan + pesan inline).
+// [2026-08-14] PATRI LARANGAN — lapis kedua, di titik SIMPAN.
+// Lapis pertama (dan yang sesungguhnya mengunci) ada di mesin: setiap prompt gambar/video melewati
+// satu corong yang menempelkan patri dan menahan prompt yang meminta hal terlarang. Lapis ini
+// menolak lebih awal, di layar, dengan pesan yang bisa dibaca — supaya pemilik niche tahu sebabnya
+// alih-alih menemukan produksinya berhenti belakangan.
+// Yang ditolak BUKAN penyebutan biasa (banyak niche Islami sah menyebut nabi sebagai konteks),
+// melainkan kalimat yang jelas-jelas MEMERINTAHKAN penggambaran atau membatalkan patri.
+const PATRI_BYPASS: RegExp[] = [
+  /\b(abaikan|hiraukan|lupakan)\s+(semua\s+)?(larangan|aturan|instruksi|batasan)/i,
+  /\bignore\s+(all\s+)?(previous|prior|above|safety|restrictions?|rules?)/i,
+  /\b(gambarkan|lukiskan|tampilkan|perlihatkan)\s+(wajah|sosok|rupa)\s+(nabi|rasul|allah)/i,
+  /\b(depict|draw|render|show|portray)\s+(the\s+)?(face|figure|form|likeness)\s+of\s+(the\s+)?(prophet|allah|god)/i,
+  /\ballah'?s\s+(face|form|figure)\b/i,
+];
+
 export function validateDnaPatch(patch: Record<string, unknown>): DnaErrors {
   const e: DnaErrors = {};
   const has = (k: string) => k in patch && patch[k] !== undefined;
+
+  // Diperiksa pada SELURUH nilai teks DNA (persona, visual_style, penajam, larangan, contoh bidikan)
+  // — bukan hanya satu kolom, sebab teks yang dikirim ke mesin gambar berasal dari banyak kolom.
+  const _teks: string[] = [];
+  const _kumpul = (v: unknown) => {
+    if (typeof v === "string") _teks.push(v);
+    else if (Array.isArray(v)) v.forEach(_kumpul);
+    else if (v && typeof v === "object") Object.values(v as object).forEach(_kumpul);
+  };
+  Object.values(patch).forEach(_kumpul);
+  const _langgar = _teks.find((t) => PATRI_BYPASS.some((rx) => rx.test(t)));
+  if (_langgar) {
+    e.patri = "Isi ini mencoba membatalkan larangan yang dipatri MesinViral (penggambaran Allah SWT / "
+      + "Nabi Muhammad ﷺ). Larangan itu tidak bisa dimatikan lewat pengaturan niche.";
+  }
 
   if (has("name") && (!isStr(patch.name) || !(patch.name as string).trim())) e.name = "Nama tidak boleh kosong.";
   for (const k of ["style", "target_emotion", "image_quality_tags", "image_negative_prompt", "emotion_scoring_criteria"]) {

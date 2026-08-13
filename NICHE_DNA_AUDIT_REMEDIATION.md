@@ -35,6 +35,34 @@
 | `voice_expression` 🆕2026-07-16 | adapter ElevenLabs (gaya-baca: style/stability 0–1) via `tenant_config` niche-EFEKTIF (DUA titik-muat seragam — kelas s85) | ✅ LIVE — detail §1.5 |
 | `access/exclusive/released/origin/is_base` | entitlement + lifecycle | ✅ sehat |
 
+## 1.1b 🔒 LARANGAN TENANT KINI BENAR-BENAR DITERAPKAN + GAYA VISUAL JADI MILIK NICHE *(2026-08-14)*
+
+**Dua janji DNA yang selama ini bocor — keduanya ditutup, lihat `SISA_KERJA [B28]` untuk bukti ukur.**
+
+| Properti | Yang dijanjikan layar | Kenyataan sebelum 14-Agu | Sekarang |
+|---|---|---|---|
+| `image_negative_prompt` ("Larangan gambar") | larangan gambar niche | **DIABAIKAN TOTAL** oleh FLUX/Cloudflare — 6 dari 11 channel. Tenant mengetik, menyimpan, mesin tak pernah membacanya | Dilipat ke **prompt POSITIF** di corong `_generate_image` ⇒ berlaku di **semua** transport, termasuk vendor yang belum ada |
+| `narration_persona.avoid` ("Pantangan") | *"dipatuhi mesin apa adanya"* | **Prioritas, bukan kepastian** — pelanggaran hanya memicu retry; percobaan habis → naskah berskor tertinggi dipakai **walau melanggar** | Naskah akhir yang masih melanggar → **run BERHENTI** (§0.6). Terukur: 0 dari 127 produksi nyata terdampak |
+
+### 🆕 `visual_style.render_style` — gaya rupa keluar dari kode
+
+Kata **"photorealistic" dulu dipatri di 6 titik** (4 di `script_engine`, 1 frame pembuka, 1 penulis-ulang).
+Akibatnya niche bergaya **animasi/ilustrasi mustahil**: DNA-nya sampai ke mesin gambar lalu **dibantah
+kata patri di prompt yang sama**. Kini gaya dibaca dari `visual_style.render_style`.
+
+> ⚠️ **JANGAN TERTUKAR dengan `realism`.** `render_style` = **satu-dua kata** gaya rupa
+> (`photorealistic` · `stylized 3D character animation`). `realism` = kalimat tekstur (rata **116
+> huruf**, terpanjang 138) — dipakai sebagai baris DNA biasa, **bukan** untuk disisipkan ke kalimat
+> pendek seperti *"End with: vertical 9:16, …"*.
+
+**Bawaan `"photorealistic"` ⇒ teks prompt 47 niche lama SAMA PERSIS, termasuk kapitalisasinya**
+(3 titik berhuruf besar, 3 huruf kecil — dijaga uji). Editor DNA **sudah** bisa menambah kunci
+`visual_style` baru ("properti tambahan"), jadi nol perubahan layar.
+
+**Yang SENGAJA tidak disentuh:** `"No people."` pada frame pembuka (judul pembuka digambar di 15% dari
+atas ⇒ membuka "ada orang" di frame itu perubahan tersendiri) · 2 baris cadangan saat `visual_style`
+kosong · contoh tetap fitur uji-model admin.
+
 ## 1.2 Rantai MUSIK (kecurigaan owner — TERBUKTI ada lubang)
 - `music_selector` sendiri dirancang baik: mode fixed/random/auto · deteksi mood dari naskah (keyword `moods` table) · cascade **niche-safe**: (1) niche+mood → (1b) niche+mood-lain → (2) mood lintas-niche → (3) fallback moods → **(4) TRACK ACAK APA SAJA**.
 - **Lubang DATA**: library 28 track hanya ter-tag 4 niche base. **Niche studio/request: `mood_priority` KOSONG + 0 track** → deteksi keyword gagal (lihat bawah) → cascade jatuh ke (2)/(4) → **musik lintas-niche/acak**. TERBUKTI: test `imunitas_tubuh` memakai track `calm` milik ocean_mysteries.

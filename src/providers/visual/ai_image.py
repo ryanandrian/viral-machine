@@ -346,6 +346,7 @@ class AIImageProvider(VisualProvider):
         niche_style   = self.niche_visual_style
         base_style    = niche_style.get("base_style", "documentary photography")
         atmosphere    = niche_style.get("atmosphere", "cinematic")
+        gaya          = (niche_style.get("render_style") or "photorealistic").strip()   # [14-Agu] dari niche
 
         rejection_context = "\n".join([
             f"Attempt {idx+1}:\n  Prompt: \"{r['prompt'][:200]}\"\n  Rejected because: {r['rejection'][:200]}"
@@ -368,7 +369,7 @@ class AIImageProvider(VisualProvider):
             f"Rejection history:\n{rejection_context}\n\n"
             f"Write ONLY the main prompt (2-3 sentences). "
             f"Do not include quality tags or negative instructions — those are added automatically. "
-            f"End with: vertical 9:16, photorealistic."
+            f"End with: vertical 9:16, {gaya}."
         )
 
         # Rejection rewrite pakai LLM tenant via factory tunggal (config-driven).
@@ -452,6 +453,49 @@ class AIImageProvider(VisualProvider):
                    "fal": "_generate_fal"}
 
     async def _generate_image(self, prompt: str, negative_prompt: str, output_path: Path) -> None:
+        # ══ PINTU TUNGGAL PATRI LARANGAN (ketetapan owner 2026-08-13/14) ═══════════════════════
+        # DIPASANG DI SINI, bukan di `_build_image_prompt`, karena INILAH corong sesungguhnya:
+        # diverifikasi 14-Agu — SEMUA gambar lewat sini (adegan biasa · frame pembuka · penulisan
+        # ulang saat vendor menolak · uji-model admin), dan NOL kode memanggil transport vendor
+        # secara langsung. Apa pun yang ditambahkan di atas sini bisa dilewati; di sini tidak.
+        #
+        # Urutannya disengaja: PERIKSA dulu (pada prompt asli), baru TEMPEL. Kalau dibalik, penjaga
+        # akan memeriksa kalimat penjaganya sendiri.
+        from src.providers.visual import patri as _patri
+        _vonis = _patri.periksa_prompt(prompt)
+        if _vonis == "kuatkan":
+            # Nama hanya muncul sebagai KONTEKS cerita → produksi JALAN TERUS, prompt dikuatkan.
+            # Uji-kering 679 prompt produksi: 3 kasus seperti ini, semuanya sah (halaman masjid
+            # sunyi · mushaf terbuka · timbangan). Memblokirnya = mematikan produksi tanpa sebab.
+            prompt = _patri.kuatkan(prompt)
+        elif _vonis:
+            # Tak terbantahkan → JANGAN dikirim. Galat ini masuk jalur tulis-ulang yang sudah ada
+            # (2 percobaan), lalu berhenti jujur bila tetap melanggar.
+            raise VisualError(
+                f"Prompt gambar ditahan penjaga MesinViral: {_vonis}. Adegan ini tidak dikirim ke "
+                f"penyedia gambar. Larangan ini tidak bisa dimatikan oleh setelan niche mana pun.",
+                error_class=ErrorClass.UNKNOWN, milik_kita=True,
+            )
+        # ── KEBOCORAN LARANGAN TENANT DITUTUP DI SINI ─────────────────────────────────────────
+        # Terukur 13-Agu: larangan gambar yang tenant tulis sendiri ("Larangan gambar" di Niche
+        # Studio) DIABAIKAN TOTAL oleh FLUX/Cloudflare — 6 dari 11 channel. Tenant mengetik,
+        # menyimpan, melihatnya tersimpan, dan mesin tak pernah membacanya. Diam-diam.
+        # Sekarang larangan itu dilipat ke prompt POSITIF di corong ini — satu tempat, berlaku di
+        # SEMUA transport, tanpa daftar per-vendor yang bisa basi.
+        if negative_prompt:
+            prompt = f"{prompt}\n\nAvoid: {negative_prompt}"
+        # Tempelan patri SELALU ke prompt positif — bukan hanya ke kanal larangan. Sebab terukur:
+        # FLUX mengabaikan kanal larangan sepenuhnya, dan jalur video tak punya kanal itu. Menempel
+        # "hanya di transport yang butuh" berarti membuat DAFTAR yang bisa basi saat penyedia baru
+        # masuk — dan daftar basi itulah yang membuat larangan tenant bocor 2 bulan di FLUX.
+        prompt, negative_prompt = _patri.tempel(prompt, negative_prompt, kanal_negatif=False)
+        # BATAS PANJANG PROMPT = DATA, bukan kode. Vendor baru cukup menuliskan `prompt_max_chars`
+        # di `ai_models.default_params`, dan patri otomatis selamat dari pemotongannya — tanpa
+        # menyentuh berkas ini. (Cloudflare punya batas 2.048 yang juga dijaga di transportnya.)
+        _batas = (self.model_config.get("params") or {}).get("prompt_max_chars")
+        if _batas:
+            prompt = _patri.potong_aman(prompt, int(_batas))
+
         platform = self.model_config["platform"]
         method = self._TRANSPORTS.get(platform)
         if not method:
@@ -529,9 +573,10 @@ class AIImageProvider(VisualProvider):
         except ImportError:
             raise VisualError("openai tidak terinstall. Jalankan: pip install openai")
 
-        # OpenAI tidak support parameter negative_prompt terpisah —
-        # digabung ke prompt utama sebagai instruksi eksplisit.
-        full_prompt = f"{prompt}\n\nStrictly avoid: {negative_prompt}"
+        # [14-Agu] Larangan SUDAH dilipat ke prompt positif di corong `_generate_image` (satu
+        # tempat untuk semua transport). Menyuntikkannya lagi di sini = teks kembar yang memanjangkan
+        # prompt tanpa menambah penjagaan.
+        full_prompt = prompt
 
         size = self.model_config.get("size", "1024x1536")
 
@@ -584,7 +629,7 @@ class AIImageProvider(VisualProvider):
         base = (self.model_config.get("base_url") or "").rstrip("/")
         base = base[:-len("/openai")] if base.endswith("/openai") else (base or "https://generativelanguage.googleapis.com/v1beta")
         url = f"{base}/models/{self.model_config['model_id']}:generateContent"
-        full_prompt = f"{prompt}\n\nStrictly avoid: {negative_prompt}"
+        full_prompt = prompt   # [14-Agu] idem: larangan dilipat di corong
         body = {
             "contents": [{"parts": [{"text": full_prompt}]}],
             "generationConfig": {"responseModalities": ["IMAGE"], "imageConfig": {"aspectRatio": "9:16"}},
@@ -639,7 +684,10 @@ class AIImageProvider(VisualProvider):
         # PROMPT MURNI tanpa merge negative (beda dari transport lain): FLUX tak punya kanal
         # negative-prompt, dan klasifier NSFW CF terbukti FALSE-POSITIVE pada suntikan
         # "Strictly avoid: ..." (uji nyata 2026-07-08: prompt lingkaran-merah pun ditolak 3030).
-        body: dict = {"prompt": prompt[:2048]}   # batas resmi input CF
+        # [14-Agu] Batas keras 2.048 huruf. Diukur pada 679 prompt produksi: 12 (2%) melewatinya
+        # sesudah patri + larangan niche ikut. Potongan biasa akan memakan EKOR — yaitu patri.
+        from src.providers.visual.patri import potong_aman
+        body: dict = {"prompt": potong_aman(prompt, 2048)}   # batas resmi input CF
         steps = (self.model_config.get("params") or {}).get("steps")
         if steps:
             body["steps"] = min(int(steps), 8)   # batas resmi CF

@@ -1533,6 +1533,8 @@ class ScriptEngine:
         nvs        = (getattr(run_config, "niche_visual_style", {}) or {}) if run_config else {}
         dna_lines  = "\n".join(f"- {k.replace('_',' ')}: {v}" for k, v in nvs.items() if v) \
                      or "- style: cinematic, photorealistic, dramatic lighting"
+        # [14-Agu] GAYA VISUAL = MILIK NICHE, bukan patri kode. Bawaan 'photorealistic' → teks prompt SAMA PERSIS untuk 47 niche lama (dijaga uji).
+        gaya = (nvs.get("render_style") or "photorealistic").strip()
         dna_inline = "; ".join(str(v) for v in nvs.values() if v) or "cinematic, photorealistic, dramatic lighting"
         # style_exemplars = eks-`visual_fallbacks` (di-repurpose): contoh shot terbaik niche → few-shot
         # acuan kualitas (bukan lagi padding stock-lib v1). Admin kurasi di niche.
@@ -1547,7 +1549,7 @@ class ScriptEngine:
             txt   = (script.get(beat) or "").strip()
             first = (txt.split(".")[0].strip() if txt else topic_text) or topic_text
             return (f"{first}. {dna_inline}. Single commanding focal point, vertical 9:16, "
-                    f"photorealistic, no text no words no letters no numbers no logos no watermarks.")
+                    f"{gaya}, no text no words no letters no numbers no logos no watermarks.")
 
         def _bad(p) -> bool:
             if not p or not isinstance(p, str):
@@ -1571,7 +1573,7 @@ class ScriptEngine:
                 )
                 system = (
                     "You are an elite cinematic visual director for viral short-form vertical video. "
-                    "You convert each narration beat into ONE photorealistic image prompt grounded in what "
+                    f"You convert each narration beat into ONE {gaya} image prompt grounded in what "
                     "the beat actually says. Output ONLY valid JSON — no markdown, no preamble."
                 )
                 user = f"""TOPIC: {topic_text}
@@ -1586,7 +1588,7 @@ Below is the FINAL narration, beat by beat. Make each image match what is actual
 RULES (every prompt — non-negotiable for a VIRAL, breathtaking result):
 - Build the image around the single most CONCRETE visual element named/implied in that beat's text — not the topic in general.
 - BEAUTY FIRST: every frame must be gallery-grade cinematic. EXPLICITLY apply the VISUAL DNA's lighting, camera/lens, composition, color, and realism in your description. Not "good enough" — stunning, scroll-stopping, emotionally striking.
-- Photorealistic, vertical 9:16, ONE commanding focal point with depth.
+- {gaya.capitalize()}, vertical 9:16, ONE commanding focal point with depth.
 - Keep ONE consistent visual through-line across all scenes (a recurring subject/setting/palette that evolves), but VARY composition, scale, and camera angle so no two scenes look alike.
 - Write a concrete, richly cinematic DESCRIPTION (2-3 sentences) that explicitly names the lighting + camera + mood. NEVER write instructions. NEVER output "N/A".
 - The narration may be in a non-English language — but write EVERY image prompt in ENGLISH (image models follow English best). Translate the beat's concrete visual element into English for the prompt.
@@ -1639,6 +1641,8 @@ Return ONLY valid JSON:
         nvs        = (getattr(run_config, "niche_visual_style", {}) or {}) if run_config else {}
         dna_lines  = "\n".join(f"- {k.replace('_',' ')}: {v}" for k, v in nvs.items() if v) \
                      or "- style: cinematic, photorealistic, dramatic lighting"
+        # [14-Agu] GAYA VISUAL = MILIK NICHE, bukan patri kode. Bawaan 'photorealistic' → teks prompt SAMA PERSIS untuk 47 niche lama (dijaga uji).
+        gaya = (nvs.get("render_style") or "photorealistic").strip()
         exemplars  = (getattr(run_config, "niche_visual_fallbacks", []) or []) if run_config else []
         exemplar_block = ("\nEXEMPLAR SHOTS (signature look — MATCH this bar, don't copy verbatim):\n"
                           + "\n".join(f"  • {e}" for e in exemplars[:4])) if exemplars else ""
@@ -1671,7 +1675,7 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
 - Describe the SUBJECT concretely (who/what fills the frame) per the VISUAL DNA.
 - Describe the MOTION: what moves inside the frame (hair, fabric, light) AND the camera movement (slow push-in / gentle orbit) — this is video, not a still.
 - Name the lighting, lens/depth-of-field, mood and color grade explicitly.
-- Vertical 9:16. Photorealistic. ABSOLUTELY NO text, words, letters, logos, or watermarks in frame.
+- Vertical 9:16. {gaya.capitalize()}. ABSOLUTELY NO text, words, letters, logos, or watermarks in frame.
 - Obey every restriction in the VISUAL DNA strictly (they are non-negotiable)."""
                 raw = (llm.complete(system=system, user=user, model=model,
                                     temperature=0.7, max_tokens=350) or "").strip().strip('"')
@@ -2133,6 +2137,34 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                 logger.info(f"[ScriptEngine] periksa ulang naskah akhir: {_ringkas2(_c2)}")
             except Exception as _ce2:
                 logger.warning(f"[ScriptEngine] periksa ulang gagal (naskah tetap dipakai): {_ce2}")
+
+        # ── [14-Agu] LARANGAN TENANT BUKAN SARAN — INI PENGHENTINYA ───────────────────────────────
+        #
+        # KEBOCORAN YANG DITUTUP. `narration_persona.avoid` dijanjikan ke tenant sebagai larangan
+        # ("Pantangan — teks bebas, dipatuhi mesin apa adanya"), tapi ditegakkan lewat ember yang
+        # sama dengan cacat mutu biasa: cacat → ULANGI dengan umpan balik → kalau percobaan habis,
+        # PAKAI NASKAH BERSKOR TERTINGGI. Artinya naskah yang melanggar larangan tenant sendiri
+        # tetap bisa terbit. Larangan itu selama ini **prioritas, bukan kepastian**.
+        #
+        # Sekarang: naskah akhir yang masih memuat kata terlarang niche → run BERHENTI (§0.6 gagal
+        # jujur). Kalau tenant menulis "jangan sebut merek kompetitor" lalu videonya menyebutnya,
+        # kerugiannya jauh lebih besar daripada satu video yang tidak jadi.
+        #
+        # Terukur sebelum dipasang: 0 dari 127 produksi nyata akan terhenti oleh aturan ini.
+        # Sengaja HANYA `kata_terlarang_niche` — cacat mutu lain (elipsis, spasi ganda) tetap
+        # ditangani jalur perbaikan, bukan penghenti.
+        if best_script:
+            _langgar = [c for c in (best_script.get("mechanical_issues") or [])
+                        if c.get("jenis") == "kata_terlarang_niche"]
+            if _langgar:
+                from src.exceptions import LLMError
+                raise LLMError(
+                    "Naskah akhir masih memuat kata yang DILARANG niche ini — produksi dihentikan "
+                    "agar larangan Anda tidak dilanggar. Yang terpakai: "
+                    + "; ".join(str(c.get("bukti") or c.get("pesan")) for c in _langgar[:3])
+                    + ". Longgarkan daftar 'Pantangan' di Niche Studio bila kata itu sebenarnya boleh.",
+                    step="script", milik_kita=False,
+                )
         # ── CACAT MEKANIS YANG TERDETEKSI HARUS DIPERBAIKI, BUKAN CUMA DILAPORKAN ─────────────────
         # Terukur 2026-08-01 di channel BISIK NUSANTARA: naskah mendarat tepat di band (meleset 0,1
         # dtk) tapi memuat elipsis — tanda yang DILARANG prompt karena membakar hampir sepertiga detik
