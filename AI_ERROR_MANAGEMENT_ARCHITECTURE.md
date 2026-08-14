@@ -209,7 +209,7 @@ kegagalan yang 100% milik kita. Owner: *"pesan errornya tidak jelas hanya kode s
 | **`tests/test_rem_tak_boleh_lumpuh.py`** | 5 | **§8k — PERILAKU, bukan angka perantara:** berapa kali produksi di-submit · berapa kabar ke tenant · apakah mesin berhenti sendiri |
 | **`tests/test_parameter_kita_tak_ditimpakan_tenant.py`** | 10 | **§8k butir 4 — dua arah:** parameter tak-didukung tak pernah dikirim (vendor baru otomatis aman) · galat parameter mengaku MILIK KITA lintas-vendor · **dan tidak salah-alamat ke arah sebaliknya** |
 | `tests/test_migrasi_selaras_db.py` | 6 | kolom & **trigger** yang migrasi janjikan benar-benar hidup di DB (§8k butir 2/3, migr 0198) |
-| **`tests/test_mesin_tak_mati_mendadak.py`** | 10 | **§8L — mesin tak boleh MATI MENDADAK:** skema SDK dipanaskan di alur utama (SELURUH model, bukan yang teratas) · mengurai balasan tak lagi membangun skema · urutan dibaca dari **pohon sintaks** · **reproduksi crash dua arah** |
+| **`tests/test_mesin_tak_mati_mendadak.py`** | 12 | **§8L — mesin tak boleh MATI MENDADAK:** skema SDK dipanaskan di alur utama (SELURUH model, bukan yang teratas) · mengurai balasan tak lagi membangun skema · urutan dibaca dari **pohon sintaks** · **reproduksi crash dua arah** |
 | **Total kelima berkas lama** | **39 lulus** | dijalankan 2026-08-03 |
 
 > ⚠️ **Angka di kolom tengah kini DIJAGA MESIN** (`TestAngkaBuktiUjiTidakBasi`): bila jumlah uji
@@ -855,7 +855,7 @@ mustahil dijaga lengkap. Menambah vendor = tambah **satu kata**. SDK tak terpasa
 
 #### Bukti penjaga — direproduksi dua arah, bukan disimpulkan
 
-`tests/test_mesin_tak_mati_mendadak.py` (9 uji): membangun skema di thread bertumpuk sempit **tanpa**
+`tests/test_mesin_tak_mati_mendadak.py` (12 uji): membangun skema di thread bertumpuk sempit **tanpa**
 pemanasan ⇒ proses **dibunuh sinyal**; **dengan** pemanasan ⇒ selesai wajar. Uji intinya memeriksa
 **PERILAKU akhir**: sesudah pemanasan, mengurai balasan berbentuk NYATA (lengkap field tambahan
 `x_groq` yang memicu `_get_extra_fields_type`) **tidak memanggil `model_rebuild` sama sekali**.
@@ -1017,8 +1017,14 @@ Bila salah satu bergeser tanpa yang lain, uji MERAH sebelum sempat menyesatkan s
   awal menyimpan jawabannya dan paling belakangan saya baca.**
   **Ikut dipasang sebagai lapis pertahanan (BUKAN perbaikan akar):** pemanasan skema SDK di alur utama
   saat start (1.049 model, 2,4 dtk) ⇒ pembangunan skema tak lagi terjadi di dalam thread produksi.
-  Dijaga 10 uji, reproduksi dua arah, merah dibuktikan lebih dulu (6 & 2 gagal).
-  Suite 1014 → **1024**, nol regresi. Nol migrasi DB, nol perubahan layar.
+  Dijaga 12 uji, reproduksi dua arah, merah dibuktikan lebih dulu (6 & 2 gagal).
+  **KEJUJURAN — satu bug saya tanam di putaran ini dan tertangkap DI PRODUKSI:** baris catatan
+  startup menyebut kunci dict (`_p['dilewati']`) yang sudah berubah nama ⇒ `KeyError`. Gagal-terbuka
+  bekerja (pemanasannya sendiri berhasil, mesin tetap jalan), tapi **keterangannya hilang** — dan
+  itulah yang menyamarkan apakah perbaikan ini aktif. Ditutup secara STRUKTURAL: penyusunan kalimat
+  dipindah ke dalam modul (`ringkasan()`) sehingga kunci dict tak pernah bocor keluar, plus 2 penjaga
+  (menjalankan baris itu · melarang mesin menyentuh kunci dict, dibaca dari pohon sintaks).
+  Suite 1014 → **1026**, nol regresi. Nol migrasi DB, nol perubahan layar.
 - **2026-08-14** — **BUG YANG KAMI TANAM SENDIRI DICABUT + DOKUMEN INI BERHENTI BERBOHONG DI 6 TITIK.**
   Dilaporkan owner dari keluhan tenant: *"sebelumnya sudah berjalan baik, 3 kali gagal langsung kena
   rem; tapi setelah anda bug fixing, malah timbul bug baru."* Benar seluruhnya.

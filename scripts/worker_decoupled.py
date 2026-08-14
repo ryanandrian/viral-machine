@@ -175,10 +175,8 @@ def main() -> None:
     # Di sini tumpukan masih kosong, jadi ruangnya lapang. Direproduksi & dibuktikan: tanpa ini
     # thread mati (core dumped) pada tumpukan 32-64KB, dengan ini selamat di semuanya.
     try:
-        from src.utils.pemanasan_skema import panaskan_skema_sdk
-        _p = panaskan_skema_sdk()
-        logger.info(f"[WorkerV2] pemanasan skema SDK: {_p['siap']} siap · "
-                    f"{_p['dilewati']} dilewati · {_p['gagal']} gagal")
+        from src.utils.pemanasan_skema import panaskan_skema_sdk, ringkasan
+        logger.info(f"[WorkerV2] pemanasan skema SDK: {ringkasan(panaskan_skema_sdk())}")
     except Exception as e:                  # gagal-terbuka: pencegahan tak boleh menghentikan mesin
         logger.warning(f"[WorkerV2] pemanasan skema gagal (non-fatal): {e}")
 

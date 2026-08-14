@@ -126,6 +126,20 @@ def _semua_turunan(kelas, hasil=None) -> set:
     return hasil
 
 
+def ringkasan(hasil: dict) -> str:
+    """Ubah hasil pemanasan menjadi satu kalimat siap-catat.
+
+    ⚠️ ADA DI SINI, BUKAN DI PEMANGGIL — sengaja. Versi pertama menyusun kalimatnya di
+    `worker_decoupled.main()` dengan menyebut kunci dict satu per satu; saat kunci berubah pada
+    penulisan ulang, baris itu melempar `KeyError` **di produksi** (tertangkap gagal-terbuka, mesin
+    tetap jalan, tapi keterangannya hilang — dan hilangnya keterangan itulah yang menyamarkan
+    apakah perbaikannya benar-benar aktif). Dengan bentuk ini, kunci dict tak pernah bocor keluar
+    modul, jadi ketidakcocokan yang sama **mustahil terjadi lagi**.
+    """
+    return (f"{hasil.get('siap', 0)} skema dibangun · {hasil.get('sudah', 0)} sudah siap · "
+            f"{hasil.get('gagal', 0)} gagal · {hasil.get('sisa', 0)} tersisa tertunda")
+
+
 def panaskan_skema_sdk() -> dict[str, int]:
     """Bangun skema SELURUH model SDK di alur UTAMA. Return ringkasan untuk dicatat.
 

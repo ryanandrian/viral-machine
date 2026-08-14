@@ -70,6 +70,47 @@ class TestPemanasanMenyiapkanSELURUHModel(unittest.TestCase):
         self.assertEqual(kedua["siap"], 0, "pemanasan kedua membangun ulang — pemborosan")
         self.assertEqual(kedua["sisa"], 0)
 
+    def test_baris_catatan_startup_BENAR_BENAR_bisa_dicetak(self):
+        """⛔ BUG NYATA YANG SAYA TANAM 15-Agu, tertangkap di produksi — dan pagarnya lahir di sini.
+
+        Versi pertama menyusun kalimat catatan di `worker_decoupled.main()` dengan menyebut kunci
+        dict satu per satu (`_p['dilewati']`). Saat kunci berubah pada penulisan ulang, baris itu
+        melempar `KeyError` **di server**: pemanasannya sendiri berhasil, mesin tetap jalan
+        (gagal-terbuka bekerja), tapi **keterangannya hilang** — dan hilangnya keterangan itulah
+        yang menyamarkan apakah perbaikan ini benar-benar aktif.
+
+        Kini penyusunan kalimat tinggal di dalam modul (`ringkasan()`), jadi kunci dict tak pernah
+        bocor keluar. Uji ini **MENJALANKAN** rangkaian itu — bukan membacanya — supaya ketidak-
+        cocokan serupa merah sebelum sampai ke server.
+        """
+        teks = ps.ringkasan(ps.panaskan_skema_sdk())
+        self.assertIsInstance(teks, str)
+        self.assertIn("tersisa tertunda", teks, "bentuk ringkasan berubah tanpa uji menyusul")
+        # Bentuk cacat pun tak boleh melempar — pemanggil tak wajib tahu isi dict.
+        for cacat in ({}, {"siap": 1}, {"apa_saja": 0}):
+            with self.subTest(cacat=cacat):
+                self.assertIsInstance(ps.ringkasan(cacat), str)
+
+    def test_worker_TIDAK_menyentuh_kunci_dict_hasil_pemanasan(self):
+        """Struktur, bukan teks: mesin dilarang membaca kunci dict hasil pemanasan secara langsung —
+        di situlah `KeyError` 15-Agu lahir. Dibaca dari pohon sintaks."""
+        import ast
+
+        pohon = ast.parse(open(os.path.join(AKAR, "scripts", "worker_decoupled.py"),
+                               encoding="utf-8").read())
+        pelanggar = []
+        for simpul in ast.walk(pohon):
+            # cari pola  <apa pun>['kunci']  yang bersumber dari panaskan_skema_sdk()
+            if isinstance(simpul, ast.Subscript) and isinstance(simpul.value, ast.Call):
+                f = simpul.value.func
+                if (f.attr if isinstance(f, ast.Attribute) else getattr(f, "id", "")) == \
+                        "panaskan_skema_sdk":
+                    pelanggar.append(simpul.lineno)
+        self.assertFalse(
+            pelanggar,
+            f"mesin membaca kunci dict hasil pemanasan langsung (baris {pelanggar}) — pakai "
+            f"`ringkasan(...)`; pola inilah yang melempar KeyError di produksi 15-Agu")
+
     def test_gagal_terbuka_tak_menghentikan_mesin(self):
         """Pencegahan tak boleh jadi syarat produksi."""
         asli = ps._AWALAN_SDK
