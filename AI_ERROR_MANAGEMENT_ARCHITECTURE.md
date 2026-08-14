@@ -720,10 +720,56 @@ dulu: pengecualian 12-Agu dihidupkan kembali → **14 uji gagal**.
 
 ### 8L. ~~MESIN MATI MENDADAK~~ — ✅ **AKAR DITEMUKAN & DITUTUP 2026-08-15**
 
-> ## 🎯 AKAR PENYEBAB (dibuktikan dari catatan KERNEL, bukan disimpulkan)
+> ## 🎯 AKAR PENYEBAB — **CACAT PENGUMPUL SAMPAH (GC) PADA `Python 3.11.0rc1`**
 >
-> **Mesin produksi berjalan di atas `Python 3.11.0rc1` — sebuah *RELEASE CANDIDATE* dari Agustus
-> 2022 — dan penerjemah itu MERUSAK MEMORINYA SENDIRI.**
+> *(dibongkar dari INSTRUKSI MESIN di titik crash + catatan kernel + rekaman memori 387 MB —
+> bukan disimpulkan. Owner menolak versi sebelumnya dari catatan ini karena ia masih dugaan; itu
+> benar, dan bagian ini menggantikannya dengan rantai bukti.)*
+>
+> **Instruksi persis di ketiga titik crash — dibongkar dari biner rc1 ASLI** (diunduh ulang; cap
+> waktunya **identik sampai detik** dengan yang tercatat di laporan crash: `1660298534` =
+> 12-Agu-2022 17:02:14):
+>
+> ```
+>   and  $0xfffffffffffffffc, %rdx     ; buang 2 bit penanda → dapatkan penunjuk
+>   mov  %rcx, (%rdx)                  ; ← MATI DI SINI (menulis ke penunjuk itu)
+>   and  $0x3, %eax  /  or ...         ; pasang kembali 2 bit penanda
+> ```
+>
+> Pola **masker `~3` + dua bit penanda** itu tanda tangan khas `_PyGCHead_SET_NEXT/SET_PREV` —
+> pembaruan **rantai ganda (doubly-linked list) milik pengumpul sampah CPython**, di mana 2 bit
+> terendah `_gc_prev` dipakai sebagai penanda (`FINALIZED`/`COLLECTING`). Alamat yang ditulisi
+> bernilai **NOL** ⇒ **rantai objek GC-nya rusak.** Ketiga crash memakai pola yang SAMA di titik
+> panggil yang berbeda — konsisten dengan rantai yang korup, bukan satu bug kode.
+>
+> **Dan cacat itu memang ada di versi tersebut, terdokumentasi resmi:** CPython 3.11 punya
+> beberapa cacat korupsi memori di GC yang **baru diperbaiki pada rilis 3.11.2 & 3.11.3** — antara
+> lain **gh-101975** (*"fix stacktop value … to avoid **corruption on garbage collection**"*) dan
+> **gh-102397** (*"fix segfault from **race condition in signal handling during garbage
+> collection**"*), plus perbaikan crash GC subinterpreter di 3.11.2.
+> **Mesin kita berjalan di `3.11.0rc1` — keluar SEBELUM 3.11.0 final, jadi tak memuat SATU PUN
+> perbaikan itu.**
+>
+> | Mata rantai | Status |
+> |---|---|
+> | Crash berada di dalam pembaruan rantai GC | ✅ dibongkar dari instruksi mesin |
+> | Rantai GC rusak (menulis ke alamat NOL) | ✅ terbukti |
+> | Bukan kode kita / pustaka lain | ✅ seluruh `ip` di dalam biner `python3.11` |
+> | Bukan perangkat keras · bukan OOM | ✅ nol proses lain crash · nol galat memori · nol OOM |
+> | Versi itu memang bercacat korupsi GC | ✅ terdokumentasi (3.11.2 / 3.11.3) |
+> | Versi kita lebih tua dari semua perbaikan | ✅ cap waktu biner cocok persis dengan rc1 |
+> | Versi baru memuat seluruh perbaikan | ✅ 3.11.15, sudah aktif di produksi |
+>
+> ⚠️ **Yang TETAP tak bisa dibuktikan (dan tak diklaim):** bahwa crash-nya berhenti. Ia datang
+> ±1× per 4 hari tanpa pola; membuktikannya butuh HARI tanpa kejadian, bukan menit. Garis dasar
+> untuk pemantauan: **11 crash, 3-Jul → 13-Agu**.
+>
+> 🔬 **Cara temuan ini didapat — dan kenapa 4 dugaan sebelumnya gugur:** rekaman memori 387 MB
+> dibongkar (`apport-unpack`), keadaan prosesor ke-14 thread dibaca langsung dari catatan ELF,
+> lalu `rip` dipetakan ke pustaka lewat `ProcMaps`. **Temuan penting yang membalik pembacaan awal:**
+> `rip` crash 14-Agu jatuh di **`pthread_kill` (libc)** — itu BUKAN titik crash, melainkan tempat
+> perekam kematian MELEMPAR ULANG sinyalnya. Karena perekam baru naik 13-Agu, maka **hanya crash
+> SEBELUM 13-Agu yang alamatnya asli** — dan alamat-alamat itulah yang dibongkar di atas.
 >
 > Bukti dari `dmesg` (catatan kernel — lapis terdalam yang bisa kita baca): **11 kali crash antara
 > 3-Jul dan 13-Agu**, dan polanya tak bisa ditafsirkan lain:
