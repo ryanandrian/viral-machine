@@ -77,6 +77,28 @@ _STATUS_MILIK_KITA: frozenset[int] = frozenset({413})
 _RX_BERKALA = re.compile(r"per day|tokens per day|\bTPD\b|\bRPD\b|daily limit|/day|per hari|harian",
                          re.I)
 
+# ── PARAMETER PERMINTAAN DITOLAK VENDOR = SALAH KITA (berlaku LINTAS-VENDOR) ────────────────────
+# Lahir 14-Agu dari 37 kejadian nyata Cloudflare: `AiError: Bad input: Error: Additional or
+# unevaluated properties '/seed' at '/' not allowed` ⇒ digolongkan `unknown` + `milik_kita=False`,
+# lalu pesan tenant ditempeli *"Kegagalan terjadi di layanan AI Anda"* — padahal permintaan KAMI
+# yang cacat. Tenant dua kali dirugikan: uangnya terpakai (produksi 4-7 menit dibuang) DAN
+# disalahkan untuk kesalahan kita.
+#
+# Kode `5006` TIDAK ADA di dokumen resmi Cloudflare (dibaca 14-Agu) — jadi jalur pemetaan per-kode
+# tertutup, dan §1 Aturan Emas mengizinkan jalur SAMPEL NYATA. Sengaja dipasang di jalur GENERIK,
+# bukan di tabel Cloudflare: parameter permintaan hanya bisa datang dari KAMI, jadi penolakan
+# atasnya mustahil milik tenant — pada vendor mana pun, termasuk yang belum ada hari ini.
+#
+# ⚠️ SENGAJA SEMPIT — hanya kalimat yang berbicara tentang PROPERTI/PARAMETER. Pola lebar
+# ("not allowed" · "bad input" · "invalid") DIUJI pada seluruh pesan vendor nyata dan DITOLAK:
+# ia akan menangkap "API key invalid"/"model not allowed", yaitu hal yang justru MILIK TENANT —
+# dan salah-alamat ke arah sebaliknya sama merusaknya. Kalimat vendor yang tak jelas tetap UNKNOWN
+# (keputusan owner: yang RAGU tetap UNKNOWN).
+_RX_PARAM_CACAT = re.compile(
+    r"additional or unevaluated propert|additional propert|unevaluated propert|"
+    r"unknown (?:parameter|argument|field|propert)|unexpected keyword|"
+    r"unrecognized (?:parameter|argument|field)", re.I)
+
 # Tipe agregator yang berarti "ini galat vendor DI BALIK saya, saya hanya meneruskan".
 _TERUSAN: frozenset[str] = frozenset({"downstream_service_error", "downstream_service_unavailable"})
 
@@ -350,6 +372,14 @@ def golongkan(penyedia: str, *, status: int | None = None, kode=None,
 
     if _RX_BERKALA.search(teks):
         return Putusan(ErrorClass.RATE_LIMIT, pesan, False, "batas-berkala")
+
+    # ── PARAMETER YANG KITA KIRIM DITOLAK = SALAH KITA, berlaku untuk VENDOR MANA PUN ──────────
+    # Ditaruh di jalur generik (bukan per-vendor) supaya vendor/model yang BELUM ADA hari ini pun
+    # otomatis benar — syarat owner: "berlaku untuk setiap penambahan AI model/vendor baru".
+    # Alasannya semantik, bukan tebakan: parameter permintaan hanya bisa datang dari KAMI, jadi
+    # penolakan atasnya tidak mungkin milik tenant. Haram ditempeli "Kegagalan di layanan AI Anda".
+    if _RX_PARAM_CACAT.search(teks):
+        return Putusan(_AMAN, pesan, True, "parameter-kita-ditolak")
 
     if status is not None:
         if int(status) in _STATUS_MILIK_KITA:

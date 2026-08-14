@@ -169,6 +169,17 @@ kegagalan yang 100% milik kita. Owner: *"pesan errornya tidak jelas hanya kode s
   DIKELUARKAN: keputusan owner "yang RAGU tetap UNKNOWN" tetap berlaku; vendor yang dokumennya
   menyebut arti status itu tertangani lewat tabelnya sendiri. Melebarkannya = ubah perilaku-saat-gagal
   = **butuh ketok owner**.
+- **[14-Agu] DUA ATURAN GENERIK tentang PARAMETER yang kita kirim** — ketetapan owner: *"pastikan
+  setiap perbaikan sedapat mungkin bersifat GENERIK, karena AI model dan AI vendor akan terus
+  bertambah"*. Keduanya berlaku untuk vendor yang **belum ada**:
+  (a) **Jangan kirim parameter yang skema resmi model tidak menyatakan menerimanya.** Penandanya
+  DATA (`ai_models.default_params.supports_seed`), **default = tidak mengirim**. Arahnya disengaja:
+  mengirim parameter tak-didukung membuat produksi GAGAL (±$0,068 uang tenant hangus dalam 2 hari,
+  §8k butir 4); tidak mengirimnya hanya membuat vendor memakai nilai acaknya sendiri.
+  (b) **Penolakan atas parameter = `milik_kita=True`, di vendor mana pun** (`_RX_PARAM_CACAT`,
+  jalur generik). Alasannya semantik: parameter permintaan hanya bisa datang dari kami. **Sempit
+  dengan sengaja** — pola lebar akan menangkap galat MILIK TENANT (*"API key invalid"*), dan
+  salah-alamat ke arah itu sama merusaknya.
 - Kode = otoritatif; dokumen = peta + bukti; sinkron dalam commit yang sama.
 - Circuit-breaker TIDAK boleh string-sniffing — hanya baca `error_class` terstruktur.
 - Menambah/menghapus kelas fast-fail = ubah `FAST_FAIL` (`src/exceptions.py`) saja.
@@ -196,6 +207,8 @@ kegagalan yang 100% milik kita. Owner: *"pesan errornya tidak jelas hanya kode s
 | **`tests/test_ssot_error_mgmt.py`** | 20 | **penjaga anti-drift: dokumen ini vs kode** (§10) — sejak 14-Agu termasuk **kolom "Sikap" §1 vs perilaku mesin**, **struktur tabel utuh**, dan **angka bukti §7 tak basi** |
 | **`tests/test_pemulihan_channel.py`** | 35 | **[B25] rem menyimpan sebabnya · Telegram bedakan pulih-sendiri · anti-drift `SELF_HEALING` lintas 3 tempat · setiap kegagalan dihitung (§8k)** |
 | **`tests/test_rem_tak_boleh_lumpuh.py`** | 5 | **§8k — PERILAKU, bukan angka perantara:** berapa kali produksi di-submit · berapa kabar ke tenant · apakah mesin berhenti sendiri |
+| **`tests/test_parameter_kita_tak_ditimpakan_tenant.py`** | 10 | **§8k butir 4 — dua arah:** parameter tak-didukung tak pernah dikirim (vendor baru otomatis aman) · galat parameter mengaku MILIK KITA lintas-vendor · **dan tidak salah-alamat ke arah sebaliknya** |
+| `tests/test_migrasi_selaras_db.py` | 6 | kolom & **trigger** yang migrasi janjikan benar-benar hidup di DB (§8k butir 2/3, migr 0198) |
 | **Total kelima berkas lama** | **39 lulus** | dijalankan 2026-08-03 |
 
 > ⚠️ **Angka di kolom tengah kini DIJAGA MESIN** (`TestAngkaBuktiUjiTidakBasi`): bila jumlah uji
@@ -649,26 +662,53 @@ dulu: pengecualian 12-Agu dihidupkan kembali → **14 uji gagal**.
    hari) · **jumlah kabar** (satu saat jeda mulai; perlu satu lagi saat jalan kembali?) · **tombol
    Uji/Jalankan Ulang** boleh menembus jeda atau ikut ditahan. Bandingkan batasan §9: *"pemulihan =
    keputusan TENANT"* — mengubahnya butuh ketok baru.
-2. **Saklar aktif/nonaktif channel tidak menutup periode kegagalan.** Migrasi 0197 (§8c) mewajibkan
-   *setiap* jalur pelepas rem mencatat `production_resumed_at`; jalur saklar tidak melakukannya.
-   Akibat nyata: BISIK NUSANTARA & Thetangga menyimpan hitungan **12**, jadi begitu tenant
-   menyalakannya kembali mesin mengerem **seketika, tanpa satu percobaan pun**. Ini keadaan yang
-   sudah ada sejak lama (bukan lahir 14-Agu), tapi baru terukur sekarang. Tindakan datanya (menyetel
-   titik pemulihan untuk dua channel itu) menyentuh data tenant ⇒ menunggu ketok owner.
-3. **Waktu tenant menyalakan/mematikan channel tidak terekam** — saklar menulis statusnya saja,
-   `updated_at` tidak ikut berubah dan tak ada pencatat otomatis. Diagnosa insiden jadi bergantung
-   pada keterangan owner/tenant. Terbukti: catatan waktu BISIK masih 13-Agu padahal banjirnya 14-Agu.
-4. **Kode Cloudflare `5006` belum dipetakan → salah KITA ditimpakan ke tenant.** Pesan verbatim
-   produksi: `AiError: Bad input: Error: Additional or unevaluated properties '/seed' at '/' not
-   allowed` ⇒ digolongkan `unknown`, `milik_kita=False`, lalu pesan tenant ditempeli *"Kegagalan
-   terjadi di layanan AI Anda"* — padahal permintaan **kita** yang cacat. Melanggar §5 langkah 2 +
-   kecualian mengikat §9. **Dokumen resmi CF tidak memuat 5006** (dibaca 2026-08-14) — tapi ada
-   **32 sampel nyata** (1× 8-Agu · 1× 11-Agu · 10× 13-Agu · 22× 14-Agu; tren naik) dan vendor
-   menyebut sifatnya sendiri (*"Bad input"*), jadi §1 Aturan Emas terpenuhi lewat jalur sampel.
-   Akarnya lebih dalam dari label: **`seed` tidak ada dalam skema resmi FLUX schnell** (hanya
-   `prompt` + `steps`, dibaca 2026-08-14) — kita mengirim parameter yang model itu tolak, dan
-   mencabutnya membuang fungsi *Diversity* §9.1, jadi bukan satu baris. Di luar lingkup perbaikan
-   14-Agu; dicatat, tidak ditambal setengah.
+2. ~~Saklar aktif/nonaktif channel tidak menutup periode kegagalan~~ — ✅ **DITUTUP 14-Agu (migr 0198).**
+   Migrasi 0197 (§8c) mewajibkan *setiap* jalur pelepas rem mencatat `production_resumed_at`; jalur
+   saklar terlewat. Akibat terukur: BISIK NUSANTARA & Thetangga menyimpan hitungan **12** ⇒ begitu
+   tenant menyalakannya kembali, mesin mengerem **seketika, tanpa satu percobaan pun**.
+   **Diperbaiki di DATABASE, bukan di layar** — ketetapan owner 14-Agu (*"pastikan setiap perbaikan
+   bersifat GENERIK"*) berlaku untuk JALUR, bukan hanya untuk vendor: menulisnya di layar hanya
+   menutup layar yang ada hari ini, dan jalur admin/API/skrip/layar-yang-belum-dibuat akan
+   melewatinya — persis cara cacat ini lahir (0197 menutup 3 jalur, melewatkan 1). Trigger
+   `channels_catat_pengaktifan` menutup **setiap** jalur tanpa satu baris kode aplikasi.
+   **TIDAK menyentuh `production_paused`** ⇒ channel yang direm tetap direm; [B25] utuh.
+   **Bukti runtime pada data NYATA** (di dalam transaksi yang dibatalkan ⇒ nol baris tenant berubah):
+   matikan → titik pemulihan **tidak** bergeser · nyalakan → **bergeser** · update biasa → **tidak** ·
+   kolom rem **tak tersentuh** · urutan trigger terverifikasi (gerbang aktivasi → 0198 → penjaga rem).
+   **Akibat sampingan yang menyenangkan:** dua channel dengan hitungan 12 kini sembuh **sendiri**
+   saat tenantnya menyalakannya — pemulihan data manual (butir 8 rencana) jadi TIDAK PERLU, dan nol
+   data tenant kami sentuh. Dijaga `tests/test_migrasi_selaras_db.py` (trigger hidup + urutannya).
+3. ~~Waktu tenant menyalakan/mematikan channel tidak terekam~~ — ✅ **DITUTUP 14-Agu (migr 0198).**
+   Saklar hanya menulis `is_active`; tak ada pencatat otomatis, sehingga `updated_at` basi (catatan
+   BISIK masih 13-Agu padahal banjirnya 14-Agu) dan satu-satunya sebab kami tahu tenant mematikan
+   channelnya adalah karena owner memberitahukannya. Trigger yang sama kini mencatat `updated_at`
+   pada **setiap** perubahan channel, dari jalur mana pun.
+4. ~~Kode Cloudflare `5006` + parameter `seed`~~ — ✅ **DITUTUP 14-Agu.** Dua sisi, keduanya generik:
+   **(a) PENCEGAHAN — akar masalahnya.** `seed` **tidak ada dalam skema resmi** FLUX schnell (hanya
+   `prompt` + `steps`, dibaca 14-Agu); kita mengirimnya dan Cloudflare menerimanya diam-diam
+   berbulan-bulan, lalu mulai memvalidasi skema: **1× 8-Agu · 1× 11-Agu · 10× 13-Agu · 22× 14-Agu**
+   (37 kejadian, tren NAIK). Satu adegan gagal menggagalkan seluruh produksi (§8i) ⇒ yang hangus
+   adalah pekerjaan yang hampir jadi: 248/442/341 detik · 15/34/26 panggilan LLM · 4/6/5 gambar ⇒
+   **±$0,068 uang TENANT dalam 2 hari, untuk kesalahan KITA.** Rem "jangan bakar duit tenant"
+   (ketok owner 17/18-Jul) secara struktur tak bisa menangkapnya — sebabnya bukan "kredit habis".
+   Kini `seed` dikirim **hanya bila skema model menyatakan menerimanya** (`ai_models.default_params.
+   supports_seed`, nol migrasi); **default = TIDAK mengirim** ⇒ model/vendor BARU otomatis aman
+   tanpa seorang pun perlu mengingatnya. `fal flux/dev` ditandai mendukung (skema resminya memuat
+   `seed`, dibaca 14-Agu) ⇒ Diversity §9.1 utuh di sana.
+   **(b) KEJUJURAN — lintas-vendor.** Jaring `_RX_PARAM_CACAT` di jalur **generik** (bukan di tabel
+   Cloudflare): kalimat vendor yang menolak PROPERTI/PARAMETER ⇒ `milik_kita=True`, berlaku untuk
+   vendor yang belum ada sekalipun — alasannya semantik, bukan tebakan: parameter permintaan hanya
+   bisa datang dari kami. Sengaja **sempit**: pola lebar (*"not allowed"* · *"bad input"* ·
+   *"invalid"*) diuji pada seluruh pesan vendor nyata dan **ditolak** karena akan menangkap
+   *"API key invalid"* — salah-alamat ke arah sebaliknya sama merusaknya (tenant menunggu kami
+   membereskan hal yang hanya bisa ia bereskan sendiri).
+   **Kelas tetap `unknown`** ⇒ nol perubahan perilaku rem. Dijaga
+   `tests/test_parameter_kita_tak_ditimpakan_tenant.py` (merah dibuktikan dua arah: 8 & 10 gagal).
+   ⚠️ **Batas yang diakui:** `videos.visual_seed` tetap mencatat seed yang DIPILIH walau tak dikirim
+   ke model yang tak mendukung — angka itu tak berpengaruh di sana. Dan model fal lain
+   (`flux-schnell`) belum diperiksa dokumennya ⇒ sengaja tidak ditandai (ragu → aman).
+   ⚠️ **Kode `3030`** (prompt ditolak penyaring konten CF, 2 kejadian nyata) **sengaja TIDAK
+   dipetakan**: tidak ada di dokumen resmi, dan pemiliknya ambigu — §5.3 "yang RAGU tetap UNKNOWN".
 
 ### 8b. ~~`notify_publish_fail` belum diseragamkan~~ — ✅ **DITUTUP 2026-08-04**
 Jalur upload YouTube gagal adalah satu-satunya notifikasi yang tak bisa menjawab pertanyaan penentu
@@ -833,10 +873,21 @@ Bila salah satu bergeser tanpa yang lain, uji MERAH sebelum sempat menyesatkan s
   angka perantara tidak bisa menangkap kerusakan yang terjadi pada akibatnya.
   **Bukti merah lebih dulu:** pengecualian 12-Agu dihidupkan kembali → **14 uji gagal**; dua penjaga
   dokumen baru merah pada dokumen apa adanya (tabel terbelah + angka basi), hijau setelah dibetulkan.
-  **Yang SENGAJA tidak dikerjakan** (dicatat di §8k, menunggu ketok owner): jeda sementara untuk
-  sebab yang pulih sendiri · saklar aktif channel yang tak menutup periode kegagalan · pemetaan
-  Cloudflare `5006` + parameter `seed` yang tak ada di skema resmi FLUX. Nol migrasi DB, nol
-  perubahan layar.
+  **(D) TIGA CELAH §8k SISANYA IKUT DITUTUP di hari yang sama** (butir 2·3·4), keduanya dibuat
+  GENERIK atas ketetapan owner *"AI model & vendor akan terus bertambah"* — dan prinsip itu
+  diterapkan pada **JALUR** juga, bukan hanya vendor:
+  • **migr 0198** — menyalakan channel menutup periode kegagalan + `updated_at` selalu tercatat.
+  Dipasang sebagai **trigger DB**, bukan 2 baris di layar: layar hanya menutup jalur yang ada hari
+  ini, dan justru begitulah cacat ini lahir (0197 menutup 3 jalur, melewatkan saklar aktif). Tidak
+  menyentuh `production_paused` ⇒ [B25] utuh. Bukti runtime pada baris NYATA di dalam transaksi
+  yang **dibatalkan** ⇒ nol data tenant berubah. Efek sampingnya: dua channel dengan hitungan 12
+  sembuh SENDIRI saat tenantnya menyalakannya ⇒ pemulihan data manual jadi tidak perlu.
+  • **`seed` hanya ke model yang skemanya menyatakan menerimanya** (default = TIDAK kirim ⇒ vendor
+  baru otomatis aman) + **jaring lintas-vendor** yang mengakui penolakan parameter sebagai salah
+  KITA. Menghentikan ±$0,068/2 hari uang tenant terbakar, dan menghentikan tenant disalahkan
+  untuk permintaan kita yang cacat.
+  **Yang SENGAJA masih terbuka** (§8k butir 1, menunggu ketok owner): **jeda sementara** untuk sebab
+  yang pulih sendiri — satu-satunya yang memilih angka & kebijakan baru, jadi bukan keputusan Claude.
 - **2026-08-13** — **JALUR TERBIT & ALARM PENYIMPANAN: tiga kegagalan senyap ditutup** (ketok owner
   "kerjakan A, B, C sampai tuntas"). Ketiganya berakar pada hal yang sama: **keadaan penting disimpan
   di ingatan proses, sementara proses itu bisa mati kapan saja.**

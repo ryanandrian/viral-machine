@@ -511,6 +511,48 @@ class AIImageProvider(VisualProvider):
         except Exception:
             pass
 
+    def _seed_boleh_dikirim(self) -> bool:
+        """Kirim `seed` HANYA bila skema resmi model menyatakan menerimanya (`params.supports_seed`).
+
+        ⛔ DEFAULT = TIDAK MENGIRIM. Ini disengaja, dan arahnya penting: mengirim parameter yang tak
+        didukung membuat produksi GAGAL (mahal — lihat angka di bawah), sedangkan tidak mengirimnya
+        hanya membuat vendor memakai seed acaknya sendiri (gambar tetap dibuat, tetap beragam; yang
+        hilang cuma kemampuan mengulang hasil identik, dan tak ada fitur kita yang memakainya).
+        Karena itu vendor/model BARU otomatis aman tanpa seorang pun perlu mengingat hal ini —
+        syarat owner: "berlaku untuk setiap penambahan AI model/vendor baru kedepannya".
+
+        ═══ KENAPA LAHIR (terukur 14-Agu, dokumen resmi + data produksi) ═══
+        Skema resmi Cloudflare `flux-1-schnell` hanya memuat **`prompt` + `steps`** — `seed` TIDAK
+        ADA di dalamnya (dibaca 14-Agu). Kita mengirimnya, dan selama berbulan-bulan Cloudflare
+        menerimanya diam-diam; lalu ia mulai memvalidasi skema:
+            8-Agu 1× · 11-Agu 1× · 13-Agu 10× · 14-Agu 22×   (tren NAIK, 37 kejadian)
+        Balasannya: `AiError: Bad input: … Additional or unevaluated properties '/seed' … not allowed`
+        Akibat per kejadian BUKAN sekadar satu adegan hilang — satu adegan gagal menggagalkan SELURUH
+        produksi (gagal-jujur §8i), jadi yang hangus adalah pekerjaan yang hampir selesai:
+            13-Agu 19:44  248 dtk · 15 panggilan LLM · 4 gambar  → $0,0146
+            14-Agu 19:07  442 dtk · 34 panggilan LLM · 6 gambar  → $0,0284
+            14-Agu 19:13  341 dtk · 26 panggilan LLM · 5 gambar  → $0,0246
+        **±$0,068 uang TENANT hangus dalam 2 hari, untuk kesalahan KITA.** Rem "jangan bakar duit
+        tenant" (ketok owner 17/18-Jul) secara struktur tak bisa menangkapnya: sebabnya bukan
+        "kredit habis", jadi ia tak pernah tergolong ke sana.
+
+        ⚠️ JANGAN "PERBAIKI" DENGAN MENGIRIM SEED LAGI karena melihat 24 video Cloudflare BERHASIL
+        dengan seed terisi. Itu benar — dan justru itu masalahnya: kita bergantung pada perilaku yang
+        vendor TIDAK PERNAH janjikan di skemanya, dan sedang ia tutup. Bekerja hari ini bukan izin.
+
+        Yang TIDAK berubah: Diversity §9.1 tetap memilih & merotasi seed, dan `videos.visual_seed`
+        tetap dicatat. Untuk model yang mendukung (fal `flux/dev` — `seed` ADA di skema resminya,
+        dibaca 14-Agu) fungsinya utuh. Untuk yang tidak, angkanya tercatat tapi tak berpengaruh —
+        batas yang diakui terang, bukan disembunyikan (SSOT §8k).
+        """
+        if self.visual_seed is None:
+            return False
+        # `is True` — BUKAN `bool(...)`. Ditangkap oleh ujinya sendiri sebelum naik: nilai ini datang
+        # dari kolom JSON yang diisi manusia, dan `bool("tidak")` = True. Satu salah-taip di admin
+        # akan menghidupkan kembali pengiriman parameter yang menghanguskan produksi. Hanya boolean
+        # sejati yang dianggap pernyataan dukungan resmi; segala bentuk lain = tidak didukung.
+        return (self.model_config.get("params") or {}).get("supports_seed") is True
+
     async def _generate_fal(self, prompt: str, negative_prompt: str, output_path: Path) -> None:
         """Transport fal.ai utk IMAGE (skema OpenAPI resmi diverifikasi 2026-07-16) — protokol queue
         SAMA dgn ai_video._generate_fal yang teruji produksi:
@@ -524,7 +566,7 @@ class AIImageProvider(VisualProvider):
         url  = f"{base}/{self.model_config['model_id']}"
         params = dict(self.model_config.get("params") or {})
         body: dict = {**params, "prompt": prompt}
-        if self.visual_seed is not None:
+        if self._seed_boleh_dikirim():
             body["seed"] = int(self.visual_seed)
         headers = {"Authorization": f"Key {self.api_key}"}
         _interval, _timeout = 2.0, 180.0   # gambar jauh lebih cepat dari video
@@ -691,7 +733,7 @@ class AIImageProvider(VisualProvider):
         steps = (self.model_config.get("params") or {}).get("steps")
         if steps:
             body["steps"] = min(int(steps), 8)   # batas resmi CF
-        if self.visual_seed is not None:
+        if self._seed_boleh_dikirim():
             body["seed"] = int(self.visual_seed)   # Diversity §9.1 — frame fingerprint per video
         async with httpx.AsyncClient(timeout=120) as client:
             r = await client.post(url, json=body, headers={"Authorization": f"Bearer {token}"})

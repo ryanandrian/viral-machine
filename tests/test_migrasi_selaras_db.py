@@ -142,5 +142,91 @@ class TestKolomJanjiMigrasiAdaDiDB(unittest.TestCase):
             f"bila memang sudah di-drop, tambahkan DROP TABLE-nya di migrasi agar tercatat.")
 
 
+class TestTriggerJanjiMigrasiHidupDiDB(unittest.TestCase):
+    """[14-Agu] Migrasi yang menjanjikan TRIGGER wajib punya triggernya HIDUP di DB.
+
+    Kenapa perlu penjaga sendiri: proyek ini tak punya tabel pencatat migrasi, dan kolom bisa
+    diperiksa lewat REST — **trigger tidak bisa**. Jadi trigger adalah bagian migrasi yang paling
+    mudah hilang tanpa jejak (mis. saat DB dipulihkan dari cadangan) dan paling sulit disadari:
+    tak ada galat, hanya perilaku yang diam-diam kembali salah.
+
+    Yang dijaga 0198: menyalakan channel WAJIB menutup periode hitungan kegagalan. Bila triggernya
+    hilang, dua channel tenant akan direm seketika saat dinyalakan — tanpa satu percobaan produksi.
+
+    SKIP bila kredensial DB langsung tak tersedia (berkas koneksi tidak ikut ke repo). Lingkungan
+    tak boleh membuat suite merah — itu melatih orang mengabaikan merah.
+    """
+
+    WAJIB = {
+        "channels_activation_gate":   "gerbang aktivasi (channel tak lengkap tak bisa dinyalakan)",
+        "channels_rem_readonly":      "kolom rem read-only bagi tenant (0195)",
+        "channels_catat_pengaktifan": "menyalakan channel menutup periode kegagalan (0198, §8k)",
+    }
+
+    @staticmethod
+    def _trigger_hidup():
+        """Nama trigger channels yang hidup — None bila lingkungan tak punya sambungan langsung."""
+        berkas = os.path.join(AKAR, "SUPABASE-CONNECTION.md")
+        if not os.path.isfile(berkas):
+            return None
+        try:
+            import psycopg2
+        except Exception:
+            return None
+        # Berkas memuat DUA proyek: v1 (PENSIUN — HARAM disentuh, CLAUDE.md §6.1) dan v2. Baris v2
+        # dipilih dengan memeriksa nama proyeknya, dan dipecah dari KANAN karena kata sandi memuat '@'.
+        for baris in open(berkas, encoding="utf-8"):
+            b = baris.strip()
+            if not b.startswith("postgresql://") or "atliatnjhysdibmfypul" not in b:
+                continue
+            kredensial, _, alamat = b[len("postgresql://"):].rpartition("@")
+            user, _, pw = kredensial.partition(":")
+            hostport, _, db = alamat.partition("/")
+            host, _, port = hostport.partition(":")
+            if "ap-southeast" not in host:      # pagar kedua: region v2
+                return None
+            try:
+                conn = psycopg2.connect(host=host, port=int(port or 5432), dbname=db or "postgres",
+                                        user=user, password=pw, connect_timeout=15)
+            except Exception:
+                return None
+            try:
+                cur = conn.cursor()
+                cur.execute("""select t.tgname from pg_trigger t
+                               join pg_class c on c.oid = t.tgrelid
+                               where c.relname = 'channels' and not t.tgisinternal""")
+                return {r[0] for r in cur.fetchall()}
+            finally:
+                conn.rollback()
+                conn.close()
+        return None
+
+    def test_trigger_channels_lengkap(self):
+        hidup = self._trigger_hidup()
+        if hidup is None:
+            self.skipTest("sambungan DB langsung tak tersedia di lingkungan ini")
+        hilang = {n: k for n, k in self.WAJIB.items() if n not in hidup}
+        self.assertFalse(
+            hilang,
+            "TRIGGER yang dijanjikan migrasi TIDAK HIDUP di DB:\n  "
+            + "\n  ".join(f"{n} — {k}" for n, k in hilang.items())
+            + "\nTak ada galat yang akan muncul; perilakunya hanya kembali salah diam-diam.")
+
+    def test_urutan_trigger_masih_seperti_dirancang(self):
+        """Urutan trigger PostgreSQL = alfabetis, dan 0198 bergantung padanya.
+
+        `channels_catat_pengaktifan` harus berjalan SESUDAH gerbang aktivasi (supaya channel yang
+        ditolak tak sempat menutup periode) dan SEBELUM penjaga rem (supaya hasilnya diperiksa
+        penjaga itu). Mengganti nama trigger tanpa memperhatikan ini akan mengubah urutannya.
+        """
+        hidup = self._trigger_hidup()
+        if hidup is None:
+            self.skipTest("sambungan DB langsung tak tersedia di lingkungan ini")
+        urut = sorted(n for n in hidup if n in self.WAJIB)
+        self.assertEqual(
+            urut, ["channels_activation_gate", "channels_catat_pengaktifan", "channels_rem_readonly"],
+            "urutan eksekusi trigger channels berubah — 0198 dirancang di antara keduanya")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
