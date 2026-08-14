@@ -209,6 +209,7 @@ kegagalan yang 100% milik kita. Owner: *"pesan errornya tidak jelas hanya kode s
 | **`tests/test_rem_tak_boleh_lumpuh.py`** | 5 | **§8k — PERILAKU, bukan angka perantara:** berapa kali produksi di-submit · berapa kabar ke tenant · apakah mesin berhenti sendiri |
 | **`tests/test_parameter_kita_tak_ditimpakan_tenant.py`** | 10 | **§8k butir 4 — dua arah:** parameter tak-didukung tak pernah dikirim (vendor baru otomatis aman) · galat parameter mengaku MILIK KITA lintas-vendor · **dan tidak salah-alamat ke arah sebaliknya** |
 | `tests/test_migrasi_selaras_db.py` | 6 | kolom & **trigger** yang migrasi janjikan benar-benar hidup di DB (§8k butir 2/3, migr 0198) |
+| **`tests/test_mesin_tak_mati_mendadak.py`** | 10 | **§8L — mesin tak boleh MATI MENDADAK:** skema SDK dipanaskan di alur utama (SELURUH model, bukan yang teratas) · mengurai balasan tak lagi membangun skema · urutan dibaca dari **pohon sintaks** · **reproduksi crash dua arah** |
 | **Total kelima berkas lama** | **39 lulus** | dijalankan 2026-08-03 |
 
 > ⚠️ **Angka di kolom tengah kini DIJAGA MESIN** (`TestAngkaBuktiUjiTidakBasi`): bila jumlah uji
@@ -717,7 +718,62 @@ dulu: pengecualian 12-Agu dihidupkan kembali → **14 uji gagal**.
    ⚠️ **Kode `3030`** (prompt ditolak penyaring konten CF, 2 kejadian nyata) **sengaja TIDAK
    dipetakan**: tidak ada di dokumen resmi, dan pemiliknya ambigu — §5.3 "yang RAGU tetap UNKNOWN".
 
-### 8L. 🔴 MESIN MATI MENDADAK — SEBABNYA AKHIRNYA PUNYA JEJAK *(tertangkap 14-Agu, BELUM diperbaiki)*
+### 8L. ~~MESIN MATI MENDADAK~~ — ✅ **AKAR DITEMUKAN & DITUTUP 2026-08-15**
+
+> ## 🎯 AKAR PENYEBAB (dibuktikan dari catatan KERNEL, bukan disimpulkan)
+>
+> **Mesin produksi berjalan di atas `Python 3.11.0rc1` — sebuah *RELEASE CANDIDATE* dari Agustus
+> 2022 — dan penerjemah itu MERUSAK MEMORINYA SENDIRI.**
+>
+> Bukti dari `dmesg` (catatan kernel — lapis terdalam yang bisa kita baca): **11 kali crash antara
+> 3-Jul dan 13-Agu**, dan polanya tak bisa ditafsirkan lain:
+>
+> | Yang tercatat | Jumlah | Artinya |
+> |---|---|---|
+> | `segfault at 0` | 5× | menyentuh alamat **NOL** — penunjuk kosong |
+> | `segfault at 1` · `at ffffffffffffffff` · alamat acak | 3× | penunjuk **liar/rusak** |
+> | `general protection fault` | 1× | akses memori tak sah |
+> | alamat instruksi (`ip`) yang BERBEDA | **10 titik berbeda** | crash di **tempat yang berlainan** |
+>
+> **Ketiga hal ini bersama-sama hanya berarti satu hal: kerusakan memori di dalam penerjemah.**
+> Semua `ip` berada di dalam berkas biner `python3.11` **itu sendiri** (`41f000+2c2000`) — bukan di
+> pustaka mana pun. Dan penyebab lain sudah disingkirkan satu per satu, dengan pemeriksaan:
+> **bukan tumpukan jebol** (alamat kesalahannya jauh dari penunjuk tumpukan; lagipula pembangunan
+> skema hanya butuh **64–96 KB** sedangkan thread produksi punya **8 MB** = 128× lebih) ·
+> **bukan perangkat keras** (nol galat memori kernel, dan **nol proses selain python** yang crash
+> di server yang sama) · **bukan kehabisan memori** (nol catatan OOM).
+>
+> **PERBAIKAN: penerjemah dimutakhirkan DI TEMPAT** — `python3.11` sistem dari **3.11.0rc1 →
+> 3.11.15 stabil**, lewat paket yang memang sudah ditunjuk `venv` (`venv/bin/python3.11 →
+> /usr/bin/python3.11`). **Nol lingkungan baru · nol jalur baru · nol perubahan kode.** Diverifikasi
+> sesudahnya: **24 pustaka + 18 modul mesin termuat sempurna**, paket terkompilasi utuh (wheel
+> `cp311` sekompatibel di seluruh 3.11.x).
+>
+> ⚠️ **EMPAT DUGAAN SAYA GUGUR SEBELUM YANG BENAR KETEMU — semuanya diuji, bukan ditinggalkan
+> begitu saja:** *(1)* tumpukan Python jebol → rekaman hanya **57 frame** (butuh ribuan) ·
+> *(2)* tumpukan C jebol → butuh 64–96 KB, tersedia 8 MB · *(3)* penerjemah 3.11.0 saja → diuji
+> dengan memasang 3.11.0 **asli**, jalur crash yang sama: **selamat** · *(4)* versi pydantic
+> (server 2.13.4 ≠ lokal 2.12.5) → diuji dengan versi **persis server**: **selamat**.
+> Yang menuntun ke jawaban akhirnya bukan reproduksi, melainkan **catatan kernel** — lapis yang
+> sejak awal menyimpan jawabannya dan baru saya baca paling belakangan.
+>
+> ℹ️ **Pemanasan skema (di bawah) TETAP DIPASANG, tapi ia BUKAN perbaikan akar** — ia lapis
+> pertahanan yang berdiri sendiri (memindahkan pekerjaan berat keluar dari thread produksi),
+> tak mengubah perilaku apa pun, dan gagal-terbuka. Jangan salah baca sebagai penyembuhnya.
+>
+> ⚠️ **DUA DIAGNOSIS SAYA SENDIRI GUGUR SEBELUM YANG BENAR KETEMU — dicatat supaya tak diulang:**
+> **(1)** *"tumpukan jebol karena rekursi terlalu dalam"* → **GUGUR**: rekamannya hanya **57 frame
+> Python**; jebolnya tumpukan Python butuh RIBUAN. Yang jebol adalah tumpukan **C**, dan itu
+> pembedaan yang menentukan seluruh arah perbaikan.
+> **(2)** *"cukup panaskan model teratas"* → **GUGUR, DAN NYARIS DIKIRIM**: diukur, `ChatCompletion.
+> model_rebuild()` menyiapkan induknya saja — `Choice`, `ChatCompletionMessage`, `CompletionUsage`
+> **tetap tertunda**, padahal SDK mengurai balasan secara bersarang dan menyentuh SETIAP tingkat.
+> Perbaikan setengah itu tidak akan menyembuhkan apa pun, dan hijaunya uji tak akan menunjukkannya.
+> Pelajaran yang mengikat: **periksa PERILAKU akhir (apakah masih ada `model_rebuild` saat balasan
+> diurai), bukan atribut satu objek.**
+
+<details><summary>Catatan saat pertama ditemukan (disimpan sebagai riwayat sebab-akibat)</summary>
+
 
 **Perekam kematian ([B26] bagian D, naik 13-Agu) berbicara untuk PERTAMA KALINYA** — dan langsung
 menunjuk tempat yang selama ini gelap. Sampai hari ini catatan resminya berbunyi *"sebab mesin mati
@@ -752,16 +808,60 @@ rekaman, karena perekamnya baru naik 13-Agu.
 - **Tak satu pun mekanisme galat AI bisa menangkapnya** — proses mati sebelum sempat menggolongkan
   apa pun. Karena itu ia dicatat di sini: ia MEMOTONG seluruh rantai §3.
 
-**BELUM DIPERBAIKI — sengaja.** Arah yang masuk akal (memperbesar tumpukan thread produksi ·
-menyesuaikan batas rekursi · menaikkan versi pydantic/SDK) menyentuh **fondasi runtime seluruh
-mesin**, jadi ia menuntut penyelidikan tersendiri dengan reproduksi yang terbukti — bukan tambalan
-yang ditebak di tengah pekerjaan lain. **Yang sudah pasti: sebabnya kini bukan misteri lagi, dan
-jejaknya terekam setiap kali terulang.**
-
 ⚠️ **Diperiksa dan DIBANTAH: bukan dari perbaikan 14-Agu.** Kematian terjadi di STEP 1-2 (pemilihan
 topik, jalur naskah) — jauh sebelum jalur gambar yang disentuh perbaikan `seed`; perubahan hari itu
 seluruhnya Python murni (pola teks + pembacaan dict + trigger SQL) yang **tidak bisa** menghasilkan
 SIGSEGV; dan 5 dari 6 kejadian terjadi **sebelum** perbaikan itu ada.
+
+</details>
+
+#### Rantai lengkap — dari frame PALING BAWAH (yang memulai), rekaman 14-Agu 23:00:52
+
+```
+producer._task → produce_one → pipeline.run → niche_selector.select → _analyze_with_ai
+  → adapters.complete → openai chat.completions.create → _base_client.post → request
+  → [balasan diurai] → openai/_models.py  _get_extra_fields_type
+  → pydantic _mock_val_ser → model_rebuild → complete_model_class
+  → generate_schema → _model_schema → _union_schema → _list_schema → … (rekursif) → SIGSEGV
+```
+
+`_get_extra_fields_type` menyentuh `cls.__pydantic_core_schema__`, dan **sentuhan itulah** yang
+memicu pembangunan skema. Ia dipanggil untuk **setiap tingkat** balasan yang diurai.
+
+#### Perbaikan — `src/utils/pemanasan_skema.py` + satu panggilan di `worker_decoupled.main()`
+
+Skema dibangun **satu kali di alur UTAMA saat mesin start**, sebelum satu thread pun dibuat, saat
+tumpukan masih kosong dan ruangnya lapang. Yang dipanaskan = **setiap turunan `BaseModel` milik SDK**
+(terukur **1.049 model dalam 2,4 detik**) — bukan hanya model teratas, sebab diagnosis-gugur (2) di
+atas membuktikan itu tidak cukup.
+
+⚠️ **CELAH KETIGA yang nyaris lolos (diukur 15-Agu):** memuat `openai.types` saja menyiapkan 747
+model — lalu begitu `openai.resources.*` ikut dimuat, muncul **308 model BARU** yang belum panas.
+Sebabnya: SDK memuat modul sumber dayanya secara MALAS, dan kode mesin mengimpor SDK **di dalam
+fungsi** (`from openai import OpenAI` di adaptor · `AsyncOpenAI` di jalur gambar) — yaitu **di dalam
+thread produksi**, persis keadaan yang hendak dihindari. Karena itu `resources` ikut diimpor lebih
+dulu di alur utama.
+
+**UKURAN "TUNTAS" yang dipakai — dan kenapa bukan "semua model":** SDK memuat ratusan model untuk
+endpoint yang mesin ini **tidak pernah panggil** (realtime · webhooks · evals · conversations);
+menjamin semuanya panas mustahil dan tak ada gunanya. Yang dijaga adalah **ketiga jalur yang mesin
+benar-benar lewati** — naskah (chat) · gambar (images) · naskah-Anthropic — diuji dengan mengurai
+balasan berbentuk NYATA lalu memastikan **NOL `model_rebuild` terpanggil**.
+
+**GENERIK atas ketetapan owner** (*"AI model & vendor akan terus bertambah"*): yang didaftar adalah
+**awalan modul** (`openai` · `anthropic`), bukan nama kelas — nama kelas berubah tiap versi SDK dan
+mustahil dijaga lengkap. Menambah vendor = tambah **satu kata**. SDK tak terpasang dilewati diam-diam.
+**Gagal-terbuka**: pemanasan yang gagal tak pernah menghentikan mesin (pencegahan, bukan syarat).
+
+#### Bukti penjaga — direproduksi dua arah, bukan disimpulkan
+
+`tests/test_mesin_tak_mati_mendadak.py` (9 uji): membangun skema di thread bertumpuk sempit **tanpa**
+pemanasan ⇒ proses **dibunuh sinyal**; **dengan** pemanasan ⇒ selesai wajar. Uji intinya memeriksa
+**PERILAKU akhir**: sesudah pemanasan, mengurai balasan berbentuk NYATA (lengkap field tambahan
+`x_groq` yang memicu `_get_extra_fields_type`) **tidak memanggil `model_rebuild` sama sekali**.
+Urutan panggilan diperiksa dari **pohon sintaks**, bukan pencarian teks (komentar sudah 4× menipu uji
+berbasis teks di proyek ini). **Merah dibuktikan lebih dulu:** kembali ke "model teratas saja" ⇒
+6 gagal · pemanasan dipindah sesudah thread ⇒ 2 gagal.
 
 ### 8b. ~~`notify_publish_fail` belum diseragamkan~~ — ✅ **DITUTUP 2026-08-04**
 Jalur upload YouTube gagal adalah satu-satunya notifikasi yang tak bisa menjawab pertanyaan penentu
@@ -898,6 +998,27 @@ Bila salah satu bergeser tanpa yang lain, uji MERAH sebelum sempat menyesatkan s
 - dokumen tidak boleh memuat anchor `file:baris` (aturan §3 — nomor baris selalu basi)
 
 ## §11 CHANGELOG
+- **2026-08-15** — **§8L: AKAR "MESIN MATI MENDADAK" DITEMUKAN — PENERJEMAHNYA VERSI PRA-RILIS.**
+  Mesin produksi berjalan di atas **Python 3.11.0rc1** (*release candidate*, Agu-2022) dan penerjemah
+  itu **merusak memorinya sendiri**. Bukti dari catatan **KERNEL**: **11 crash antara 3-Jul dan
+  13-Agu** · alamat kesalahan `0` (5×) · `1` · `ffffffffffffffff` · acak · satu *general protection
+  fault* · dan **10 alamat instruksi BERBEDA, semuanya di dalam biner `python3.11` sendiri**.
+  Penunjuk kosong/liar + titik crash yang berlainan = **kerusakan memori di penerjemah**, bukan bug
+  satu jalur kode. Penyebab lain disingkirkan dengan pemeriksaan: **bukan tumpukan jebol** (alamatnya
+  jauh dari penunjuk tumpukan; pembangunan skema butuh 64–96 KB, tersedia 8 MB) · **bukan perangkat
+  keras** (nol galat memori kernel, **nol proses selain python** yang crash) · **bukan OOM** (nol).
+  **PERBAIKAN: `python3.11` sistem dimutakhirkan DI TEMPAT ke 3.11.15 stabil** — paket yang memang
+  sudah ditunjuk `venv`; **nol lingkungan baru, nol jalur baru, nol perubahan kode**. Diverifikasi:
+  24 pustaka + 18 modul mesin termuat sempurna.
+  **EMPAT dugaan saya GUGUR lebih dulu, semuanya diuji** (dicatat di §8L): tumpukan Python jebol
+  (rekaman cuma 57 frame) · tumpukan C jebol (butuh 64–96 KB, ada 8 MB) · Python 3.11.0 saja (diuji
+  dengan memasang 3.11.0 asli ⇒ selamat) · versi pydantic (diuji dengan versi persis server ⇒
+  selamat). Yang menuntun ke jawaban bukan reproduksi, melainkan **catatan kernel — lapis yang sejak
+  awal menyimpan jawabannya dan paling belakangan saya baca.**
+  **Ikut dipasang sebagai lapis pertahanan (BUKAN perbaikan akar):** pemanasan skema SDK di alur utama
+  saat start (1.049 model, 2,4 dtk) ⇒ pembangunan skema tak lagi terjadi di dalam thread produksi.
+  Dijaga 10 uji, reproduksi dua arah, merah dibuktikan lebih dulu (6 & 2 gagal).
+  Suite 1014 → **1024**, nol regresi. Nol migrasi DB, nol perubahan layar.
 - **2026-08-14** — **BUG YANG KAMI TANAM SENDIRI DICABUT + DOKUMEN INI BERHENTI BERBOHONG DI 6 TITIK.**
   Dilaporkan owner dari keluhan tenant: *"sebelumnya sudah berjalan baik, 3 kali gagal langsung kena
   rem; tapi setelah anda bug fixing, malah timbul bug baru."* Benar seluruhnya.

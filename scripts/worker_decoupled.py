@@ -166,6 +166,22 @@ def main() -> None:
     except Exception as e:
         logger.warning(f"[WorkerV2] periksa kematian sebelumnya gagal (non-fatal): {e}")
 
+    # ⛔ SEBELUM SATU THREAD PUN DIBUAT — menutup sebab mesin MATI MENDADAK (SIGSEGV, SSOT §8L).
+    # SDK OpenAI menunda pembangunan skema pydantic-nya sampai balasan PERTAMA diurai, dan balasan
+    # pertama selalu tiba di dalam thread produksi — saat tumpukan panggilan sudah dalam. Pembangunan
+    # itu rekursif & sebagian besar di lapis C, jadi yang terjadi bukan RecursionError yang bisa
+    # ditangkap melainkan tumpukan jebol ⇒ SIGSEGV yang membunuh SELURUH proses (6× sejak 1-Agu;
+    # produksi yang sedang berjalan hilang tanpa jejak, tenant tak dikabari).
+    # Di sini tumpukan masih kosong, jadi ruangnya lapang. Direproduksi & dibuktikan: tanpa ini
+    # thread mati (core dumped) pada tumpukan 32-64KB, dengan ini selamat di semuanya.
+    try:
+        from src.utils.pemanasan_skema import panaskan_skema_sdk
+        _p = panaskan_skema_sdk()
+        logger.info(f"[WorkerV2] pemanasan skema SDK: {_p['siap']} siap · "
+                    f"{_p['dilewati']} dilewati · {_p['gagal']} gagal")
+    except Exception as e:                  # gagal-terbuka: pencegahan tak boleh menghentikan mesin
+        logger.warning(f"[WorkerV2] pemanasan skema gagal (non-fatal): {e}")
+
     stop = threading.Event()
 
     def _shutdown(sig, _frame):
