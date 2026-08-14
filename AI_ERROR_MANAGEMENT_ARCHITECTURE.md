@@ -216,9 +216,13 @@ kegagalan yang 100% milik kita. Owner: *"pesan errornya tidak jelas hanya kode s
 > nyatanya 20 & 35 — dan pembaca memakainya untuk menilai seberapa terjaga sebuah topik.
 
 **Bukti dari PRODUKSI NYATA** (bukan hanya uji) — `production_runs.error_class`, dihitung ulang
-**14-Agu 2026** atas SELURUH 425 run (paginasi penuh, bukan sampel): `rate_limit` **53×** ·
-`unknown` 39× · kelas kosong (run pra-0170) 38× · `quota_exhausted` 4× · `model_unavailable` 2×.
+**14-Agu 2026** atas SELURUH run (paginasi penuh, bukan sampel): `rate_limit` **53×** ·
+`unknown` 39× · kelas kosong 46× · `quota_exhausted` 4× · `model_unavailable` 2×.
 Registry bekerja: empat kelas berbeda benar-benar terklasifikasi pada trafik sungguhan.
+**Rincian "kelas kosong" — diperiksa, bukan diasumsikan:** 38 = run gagal sebelum kelas disimpan
+(migr 0170) · 8 = `qc_failed`, yaitu **gerbang mutu KITA yang menolak** (durasi meleset) — itu bukan
+galat penyedia, jadi memang tak punya golongan. Yang terakhir bertanggal **2-Agu**, dan 37 dari 46
+terjadi di Juli ⇒ ini SEJARAH, bukan kebocoran yang masih berjalan.
 ⚠️ **Angka `rate_limit` naik 3 → 53 justru karena kerusakan §8k** — 50 dari 53 terjadi pada 13 &
 14-Agu, saat rem dilumpuhkan dan mesin mencoba tanpa henti. Angka yang melonjak di satu kelas
 adalah **gejala yang layak diperiksa**, bukan tanda registry makin pintar.
@@ -381,7 +385,10 @@ tanggal (§11 04-Agu), bukan ditebak:
   (`99b1c32`), jalur naskah **20-Jul** (`84d9ebb`). Satu hari & dua belas hari SEBELUM perbaikannya.
 - 11 sisanya = jalur visual → akarnya dipotong **§8e-A** malam ini.
 
-**UKURAN SEKARANG: dari 42 kegagalan sejak 20-Jul, hanya 1 yang sebabnya terhapus** (2,4%) — yaitu
+**UKURAN SEKARANG *(dihitung ulang 14-Agu atas SELURUH `production_runs`, paginasi penuh)*: dari
+105 kegagalan sejak 20-Jul, masih hanya 1 yang sebabnya terhapus** (0,95%; angka lama "42 kegagalan"
+= keadaan 04-Agu, sudah basi — **yang penting bukan penyebutnya melainkan pembilangnya, dan ia tetap
+1**) — yaitu
 kegagalan visual 29-Jul, jenis yang §8e-A tutup. **Cara owner memeriksa sendiri:** hitung `production_runs`
 berstatus `failed` yang `error_message`-nya PERSIS kalimat pembungkus tanpa rincian
 ("No topics selected" · "TTS generation failed" · "Visual assembly failed — no clips downloaded").
@@ -709,6 +716,52 @@ dulu: pengecualian 12-Agu dihidupkan kembali → **14 uji gagal**.
    (`flux-schnell`) belum diperiksa dokumennya ⇒ sengaja tidak ditandai (ragu → aman).
    ⚠️ **Kode `3030`** (prompt ditolak penyaring konten CF, 2 kejadian nyata) **sengaja TIDAK
    dipetakan**: tidak ada di dokumen resmi, dan pemiliknya ambigu — §5.3 "yang RAGU tetap UNKNOWN".
+
+### 8L. 🔴 MESIN MATI MENDADAK — SEBABNYA AKHIRNYA PUNYA JEJAK *(tertangkap 14-Agu, BELUM diperbaiki)*
+
+**Perekam kematian ([B26] bagian D, naik 13-Agu) berbicara untuk PERTAMA KALINYA** — dan langsung
+menunjuk tempat yang selama ini gelap. Sampai hari ini catatan resminya berbunyi *"sebab mesin mati
+mendadak masih belum diketahui (Pillow/font DICABUT · OOM disingkirkan)"*.
+
+**Kejadian:** 14-Agu 23:00:52, ±20 detik setelah produksi RETRO REWIND dimulai.
+`systemd`: `Main process exited, code=killed, status=11/SEGV`. Mesin dihidupkan kembali otomatis
+23:01:02, dan pesan *"MESIN SEBELUMNYA MATI MENDADAK"* terkirim ke owner ✅ (mekanisme 13-Agu bekerja).
+
+**Rekaman detik kematian (`Fatal Python error: Segmentation fault`), tumpukan panggilannya:**
+```
+openai/_models.py            _get_extra_fields_type
+pydantic/_internal/_mock_val_ser.py   __getitem__ → _get_built → handler
+pydantic/main.py             model_rebuild
+pydantic/_internal/_model_construction.py  complete_model_class
+pydantic/_internal/_generate_schema.py     generate_schema → _generate_schema_inner
+                                           → _model_schema → <dictcomp>   ← BERULANG
+```
+Artinya: saat SDK OpenAI-compatible mengurai balasan penyedia, **pydantic membangun skema modelnya
+secara rekursif sampai tumpukan panggilan habis**. Ini bukan `RecursionError` Python (yang bisa
+ditangkap) melainkan **stack overflow di lapis C ⇒ SIGSEGV**, yang mematikan SELURUH proses — ketujuh
+thread ikut mati bersamanya.
+
+**Frekuensi terukur:** `journalctl` mencatat **6 SEGV sejak 1-Agu**. Hanya yang terakhir punya
+rekaman, karena perekamnya baru naik 13-Agu.
+
+**Kenapa ini mahal, bukan sekadar restart:**
+- Produksi yang sedang berjalan **hilang tanpa jejak** — run 23:00:31 tak pernah menghasilkan baris
+  `production_runs`. Bagi sistem kita ia tak pernah ada; tenant tak dikabari apa pun.
+- Ini bentuk kerugian yang sama dengan video `xa3Rbi-SbXM` (12-Agu, §11): pekerjaan hilang, catatan
+  kosong, tak seorang pun tahu.
+- **Tak satu pun mekanisme galat AI bisa menangkapnya** — proses mati sebelum sempat menggolongkan
+  apa pun. Karena itu ia dicatat di sini: ia MEMOTONG seluruh rantai §3.
+
+**BELUM DIPERBAIKI — sengaja.** Arah yang masuk akal (memperbesar tumpukan thread produksi ·
+menyesuaikan batas rekursi · menaikkan versi pydantic/SDK) menyentuh **fondasi runtime seluruh
+mesin**, jadi ia menuntut penyelidikan tersendiri dengan reproduksi yang terbukti — bukan tambalan
+yang ditebak di tengah pekerjaan lain. **Yang sudah pasti: sebabnya kini bukan misteri lagi, dan
+jejaknya terekam setiap kali terulang.**
+
+⚠️ **Diperiksa dan DIBANTAH: bukan dari perbaikan 14-Agu.** Kematian terjadi di STEP 1-2 (pemilihan
+topik, jalur naskah) — jauh sebelum jalur gambar yang disentuh perbaikan `seed`; perubahan hari itu
+seluruhnya Python murni (pola teks + pembacaan dict + trigger SQL) yang **tidak bisa** menghasilkan
+SIGSEGV; dan 5 dari 6 kejadian terjadi **sebelum** perbaikan itu ada.
 
 ### 8b. ~~`notify_publish_fail` belum diseragamkan~~ — ✅ **DITUTUP 2026-08-04**
 Jalur upload YouTube gagal adalah satu-satunya notifikasi yang tak bisa menjawab pertanyaan penentu
