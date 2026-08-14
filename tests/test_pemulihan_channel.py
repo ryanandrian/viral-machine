@@ -285,14 +285,15 @@ class TestPemulihanMemutusHitungan(unittest.TestCase):
                 return _QRuns(TestPemulihanMemutusHitungan.RUNS)
         return SB()
 
-    def test_tanpa_titik_pemulihan_hanya_kegagalan_NYATA_dihitung(self):
-        """Tanpa titik pemulihan, seluruh periode terbaca — TAPI sejak 12-Agu kegagalan yang PULIH
-        SENDIRI netral. Contoh data ini memang 3 kegagalan, dan 2 di antaranya `rate_limit`
-        (jatah harian habis) → yang dihitung tinggal 1. Dulu 3, dan itulah yang mengerem channel
-        Bang Us-Dat selama 11 hari untuk sebab yang sembuh keesokan paginya."""
+    def test_tanpa_titik_pemulihan_streak_penuh(self):
+        """Perilaku lama — inilah yang mengerem berulang.
+
+        [14-Agu] Angka ini sempat diubah 3 → 1 oleh percobaan 12-Agu (kelas pulih-sendiri dibuat
+        netral). Percobaan itu DICABUT karena melahirkan banjir 53 kabar gagal ke dua tenant, jadi
+        angkanya kembali 3: contoh data ini 3 kegagalan, dan KETIGANYA dihitung."""
         with patch("src.orchestrator.inventory._sb", return_value=self._stub()):
             from src.orchestrator import inventory
-            self.assertEqual(inventory.recent_nonready_streak("C1"), 1)
+            self.assertEqual(inventory.recent_nonready_streak("C1"), 3)
 
     def test_sesudah_pemulihan_hitungan_nol(self):
         with patch("src.orchestrator.inventory._sb", return_value=self._stub()):
@@ -302,12 +303,12 @@ class TestPemulihanMemutusHitungan(unittest.TestCase):
                 "kegagalan sebelum pemulihan masih dihitung → channel direm ulang seketika")
 
     def test_kegagalan_BARU_tetap_dihitung(self):
-        # Rem tidak boleh lumpuh: periode yang belum ditutup tetap dihukum — tapi HANYA untuk
-        # kegagalan yang memang menuntut tindakan. 1 dari 3 di contoh data ini (`unknown`).
+        # Rem tidak boleh lumpuh: periode yang belum ditutup tetap dihukum. KETIGA kegagalan
+        # dihitung — termasuk yang pulih sendiri (lihat pencabutan 14-Agu di docstring inventory).
         with patch("src.orchestrator.inventory._sb", return_value=self._stub()):
             from src.orchestrator import inventory
             self.assertEqual(
-                inventory.recent_nonready_streak("C1", sejak="2026-08-01T00:00:00+00:00"), 1)
+                inventory.recent_nonready_streak("C1", sejak="2026-08-01T00:00:00+00:00"), 3)
 
     def test_rem_cepat_membaca_periode_yang_sama(self):
         # Dua pengambil keputusan tak boleh membaca dunia yang berbeda.
@@ -489,18 +490,26 @@ class TestAntiDriftTigaTempat(unittest.TestCase):
                              f"pada penyedia berikutnya. Petakan per KELAS.")
 
 
-class TestSebabPulihSendiriTakMengeremChannel(unittest.TestCase):
-    """⛔ BUG YANG DITUTUP 12-Agu — DUA ARAH, keduanya wajib.
+class TestSetiapKegagalanDihitungAntiBanjir(unittest.TestCase):
+    """⛔⛔ PENCABUTAN 14-Agu — SETIAP kegagalan dihitung, TERMASUK yang pulih sendiri.
 
-    Bang Us-Dat: jatah token HARIAN Groq habis 01-Agu 12:00 → 3 kegagalan → channel DIREM. Jatahnya
-    pulih keesokan pagi (terbukti: 02-Agu produksi BERHASIL 2×), tapi status berhenti menempel
-    **11 hari**. Pola sama pernah membuatnya mati 44 jam.
+    Kelas ini menggantikan `TestSebabPulihSendiriTakMengeremChannel` (12-Agu), yang menjaga
+    perilaku SEBALIKNYA dan karena itu menjaga sebuah bug. Arahnya dibalik dengan sengaja.
 
-    Yang membuatnya BUG: layar tenant berkata *"pulih sendiri, Anda tidak perlu mengubah apa pun"*
-    sementara channelnya menuntut tenant menekan tombol. Dua pernyataan yang saling membatalkan.
+    **Apa yang dibayar untuk pelajaran ini** (data produksi, bukan taksiran):
+      • 13-Agu Thetangga Property — 30 kegagalan / 8 menit (29 jatah-harian) · rem TIDAK menyala
+      • 14-Agu BISIK NUSANTARA    — 23 kegagalan / 11 menit (21 jatah-harian) · rem TIDAK menyala
+      • satu produksi baru tiap ±14 detik ⇒ ±257 kabar gagal per JAM ke Telegram tenant
+      • 50 dari 53 kegagalan `rate_limit` sepanjang umur aplikasi terjadi di dua hari itu (94%)
+      • yang akhirnya menghentikannya: **tenant mematikan channelnya sendiri**
 
-    ARAH KEDUA sama pentingnya: rem TIDAK BOLEH lumpuh. Channel yang gagal karena sebab nyata wajib
-    tetap berhenti — kalau tidak, tenant membakar jatah/biaya tanpa hasil dan tak pernah diberi tahu.
+    **Sebabnya, dalam satu kalimat:** rem ini menghentikan CHANNEL *dan* menghentikan PERCOBAAN.
+    Pengecualian 12-Agu hanya diniatkan untuk yang pertama, tapi yang kedua ikut hilang — dan tak
+    ada apa pun di aplikasi ini yang menggantikannya.
+
+    ⛔ **Bila suatu hari ada yang hendak mengecualikan kelas apa pun dari hitungan ini:** jangan,
+    sampai ada penahan laju yang menggantikan fungsi kedua itu. Jalan keluar yang benar (jeda
+    sementara + satu kabar) menunggu ketokan owner — SSOT §8k.
     """
 
     def _stub(self, runs):
@@ -519,38 +528,42 @@ class TestSebabPulihSendiriTakMengeremChannel(unittest.TestCase):
         return {"created_at": f"2026-08-02T1{i}:00:00+00:00", "status": status,
                 "error_class": kelas, "error_message": "x"}
 
-    def test_tiga_kegagalan_pulih_sendiri_TIDAK_mengerem(self):
+    def test_tiga_kegagalan_pulih_sendiri_TETAP_mengerem(self):
+        """⛔ INTI PENCABUTAN. Inilah uji yang, bila merah, berarti banjir 13/14-Agu bisa terulang."""
         for kelas in ("rate_limit", "transient"):
             with self.subTest(kelas):
                 runs = [self._run(kelas, i) for i in (9, 8, 7)]
                 self.assertEqual(
-                    self._streak(runs), 0,
-                    f"'{kelas}' pulih sendiri tapi masih dihitung → channel direm untuk sebab yang "
-                    f"sembuh sendiri, lalu menunggu tenant menekan tombol yang layarnya sendiri "
-                    f"bilang tak perlu ditekan (kasus Bang Us-Dat, 11 hari)")
+                    self._streak(runs), 3,
+                    f"'{kelas}' dikecualikan dari hitungan → mesin mencoba TANPA HENTI dan tenant "
+                    f"dibanjiri ±257 kabar gagal per jam (Thetangga 30 kegagalan/8 menit; BISIK "
+                    f"23/11 menit). Jangan dikecualikan sebelum ada penahan laju penggantinya.")
 
-    def test_rem_TIDAK_lumpuh_untuk_sebab_nyata(self):
-        """Arah kedua. Sebab yang menuntut tindakan tenant WAJIB tetap menumpuk."""
-        for kelas in ("quota_exhausted", "account_billing", "auth_invalid",
-                      "model_unavailable", "unknown"):
-            with self.subTest(kelas):
-                runs = [self._run(kelas, i) for i in (9, 8, 7)]
+    def test_SELURUH_kelas_error_ikut_dihitung(self):
+        """Anti-drift menyeluruh: tak satu pun kelas boleh mendapat perlakuan istimewa di sini.
+
+        Ditulis atas SELURUH anggota `ErrorClass`, bukan daftar yang diketik tangan — supaya kelas
+        yang ditambahkan kelak ikut terjaga tanpa uji ini perlu disunting."""
+        from src.exceptions import ErrorClass
+        for kelas in ErrorClass:
+            with self.subTest(kelas.value):
+                runs = [self._run(kelas.value, i) for i in (9, 8, 7)]
                 self.assertEqual(self._streak(runs), 3,
-                                 f"'{kelas}' menuntut tindakan tenant — rem WAJIB tetap menyala")
+                                 f"'{kelas.value}' tidak dihitung → rem tak pernah menyala untuk "
+                                 f"sebab ini, dan tak ada yang menghentikan percobaan berulang")
 
-    def test_campuran_hanya_yang_nyata_dihitung(self):
+    def test_campuran_semua_dihitung(self):
         runs = [self._run("rate_limit", 9), self._run("unknown", 8),
                 self._run("transient", 7), self._run("auth_invalid", 6)]
-        self.assertEqual(self._streak(runs), 2,
-                         "yang pulih sendiri harus NETRAL: tak menambah, dan tak memaafkan "
-                         "kegagalan nyata sebelumnya")
+        self.assertEqual(self._streak(runs), 4,
+                         "setiap kegagalan beruntun dihitung, apa pun kelasnya")
 
     def test_pulih_sendiri_TIDAK_memutus_hitungan(self):
-        """Netral, bukan pemutus. Kalau ia memutus, kegagalan nyata sebelumnya ikut dimaafkan dan
-        channel yang benar-benar rusak tak pernah direm."""
+        """Hanya SUKSES yang memutus. Kalau kegagalan pulih-sendiri memutus, kegagalan nyata
+        sebelumnya ikut dimaafkan dan channel yang benar-benar rusak tak pernah direm."""
         runs = [self._run("unknown", 9), self._run("rate_limit", 8), self._run("unknown", 7),
                 self._run("unknown", 6)]
-        self.assertEqual(self._streak(runs), 3,
+        self.assertEqual(self._streak(runs), 4,
                          "kegagalan pulih-sendiri di tengah MEMUTUS hitungan → rem lumpuh")
 
     def test_sukses_TETAP_memutus_hitungan(self):

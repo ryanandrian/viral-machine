@@ -153,32 +153,42 @@ def recent_nonready_streak(channel_id: str, limit: int = 12, sejak: str | None =
     2026-08-03 pada BISIK NUSANTARA; log membuktikan rem menyala 2× tanpa SATU PUN percobaan
     produksi baru). Pola identik dengan insiden 8-Jul di atas — sebab berbeda, akibat sama.
 
-    [2026-08-12] KEGAGALAN YANG PULIH SENDIRI TIDAK DIHITUNG — netral, seperti `discarded`.
+    ⛔⛔ **SETIAP KEGAGALAN DIHITUNG — TERMASUK YANG PULIH SENDIRI. JANGAN DIKECUALIKAN LAGI.**
+    *(percobaan 12-Agu dicabut 14-Agu; dijaga `tests/test_rem_tak_boleh_lumpuh.py`)*
 
-    Sebab, terukur: Bang Us-Dat direm 01-Agu 12:00 karena jatah token HARIAN Groq habis. Jatahnya
-    pulih keesokan pagi — terbukti, 02-Agu produksinya BERHASIL dua kali. Tapi status "berhenti"
-    menempel sampai 12-Agu: **11 hari channel tenant BERBAYAR menganggur untuk sebab yang sembuh
-    dalam beberapa jam.** Pola sama pernah membuatnya mati 44 jam (§8a).
+    Pada 12-Agu kelas `SELF_HEALING` (jatah harian · throttle) dibuat NETRAL di sini, dengan maksud
+    baik: channel tenant tak lagi mati berhari-hari untuk sebab yang sembuh sendiri. Maksudnya benar,
+    **akibatnya merusak** — dan inilah sebab pengecualian itu HARAM dihidupkan kembali:
 
-    Yang membuatnya BUG — bukan sekadar kurang nyaman — adalah mesin mengatakan dua hal yang saling
-    membatalkan kepada tenant yang sama: layar berbunyi *"batas seperti ini pulih sendiri, Anda tidak
-    perlu mengubah apa pun"*, sementara channelnya tetap mati sampai tenant menekan tombol. Tenant
-    yang MEMPERCAYAI kalimat kita justru yang paling dirugikan.
+    **Rem ini mengerjakan DUA hal, bukan satu.** (1) menghentikan CHANNEL, dan (2) menghentikan
+    PERCOBAAN. Yang dicabut 12-Agu hanya diniatkan untuk (1), tapi (2) ikut hilang — dan tak ada
+    apa pun di seluruh aplikasi yang menggantikannya. Tak ada penahan laju, tak ada jeda, tak ada
+    batas percobaan per jam. Yang menutup akhirnya: **tenant mematikan channelnya sendiri.**
 
-    Keputusan owner [B25] ("pemulihan = keputusan TENANT; sistem tak pernah melepas rem sendiri")
-    TIDAK dibalik: ia lahir untuk sebab yang MENUNTUT tindakan tenant (saldo, kunci, model). Untuk
-    sebab yang tak menuntut apa pun, remnya memang tak seharusnya menyala — jadi tak ada rem yang
-    perlu dilepas sendiri.
+    **TERUKUR, dua tenant, dua hari berurutan (satu tenant sama):**
+      • 13-Agu Thetangga Property — 30 kegagalan dalam 8 menit (29 jatah-harian), rem TIDAK menyala
+      • 14-Agu BISIK NUSANTARA    — 23 kegagalan dalam 11 menit (21 jatah-harian), rem TIDAK menyala
+      • laju: satu produksi baru tiap ±14 detik ⇒ **±257 kabar gagal per JAM** ke Telegram tenant
+      • sepanjang umur aplikasi ada 53 kegagalan `rate_limit`; **50 (94%) di dua hari itu saja**
+      • rem TERAKHIR menyala 3-Agu; sejak pengecualian ini naik (12-Agu 19:54) **tak sekali pun**
 
-    NETRAL, bukan pemutus streak — dua-arah, sengaja:
-      • bila MEMUTUS: kegagalan NYATA sebelumnya ikut dimaafkan → channel rusak tak pernah direm.
-      • bila DIHITUNG: channel direm untuk sebab yang sudah sembuh → kasus Bang Us-Dat terulang.
-      • netral = seolah percobaan itu tak pernah terjadi. Kegagalan nyata tetap menumpuk apa adanya.
-    Kelas KOSONG (run lama, sebelum kelas disimpan) tetap DIHITUNG → perilaku lama dipertahankan.
+    Hitungannya bahkan tak sampai ambang: 21 jatah-harian dilewati + 2 sebab lain dihitung = 2 dari
+    ambang 3. Sisi tenant: dibanjiri sampai ia sendiri mematikan channelnya.
+
+    **Kenapa mengembalikannya AMAN — dan bukan sekadar mundur:** mudarat yang dikejar 12-Agu (channel
+    menganggur lama) akarnya sudah ditutup 3-Agu oleh [B25]: kelas error kini TERSIMPAN saat rem
+    menyala, layar memberi panel per-KELAS ("pulih sendiri — tak ada yang perlu Anda ubah") + tombol
+    *Pulihkan produksi*, dan Telegram membedakan pulih-sendiri dari butuh-tindakan. Bang Us-Dat
+    menganggur 11 hari karena kelasnya tersimpan `unknown` sehingga panelnya bisu — bukan karena rem
+    menyala. Rem yang menyala + panel yang bicara = tenant kehilangan satu tekanan tombol, bukan
+    kehilangan channelnya.
+
+    **Yang MASIH terbuka, dan sengaja TIDAK diputuskan di sini** (perilaku-saat-gagal = ketok owner,
+    CLAUDE.md §0.6; lihat SSOT §8k): apakah sebab yang pulih sendiri layak mendapat **jeda sementara**
+    (mesin berhenti mencoba lalu jalan lagi otomatis, satu kabar saja) alih-alih rem yang menuntut
+    tenant menekan tombol. Itu jalan keluar yang benar untuk KEDUA mudarat sekaligus — tapi ia
+    memilih angka & kebijakan baru, jadi bukan keputusan Claude.
     """
-    from src.exceptions import SELF_HEALING
-    _pulih = frozenset(ec.value for ec in SELF_HEALING)
-
     q = (_sb().table("production_runs").select("status,error_class")
          .eq("channel_id", channel_id))
     if sejak:
@@ -188,9 +198,7 @@ def recent_nonready_streak(channel_id: str, limit: int = 12, sejak: str | None =
     for row in (res.data or []):
         st = row["status"]
         if st in ("failed", "qc_failed"):
-            if (row.get("error_class") or "") in _pulih:
-                continue          # pulih sendiri → netral: tak menambah, tak memutus
-            streak += 1
+            streak += 1           # SEMUA kelas dihitung — lihat larangan di docstring
         elif st == "success":
             break
     return streak

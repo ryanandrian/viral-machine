@@ -237,5 +237,186 @@ class TestPenjagaNyataDisebutDokumen(unittest.TestCase):
 
 
 
+# ── [14-Agu] TIGA PENJAGA BARU — menutup apa yang lolos pada insiden 13/14-Agu ──────────────────
+#
+# Penjaga di atas semuanya HIJAU sementara dokumen ini menyatakan perilaku yang TIDAK ADA di mesin:
+# §1 & §3 berjanji "toleransi normal → rem menyala di kegagalan ke-3", padahal sejak 12-Agu dua kelas
+# dikecualikan dari hitungan sehingga rem TIDAK PERNAH menyala. Dua tenant dibanjiri 53 kabar gagal.
+#
+# Yang tak terjaga, dan sekarang dijaga:
+#   (a) kolom "Sikap" §1 — kalimat PERILAKU, tak pernah dibandingkan dengan perilaku sebenarnya
+#   (b) struktur tabel — blok catatan disisipkan di antara baris judul & pemisah §9a, tabelnya rusak
+#   (c) angka bukti §7 — tertulis 12 & 9, nyatanya 35 & 14; "rate_limit 3×", nyatanya 53×
+
+
+def _kolom_tabel(baris: str) -> list[str]:
+    """Pecah satu baris tabel Markdown menjadi kolom-kolomnya."""
+    return [k.strip() for k in baris.strip().strip("|").split("|")]
+
+
+class _GudangUji:
+    """Buku besar run palsu — sekecil mungkin, hanya untuk mengukur PERILAKU hitungan."""
+
+    def __init__(self, kelas, n=3):
+        self.runs = [{"status": "failed", "error_class": kelas, "error_message": "x",
+                      "created_at": f"2026-08-14T12:0{i}:00+00:00"} for i in range(n)]
+
+    def table(self, _n):
+        gudang = self
+
+        class Q:
+            def select(self, *_a, **_k):
+                return self
+
+            def eq(self, *_a):
+                return self
+
+            def gt(self, *_a):
+                return self
+
+            def order(self, *_a, **_k):
+                return self
+
+            def limit(self, _n2):
+                return self
+
+            def execute(self):
+                class R:
+                    data = gudang.runs
+                    count = None
+                return R()
+        return Q()
+
+
+def _streak_untuk(kelas: str) -> int:
+    from unittest.mock import patch as _patch
+    from src.orchestrator import inventory
+    with _patch("src.orchestrator.inventory._sb", return_value=_GudangUji(kelas)):
+        return inventory.recent_nonready_streak("CH")
+
+
+class TestSikapDokumenAdalahPerilakuNyata(unittest.TestCase):
+    """⛔ Kolom "Sikap" §1 adalah JANJI PERILAKU. Uji ini membandingkannya dengan mesin.
+
+    Inilah penjaga yang absen 12–14 Agu. Dokumen berkata dua kelas mendapat "toleransi normal"
+    (= rem menyala setelah 3 kegagalan) sementara mesin tidak menghitungnya sama sekali. Tak satu
+    pun dari 880 uji membandingkan kalimat itu dengan kenyataan.
+    """
+
+    def _baris_kelas(self) -> dict[str, list[str]]:
+        hasil = {}
+        for b in _baris_tabel(_bagian("## §1", "## §2")).splitlines():
+            kol = _kolom_tabel(b)
+            if len(kol) >= 3:
+                m = re.match(r"`([A-Z][A-Z_]+)`", kol[0])
+                if m:
+                    hasil[m.group(1)] = kol
+        return hasil
+
+    def test_semua_kelas_terbaca_dari_tabel(self):
+        self.assertEqual(set(self._baris_kelas()), {k.name for k in ErrorClass},
+                         "format tabel §1 berubah sehingga kolom Sikap tak lagi bisa dibaca mesin — "
+                         "penjaga ini jadi tidur tanpa memberi tahu siapa pun")
+
+    def test_kelas_bersikap_REM_SEGERA_memang_fast_fail(self):
+        for nama, kol in self._baris_kelas().items():
+            sikap = kol[2]
+            with self.subTest(nama):
+                if "REM SEGERA" in sikap.upper():
+                    self.assertIn(ErrorClass[nama], FAST_FAIL,
+                                  f"§1 menjanjikan REM SEGERA untuk {nama}, tapi kode tidak")
+                else:
+                    self.assertNotIn(ErrorClass[nama], FAST_FAIL,
+                                     f"kode merem SEGERA untuk {nama}, tapi §1 tidak mengatakannya")
+
+    def test_kelas_bertoleransi_normal_BENAR_BENAR_dihitung(self):
+        """Uji PERILAKU, bukan pembacaan teks.
+
+        "toleransi normal" hanya bermakna bila kegagalannya memang menambah hitungan. Bila ada yang
+        mengecualikan sebuah kelas lagi (percobaan 12-Agu), uji ini merah — dan pesannya menyebut
+        harga yang sudah dibayar.
+        """
+        acuan = _streak_untuk(ErrorClass.AUTH_INVALID.value)
+        self.assertEqual(acuan, 3, "acuan hitungan sendiri sudah tidak benar")
+        for nama, kol in self._baris_kelas().items():
+            if "toleransi normal" not in kol[2].lower():
+                continue
+            with self.subTest(nama):
+                self.assertEqual(
+                    _streak_untuk(ErrorClass[nama].value), acuan,
+                    f"§1 menjanjikan '{nama}: toleransi normal' (rem menyala di kegagalan ke-3), "
+                    f"tapi mesin tidak menghitungnya ⇒ rem TIDAK PERNAH menyala untuk sebab ini. "
+                    f"Itu kerusakan 13/14-Agu: 30 & 23 kegagalan beruntun, ±257 kabar gagal/jam, "
+                    f"dua tenant mematikan channelnya sendiri.")
+
+    def test_sikap_di_alur_bagian3_masih_menyebut_ambangnya(self):
+        """§3 butir 6 menuliskan ambang rem sebagai angka. Bila kode & dokumen berbeda, salah satu
+        berbohong kepada pembacanya."""
+        sec = _bagian("## §3", "## §4")
+        m = re.search(r"PRODUCER_FAIL_STREAK_STOP`?\((\d+)\)", sec)
+        self.assertIsNotNone(m, "§3 tak lagi menyebut ambang rem — pembaca kehilangan angkanya")
+        bawaan = int(os.getenv("PRODUCER_FAIL_STREAK_STOP", "3"))
+        self.assertEqual(int(m.group(1)), bawaan,
+                         f"§3 menyebut ambang {m.group(1)}, bawaan kode {bawaan}")
+
+
+class TestStrukturTabelDokumenUtuh(unittest.TestCase):
+    """⛔ Tabel yang terbelah tidak ter-render sebagai tabel — isinya hilang dari mata pembaca.
+
+    Nyata: catatan 12-Agu disisipkan tepat antara baris JUDUL tabel §9a dan baris pemisahnya,
+    sehingga seluruh tabel jalur pemulihan berhenti tampil sebagai tabel. Lolos dari semua penjaga
+    karena tak satu pun memeriksa BENTUK dokumen — hanya isinya.
+    """
+
+    @staticmethod
+    def _pemisah(b: str) -> bool:
+        return bool(re.match(r"^\|[\s:\-|]+\|?\s*$", b))
+
+    def test_setiap_tabel_punya_baris_pemisah_tepat_di_bawah_judulnya(self):
+        baris = _teks().split("\n")
+        rusak = []
+        for i, b in enumerate(baris):
+            if not b.startswith("|") or self._pemisah(b):
+                continue
+            sebelum = baris[i - 1] if i else ""
+            if sebelum.startswith("|"):
+                continue                      # bukan baris judul
+            sesudah = baris[i + 1] if i + 1 < len(baris) else ""
+            if not self._pemisah(sesudah):
+                rusak.append(f"baris {i + 1}: {b[:60]}")
+        self.assertFalse(
+            rusak,
+            "tabel Markdown terbelah — judulnya tak langsung diikuti baris pemisah, jadi tabelnya "
+            f"tidak ter-render:\n  " + "\n  ".join(rusak))
+
+
+class TestAngkaBuktiUjiTidakBasi(unittest.TestCase):
+    """⛔ Angka bukti yang basi = dokumen yang meyakinkan tapi salah.
+
+    §7 menulis jumlah uji per berkas. Angka itu tak pernah dijaga: tertulis 12 & 9 sementara nyatanya
+    35 & 14. Pembaca (termasuk sesi Claude berikutnya) memakainya untuk menilai seberapa terjaga
+    sebuah topik — dan menilai terlalu rendah sama menyesatkannya dengan terlalu tinggi.
+    """
+
+    @staticmethod
+    def _jumlah_nyata(modul: str) -> int:
+        return unittest.TestLoader().loadTestsFromName(f"tests.{modul}").countTestCases()
+
+    def test_angka_di_tabel_bagian7_sama_dengan_jumlah_nyata(self):
+        salah = []
+        for b in _baris_tabel(_bagian("## §7", "## §8")).splitlines():
+            kol = _kolom_tabel(b)
+            if len(kol) < 2:
+                continue
+            berkas = re.findall(r"tests/(test_[a-z0-9_]+)\.py", kol[0])
+            angka = re.fullmatch(r"\**(\d+)\**", kol[1].strip())
+            if len(berkas) != 1 or not angka:
+                continue                     # baris tanpa angka ("—") atau baris gabungan → dilewati
+            nyata = self._jumlah_nyata(berkas[0])
+            if int(angka.group(1)) != nyata:
+                salah.append(f"{berkas[0]}: dokumen {angka.group(1)}, nyata {nyata}")
+        self.assertFalse(salah, "angka bukti §7 sudah basi:\n  " + "\n  ".join(salah))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

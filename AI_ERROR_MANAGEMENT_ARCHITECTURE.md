@@ -193,13 +193,22 @@ kegagalan yang 100% milik kita. Owner: *"pesan errornya tidak jelas hanya kode s
 | `tests/test_error_429_generik.py` | — | 429 level-transport (bukan kalimat vendor) → RATE_LIMIT |
 | `tests/test_youtube_auth_invalid.py` | — | `invalid_grant`→AUTH_INVALID; RefreshError lain tetap transien |
 | `tests/test_suara_terpotong.py` · `test_suara_naskah_panjang.py` | — | kegagalan suara → TRANSIENT |
-| **`tests/test_ssot_error_mgmt.py`** | 9 | **penjaga anti-drift: dokumen ini vs kode** (§10) |
-| **`tests/test_pemulihan_channel.py`** | **12** | **[B25] rem menyimpan sebabnya · Telegram bedakan pulih-sendiri · anti-drift `SELF_HEALING` lintas 3 tempat** |
+| **`tests/test_ssot_error_mgmt.py`** | 20 | **penjaga anti-drift: dokumen ini vs kode** (§10) — sejak 14-Agu termasuk **kolom "Sikap" §1 vs perilaku mesin**, **struktur tabel utuh**, dan **angka bukti §7 tak basi** |
+| **`tests/test_pemulihan_channel.py`** | 35 | **[B25] rem menyimpan sebabnya · Telegram bedakan pulih-sendiri · anti-drift `SELF_HEALING` lintas 3 tempat · setiap kegagalan dihitung (§8k)** |
+| **`tests/test_rem_tak_boleh_lumpuh.py`** | 5 | **§8k — PERILAKU, bukan angka perantara:** berapa kali produksi di-submit · berapa kabar ke tenant · apakah mesin berhenti sendiri |
 | **Total kelima berkas lama** | **39 lulus** | dijalankan 2026-08-03 |
 
-**Bukti dari PRODUKSI NYATA** (bukan hanya uji) — `production_runs.error_class` sejak migr 0170:
-`unknown` 32× · `quota_exhausted` 4× · `rate_limit` 3× · `model_unavailable` 2×. Registry bekerja:
-empat kelas berbeda benar-benar terklasifikasi pada trafik sungguhan, bukan semuanya jatuh ke UNKNOWN.
+> ⚠️ **Angka di kolom tengah kini DIJAGA MESIN** (`TestAngkaBuktiUjiTidakBasi`): bila jumlah uji
+> berubah tanpa tabel ini menyusul, suite MERAH. Sebelum 14-Agu angkanya basi — tertulis 9 & 12,
+> nyatanya 20 & 35 — dan pembaca memakainya untuk menilai seberapa terjaga sebuah topik.
+
+**Bukti dari PRODUKSI NYATA** (bukan hanya uji) — `production_runs.error_class`, dihitung ulang
+**14-Agu 2026** atas SELURUH 425 run (paginasi penuh, bukan sampel): `rate_limit` **53×** ·
+`unknown` 39× · kelas kosong (run pra-0170) 38× · `quota_exhausted` 4× · `model_unavailable` 2×.
+Registry bekerja: empat kelas berbeda benar-benar terklasifikasi pada trafik sungguhan.
+⚠️ **Angka `rate_limit` naik 3 → 53 justru karena kerusakan §8k** — 50 dari 53 terjadi pada 13 &
+14-Agu, saat rem dilumpuhkan dan mesin mencoba tanpa henti. Angka yang melonjak di satu kelas
+adalah **gejala yang layak diperiksa**, bukan tanda registry makin pintar.
 
 ## §8 CELAH TERBUKA yang diketahui (jujur — belum diperbaiki)
 
@@ -573,11 +582,93 @@ perlakuan berbeda — ini perbuatan goblok."* Yang dikerjakan:
   jaring generik tak boleh merem cepat · terusan agregator terbaca. **Dibuktikan MERAH** untuk 3 bentuk
   pelanggaran, lalu hijau lagi. Suite **853 → 869 lulus, nol regresi.**
 
-**⚠️ MASIH TERBUKA — butuh ketok owner, sengaja TIDAK diputuskan sendiri:** Cloudflare `3036` (jatah
-gratis harian) dipetakan QUOTA_EXHAUSTED = **FAST_FAIL (berhenti)**, sesuai rencana yang disetujui.
-Tapi jatah itu **pulih sendiri keesokan hari UTC** — apakah ia juga layak masuk `SELF_HEALING`
-(produksi lanjut sendiri besok, tanpa tenant menekan apa pun) adalah **keputusan produk** (§0.6),
-bukan keputusan Claude. Hari ini: berhenti + beri tahu tenant.
+**✅ SUDAH TERTUTUP — koreksi drift 14-Agu.** Blok ini sebelumnya berbunyi *"MASIH TERBUKA … `3036`
+dipetakan QUOTA_EXHAUSTED = FAST_FAIL (berhenti) … hari ini: berhenti + beri tahu tenant"* — dan itu
+**bertentangan dengan kalimat di atasnya sendiri** (yang sudah menyatakan `3036` → `RATE_LIMIT`),
+berjarak 16 baris. Yang benar = kode: dijalankan 14-Agu lewat `classify_cloudflare_error` dengan
+balasan CF berbentuk daftar, hasilnya **`rate_limit` · pulih sendiri · tidak merem cepat**. Dokumen
+resmi CF mendukungnya (*"Account limited — daily free allocation exhausted"*, HTTP 429, dibaca
+14-Agu), dan `3040` tetap terpisah sebagai `transient` — dua arti di balik satu kode HTTP, benar.
+`MEMORY.md` ikut memuat versi basi itu dan dikoreksi pada tanggal yang sama.
+**Pelajaran bentuknya:** satu bagian dokumen menyimpan DUA jawaban untuk satu pertanyaan, dan yang
+dibaca sesi berikutnya adalah yang kebetulan ditemukan lebih dulu. Bila sebuah pertanyaan sudah
+dijawab, catatan "masih terbuka"-nya wajib dicabut **di commit yang sama** — bukan ditinggalkan
+sebagai jejak sejarah di tempat pembaca mencari keputusan yang berlaku.
+
+### 8k. 🔴 REM YANG DILUMPUHKAN → BANJIR KABAR KE TENANT *(ditanam 12-Agu, DICABUT 14-Agu)*
+
+**Ini bug yang KAMI tanam sendiri saat memperbaiki bug lain.** Dilaporkan owner dari keluhan tenant.
+
+**Rantainya:** perbaikan 12-Agu membuat kelas `SELF_HEALING` (jatah harian · throttle) **netral** di
+`inventory.recent_nonready_streak`, supaya channel tenant tak mati berhari-hari untuk sebab yang
+sembuh sendiri. Niatnya benar. Yang tak terhitung: **rem itu mengerjakan DUA hal — menghentikan
+CHANNEL *dan* menghentikan PERCOBAAN.** Hanya yang pertama yang diincar; yang kedua ikut hilang, dan
+**tak ada apa pun di aplikasi ini yang menggantikannya** — nol penahan laju, nol jeda, nol batas
+percobaan per jam.
+
+**Terukur (production_runs + worker.log VPS), dua channel tenant yang SAMA, dua hari berurutan:**
+
+| Tanggal | Channel | Kegagalan | Rentang | Rem menyala? |
+|---|---|---|---|---|
+| 13-Agu | Thetangga Property | **30** (29 jatah-harian) | 8 menit | ❌ tidak |
+| 14-Agu | BISIK NUSANTARA | **23** (21 jatah-harian) | 11 menit | ❌ tidak |
+
+- Laju terukur: satu produksi baru tiap **±14 detik** ⇒ **±257 kabar gagal per JAM** ke Telegram tenant
+- Setiap percobaan menembak penyedia **3×** (`AI analysis attempt 1/3 … 3/3`) ⇒ ±13 permintaan/menit
+  ke penyedia yang sedang menolak
+- Dari 53 kegagalan `rate_limit` sepanjang umur aplikasi, **50 (94%) terjadi pada dua hari itu**
+- Rem TERAKHIR menyala **3-Agu**; sejak perbaikan naik (12-Agu 19:54) **tak sekali pun**
+- Hitungannya bahkan tak sampai ambang: 21 dilewati + 2 dihitung = **2** dari ambang 3
+- **Yang menghentikannya: tenant mematikan channelnya sendiri** — bukan mesin
+
+**Kenapa 880 uji hijau tak menangkapnya:** seluruh uji rem memeriksa **angka di dalam mesin**
+(`streak == 3`), dan angka itu MEMANG benar. Yang salah adalah akibatnya di dunia nyata. Commit-nya
+bahkan menulis *"jangkauan terbukti sempit — dipakai di SATU tempat untuk SATU keputusan"*: benar
+secara harfiah, menyesatkan secara akibat, karena **titik panggil** dihitung dan **akibat** tidak.
+
+**PENCABUTAN 14-Agu:** setiap kegagalan dihitung kembali, apa pun kelasnya (perilaku sebelum 12-Agu).
+Aman, dan bukan sekadar mundur: mudarat yang dikejar 12-Agu akarnya sudah ditutup 3-Agu oleh [B25] —
+kelas error TERSIMPAN saat rem menyala, layar memberi panel per-KELAS (*"pulih sendiri — tak ada yang
+perlu Anda ubah"*) + tombol *Pulihkan produksi*, Telegram membedakan pulih-sendiri dari
+butuh-tindakan. Bang Us-Dat menganggur 11 hari karena kelasnya tersimpan `unknown` sehingga panelnya
+bisu — **bukan** karena rem menyala. Rem + panel yang bicara = tenant kehilangan satu tekanan tombol,
+bukan kehilangan channelnya.
+**Dampak pencabutan diukur pada data nyata sebelum dikirim:** **nol** channel aktif yang langsung
+direm saat perbaikan naik (12 channel diperiksa satu per satu).
+
+**Dijaga PERILAKU, bukan angka perantara** — `tests/test_rem_tak_boleh_lumpuh.py`: berapa kali
+produksi di-submit · berapa kabar terkirim · apakah mesin berhenti sendiri; ditulis atas SELURUH
+anggota `ErrorClass` supaya kelas baru ikut terjaga tanpa uji disunting. Merah dibuktikan lebih
+dulu: pengecualian 12-Agu dihidupkan kembali → **14 uji gagal**.
+
+**⏳ MASIH TERBUKA — keputusan produk, sengaja TIDAK diputuskan sendiri (§0.6 CLAUDE.md):**
+1. **Jeda sementara** untuk sebab yang pulih sendiri — mesin berhenti mencoba lalu jalan lagi
+   otomatis, **satu** kabar saja. Ini jalan keluar yang benar untuk KEDUA mudarat (banjir *dan*
+   channel menganggur), tapi ia memilih angka & kebijakan baru. Yang perlu diketok: **lama jeda**
+   (ikut waktu yang penyedia sebutkan — sudah tersimpan, 56 sampel §8h — / jeda tetap / sampai ganti
+   hari) · **jumlah kabar** (satu saat jeda mulai; perlu satu lagi saat jalan kembali?) · **tombol
+   Uji/Jalankan Ulang** boleh menembus jeda atau ikut ditahan. Bandingkan batasan §9: *"pemulihan =
+   keputusan TENANT"* — mengubahnya butuh ketok baru.
+2. **Saklar aktif/nonaktif channel tidak menutup periode kegagalan.** Migrasi 0197 (§8c) mewajibkan
+   *setiap* jalur pelepas rem mencatat `production_resumed_at`; jalur saklar tidak melakukannya.
+   Akibat nyata: BISIK NUSANTARA & Thetangga menyimpan hitungan **12**, jadi begitu tenant
+   menyalakannya kembali mesin mengerem **seketika, tanpa satu percobaan pun**. Ini keadaan yang
+   sudah ada sejak lama (bukan lahir 14-Agu), tapi baru terukur sekarang. Tindakan datanya (menyetel
+   titik pemulihan untuk dua channel itu) menyentuh data tenant ⇒ menunggu ketok owner.
+3. **Waktu tenant menyalakan/mematikan channel tidak terekam** — saklar menulis statusnya saja,
+   `updated_at` tidak ikut berubah dan tak ada pencatat otomatis. Diagnosa insiden jadi bergantung
+   pada keterangan owner/tenant. Terbukti: catatan waktu BISIK masih 13-Agu padahal banjirnya 14-Agu.
+4. **Kode Cloudflare `5006` belum dipetakan → salah KITA ditimpakan ke tenant.** Pesan verbatim
+   produksi: `AiError: Bad input: Error: Additional or unevaluated properties '/seed' at '/' not
+   allowed` ⇒ digolongkan `unknown`, `milik_kita=False`, lalu pesan tenant ditempeli *"Kegagalan
+   terjadi di layanan AI Anda"* — padahal permintaan **kita** yang cacat. Melanggar §5 langkah 2 +
+   kecualian mengikat §9. **Dokumen resmi CF tidak memuat 5006** (dibaca 2026-08-14) — tapi ada
+   **32 sampel nyata** (1× 8-Agu · 1× 11-Agu · 10× 13-Agu · 22× 14-Agu; tren naik) dan vendor
+   menyebut sifatnya sendiri (*"Bad input"*), jadi §1 Aturan Emas terpenuhi lewat jalur sampel.
+   Akarnya lebih dalam dari label: **`seed` tidak ada dalam skema resmi FLUX schnell** (hanya
+   `prompt` + `steps`, dibaca 2026-08-14) — kita mengirim parameter yang model itu tolak, dan
+   mencabutnya membuang fungsi *Diversity* §9.1, jadi bukan satu baris. Di luar lingkup perbaikan
+   14-Agu; dicatat, tidak ditambal setengah.
 
 ### 8b. ~~`notify_publish_fail` belum diseragamkan~~ — ✅ **DITUTUP 2026-08-04**
 Jalur upload YouTube gagal adalah satu-satunya notifikasi yang tak bisa menjawab pertanyaan penentu
@@ -641,27 +732,6 @@ teknis. Lihat `PAYMENT_AND_TENANT_GATE_ARCHITECTURE.md` §10b K2.
 
 ### §9a JALUR PEMULIHAN per kelas — ditentukan oleh SEBAB, bukan oleh gerbang uji *(dipatri 2026-08-06)*
 | Kelas | Yang ditawarkan panel | Kenapa |
-> **🔧 DITUTUP 2026-08-12 — SEBAB YANG PULIH SENDIRI TIDAK LAGI MENGEREM CHANNEL.**
-> Cacat: layar tenant berkata *"batas seperti ini pulih sendiri, Anda tidak perlu mengubah apa pun"*
-> sementara channelnya **tetap mati sampai tenant menekan tombol** — dua pernyataan yang saling
-> membatalkan, dan tenant yang MEMPERCAYAI kalimat kita justru paling dirugikan.
-> **Terukur:** Bang Us-Dat direm 01-Agu 12:00 (jatah token HARIAN Groq habis), jatahnya pulih
-> keesokan pagi — 02-Agu produksinya BERHASIL 2× — tapi status berhenti menempel **11 hari**.
-> Pola sama pernah membuatnya mati **44 jam** (§8a).
-> **Perbaikan:** `inventory.recent_nonready_streak` tidak lagi menghitung kegagalan ber-kelas
-> `SELF_HEALING`. **NETRAL, bukan pemutus** — dua arah sengaja: memutus = kegagalan NYATA sebelumnya
-> ikut dimaafkan (rem lumpuh); menghitung = channel direm untuk sebab yang sudah sembuh. Kelas
-> KOSONG (run lama) tetap dihitung → perilaku lama dipertahankan.
-> **Keputusan owner [B25] TIDAK dibalik:** ia lahir untuk sebab yang MENUNTUT tindakan tenant
-> (saldo · kunci · model). Untuk sebab yang tak menuntut apa pun, remnya memang tak seharusnya
-> menyala — jadi tak ada rem yang perlu dilepas sendiri. Lingkupnya dikembalikan, bukan dicabut.
-> **Bukti data NYATA:** Abyss ID (sebab `model_unavailable`) hitungan tetap 10 → rem TETAP menyala,
-> benar. **Batas jujur:** kegagalan Bang Us-Dat 01-Agu tersimpan ber-kelas `unknown` (penggolongan
-> jatah harian Groq aktif setelahnya) → perbaikan ini **mencegah kejadian berikutnya, tidak
-> menyembuhkan yang sudah tercatat**; channel itu tetap butuh satu tekanan tombol tenant.
-> **Dijaga** `tests/test_pemulihan_channel.py` (kelas `TestSebabPulihSendiriTakMengeremChannel`),
-> dibuktikan merah dua arah.
-
 |---|---|---|
 | `QUOTA_EXHAUSTED` · `ACCOUNT_BILLING` · `AUTH_INVALID` · `MODEL_UNAVAILABLE` | **"Jalankan uji & pulihkan"** (selama gerbang uji mengizinkan) | tenant harus memperbaiki sesuatu dulu; **uji MEMBUKTIKAN perbaikannya berhasil**, dan keberhasilan itu sendiri yang memutus hitungan kegagalan |
 | `RATE_LIMIT` · `TRANSIENT` | **"Pulihkan produksi"** + peringatan jujur | uji **tidak membuktikan apa pun** di sini dan **memanggil penyedia yang sedang menolak** ⇒ dijamin gagal sambil MEMBAKAR sisa jatah tenant |
@@ -705,10 +775,22 @@ terpisah (`components/gate-message.tsx`). Dokumen ini hanya mengatur kegagalan A
 >    **tak bisa dipastikan wajib dilaporkan, bukan diterbitkan ulang**.
 > 5. `tests/test_notifikasi_owner_dan_tenant.py` — bentuk pesan ke owner & tenant (nol kode mesin,
 >    nol istilah teknis, nol potongan senyap) + sejak 13-Agu: kegagalan terbit **mengaku milik kita**.
+> 6. `tests/test_rem_tak_boleh_lumpuh.py` *(14-Agu, §8k)* — **PERILAKU rem, bukan angka perantara:**
+>    berapa kali produksi di-submit · berapa kabar gagal terkirim · apakah mesin berhenti sendiri.
+>    Ditulis atas SELURUH anggota `ErrorClass` → kelas baru ikut terjaga tanpa uji disunting.
 >
 > ⚠️ **YANG TIDAK DIJAGA SIAPA PUN:** apakah pemetaan sebuah kode memang BENAR menurut dokumen
 > vendornya. Mesin bisa memastikan tabel & kode sinkron; ia tidak bisa membaca dokumen vendor
 > untuk Anda. Itu tetap pekerjaan manusia — dan di situlah §1 Aturan Emas berlaku.
+>
+> ⚠️⚠️ **BATAS YANG DIBAYAR MAHAL 13/14-Agu — hijau ≠ dokumen & mesin sejalan.** Ketiga penjaga di
+> atas HIJAU sepanjang insiden §8k (880 uji lulus) sementara §1 & §3 dokumen ini menjanjikan rem
+> yang **sudah tidak ada di mesin**, dan dua tenant dibanjiri 53 kabar gagal. Sebabnya: yang dijaga
+> adalah **nama** kelas, **daftar** fast-fail, **keberadaan** berkas uji, dan tabel §4 — sementara
+> yang bergeser adalah **kalimat SIKAP** ("toleransi normal"), **angka bukti**, dan **bentuk tabel**.
+> Ketiganya kini dijaga (`TestSikapDokumenAdalahPerilakuNyata` · `TestAngkaBuktiUjiTidakBasi` ·
+> `TestStrukturTabelDokumenUtuh`). Pelajaran yang tetap berlaku sesudahnya: **daftar penjaga ini
+> bukan bukti kelengkapan** — ia hanya daftar hal yang sudah pernah gagal.
 
 Audit 2026-08-03 menemukan dokumen ini menyimpang dari kode di **empat** tempat sekaligus — dua di
 antaranya membuatnya **menyatakan perilaku yang salah** (kelas hilang, daftar FAST_FAIL kurang satu),
@@ -723,6 +805,38 @@ Bila salah satu bergeser tanpa yang lain, uji MERAH sebelum sempat menyesatkan s
 - dokumen tidak boleh memuat anchor `file:baris` (aturan §3 — nomor baris selalu basi)
 
 ## §11 CHANGELOG
+- **2026-08-14** — **BUG YANG KAMI TANAM SENDIRI DICABUT + DOKUMEN INI BERHENTI BERBOHONG DI 6 TITIK.**
+  Dilaporkan owner dari keluhan tenant: *"sebelumnya sudah berjalan baik, 3 kali gagal langsung kena
+  rem; tapi setelah anda bug fixing, malah timbul bug baru."* Benar seluruhnya.
+  **(A) §8k — rem yang dilumpuhkan.** Perbaikan 12-Agu mengecualikan kelas `SELF_HEALING` dari
+  hitungan kegagalan. Rem itu mengerjakan DUA hal (menghentikan channel *dan* menghentikan
+  percobaan); hanya yang pertama yang diincar, yang kedua ikut hilang tanpa pengganti. Akibat
+  terukur: Thetangga 30 kegagalan/8 menit · BISIK 23/11 menit · ±257 kabar gagal per jam · 50 dari
+  53 kegagalan `rate_limit` sepanjang umur aplikasi terjadi di dua hari itu · yang menghentikannya
+  **tenant mematikan channelnya sendiri**. **Dicabut** — setiap kegagalan dihitung kembali. Diukur
+  sebelum dikirim: **nol** channel aktif yang langsung direm.
+  **(B) Enam ketidaksesuaian dokumen-vs-kenyataan diperbaiki.** §1 & §3 menjanjikan *"toleransi
+  normal → rem di kegagalan ke-3"* untuk perilaku yang sudah tidak ada (sembuh sendiri begitu (A)
+  dicabut) · §8j memuat DUA jawaban berlawanan tentang Cloudflare `3036` berjarak 16 baris
+  (dijalankan: `rate_limit`, jadi catatan "masih terbuka"-nya dicabut) · tabel §9a **terbelah**
+  karena catatan 12-Agu disisipkan antara baris judul & pemisahnya · angka bukti §7 basi (9 & 12 →
+  nyata 20 & 35) · bukti produksi masih menyebut `rate_limit` 3× (nyata 53×) · celah baru §8k
+  belum tercatat.
+  **(C) Tiga penjaga baru — menyerang sebab kebocorannya, bukan gejalanya.**
+  `TestSikapDokumenAdalahPerilakuNyata` (kolom "Sikap" §1 dibandingkan dengan PERILAKU mesin, bukan
+  dengan teks) · `TestStrukturTabelDokumenUtuh` (tabel terbelah = merah) ·
+  `TestAngkaBuktiUjiTidakBasi` (angka §7 dihitung dari suite, bukan diketik) ·
+  `tests/test_rem_tak_boleh_lumpuh.py` (berapa percobaan · berapa kabar · apakah mesin berhenti
+  sendiri).
+  **Kenapa penjaganya berbentuk PERILAKU:** seluruh uji rem yang ada memeriksa `streak == 3`, dan
+  angka itu MEMANG benar sepanjang insiden — 880 uji hijau sementara tenant dibanjiri. Uji pada
+  angka perantara tidak bisa menangkap kerusakan yang terjadi pada akibatnya.
+  **Bukti merah lebih dulu:** pengecualian 12-Agu dihidupkan kembali → **14 uji gagal**; dua penjaga
+  dokumen baru merah pada dokumen apa adanya (tabel terbelah + angka basi), hijau setelah dibetulkan.
+  **Yang SENGAJA tidak dikerjakan** (dicatat di §8k, menunggu ketok owner): jeda sementara untuk
+  sebab yang pulih sendiri · saklar aktif channel yang tak menutup periode kegagalan · pemetaan
+  Cloudflare `5006` + parameter `seed` yang tak ada di skema resmi FLUX. Nol migrasi DB, nol
+  perubahan layar.
 - **2026-08-13** — **JALUR TERBIT & ALARM PENYIMPANAN: tiga kegagalan senyap ditutup** (ketok owner
   "kerjakan A, B, C sampai tuntas"). Ketiganya berakar pada hal yang sama: **keadaan penting disimpan
   di ingatan proses, sementara proses itu bisa mati kapan saja.**
