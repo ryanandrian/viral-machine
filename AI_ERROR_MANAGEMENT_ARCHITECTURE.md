@@ -209,6 +209,7 @@ kegagalan yang 100% milik kita. Owner: *"pesan errornya tidak jelas hanya kode s
 | **`tests/test_rem_tak_boleh_lumpuh.py`** | 5 | **§8k — PERILAKU, bukan angka perantara:** berapa kali produksi di-submit · berapa kabar ke tenant · apakah mesin berhenti sendiri |
 | **`tests/test_parameter_kita_tak_ditimpakan_tenant.py`** | 10 | **§8k butir 4 — dua arah:** parameter tak-didukung tak pernah dikirim (vendor baru otomatis aman) · galat parameter mengaku MILIK KITA lintas-vendor · **dan tidak salah-alamat ke arah sebaliknya** |
 | `tests/test_migrasi_selaras_db.py` | 6 | kolom & **trigger** yang migrasi janjikan benar-benar hidup di DB (§8k butir 2/3, migr 0198) |
+| **`tests/test_penurunan_mutu_tak_senyap.py`** | 6 | **§8f — penurunan mutu tak boleh senyap:** sebab frame pembuka IKUT tersimpan ke `run_metadata` di KEDUA jalur produksi · pesan penyedia tak dipotong · run sehat tak dikotori |
 | **`tests/test_mesin_tak_mati_mendadak.py`** | 12 | **§8L — mesin tak boleh MATI MENDADAK:** skema SDK dipanaskan di alur utama (SELURUH model, bukan yang teratas) · mengurai balasan tak lagi membangun skema · urutan dibaca dari **pohon sintaks** · **reproduksi crash dua arah** |
 | **Total kelima berkas lama** | **39 lulus** | dijalankan 2026-08-03 |
 
@@ -395,7 +396,42 @@ berstatus `failed` yang `error_message`-nya PERSIS kalimat pembungkus tanpa rinc
 ("No topics selected" · "TTS generation failed" · "Visual assembly failed — no clips downloaded").
 Angka itu harus tetap 0 untuk run baru; kalau naik, diagnosa melorot lagi.
 
-### 8f. 🔴 DEGRADASI SENYAP pada FRAME PERTAMA (tuas viral) *(ditemukan 2026-08-04, BELUM diperbaiki)*
+### 8f. ~~DEGRADASI SENYAP pada FRAME PERTAMA~~ — ✅ **SENYAPNYA DITUTUP 2026-08-15**
+
+> **Yang ditutup: SENYAPNYA. Yang TIDAK diubah: video tetap terbit.** Menghentikan produksi karena
+> frame pembuka = keputusan produk (§0.6) dan bukan hak Claude; yang §0.6 larang adalah **fallback
+> senyap**, dan itulah yang dicabut.
+>
+> **Cacat sebenarnya bukan "nilainya tak ada" — nilainya SUDAH ADA dan dibuang.** Sebab kegagalan
+> ditangkap sejak 05-Agu (`visual_assembler.hook_frame_error`) lalu dimasukkan ke
+> `result["steps"]["visuals"]` — tapi `steps` **tidak pernah ditulis ke tabel mana pun**. Komentar di
+> `visual_assembler.py` bahkan **mengakuinya terang-terangan sejak 08-Agu**, dan tetap begitu sepuluh
+> hari. Terukur 15-Agu: **85 run sejak 8-Agu, NOL yang menyimpannya.**
+> **Perbaikan:** `producer._mutu_fields()` menyambungkannya ke `run_metadata` lewat jalur simpan yang
+> SUDAH ADA & terbukti (`_cost_fields`), pada **kedua** jalur produksi (terjadwal + tombol tenant).
+> Nol jalur baru · nol migrasi · nol tabel · nol perubahan perilaku mesin.
+> Pesan penyedia disimpan **tanpa dipotong** (§8h). Fail-soft: gagal mencatat tak menghentikan apa pun.
+>
+> **Frekuensinya sudah turun sendiri tanpa disadari:** dari 13 kegagalan (653 percobaan, 2%),
+> **3 di antaranya bug `seed` KITA** yang ditutup 14-Agu (§8k butir 4), 2 lagi bug kita di Juni
+> (berkas tak ada · FFmpeg, nihil sejak). Sisanya milik akun/penyaring penyedia.
+> **Dijaga** `tests/test_penurunan_mutu_tak_senyap.py` (6 uji; merah dibuktikan: sambungan dicabut
+> dari satu jalur ⇒ merah).
+>
+> ⛔⛔ **AKAR YANG SAMA, TIGA KALI — pelajaran paling mahal malam itu.** Ketiga cacat ini satu
+> kebiasaan, bukan tiga kejadian terpisah: **keterangan DITANGKAP lalu DIBUANG sebelum sampai ke
+> siapa pun.**
+> | # | Datanya ada di | Yang membacanya | Akibat |
+> |---|---|---|---|
+> | 1 | `production_runs.error_class` | layar tak membacanya | panel salah, tenant diarahkan ke jalur keliru (§8m) |
+> | 2 | `hook_frame_error` di memori | tak ada yang menyimpan | penurunan mutu senyap 10 hari |
+> | 3 | pesan MENTAH penyedia di dalam galat | ditimpa pesan kita saat simpan | waktu "coba lagi" hilang — 0 dari 53 baris (§8k) |
+> **MENANGKAP ≠ MENYAMPAIKAN.** Setiap kali menambah perekaman, telusuri sampai permukaan yang
+> membacanya — kalau tak ada pembacanya, perekaman itu belum selesai.
+
+<details><summary>Catatan asli saat ditemukan (riwayat sebab-akibat)</summary>
+
+**8f-lama. DEGRADASI SENYAP pada FRAME PERTAMA (tuas viral)** *(ditemukan 2026-08-04)*
 `visual_assembler._generate_hook_frame` gagal → `logger.warning(... keeping original clips[0])` → video
 **tetap dikirim** dengan frame pertama yang lebih buruk, **tanpa notifikasi ke siapa pun**. Frame pertama =
 penentu penonton berhenti menggulir; menurunkannya diam-diam melemahkan janji inti produk.
@@ -419,6 +455,11 @@ melanjutkan. Persis pola yang ditegur owner: melihat catatan yang relevan, lalu 
 **BELUM DIPERBAIKI — menunggu ketok owner**, karena pilihannya adalah perilaku-saat-gagal (§0.6):
 (a) tetap kirim tapi **beri tahu** · (b) STOP produksi run itu · (c) coba ulang N× dulu. Dua dari empat sebab
 adalah bug kita sendiri dan pantas ditangani terpisah dari kebijakan degradasi.
+
+*(15-Agu: pilihan (a) dijalankan — itu YANG SUDAH diketok §0.6, bukan keputusan baru. (b) & (c) tetap
+menunggu owner. Dua "bug kita sendiri" itu nihil sejak Juni; yang tersisa milik akun/penyaring penyedia.)*
+
+</details>
 
 ### 8h. ~~EKOR pesan penyedia DIBUANG sebelum disimpan~~ — ✅ **DITUTUP 2026-08-06**
 
@@ -908,6 +949,55 @@ pemanasan ⇒ proses **dibunuh sinyal**; **dengan** pemanasan ⇒ selesai wajar.
 Urutan panggilan diperiksa dari **pohon sintaks**, bukan pencarian teks (komentar sudah 4× menipu uji
 berbasis teks di proyek ini). **Merah dibuktikan lebih dulu:** kembali ke "model teratas saja" ⇒
 6 gagal · pemanasan dipindah sesudah thread ⇒ 2 gagal.
+
+### 8m. ~~GOLONGAN KOSONG MELUMPUHKAN PANEL PEMULIHAN~~ — ✅ **DITUTUP 2026-08-15**
+
+**Dilaporkan lewat pertanyaan owner** *"apakah mesin sudah cukup jelas memberi tahu 2 tenant itu?"* —
+dan jawabannya tidak, dengan sebab yang lebih dalam dari sekadar pesan tumpul.
+
+**Cacatnya:** migrasi **0196** (3-Agu) hanya **MENAMBAH** kolom `channels.production_paused_class`;
+**nol perintah mengisi baris lama** (diverifikasi: `UPDATE` = 0 di berkas migrasinya). Komentar kolom
+itu bahkan **menuliskan sendiri** *"NULL = rem menyala sebelum kolom ini ada"* — keadaan itu disadari,
+ditulis, lalu **tak pernah ditangani**.
+
+**Kenapa bukan sekadar pesan tumpul.** `PemulihanChannel` memilih **judul · penjelasan · tombol
+tindakan · DAN jalur pemulihan** dari golongan itu:
+```ts
+const ujiJalurYangBenar = bisaUji && r.pulihSendiri === false;
+```
+Golongan kosong ⇒ `pulihSendiri = null` ⇒ tenant diarahkan ke **"Pulihkan produksi"**. Untuk sebab
+yang menuntut tindakan, itu **jebakan**: tekan tanpa memperbaiki ⇒ gagal lagi ⇒ direm lagi — persis
+insiden 3-Agu yang komentar di berkas itu sendiri peringatkan.
+
+**Akibat TERUKUR (15-Agu):** dua channel tenant **BERBAYAR** diam **13 & 24 hari** sambil membaca
+*"Kami belum bisa memastikan penyebab pastinya — hubungi dukungan"*, padahal:
+
+| Channel | Yang mesin SUDAH tahu (`production_runs`) | Yang tenant lihat |
+|---|---|---|
+| **Abyss ID** (24 hari) | `model_unavailable` — **panelnya sudah ada**: *"Ganti model"* + tautan ke pengaturan | *"belum bisa memastikan penyebabnya"* |
+| **Bang Us-Dat** (13 hari) | `unknown` (penggolongan Groq belum ada saat itu) | idem |
+
+Dan kalimat teknis yang tersimpan justru **menyesatkan**: *"Periksa kredensial/konfigurasi"* —
+kredensial Bang Us-Dat baik-baik saja; yang terjadi hanya jatah harian habis, **sudah pulih keesokan
+harinya (terbukti: 2× produksi sukses 2-Agu)**.
+
+**Perbaikan:** layar mengambil golongan **CADANGAN dari kegagalan TERAKHIR** bila kolomnya kosong —
+sumbernya `production_runs`, **tabel yang SAMA dengan yang dibaca rem darurat di mesin**, sehingga
+layar & mesin tetap membaca dunia yang sama (§3: nol jalur yang bercerita sendiri).
+**Nol jalur baru** (halaman itu sudah membaca `production_runs`) · nol migrasi · nol perubahan mesin.
+
+**Bukti pada data NYATA — dan batas jujurnya:** Abyss ID berubah dari *"hubungi dukungan"* menjadi
+**"Ganti model"** ✅. **Bang Us-Dat TIDAK berubah** — golongan kegagalan terakhirnya memang tersimpan
+`unknown`, jadi mesin sungguh tak tahu dan layar **tidak boleh mengarang**. Perbaikan ini menolong
+**1 dari 2**, dan itu disebut apa adanya.
+
+**Dijaga** `tests/test_pemulihan_tak_menjebak.py` (`test_golongan_kosong_punya_CADANGAN`, merah
+dibuktikan). Uji lama yang mengikat **teks harfiah** titik panggil diperketat ke **kontraknya** —
+niat aslinya utuh, hanya berhenti mengunci susunan huruf.
+
+⚠️ **Diakui, tidak diperluas:** layar admin (`/admin/system`) memakai kolom yang sama dan menampilkan
+`—` untuk rem lama. Itu **informatif saja — tak mengarahkan siapa pun ke jalur yang salah**, jadi
+sengaja tidak ikut disentuh (jangan melebarkan lingkup tanpa kerugian nyata).
 
 ### 8b. ~~`notify_publish_fail` belum diseragamkan~~ — ✅ **DITUTUP 2026-08-04**
 Jalur upload YouTube gagal adalah satu-satunya notifikasi yang tak bisa menjawab pertanyaan penentu

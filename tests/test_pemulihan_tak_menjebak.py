@@ -157,11 +157,43 @@ class TestTakAdaRegresi(unittest.TestCase):
                               f"berikutnya. Pemetaan WAJIB per kelas error.")
 
     def test_titik_panggil_tidak_perlu_berubah(self):
-        """Blast radius terkecil: kelas error SUDAH dikirim, jadi tak ada prop baru & halaman channel
-        tak perlu disentuh sama sekali."""
+        """Blast radius terkecil: KONTRAK prop panel tidak berubah.
+
+        [15-Agu] Dulu uji ini mencocokkan teks harfiah `kelas={ch.production_paused_class}`. Yang
+        HENDAK dijaga bukan susunan hurufnya, melainkan **kontraknya**: prop `kelas` tetap dikirim
+        dan tetap bersumber dari kolom rem — tak ada prop baru, tak ada kontrak yang bergeser.
+        Sumbernya kini boleh punya CADANGAN (`|| kelasCadangan`, §8m) karena kolom itu NULL untuk rem
+        yang menyala sebelum migr 0196; kosong bukan cuma bikin pesan tumpul — ia mengubah jalur
+        pemulihan yang disarankan. Yang dijaga tetap sama, hanya berhenti mengikat bentuk hurufnya.
+        """
         t = _teks(TITIK_PANGGIL)
-        for prop in ("kelas={ch.production_paused_class}", "bisaUji=", "bolehPulihkan=", "onPulihkan="):
+        for prop in ("kelas=", "bisaUji=", "bolehPulihkan=", "onPulihkan="):
             self.assertIn(prop, t, f"prop `{prop}` hilang dari titik panggil — kontraknya berubah")
+        self.assertRegex(
+            t, r"kelas=\{ch\.production_paused_class\b",
+            "prop `kelas` tak lagi bersumber dari `production_paused_class` — panel bisa membaca "
+            "dunia yang berbeda dari mesin (§3 SSOT: nol jalur yang bercerita sendiri)")
+
+    def test_golongan_kosong_punya_CADANGAN(self):
+        """⛔ §8m — kolom rem NULL tidak boleh melumpuhkan panel.
+
+        migr 0196 (3-Agu) hanya MENAMBAH `production_paused_class`; nol pengisian baris lama. Komentar
+        kolomnya bahkan menuliskan sendiri *"NULL = rem menyala sebelum kolom ini ada"* — keadaan itu
+        ditulis, lalu tak pernah ditangani. Akibat TERUKUR: 2 channel tenant BERBAYAR diam 13 & 24 hari
+        sambil membaca *"kami belum bisa memastikan penyebabnya"*, padahal golongannya tersimpan rapi
+        di catatan produksi mereka sendiri — dan untuk Abyss ID panel yang tepat SUDAH ADA
+        (*"Ganti model"*). Lebih buruk lagi: `ujiJalurYangBenar = bisaUji && r.pulihSendiri === false`
+        ⇒ golongan kosong MENGUBAH jalur pemulihan yang disarankan, bukan sekadar menumpulkan pesan.
+        """
+        t = _teks(TITIK_PANGGIL)
+        self.assertRegex(
+            t, r"kelas=\{ch\.production_paused_class\s*\|\|",
+            "cadangan golongan hilang — channel yang direm sebelum 3-Agu kembali melihat panel "
+            "'penyebab tak diketahui' dan diarahkan ke jalur pemulihan yang keliru")
+        self.assertIn(
+            "production_runs", t.split("kelasCadangan")[0] if "kelasCadangan" in t else t,
+            "cadangan tidak bersumber dari `production_runs` — sumbernya WAJIB sama dengan yang "
+            "dibaca rem darurat di mesin, supaya layar & mesin tak membaca dunia yang berbeda")
 
 
 class TestJalurGratisMemangGRATIS(unittest.TestCase):

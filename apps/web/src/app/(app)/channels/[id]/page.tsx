@@ -162,6 +162,18 @@ export default function ChannelDetailPage() {
   const [chIns, setChIns] = useState<Insights | null>(null);
   const [chLearned, setChLearned] = useState<LearnedWeights>(null);  // formula adaptif S3-A (tenant-wide)
   const [chRunStats, setChRunStats] = useState<{ total: number; success: number; failed: number; review: number } | null>(null);  // COUNT penuh utk KPI tab Analytics
+  // [§8f/15-Agu] GOLONGAN CADANGAN untuk rem yang menyala SEBELUM kolom `production_paused_class`
+  // ada (migr 0196, 3-Agu). Migrasi itu hanya MENAMBAH kolom — nol pengisian baris lama — dan
+  // komentar kolomnya bahkan menuliskan sendiri "NULL = rem menyala sebelum kolom ini ada". Keadaan
+  // itu ditulis, lalu tak pernah ditangani.
+  //
+  // Akibatnya BUKAN sekadar pesan kurang tajam: `PemulihanChannel` memilih judul, penjelasan, tombol
+  // tindakan, DAN jalur pemulihan dari golongan ini. Kosong ⇒ tenant diarahkan ke "Pulihkan produksi"
+  // padahal sebabnya mungkin menuntut tindakan dulu — tekan tanpa memperbaiki = gagal lagi, direm
+  // lagi (insiden 3-Agu). Terukur: 2 channel tenant BERBAYAR diam 13 & 24 hari sambil membaca
+  // "kami belum bisa memastikan penyebabnya", padahal golongannya TERSIMPAN RAPI di catatan
+  // produksi mereka sendiri (`model_unavailable` untuk Abyss ID — panelnya sudah ada: "Ganti model").
+  const [kelasCadangan, setKelasCadangan] = useState<string | null>(null);
   const [slots, setSlots] = useState<string[]>([]);
   const [newSlot, setNewSlot] = useState("");
   const [slotMsg, setSlotMsg] = useState<string | null>(null);
@@ -639,6 +651,15 @@ export default function ChannelDetailPage() {
     };
     const [rTot, rOk, rFail, rRev] = await Promise.all([cntRun(), cntRun(["success"]), cntRun(["failed"]), cntRun(["qc_failed", "ready_with_issues"])]);
     setChRunStats({ total: rTot, success: rOk, failed: rFail, review: rRev });
+    // [§8f/15-Agu] Golongan CADANGAN dari kegagalan TERAKHIR — dipakai HANYA bila kolom rem kosong.
+    // Sumbernya sama dengan yang dibaca rem darurat di mesin (`production_runs`), jadi layar & mesin
+    // tetap membaca dunia yang sama (§3 SSOT: nol jalur yang bercerita sendiri).
+    try {
+      const { data: lastFail } = await supabase.from("production_runs")
+        .select("error_class").eq("channel_id", id).in("status", ["failed", "qc_failed"])
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      setKelasCadangan(((lastFail as { error_class?: string | null } | null)?.error_class) || null);
+    } catch { setKelasCadangan(null); }
     const tier = (cfg as { plan_type?: string } | null)?.plan_type ?? "starter";
     // Entitlement katalog publik per-tier: CONFIG-DRIVEN dari plan_limits.full_niche_catalog (0124) — no-hardcode.
     const { data: plRow } = await supabase.from("plan_limits").select("full_niche_catalog").eq("plan_type", tier).maybeSingle();
@@ -833,7 +854,7 @@ export default function ChannelDetailPage() {
       {eff.key === "halted" && (
         <PemulihanChannel
           channelId={id}
-          kelas={ch.production_paused_class}
+          kelas={ch.production_paused_class || kelasCadangan}
           alasan={ch.production_paused_reason}
           sejak={ch.production_paused_at}
           bisaUji={!ujiTerkunci}

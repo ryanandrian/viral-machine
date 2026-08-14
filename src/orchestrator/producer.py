@@ -145,7 +145,7 @@ def _record_production_run(channel_row: dict, result: dict, status: str,
             "error_class":     result.get("error_class"),   # [ERROR-MGMT] makna → circuit-breaker semantik
             # video_title = judul AKHIR (yang tampil di YouTube) — FE Runs menampilkan ini, bukan
             # topik internal (owner 2026-07-10: 1 video sempat tampil beda nama di Runs vs Studio).
-            "run_metadata":    {"scheduled": True, "mode": "buffer", "video_title": script.get("title", ""), **_cost_fields(result)},
+            "run_metadata":    {"scheduled": True, "mode": "buffer", "video_title": script.get("title", ""), **_cost_fields(result), **_mutu_fields(result)},
         }).execute()
     except Exception as e:
         logger.warning(f"[Producer] tulis production_runs (scheduled) gagal — non-fatal: {e}")
@@ -166,6 +166,44 @@ def _cost_fields(result: dict) -> dict:
     except Exception as e:
         logger.warning(f"[Producer] hitung biaya AI gagal (usage tetap dicatat): {e}")
     return out
+
+
+def _mutu_fields(result: dict) -> dict:
+    """[§8f · 15-Agu] Penurunan mutu yang TERJADI pada run ini → `run_metadata`, supaya berhenti senyap.
+
+    ═══ KENAPA INI ADA ═══
+    Frame PERTAMA adalah tuas viral — penentu penonton berhenti menggulir. Bila pembuatannya gagal,
+    video TETAP diterbitkan dengan klip biasa sebagai pembuka: lebih lemah, dan **tak seorang pun
+    diberi tahu**. Itu melanggar §0.6 yang sudah diketok owner: *"kegagalan komponen = STOP +
+    notifikasi, HARAM fallback senyap"*.
+
+    ═══ KENAPA BARU SEKARANG — pengakuan yang tertulis di kode sendiri ═══
+    Sebabnya SUDAH ditangkap sejak 05-Agu (`visual_assembler.hook_frame_error`) dan dimasukkan ke
+    `result["steps"]["visuals"]`. Tapi `steps` **tidak pernah ditulis ke tabel mana pun** — komentar
+    di `visual_assembler.py` bahkan mengakuinya terang-terangan sejak 08-Agu. Jadi selama sepuluh
+    hari nilainya ditangkap lalu dibuang. Terukur 15-Agu: **85 run sejak 8-Agu, NOL yang
+    menyimpannya.** Berkas ini menyambung ujung yang menganga itu.
+
+    ⚠️ **AKAR YANG SAMA, TIGA KALI** (dicatat supaya berhenti terulang): keterangan ditangkap lalu
+    dibuang sebelum sampai ke siapa pun — (1) golongan galat ada di `production_runs` tapi layar tak
+    membacanya · (2) sebab frame pembuka ada di memori tapi tak disimpan · (3) pesan mentah penyedia
+    ada di dalam galat tapi ditimpa pesan kita saat menyimpan. **Menangkap ≠ menyampaikan.**
+
+    Yang TIDAK diubah: video tetap diterbitkan. Menghentikan produksi karena frame pembuka =
+    keputusan produk (§0.6) dan bukan hak Claude; yang dilarang §0.6 adalah **senyap**-nya, dan
+    itulah yang ditutup di sini. Fail-soft: gagal mencatat tak boleh menggagalkan produksi.
+    """
+    try:
+        v = ((result.get("steps") or {}).get("visuals") or {})
+        hf = v.get("hook_frame_error")
+        if not hf:
+            return {}
+        # Tanpa pemotongan: §8h — memotong pesan penyedia justru membuang angka & tautan
+        # perbaikannya. Nilai tersimpan apa adanya; peringkasan hanya saat DITAMPILKAN.
+        return {"mutu": {"frame_pembuka_gagal": str(hf)}}
+    except Exception as e:                       # fail-soft: pencatatan tak boleh menghentikan apa pun
+        logger.warning(f"[Producer] catat penurunan mutu gagal (non-fatal): {e}")
+        return {}
 
 
 def produce_one(channel_row: dict) -> int | None:
@@ -403,7 +441,7 @@ def run_direct(sb, job: dict) -> None:
             "elapsed_seconds": result.get("elapsed_seconds"),
             "error_message": err,
             "error_class": result.get("error_class"),   # [ERROR-MGMT]
-            "run_metadata": {"direct": True, "job_type": job.get("job_type"), "video_title": _script.get("title", ""), **_cost_fields(result)},
+            "run_metadata": {"direct": True, "job_type": job.get("job_type"), "video_title": _script.get("title", ""), **_cost_fields(result), **_mutu_fields(result)},
         }).execute()
     except Exception as e:
         logger.warning(f"[Direct] tulis production_runs gagal: {e}")
