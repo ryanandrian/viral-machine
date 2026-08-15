@@ -128,6 +128,12 @@ export const VISUAL_PROPS: Record<string, VisualProp> = {
     contoh: "jangan gambarkan nabi, rasul, atau malaikat — wajah, tubuh, siluet, maupun bayangannya",
     panjang: true,
   },
+  hook_frame_people: {
+    label: "Boleh ada orang di frame pembuka?", labelEn: "Allow people in the opening frame?",
+    hint: "Isi `yes` bila niche ini memang tentang manusia. Bawaan (kosong) = frame pembuka dibuat TANPA orang, karena judul pembuka digambar di bagian atas frame dan wajah bisa tertutup.",
+    hintEn: "Set `yes` if this niche is about people. Default (empty) = the opening frame is generated WITHOUT people, since the hook title is drawn across the top and would cover a face.",
+    contoh: "yes",
+  },
   mandatory_motion: {
     label: "Gerak wajib (video-AI)", labelEn: "Mandatory motion (AI-video)",
     hint: "Hanya untuk niche berdurasi 8 detik yang memakai video-AI: gerak yang harus ada di setiap klip.",

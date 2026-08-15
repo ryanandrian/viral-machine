@@ -972,7 +972,7 @@ ketiganya; yang bolong **terpusat di visual** — separuh nilai jual niche.
 | **T3** | 13 properti visual dapat label+penjelasan+contoh via **deklarasi tunggal** (§5b Lapis-2 "terlihat") | `lib/niche-dna.ts` · `niche-dna-editor.tsx` · `tests/test_properti_visual_berlabel.py` | uji: tiap kunci `visual_style` di 48 niche WAJIB punya deklarasi label | ✅ **2026-08-15** |
 | **T4** | **Satu jalur baca DNA** (daftar 15 kolom dibuang) + frame pembuka memakai SELURUH DNA | `config.py` · `tenant_config.py` · `visual_assembler.py` · `music_selector.py` · `youtube_publisher.py` · `tests/test_dna_niche_sampai_utuh.py` | potret 48 niche identik; uji merah bila kolom baru tak terbawa | ✅ **2026-08-15** |
 | **T5** | DNA yang baru disimpan **langsung** dipakai uji niche; layar menyatakan kapan berlaku | `producer.py` · `test-niche-panel.tsx` · `niche-dna-editor.tsx` · `tests/test_dna_uji_selalu_terbaru.py` | sunting→uji→terbukti versi BARU; uji merah bila jalur segar dicabut | ✅ **2026-08-15** |
-| **T6** | Penegakan gaya visual: **uji terkendali dulu** (1 adegan × 4 versi), lalu gaya di depan perintah + larangan lewat saluran sesuai **deklarasi kemampuan vendor**; `"No people."` pindah dari kode ke DNA | `script_engine.py` · `ai_image.py` · `visual_assembler.py` · `ai_models` (data) | 47 niche lama tak bergeser sehuruf; uji merah bila vendor baru tanpa deklarasi | ⬜ |
+| **T6** | Penegakan gaya visual: **uji terkendali dulu** (1 adegan × 4 versi), lalu gaya di depan perintah; `"No people."` pindah dari kode ke DNA | `ai_image.py` · `visual_assembler.py` · `lib/niche-dna.ts` · `tests/test_gaya_niche_ditegakkan.py` | 47 niche lama tak bergeser sehuruf | ✅ **2026-08-15** |
 | **T7** | **[B14]** larangan figur ditegakkan pada GAMBAR keluaran (bukan cuma pada permintaan) → gagal jujur, tidak terbit | `visual_assembler.py` · QC | gambar uji melanggar → ditolak; sabotase → merah | ⬜ |
 | **T8** | `F-2`: "niche tak dikenal → pakai niche aktif pertama" (6 titik) jadi **gagal jujur** — usulan 15-Jul, belum pernah diketok | `script_engine.py`(2) · `hook_optimizer.py` · `niche_selector.py`(2) · `tenant_config.py` | niche hilang → berhenti+lapor, bukan substitusi senyap | ⬜ |
 
@@ -1078,6 +1078,31 @@ Produksi terjadwal menyusul dalam beberapa menit."* (dwibahasa, §3.5).
 persis): mesin memuat DNA → DNA disunting di DB → **tanpa penyegaran mesin MASIH membaca yang lama**
 (cacatnya terbukti hidup) → jalur uji menyegarkan → DNA baru terbaca. Merah dibuktikan 2×: sebelum
 perbaikan 5 gagal · sabotase (pemanggilan dicabut) → 1 merah. `tsc` bersih · **suite penuh 1065 lulus**.
+
+#### ✅ REALISASI T6 (2026-08-15) — **DIUKUR, BUKAN DIDUGA**
+Uji terkendali: SATU adegan yang sama → `gpt-image-1-mini` → **7 gambar**, DNA `sunnah_harian` (minta
+animasi 3D). Hasil: gaya di **EKOR** ⇒ **foto** (A 2/2 · C 1/1) · gaya di **DEPAN** ⇒ **animasi 3D**
+(B 2/3, satu setengah jalan). **Pengungkitnya LETAK**, bukan panjang perintah: mesin gambar menimbang
+kata-kata awal jauh lebih berat, jadi gaya yang menempel sesudah paragraf deskriptif praktis tak
+terdengar. Inilah sebab video uji 15-Agu keluar seperti foto padahal DNA-nya benar dan sudah sampai.
+⛔ **DUGAAN SAYA 15-Agu GUGUR** — saya menduga kalimat `Avoid: photorealistic…` yang MEMANGGIL
+fotorealisme. Varian D (gaya di depan, TANPA daftar Avoid) justru **lebih buruk** ⇒ daftar itu **tetap
+dikirim**. Dicatat supaya sesi berikutnya tak menghidupkannya lagi.
+⚠️ **Jujur soal batasnya:** memperbaiki, **tidak menjamin** (1 dari 3 hanya setengah bergaya) ⇒ lapis
+pemeriksaan hasil = **T7**.
+**Penegakan hanya untuk niche yang MEMILIH `render_style`** ⇒ 47 niche lama **byte-identik** (jaminan
+14-Agu utuh), dan niche/vendor baru otomatis ikut tanpa menyentuh kode (mandat generik owner).
+**`"No people."` PINDAH dari kode ke DNA** (`hook_frame_people`): bawaan tetap melarang (47 niche lama
+sama persis), tapi niche yang subjeknya justru manusia — seperti sunnah harian, yang DNA-nya sendiri
+berbunyi *"orang biasa masa kini ADALAH subjeknya"* — tak lagi dibantah kodenya sendiri. Kenop itu ikut
+berlabel manusiawi di T3, jadi terlihat & bisa diubah pemilik niche (§5b Lapis-2).
+📌 **Lapis "kemampuan vendor sebagai DATA" TIDAK jadi dibangun — sengaja.** Pengungkit yang menang
+(letak) berlaku **universal** untuk semua mesin gambar; menambah kenop per-vendor untuk sesuatu yang
+tidak berbeda per-vendor = kerumitan tanpa manfaat. Perbedaan vendor yang NYATA sudah jadi data sejak
+14-Agu (`supports_seed`, `prompt_max_chars`).
+**Bukti runtime:** satu gambar lewat **jalur produksi apa adanya** sesudah perbaikan → prompt dimulai
+*"premium 3D animated feature film still."* → hasilnya animasi 3D. Merah dibuktikan 2×: sebelum 3 gagal ·
+sabotase (gaya dikembalikan ke ekor) → 1 merah. `tsc` bersih · **suite penuh 1072 lulus**.
 
 #### ⛔ LARANGAN DALAM [B32] — jangan dikerjakan, jangan "sekalian"
 - **Jangan** membangun sub-tag/`tag_pool` atau siklus rilis bulanan (aspiratif, di luar lingkup).

@@ -36,9 +36,11 @@ def prompt_frame_pembuka(niche_vs: dict, thumbnail_concept: str) -> str:
     ikut tanpa menyentuh berkas ini. Nilai bersarang (mis. `camera_motion`) dilewati: ia bukan teks
     prompt, melainkan kenop gerak Ken Burns yang dipakai belakangan.
 
-    Yang SENGAJA tidak berubah di tahap ini: `"No people."` — itu **keputusan sadar** yang tercatat di
-    `NICHE_DNA §1.1b` (14-Agu: judul pembuka digambar di 15% dari atas, jadi membuka "ada orang" di
-    frame ini adalah perubahan tersendiri). Memindahkannya ke DNA niche = pekerjaan T6, ber-ketok owner.
+    `"No people."` — dulu dipatri di kode (keputusan sadar `NICHE_DNA §1.1b` 14-Agu: judul pembuka
+    digambar di 15% dari atas) — kini **milik DNA** (`hook_frame_people`, T6). Bawaannya TIDAK berubah:
+    tetap melarang, jadi 47 niche lama berperilaku sama persis. Yang berubah: niche yang subjeknya
+    justru MANUSIA (mis. sunnah harian, yang DNA-nya sendiri berbunyi "orang biasa masa kini ADALAH
+    subjeknya") tak lagi dipaksa mengosongkan frame pembukanya.
     Bawaan ketiga properti inti dipertahankan persis supaya niche tanpa isian tetap berperilaku sama.
     """
     base_style = niche_vs.get("base_style") or "documentary photography style, cinematic"
@@ -51,8 +53,17 @@ def prompt_frame_pembuka(niche_vs: dict, thumbnail_concept: str) -> str:
     sisa = "; ".join(f"{k.replace('_', ' ')}: {v}"
                      for k, v in niche_vs.items()
                      if k not in _inti and isinstance(v, str) and v.strip())
+    # [B32] T6 — gaya rupa DI DEPAN (terukur: yang di ekor diabaikan mesin gambar; 7 gambar uji).
+    # Hanya bila niche MEMILIH gaya ⇒ 47 niche lama tetap sama persis, termasuk `.capitalize()` lama.
+    _depan = f"{gaya}. " if (niche_vs.get("render_style") or "").strip() else ""
+    # [B32] T6 — `"No people."` PINDAH dari kode ke DNA. Dulu dipatri (keputusan sadar 14-Agu §1.1b:
+    # judul pembuka digambar di 15% atas). Tapi ia bertabrakan langsung dengan niche yang subjeknya
+    # justru MANUSIA — mis. sunnah harian, yang larangannya sendiri berbunyi "orang biasa masa kini
+    # ADALAH subjeknya". Bawaan TIDAK berubah (tetap melarang, 47 niche lama utuh); niche yang
+    # memerlukannya cukup menulis `hook_frame_people: yes` di DNA-nya.
+    _tanpa_orang = "" if str(niche_vs.get("hook_frame_people") or "").strip().lower() in ("yes", "ya", "true", "1") else " No people."
     return (
-        f"Cinematic vertical 9:16 hero image. "
+        f"{_depan}Cinematic vertical 9:16 hero image. "
         f"{thumbnail_concept}. "
         f"Style: {base_style}. "
         f"Color palette: {color_pal}. "
@@ -60,7 +71,7 @@ def prompt_frame_pembuka(niche_vs: dict, thumbnail_concept: str) -> str:
         + (f"{sisa}. " if sisa else "")
         + f"Single striking focal point that stops the scroll instantly. "
         f"{gaya.capitalize()}. "
-        f"No text, no words, no letters, no numbers, no signs, no typography. No people."
+        f"No text, no words, no letters, no numbers, no signs, no typography.{_tanpa_orang}"
     )
 
 

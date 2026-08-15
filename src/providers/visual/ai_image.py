@@ -416,11 +416,30 @@ class AIImageProvider(VisualProvider):
 
     def _build_image_prompt(self, main_prompt: str) -> tuple[str, str]:
         """
-        Bangun prompt 3-bagian: [PROMPT UTAMA] + [QUALITY TAGS] + [NEGATIVE PROMPT].
+        Bangun prompt 3-bagian: [GAYA RUPA] + [PROMPT UTAMA] + [QUALITY TAGS] + [NEGATIVE PROMPT].
         Returns: (positive_prompt, negative_prompt)
         Quality tags dan negative prompt diambil dari niche (Supabase) atau default.
+
+        ═══ GAYA RUPA DI DEPAN — TERUKUR, BUKAN DIDUGA (2026-08-15, `[B32]` T6) ═══
+        Satu adegan sama dikirim ke `gpt-image-1-mini` dalam 4 susunan, 7 gambar, DNA meminta animasi 3D:
+        gaya di EKOR → **foto** (A 2/2 · C 1/1) · gaya di DEPAN → **animasi 3D** (B 2/3, sisanya
+        setengah jalan). Mesin gambar menimbang kata-kata AWAL jauh lebih berat; gaya yang menempel
+        sesudah paragraf deskriptif praktis tak terdengar. Inilah sebab video uji `sunnah_harian`
+        keluar seperti foto padahal DNA-nya sudah benar dan sudah sampai ke mesin.
+
+        ⛔ Dugaan lama GUGUR: saya menduga kalimat `Avoid: photorealistic…` yang memanggil fotorealisme.
+        Varian D (gaya di depan TANPA daftar Avoid) justru **lebih buruk** → daftar itu TETAP dikirim.
+
+        ⚠️ Jujur: ini **memperbaiki, bukan menjamin** (1 dari 3 hanya setengah bergaya). Lapis
+        pemeriksaan hasil = T7.
+
+        Hanya berlaku bila niche MEMILIH `render_style`. Kosong ⇒ prompt **sama persis** seperti
+        sebelumnya untuk 47 niche lama (jaminan byte-identik 14-Agu utuh). Generik: niche/vendor baru
+        otomatis ikut tanpa menyentuh kode.
         """
-        positive = f"{main_prompt}\n\n{self.image_quality_tags}"
+        gaya = str((self.niche_visual_style or {}).get("render_style") or "").strip()
+        positive = f"{gaya}. {main_prompt}\n\n{self.image_quality_tags}" if gaya \
+            else f"{main_prompt}\n\n{self.image_quality_tags}"
         return positive, self.image_negative_prompt
 
     @property
