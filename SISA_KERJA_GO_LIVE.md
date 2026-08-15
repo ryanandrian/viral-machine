@@ -969,7 +969,7 @@ ketiganya; yang bolong **terpusat di visual** — separuh nilai jual niche.
 |---|---|---|---|---|
 | **T1** | Preset **menggabung**, bukan mengganti; properti di luar preset dipertahankan; layar menyebut apa yang berubah | `components/niche-dna-editor.tsx` · `lib/niche-dna.ts` · `tests/test_preset_dna_tak_menghapus.py` | uji `applyVisual` mempertahankan 9 kunci; merah di kode sekarang | ✅ **2026-08-15** |
 | **T2** | Kunci tulis publik di `niches`·`moods`·`music_library`; niche privat hanya terbaca pemiliknya (dijaga DB, bukan disaring browser) | `migrations/0199_kunci_tulis_publik_katalog_niche.sql` · `tests/test_katalog_niche_tak_bisa_ditulis_publik.py` | sapuan izin: tulis DITOLAK ketiganya; baca 5 layar tetap jalan | ✅ **2026-08-15** (migrasi APPLIED) |
-| **T3** | 13 properti visual dapat label+penjelasan+contoh via **deklarasi tunggal** (§5b Lapis-2 "terlihat") | `niche-dna-editor.tsx` · `lib/niche-dna.ts` | uji: tiap kunci `visual_style` di 48 niche WAJIB punya deklarasi label | ⬜ |
+| **T3** | 13 properti visual dapat label+penjelasan+contoh via **deklarasi tunggal** (§5b Lapis-2 "terlihat") | `lib/niche-dna.ts` · `niche-dna-editor.tsx` · `tests/test_properti_visual_berlabel.py` | uji: tiap kunci `visual_style` di 48 niche WAJIB punya deklarasi label | ✅ **2026-08-15** |
 | **T4** | **Satu jalur baca DNA** (daftar 15 kolom dibuang) + frame pembuka memakai SELURUH DNA | `config.py` · `tenant_config.py` · `visual_assembler.py` · `music_selector.py` · `youtube_publisher.py` · `ai_image.py` | potret 48 niche identik; uji merah bila kolom baru tak terbawa | ⬜ |
 | **T5** | DNA yang baru disimpan **langsung** dipakai uji niche; layar menyatakan kapan berlaku | `config.py` · `components/test-niche-panel.tsx` | sunting→uji→terbukti versi BARU; uji merah bila jalur segar dicabut | ⬜ |
 | **T6** | Penegakan gaya visual: **uji terkendali dulu** (1 adegan × 4 versi), lalu gaya di depan perintah + larangan lewat saluran sesuai **deklarasi kemampuan vendor**; `"No people."` pindah dari kode ke DNA | `script_engine.py` · `ai_image.py` · `visual_assembler.py` · `ai_models` (data) | 47 niche lama tak bergeser sehuruf; uji merah bila vendor baru tanpa deklarasi | ⬜ |
@@ -1016,6 +1016,27 @@ katalog musik terbuka tanpa sesi). Sesudah: 5 lulus + 5 subuji. **Suite penuh 10
 *(Alat ukurnya sendiri sempat salah — mengharapkan "0 baris" padahal server melempar `permission denied`;
 diperbaiki agar menerima KEDUA bentuk penolakan. Pelajaran `test_rute_api_terjaga.py`: alat ukur yang
 salah lebih berbahaya daripada tidak mengukur.)*
+
+#### ✅ REALISASI T3 (2026-08-15)
+`VISUAL_PROPS` lahir di `lib/niche-dna.ts` — **satu-satunya tempat properti gaya visual dijelaskan**:
+15 properti × (label ID · label EN · penjelasan DAMPAKNYA ke video ID/EN · contoh nyata · jenis kotak).
+Editor admin **dan** editor tenant merender SELURUH kotaknya dari daftar itu; menambah properti ke-17 =
+**satu baris** di deklarasi, kotak+label+panduan+contoh muncul sendiri di KEDUA layar. Ini menuntaskan
+janji `NICHE_DNA §2` butir 2 ("NOL JSON mentah") yang tertunda sejak 4-Jul, dan `DESAIN §5b` Lapis-2
+("milik pemilik niche, **terlihat** & bisa diubah") untuk `strict_prohibition` + `render_style`.
+Penjelasan ditulis untuk pemilik niche awam, termasuk yang paling sering keliru: **`render_style` = 1–2
+kata** (penentu foto vs animasi) vs **`realism` = kalimat tekstur** — kekeliruan yang §1.1b sendiri
+peringatkan. `camera_motion` sengaja di luar daftar (objek bersarang, sudah punya seksi 4-tombol sendiri).
+Properti yang ditambahkan sendiri pemilik niche tetap boleh tampil apa adanya, tapi kini **ditandai
+jujur** *"belum punya panduan"* — bukan disamarkan seolah setara properti resmi.
+**Bukti:** `tests/test_properti_visual_berlabel.py` membaca daftar kunci **dari 48 niche di DB** (bukan
+dari daftar di dalam uji) ⇒ properti ke-17 yang lahir tanpa label = **MERAH otomatis**; deklarasinya
+DIJALANKAN lewat `tsc`+node, bukan dicocokkan teksnya. Merah dibuktikan 2×: sebelum perbaikan 5 gagal ·
+sabotase (mencabut `strict_prohibition`+`render_style` dari deklarasi) → 2 merah. Sesudah 6 lulus + 15 subuji.
+**Regresi:** `tsc --noEmit` EXIT=0 · **`next build` lulus** · **suite penuh 1052 lulus**.
+*(Dua uji saya sendiri sempat terlalu kasar — menolak label EN "Atmosphere"/"Lighting" karena kebetulan
+sama kata dengan kuncinya, dan melarang SELURUH kotak bernama-kode padahal properti buatan pemilik niche
+memang tak punya label. Keduanya **diperketat ke KONTRAK**-nya, bukan dilonggarkan agar hijau — pelajaran [B31].)*
 
 #### ⛔ LARANGAN DALAM [B32] — jangan dikerjakan, jangan "sekalian"
 - **Jangan** membangun sub-tag/`tag_pool` atau siklus rilis bulanan (aspiratif, di luar lingkup).

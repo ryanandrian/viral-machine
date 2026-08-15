@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Sparkles, Music, Image as ImageIcon, Clock3, Gauge, User, Plus, X, AlertTriangle, Video } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { validateDnaPatch, terapkanPreset, PERSONA_KEYS, VISUAL_CORE_KEYS, SECTION_KEYS, SECTION_LABELS, type DnaErrors } from "@/lib/niche-dna";
+import { validateDnaPatch, terapkanPreset, VISUAL_PROPS, PERSONA_KEYS, VISUAL_CORE_KEYS, SECTION_KEYS, SECTION_LABELS, type DnaErrors } from "@/lib/niche-dna";
 import { YT_CATEGORIES } from "@/lib/youtube-categories";
 
 // NICHE DNA EDITOR — SATU komponen utk ADMIN & TENANT (kesepakatan owner 2026-07-04: fungsi & alur
@@ -400,20 +400,26 @@ export default function NicheDnaEditor({ niche, onSave, busy, onCancel }: { nich
         subId="DNA gambar tiap adegan — di-inject ke prompt pembuat visual." subEn="Per-scene image DNA — injected into the visual generator prompts.">
         <PresetPicker presets={presetsFor("visual_style")} onApply={applyVisual} />
         {catatanPreset("visual_style")}
-        <Fld label={<Bi id="Gaya dasar (base_style)" en="Base style" />} hint={<Bi id="Fondasi tampilan semua gambar." en="Foundation look of every image." />}>
-          <input className="input" value={visual.base_style ?? ""} onChange={(e) => setVisual({ ...visual, base_style: e.target.value })} placeholder="mis. hyper-photorealistic cinematic photography" />
-        </Fld>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: ".75rem" }}>
-          <Fld label={<Bi id="Palet warna" en="Color palette" />}>
-            <input className="input" value={visual.color_palette ?? ""} onChange={(e) => setVisual({ ...visual, color_palette: e.target.value })} placeholder="mis. deep contrast, rich natural tones" />
+        {/* SELURUH kotak gaya visual LAHIR dari deklarasi tunggal `VISUAL_PROPS` (lib/niche-dna).
+            Sebelum 15-Agu hanya 3 kunci punya label; 13 sisanya — dipakai 47–48 dari 48 niche —
+            tampil sebagai nama kode Inggris di kotak kosong ([B32] T3). Menambah properti ke-17 =
+            satu baris di deklarasi itu; kotak+label+penjelasan+contoh muncul sendiri di KEDUA layar. */}
+        {Object.entries(VISUAL_PROPS).map(([k, d]) => (
+          <Fld key={k} label={<Bi id={d.label} en={d.labelEn} />} hint={<Bi id={d.hint} en={d.hintEn} />}>
+            {d.panjang
+              ? <textarea className="textarea" rows={2} value={visual[k] ?? ""} placeholder={d.contoh}
+                          onChange={(e) => setVisual({ ...visual, [k]: e.target.value })} />
+              : <input className="input" value={visual[k] ?? ""} placeholder={d.contoh}
+                       onChange={(e) => setVisual({ ...visual, [k]: e.target.value })} />}
           </Fld>
-          <Fld label={<Bi id="Atmosfer" en="Atmosphere" />}>
-            <input className="input" value={visual.atmosphere ?? ""} onChange={(e) => setVisual({ ...visual, atmosphere: e.target.value })} placeholder="mis. dramatic, larger than life" />
-          </Fld>
-        </div>
-        {Object.entries(visual).filter(([k]) => !(VISUAL_CORE_KEYS as readonly string[]).includes(k)).map(([k, v]) => (
+        ))}
+        {/* Properti di LUAR deklarasi (ditambahkan sendiri lewat kotak "properti tambahan" di bawah).
+            Tetap bisa disunting & dihapus — tapi diberi tanda jujur bahwa ia belum punya panduan. */}
+        {Object.entries(visual).filter(([k]) => !(k in VISUAL_PROPS) && k !== "camera_motion").map(([k, v]) => (
           <div key={k} style={{ display: "flex", gap: ".5rem", alignItems: "end" }}>
-            <Fld label={<span className="mono" style={{ fontSize: "0.6875rem" }}>{k}</span>}>
+            <Fld label={<span className="mono" style={{ fontSize: "0.6875rem" }}>{k}</span>}
+                 hint={<Bi id="Properti tambahan — dikirim apa adanya ke mesin gambar, belum punya panduan."
+                           en="Extra property — passed verbatim to the image engine, no guidance yet." />}>
               <input className="input" value={v} onChange={(e) => setVisual({ ...visual, [k]: e.target.value })} />
             </Fld>
             <button type="button" className="btn btn-ghost btn-icon btn-sm" style={{ color: "var(--danger)", flex: "none", marginBottom: 2 }} onClick={() => { const nv = { ...visual }; delete nv[k]; setVisual(nv); }}><X size={13} /></button>

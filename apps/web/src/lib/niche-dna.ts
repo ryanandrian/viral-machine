@@ -28,6 +28,114 @@ export const SECTION_LABELS: Record<string, [string, string, string, string]> = 
   cta:               ["Ajakan penutup", "Closing CTA", "Penutup + ajakan (ikut cta_mode channel)", "Closer + call-to-action"],
 };
 
+// ── DEKLARASI PROPERTI VISUAL — SATU-SATUNYA tempat properti gaya visual dijelaskan ───────────────
+// Editor admin, editor tenant, dan panduan di layar semuanya LAHIR dari daftar ini. Menambah properti
+// ke-17 = menambah SATU baris di sini; kotaknya, labelnya, penjelasannya, dan contohnya muncul sendiri
+// di kedua layar. (Standar world-class, ketok owner 2026-08-15 — `SISA_KERJA [B32]` T3.)
+//
+// CACAT YANG DITUTUP: sebelum ini hanya 3 kunci punya label; 13 kunci lain — yang dipakai 47–48 dari 48
+// niche — tampil sebagai NAMA KODE INGGRIS di kotak kosong. Melanggar `NICHE_DNA §2` butir 2 ("NOL JSON
+// mentah … label bahasa awam + contoh nyata + penjelasan dampaknya ke video") dan `DESAIN §5b` Lapis-2
+// (aniconism & gaya rupa = milik pemilik niche, "TERLIHAT & bisa diubah").
+// Dijaga `tests/test_properti_visual_berlabel.py`: kunci baru muncul di DB tanpa baris di sini → MERAH.
+//
+// `camera_motion` sengaja TIDAK di sini — ia objek bersarang dan punya seksi sendiri ("Gerakan Kamera",
+// 4 tombol berlabel awam), bukan kotak teks.
+export type VisualProp = { label: string; labelEn: string; hint: string; hintEn: string; contoh: string; panjang?: boolean };
+export const VISUAL_PROPS: Record<string, VisualProp> = {
+  render_style: {
+    label: "Gaya rupa", labelEn: "Render style",
+    hint: "SATU–DUA KATA yang menentukan hasilnya foto, animasi 3D, atau ilustrasi. Jangan diisi kalimat panjang — kata ini disisipkan apa adanya ke perintah gambar.",
+    hintEn: "ONE–TWO WORDS deciding whether output looks photographic, 3D-animated, or illustrated. Keep it short — it is injected verbatim into the image prompt.",
+    contoh: "photorealistic · stylized 3D animated · hand-drawn illustration",
+  },
+  base_style: {
+    label: "Gaya dasar", labelEn: "Base style",
+    hint: "Fondasi tampilan SEMUA gambar niche ini — kalimat pembuka yang dibaca mesin gambar.",
+    hintEn: "The foundation look of every image in this niche — the opening line the image engine reads.",
+    contoh: "sinematik fotorealistis, detail tajam, kedalaman ruang terasa", panjang: true,
+  },
+  color_palette: {
+    label: "Palet warna", labelEn: "Colour palette",
+    hint: "Warna yang mendominasi tiap adegan. Sebut 3–5 warna, jangan satu warna saja (hasilnya jadi satu nada membosankan).",
+    hintEn: "Colours that dominate each scene. Name 3–5; a single colour yields flat, monotone frames.",
+    contoh: "biru laut dalam, pirus, hitam pekat, perak dingin",
+  },
+  atmosphere: {
+    label: "Suasana", labelEn: "Atmosphere",
+    hint: "Perasaan yang ditinggalkan gambar pada penonton — bukan isinya, melainkan rasanya.",
+    hintEn: "The feeling the image leaves with the viewer — not what is in it, but how it feels.",
+    contoh: "megah dan sunyi, membuat penonton merasa kecil",
+  },
+  lighting: {
+    label: "Pencahayaan", labelEn: "Lighting",
+    hint: "Arah dan sifat cahaya. Ini penentu terbesar apakah gambar terlihat mahal atau murah.",
+    hintEn: "Direction and quality of light — the single biggest factor in whether frames look expensive.",
+    contoh: "cahaya jendela pagi yang lembut, garis tipis di tepi wajah", panjang: true,
+  },
+  camera: {
+    label: "Sudut & lensa kamera", labelEn: "Camera & lens",
+    hint: "Dari mana gambar diambil dan seberapa dekat ke subjek.",
+    hintEn: "Where the shot is taken from and how close it sits to the subject.",
+    contoh: "setinggi mata, lensa 35mm, dorongan lambat ke wajah", panjang: true,
+  },
+  composition: {
+    label: "Komposisi", labelEn: "Composition",
+    hint: "Peletakan subjek dalam bingkai tegak 9:16. Sisakan ruang kosong di atas bila judul akan ditumpangkan.",
+    hintEn: "How the subject sits in the vertical 9:16 frame. Leave headroom if a title overlays the top.",
+    contoh: "satu subjek dominan, latar berlapis, ruang kosong di sepertiga atas", panjang: true,
+  },
+  realism: {
+    label: "Tingkat realisme", labelEn: "Realism level",
+    hint: "Kalimat TEKSTUR: seberapa mirip foto atau seberapa bergaya. Berbeda dari “Gaya rupa” yang cuma 1–2 kata.",
+    hintEn: "A TEXTURE sentence: how photographic or how stylised. Different from “Render style”, which is 1–2 words.",
+    contoh: "kulit berpori halus, serat kain terlihat, bayangan kontak akurat", panjang: true,
+  },
+  color_grading: {
+    label: "Gradasi warna", labelEn: "Colour grading",
+    hint: "Sentuhan akhir warna: kontras, kedalaman bayangan, kehangatan. Hindari “satu warna menyelimuti seluruh gambar”.",
+    hintEn: "Final colour pass: contrast, shadow depth, warmth. Avoid one hue washing the whole frame.",
+    contoh: "kontras kaya, bayangan pekat tapi tidak mati, sorotan bersih", panjang: true,
+  },
+  motion: {
+    label: "Gerak di dalam adegan", labelEn: "In-scene motion",
+    hint: "Gerak yang DIGAMBARKAN di dalam satu bidikan. Berbeda dari “Gerakan Kamera” (zoom/geser) yang diatur di bawah.",
+    hintEn: "Movement DEPICTED inside a shot. Different from “Camera Motion” (zoom/pan) set below.",
+    contoh: "gerak tenang, satu aksi jelas per adegan",
+  },
+  reference: {
+    label: "Rujukan gaya", labelEn: "Style reference",
+    hint: "Bahasa visual yang jadi acuan mutu — sebut jenis karyanya, bukan judul berhak cipta.",
+    hintEn: "The visual language used as a quality bar — name the genre, not a copyrighted title.",
+    contoh: "dokumenter alam kelas bioskop", panjang: true,
+  },
+  subject: {
+    label: "Subjek utama", labelEn: "Main subject",
+    hint: "Siapa atau apa yang paling sering jadi pusat gambar di niche ini.",
+    hintEn: "Who or what most often sits at the centre of the frame in this niche.",
+    contoh: "orang biasa masa kini yang sedang beraktivitas",
+  },
+  environment: {
+    label: "Lingkungan", labelEn: "Environment",
+    hint: "Tempat kejadian yang khas untuk niche ini.",
+    hintEn: "The settings characteristic of this niche.",
+    contoh: "rumah sederhana, jalan kampung, dapur pagi hari",
+  },
+  strict_prohibition: {
+    label: "Larangan mutlak niche", labelEn: "Absolute bans for this niche",
+    hint: "Hal yang TIDAK BOLEH muncul di gambar mana pun niche ini — misalnya tingkat aniconism atau adab berpakaian. Milik Anda, bukan mesin. (Larangan MesinViral sendiri tetap berlaku dan tak bisa dimatikan dari sini.)",
+    hintEn: "What must NEVER appear in any image of this niche — e.g. level of aniconism or dress modesty. Yours to set. (MesinViral's own hard bans still apply and cannot be switched off here.)",
+    contoh: "jangan gambarkan nabi, rasul, atau malaikat — wajah, tubuh, siluet, maupun bayangannya",
+    panjang: true,
+  },
+  mandatory_motion: {
+    label: "Gerak wajib (video-AI)", labelEn: "Mandatory motion (AI-video)",
+    hint: "Hanya untuk niche berdurasi 8 detik yang memakai video-AI: gerak yang harus ada di setiap klip.",
+    hintEn: "Only for 8-second AI-video niches: motion that must be present in every clip.",
+    contoh: "kamera bergerak halus maju",
+  },
+};
+
 export type DnaErrors = Record<string, string>;
 
 const isStr = (v: unknown): v is string => typeof v === "string";
