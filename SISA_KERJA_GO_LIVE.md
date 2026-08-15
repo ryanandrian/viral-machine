@@ -973,7 +973,7 @@ ketiganya; yang bolong **terpusat di visual** — separuh nilai jual niche.
 | **T4** | **Satu jalur baca DNA** (daftar 15 kolom dibuang) + frame pembuka memakai SELURUH DNA | `config.py` · `tenant_config.py` · `visual_assembler.py` · `music_selector.py` · `youtube_publisher.py` · `tests/test_dna_niche_sampai_utuh.py` | potret 48 niche identik; uji merah bila kolom baru tak terbawa | ✅ **2026-08-15** |
 | **T5** | DNA yang baru disimpan **langsung** dipakai uji niche; layar menyatakan kapan berlaku | `producer.py` · `test-niche-panel.tsx` · `niche-dna-editor.tsx` · `tests/test_dna_uji_selalu_terbaru.py` | sunting→uji→terbukti versi BARU; uji merah bila jalur segar dicabut | ✅ **2026-08-15** |
 | **T6** | Penegakan gaya visual: **uji terkendali dulu** (1 adegan × 4 versi), lalu gaya di depan perintah; `"No people."` pindah dari kode ke DNA | `ai_image.py` · `visual_assembler.py` · `lib/niche-dna.ts` · `tests/test_gaya_niche_ditegakkan.py` | 47 niche lama tak bergeser sehuruf | ✅ **2026-08-15** |
-| **T7** | **[B14]** larangan figur ditegakkan pada GAMBAR keluaran (bukan cuma pada permintaan) → gagal jujur, tidak terbit | `visual_assembler.py` · QC | gambar uji melanggar → ditolak; sabotase → merah | ⬜ |
+| **T7** | **RENCANA DIGANTI OWNER** — bukan periksa gambar hasil, melainkan **batasi LLM-nya**: Rasulullah & Allah tak digambarkan/disuarakan di NASKAH; cukup terjemahan hadits/Qur'an. Orang lain bebas | `script_engine.py` · `tests/test_batas_rasul_dan_allah.py` | batas sampai ke kedua penulis naskah; nol lapis duplikat di sisi gambar | ✅ **2026-08-15** |
 | **T8** | `F-2` substitusi senyap → gagal jujur. **TERNYATA SUDAH dikerjakan 15-Jul; dokumennya yang basi.** Yang kurang = PENJAGA | `tests/test_niche_tak_dikenal_gagal_jujur.py` · `AUDIT_ATRIBUSI_NICHE` (koreksi) | niche hilang → berhenti+lapor, bukan substitusi senyap | ✅ **2026-08-15** |
 
 #### ✅ REALISASI T1 (2026-08-15)
@@ -1114,6 +1114,33 @@ Yang benar-benar kurang: **penjaganya**. Kini `tests/test_niche_tak_dikenal_gaga
 MEMANGGIL ketiga titik dengan niche karangan dan menuntut run berhenti, plus sapuan kode agar pola
 substitusi (`next(iter(niches…))`) tak bisa kembali. Sabotase satu titik ⇒ **2 merah**. Dokumen
 `AUDIT_ATRIBUSI_NICHE` dikoreksi di commit yang sama.
+
+#### ✅ REALISASI T7 (2026-08-15) — **rencana saya diganti owner, dan gantinya lebih benar**
+Rancangan saya (periksa GAMBAR hasil: pengenal wajah / "mata" AI / tolak semua kata bertubuh)
+**DITOLAK owner**: *"jangan over engineering, yang membuat niche jadi kaku dan jadi bermasalah."*
+Ia benar — ketiganya melarang **seluruh manusia**, padahal yang terlarang **hanya DUA sosok**.
+**Ketetapan owner:** batasi **LLM**-nya — Rasulullah & Allah tidak digambarkan/disuarakan **dalam
+NASKAH**; yang boleh hanya menyampaikan **terjemahan hadits / terjemahan Al-Qur'an**; menggambarkan
+orang lain **boleh-boleh saja**.
+**PETA yang diperiksa lebih dulu (owner: "bukankah sudah ada proteksinya?"):**
+· sisi **GAMBAR** = **sudah** terlindungi 3 lapis sejak 14-Agu (`patri.py`: penyaring permintaan +
+tempelan larangan tiap prompt + 23 uji) ⇒ **tidak disentuh**; lapis ke-4 yang sempat saya tambahkan
+di penulis prompt gambar **DICABUT** — *double cover = pengerusakan.*
+· sisi **NASKAH** = **NOL**. Sapuan kode: tak satu baris pun menyebut Rasulullah/Allah di jalur naskah;
+yang ada hanya tulisan DNA **2 dari 48** niche (ditulis pemilik niche sendiri, bukan jaminan mesin).
+Padahal `DESAIN §5b` menetapkan keduanya sebagai **patri #1 dan #2 — dipatri di KODE**, bukan
+diserahkan ke DNA. Jadi ini menutup sisi yang kosong, bukan menumpuk di atas yang sudah ada.
+**Wujudnya: satu kalimat, satu konstanta** (`BATAS_SOSOK_DIMULIAKAN`), dipakai **2 penulis naskah**
+(naskah utuh · naskah per-bagian). Nol subsistem baru · nol pemeriksa baru · nol biaya per gambar ·
+nol ketergantungan vendor baru · niche tidak jadi kaku.
+**Dasar ukur:** 4 gambar (adegan pasar gurun subuh) ⇒ mesin gambar **mematuhi** larangan selama adegan
+yang kita perintahkan tidak memintanya (**4/4 nol manusia**), di posisi depan maupun akhir. Yang
+membuatnya melanggar adalah kalimat adegan **kita sendiri**. ⛔ Ini **mengoreksi** kesimpulan saya
+15-Agu *"properti DNA berbentuk larangan tidak andal"* — terlalu luas, dicabut.
+**Bukti:** merah dulu (3 gagal) → hijau; `test_patri_larangan.py` 23 uji tetap hijau (nol regresi sisi
+gambar); **suite penuh 1079 lulus**.
+⛔ **JANGAN hidupkan lagi:** pengenal wajah di server · "mata" AI per-gambar · penolak semua kata
+bertubuh untuk niche anikonik. Ketiganya ditolak owner dengan alasan yang sudah terbukti.
 
 #### ⛔ LARANGAN DALAM [B32] — jangan dikerjakan, jangan "sekalian"
 - **Jangan** membangun sub-tag/`tag_pool` atau siklus rilis bulanan (aspiratif, di luar lingkup).

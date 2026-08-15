@@ -246,6 +246,24 @@ def _beat_weight() -> dict:
     return _beats.weights()
 
 
+# ── BATAS SOSOK YANG DIMULIAKAN — ketetapan owner 2026-08-15 (`SISA_KERJA [B32]` T7) ─────────────
+# Dipasang pada INSTRUKSI ke LLM (penulis naskah & penulis perintah gambar), bukan sebagai pemeriksa
+# gambar hasil atau penyaring kata bertubuh. Sebabnya: yang terlarang hanya DUA sosok — bukan seluruh
+# manusia. Menyaring semua kata bertubuh membuat niche KAKU dan melarang jauh lebih banyak daripada
+# aturannya sendiri (rancangan itu ditolak owner: "jangan over engineering").
+#
+# Terukur 15-Agu (4 gambar, adegan pasar gurun subuh): mesin gambar MEMATUHI larangan selama adegan
+# yang kita perintahkan tidak memintanya (4/4 nol manusia). Yang membuatnya melanggar adalah kalimat
+# adegan kita sendiri yang meminta orang. Maka menahannya di HULU — pada penulisnya — sudah cukup;
+# penyaring prompt `providers/visual/patri.py` tetap menjadi jaring terakhir.
+BATAS_SOSOK_DIMULIAKAN = (
+    "SACRED LIMIT (non-negotiable): never depict, portray, voice, or put words into the mouth of "
+    "Prophet Muhammad or Allah. When either is referred to, convey ONLY the translated meaning of an "
+    "authentic hadith or Qur'anic verse, attributed plainly. Other people may be shown and described "
+    "freely — this limit applies to those two alone."
+)
+
+
 def _role_label() -> dict:
     """Label peran adegan untuk prompt (mis. `hook` → HOOK)."""
     return _beats.labels_upper()
@@ -623,6 +641,7 @@ def _generate_per_beat(provider, model, topic, niche, beats: list, resep: dict,
             # kolom ini tak pernah sampai ke penulis — padahal ia satu-satunya kalimat utuh yang
             # menjelaskan niche, dan itu tuas mutu narasi yang kita kuasai sendiri.
             ("WHAT THIS NICHE IS", _deskripsi_niche(niche_profile, content_language)),
+            ("SACRED LIMIT", BATAS_SOSOK_DIMULIAKAN),
         ]
         dna = "\n".join(f"{nama}: {nilai}" for nama, nilai in _bagian if nilai)
     lokal = (_content_language_block(content_language) if content_language
@@ -1278,6 +1297,8 @@ NICHE: {niche_data.get('name', niche)}
 TARGET DURATION: {target_duration} seconds of spoken narration.
 {_content_language_block(content_language)}
 {length_block}
+
+{BATAS_SOSOK_DIMULIAKAN}
 
 TONE: {profile['tone']}
 STYLE: {profile['style']}
