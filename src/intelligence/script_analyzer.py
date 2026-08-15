@@ -124,6 +124,18 @@ def _build_prompt(script: dict, niche: str, niche_profile: dict | None = None,
 
     emotion_criteria = _derive_emotion_criteria(niche_profile)
 
+    # [B32] T9 — PANTANGAN TENANT IKUT DINILAI (ketetapan owner 15-Agu: "kotak avoid benar-benar
+    # ditaati mesin produksi"). Pemeriksa harfiah `script_checker` hanya menangkap butir 1–2 kata;
+    # butir berupa KALIMAT — 79 dari 187 butir di 48 niche — selama ini nol penjagaan, termasuk
+    # pantangan terpenting `kisah_teladan_islami`: "depicting/voicing revered figures directly".
+    # Penilai ini SUDAH dipanggil tiap percobaan naskah ⇒ nol panggilan AI tambahan, nol biaya
+    # tambahan. Melanggar ⇒ nilai jatuh ⇒ naskah ditulis ulang oleh putaran retry yang sudah ada.
+    # Niche tanpa pantangan → blok kosong ⇒ perintah penilai SAMA PERSIS seperti sebelumnya.
+    _avoid = str((((niche_profile or {}).get("narration_persona") or {}).get("avoid") or "")).strip()
+    bans_block = (f"\n\nNICHE BANS (written by the niche owner — treat as hard requirements): {_avoid}\n"
+                  "If the script violates ANY of them, score `brand_safety_violation`: set overall "
+                  "score BELOW 60 and name the violated ban first in `weak_areas`.") if _avoid else ""
+
     # Catatan FORMAT (preset-aware): bila preset pendek sengaja tak punya climax/cta, beri tahu
     # LLM agar TIDAK menghukum bagian yang absen (set dimensi terkait null, nilai hanya yang ada).
     beats_note = ""
@@ -178,7 +190,7 @@ Dimensions (award 80+ for good execution, 90+ for exceptional; reserve <60 for g
 - hook_power (25%): stops scroll in first second. Score 80+ if the opening creates a specific information gap tied to THIS topic (a number/name/claim it couldn't be about anything else); 90+ if irresistibly precise. Score below 60 for generic openers ("Did you know", "In this video").
 - curiosity_gap (20%): sections leave loops open. Score 80+ if the viewer feels pulled to the next line; 90+ if stopping feels like leaving mid-sentence. Score below 60 only if sections summarize/close loops prematurely.
 - retention_arc (20%): each sentence adds info or raises stakes. Score 80+ if it stays tight with little waste; 90+ if nothing could be cut. Score below 60 for filler, repetition, or vague claims.
-- emotional_peak (20%): {emotion_criteria}
+- emotional_peak (20%): {emotion_criteria}{bans_block}
 - information_density (10%): specific numbers, names, dates. Score 80+ if it carries concrete, verifiable specifics; 90+ if every fact is surprising AND precise. Score below 60 for "very large", "long ago", "many scientists".
 - cta_strength (5%): Score 80+ if it reads like one human sharing a thought — a question, open loop, or perspective shift (implicit engagement that makes following feel like the viewer's own idea). Score below 50 for ANY explicit instruction ("follow", "subscribe", "like", "hit the bell", or any imperative verb at the viewer).
 

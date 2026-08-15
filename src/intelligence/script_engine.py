@@ -131,6 +131,29 @@ def _scale_section_timing(section_timing: dict, target_seconds: float) -> dict:
     return {k: max(1, round(v * factor)) for k, v in section_timing.items()}
 
 
+def bagian_larangan_gambar(niche_profile: dict | None) -> str:
+    """Larangan gambar TENANT (`niches.image_negative_prompt`) untuk diberikan ke PENULIS ADEGAN.
+
+    ═══ CACAT YANG DITUTUP (2026-08-15, `SISA_KERJA [B32]` T9 — ketetapan owner) ═══
+    Larangan gambar tenant selama ini HANYA ditempel di EKOR perintah ke mesin gambar. AI yang
+    mengarang adegan **tidak pernah diberi tahu**, sehingga ia bebas menulis "seorang pemuda duduk
+    bersila di ruang tamu…" walaupun tenant melarang manusia. Mesin gambar lalu menuruti ADEGAN-nya —
+    bukan larangan yang menempel belakangan. Terukur 15-Agu: larangan dipatuhi (4/4) selama adegan
+    tidak memintanya, dan diabaikan begitu adegan memintanya.
+    ⇒ Selama ini larangan TENANT kalah oleh kalimat yang KITA sendiri tulis.
+
+    Ketetapan owner: kotak Pantangan tenant = **penjagaan PERTAMA**; patri mesin hanya penjagaan kedua.
+    Maka larangannya harus sampai ke titik adegan DILAHIRKAN, bukan ditambal sesudahnya.
+
+    Kosong → string kosong ⇒ perintah niche tanpa larangan **sama persis** seperti sebelumnya.
+    """
+    larangan = str(((niche_profile or {}).get("image_negative_prompt") or "")).strip()
+    if not larangan:
+        return ""
+    return ("\nNICHE OWNER'S IMAGE BANS (the niche owner forbids these in every image — compose scenes "
+            f"that never require them; do NOT write a scene that needs any of these):\n  {larangan}\n")
+
+
 def _get_profile(niche: str) -> dict:
     """
     Load narration_persona dari niche registry (Supabase-driven, no hardcode).
@@ -1544,6 +1567,9 @@ class ScriptEngine:
         topic_text = script.get("topic", "") or script.get("title", "")
         niche_key  = getattr(tenant_config, "niche", "") or script.get("niche", "")
         niche_name = (get_niches().get(niche_key) or {}).get("name", niche_key)
+        # [B32] T9 — larangan gambar TENANT ikut ke PENULIS ADEGAN (penjagaan PERTAMA, ketetapan owner
+        # 15-Agu). Tanpa ini, adegan bisa lahir melanggar lalu mesin gambar menuruti adegannya.
+        larangan_block = bagian_larangan_gambar(get_niches().get(niche_key) or {})
 
         def _extractive(beat: str) -> str:
             txt   = (script.get(beat) or "").strip()
@@ -1581,7 +1607,7 @@ NICHE: {niche_name}
 
 VISUAL DNA — the signature cinematic identity of this niche. Apply ALL of it to EVERY image:
 {dna_lines}
-{exemplar_block}
+{exemplar_block}{larangan_block}
 
 Below is the FINAL narration, beat by beat. Make each image match what is actually SAID in that beat.
 

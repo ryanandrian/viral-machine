@@ -974,6 +974,7 @@ ketiganya; yang bolong **terpusat di visual** — separuh nilai jual niche.
 | **T5** | DNA yang baru disimpan **langsung** dipakai uji niche; layar menyatakan kapan berlaku | `producer.py` · `test-niche-panel.tsx` · `niche-dna-editor.tsx` · `tests/test_dna_uji_selalu_terbaru.py` | sunting→uji→terbukti versi BARU; uji merah bila jalur segar dicabut | ✅ **2026-08-15** |
 | **T6** | Penegakan gaya visual: **uji terkendali dulu** (1 adegan × 4 versi), lalu gaya di depan perintah; `"No people."` pindah dari kode ke DNA | `ai_image.py` · `visual_assembler.py` · `lib/niche-dna.ts` · `tests/test_gaya_niche_ditegakkan.py` | 47 niche lama tak bergeser sehuruf | ✅ **2026-08-15** |
 | **T7** | **DIGANTI DUA KALI OLEH OWNER** → hasil akhir: **pastikan fasilitas `avoid` milik tenant berjalan baik** (bukan menambah patri apa pun) | `niche-dna-editor.tsx` · `tests/test_pantangan_jujur.py` | mesin TIDAK berubah; layar berhenti menjanjikan yang tak ditepati | ✅ **2026-08-15** |
+| **T9** | ⭐ **TUJUAN UTAMA OWNER:** kotak Pantangan tenant **benar-benar ditaati** — narasi DAN gambar; patri mesin turun jadi penjagaan KEDUA | `script_engine.py` · `script_analyzer.py` · `tests/test_pantangan_benar_benar_ditaati.py` | larangan gambar sampai ke penulis adegan; pantangan narasi ikut dinilai | ✅ **2026-08-15** |
 | **T8** | `F-2` substitusi senyap → gagal jujur. **TERNYATA SUDAH dikerjakan 15-Jul; dokumennya yang basi.** Yang kurang = PENJAGA | `tests/test_niche_tak_dikenal_gagal_jujur.py` · `AUDIT_ATRIBUSI_NICHE` (koreksi) | niche hilang → berhenti+lapor, bukan substitusi senyap | ✅ **2026-08-15** |
 
 #### ✅ REALISASI T1 (2026-08-15)
@@ -1140,6 +1141,30 @@ dwibahasa. Itu memperbaiki ALAT, bukan mengatur isi konten tenant.
 keras · kalimat = tidak harfiah · pelanggaran = parah) + menuntut layar jujur. **Suite penuh 1082 lulus.**
 ⛔ **JANGAN hidupkan lagi:** pengenal wajah · "mata" AI per-gambar · penolak kata bertubuh · patri
 larangan sosok di penulis naskah · pencocokan makna (semantik) · memaksa tenant menulis kata tunggal.
+
+#### ⭐ REALISASI T9 (2026-08-15) — **TUJUAN UTAMA OWNER, yang justru TIDAK ada di rencana saya**
+Ketetapan owner: *"kotak avoid pada Niche Studio dan Niche Library, baik untuk LLM maupun visual,
+BENAR-BENAR DITAATI oleh mesin produksi. Titik."* + *"patri 2 hal terkait Allah dan Rasulullah juga
+hanya penjagaan KEDUA; yang pertama harus dari tenant sendiri melalui kotak avoid."*
+⚠️ **Kesalahan saya:** rencana [B32] memetakan apa yang RUSAK, bukan apa yang owner INGINKAN. Delapan
+tahap dikerjakan tanpa satu pun menyentuh tujuan utamanya. Dicatat sebagai pelajaran menyusun rencana.
+**Dua lubang yang ditutup:**
+1. **Larangan GAMBAR tenant tak pernah sampai ke PENULIS ADEGAN** — hanya ditempel di ekor perintah ke
+   mesin gambar. Akibatnya penulis adegan bebas mengarang *"seorang pemuda duduk bersila…"* walau tenant
+   melarang manusia, lalu mesin gambar menuruti ADEGAN, bukan larangan yang menempel belakangan.
+   Terukur 15-Agu: larangan dipatuhi **4/4** selama adegan tak memintanya, diabaikan begitu adegan
+   memintanya. ⇒ **larangan TENANT kalah oleh kalimat yang KITA tulis sendiri.** Kini
+   `bagian_larangan_gambar()` menyerahkannya ke penulis adegan ⇒ adegan lahir sudah patuh.
+2. **Pantangan NARASI hanya ditegakkan bila 1–2 kata.** Butir berupa kalimat (79 dari 187 butir di 48
+   niche) nol penjagaan — termasuk pantangan terpenting `kisah_teladan_islami`: *"depicting/voicing
+   revered figures directly"*. Kini ikut dinilai **penilai naskah yang SUDAH dipanggil tiap percobaan**
+   ⇒ **nol panggilan AI tambahan, nol biaya tambahan**; melanggar ⇒ nilai <60 ⇒ ditulis ulang oleh
+   putaran retry yang sudah ada.
+**Pemeriksa harfiah TIDAK diubah** (mencocokkan kalimat secara harfiah akan menolak naskah SAH — kelas
+"keras"→"kekerasan" yang sudah dibayar). Niche tanpa isian ⇒ perintah **sama persis** seperti sebelumnya.
+**Bukti pada niche NYATA:** `kisah_teladan_islami` & `sunnah_harian` — larangan gambar ✅ sampai ke
+penulis adegan · pantangan narasi ✅ sampai ke penilai. Merah dibuktikan 2×: sebelum 5 gagal · sabotase
+(dua sambungan dicabut) → 2 merah. **Suite penuh 1088 lulus.**
 
 #### ⛔ LARANGAN DALAM [B32] — jangan dikerjakan, jangan "sekalian"
 - **Jangan** membangun sub-tag/`tag_pool` atau siklus rilis bulanan (aspiratif, di luar lingkup).
