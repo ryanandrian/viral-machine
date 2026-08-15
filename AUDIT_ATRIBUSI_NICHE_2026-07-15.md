@@ -35,10 +35,14 @@ Dua temuan kelas-lain tercatat (F-2 latent, F-3 higiene) — bukan kebocoran akt
 - **FE-marketing:** kata "niche" hanya copy statis — NOL data ber-atribusi niche ✅.
 
 ## Temuan (bukan kebocoran aktif — keputusan owner)
-- **F-2 (latent, kelas §3.3):** 5 titik intelijen + loader memakai pola fallback `niche tak dikenal → pakai niche AKTIF PERTAMA`
-  (script_engine :123/:362, hook_optimizer :55, niche_selector :81/:374, loader :537). Hanya terpicu bila baris niche
-  DIHAPUS saat channel masih memakainya (readiness menggerbangi kasus normal). Substitusi senyap = kelas yang sama
-  dengan pelanggaran fallback 14-Jul → **usulan: ubah jadi gagal-jujur** (kecil, 6 titik). MENUNGGU KETOK.
+- **F-2 (kelas §3.3) — ✅ SUDAH DITUTUP 2026-07-15, bukan "menunggu ketok".** 6 titik dulu memakai pola
+  `niche tak dikenal → pakai niche AKTIF PERTAMA` (script_engine, hook_optimizer, niche_selector ×2, loader);
+  substitusi senyap = kelas yang sama dengan pelanggaran fallback 14-Jul. Keenamnya **kini gagal-jujur**
+  (run STOP + notifikasi), diverifikasi baris-per-baris 15-Agu.
+  ⛔ **Baris ini sempat menulis "MENUNGGU KETOK" selama sebulan padahal kodenya sudah benar** — dan itu
+  jenis kalimat yang membuat sesi berikutnya "memperbaiki" yang sudah beres, lalu merusaknya. Dikoreksi
+  2026-08-15 (`SISA_KERJA [B32]` T8). Yang benar-benar kurang bukan kodenya, melainkan **penjaganya**:
+  kini `tests/test_niche_tak_dikenal_gagal_jujur.py` (4 uji perilaku; sabotase 1 titik ⇒ merah).
 - **F-3 (higiene):** duplikat `tenant_configs.niche`/`niche_pool` vestigial → masuk **[B5]** sapu fosil.
 
 ## Batas audit (jujur)

@@ -974,7 +974,7 @@ ketiganya; yang bolong **terpusat di visual** — separuh nilai jual niche.
 | **T5** | DNA yang baru disimpan **langsung** dipakai uji niche; layar menyatakan kapan berlaku | `producer.py` · `test-niche-panel.tsx` · `niche-dna-editor.tsx` · `tests/test_dna_uji_selalu_terbaru.py` | sunting→uji→terbukti versi BARU; uji merah bila jalur segar dicabut | ✅ **2026-08-15** |
 | **T6** | Penegakan gaya visual: **uji terkendali dulu** (1 adegan × 4 versi), lalu gaya di depan perintah; `"No people."` pindah dari kode ke DNA | `ai_image.py` · `visual_assembler.py` · `lib/niche-dna.ts` · `tests/test_gaya_niche_ditegakkan.py` | 47 niche lama tak bergeser sehuruf | ✅ **2026-08-15** |
 | **T7** | **[B14]** larangan figur ditegakkan pada GAMBAR keluaran (bukan cuma pada permintaan) → gagal jujur, tidak terbit | `visual_assembler.py` · QC | gambar uji melanggar → ditolak; sabotase → merah | ⬜ |
-| **T8** | `F-2`: "niche tak dikenal → pakai niche aktif pertama" (6 titik) jadi **gagal jujur** — usulan 15-Jul, belum pernah diketok | `script_engine.py`(2) · `hook_optimizer.py` · `niche_selector.py`(2) · `tenant_config.py` | niche hilang → berhenti+lapor, bukan substitusi senyap | ⬜ |
+| **T8** | `F-2` substitusi senyap → gagal jujur. **TERNYATA SUDAH dikerjakan 15-Jul; dokumennya yang basi.** Yang kurang = PENJAGA | `tests/test_niche_tak_dikenal_gagal_jujur.py` · `AUDIT_ATRIBUSI_NICHE` (koreksi) | niche hilang → berhenti+lapor, bukan substitusi senyap | ✅ **2026-08-15** |
 
 #### ✅ REALISASI T1 (2026-08-15)
 `terapkanPreset()` lahir di `lib/niche-dna.ts` — **preset berkuasa penuh atas KELUARGA kuncinya sendiri
@@ -1103,6 +1103,17 @@ tidak berbeda per-vendor = kerumitan tanpa manfaat. Perbedaan vendor yang NYATA 
 **Bukti runtime:** satu gambar lewat **jalur produksi apa adanya** sesudah perbaikan → prompt dimulai
 *"premium 3D animated feature film still."* → hasilnya animasi 3D. Merah dibuktikan 2×: sebelum 3 gagal ·
 sabotase (gaya dikembalikan ke ekor) → 1 merah. `tsc` bersih · **suite penuh 1072 lulus**.
+
+#### ✅ REALISASI T8 (2026-08-15) — **dokumen basi hampir membuat saya "memperbaiki" yang sudah benar**
+Rencana menyebut F-2 "belum pernah diketok" karena `AUDIT_ATRIBUSI_NICHE` masih menulis **MENUNGGU
+KETOK**. Diperiksa baris-per-baris: **keenam titik SUDAH gagal-jujur sejak 15-Jul** (script_engine ·
+hook_optimizer · niche_selector ×2 · tenant_config), lengkap dengan komentar bertanggal. Dokumennya yang
+tertinggal sebulan. Kalau saya percaya dokumen dan "memperbaikinya", saya akan menyentuh kode yang sudah
+benar — persis peringatan owner *"dokumen basi bisa jadi sumber pengerusakan"*.
+Yang benar-benar kurang: **penjaganya**. Kini `tests/test_niche_tak_dikenal_gagal_jujur.py` — 4 uji yang
+MEMANGGIL ketiga titik dengan niche karangan dan menuntut run berhenti, plus sapuan kode agar pola
+substitusi (`next(iter(niches…))`) tak bisa kembali. Sabotase satu titik ⇒ **2 merah**. Dokumen
+`AUDIT_ATRIBUSI_NICHE` dikoreksi di commit yang sama.
 
 #### ⛔ LARANGAN DALAM [B32] — jangan dikerjakan, jangan "sekalian"
 - **Jangan** membangun sub-tag/`tag_pool` atau siklus rilis bulanan (aspiratif, di luar lingkup).
