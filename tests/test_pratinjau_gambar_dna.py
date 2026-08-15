@@ -86,5 +86,72 @@ class TestKontrakGagalJujur(unittest.TestCase):
         self.assertIn("result_key", self._badan())
 
 
+
+class TestPratinjauMemakaiSeluruhDna(unittest.TestCase):
+    """CACAT YANG DIJAGA (temuan owner 15-Agu, beberapa menit setelah T11 dipasang):
+    pratinjau versi pertama mengirim kalimat adegan MENTAH ⇒ hanya **2 dari 15** properti visual ikut
+    (`render_style` + tag kualitas + larangan). Ketiga belas sisanya — pencahayaan, kamera, komposisi,
+    realisme, palet, gradasi, atmosfer, rujukan, subjek, lingkungan, larangan niche — TIDAK ikut,
+    padahal di produksi semuanya ikut. Pratinjau seperti itu **berbohong**: pemilik niche menyetel DNA
+    berdasarkan gambar yang tak pernah memakai isian yang ia ubah."""
+
+    DNA = {"visual_style": {
+        "base_style": "GAYADASAR", "lighting": "CAHAYA", "camera": "KAMERA", "composition": "KOMPOSISI",
+        "realism": "REALISME", "color_palette": "PALET", "color_grading": "GRADASI",
+        "atmosphere": "SUASANA", "reference": "RUJUKAN", "subject": "SUBJEK",
+        "environment": "LINGKUNGAN", "strict_prohibition": "LARANGAN", "motion": "GERAK",
+        "render_style": "GAYARUPA", "camera_motion": {"intensity": "halus"}}}
+
+    def test_seluruh_properti_visual_ikut(self):
+        from src.intelligence.script_engine import prompt_adegan_dari_dna
+        p = prompt_adegan_dari_dna(self.DNA, "sebuah adegan")
+        hilang = [k for k, v in self.DNA["visual_style"].items() if isinstance(v, str) and v not in p]
+        self.assertEqual(hilang, [], f"properti visual ini tak ikut ke pratinjau: {hilang}")
+
+    def test_adegannya_tetap_ada(self):
+        from src.intelligence.script_engine import prompt_adegan_dari_dna
+        self.assertIn("sebuah adegan", prompt_adegan_dari_dna(self.DNA, "sebuah adegan"))
+
+    def test_niche_tanpa_dna_tetap_menghasilkan_prompt(self):
+        from src.intelligence.script_engine import prompt_adegan_dari_dna
+        p = prompt_adegan_dari_dna({}, "adegan")
+        self.assertIn("adegan", p)
+        self.assertGreater(len(p), 40)
+
+    def test_pratinjau_memanggilnya(self):
+        import inspect
+        import src.orchestrator.producer as prod
+        self.assertIn("prompt_adegan_dari_dna", inspect.getsource(prod.run_preview_image),
+                      "pratinjau kembali mengirim kalimat mentah — hanya 2 dari 15 properti akan ikut")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestJalurTampilPratinjau(unittest.TestCase):
+    """CACAT YANG DIJAGA (temuan owner 15-Agu: "hasil test tidak bisa dilihat"):
+    mesin mengunggah gambar pratinjau ke keranjang BUFFER (`S3_BUCKET`, lewat `s3_buffer.upload`,
+    sama seperti video uji), tetapi rute layar menandatangani tautannya dari keranjang ASET
+    (`mesinviral-assets` — tempat musik & logo). Beda keranjang ⇒ tautan menunjuk berkas yang tidak
+    ada ⇒ **gambar tak pernah tampil**.
+
+    ⛔ Kenapa lolos: saya menguji MESINNYA (gambar jadi & tersimpan) lalu menyebutnya "lulus", tanpa
+    menguji JALUR TAMPILNYA — pelanggaran §3.4 (*data valid ≠ tampilan valid*), aturan yang saya
+    sendiri kutip berkali-kali hari ini."""
+
+    def test_rute_memakai_keranjang_yang_sama_dengan_pengunggah(self):
+        rute = os.path.join(AKAR, "apps", "web", "src", "app", "api", "niches", "preview-image", "route.ts")
+        with open(rute, encoding="utf-8") as f:
+            src = f.read()
+        self.assertIn("presignBufferKey", src,
+                      "rute pratinjau menandatangani dari keranjang yang salah — gambar tak akan tampil")
+        i = src.find("const url_gambar")
+        self.assertNotIn("presignAssetKey", src[i:i + 200],
+                         "masih memakai keranjang ASET, padahal mesin mengunggah ke keranjang BUFFER")
+
+    def test_mesin_mengunggah_ke_keranjang_buffer(self):
+        """Sisi mesin dikunci juga: kalau suatu hari ia pindah keranjang, uji di atas jadi bohong."""
+        import inspect
+        import src.orchestrator.producer as prod
+        self.assertIn("s3_buffer.upload", inspect.getsource(prod.run_preview_image))

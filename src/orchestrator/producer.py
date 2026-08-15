@@ -392,7 +392,13 @@ def run_preview_image(sb, job: dict, ch: dict) -> None:
             "visual_seed":            getattr(tc, "visual_seed", None),
         })
 
-        positif, negatif = provider._build_image_prompt(ADEGAN)     # perakit PRODUKSI
+        # Adegan dirakit dari SELURUH DNA visual (cerminan jalur cadangan produksi) — bukan kalimat
+        # mentah. Versi pertama mengirim ADEGAN apa adanya ⇒ hanya 2 dari 15 properti visual ikut,
+        # sehingga pratinjaunya TIDAK mewakili hasil asli (temuan owner 15-Agu).
+        from src.intelligence.config import muat_niche_segar
+        from src.intelligence.script_engine import prompt_adegan_dari_dna
+        adegan_ber_dna = prompt_adegan_dari_dna(muat_niche_segar(niche), ADEGAN)
+        positif, negatif = provider._build_image_prompt(adegan_ber_dna)   # perakit PRODUKSI
         with tempfile.TemporaryDirectory() as d:
             f = Path(d) / "pratinjau.png"
             asyncio.run(provider._generate_image(positif, negatif, f))  # corong PRODUKSI (patri ikut)

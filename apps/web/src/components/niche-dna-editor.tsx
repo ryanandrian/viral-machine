@@ -446,15 +446,21 @@ export default function NicheDnaEditor({ niche, onSave, busy, onCancel, adminMod
         subId="DNA gambar tiap adegan — di-inject ke prompt pembuat visual." subEn="Per-scene image DNA — injected into the visual generator prompts.">
         <PresetPicker presets={presetsFor("visual_style")} onApply={applyVisual} />
         {catatanPreset("visual_style")}
-        <div style={{ display: "flex", alignItems: "center", gap: ".6rem", flexWrap: "wrap", marginBottom: ".2rem" }}>
-          <button type="button" className="btn btn-secondary btn-sm" disabled={pv.sibuk} onClick={pratinjau}>
-            {pv.sibuk ? <><Loader2 size={13} className="spin" /> <Bi id="Membuat…" en="Generating…" /></>
-                      : <><ImageIcon size={13} /> <Bi id="Pratinjau 1 gambar" en="Preview 1 image" /></>}
+        {/* [KOREKSI 15-Agu, teguran owner] Versi pertama: tombol kecil abu-abu BERDAMPINGAN dengan
+            kalimat panjang ⇒ terbaca sebagai teks, bukan tombol. Kini: tombol PENUH ber-warna merek,
+            berdiri sendiri di barisnya, keterangan biaya PINDAH ke bawahnya (§3.6 UI layak tenant awam
+            — aksi harus terlihat sebagai aksi, bukan disamarkan di antara kalimat). */}
+        <div style={{ padding: ".75rem", borderRadius: "var(--r-sm)", background: "var(--surface-2)",
+                      border: "1px solid var(--border-subtle)", marginBottom: ".25rem" }}>
+          <button type="button" className="btn btn-default" style={{ width: "100%" }}
+                  disabled={pv.sibuk} onClick={pratinjau}>
+            {pv.sibuk ? <><Loader2 size={15} className="spin" /> <Bi id="Membuat gambar…" en="Generating image…" /></>
+                      : <><ImageIcon size={15} /> <Bi id="Pratinjau 1 gambar" en="Preview 1 image" /></>}
           </button>
-          <span className="muted" style={{ fontSize: "0.6875rem" }}>
-            <Bi id="±25 detik · ±Rp 250 · memakai kunci AI Anda sendiri. Menyimpan DNA dulu agar pratinjau memakai isian terbaru."
-                en="±25 seconds · ±Rp 250 · uses your own AI key. Save the DNA first so the preview reflects your latest edits." />
-          </span>
+          <div className="muted" style={{ fontSize: "0.6875rem", marginTop: ".45rem", textAlign: "center" }}>
+            <Bi id="Lihat hasil gaya visual tanpa membuat video — ±25 detik, ±Rp 250, memakai kunci AI Anda sendiri. Simpan DNA dulu agar pratinjau memakai isian terbaru."
+                en="See the visual style without producing a video — ±25 seconds, ±Rp 250, on your own AI key. Save the DNA first so the preview uses your latest edits." />
+          </div>
         </div>
         {pv.galat && <div style={{ fontSize: "0.6875rem", color: "var(--danger)", marginBottom: ".4rem" }}>{pv.galat}</div>}
         {pv.url && (

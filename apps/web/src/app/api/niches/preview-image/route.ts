@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireSuperAdmin } from "@/lib/admin/guard";
 import { testChannelReadiness, ADMIN_TEST_TID } from "@/lib/admin/test-readiness";
-import { presignAssetKey } from "@/lib/test-run";
+import { presignBufferKey } from "@/lib/test-run";
 
 // [B32] T11 — PRATINJAU 1 GAMBAR dari DNA niche. Dipakai DUA layar sekaligus:
 // Niche Studio (tenant, niche miliknya) & Niche Library (admin, niche mana pun).
@@ -86,6 +86,12 @@ export async function GET(req: Request) {
     && (j.tenant_id === pemilik || (asAdmin && j.tenant_id === ADMIN_TEST_TID));
   if (!sah) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  const url_gambar = j.result_key ? await presignAssetKey(j.result_key as string) : null;
+  // [KOREKSI 15-Agu — hasil pratinjau TIDAK BISA DILIHAT] Versi pertama memakai `presignAssetKey`
+  // (keranjang `mesinviral-assets`, tempat musik & logo), padahal mesin mengunggah gambar pratinjau ke
+  // keranjang BUFFER (`S3_BUCKET`) lewat `s3_buffer.upload` — sama seperti video uji. Beda keranjang ⇒
+  // tautannya menunjuk berkas yang tak ada ⇒ gambar tak pernah tampil. Cacat ini lolos karena saya
+  // menguji MESINNYA (gambar jadi & tersimpan) tapi tidak menguji JALUR TAMPILNYA (§3.4: data valid ≠
+  // tampilan valid).
+  const url_gambar = j.result_key ? await presignBufferKey(j.result_key as string) : null;
   return NextResponse.json({ status: j.status, error: j.error, url: url_gambar });
 }

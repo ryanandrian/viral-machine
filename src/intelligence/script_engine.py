@@ -131,6 +131,28 @@ def _scale_section_timing(section_timing: dict, target_seconds: float) -> dict:
     return {k: max(1, round(v * factor)) for k, v in section_timing.items()}
 
 
+def prompt_adegan_dari_dna(niche_profile: dict | None, kalimat_adegan: str) -> str:
+    """Rakit prompt adegan dari SELURUH `visual_style` niche — cerminan jalur cadangan produksi.
+
+    ═══ KENAPA ADA (koreksi 2026-08-15, temuan owner) ═══
+    Pratinjau versi pertama mengirim kalimat adegan MENTAH ke mesin gambar, sehingga hanya
+    `render_style` + `image_quality_tags` + `image_negative_prompt` yang ikut — **2 dari 15 properti
+    visual**. Di produksi, ketiga belas properti lain ikut lewat AI penulis adegan. Artinya pratinjau
+    itu **tidak mewakili hasil asli**: pemilik niche akan menyetel DNA berdasarkan gambar yang tak
+    pernah memakai isian yang ia ubah.
+
+    Bentuk di bawah SENGAJA menyalin `_extractive()` — jalur cadangan yang dipakai produksi ketika
+    penulis adegan gagal — supaya pratinjau tetap memakai perakit milik mesin, bukan karangan baru.
+    Konsekuensinya: properti niche ke-17 otomatis ikut ke pratinjau tanpa menyentuh berkas ini.
+    """
+    nvs = ((niche_profile or {}).get("visual_style") or {})
+    dna_inline = "; ".join(str(v) for v in nvs.values() if v and isinstance(v, str)) \
+                 or "cinematic, photorealistic, dramatic lighting"
+    gaya = (nvs.get("render_style") or "photorealistic").strip()
+    return (f"{kalimat_adegan}. {dna_inline}. Single commanding focal point, vertical 9:16, "
+            f"{gaya}, no text no words no letters no numbers no logos no watermarks.")
+
+
 def bagian_larangan_gambar(niche_profile: dict | None) -> str:
     """Larangan gambar TENANT (`niches.image_negative_prompt`) untuk diberikan ke PENULIS ADEGAN.
 
