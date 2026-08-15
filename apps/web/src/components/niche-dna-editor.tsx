@@ -300,9 +300,27 @@ export default function NicheDnaEditor({ niche, onSave, busy, onCancel }: { nich
         <Fld label={<Bi id="Gaya penyampaian (style)" en="Delivery style" />}>
           <input className="input" value={persona.style ?? ""} onChange={(e) => setPersona({ ...persona, style: e.target.value })} placeholder="mis. jeda dramatis, membangun ketegangan" />
         </Fld>
-        <Fld label={<Bi id="Pantangan (avoid) — teks bebas, dipatuhi mesin apa adanya" en="Never say (avoid) — free text, obeyed verbatim" />}
-          hint={<Bi id="Tuliskan hal yang TIDAK BOLEH dikatakan narasi — termasuk kepentingan bisnis Anda (mis. 'jangan menyatakan suplemen tidak diperlukan; jangan sebut merek kompetitor')." en="Write what the narration must NEVER say — including your business red lines (e.g. 'never claim supplements are unnecessary; never mention competitor brands')." />}>
+        {/* [B32] JUJUR SOAL CARA KERJANYA (15-Agu). Label lama berbunyi "dipatuhi mesin apa adanya" —
+            itu JANJI YANG TIDAK BENAR. Terukur: pemeriksa naskah mencocokkan HARFIAH, jadi "kadrun"
+            tertangkap tapi "kata KADRUN" atau "menggambarkan atau menyuarakan Nabi" LOLOS. Dari 187
+            butir pantangan di 48 niche, 79 (42%) berupa kalimat yang tak akan pernah cocok — dan
+            pemiliknya tak punya cara tahu. Kalimat TETAP berguna (ikut jadi arahan ke AI penulis),
+            jadi yang diperbaiki adalah KETERANGANNYA, bukan mesinnya: tiap butir kini dihitung dan
+            dijelaskan perannya. Mesin TIDAK diubah — tenant yang memutuskan isi kontennya sendiri. */}
+        <Fld label={<Bi id="Pantangan (avoid)" en="Never say (avoid)" />}
+          hint={<Bi id="Pisahkan dengan koma. Butir 1–2 KATA ditegakkan mesin secara harfiah: naskah yang memuatnya DITOLAK. Butir berupa KALIMAT tidak dicocokkan harfiah — ia dikirim sebagai arahan ke AI penulis. Keduanya berguna; pakai kata untuk hal yang wajib ditolak, kalimat untuk hal yang perlu dipahami." en="Separate with commas. Entries of 1–2 WORDS are enforced literally: a script containing them is REJECTED. Sentence-length entries are not matched literally — they are passed to the writing AI as guidance. Both are useful; use words for hard bans, sentences for nuance." />}>
           <textarea className="textarea" rows={3} value={persona.avoid ?? ""} onChange={(e) => setPersona({ ...persona, avoid: e.target.value })} />
+          {(() => {
+            const butir = (persona.avoid ?? "").split(/[,;·|]/).map((x) => x.trim()).filter((x) => x.length >= 4);
+            if (!butir.length) return null;
+            const keras = butir.filter((x) => x.split(/\s+/).length <= 2).length;
+            return (
+              <div className="muted" style={{ fontSize: "0.6875rem", marginTop: ".3rem" }}>
+                <Bi id={`${keras} butir ditegakkan harfiah (naskah ditolak) · ${butir.length - keras} butir jadi arahan untuk AI penulis.`}
+                    en={`${keras} entr${keras === 1 ? "y" : "ies"} enforced literally (script rejected) · ${butir.length - keras} passed as guidance to the writing AI.`} />
+              </div>
+            );
+          })()}
         </Fld>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: ".75rem" }}>
           <Fld label={<Bi id="Formula hook" en="Hook formula" />} hint={<Bi id="Pola pembuka; boleh sebut beberapa." en="Opening pattern; may list several." />}>
