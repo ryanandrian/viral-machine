@@ -19,10 +19,8 @@ def _niche_default_hashtags(niche: str) -> list:
     Dipakai sebagai fallback saat channel belum override (channels.niche_hashtags[niche] kosong).
     Fail-soft → []."""
     try:
-        from supabase import create_client
-        sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
-        r = sb.table("niches").select("default_hashtags").eq("niche_id", niche).limit(1).execute()
-        dh = (r.data or [{}])[0].get("default_hashtags") or []
+        from src.intelligence.config import muat_niche_segar   # [B32] T4 — pintu tunggal, tetap segar
+        dh = muat_niche_segar(niche).get("default_hashtags") or []
         return dh if isinstance(dh, list) else []
     except Exception as e:
         logger.warning(f"[YouTube] ambil default_hashtags niche {niche} gagal (non-fatal): {e}")
@@ -34,10 +32,8 @@ def _niche_video_tags(niche: str) -> list:
     Sumber = `niches.keywords` (diatur admin via Niche Library / tenant via Niche Studio) — BUKAN lagi hardcode
     per-niche ryan. Niche tanpa keywords → [] (graceful; admin isi). Fail-soft → []."""
     try:
-        from supabase import create_client
-        sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
-        r = sb.table("niches").select("keywords").eq("niche_id", niche).limit(1).execute()
-        kw = (r.data or [{}])[0].get("keywords") or []
+        from src.intelligence.config import muat_niche_segar   # [B32] T4 — pintu tunggal, tetap segar
+        kw = muat_niche_segar(niche).get("keywords") or []
         return kw if isinstance(kw, list) else []
     except Exception as e:
         logger.warning(f"[YouTube] ambil keywords niche {niche} gagal (non-fatal): {e}")
@@ -48,10 +44,8 @@ def _niche_category(niche: str) -> str:
     """categoryId YouTube per-niche dari `niches.youtube_category_id` (diatur admin via Niche Library /
     tenant via Niche Studio) — BUKAN lagi hardcode per-niche ryan. Fallback "27" (Education). Fail-soft."""
     try:
-        from supabase import create_client
-        sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
-        r = sb.table("niches").select("youtube_category_id").eq("niche_id", niche).limit(1).execute()
-        cat = (r.data or [{}])[0].get("youtube_category_id")
+        from src.intelligence.config import muat_niche_segar   # [B32] T4 — pintu tunggal, tetap segar
+        cat = muat_niche_segar(niche).get("youtube_category_id")
         return str(cat) if cat else "27"
     except Exception as e:
         logger.warning(f"[YouTube] ambil category niche {niche} gagal (non-fatal): {e}")

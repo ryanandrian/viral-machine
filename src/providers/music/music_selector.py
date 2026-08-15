@@ -40,18 +40,14 @@ def _load_niche_mood_priority(niche: str) -> list:
     Load mood_priority dari Supabase niches table.
     Dipakai sebagai safety net fallback jika tidak ada keyword match.
     """
+    # [B32] T4 — lewat PINTU TUNGGAL baca niche (`intelligence/config`), bukan kueri sendiri.
+    # Tetap SEGAR (bukan lewat cache 300 dtk) supaya pilihan mood yang baru disimpan langsung berlaku.
     try:
-        from supabase import create_client
-        from dotenv import load_dotenv
-        load_dotenv()
-
-        sb  = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
-        res = sb.table("niches").select("mood_priority").eq("niche_id", niche).single().execute()
-        if res.data:
-            priority = res.data.get("mood_priority") or []
-            if priority:
-                logger.debug(f"[MusicSelector] mood_priority: {priority}")
-                return priority
+        from src.intelligence.config import muat_niche_segar
+        priority = muat_niche_segar(niche).get("mood_priority") or []
+        if priority:
+            logger.debug(f"[MusicSelector] mood_priority: {priority}")
+            return priority
     except Exception as e:
         logger.warning(f"[MusicSelector] Gagal load mood_priority dari niches: {e}")
     return []
@@ -61,13 +57,10 @@ def _load_music_config(niche: str) -> dict:
     """Kebijakan musik niche (§3#24/§10.G): {mode: fixed|random|auto, mood?, track_id?}.
     Kosong/None → 'auto' (deteksi mood per-naskah = perilaku existing). Config-driven."""
     try:
-        from supabase import create_client
-        from dotenv import load_dotenv
-        load_dotenv()
-        sb  = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
-        res = sb.table("niches").select("music_config").eq("niche_id", niche).single().execute()
-        if res.data and isinstance(res.data.get("music_config"), dict):
-            return res.data["music_config"]
+        from src.intelligence.config import muat_niche_segar   # [B32] T4 — pintu tunggal, tetap segar
+        mc = muat_niche_segar(niche).get("music_config")
+        if isinstance(mc, dict):
+            return mc
     except Exception as e:
         logger.warning(f"[MusicSelector] Gagal load music_config: {e}")
     return {}

@@ -153,37 +153,70 @@ def _load_from_supabase() -> dict:
         niche_id = row.get("niche_id")
         if not niche_id:
             continue
-        niches[niche_id] = {
-            "name":             row.get("name", niche_id),
-            "keywords":         row.get("keywords") or [],
-            "style":            row.get("style") or "",
-            "target_emotion":   row.get("target_emotion") or "",
-            "is_active":        row.get("is_active", True),
-            "narration_persona": row.get("narration_persona") or row.get("voice_profile") or {},
-            "visual_style":     row.get("visual_style") or {},
-            "visual_fallbacks": row.get("visual_fallbacks") or [],
-            "mood_priority":    row.get("mood_priority") or [],
-            "default_hashtags": row.get("default_hashtags") or [],
-            "section_timing":        row.get("section_timing") or {},
-            "image_quality_tags":    row.get("image_quality_tags") or "",
-            "image_negative_prompt": row.get("image_negative_prompt") or "",
-            # BUG FIX 2026-07-04 (audit NICHE_DNA): kolom ini TIDAK pernah disalin → kriteria scoring
-            # admin tak pernah sampai ke prompt QUALITY BAR (script_engine:497) & analyzer prioritas-1
-            # (script_analyzer:74) — selalu jatuh ke derive/default. (hook_templates di-drop: fosil,
-            # nol konsumen — hook via HOOK_FORMULAS + persona.hook_style.)
-            "emotion_scoring_criteria": row.get("emotion_scoring_criteria") or "",
-            # BUG FIX 2026-08-01 (audit DNA→prompt): kolom DESKRIPSI juga tak pernah disalin — kelas
-            # cacat yang sama dengan `emotion_scoring_criteria` di atas. Padahal deskripsi adalah
-            # satu-satunya kalimat UTUH yang menjelaskan niche ini apa; ia terisi untuk 47 niche dan
-            # berhenti di DB. Dibuktikan dengan menangkap prompt sungguhan: nol kemunculan.
-            # Dwibahasa: `description_en` dipakai untuk channel berbahasa Inggris.
-            "description":      row.get("description") or "",
-            "description_en":   row.get("description_en") or "",
-            # Voice = PER-CHANNEL (§10.B FINAL, owner 2026-06-23): niche provider-AGNOSTIK,
-            # TIDAK menyimpan voice. narration_persona = gaya/persona narasi (membentuk TEKS naskah
-            # via LLM, BUKAN pemilih suara). voice_key/voice_defaults niche = fosil (di-drop migr 0083).
-        }
+        niches[niche_id] = _rapikan_baris(row)
     return niches
+
+
+# Bentuk kosong per-properti — dipakai supaya NULL di DB berperilaku sama seperti dulu bagi konsumen
+# (list/dict/str, bukan None). Kunci di luar daftar ini ikut apa adanya.
+_BENTUK_KOSONG: dict = {
+    "keywords": [], "visual_fallbacks": [], "mood_priority": [], "default_hashtags": [],
+    "narration_persona": {}, "visual_style": {}, "section_timing": {},
+    "style": "", "target_emotion": "", "image_quality_tags": "", "image_negative_prompt": "",
+    "emotion_scoring_criteria": "", "description": "", "description_en": "",
+}
+
+
+def _rapikan_baris(row: dict) -> dict:
+    """SELURUH kolom baris niche → dict siap-pakai. **Tanpa daftar kolom tulis-tangan.**
+
+    ═══ KENAPA TANPA DAFTAR (koreksi 2026-08-15, `SISA_KERJA [B32]` T4) ═══
+    Versi lama menyalin kolom satu per satu. Kolom di luar daftar itu hilang SENYAP: tersimpan benar di
+    DB, tak pernah sampai ke penulis naskah/gambar. Sudah memakan korban DUA kali — `emotion_scoring_criteria`
+    (4-Jul) dan `description` (1-Agu, terisi 47 niche lalu berhenti di DB) — dan keduanya baru ketahuan
+    setelah berbulan-bulan. Terukur 15-Agu: **16 kunci sampai ke mesin, 27 kolom ada di DB.**
+    Menyalin SELURUH baris menghapus kelas cacatnya, bukan menambal kejadian ketiganya: kolom DNA yang
+    admin tambahkan besok otomatis sampai ke mesin tanpa menyentuh berkas ini.
+    Dijaga `tests/test_dna_niche_sampai_utuh.py` (kolom baru tak sampai ⇒ MERAH).
+
+    Yang tetap dipertahankan dari versi lama: `name` jatuh ke `niche_id`, NULL → bentuk kosong sesuai
+    tipenya, dan warisan `voice_profile` → `narration_persona` (kolomnya sudah di-drop migr 0083, tapi
+    cache lokal lama bisa masih memuatnya).
+    """
+    d = dict(row)
+    d["name"] = row.get("name") or row.get("niche_id")
+    d["is_active"] = row.get("is_active", True)
+    d["narration_persona"] = row.get("narration_persona") or row.get("voice_profile") or {}
+    for k, kosong in _BENTUK_KOSONG.items():
+        if k == "narration_persona":
+            continue
+        if not d.get(k):
+            d[k] = type(kosong)() if isinstance(kosong, (list, dict)) else kosong
+    d.pop("voice_profile", None)          # warisan; sudah dilebur ke narration_persona di atas
+    return d
+
+
+def muat_niche_segar(niche_id: str) -> dict:
+    """Baca SATU niche LANGSUNG dari DB — melewati cache, bentuknya identik `get_niches()[id]`.
+
+    Ada supaya penyatuan jalur baca TIDAK menanam jeda baru. Sebagian pembaca (pemilih musik, kategori
+    YouTube, gaya visual per-run) selama ini membaca langsung ke DB = selalu mutakhir; memaksa mereka
+    lewat cache 300 detik berarti menukar satu cacat dengan cacat lain. Pintu tetap SATU, pilihannya
+    dua: bercache (`get_niches`) atau segar (fungsi ini). Gagal baca → dict kosong (pemanggil sudah
+    memakai `.get(...)`), sama seperti perilaku kueri langsung yang digantikannya.
+    """
+    try:
+        from supabase import create_client
+        url, key = os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY")
+        if not url or not key:
+            return {}
+        r = (create_client(url, key).table("niches").select("*")
+             .eq("niche_id", niche_id).limit(1).execute())
+        baris = (r.data or [None])[0]
+        return _rapikan_baris(baris) if baris else {}
+    except Exception as e:
+        print(f"[NicheRegistry] muat_niche_segar('{niche_id}') gagal: {e}")
+        return {}
 
 
 def _save_cache(niches: dict) -> None:

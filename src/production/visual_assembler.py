@@ -18,6 +18,52 @@ from src.intelligence.config import TenantConfig
 load_dotenv()
 
 
+def prompt_frame_pembuka(niche_vs: dict, thumbnail_concept: str) -> str:
+    """Prompt gambar FRAME PEMBUKA — dari SELURUH properti `visual_style` niche.
+
+    ═══ CACAT YANG DITUTUP (2026-08-15, `SISA_KERJA [B32]` T4) ═══
+    Frame pembuka adalah pemikat paling menentukan sebuah Short, tapi prompt-nya hanya membaca
+    **4 dari 16** properti visual niche: `base_style`, `color_palette`, `atmosphere`, `render_style`.
+    Pencahayaan, kamera, komposisi, realisme, gradasi warna, rujukan gaya, gerak — **dan larangan
+    figur niche (`strict_prohibition`, §5b Lapis-2)** — tak pernah ikut. Adegan biasa memakai
+    seluruhnya; justru frame terpentinglah yang paling miskin DNA.
+    Ini bukan temuan baru: `NICHE_DNA_AUDIT_REMEDIATION §1.1` sudah menandainya 🟡 sejak **4-Jul**
+    (*"2 konsumen butuh 3 key inti; kalau admin isi key lain saja → jatuh ke default hardcode"*) —
+    utang yang tak pernah ditutup sampai hari ini.
+
+    Sekarang SEMUA nilai teks `visual_style` ikut, dengan nama propertinya sebagai label — pola yang
+    sama persis dengan jalur adegan biasa (`script_engine`), sehingga properti niche ke-17 otomatis
+    ikut tanpa menyentuh berkas ini. Nilai bersarang (mis. `camera_motion`) dilewati: ia bukan teks
+    prompt, melainkan kenop gerak Ken Burns yang dipakai belakangan.
+
+    Yang SENGAJA tidak berubah di tahap ini: `"No people."` — itu **keputusan sadar** yang tercatat di
+    `NICHE_DNA §1.1b` (14-Agu: judul pembuka digambar di 15% dari atas, jadi membuka "ada orang" di
+    frame ini adalah perubahan tersendiri). Memindahkannya ke DNA niche = pekerjaan T6, ber-ketok owner.
+    Bawaan ketiga properti inti dipertahankan persis supaya niche tanpa isian tetap berperilaku sama.
+    """
+    base_style = niche_vs.get("base_style") or "documentary photography style, cinematic"
+    color_pal  = niche_vs.get("color_palette") or "natural cinematic colors"
+    atmosphere = niche_vs.get("atmosphere") or "dramatic cinematic atmosphere"
+    # [14-Agu] Gaya dari NICHE, bukan patri. Bawaan 'photorealistic' → perilaku 47 niche lama utuh.
+    gaya       = (niche_vs.get("render_style") or "photorealistic").strip()
+    # Properti SELAIN keempat di atas — apa adanya, dengan labelnya, supaya nol properti tertinggal.
+    _inti = {"base_style", "color_palette", "atmosphere", "render_style"}
+    sisa = "; ".join(f"{k.replace('_', ' ')}: {v}"
+                     for k, v in niche_vs.items()
+                     if k not in _inti and isinstance(v, str) and v.strip())
+    return (
+        f"Cinematic vertical 9:16 hero image. "
+        f"{thumbnail_concept}. "
+        f"Style: {base_style}. "
+        f"Color palette: {color_pal}. "
+        f"Atmosphere: {atmosphere}. "
+        + (f"{sisa}. " if sisa else "")
+        + f"Single striking focal point that stops the scroll instantly. "
+        f"{gaya.capitalize()}. "
+        f"No text, no words, no letters, no numbers, no signs, no typography. No people."
+    )
+
+
 class VisualAssembler:
     """Selector provider visual (generator AI). NO-FALLBACK: gagal = gagal jujur (return [])."""
 
@@ -395,25 +441,8 @@ class VisualAssembler:
             if not hook_text:
                 return None
 
-            # Hook frame prompt — dibangun dari niche visual_style Supabase (tidak hardcode)
-            niche_vs   = config.get("niche_visual_style") or {}
-            base_style = niche_vs.get("base_style", "documentary photography style, cinematic")
-            color_pal  = niche_vs.get("color_palette", "natural cinematic colors")
-            atmosphere = niche_vs.get("atmosphere", "dramatic cinematic atmosphere")
-            # [14-Agu] Gaya dari NICHE, bukan patri. Bawaan 'photorealistic' → prompt frame pembuka
-            # SAMA PERSIS dengan sebelumnya untuk 47 niche lama (dijaga uji).
-            gaya       = (niche_vs.get("render_style") or "photorealistic").strip()
-
-            prompt = (
-                f"Cinematic vertical 9:16 hero image. "
-                f"{thumbnail_concept}. "
-                f"Style: {base_style}. "
-                f"Color palette: {color_pal}. "
-                f"Atmosphere: {atmosphere}. "
-                f"Single striking focal point that stops the scroll instantly. "
-                f"{gaya.capitalize()}. "
-                f"No text, no words, no letters, no numbers, no signs, no typography. No people."
-            )
+            # Hook frame prompt — SELURUH DNA visual niche (lihat `prompt_frame_pembuka`).
+            prompt = prompt_frame_pembuka(config.get("niche_visual_style") or {}, thumbnail_concept)
             provider  = build_visual_provider(config.get("visual_provider") or "ai_image:", config)   # F5-06: registry
             img_path  = clips_dir / "hook_frame_img.jpg"
             clip_path = clips_dir / "clip_01_hook.mp4"

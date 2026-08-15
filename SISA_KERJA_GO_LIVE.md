@@ -970,7 +970,7 @@ ketiganya; yang bolong **terpusat di visual** — separuh nilai jual niche.
 | **T1** | Preset **menggabung**, bukan mengganti; properti di luar preset dipertahankan; layar menyebut apa yang berubah | `components/niche-dna-editor.tsx` · `lib/niche-dna.ts` · `tests/test_preset_dna_tak_menghapus.py` | uji `applyVisual` mempertahankan 9 kunci; merah di kode sekarang | ✅ **2026-08-15** |
 | **T2** | Kunci tulis publik di `niches`·`moods`·`music_library`; niche privat hanya terbaca pemiliknya (dijaga DB, bukan disaring browser) | `migrations/0199_kunci_tulis_publik_katalog_niche.sql` · `tests/test_katalog_niche_tak_bisa_ditulis_publik.py` | sapuan izin: tulis DITOLAK ketiganya; baca 5 layar tetap jalan | ✅ **2026-08-15** (migrasi APPLIED) |
 | **T3** | 13 properti visual dapat label+penjelasan+contoh via **deklarasi tunggal** (§5b Lapis-2 "terlihat") | `lib/niche-dna.ts` · `niche-dna-editor.tsx` · `tests/test_properti_visual_berlabel.py` | uji: tiap kunci `visual_style` di 48 niche WAJIB punya deklarasi label | ✅ **2026-08-15** |
-| **T4** | **Satu jalur baca DNA** (daftar 15 kolom dibuang) + frame pembuka memakai SELURUH DNA | `config.py` · `tenant_config.py` · `visual_assembler.py` · `music_selector.py` · `youtube_publisher.py` · `ai_image.py` | potret 48 niche identik; uji merah bila kolom baru tak terbawa | ⬜ |
+| **T4** | **Satu jalur baca DNA** (daftar 15 kolom dibuang) + frame pembuka memakai SELURUH DNA | `config.py` · `tenant_config.py` · `visual_assembler.py` · `music_selector.py` · `youtube_publisher.py` · `tests/test_dna_niche_sampai_utuh.py` | potret 48 niche identik; uji merah bila kolom baru tak terbawa | ✅ **2026-08-15** |
 | **T5** | DNA yang baru disimpan **langsung** dipakai uji niche; layar menyatakan kapan berlaku | `config.py` · `components/test-niche-panel.tsx` | sunting→uji→terbukti versi BARU; uji merah bila jalur segar dicabut | ⬜ |
 | **T6** | Penegakan gaya visual: **uji terkendali dulu** (1 adegan × 4 versi), lalu gaya di depan perintah + larangan lewat saluran sesuai **deklarasi kemampuan vendor**; `"No people."` pindah dari kode ke DNA | `script_engine.py` · `ai_image.py` · `visual_assembler.py` · `ai_models` (data) | 47 niche lama tak bergeser sehuruf; uji merah bila vendor baru tanpa deklarasi | ⬜ |
 | **T7** | **[B14]** larangan figur ditegakkan pada GAMBAR keluaran (bukan cuma pada permintaan) → gagal jujur, tidak terbit | `visual_assembler.py` · QC | gambar uji melanggar → ditolak; sabotase → merah | ⬜ |
@@ -1037,6 +1037,31 @@ sabotase (mencabut `strict_prohibition`+`render_style` dari deklarasi) → 2 mer
 *(Dua uji saya sendiri sempat terlalu kasar — menolak label EN "Atmosphere"/"Lighting" karena kebetulan
 sama kata dengan kuncinya, dan melarang SELURUH kotak bernama-kode padahal properti buatan pemilik niche
 memang tak punya label. Keduanya **diperketat ke KONTRAK**-nya, bukan dilonggarkan agar hijau — pelajaran [B31].)*
+
+#### ✅ REALISASI T4 (2026-08-15)
+**Daftar kolom tulis-tangan DIBUANG** — `_rapikan_baris()` menyalin SELURUH baris niche. Terukur:
+**16 kunci → 27 kunci** sampai ke mesin; 11 yang dulu hilang senyap kini ikut (`music_config`,
+`voice_expression`, `youtube_category_id`, `niche_id`, `access_type`, `origin`, `is_base`,
+`exclusive_to/until`, `released_at`, `created_at`). Kolom DNA yang admin tambahkan besok otomatis sampai
+**tanpa menyentuh kode** — kelas cacatnya dihapus, bukan kejadian ketiganya ditambal (korban 1
+`emotion_scoring_criteria` 4-Jul, korban 2 `description` 1-Agu).
+**Tiga jalur baca → SATU PINTU:** hanya `intelligence/config.py` yang boleh menyentuh tabel `niches`.
+`tenant_config` (2 titik-muat), `music_selector` (2 fungsi), `youtube_publisher` (3 helper) kini lewat
+pintu itu. ⚠️ **Kesegaran tidak ikut jadi korban:** pintu menyediakan dua daun — `get_niches()` bercache
+300 dtk dan `muat_niche_segar()` langsung-DB. Pembaca yang selama ini selalu mutakhir TETAP mutakhir;
+menyatukan jalur tidak boleh menukar satu cacat dengan cacat lain (jeda 300 dtk).
+**Frame pembuka memakai SELURUH DNA** — dulu hanya 4 dari 16 properti (utang 🟡 `NICHE_DNA §1.1` sejak
+4-Jul). Kini pencahayaan · kamera · komposisi · realisme · gradasi · rujukan · gerak **dan larangan figur
+niche** ikut ke frame terpenting sebuah Short. `"No people."` **sengaja belum disentuh** (keputusan sadar
+§1.1b 14-Agu) → dipindah ke DNA di T6.
+**Bukti:** potret 48 niche sebelum–sesudah = **48 × 16 properti IDENTIK**, nol nilai lama bergeser ·
+5 niche nyata × 5 properti dibandingkan dengan pembacaan LANGSUNG ke DB = **nol selisih** · jalur
+gagal-lunak untuk niche tak dikenal berperilaku sama persis (`{}`/`[]`/`"27"`) · `tenant_config` dua
+channel produksi tetap memuat 11 kunci visual + 6 contoh shot + ekspresi vokal.
+Merah dibuktikan 2×: sebelum perbaikan 7 gagal · sabotase (daftar kolom dikembalikan) → 1 merah.
+**Suite penuh 1060 lulus.**
+*(Satu uji saya sendiri sempat mengikat huruf besar-kecil `render_style` — diperketat ke KONTRAK
+"nilainya sampai", bukan "susunan hurufnya sama".)*
 
 #### ⛔ LARANGAN DALAM [B32] — jangan dikerjakan, jangan "sekalian"
 - **Jangan** membangun sub-tag/`tag_pool` atau siklus rilis bulanan (aspiratif, di luar lingkup).

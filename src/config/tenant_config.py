@@ -419,10 +419,8 @@ class TenantConfigManager:
         if not self._supabase:
             return
         try:
-            nr = (self._supabase.table("niches")
-                  .select("visual_style, visual_fallbacks, voice_expression")
-                  .eq("niche_id", eff_niche).single().execute())
-            data = nr.data or {}
+            from src.intelligence.config import muat_niche_segar   # [B32] T4 — pintu tunggal, tetap segar
+            data = muat_niche_segar(eff_niche)
             config.niche_visual_style     = data.get("visual_style") or {}
             config.niche_visual_fallbacks = data.get("visual_fallbacks") or []
             config.niche_voice_expression = data.get("voice_expression") or None   # [EKSPRESI VOKAL]
@@ -627,18 +625,12 @@ class TenantConfigManager:
             niche_visual_fallbacks = []
             niche_voice_expression = None
             try:
-                niche_row = (
-                    self._supabase
-                    .table("niches")
-                    .select("visual_style, visual_fallbacks, voice_expression")
-                    .eq("niche_id", niche)
-                    .single()
-                    .execute()
-                )
-                if niche_row.data:
-                    niche_visual_style     = niche_row.data.get("visual_style") or {}
-                    niche_visual_fallbacks = niche_row.data.get("visual_fallbacks") or []
-                    niche_voice_expression = niche_row.data.get("voice_expression") or None   # [EKSPRESI VOKAL] dua titik-muat WAJIB seragam (kelas s85)
+                from src.intelligence.config import muat_niche_segar   # [B32] T4 — pintu tunggal, tetap segar
+                _nd = muat_niche_segar(niche)
+                if _nd:
+                    niche_visual_style     = _nd.get("visual_style") or {}
+                    niche_visual_fallbacks = _nd.get("visual_fallbacks") or []
+                    niche_voice_expression = _nd.get("voice_expression") or None   # [EKSPRESI VOKAL] dua titik-muat WAJIB seragam (kelas s85)
                     logger.debug(f"[TenantConfig] Niche visual data loaded: {niche}")
             except Exception as e:
                 logger.warning(f"[TenantConfig] Gagal load niche visual data: {e}")
