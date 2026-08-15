@@ -403,7 +403,12 @@ def run_preview_image(sb, job: dict, ch: dict) -> None:
             f = Path(d) / "pratinjau.png"
             asyncio.run(provider._generate_image(positif, negatif, f))  # corong PRODUKSI (patri ikut)
             from src.utils import s3_buffer
-            key = f"{job['tenant_id']}/pratinjau/{jid}.png"
+            # KUNCI TETAP per (tenant, niche) — sengaja BUKAN per-job. Tiap pratinjau baru MENIMPA
+            # yang lama, jadi penyimpanan tak pernah menumpuk dan **tak perlu penyapu sama sekali**.
+            # (Versi pertama memakai kunci per-job ⇒ tiap klik meninggalkan berkas ±2 MB selamanya;
+            # kelalaian saya, ditemukan owner 15-Agu. Video uji punya penyapu ber-TTL; pratinjau
+            # tidak perlu punya, karena masalahnya dihapus dari akarnya.)
+            key = f"{job['tenant_id']}/pratinjau/{niche or 'niche'}.png"
             s3_buffer.upload(str(f), key)
 
         sb.table("direct_jobs").update({

@@ -155,3 +155,22 @@ class TestJalurTampilPratinjau(unittest.TestCase):
         import inspect
         import src.orchestrator.producer as prod
         self.assertIn("s3_buffer.upload", inspect.getsource(prod.run_preview_image))
+
+
+class TestPratinjauTakMenumpukDiPenyimpanan(unittest.TestCase):
+    """CACAT YANG DIJAGA (teguran owner 15-Agu): video uji punya penyapu ber-TTL; gambar pratinjau
+    versi pertama saya TIDAK punya apa pun — kuncinya per-JOB, jadi tiap klik meninggalkan berkas
+    ±2 MB di S3 **selamanya**. Untuk fitur yang dirancang agar diklik berkali-kali, itu kebocoran
+    penyimpanan yang pasti terjadi, bukan kemungkinan.
+
+    Perbaikannya menghapus masalahnya dari akar, bukan menambah penyapu: kunci TETAP per (tenant,
+    niche) ⇒ pratinjau baru menimpa yang lama ⇒ paling banyak satu berkas per niche per tenant."""
+
+    def test_kunci_tetap_per_niche_bukan_per_job(self):
+        import inspect
+        import src.orchestrator.producer as prod
+        src = inspect.getsource(prod.run_preview_image)
+        self.assertIn("pratinjau/{niche", src,
+                      "kunci pratinjau tidak tetap per-niche — berkas akan menumpuk tiap klik")
+        self.assertNotIn("pratinjau/{jid}", src,
+                         "kunci masih per-job ⇒ tiap klik meninggalkan berkas baru selamanya")
