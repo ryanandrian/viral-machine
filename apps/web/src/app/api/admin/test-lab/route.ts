@@ -36,8 +36,21 @@ export async function PATCH(req: Request) {
   const body = await req.json().catch(() => ({}));
   const a = createAdminClient();
 
-  const patch: Record<string, string> = {};
-  for (const k of CH_FIELDS) if (k in body && typeof body[k] === "string") patch[k] = body[k].trim();
+  // [KOREKSI 15-Agu] Teks KOSONG dinormalkan jadi NULL sebelum menyentuh DB.
+  // Cacat yang ditutup (dilaporkan owner): mengganti penyedia TTS mengirim `voice_key: ""` untuk
+  // mengosongkan pilihan lama. Tapi `channels.voice_key` terikat ke `voice_catalog`, dan "" BUKAN
+  // kosong — ia nilai yang wajib ada di katalog. Database menolak:
+  //   violates foreign key constraint "channels_voice_key_fkey" — Key (voice_key)=() is not present
+  // ⇒ PATCH gagal ⇒ layar memuat ulang ⇒ pilihan MELOMPAT KEMBALI ke penyedia lama. Terlihat seperti
+  // "tidak bisa memilih ElevenLabs", padahal katalognya lengkap (4 model aktif) dan kuncinya valid.
+  // Berlaku untuk SELURUH field: mengosongkan pilihan = NULL, bukan string kosong.
+  const patch: Record<string, string | null> = {};
+  for (const k of CH_FIELDS) {
+    if (k in body && typeof body[k] === "string") {
+      const v = (body[k] as string).trim();
+      patch[k] = v === "" ? null : v;
+    }
+  }
   if (Object.keys(patch).length === 0) return NextResponse.json({ error: "no_fields" }, { status: 400 });
 
   // Validasi katalog server-side (nol asumsi FE): model harus ada+aktif utk komponen & penyedianya.
