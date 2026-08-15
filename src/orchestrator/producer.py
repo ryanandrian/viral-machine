@@ -332,6 +332,85 @@ def produce_one(channel_row: dict) -> int | None:
 
 
 # ── DIRECT / ON-DEMAND (V2 "1 mesin, 2 mode") ──────────────────────────────
+
+def run_preview_image(sb, job: dict, ch: dict) -> None:
+    """PRATINJAU 1 GAMBAR dari DNA niche — bukan produksi.
+
+    ═══ KENAPA ADA (ketetapan owner 2026-08-15, `SISA_KERJA [B32]` T11) ═══
+    Mencocokkan gaya visual sebuah niche menuntut **video penuh**: ±4 menit, ±Rp 1.500 sekali coba.
+    Terukur pada sesi 15-Agu: enam putaran video hanya untuk menyetel gaya, dan tiap putaran menunggu
+    empat menit. Beban itu akan diwarisi SETIAP tenant yang ingin nichenya terlihat seperti yang ia
+    bayangkan. Pratinjau: **±25 detik (terukur), ±Rp 250, nol video, nol kuota, nol jejak di stok konten.**
+
+    ⚠️ **MEMAKAI PERAKIT PROMPT PRODUKSI APA ADANYA** — `_build_image_prompt` lalu corong
+    `_generate_image` (yang menempelkan patri larangan & memotong-aman sesuai batas vendor). Merakit
+    prompt sendiri di sini = melahirkan KEBENARAN KEDUA yang suatu hari berbeda dari produksi, persis
+    kelas cacat yang [B32] tutup seharian ini. Pratinjau yang berbohong lebih berbahaya daripada tidak
+    ada pratinjau: pemilik niche akan menyetel DNA-nya berdasarkan gambar yang tak mewakili hasil asli.
+
+    Yang SENGAJA tidak disentuh: naskah · suara · render · `content_inventory` · `production_runs` ·
+    kuota publish. Ini satu gambar, titik.
+    """
+    from datetime import datetime, timezone
+    from pathlib import Path
+    import asyncio, tempfile
+    from src.intelligence.config import tenant_config_from_channel
+
+    jid = job["id"]
+    _now = lambda: datetime.now(timezone.utc).isoformat()
+    niche = job.get("niche") or ch.get("niche")
+
+    # Adegan contoh yang NETRAL: cukup untuk menampakkan gaya, tanpa mendikte isi konten niche.
+    ADEGAN = "a person going about an ordinary everyday moment at home"
+
+    try:
+        tc = tenant_config_from_channel(ch, niche=niche)
+        # Konfigurasi provider diambil dari PEMUAT PRODUKSI (`_load_run_config`) lalu dirakit dengan
+        # bentuk yang SAMA PERSIS dengan `_try_ai_image` — bukan dikarang di sini. Percobaan pertama
+        # saya merakit dict sendiri dan langsung patah ('TenantConfig' tak punya `visual_provider`);
+        # itu justru bukti kenapa pratinjau tak boleh punya jalur sendiri.
+        from src.production.visual_assembler import VisualAssembler
+        from src.providers.visual import build_visual_provider
+        rc = VisualAssembler()._load_run_config(tc)
+        visual_mode = rc.get("visual_mode") or ""
+        if not visual_mode:
+            raise RuntimeError("Generator visual belum dipilih di channel ini")
+        provider = build_visual_provider(visual_mode, {
+            "tenant_id":              tc.tenant_id,
+            "niche":                  niche,
+            "visual_provider":        visual_mode,
+            "visual_ai_model":        visual_mode.split(":", 1)[1] if ":" in visual_mode else "",
+            "visual_api_key":         rc.get("visual_api_key"),
+            "llm_api_key":            rc.get("llm_api_key") or "",
+            "llm_library":            rc.get("llm_library") or "",
+            "llm_provider":           rc.get("llm_provider") or "",
+            "llm_models":             rc.get("llm_models") or {},
+            "llm_model":              rc.get("llm_model") or "",
+            "niche_visual_style":     rc.get("niche_visual_style") or {},
+            "niche_visual_fallbacks": rc.get("niche_visual_fallbacks") or [],
+            "image_quality":          rc.get("image_quality") or "",
+            "visual_seed":            getattr(tc, "visual_seed", None),
+        })
+
+        positif, negatif = provider._build_image_prompt(ADEGAN)     # perakit PRODUKSI
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "pratinjau.png"
+            asyncio.run(provider._generate_image(positif, negatif, f))  # corong PRODUKSI (patri ikut)
+            from src.utils import s3_buffer
+            key = f"{job['tenant_id']}/pratinjau/{jid}.png"
+            s3_buffer.upload(str(f), key)
+
+        sb.table("direct_jobs").update({
+            "status": "done", "result_key": key, "completed_at": _now(),
+        }).eq("id", jid).execute()
+        logger.info(f"[Pratinjau] job {jid} niche={niche} → {key}")
+    except Exception as e:
+        logger.error(f"[Pratinjau] job {jid} GAGAL: {e}")
+        sb.table("direct_jobs").update({
+            "status": "failed", "error": str(e)[:500], "completed_at": _now(),
+        }).eq("id", jid).execute()
+
+
 def segarkan_dna_sebelum_direct() -> None:
     """Buang potret DNA niche sebelum job yang DIPICU MANUSIA dijalankan.
 
@@ -419,6 +498,11 @@ def run_direct(sb, job: dict) -> None:
     # Test niche TANPA publish (keputusan owner 2026-07-04): admin_test (channel internal admin) &
     # test_nopub (F5 — channel+kredensial TENANT sendiri, dari Niche Studio). Video → S3 status='test'
     # (tak pernah diklaim publisher; TTL janitor). Beda dari direct tenant test/retry (publish private).
+    # [B32] T11 — pratinjau 1 gambar: bukan produksi, tak menyentuh naskah/suara/render.
+    if (job.get("job_type") or "") == "preview_image":
+        run_preview_image(sb, job, ch)
+        return
+
     if (job.get("job_type") or "") in ("admin_test", "test_nopub"):
         _run_test_no_publish(sb, job, ch, run_id)
         return

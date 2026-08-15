@@ -1166,7 +1166,7 @@ tahap dikerjakan tanpa satu pun menyentuh tujuan utamanya. Dicatat sebagai pelaj
 penulis adegan · pantangan narasi ✅ sampai ke penilai. Merah dibuktikan 2×: sebelum 5 gagal · sabotase
 (dua sambungan dicabut) → 2 merah. **Suite penuh 1088 lulus.**
 
-#### ✅ T10 SELESAI · 🔵 T11 SEDANG DIKERJAKAN (ketok owner 2026-08-15)
+#### ✅ T10 & T11 SELESAI (ketok owner 2026-08-15)
 **T10 ✅ — judul topik tunduk pada kotak Pantangan niche.** Terukur DUA kali: aturan niche sampai ke
 pemilih topik hanya sebagai SARAN. `sunnah_harian` menyatakan tegas di kalimat PERTAMA deskripsinya
 "SATU sunnah per video, judul dilarang memuat angka" — tetap **1 dari 5** judul berbunyi *"7 Daily
@@ -1186,8 +1186,18 @@ tenant.* Pratinjau: **±6 detik, ±Rp 250, nol video**.
 (`ai_image._build_image_prompt` + corong patri). Merakit sendiri = kebenaran KEDUA yang suatu hari
 berbeda — persis kelas cacat yang [B32] tutup seharian ini. Karena itu ia lewat **pekerja**, bukan
 dirakit di layar.
-Berkas: migrasi 0200 (`job_type='preview_image'` + kolom hasil) · `producer.py` · 2 rute API ·
-`niche-dna-editor.tsx` (satu komponen ⇒ tenant & admin sekaligus) · uji.
+**✅ REALISASI T11:** migr **0200 APPLIED** (`job_type='preview_image'` + kolom `result_key`) ·
+`producer.run_preview_image()` · rute `api/niches/preview-image` (POST antre + GET polling, tautan
+berjangka — kunci S3 tak pernah dikirim mentah) · tombol di `niche-dna-editor.tsx` ⇒ **Niche Studio DAN
+Niche Library sekaligus** (satu komponen) · `tests/test_pratinjau_gambar_dna.py`.
+**Nol tabel baru · nol layanan baru · nol jalur baru** — menumpang antrean `direct_jobs` yang sudah teruji.
+⚠️ **Percobaan pertama saya merakit konfigurasi provider SENDIRI dan langsung patah** (`TenantConfig`
+tak punya `visual_provider`). Itu justru bukti kenapa pratinjau tak boleh punya jalur sendiri: kini ia
+memakai `VisualAssembler._load_run_config()` + bentuk config yang SAMA PERSIS dengan `_try_ai_image`.
+**BUKTI RUNTIME:** job pratinjau dijalankan sungguhan → gambar 1,9 MB jadi, gaya niche terbaca.
+⚠️ **ANGKA SAYA KELIRU & DIKOREKSI:** bukan ±6 detik melainkan **±25 detik** (terukur). Teks di layar,
+rute, dan docstring sudah diperbaiki — janji di layar harus sama dengan kenyataan.
+Merah dibuktikan (6 gagal sebelum). `tsc` bersih · `next build` lulus · **suite 1099 lulus**.
 
 #### ⛔ LARANGAN DALAM [B32] — jangan dikerjakan, jangan "sekalian"
 - **Jangan** membangun sub-tag/`tag_pool` atau siklus rilis bulanan (aspiratif, di luar lingkup).

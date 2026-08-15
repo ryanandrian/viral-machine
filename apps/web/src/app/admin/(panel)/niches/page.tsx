@@ -293,7 +293,7 @@ export default function AdminNichesPage() {
           </div>
           <div className="nl-drawer-tabs">{DTABS.map((l, i) => <button key={l} className={`nl-dtab${dtab === i ? " active" : ""}`} onClick={() => setDtab(i)}>{l}</button>)}</div>
           <div className="nl-dpanel">
-            {dtab === 0 && <NicheDnaEditor key={cur.niche_id} niche={cur as unknown as NicheRow} onSave={saveDna} busy={busy} />}
+            {dtab === 0 && <NicheDnaEditor key={cur.niche_id} niche={cur as unknown as NicheRow} onSave={saveDna} busy={busy} adminMode />}
             {dtab === 1 && <>
               <div className="nl-fld" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}><span style={{ fontSize: "var(--text-sm)" }}>is_active</span><label className="switch"><input type="checkbox" checked={!!edit.is_active} onChange={(e) => setEdit({ ...edit, is_active: e.target.checked })} /><span className="track" /><span className="thumb" /></label></div>
               <div className="nl-fld" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}><span style={{ fontSize: "var(--text-sm)" }}>is_base <span className="muted">(trial/starter only)</span></span><label className="switch"><input type="checkbox" checked={!!edit.is_base} onChange={(e) => setEdit({ ...edit, is_base: e.target.checked })} /><span className="track" /><span className="thumb" /></label></div>

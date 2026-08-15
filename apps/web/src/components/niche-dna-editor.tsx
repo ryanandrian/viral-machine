@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { Sparkles, Music, Image as ImageIcon, Clock3, Gauge, User, Plus, X, AlertTriangle, Video } from "lucide-react";
+import { Sparkles, Music, Image as ImageIcon, Clock3, Gauge, User, Plus, X, AlertTriangle, Video, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { validateDnaPatch, terapkanPreset, VISUAL_PROPS, PERSONA_KEYS, VISUAL_CORE_KEYS, SECTION_KEYS, SECTION_LABELS, type DnaErrors } from "@/lib/niche-dna";
 import { YT_CATEGORIES } from "@/lib/youtube-categories";
@@ -107,7 +107,7 @@ const STYLE_SUGGESTIONS = ["mysterious and awe-inspiring", "fun and energetic", 
 const EMOTION_SUGGESTIONS = ["wonder and curiosity", "chills and dread", "surprise and delight", "calm and motivation", "excitement"];
 const HOOK_FORMULAS = ["question", "impossible_claim", "you_dont_know", "number_shock", "story_open"];
 
-export default function NicheDnaEditor({ niche, onSave, busy, onCancel }: { niche: NicheRow; onSave: (patch: Record<string, unknown>) => Promise<{ ok: boolean; fields?: DnaErrors }>; busy: boolean; onCancel?: () => void }) {
+export default function NicheDnaEditor({ niche, onSave, busy, onCancel, adminMode }: { niche: NicheRow; onSave: (patch: Record<string, unknown>) => Promise<{ ok: boolean; fields?: DnaErrors }>; busy: boolean; onCancel?: () => void; adminMode?: boolean }) {
   // draft terstruktur (bukan JSON string)
   const [name, setName] = useState(asStr(niche.name));
   const [descId, setDescId] = useState(asStr(niche.description));       // 0135: deskripsi etalase (ID)
@@ -233,6 +233,34 @@ export default function NicheDnaEditor({ niche, onSave, busy, onCancel }: { nich
     set(r.hasil);
     setPresetInfo({ prop, label: p.label, diisi: r.diisi.length, dipertahankan: r.dipertahankan.length, dikosongkan: r.dikosongkan.length });
   };
+  // [B32] T11 — PRATINJAU 1 GAMBAR. Menjawab beban yang selama ini ditanggung siapa pun yang
+  // menyetel gaya niche: satu-satunya cara melihat hasilnya adalah memproduksi VIDEO PENUH
+  // (±4 menit, ±Rp 1.500 sekali coba). Pratinjau: ±25 detik, ±Rp 250, nol video, nol kuota.
+  // Gambarnya dibuat PEKERJA dengan perakit prompt PRODUKSI apa adanya — layar tidak merakit apa pun,
+  // supaya yang dilihat pemilik niche benar-benar mewakili hasil aslinya.
+  const [pv, setPv] = useState<{ sibuk: boolean; url?: string; galat?: string }>({ sibuk: false });
+  const pratinjau = async () => {
+    setPv({ sibuk: true });
+    try {
+      const r = await fetch("/api/niches/preview-image", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ niche_id: niche.niche_id, admin: !!adminMode }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { setPv({ sibuk: false, galat: j.error || "gagal memulai pratinjau" }); return; }
+      for (let i = 0; i < 60; i++) {
+        await new Promise((res) => setTimeout(res, 2000));
+        const q = await fetch(`/api/niches/preview-image?job=${j.job}${adminMode ? "&admin=1" : ""}`);
+        const d = await q.json().catch(() => ({}));
+        if (d.status === "done" && d.url) { setPv({ sibuk: false, url: d.url }); return; }
+        if (d.status === "failed") { setPv({ sibuk: false, galat: d.error || "pratinjau gagal" }); return; }
+      }
+      setPv({ sibuk: false, galat: "pratinjau terlalu lama — coba lagi" });
+    } catch (e) {
+      setPv({ sibuk: false, galat: String(e) });
+    }
+  };
+
   // Tenant harus MELIHAT akibat kliknya — dulu 9 properti bisa lenyap tanpa satu pun kalimat.
   const catatanPreset = (prop: string) => presetInfo?.prop !== prop ? null : (
     <div style={{ fontSize: "0.6875rem", color: "var(--text-secondary)", marginTop: "-.4rem", marginBottom: ".5rem" }}>
@@ -418,6 +446,27 @@ export default function NicheDnaEditor({ niche, onSave, busy, onCancel }: { nich
         subId="DNA gambar tiap adegan — di-inject ke prompt pembuat visual." subEn="Per-scene image DNA — injected into the visual generator prompts.">
         <PresetPicker presets={presetsFor("visual_style")} onApply={applyVisual} />
         {catatanPreset("visual_style")}
+        <div style={{ display: "flex", alignItems: "center", gap: ".6rem", flexWrap: "wrap", marginBottom: ".2rem" }}>
+          <button type="button" className="btn btn-secondary btn-sm" disabled={pv.sibuk} onClick={pratinjau}>
+            {pv.sibuk ? <><Loader2 size={13} className="spin" /> <Bi id="Membuat…" en="Generating…" /></>
+                      : <><ImageIcon size={13} /> <Bi id="Pratinjau 1 gambar" en="Preview 1 image" /></>}
+          </button>
+          <span className="muted" style={{ fontSize: "0.6875rem" }}>
+            <Bi id="±25 detik · ±Rp 250 · memakai kunci AI Anda sendiri. Menyimpan DNA dulu agar pratinjau memakai isian terbaru."
+                en="±25 seconds · ±Rp 250 · uses your own AI key. Save the DNA first so the preview reflects your latest edits." />
+          </span>
+        </div>
+        {pv.galat && <div style={{ fontSize: "0.6875rem", color: "var(--danger)", marginBottom: ".4rem" }}>{pv.galat}</div>}
+        {pv.url && (
+          <div style={{ marginBottom: ".6rem" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={pv.url} alt="pratinjau gaya visual" style={{ maxWidth: 260, borderRadius: 8, border: "1px solid var(--border-subtle)" }} />
+            <div className="muted" style={{ fontSize: "0.625rem", marginTop: ".25rem" }}>
+              <Bi id="Adegan contoh netral — yang dinilai GAYA-nya (rupa, cahaya, warna, proporsi), bukan isinya."
+                  en="Neutral sample scene — judge the STYLE (render, light, colour, proportions), not the content." />
+            </div>
+          </div>
+        )}
         {/* SELURUH kotak gaya visual LAHIR dari deklarasi tunggal `VISUAL_PROPS` (lib/niche-dna).
             Sebelum 15-Agu hanya 3 kunci punya label; 13 sisanya — dipakai 47–48 dari 48 niche —
             tampil sebagai nama kode Inggris di kotak kosong ([B32] T3). Menambah properti ke-17 =
