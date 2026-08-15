@@ -32,8 +32,14 @@ export async function POST(req: Request) {
   if (asAdmin) {
     const g = await requireSuperAdmin();
     if (g.error) return g.error;
-    tenantId = ADMIN_TEST_TID;
     admin = createAdminClient();
+    // [KOREKSI 15-Agu] Versi pertama memakai channel uji INTERNAL admin — yang kunci AI-nya KOSONG,
+    // sehingga tombol Pratinjau di Niche Library DITOLAK sebelum sempat mengantre dan admin hanya
+    // melihat kegagalan. Admin juga seorang tenant (tenant_id = auth.uid()), jadi pratinjau memakai
+    // channel & kunci MILIKNYA SENDIRI — biayanya pun jatuh ke dompet yang menekan tombolnya.
+    // Channel internal tetap jadi cadangan bila suatu hari ia diisi kunci.
+    const sendiri = await testChannelReadiness(g.user.id);
+    tenantId = (sendiri.channel_id && sendiri.elems.visual.ok) ? g.user.id : ADMIN_TEST_TID;
   } else {
     const g = await tenantGate(); if (g.error) return g.error;
     tenantId = g.user.id; admin = g.admin;
@@ -46,7 +52,7 @@ export async function POST(req: Request) {
 
   // Channel + kredensial yang dipakai = milik pemilik pratinjau sendiri (BYOK), sama seperti test niche.
   const r = await testChannelReadiness(tenantId);
-  if (!r.channel_id) return NextResponse.json({ error: "Belum ada channel siap produksi." }, { status: 400 });
+  if (!r.channel_id) return NextResponse.json({ error: "Belum ada channel yang bisa dipakai — buat channel dulu." }, { status: 400 });
   if (!r.elems.visual.ok) return NextResponse.json({ error: `Generator visual belum siap — ${r.elems.visual.msg}` }, { status: 400 });
 
   const { data: job, error } = await admin.from("direct_jobs").insert({
@@ -67,7 +73,7 @@ export async function GET(req: Request) {
   let pemilik: string;
   if (asAdmin) {
     const g = await requireSuperAdmin(); if (g.error) return g.error;
-    pemilik = ADMIN_TEST_TID;
+    pemilik = g.user.id;          // POST memakai tenant admin sendiri bila channelnya siap
   } else {
     const g = await tenantGate(); if (g.error) return g.error;
     pemilik = g.user.id;
@@ -76,8 +82,9 @@ export async function GET(req: Request) {
   const { data: j } = await admin.from("direct_jobs")
     .select("status, error, result_key, tenant_id, job_type")
     .eq("id", jobId).maybeSingle();
-  if (!j || j.job_type !== "preview_image" || j.tenant_id !== pemilik)
-    return NextResponse.json({ error: "not found" }, { status: 404 });
+  const sah = j && j.job_type === "preview_image"
+    && (j.tenant_id === pemilik || (asAdmin && j.tenant_id === ADMIN_TEST_TID));
+  if (!sah) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   const url_gambar = j.result_key ? await presignAssetKey(j.result_key as string) : null;
   return NextResponse.json({ status: j.status, error: j.error, url: url_gambar });
