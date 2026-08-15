@@ -1166,6 +1166,29 @@ tahap dikerjakan tanpa satu pun menyentuh tujuan utamanya. Dicatat sebagai pelaj
 penulis adegan · pantangan narasi ✅ sampai ke penilai. Merah dibuktikan 2×: sebelum 5 gagal · sabotase
 (dua sambungan dicabut) → 2 merah. **Suite penuh 1088 lulus.**
 
+#### ✅ T10 SELESAI · 🔵 T11 SEDANG DIKERJAKAN (ketok owner 2026-08-15)
+**T10 ✅ — judul topik tunduk pada kotak Pantangan niche.** Terukur DUA kali: aturan niche sampai ke
+pemilih topik hanya sebagai SARAN. `sunnah_harian` menyatakan tegas di kalimat PERTAMA deskripsinya
+"SATU sunnah per video, judul dilarang memuat angka" — tetap **1 dari 5** judul berbunyi *"7 Daily
+Sunnah Practices…"*, dan **3 dari 5** memuat lambang ﷺ (kotak kosong di takarir). ⇒ instruksi tak
+mengikat, penyaring mengikat. `saring_judul_terlarang()` membuang judul yang melanggar **kata terlarang
+milik niche itu sendiri**, memakai pemeriksa harfiah yang SUDAH ada — bukan aturan baru, bukan selera
+mesin (`DESAIN §5b`). Niche tanpa pantangan → nol perubahan. Semua kandidat melanggar → daftar dipakai
+apa adanya + WARNING (produksi tak pernah berhenti). Berkas: `niche_selector.py` · `tests/test_judul_patuh_pantangan_niche.py`.
+⚠️ **Ambang panjang SENGAJA beda dari `script_checker`:** pemeriksa naskah mengabaikan butir <4 huruf (benar untuk naskah 130 kata — butir sependek "7" akan salah-tuduh di mana-mana), tapi JUDUL pendek & ditulis sengaja ⇒ butir 1 karakter pun dihormati. Tanpa itu pantangan `ﷺ` dan `7` **tak pernah terpakai** (terukur: keduanya lolos memakai ambang naskah).
+**BUKTI:** 5 kandidat → judul ber-"7" dan ber-ﷺ DIBUANG, 3 judul bersih lolos. Merah dibuktikan (5 gagal sebelum, termasuk 2 gagal saat ambang naskah masih dipakai). Suite penuh **1093 lulus**.
+
+**T11 — "Pratinjau 1 gambar" di editor DNA (Niche Studio + Niche Library).** ⭐ *Jawaban atas pertanyaan
+owner "apa pantas dijual": hari ini satu-satunya cara mencocokkan gaya visual adalah memproduksi VIDEO
+PENUH — ±4 menit, ±Rp 1.500 sekali coba. Itu membuat penyetelan gaya mahal & lambat bagi kita MAUPUN
+tenant.* Pratinjau: **±6 detik, ±Rp 250, nol video**.
+⚠️ **SYARAT MUTLAK:** pratinjau WAJIB memakai perakit prompt yang SAMA PERSIS dengan produksi
+(`ai_image._build_image_prompt` + corong patri). Merakit sendiri = kebenaran KEDUA yang suatu hari
+berbeda — persis kelas cacat yang [B32] tutup seharian ini. Karena itu ia lewat **pekerja**, bukan
+dirakit di layar.
+Berkas: migrasi 0200 (`job_type='preview_image'` + kolom hasil) · `producer.py` · 2 rute API ·
+`niche-dna-editor.tsx` (satu komponen ⇒ tenant & admin sekaligus) · uji.
+
 #### ⛔ LARANGAN DALAM [B32] — jangan dikerjakan, jangan "sekalian"
 - **Jangan** membangun sub-tag/`tag_pool` atau siklus rilis bulanan (aspiratif, di luar lingkup).
 - **Jangan** mencabut `"No people."` diam-diam — pindahkan ke DNA (T6), keputusan sadar 14-Agu.

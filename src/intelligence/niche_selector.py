@@ -36,6 +36,59 @@ def _offniche_topic(topics) -> bool:
     return all(any(kw in str(t).lower() for kw in _OFFNICHE_TOPIC_KW) for t in topics)
 
 
+def saring_judul_terlarang(topik: list, niche_profile: dict | None) -> list:
+    """Buang judul yang melanggar KOTAK PANTANGAN niche itu sendiri.
+
+    ═══ KENAPA (ketetapan owner 2026-08-15, `SISA_KERJA [B32]` T10) ═══
+    Aturan niche sampai ke pemilih topik hanya sebagai SARAN. Terukur DUA kali pada `sunnah_harian`,
+    yang deskripsinya menyatakan tegas di kalimat PERTAMA "SATU sunnah per video, judul dilarang memuat
+    angka": tetap **1 dari 5** judul berbunyi *"7 Daily Sunnah Practices…"*, dan **3 dari 5** memuat
+    lambang ﷺ yang tak bisa dirender font takarir (tampil sebagai kotak kosong di video).
+    Instruksi tidak mengikat; penyaring mengikat.
+
+    Yang ditegakkan = **aturan PEMILIK NICHE** (`narration_persona.avoid`), bukan selera mesin
+    (`DESAIN §5b`). Niche tanpa pantangan → daftar kembali apa adanya.
+
+    ⚠️ AMBANG PANJANG SENGAJA BERBEDA dari `script_checker`. Pemeriksa naskah mengabaikan butir <4 huruf
+    — benar untuk naskah 130 kata, sebab butir sependek "7" akan menyalakan salah-tuduh di mana-mana.
+    Tapi JUDUL hanya beberapa kata dan ditulis sengaja, jadi di sini butir sependek satu karakter pun
+    dihormati — tanpa itu, pantangan `ﷺ` dan `7` yang pemilik niche tulis sendiri **tak pernah terpakai**
+    (terukur: keduanya lolos saat memakai ambang naskah).
+
+    GAGAL-LUNAK: seluruh kandidat melanggar → daftar utuh + WARNING (produksi TIDAK pernah berhenti).
+    """
+    if not topik or not niche_profile:
+        return topik
+    try:
+        import re as _re
+        avoid = str(((niche_profile.get("narration_persona") or {}).get("avoid") or "")).strip()
+        if not avoid:
+            return topik
+        frasa = [x.strip().lower() for x in _re.split(r"[,;·|]|\band\b", avoid) if x.strip()]
+        def _langgar(judul: str) -> str | None:
+            low = judul.lower()
+            for f in frasa:
+                if _re.search(rf"(?<![0-9a-zà-ÿ]){_re.escape(f)}(?![0-9a-zà-ÿ])", low):
+                    return f
+            return None
+        bersih = []
+        for t in topik:
+            judul = str((t or {}).get("topic") or "")
+            kena = _langgar(judul)
+            if kena:
+                logger.info(f"[NicheSelector] judul dibuang — melanggar pantangan niche '{kena}': '{judul}'")
+            else:
+                bersih.append(t)
+        if not bersih:
+            logger.warning(f"[NicheSelector] SEMUA {len(topik)} judul melanggar pantangan niche — "
+                           f"daftar dipakai apa adanya agar produksi tidak berhenti")
+            return topik
+        return bersih
+    except Exception as e:
+        logger.warning(f"[NicheSelector] penyaring judul gagal ({e}) — daftar apa adanya")
+        return topik
+
+
 class NicheSelector:
     """
     Menganalisis sinyal tren dan memilih topik terbaik untuk diproduksi.
@@ -696,6 +749,12 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
 
         # s71: Duplicate prevention (pass _recent_topics agar tidak re-query Supabase)
         topics = self._filter_duplicates(topics, tenant_config, recent=_recent_topics)
+        # [B32] T10 — judul wajib tunduk pada kotak Pantangan niche itu sendiri (bukan selera mesin).
+        try:
+            from src.intelligence.config import get_niches
+            topics = saring_judul_terlarang(topics, get_niches().get(getattr(tenant_config, 'niche', '')) or {})
+        except Exception as _e:
+            logger.warning(f"[NicheSelector] saring judul dilewati ({_e})")
 
         result = {
             "tenant_id": tenant_config.tenant_id,
