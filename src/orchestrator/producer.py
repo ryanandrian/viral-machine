@@ -332,6 +332,30 @@ def produce_one(channel_row: dict) -> int | None:
 
 
 # ── DIRECT / ON-DEMAND (V2 "1 mesin, 2 mode") ──────────────────────────────
+def segarkan_dna_sebelum_direct() -> None:
+    """Buang potret DNA niche sebelum job yang DIPICU MANUSIA dijalankan.
+
+    ═══ KENAPA (2026-08-15, `SISA_KERJA [B32]` T5) ═══
+    Registry niche bercache 300 detik — benar untuk produksi terjadwal (48 niche dibaca ulang tiap run =
+    beban DB sia-sia), tapi SALAH untuk jalur yang dipicu orang yang baru saja menekan Simpan. Alur
+    tenant: sunting DNA → Simpan → "Jalankan test". Tanpa penyegaran ini, videonya lahir dari DNA LAMA
+    dan tenant menyimpulkan "perubahan saya tidak berpengaruh" — lalu mengubahnya ke arah yang salah.
+
+    Berlaku untuk SELURUH direct-job (uji niche · uji admin · ulangi), bukan disaring per-jenis:
+    semuanya dipicu manusia yang menunggu hasilnya sekarang, dan menyaring per-jenis hanya menambah
+    satu tempat baru untuk salah menggolongkan.
+
+    `invalidate_niches_cache()` sudah ada sejak 2-Agu dengan **nol pemanggil** — mekanisme yang lahir
+    mati; inilah pemanggilnya. GAGAL-LUNAK: kegagalan menyegarkan tak boleh menjatuhkan produksi yang
+    seharusnya jalan (§0.6) — paling buruk kembali ke perilaku lama (potret ≤300 dtk).
+    """
+    try:
+        from src.intelligence.config import invalidate_niches_cache
+        invalidate_niches_cache()
+    except Exception as e:
+        logger.warning(f"[Direct] gagal menyegarkan DNA niche (lanjut dengan potret lama): {e}")
+
+
 # Jalur prioritas: tenant/admin minta produksi 1 job SEKARANG (test/retry/admin_test).
 # Di-drain SEBELUM stok-buffer, pakai semaphore+pool yang SAMA (anti-OOM utuh). Mesin = pipeline.run().
 def run_direct(sb, job: dict) -> None:
@@ -340,6 +364,9 @@ def run_direct(sb, job: dict) -> None:
     from datetime import datetime, timezone
     from src.intelligence.config import tenant_config_from_channel
     from src.orchestrator.pipeline import Pipeline
+
+    # [B32] T5 — job ini dipicu MANUSIA yang baru menekan Simpan: DNA-nya wajib yang terbaru.
+    segarkan_dna_sebelum_direct()
 
     jid = job["id"]
     tenant_id = job["tenant_id"]

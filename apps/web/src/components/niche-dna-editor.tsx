@@ -502,6 +502,13 @@ export default function NicheDnaEditor({ niche, onSave, busy, onCancel }: { nich
           {busy ? <Bi id="Menyimpan…" en="Saving…" /> : <Bi id="Simpan DNA" en="Save DNA" />}
         </button>
         {!valid && <span style={{ fontSize: "var(--text-xs)", color: "var(--danger)" }}><Bi id={`Perbaiki ${Object.keys(errors).length} isian bertanda merah dulu.`} en={`Fix the ${Object.keys(errors).length} flagged fields first.`} /></span>}
+        {/* [B32] T5 — mesin memegang potret niche s/d 5 menit. Test niche SELALU menyegarkannya, tapi
+            produksi TERJADWAL bisa memakai DNA lama sebentar. Dulu nol kalimat menjelaskan ini, jadi
+            tenant menyimpulkan suntingannya "tidak berpengaruh". */}
+        {valid && <span className="muted" style={{ fontSize: "0.6875rem" }}>
+          <Bi id="Test niche langsung memakai DNA terbaru. Produksi terjadwal menyusul dalam beberapa menit."
+              en="A niche test uses the newest DNA immediately. Scheduled production follows within a few minutes." />
+        </span>}
       </div>
     </div>
   );

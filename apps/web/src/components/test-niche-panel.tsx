@@ -124,6 +124,14 @@ export default function TestNichePanel({ getUrl, postUrl, postBody, confirmMessa
         </span>
       </div>
 
+      {/* [B32] T5 — dulu tenant tak punya cara tahu DNA mana yang dipakai: mesin memegang potret
+          niche s/d 300 detik, jadi "Simpan lalu Jalankan test" bisa menguji DNA LAMA tanpa sepatah
+          kata pun di layar. Jalur uji kini SELALU menyegarkan DNA; kalimat ini yang memberitahunya. */}
+      <div className="muted" style={{ fontSize: "0.6875rem", marginTop: ".4rem" }}>
+        <Bi id="Test selalu memakai DNA terbaru yang sudah Anda simpan."
+            en="A test always uses the latest DNA you have saved." />
+      </div>
+
       {running && (
         <div style={{ marginTop: ".6rem" }}>
           {test?.progress && test.progress.step > 0 ? (<>

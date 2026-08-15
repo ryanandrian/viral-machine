@@ -971,7 +971,7 @@ ketiganya; yang bolong **terpusat di visual** — separuh nilai jual niche.
 | **T2** | Kunci tulis publik di `niches`·`moods`·`music_library`; niche privat hanya terbaca pemiliknya (dijaga DB, bukan disaring browser) | `migrations/0199_kunci_tulis_publik_katalog_niche.sql` · `tests/test_katalog_niche_tak_bisa_ditulis_publik.py` | sapuan izin: tulis DITOLAK ketiganya; baca 5 layar tetap jalan | ✅ **2026-08-15** (migrasi APPLIED) |
 | **T3** | 13 properti visual dapat label+penjelasan+contoh via **deklarasi tunggal** (§5b Lapis-2 "terlihat") | `lib/niche-dna.ts` · `niche-dna-editor.tsx` · `tests/test_properti_visual_berlabel.py` | uji: tiap kunci `visual_style` di 48 niche WAJIB punya deklarasi label | ✅ **2026-08-15** |
 | **T4** | **Satu jalur baca DNA** (daftar 15 kolom dibuang) + frame pembuka memakai SELURUH DNA | `config.py` · `tenant_config.py` · `visual_assembler.py` · `music_selector.py` · `youtube_publisher.py` · `tests/test_dna_niche_sampai_utuh.py` | potret 48 niche identik; uji merah bila kolom baru tak terbawa | ✅ **2026-08-15** |
-| **T5** | DNA yang baru disimpan **langsung** dipakai uji niche; layar menyatakan kapan berlaku | `config.py` · `components/test-niche-panel.tsx` | sunting→uji→terbukti versi BARU; uji merah bila jalur segar dicabut | ⬜ |
+| **T5** | DNA yang baru disimpan **langsung** dipakai uji niche; layar menyatakan kapan berlaku | `producer.py` · `test-niche-panel.tsx` · `niche-dna-editor.tsx` · `tests/test_dna_uji_selalu_terbaru.py` | sunting→uji→terbukti versi BARU; uji merah bila jalur segar dicabut | ✅ **2026-08-15** |
 | **T6** | Penegakan gaya visual: **uji terkendali dulu** (1 adegan × 4 versi), lalu gaya di depan perintah + larangan lewat saluran sesuai **deklarasi kemampuan vendor**; `"No people."` pindah dari kode ke DNA | `script_engine.py` · `ai_image.py` · `visual_assembler.py` · `ai_models` (data) | 47 niche lama tak bergeser sehuruf; uji merah bila vendor baru tanpa deklarasi | ⬜ |
 | **T7** | **[B14]** larangan figur ditegakkan pada GAMBAR keluaran (bukan cuma pada permintaan) → gagal jujur, tidak terbit | `visual_assembler.py` · QC | gambar uji melanggar → ditolak; sabotase → merah | ⬜ |
 | **T8** | `F-2`: "niche tak dikenal → pakai niche aktif pertama" (6 titik) jadi **gagal jujur** — usulan 15-Jul, belum pernah diketok | `script_engine.py`(2) · `hook_optimizer.py` · `niche_selector.py`(2) · `tenant_config.py` | niche hilang → berhenti+lapor, bukan substitusi senyap | ⬜ |
@@ -1062,6 +1062,22 @@ Merah dibuktikan 2×: sebelum perbaikan 7 gagal · sabotase (daftar kolom dikemb
 **Suite penuh 1060 lulus.**
 *(Satu uji saya sendiri sempat mengikat huruf besar-kecil `render_style` — diperketat ke KONTRAK
 "nilainya sampai", bukan "susunan hurufnya sama".)*
+
+#### ✅ REALISASI T5 (2026-08-15)
+`segarkan_dna_sebelum_direct()` dipanggil di **awal `run_direct`** ⇒ SELURUH job yang dipicu manusia
+(uji niche tenant · uji admin · ulangi) membuang potret DNA lebih dulu. Tidak disaring per-jenis job:
+semuanya dipicu orang yang menunggu hasilnya sekarang, dan menyaring per-jenis hanya menambah satu
+tempat baru untuk salah menggolongkan. **GAGAL-LUNAK** (§0.6): penyegaran gagal → kembali ke perilaku
+lama, produksi tidak dijatuhkan.
+⚠️ `invalidate_niches_cache()` sudah ditulis **2-Agu dengan NOL pemanggil** — mekanisme lahir mati yang
+komentarnya sendiri mengakuinya. Inilah pemanggilnya; cacat lama tidak ditambal dua kali.
+**Layar berhenti membiarkan tenant menebak:** panel uji menyatakan *"Test selalu memakai DNA terbaru
+yang sudah Anda simpan."*, dan di bawah tombol Simpan: *"Test niche langsung memakai DNA terbaru.
+Produksi terjadwal menyusul dalam beberapa menit."* (dwibahasa, §3.5).
+**Bukti runtime — putaran nyata pada `sunnah_harian`** (nol channel memakainya; nilainya dikembalikan
+persis): mesin memuat DNA → DNA disunting di DB → **tanpa penyegaran mesin MASIH membaca yang lama**
+(cacatnya terbukti hidup) → jalur uji menyegarkan → DNA baru terbaca. Merah dibuktikan 2×: sebelum
+perbaikan 5 gagal · sabotase (pemanggilan dicabut) → 1 merah. `tsc` bersih · **suite penuh 1065 lulus**.
 
 #### ⛔ LARANGAN DALAM [B32] — jangan dikerjakan, jangan "sekalian"
 - **Jangan** membangun sub-tag/`tag_pool` atau siklus rilis bulanan (aspiratif, di luar lingkup).
