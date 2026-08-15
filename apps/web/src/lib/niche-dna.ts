@@ -129,6 +129,51 @@ export function validateDnaPatch(patch: Record<string, unknown>): DnaErrors {
   return e;
 }
 
+// ── PENERAPAN PRESET "PILIH SATU KARAKTER" ────────────────────────────────────────────────────────
+// Dipakai untuk properti ber-`apply_mode='replace'` (visual_style, narration_persona, …).
+//
+// CACAT YANG DITUTUP 2026-08-15 (`SISA_KERJA [B32]` T1): editor dulu merakit ulang objeknya —
+// `{...kunci-inti-dikosongkan, ...preset}` — sehingga SEMUA properti di luar preset LENYAP. Ke-6 preset
+// `visual_style` hanya memuat 6 kunci sementara niche memakai sampai 16 ⇒ satu klik menghapus s/d 9
+// properti, termasuk `strict_prohibition` (larangan agama niche) dan `render_style` (gaya rupa).
+//
+// Kontrak ini memenuhi DUA keputusan owner sekaligus, yang tak bisa dipenuhi salah satunya saja:
+//   • 4-Jul "preset karakter = PILIH SATU" ⇒ kunci milik KELUARGA preset yang tak diisi preset baru
+//     WAJIB dikosongkan; kalau tidak, sisa gaya lama bercampur dengan gaya baru.
+//   • 14-Agu `DESAIN_PRODUK_SAAS §5b` Lapis-2 ⇒ aniconism & gaya rupa milik PEMILIK NICHE, "terlihat
+//     & bisa diubah" — haram lenyap sebagai efek samping memilih gaya.
+// Maka: preset berkuasa penuh atas keluarganya sendiri, dan TIDAK menyentuh apa pun di luar itu.
+//
+// `keluarga` = gabungan kunci SELURUH preset properti tsb, DITEMUKAN dari data (lihat pemanggil) —
+// bukan daftar hafalan. Preset baru dengan kunci baru otomatis ikut terhitung, jadi kelas kesalahan
+// "pemeriksa buta terhadap yang baru" (pelajaran `test_rute_api_terjaga.py`) tidak lahir lagi.
+export function terapkanPreset(
+  sekarang: Record<string, string>,
+  preset: Record<string, string>,
+  keluarga: readonly string[],
+): { hasil: Record<string, string>; diisi: string[]; dipertahankan: string[]; dikosongkan: string[] } {
+  const anggota = new Set(keluarga);
+  const hasil: Record<string, string> = {};
+  const diisi: string[] = [], dipertahankan: string[] = [], dikosongkan: string[] = [];
+
+  for (const [k, v] of Object.entries(sekarang)) {
+    if (anggota.has(k) || k in preset) continue;   // milik keluarga → ditangani di bawah
+    hasil[k] = v;                                   // DI LUAR keluarga → milik pemilik niche, utuh
+    if (String(v).trim() !== "") dipertahankan.push(k);
+  }
+  for (const k of anggota) {
+    if (k in preset) continue;
+    const lama = sekarang[k];
+    hasil[k] = "";                                  // "pilih satu": sisa karakter lama dibersihkan
+    if (lama !== undefined && String(lama).trim() !== "") dikosongkan.push(k);
+  }
+  for (const [k, v] of Object.entries(preset)) {
+    hasil[k] = v;
+    diisi.push(k);
+  }
+  return { hasil, diisi, dipertahankan, dikosongkan };
+}
+
 // Kolom DNA yang di-copy saat buat niche baru dari template (wizard — keputusan owner: copy-dari-base).
 // keywords/hashtags/fallbacks TIDAK di-copy (spesifik topik niche — harus milik niche baru).
 export const TEMPLATE_COPY_COLUMNS = [

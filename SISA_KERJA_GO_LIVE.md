@@ -890,6 +890,143 @@ Suite **893 → 907 lulus**. Nol DB · nol tampilan · nol komponen baru.
 - **PENJAGA + merah dibuktikan:** `tests/test_penurunan_mutu_tak_senyap.py` (6 uji; sambungan dicabut dari satu jalur ⇒ merah) · `tests/test_pemulihan_tak_menjebak.py` +1 (cadangan dicabut ⇒ merah). Uji lama yang mengikat **teks harfiah** titik panggil **diperketat ke kontraknya** — niat aslinya utuh, berhenti mengunci susunan huruf (bukan dilonggarkan agar hijau).
 - **DIAKUI, tidak diperluas:** layar admin memakai kolom yang sama & menampilkan `—` untuk rem lama — informatif saja, tak menyesatkan siapa pun, jadi sengaja tak disentuh.
 
+### [B32] NICHE DNA: DARI "TERSIMPAN" JADI "DITEGAKKAN" — 🔵 RENCANA MATANG, MENUNGGU KETOK OWNER (2026-08-15)
+> **Mandat owner 2026-08-15:** *"Niche DNA adalah NILAI JUAL UTAMA aplikasi ini. Niche Library dan Niche
+> Studio harus dibuat sebaik mungkin, semaksimal mungkin, bukan asal jadi."* + *"MesinViral = world-class
+> application, seluruh unsur dibangun dengan world-class best practice."*
+> **SSOT arsitektur = `NICHE_DNA_AUDIT_REMEDIATION.md`** · larangan konten = `DESAIN_PRODUK_SAAS §5b` ·
+> alur pesanan = `CUSTOM_NICHE_REQUEST_FLOW.md` · atribusi = `AUDIT_ATRIBUSI_NICHE_2026-07-15.md` ·
+> model niche = memory `decisions_niche_model`.
+
+**🎯 TUJUAN TUNGGAL — tiap properti DNA wajib lulus TIGA syarat:** (1) **terlihat & bisa diubah**
+pemiliknya · (2) **sampai** ke mesin · (3) **ditegakkan** pada hasil. Hari ini ±60% properti lulus
+ketiganya; yang bolong **terpusat di visual** — separuh nilai jual niche.
+
+#### 📏 FAKTA TERUKUR (2026-08-15, dari DB & kode live — JANGAN diselidiki ulang)
+- **48 niche · 27 kolom · 16 kunci `visual_style`.** Sebaran: `camera`/`realism`/`lighting`/`reference`/
+  `atmosphere`/`base_style`/`color_grading`/`color_palette` = 48/48 · `motion`/`composition`/`camera_motion`
+  = 47/48 · `strict_prohibition` 3/48 · `subject`/`environment`/`mandatory_motion`/`render_style` 1/48.
+- **T1 RANJAU PRESET:** `applyVisual` (`niche-dna-editor.tsx:434`) MENGGANTI, bukan menggabung. Ke-6 preset
+  `visual_style` hanya memuat 6 kunci (atmosphere·base_style·camera·color_palette·lighting·realism) ⇒ satu
+  klik **menghapus s/d 9 properti**, termasuk `strict_prohibition` (larangan agama) & `render_style`.
+  **Belum meledak:** nol niche berjejak 6-kunci-persis di DB. `camera_motion` selamat (disuntik ulang di perakit patch).
+- **T2 LUBANG TULIS PUBLIK:** dengan **kunci publik, TANPA login**, `niches`/`moods`/`music_library` bisa
+  **DITULIS** (dibuktikan: UPDATE nilai-sama pada `sunnah_harian` → server balas 1 baris). 16 tabel lain
+  tertutup rapat (channels·tenant_configs·videos·production_runs·kunci AI·akun YT·direct_jobs·niche_requests
+  ·admin_audit·content_inventory·plan_limits·ai_models·ai_providers·app_config·content_beats·presets).
+  Sebab: RLS ketiganya sengaja OFF (migr 0071) + izin tulis publik tak pernah dicabut.
+  ⚠️ **BEDAKAN dari celah yang owner TUNDA 30-Jun** (`authenticated` bisa UPDATE `channels.niche` — butuh
+  login, terbatas baris sendiri). Ini kelas lain: nol login, seluruh 48 niche.
+- **T3 FRAME PEMBUKA:** hanya membaca 4 dari 16 properti (`base_style`/`color_palette`/`atmosphere`/
+  `render_style`). Sudah tercatat 🟡 di `NICHE_DNA §1.1` sejak **4-Jul**, tak pernah ditutup.
+  `"No people."` = **keputusan sengaja** (`§1.1b`, 14-Agu), BUKAN kelalaian — jangan dicabut diam-diam.
+- **T4 MESIN GAMBAR MENGABAIKAN LARANGAN (akar mutu visual):** satu video uji, DUA pengukuran —
+  *"NOT photorealistic"* diabaikan (3 dari 6 frame keluar seperti foto) **dan** *"No people."* diabaikan
+  (frame pembuka tetap menggambar orang). ⇒ **setiap properti DNA berbentuk larangan tidak andal** pada
+  `gpt-image-1-mini`, termasuk kotak "Larangan gambar" milik tenant.
+- **T5 13 DARI 16 PROPERTI TAMPIL SEBAGAI NAMA KODE.** `VISUAL_CORE_KEYS` hanya 3. Melanggar `§5b` Lapis-2
+  (*"milik pemilik niche, terlihat & bisa diubah"*) DAN janji `NICHE_DNA §2` butir 2 (*"NOL JSON mentah"*).
+- **T6 TIGA JALUR BACA:** (a) `config.py::_load_from_supabase` = **daftar 15 kolom tulis-tangan** (TTL 300s)
+  · (b) `tenant_config` 2 titik (`visual_style`,`visual_fallbacks`,`voice_expression`, baca-hidup) ·
+  (c) kueri langsung per-konsumen (`music_selector`=`music_config`, `youtube_publisher`=`youtube_category_id`
+  +`keywords`+`default_hashtags`). Kolom di luar daftar (a) **hilang senyap** — sudah memakan korban 2×:
+  `emotion_scoring_criteria` (4-Jul) & `description` (1-Agu). **Diperiksa 15-Agu: nol kolom menganggur sekarang.**
+  ⚠️ Ini BUKAN bug atribusi — `AUDIT_ATRIBUSI_NICHE` tetap sah, seluruh titik baca memakai kunci niche yang benar.
+- **T7 JEDA 300 DETIK:** DNA yang baru disimpan baru dipakai mesin s/d 5 menit kemudian; nol kalimat di layar
+  yang memberi tahu. Tenant menyangka sedang menguji DNA barunya.
+- **[B14] PEMICUNYA SUDAH LEWAT:** channel **"Bang Us-Dat"** (tenant `6f044e7d…`, BUKAN akun owner) memakai
+  `kisah_teladan_islami`, produksi harian, **2 video TERBIT** (31-Jul & 1-Agu). `sunnah_harian` ditambahkan
+  15-Agu sebagai publik+aktif ⇒ terlihat oleh starter/pro/business. Patri 14-Agu menahan **permintaan** yang
+  melanggar; **nol pemeriksaan pada GAMBAR yang keluar** — dan T4 membuktikan mesin gambar memang melanggar.
+
+#### 🧹 KOREKSI DOKUMEN BASI (peringatan owner: dokumen basi = sumber pengerusakan)
+- `NICHE_DNA §1.1b` menulis larangan gambar tenant kini *"berlaku di semua transport"*. **Yang benar: SAMPAI
+  ke semua transport, TIDAK DIPATUHI oleh keluarga OpenAI** (terukur 15-Agu). Wajib diubah jadi
+  **"dikirim ≠ dipatuhi"** — kalimat sekarang membuat pembaca menyangka fitur itu aman.
+- `decisions_niche_model` Layer-2 sub-tag (`niches.tag_pool`/`videos.topic_tags`) = **aspiratif, kolomnya
+  TIDAK ADA di DB** (diverifikasi ulang 15-Agu). Siklus rilis bulanan juga belum dibangun. **Keduanya DI LUAR [B32].**
+
+#### 🛡️ PROTOKOL NOL-BUG — syarat lulus tiap tahap, tanpa kecuali
+1. **Uji dibuktikan MERAH dulu** di kode sekarang. Uji yang sudah hijau sebelum perbaikan = uji palsu.
+2. **Potret 48 niche sebelum–sesudah** untuk tiap perubahan mesin; wajib identik kecuali satu selisih yang diniatkan.
+3. **Sabotase penjaganya** sampai merah — penjaga yang tak bisa merah tidak menjaga apa pun.
+4. **Layar sungguhan dibuka** (kunci publik nyata + akun tenant nyata), bukan "build lulus".
+5. **Nol suntingan di luar daftar berkas tahap itu.** Temuan baru → usulan (§0.3), bukan dikerjakan sekalian.
+6. Dokumen SSOT diperbarui di **commit yang sama** (§3.7). Deploy tetap izin owner per-batch (§5.0).
+
+#### 📐 STANDAR WORLD-CLASS (ketok owner 15-Agu) — berlaku di SETIAP tahap
+- **Properti DNA dideklarasikan SATU KALI** (nama awam ID/EN · penjelasan dampaknya ke video · contoh · jenis
+  isian · konsumen di mesin). Editor admin, editor tenant, dan validasi server lahir dari deklarasi itu ⇒
+  properti ke-14 tak mengulang masalah properti ke-13.
+- **Kemampuan vendor = DATA, bukan cabang kode** (`ai_models.default_params`: punya saluran larangan? patuh
+  negasi? menerima `seed`?). Vendor ke-20 cukup menambah baris DB. *(Mandat generik owner 14-Agu.)*
+- **Hasil diperiksa, bukan diharapkan** — tiap penegakan meninggalkan bukti terbaca di laporan run.
+- **Penjaga yang tak bisa lapuk:** uji MERAH otomatis bila kolom DNA baru tak tersambung · properti tanpa
+  label manusiawi · vendor gambar baru tanpa deklarasi kemampuan.
+
+#### 📋 DELAPAN TAHAP (berurutan; centang saat tuntas)
+| # | Isi | Berkas | Penjaga (uji) | REALISASI |
+|---|---|---|---|---|
+| **T1** | Preset **menggabung**, bukan mengganti; properti di luar preset dipertahankan; layar menyebut apa yang berubah | `components/niche-dna-editor.tsx` · `lib/niche-dna.ts` · `tests/test_preset_dna_tak_menghapus.py` | uji `applyVisual` mempertahankan 9 kunci; merah di kode sekarang | ✅ **2026-08-15** |
+| **T2** | Kunci tulis publik di `niches`·`moods`·`music_library`; niche privat hanya terbaca pemiliknya (dijaga DB, bukan disaring browser) | `migrations/0199_kunci_tulis_publik_katalog_niche.sql` · `tests/test_katalog_niche_tak_bisa_ditulis_publik.py` | sapuan izin: tulis DITOLAK ketiganya; baca 5 layar tetap jalan | ✅ **2026-08-15** (migrasi APPLIED) |
+| **T3** | 13 properti visual dapat label+penjelasan+contoh via **deklarasi tunggal** (§5b Lapis-2 "terlihat") | `niche-dna-editor.tsx` · `lib/niche-dna.ts` | uji: tiap kunci `visual_style` di 48 niche WAJIB punya deklarasi label | ⬜ |
+| **T4** | **Satu jalur baca DNA** (daftar 15 kolom dibuang) + frame pembuka memakai SELURUH DNA | `config.py` · `tenant_config.py` · `visual_assembler.py` · `music_selector.py` · `youtube_publisher.py` · `ai_image.py` | potret 48 niche identik; uji merah bila kolom baru tak terbawa | ⬜ |
+| **T5** | DNA yang baru disimpan **langsung** dipakai uji niche; layar menyatakan kapan berlaku | `config.py` · `components/test-niche-panel.tsx` | sunting→uji→terbukti versi BARU; uji merah bila jalur segar dicabut | ⬜ |
+| **T6** | Penegakan gaya visual: **uji terkendali dulu** (1 adegan × 4 versi), lalu gaya di depan perintah + larangan lewat saluran sesuai **deklarasi kemampuan vendor**; `"No people."` pindah dari kode ke DNA | `script_engine.py` · `ai_image.py` · `visual_assembler.py` · `ai_models` (data) | 47 niche lama tak bergeser sehuruf; uji merah bila vendor baru tanpa deklarasi | ⬜ |
+| **T7** | **[B14]** larangan figur ditegakkan pada GAMBAR keluaran (bukan cuma pada permintaan) → gagal jujur, tidak terbit | `visual_assembler.py` · QC | gambar uji melanggar → ditolak; sabotase → merah | ⬜ |
+| **T8** | `F-2`: "niche tak dikenal → pakai niche aktif pertama" (6 titik) jadi **gagal jujur** — usulan 15-Jul, belum pernah diketok | `script_engine.py`(2) · `hook_optimizer.py` · `niche_selector.py`(2) · `tenant_config.py` | niche hilang → berhenti+lapor, bukan substitusi senyap | ⬜ |
+
+#### ✅ REALISASI T1 (2026-08-15)
+`terapkanPreset()` lahir di `lib/niche-dna.ts` — **preset berkuasa penuh atas KELUARGA kuncinya sendiri
+dan tidak menyentuh apa pun di luar itu.** Ini satu-satunya semantik yang memenuhi DUA keputusan owner
+sekaligus: 4-Jul *"preset karakter = pilih-satu"* (kunci keluarga yang tak diisi preset baru DIKOSONGKAN
+⇒ nol sisa gaya lama) **dan** `DESAIN §5b` Lapis-2 14-Agu (aniconism & gaya rupa milik pemilik niche ⇒
+haram lenyap sebagai efek samping). **Keluarga DITEMUKAN dari data** (gabungan kunci seluruh preset
+properti itu ∪ kunci inti) — preset baru berkunci baru otomatis terhitung, jadi kelas "pemeriksa buta
+terhadap yang baru" tak lahir lagi. Berlaku untuk `visual_style` **dan** `narration_persona` (kelas cacat
+identik: hari ini tak merugikan karena ke-6 preset persona memuat semua 5 kunci, tapi kunci persona ke-6
+akan jadi korban). Layar kini menyebut akibat kliknya: *"…N kotak diisi, M properti Anda dipertahankan,
+K kotak gaya lama dikosongkan"* — dulu 9 properti bisa lenyap tanpa satu pun kalimat.
+**Bukti:** uji `tests/test_preset_dna_tak_menghapus.py` (8 uji) **MENJALANKAN** fungsi TS-nya sungguhan
+(transpilasi `tsc` repo → node), bukan mencocokkan teks — pelajaran [B30] butir 2 (uji PERILAKU AKHIR).
+Merah dibuktikan **3×**: sebelum perbaikan 8/8 gagal · sabotase pustaka (properti luar keluarga dibuang)
+→ 4 merah · sabotase editor (kembali merakit objek sendiri) → 1 merah. Sesudah dipulihkan 8/8 hijau.
+**Regresi:** `tsc --noEmit` seluruh `apps/web` EXIT=0 · **suite penuh 1041 lulus**.
+Data produksi TIDAK disentuh (ranjau memang belum meledak: nol niche berjejak 6-kunci-persis).
+
+#### ✅ REALISASI T2 (2026-08-15) — migr **0199 APPLIED ke DB v2**
+RLS dinyalakan di `niches` · `moods` · `music_library`, dan izin INSERT/UPDATE/DELETE untuk peran
+`anon`+`authenticated` **DICABUT** (dua lapis: policy tulis tak ada, plus REVOKE sebagai sabuk kedua).
+Policy BACA `niches` **menyalin PERSIS penyaring yang selama ini dipakai layar** (`exclusive_to = saya`
+ATAU `exclusive_to IS NULL AND is_active AND access_type='public'`) — jadi yang berubah hanya SIAPA yang
+menegakkannya: dari browser (bisa dilewati) pindah ke database (tidak bisa). Niche milik sendiri tetap
+terlihat **walau belum aktif** (syarat `CUSTOM_NICHE_REQUEST_FLOW §3.1` "Belum aktif").
+⚠️ `exclusive_to` bertipe TEXT sedangkan `auth.uid()` UUID ⇒ **cast wajib**; tanpa itu migrasi ditolak
+Postgres (*"operator does not exist: text = uuid"*) — tertangkap saat penerapan, bukan setelahnya.
+**Bukti dijalankan sebagai peran & sesi sungguhan** (dalam transaksi yang di-ROLLBACK, nol data berubah):
+tenant pemilik melihat **48** niche termasuk 2 privat miliknya · tenant LAIN melihat **46**, nol privat
+orang lain (sebelumnya browser-nya menerima 48 lalu menyaringnya sendiri ⇒ **tampilan di layar sama
+persis**, yang hilang cuma kebocorannya) · pengunjung tanpa login **46**, `moods`/`music_library` **0** ·
+**mesin (`service_role`) tetap 48/15/28 ⇒ produksi nol terganggu.**
+Diverifikasi sebelum menyentuh DB: mesin memakai `service_role` (peran kunci `.env` diperiksa) · seluruh
+route API admin & Studio memakai `createAdminClient()` · hanya **4 titik** membaca dari browser · seluruh
+RPC penyentuh `niches` = `SECURITY DEFINER` ⇒ tak dihalangi RLS.
+**Merah dibuktikan:** sebelum migrasi 7 uji gagal (tulis diterima di 3 tabel · DNA privat bocor ·
+katalog musik terbuka tanpa sesi). Sesudah: 5 lulus + 5 subuji. **Suite penuh 1046 lulus.**
+*(Alat ukurnya sendiri sempat salah — mengharapkan "0 baris" padahal server melempar `permission denied`;
+diperbaiki agar menerima KEDUA bentuk penolakan. Pelajaran `test_rute_api_terjaga.py`: alat ukur yang
+salah lebih berbahaya daripada tidak mengukur.)*
+
+#### ⛔ LARANGAN DALAM [B32] — jangan dikerjakan, jangan "sekalian"
+- **Jangan** membangun sub-tag/`tag_pool` atau siklus rilis bulanan (aspiratif, di luar lingkup).
+- **Jangan** mencabut `"No people."` diam-diam — pindahkan ke DNA (T6), keputusan sadar 14-Agu.
+- **Jangan** mengubah atribusi niche (`AUDIT_ATRIBUSI_NICHE` = sehat) — [B32] menyentuh KELENGKAPAN & PENEGAKAN, bukan pemilihan niche.
+- **Jangan** membuka lagi celah `authenticated`→`channels.niche` (owner sengaja menunda 30-Jun).
+- **Jangan** melonggarkan uji yang menghalangi; perketat ke KONTRAK-nya (pelajaran [B31]).
+
+#### ⏳ MENUNGGU KETOK OWNER
+Ketok "jalan" = T1→T8 dikerjakan **berurutan sampai 100% tuntas** (§0.8). Deploy tetap minta izin per-batch.
+
 ### [C2] Self-learning deepening + trend F3/F4 — 🟡  (TREND_RADAR **F3/F4**)
 - **TUJUAN:** kalibrasi `source_weights` (bobot sumber trend) dari outcome nyata per (niche,geo) + panen sinyal Analytics kaya (retensi/trafficSource/searchTerms) + agregat lintas-tenant anonim (cold-start moat).
 - **BUKTI:** loop inti hidup (`viral_score_weights`/`historical_factor`); `channel_analytics` sebagian sinyal sudah. CTR per-video=0 PERMANEN (batas API YouTube, bukan bug).

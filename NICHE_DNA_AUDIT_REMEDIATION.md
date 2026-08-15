@@ -63,6 +63,26 @@ kata patri di prompt yang sama**. Kini gaya dibaca dari `visual_style.render_sty
 atas ⇒ membuka "ada orang" di frame itu perubahan tersendiri) · 2 baris cadangan saat `visual_style`
 kosong · contoh tetap fitur uji-model admin.
 
+## 1.1c 🧩 SEMANTIK PRESET DIPERTAJAM — "pilih-satu" ≠ "hapus yang lain" *(2026-08-15, `[B32]` T1)*
+
+Kesepakatan 4-Jul di kepala dokumen ini berbunyi **"preset karakter = pilih-satu"**. Editor
+menerjemahkannya menjadi *"rakit ulang objeknya dari kunci inti + isi preset"* — sehingga **setiap
+properti di luar preset LENYAP**. Ke-6 preset `visual_style` hanya memuat 6 kunci sementara niche
+memakai s/d 16 ⇒ **satu klik menghapus s/d 9 properti**, termasuk `strict_prohibition` (larangan agama)
+dan `render_style` (§1.1b). Tenant menekan Simpan, larangannya hilang, kotaknya pun ikut hilang dari
+layar — tak terlihat siapa pun. *(Terukur 15-Agu: nol niche berjejak 6-kunci-persis ⇒ ranjau, belum meledak.)*
+
+**Semantik resmi sekarang** (`terapkanPreset()` di `lib/niche-dna.ts`): preset **berkuasa penuh atas
+KELUARGA kuncinya sendiri**, dan **tidak menyentuh apa pun di luar keluarga itu**.
+- kunci keluarga yang diisi preset → **diisi**
+- kunci keluarga yang TIDAK diisi preset → **dikosongkan** *(inilah "pilih-satu": nol sisa gaya lama)*
+- kunci di luar keluarga → **dipertahankan** *(§5b Lapis-2: milik pemilik niche)*
+
+**Keluarga ditemukan dari DATA** — gabungan kunci seluruh preset properti itu ∪ kunci inti — bukan daftar
+hafalan; preset baru berkunci baru otomatis terhitung. Berlaku sama untuk `narration_persona`.
+Dijaga `tests/test_preset_dna_tak_menghapus.py` (8 uji yang **menjalankan** fungsi TS-nya, bukan membaca
+teksnya; merah dibuktikan 3× termasuk 2 sabotase).
+
 ## 1.2 Rantai MUSIK (kecurigaan owner — TERBUKTI ada lubang)
 - `music_selector` sendiri dirancang baik: mode fixed/random/auto · deteksi mood dari naskah (keyword `moods` table) · cascade **niche-safe**: (1) niche+mood → (1b) niche+mood-lain → (2) mood lintas-niche → (3) fallback moods → **(4) TRACK ACAK APA SAJA**.
 - **Lubang DATA**: library 28 track hanya ter-tag 4 niche base. **Niche studio/request: `mood_priority` KOSONG + 0 track** → deteksi keyword gagal (lihat bawah) → cascade jatuh ke (2)/(4) → **musik lintas-niche/acak**. TERBUKTI: test `imunitas_tubuh` memakai track `calm` milik ocean_mysteries.

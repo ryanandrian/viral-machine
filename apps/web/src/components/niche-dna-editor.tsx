@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Sparkles, Music, Image as ImageIcon, Clock3, Gauge, User, Plus, X, AlertTriangle, Video } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { validateDnaPatch, PERSONA_KEYS, VISUAL_CORE_KEYS, SECTION_KEYS, SECTION_LABELS, type DnaErrors } from "@/lib/niche-dna";
+import { validateDnaPatch, terapkanPreset, PERSONA_KEYS, VISUAL_CORE_KEYS, SECTION_KEYS, SECTION_LABELS, type DnaErrors } from "@/lib/niche-dna";
 import { YT_CATEGORIES } from "@/lib/youtube-categories";
 
 // NICHE DNA EDITOR — SATU komponen utk ADMIN & TENANT (kesepakatan owner 2026-07-04: fungsi & alur
@@ -213,8 +213,35 @@ export default function NicheDnaEditor({ niche, onSave, busy, onCancel }: { nich
   const timingEmpty = Object.values(timing).every((v) => String(v).trim() === "");
 
   // penerapan preset
-  const applyPersona = (p: Preset) => setPersona({ ...Object.fromEntries(PERSONA_KEYS.map((k) => [k, ""])), ...asDict(p.value) });
-  const applyVisual = (p: Preset) => setVisual({ ...Object.fromEntries(VISUAL_CORE_KEYS.map((k) => [k, ""])), ...asDict(p.value) });
+  // KELUARGA kunci sebuah properti = gabungan kunci SELURUH presetnya, DITEMUKAN dari data (bukan
+  // dihafal). Preset baru berkunci baru otomatis ikut terhitung — kelas "pemeriksa buta terhadap yang
+  // baru" tidak lahir lagi. Kunci inti dimasukkan sebagai lantai dasar supaya kotak intinya tetap ada.
+  const keluargaPreset = useCallback((prop: string, inti: readonly string[]) => {
+    const s = new Set<string>(inti);
+    presets.filter((p) => p.property === prop).forEach((p) => Object.keys(asDict(p.value)).forEach((k) => s.add(k)));
+    return [...s];
+  }, [presets]);
+
+  // Apa yang terjadi saat preset diklik — ditampilkan ke tenant, bukan disimpan sendiri (§3.6).
+  const [presetInfo, setPresetInfo] = useState<{ prop: string; label: string; diisi: number; dipertahankan: number; dikosongkan: number } | null>(null);
+  const pakaiPreset = (p: Preset, prop: string, inti: readonly string[],
+                       kini: Record<string, string>, set: (v: Record<string, string>) => void) => {
+    // `terapkanPreset` (lib/niche-dna, diuji `tests/test_preset_dna_tak_menghapus.py`): preset berkuasa
+    // penuh atas KELUARGA-nya, dan TIDAK menyentuh properti di luar itu. Pola lama merakit ulang objek
+    // dari kunci inti ⇒ menghapus s/d 9 properti niche, termasuk larangan agama & gaya rupa ([B32] T1).
+    const r = terapkanPreset(kini, asDict(p.value), keluargaPreset(prop, inti));
+    set(r.hasil);
+    setPresetInfo({ prop, label: p.label, diisi: r.diisi.length, dipertahankan: r.dipertahankan.length, dikosongkan: r.dikosongkan.length });
+  };
+  // Tenant harus MELIHAT akibat kliknya — dulu 9 properti bisa lenyap tanpa satu pun kalimat.
+  const catatanPreset = (prop: string) => presetInfo?.prop !== prop ? null : (
+    <div style={{ fontSize: "0.6875rem", color: "var(--text-secondary)", marginTop: "-.4rem", marginBottom: ".5rem" }}>
+      <Bi id={`Preset “${presetInfo.label}” diterapkan — ${presetInfo.diisi} kotak diisi, ${presetInfo.dipertahankan} properti Anda dipertahankan, ${presetInfo.dikosongkan} kotak gaya lama dikosongkan.`}
+          en={`Preset “${presetInfo.label}” applied — ${presetInfo.diisi} boxes filled, ${presetInfo.dipertahankan} of your properties kept, ${presetInfo.dikosongkan} leftover boxes cleared.`} />
+    </div>
+  );
+  const applyPersona = (p: Preset) => pakaiPreset(p, "narration_persona", PERSONA_KEYS, persona, setPersona);
+  const applyVisual = (p: Preset) => pakaiPreset(p, "visual_style", VISUAL_CORE_KEYS, visual, setVisual);
   const applyTiming = (p: Preset) => { const v = asDict(p.value); setTiming(Object.fromEntries(SECTION_KEYS.map((k) => [k, v[k] ?? ""]))); };
   const applyScoring = (p: Preset) => setScoring(asStr(p.value));
   const applyQuality = (p: Preset) => setQualityTags((c) => mergeCsv(c, asStr(p.value)));
@@ -266,6 +293,7 @@ export default function NicheDnaEditor({ niche, onSave, busy, onCancel }: { nich
       <Sec icon={<Sparkles size={16} />} titleId="Kepribadian Narasi" titleEn="Narration Persona"
         subId="Karakter penulisan naskah (bukan pemilih suara — suara diatur di Channel)." subEn="Script-writing character (not the voice — voice is set on the Channel).">
         <PresetPicker presets={presetsFor("narration_persona")} onApply={applyPersona} />
+        {catatanPreset("narration_persona")}
         <Fld label={<Bi id="Nada bicara (tone)" en="Tone" />} hint={<Bi id="Bagaimana narasi terdengar di telinga penonton." en="How the narration feels to the viewer." />}>
           <input className="input" value={persona.tone ?? ""} onChange={(e) => setPersona({ ...persona, tone: e.target.value })} placeholder="mis. berwibawa namun memukau, seperti narator dokumenter" />
         </Fld>
@@ -371,6 +399,7 @@ export default function NicheDnaEditor({ niche, onSave, busy, onCancel }: { nich
       <Sec icon={<ImageIcon size={16} />} titleId="Gaya Visual" titleEn="Visual Style"
         subId="DNA gambar tiap adegan — di-inject ke prompt pembuat visual." subEn="Per-scene image DNA — injected into the visual generator prompts.">
         <PresetPicker presets={presetsFor("visual_style")} onApply={applyVisual} />
+        {catatanPreset("visual_style")}
         <Fld label={<Bi id="Gaya dasar (base_style)" en="Base style" />} hint={<Bi id="Fondasi tampilan semua gambar." en="Foundation look of every image." />}>
           <input className="input" value={visual.base_style ?? ""} onChange={(e) => setVisual({ ...visual, base_style: e.target.value })} placeholder="mis. hyper-photorealistic cinematic photography" />
         </Fld>
