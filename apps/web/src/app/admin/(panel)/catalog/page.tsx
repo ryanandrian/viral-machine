@@ -252,16 +252,51 @@ export default function AdminCatalogPage() {
     return opts.length ? opts : null;
   }, [data]);
 
+  // [16-Agu] Uji model VIDEO memakan >1 menit dan sambungan ke layar putus lebih dulu. Insiden
+  // Hailuo 02: mesin membalas 200 OK di detik ke-90 dengan klip 5,9 dtk JADI dan SUDAH ditagih
+  // vendor (±Rp 4.000) — tapi layar sudah menyerah dan memvonis "respons tidak valid", seolah
+  // modelnya rusak. Menaikkan batas tunggu hanya memindahkan garis putusnya; model video berikutnya
+  // bisa lebih lambat lagi. Hasil uji SELALU tersimpan permanen di `ai_models.cost_hint.audit`,
+  // jadi saat sambungan putus layar cukup MENUNGGU jejak itu berubah — pola "titip lalu tanya
+  // berkala" yang sudah dipakai tombol Pratinjau 1 gambar.
+  async function auditSekarang(mk: string): Promise<string> {
+    try {
+      const r = await fetch("/api/admin/catalog", { cache: "no-store" });
+      const j = await r.json();
+      const row = ((j?.ai_models ?? []) as Record<string, unknown>[]).find((m) => String(m.model_key) === mk);
+      return String(((row?.cost_hint ?? {}) as Record<string, unknown>).audit ?? "");
+    } catch { return ""; }
+  }
+
+  async function tungguHasilUji(mk: string, sebelum: string): Promise<{ ok: boolean; text: string }> {
+    // Terlama yang terukur ±90 dtk; beri ruang 6 menit untuk model video yang lebih berat.
+    for (let i = 0; i < 36; i++) {
+      await new Promise((r) => setTimeout(r, 10_000));
+      const a = await auditSekarang(mk);
+      if (a && a !== sebelum && !a.startsWith("SEDANG DIUJI")) return { ok: a.startsWith("LULUS"), text: a };
+    }
+    return { ok: false, text: "Uji masih berjalan di server. Hasilnya tersimpan sendiri — buka layar ini lagi sebentar lagi." };
+  }
+
   async function runTest() {
     if (!tm) return;
     setTmBusy(true); setTmMsg(null);
+    const sebelum = await auditSekarang(tm.mk);
     try {
       const r = await fetch("/api/admin/catalog/test-model", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model_key: tm.mk, key: tmKey.trim() }) });
-      const j = await r.json().catch(() => ({ ok: false, error: "respons tidak valid" }));
-      setTmMsg({ ok: !!j.ok, text: j.ok ? (j.result || "LULUS") : (j.error || "GAGAL") });
+      const j = await r.json().catch(() => null);
+      if (j) {
+        setTmMsg({ ok: !!j.ok, text: j.ok ? (j.result || "LULUS") : (j.error || "GAGAL") });
+      } else {
+        // Balasan tak terbaca = sambungan putus, BUKAN model gagal. Ujinya jalan terus di server.
+        setTmMsg({ ok: true, text: "Uji berjalan di server (model berat) — menunggu hasilnya…" });
+        setTmMsg(await tungguHasilUji(tm.mk, sebelum));
+      }
       await load();  // refresh: audit ter-stamp
-    } catch (e) {
-      setTmMsg({ ok: false, text: (e as Error).message });
+    } catch {
+      setTmMsg({ ok: true, text: "Sambungan terputus, tapi uji jalan terus di server — menunggu hasilnya…" });
+      setTmMsg(await tungguHasilUji(tm.mk, sebelum));
+      await load();
     } finally { setTmBusy(false); }
   }
 

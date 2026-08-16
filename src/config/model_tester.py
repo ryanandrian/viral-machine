@@ -58,7 +58,14 @@ def test_model(model_key: str, key: str = "") -> dict:
     if needs_key and not key:
         return {"ok": False, "error": "Provider ini butuh API token — tempel token uji (tidak disimpan), atau simpan kunci vendor ini di Test Lab."}
 
-    stamp_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    # [2026-08-16] Stempel menyertakan JAM. Uji model video makan >1 menit dan sambungan ke layar
+    # putus lebih dulu (insiden Hailuo: mesin 200 OK di detik ke-90, layar sudah menyerah) — layar
+    # kini MENUNGGU jejak ini berubah. Stempel bertanggal saja membuat uji ulang di hari yang sama
+    # menghasilkan catatan IDENTIK ⇒ penantian itu takkan pernah berakhir.
+    stamp_date = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+    # Penanda MULAI, ditulis sebelum vendor dipanggil: dari sinilah layar tahu ujinya benar-benar
+    # berjalan (dan kredit sedang terpakai), bukan sekadar permintaannya hilang di jalan.
+    _stamp_audit(sb, model_key, f"SEDANG DIUJI sejak {stamp_date} (uji manual admin)")
     try:
         if comp == "llm":
             from src.providers.llm import build_llm_provider
