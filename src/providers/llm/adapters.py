@@ -323,21 +323,33 @@ class OpenAIChatAdapter(_BaseAdapter):
 
 
 class FalAnyLlmAdapter(_BaseAdapter):
-    """Protokol fal.ai `any-llm` — SATU kunci fal untuk banyak model (Claude/Gemini/GPT/Llama).
+    """Protokol naskah fal.ai — SATU kunci fal untuk banyak model (Claude/Gemini/GPT/Llama).
 
     Beda bentuk dari dua adapter di atas, dan itu disengaja oleh vendornya:
       * bukan percakapan berperan — hanya `prompt` + `system_prompt`, jawaban di field `output`;
       * TIDAK punya mode JSON asli (tak ada `response_format`). JSON diminta lewat instruksi,
         lalu dibaca `parse_json_lenient` — cara yang sama dipakai adapter Anthropic sejak lama.
-        Terverifikasi 2026-07-28 pada gpt-4o-mini (JSON bersih) & gemini-2.5-flash + claude-haiku-4.5
-        (terbungkus pagar kode, tetap terbaca parser toleran);
-      * tarifnya PER PERMINTAAN, bukan per token.
+        Terverifikasi 2026-07-28 & diulang 2026-08-16 pada ketiga model (kunci JSON lengkap);
+      * membalas HTTP 200 dengan field `error` terisi bila permintaannya ditolak — jalur galat
+        KEDUA yang wajib digolongkan sama seriusnya dengan galat transport.
+
+    [2026-08-16] ALAMAT DIPINDAH — endpoint lama `fal-ai/any-llm` DIPENSIUNKAN vendornya
+    ("This endpoint is deprecated. This model is no longer supported.", dokumen resmi fal dibaca
+    2026-08-16). Penggantinya masih didukung, dan bedanya menentukan bagi kita: ia MELAPORKAN
+    pemakaian token, sehingga tabel harga otomatis punya angka untuk dikalikan. Endpoint lama tak
+    melaporkan apa pun dan bertarif per-permintaan — di atasnya, biaya tenant mustahil dilacak.
+
+    ⚠️ `ai_providers.base_url` milik penyedia `fal` SENGAJA TIDAK dipakai di sini: kolom itu berisi
+    alamat ANTREAN jalur VISUAL (`queue.fal.run`, dipakai ai_image/ai_video). Sejak migrasi 0180
+    menyatukan tiga baris penyedia fal jadi satu, jalur naskah ikut memungutnya dan memanggil alamat
+    yang salah → HTTP 404 pada panggilan PERTAMA (terbukti 2026-08-16). Alamat protokol = milik
+    ADAPTER, pola yang sudah dipakai adaptor suara fal & ElevenLabs.
 
     Model dikirim apa adanya sesuai daftar fal (mis. "anthropic/claude-haiku-4.5"). Model di luar
     daftar dijawab 404 oleh fal → GAGAL JUJUR, tidak pernah diam-diam diganti model lain.
     """
 
-    _BASE = "https://fal.run/fal-ai/any-llm"
+    _BASE = "https://fal.run/openrouter/router"
 
     def complete(self, *, system, user, model, temperature=0.7, max_tokens=2000,
                  as_json=False) -> str:
@@ -353,8 +365,9 @@ class FalAnyLlmAdapter(_BaseAdapter):
                                "tanpa pagar kode ```.").strip()
         body = json.dumps({"model": model, "prompt": user, "system_prompt": sistem,
                            "temperature": temperature, "max_tokens": max_tokens}).encode()
+        # Alamat = milik ADAPTER (lihat docstring): `base_url` penyedia `fal` adalah antrean VISUAL.
         req = urllib.request.Request(
-            self.base_url or self._BASE, data=body,
+            self._BASE, data=body,
             headers={"Authorization": f"Key {self.api_key}", "Content-Type": "application/json"})
         try:
             with urllib.request.urlopen(req, timeout=180) as r:
@@ -369,9 +382,27 @@ class FalAnyLlmAdapter(_BaseAdapter):
             _ec, _human = _classify_openai_compat_error(e, self.provider_key)
             raise LLMError(f"Provider '{self.display_name}' gagal: {e} {detail}".strip(),
                            error_class=_ec, human_message=_human) from e
+        # B2 cost-tracking: usage menumpang di respons yg sama (nol overhead). Fail-soft.
+        # Dicatat SEBELUM cabang galat — permintaan yang ditolak pun sudah memakai uang tenant
+        # (pola yang sama dipakai pipeline: "run gagal pun uang TERPAKAI — tetap dicatat").
+        try:
+            from src.utils import cost_meter
+            u = data.get("usage") or {}
+            cost_meter.add_llm(model, int(u.get("prompt_tokens") or 0),
+                               int(u.get("completion_tokens") or 0))
+        except Exception:
+            pass
         # fal membalas 200 dengan field `error` terisi bila model menolak → tetap GAGAL JUJUR.
+        # [2026-08-16] Golongannya WAJIB ikut: tanpa itu galat jatuh ke UNKNOWN = boleh-diulang,
+        # sehingga saldo tenant yang habis (`Exhausted balance`, sampel nyata fal) memakan 3 produksi
+        # sebelum channel direm — padahal QUOTA_EXHAUSTED ∈ FAST_FAIL mengerem setelah SATU kegagalan
+        # dan memberi tahu tenant apa yang harus ia lakukan. Penilainya SATU, yang sudah dipakai
+        # cabang galat transport di bawah — bukan penilai kedua.
         if data.get("error"):
-            raise LLMError(f"Provider '{self.display_name}' gagal: {data['error']}")
+            _pesan = str(data["error"])
+            _ec, _human = _classify_openai_compat_error(Exception(_pesan), self.provider_key)
+            raise LLMError(f"Provider '{self.display_name}' gagal: {_pesan}",
+                           error_class=_ec, human_message=_human)
         teks = (data.get("output") or "").strip()
         if not teks:
             raise LLMError(f"Provider '{self.display_name}' mengembalikan jawaban kosong.")

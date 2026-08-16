@@ -204,7 +204,11 @@ def sync_prices(sb=None, force: bool = False, only_model_key: str | None = None)
         if pricing is None and m.get("component") == "llm":
             if orm is None:
                 orm = _openrouter_map()
-            fo = orm.get(m.get("model_id") or m["model_key"])
+            # Daftar sumber cadangan dibangun BY SUFFIX (lihat `_openrouter_map`: id vendor/model →
+            # kunci polos). Pencariannya wajib memakai kunci yang sama, kalau tidak model yang
+            # penandanya berawalan vendor (seluruh model naskah fal) tak pernah ketemu — harganya
+            # mandek di angka manual lama selamanya. Model berpenanda polos: split → dirinya sendiri.
+            fo = orm.get((m.get("model_id") or m["model_key"]).split("/")[-1])
             if fo:
                 pricing = {**fo, "per_image": None, "per_1m_chars": None, "source": "openrouter", "synced_at": now}
         if pricing is None:

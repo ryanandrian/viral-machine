@@ -64,7 +64,7 @@ vendor — mustahil sembuh dengan diulang). Menambah/menghapus kelas = ubah SATU
 Klasifikasi menempel pada **transport yang menerima error**, bukan merek model. "Suara ElevenLabs" = model; "API EL" & "API fal" = dua transport → dua kontrak error.
 - **EL-direct** → adapter `elevenlabs` → kode native EL → akun ElevenLabs.
 - **EL-via-fal** (kelak) → adapter **fal** → amplop error fal → akun fal. **BUKAN** di adapter EL-direct.
-- Agregator (fal) = **satu titik billing**: bila fal habis, SEMUA model via fal (TTS+image+video) gagal bersama.
+- Agregator (fal) = **satu titik billing**: bila fal habis, SEMUA model via fal (naskah+suara+gambar+video) gagal bersama.
 
 ## §3 Aliran error ujung-ke-ujung
 > ⚠️ **Anchor baris SENGAJA DIHAPUS 2026-08-03.** Semua nomor baris di versi lama sudah basi
@@ -209,6 +209,8 @@ kegagalan yang 100% milik kita. Owner: *"pesan errornya tidak jelas hanya kode s
 | **`tests/test_rem_tak_boleh_lumpuh.py`** | 5 | **§8k — PERILAKU, bukan angka perantara:** berapa kali produksi di-submit · berapa kabar ke tenant · apakah mesin berhenti sendiri |
 | **`tests/test_parameter_kita_tak_ditimpakan_tenant.py`** | 10 | **§8k butir 4 — dua arah:** parameter tak-didukung tak pernah dikirim (vendor baru otomatis aman) · galat parameter mengaku MILIK KITA lintas-vendor · **dan tidak salah-alamat ke arah sebaliknya** |
 | `tests/test_migrasi_selaras_db.py` | 6 | kolom & **trigger** yang migrasi janjikan benar-benar hidup di DB (§8k butir 2/3, migr 0198) |
+| **`tests/test_naskah_fal_jalur_hidup.py`** | 8 | **jalur naskah fal (16-Agu):** alamat tak boleh datang dari transport VISUAL & tak boleh menunjuk endpoint yang DIPENSIUNKAN vendor · pemakaian tercatat (tabel harga butuh angka untuk dikalikan) · balasan **HTTP 200 yang berisi `error`** digolongkan lewat penilai yang SATU itu (saldo habis ⇒ rem 1-kegagalan, bukan 3 produksi terbuang) · **generik: SETIAP adapter naskah wajib mencatat biaya**, jadi vendor berikutnya tertangkap merah bila lupa |
+| **`tests/test_harga_otomatis_model_fal.py`** | 4 | **tabel harga (16-Agu):** model berpenanda `vendor/model` ikut terisi sumber otomatis (dulu SELALU meleset ⇒ harga mandek selamanya) · model berpenanda polos tak berubah · model tanpa sumber dilaporkan jujur, harganya TIDAK dikosongkan · kunci admin tetap menang |
 | **`tests/test_penurunan_mutu_tak_senyap.py`** | 6 | **§8f — penurunan mutu tak boleh senyap:** sebab frame pembuka IKUT tersimpan ke `run_metadata` di KEDUA jalur produksi · pesan penyedia tak dipotong · run sehat tak dikotori |
 | **`tests/test_mesin_tak_mati_mendadak.py`** | 12 | **§8L — mesin tak boleh MATI MENDADAK:** skema SDK dipanaskan di alur utama (SELURUH model, bukan yang teratas) · mengurai balasan tak lagi membangun skema · urutan dibaca dari **pohon sintaks** · **reproduksi crash dua arah** |
 | **Total kelima berkas lama** | **39 lulus** | dijalankan 2026-08-03 |

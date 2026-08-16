@@ -241,7 +241,7 @@ PENYEDIA: dict[str, dict] = {
         "teks": [("detected_unusual_activity", ErrorClass.ACCOUNT_BILLING)],
     },
 
-    # ── fal.ai — AGREGATOR (gambar/video; 0 channel aktif) ────────────────────────────────────
+    # ── fal.ai — AGREGATOR (gambar/video/naskah/suara; 0 channel aktif) ───────────────────────
     "fal": {
         "sumber": "https://fal.ai/docs/documentation/model-apis/errors",
         "dibaca": "2026-08-12",
