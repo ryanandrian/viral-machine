@@ -39,7 +39,14 @@ from src.exceptions import ErrorClass
 _KELUARGA_COMPAT: tuple[str, ...] = ("openai", "groq", "gemini")
 _OPENAI_COMPAT_HUMAN = {
     ErrorClass.AUTH_INVALID: "Kunci API AI (penulis naskah) ditolak penyedia. Periksa/perbarui kunci di halaman Integrasi, lalu pastikan Akun (kunci) di setting channel sepadan dengan penyedianya.",
-    ErrorClass.MODEL_UNAVAILABLE: "Model AI ini sudah tidak tersedia di penyedianya (dipensiunkan/tak bisa diakses). Pilih model lain di setting channel.",
+    # [17-Agu] IDENTITAS WAJIB IKUT. Keluhan tenant BISIK NUSANTARA: produksi berhenti dgn kalimat
+    # "Model AI ini sudah tidak tersedia" — tanpa menyebut model yang mana. Satu channel memakai TIGA
+    # slot AI (naskah · suara · gambar), jadi anjuran "pilih model lain" MUSTAHIL dikerjakan. Padahal
+    # vendor sudah menyebutkannya tepat ('The model `llama-3.3-70b-versatile` does not exist'), dan
+    # kita memegang ketiganya — penyedia, slot, nama model — lalu membuang semuanya. Ini satu-satunya
+    # golongan di tabel ini yang dulu tak menyebut slotnya, justru golongan yang paling membutuhkan.
+    # `{ident}` diisi `_anjuran`; kosong (pemanggil lama) → kalimat tetap utuh & tak bocor kerangka.
+    ErrorClass.MODEL_UNAVAILABLE: "Model AI penulis naskah{ident} sudah tidak tersedia di penyedianya (dipensiunkan/tak bisa diakses). Pilih model lain di setting channel.",
     ErrorClass.QUOTA_EXHAUSTED: "Kuota/kredit penyedia AI (penulis naskah) sudah habis. Isi saldo/kredit di akun penyedia Anda, lalu Jalankan Ulang.",
     # Pesan UMUM 429: berlaku untuk penyedia mana pun. Varian "jatah harian" hanya dipakai bila
     # penyedianya sendiri menyebutkannya — mengatakan "jatah harian habis" untuk throttle per-menit
@@ -55,12 +62,17 @@ _HUMAN_KUOTA_HARIAN = ("Jatah HARIAN penyedia AI (penulis naskah) sudah terpakai
 _RX_HARIAN = re.compile(r"per day|daily limit|/day|harian", re.I)
 
 
-def _classify_openai_compat_error(exc: Exception, penyedia: str = "") -> tuple[ErrorClass, str | None]:
+def _classify_openai_compat_error(exc: Exception, penyedia: str = "", *,
+                                  model: str = "", penyedia_nama: str = "") -> tuple[ErrorClass, str | None]:
     """Galat transport OpenAI-compatible → (ErrorClass, anjuran untuk tenant).
 
     Pembungkus tipis di atas `galat_registry.golongkan()` — penggolongannya milik registry, yang
     tinggal di sini hanya ANJURAN khas komponen "penulis naskah". `penyedia` = `ai_providers.
     provider_key`; bila pemanggil tak menyebutkannya, seluruh keluarga adaptor ini dicoba.
+
+    `model` + `penyedia_nama` = IDENTITAS yang dibawa ke kalimat anjuran (17-Agu, keluhan tenant
+    BISIK NUSANTARA): tanpa keduanya, "pilih model lain" tak bisa dikerjakan tenant yang punya tiga
+    slot AI. Keduanya SUDAH ada di tangan setiap adapter saat galat terjadi — hanya belum diteruskan.
 
     Tanda tangan lama (satu argumen) SENGAJA tetap sah — dipakai uji-uji yang sudah ada.
     """
@@ -81,23 +93,40 @@ def _classify_openai_compat_error(exc: Exception, penyedia: str = "") -> tuple[E
     # Vendor yang dicoba: yang diberitahu pemanggil, else seluruh keluarga adaptor ini. Vendor SPESIFIK
     # penting karena kode yang sama bisa berarti hal berbeda antar vendor (mis. `quota_exceeded` =
     # jatah HARIAN di Gemini tapi jatah BULANAN di ElevenLabs) — menebaknya = menasihati tenant salah.
+    # Identitas dirakit SEKALI di sini, lalu dipakai cabang mana pun di bawah — mis. " 'gpt-4o' (OpenAI)".
+    _ident = _identitas(model, penyedia_nama)
     _kandidat = (penyedia,) if penyedia else _KELUARGA_COMPAT
     for nama in _kandidat:
         p = golongkan(nama, status=_status, kode=_kode, teks=blob)
         if p.dasar.startswith(("kode/teks-vendor", "terusan-agregator")):
-            return p.kelas, _anjuran(p.kelas, blob)
+            return p.kelas, _anjuran(p.kelas, blob, _ident)
 
     # Tak ada kode vendor yang cocok → jaring generik (batas berkala · semantik HTTP).
     p = golongkan(penyedia or "", status=_status, kode=_kode, teks=blob)
-    return p.kelas, (_anjuran(p.kelas, blob) if p.kelas is not ErrorClass.UNKNOWN else None)
+    return p.kelas, (_anjuran(p.kelas, blob, _ident) if p.kelas is not ErrorClass.UNKNOWN else None)
 
 
-def _anjuran(kelas: ErrorClass, blob: str) -> str | None:
+def _identitas(model: str, penyedia_nama: str) -> str:
+    """" 'nama-model' (Nama Penyedia)" — sisipan yang membuat anjuran BISA DIKERJAKAN tenant.
+    Kosong bila keduanya tak diketahui; separuh diketahui tetap lebih baik daripada tak ada."""
+    model, penyedia_nama = (model or "").strip(), (penyedia_nama or "").strip()
+    if model and penyedia_nama:
+        return f" '{model}' ({penyedia_nama})"
+    if model:
+        return f" '{model}'"
+    return f" di {penyedia_nama}" if penyedia_nama else ""
+
+
+def _anjuran(kelas: ErrorClass, blob: str, ident: str = "") -> str | None:
     """Anjuran untuk tenant — khas komponen 'penulis naskah'. Golongan datang dari registry;
-    kalimat anjurannya tinggal di sini karena beda komponen beda tindakan."""
+    kalimat anjurannya tinggal di sini karena beda komponen beda tindakan.
+
+    `ident` disisipkan hanya pada kalimat yang menyediakan penampungnya. Kalimat tanpa penampung
+    tak tersentuh, dan penampung yang tak terisi TIDAK PERNAH bocor ke mata tenant."""
     if kelas is ErrorClass.RATE_LIMIT and _RX_HARIAN.search(blob):
         return _HUMAN_KUOTA_HARIAN
-    return _OPENAI_COMPAT_HUMAN.get(kelas)
+    pesan = _OPENAI_COMPAT_HUMAN.get(kelas)
+    return pesan.replace("{ident}", ident) if pesan else pesan
 
 
 class _BaseAdapter(LLMProvider):
@@ -204,7 +233,7 @@ class AnthropicMessagesAdapter(_BaseAdapter):
             # "tak dikenal": diulang 3x walau kunci salah, dan tenant tak diberi tahu apa pun yang
             # bisa dikerjakan. Anthropic satu-satunya vendor dengan kode TAGIHAN tersendiri (402
             # `billing_error`); tanpa penggolongan, itu ikut hilang.
-            _ec, _human = _classify_openai_compat_error(e, self.provider_key)
+            _ec, _human = _classify_openai_compat_error(e, self.provider_key, model=model, penyedia_nama=self.display_name)
             raise LLMError(f"Provider '{self.display_name}' gagal: {e}",
                            error_class=_ec, human_message=_human) from e
 
@@ -317,7 +346,7 @@ class OpenAIChatAdapter(_BaseAdapter):
         except Exception as e:
             # [ERROR-MGMT 2026-07-20] klasifikasi ber-bukti-sampel → error_class + pesan manusiawi
             # mengalir terstruktur (rem-cepat FAST_FAIL di hilir membaca MAKNA, bukan teks).
-            _ec, _human = _classify_openai_compat_error(e, self.provider_key)
+            _ec, _human = _classify_openai_compat_error(e, self.provider_key, model=model, penyedia_nama=self.display_name)
             raise LLMError(f"Provider '{self.display_name}' gagal: {e}",
                            error_class=_ec, human_message=_human) from e
 
@@ -379,7 +408,7 @@ class FalAnyLlmAdapter(_BaseAdapter):
                     detail = e.read()[:300].decode("utf-8", "replace")
                 except Exception:
                     detail = ""
-            _ec, _human = _classify_openai_compat_error(e, self.provider_key)
+            _ec, _human = _classify_openai_compat_error(e, self.provider_key, model=model, penyedia_nama=self.display_name)
             raise LLMError(f"Provider '{self.display_name}' gagal: {e} {detail}".strip(),
                            error_class=_ec, human_message=_human) from e
         # B2 cost-tracking: usage menumpang di respons yg sama (nol overhead). Fail-soft.
@@ -400,7 +429,7 @@ class FalAnyLlmAdapter(_BaseAdapter):
         # cabang galat transport di bawah — bukan penilai kedua.
         if data.get("error"):
             _pesan = str(data["error"])
-            _ec, _human = _classify_openai_compat_error(Exception(_pesan), self.provider_key)
+            _ec, _human = _classify_openai_compat_error(Exception(_pesan), self.provider_key, model=model, penyedia_nama=self.display_name)
             raise LLMError(f"Provider '{self.display_name}' gagal: {_pesan}",
                            error_class=_ec, human_message=_human)
         teks = (data.get("output") or "").strip()
