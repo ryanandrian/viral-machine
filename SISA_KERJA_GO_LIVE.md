@@ -930,6 +930,22 @@ Suite **893 → 907 lulus**. Nol DB · nol tampilan · nol komponen baru.
 - **🔒 MENUNGGU KETOK OWNER (sengaja tak dikerjakan):** **6 channel masih menunjuk model mati** (BISIK NUSANTARA · Bang Us-Dat *(keduanya sudah berhenti)* · JaydenSaverio · RETRO REWIND GARAGE · BJ Yusroon · Thetangga Property *(nonaktif)*). Mengalihkannya = menyentuh **setelan milik tenant** ⇒ keputusan owner, bukan keputusan saya.
 - **🔴 CELAH TERBUKA — belum ada ketokan:** **tak ada apa pun di sistem yang memeriksa ulang apakah model katalog masih hidup di vendornya.** Stempel audit `llama-3.3-70b` masih *"LULUS 20-Jul"* — benar hari itu, basi sejak 16-Agu. Vendor akan terus memensiunkan model; tanpa pemeriksaan berkala, tenant selalu jadi yang pertama tahu.
 
+### [B38] DEFINISI BUG vs IMPROVEMENT — KETOKAN OWNER 19-Agu (berlaku surut ke seluruh temuan)
+- **Ketetapan owner, kata demi kata:** **BUG** = *"sesuatu yang rusak, atau berpotensi merusak, termasuk **fosil**, atau **objek pada screen yang tidak berfungsi / tidak terwiring**, **data yang dikumpulkan tapi tidak digunakan**, dan sebagainya."* · **IMPROVEMENT** = *"sesuatu yang saat ini berjalan dengan baik tapi secara mutu belum tercapai, belum memuaskan dan berpotensi ditingkatkan, termasuk **kualitas konten** (narasi, suara, gambar, video, durasi, dsb), serta yang terkait dengan **self-learning & self-improvement**."*
+- **KENAPA DIKETOK:** Claude salah menggolongkan **dua kali dalam satu sesi** (menyebut kontrak rancangan "rusak"; menyebut rancangan keyakinan mesin "bug" lalu menariknya). Owner: *"anda sendiri tidak paham apa itu bedanya bug dan improvement, tapi anda mau cari bug."* Maka definisinya **milik owner**, bukan tafsiran Claude. Tercatat di `PETA_MESINVIRAL.md §4b` (dijaga `test_peta_tak_menyebut_bug_tanpa_bukti.py`).
+- **UJIAN MEKANIS** (supaya penilaian Claude tak masuk hitungan): **bisa ditulis uji yang MERAH di kode sekarang ⇒ BUG. Tidak bisa ⇒ IMPROVEMENT.**
+- **REKLASIFIKASI temuan 18/19-Agu menurut definisi ini:**
+  | Temuan | Golongan | Dasar |
+  |---|---|---|
+  | Tombol mutu gambar tak berpengaruh di 9/12 channel | **BUG** | objek layar tak terwiring → `[B36]` ✅ |
+  | Suara aktif pada mesin suara yang mati (fal 16-Agu · Gemini 18-Agu) | **BUG** | objek layar tak terjangkau → `[B34]` ✅ |
+  | Jawaban terpotong diulang 3× sia-sia | **BUG** | rusak + merusak (uang tenant) → `[B35]` ✅ |
+  | Data belajar diberi label karangan | **BUG** | data dikumpulkan lalu dipakai salah → `[B37]` ✅ |
+  | **10 topik & 10 hook DIPELAJARI, hanya 3+3 dikirim ke mesin AI** | **🔴 BUG BARU — BELUM DIPERIKSA** | **"data yang dikumpulkan tapi tidak digunakan"** — 7 dari 10 dibuang di depan pintu. Sebelumnya Claude menyebutnya "improvement"; **menurut definisi owner ini BUG.** Wajib dibuktikan MERAH dulu sebelum disebut apa pun. |
+  | Jumlah gambar mengikuti babak, bukan panjang tayangan | IMPROVEMENT | mutu konten (gambar) → `PETA §4c` |
+  | Mesin percaya 100% pada korelasi lemah | IMPROVEMENT | self-learning → keputusan owner, belum diketok |
+- **⚠️ KONSEKUENSI YANG HARUS DISEBUT:** definisi ini **memperluas** apa yang terhitung bug. "Fosil" dan "data dikumpulkan tapi tak dipakai" belum pernah disapu dengan kacamata ini. Sapuan itu **belum dikerjakan** dan **belum diketok**.
+
 ### [B37] MESIN BELAJAR DARI LABEL YANG IA KARANG SENDIRI — 🟢 SELESAI, ⏳ MENUNGGU IZIN DEPLOY (2026-08-19)
 - **TERUKUR (bukan pendapat — siapa pun bisa mengulangi):** `_compute_performance_scores` menulis `avg_view_pct = ... or 0.0` ⇒ retensi yang **BELUM TERAMBIL** jadi **0,0** lalu dibobot **0,30** ⇒ video yang datanya belum turun dinilai **GAGAL TOTAL**. Bahwa itu label PALSU terbukti tanpa berdebat: video ber-`views > 0` **MUSTAHIL** retensi 0% — kalau ada yang menonton, ada durasi yang tertonton.
 - **BESARNYA, apa adanya (tidak dibesar-besarkan):** hari ini **2 dari 132** video (1%) ⇒ korelasi bergeser **0,0004** — praktis nol. **TAPI** cakupan retensi per bulan terukur (paginasi penuh): **Apr 4% · Mei 0% · Jun 51% · Jul 49% · Agu 92%** ⇒ pada bulan seperti **Mei, seluruh label palsu**. Nilainya = perlindungan saat pengambilan analitik tersendat lagi (sudah 2× terjadi), bukan perbaikan angka hari ini.

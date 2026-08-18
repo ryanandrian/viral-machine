@@ -67,11 +67,22 @@ Keputusannya milik owner.
 Owner: *"setiap sesi anda meyakinkan menyatakan bug, lalu sesi berikutnya anda hina rancangan
 sendiri. Saya tidak punya pegangan mana yang benar."* **Sebabnya: dua hal dicampur.**
 
-| | **TERUKUR** | **PENDAPAT** |
+### DEFINISI OWNER — 19-Agu 2026, ini yang berlaku (bukan tafsiran Claude)
+
+> **BUG** = sesuatu yang **rusak, atau berpotensi merusak.** Termasuk: **fosil** · **objek di layar
+> yang tidak berfungsi / tidak terhubung** · **data yang dikumpulkan tapi tidak dipakai** · dan
+> sejenisnya.
+>
+> **IMPROVEMENT** = sesuatu yang **saat ini berjalan dengan baik** tapi **mutunya belum tercapai /
+> belum memuaskan** dan berpotensi ditingkatkan. Termasuk **mutu konten** (narasi · suara · gambar ·
+> video · durasi) dan segala yang terkait **self-learning & self-improvement.**
+
+**Ujian mekanis untuk memisahkannya** (supaya penilaian Claude tidak masuk hitungan):
+
+| | **BUG** | **IMPROVEMENT** |
 |---|---|---|
-| Contoh | vendor menolak dengan galat 404 · suara tak muncul di layar · jawaban terpotong di 2000 & lengkap di 4000 · kecepatan bicara tertulis 2,4 terukur 1,91 | seberapa percaya pada sinyal lemah · jumlah gambar ikut babak atau panjang tayangan · mutu jadi tombol atau ikut model |
-| Bisa diulang siapa pun? | **Ya** — ukur lagi, angkanya sama | Tidak — tergantung yang menilai |
-| Boleh disebut **bug**? | **Ya** | **TIDAK.** Ini keputusan rancangan |
+| Bisa ditulis uji yang **MERAH** di kode sekarang? | **Ya** | Tidak |
+| Contoh nyata 19-Agu | tombol mutu gambar tak terhubung di 9 dari 12 channel · suara aktif pada mesin yang mati · jawaban terpotong diulang 3× sia-sia · data belajar dikumpulkan lalu diberi label karangan | jumlah gambar per panjang cerita · seberapa percaya pada sinyal belajar yang lemah |
 | Dijaga apa? | **penjaga uji** — sesi berikutnya yang membaliknya ditolak mesin | **keputusan owner bertanggal** |
 
 **Ukuran untuk owner:** kalau Claude menyebut sesuatu bug, tanya *"apa angkanya, dan bagaimana saya
