@@ -28,13 +28,17 @@ kredit tenant tidak terbakar).
 - Pembayaran, jadwal, penerbitan YouTube, notifikasi, dan penagihan biaya AI: berjalan.
 - Mesin **benar-benar mengukur** performa: 239 video RAD sudah dianalisa.
 
-## 3. Yang rusak sekarang — 2 hal
+## 3. Yang rusak sekarang — 1 hal
 
 1. **Gambar terlalu sedikit untuk panjang cerita.** Satu gambar bisa menemani sampai 19 detik
    narasi, jadi terasa tidak nyambung. Jumlah gambar diikat ke jumlah babak cerita, bukan ke
-   panjang tayangan. *(Perbaikannya sudah dirancang sejak Juni, menunggu ketokan owner.)*
-2. **Tombol mutu gambar (Hemat/Seimbang/Terbaik) tidak berfungsi** di 9 dari 12 channel.
-   Tombol itu hanya berpengaruh pada satu pemasok gambar; pemasok lain mengabaikannya.
+   panjang tayangan. *(Perbaikannya sudah dirancang sejak Juni — **menunggu ketokan owner**, dan
+   dokumennya melarang mengubahnya tanpa itu.)*
+
+**Sudah diperbaiki 19-Agu, menunggu izin pasang:** jawaban AI terpotong lalu diulang 3× sia-sia
+(uang tenant terbakar tanpa peluang berhasil) · tombol mutu gambar yang tak berpengaruh di 9 dari
+12 channel — kini hanya muncul pada model yang benar-benar menerimanya, dan tenant diberi tahu
+bahwa mutu mengikuti model yang ia pilih.
 
 ## 4. Yang dijanjikan tapi belum dibangun — 2 hal, dan ini yang terbesar
 

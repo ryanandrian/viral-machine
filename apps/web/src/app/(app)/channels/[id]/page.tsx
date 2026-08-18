@@ -102,7 +102,7 @@ const hashtagsOf = (t: Record<string, string>): Record<string, string[]> => {
 // "Nama ", keduanya tak pernah cocok. Kelas bug yang sama berlaku utk semua kotak teks yang di-trim.
 const rapi = (v: unknown) => (typeof v === "string" ? v.trim() : v);
 const sameForm = (a: unknown, b: unknown) => same(rapi(a), rapi(b));
-type ModelOpt = { model_key: string; provider_key: string; display_name: string; quality_tier?: string | null; pricing?: Record<string, unknown> | null; component?: string };
+type ModelOpt = { model_key: string; provider_key: string; display_name: string; quality_tier?: string | null; pricing?: Record<string, unknown> | null; component?: string; default_params?: Record<string, unknown> | null };
 type VoiceOpt = { voice_key: string; provider_key: string; display_name: string; gender: string | null; preview_url: string | null; locale: string | null; language: string | null };
 
 // F2-07/F1-09: status efektif terpadu = komponen bersama `lib/channel-status` (satu sumber, anti-drift).
@@ -588,7 +588,7 @@ export default function ChannelDetailPage() {
     const { data: aps } = await supabase.from("ai_providers").select("provider_key,display_name,auth_type,key_group").eq("is_active", true);
     const activeProv = new Set(((aps ?? []) as { provider_key: string }[]).map((p) => p.provider_key));
     // 1a/1b: sertakan tier + harga (petunjuk budget di pill) & urutkan sort_order (kurasi admin) lalu nama.
-    const { data: amRaw } = await supabase.from("ai_models").select("model_key,provider_key,component,display_name,quality_tier,pricing,sort_order").eq("is_active", true).order("sort_order").order("display_name");
+    const { data: amRaw } = await supabase.from("ai_models").select("model_key,provider_key,component,display_name,quality_tier,pricing,sort_order,default_params").eq("is_active", true).order("sort_order").order("display_name");
     const am = ((amRaw ?? []) as (ModelOpt & { component: string })[]).filter((m) => activeProv.has(m.provider_key));
     // [B6] F3: peta render_mode per-preset (utk gating preset⇄model video di titik input).
     const { data: dps } = await supabase.from("duration_presets").select("seconds,render_mode").eq("is_active", true);
@@ -1183,8 +1183,30 @@ export default function ChannelDetailPage() {
             <div className="fld-row"><div className="k"><Bi id="Model" en="Model" /><div className="sub"><Bi id="gambar atau video" en="image or video" /></div></div>
               <div className="radio-row">{imgOpts.filter((m) => m.provider_key === visualProv).map((m) => <span key={m.model_key} title={priceTitle(m, m.component || "image")} className={`radio-pill${imgModel === m.model_key ? " sel" : ""}`} onClick={() => setImgModel(m.model_key)}>{m.display_name}<ModelBadges m={m} /></span>)}</div></div>
           )}
-          <div className="fld-row"><div className="k"><Bi id="Kualitas gambar" en="Image quality" /><div className="sub"><Bi id="makin tinggi makin bagus & makin mahal" en="higher = nicer & pricier" /></div></div>
-            <div className="radio-row">{([["low", "Hemat", "Saver"], ["medium", "Seimbang", "Balanced"], ["high", "Terbaik", "Best"]] as [string, string, string][]).map(([q, idL, enL]) => <span key={q} className={`radio-pill${imgQuality === q ? " sel" : ""}`} onClick={() => setImgQuality(q)}><Bi id={idL} en={enL} /></span>)}</div></div>
+          {/* [19-Agu] Kenop mutu HANYA untuk model yang MENYATAKAN menerimanya (`default_params.
+              supports_quality_tier` — pola sama dgn `supports_seed`, default TIDAK ⇒ model & vendor
+              BARU otomatis aman). Temuan owner 18-Agu: tiga tombol ini sebenarnya parameter milik
+              SATU pemasok (OpenAI `quality`); untuk Cloudflare/fal/Gemini — 9 dari 12 channel —
+              mesin MENGABAIKANNYA, jadi tenant menekan tombol yang tak berpengaruh. Tuas mutu yang
+              nyata berbeda per model dan sudah jadi DATA di katalog (steps 8 · 4 · 28), dan di fal
+              beda "hemat" vs "terbaik" adalah beda MODEL. Mesin TIDAK disentuh — ia sudah benar. */}
+          {(() => {
+            const m = imgOpts.find((x) => x.model_key === imgModel);
+            const dukung = Boolean((m?.default_params as Record<string, unknown> | null)?.supports_quality_tier);
+            if (!dukung) {
+              return imgModel ? (
+                <div className="fld-row"><div className="k"><Bi id="Kualitas gambar" en="Image quality" /></div>
+                  <div className="muted" style={{ fontSize: "var(--text-sm)" }}>
+                    <Bi id="Mutu mengikuti model yang Anda pilih di atas — model ini tidak punya setelan mutu terpisah."
+                        en="Quality follows the model you picked above — this model has no separate quality setting." />
+                  </div></div>
+              ) : null;
+            }
+            return (
+              <div className="fld-row"><div className="k"><Bi id="Kualitas gambar" en="Image quality" /><div className="sub"><Bi id="makin tinggi makin bagus & makin mahal" en="higher = nicer & pricier" /></div></div>
+                <div className="radio-row">{([["low", "Hemat", "Saver"], ["medium", "Seimbang", "Balanced"], ["high", "Terbaik", "Best"]] as [string, string, string][]).map(([q, idL, enL]) => <span key={q} className={`radio-pill${imgQuality === q ? " sel" : ""}`} onClick={() => setImgQuality(q)}><Bi id={idL} en={enL} /></span>)}</div></div>
+            );
+          })()}
           {acctPicker(visualProv, visualAcct, setVisualAcct)}
           {saveBar({ ubah: dirty.visual, sibuk: savingAi === "visual", simpan: saveVisual, batal: undo.visual,
             pesan: aiMsg?.el === "visual" ? <span style={{ color: aiMsg.ok ? "var(--success)" : "var(--danger,#ef4444)" }}>{aiMsg.text}</span> : null })}
