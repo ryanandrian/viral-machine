@@ -80,6 +80,10 @@ seluruh kerusakan sistem".)*
 - **"Jalan" = sudah dijalankan pada data nyata; "terpasang" = sudah deploy.** Sebut yang mana.
 - **Kemarahan owner = luapan, bukan perintah.** Berhenti, jawab, jangan memotong prosedur "demi cepat".
 - **Haram menyalahkan "kode lama/sesi sebelumnya"** — 100% karya saya.
+- **TERUKUR vs PENDAPAT — pisahkan, jangan campur.** Hanya yang bisa diukur ulang siapa pun boleh
+  disebut **bug**; soal rancangan = **pendapat**, dan keputusan owner bertanggal **HARAM disebut bug**
+  (mau mengubah → datang dengan ANGKA). *(19-Agu: saya menyebut rancangan saya sendiri "bug" lalu
+  menariknya; owner: "saya tidak punya pegangan mana yang benar." Tabel + contohnya di `PETA_MESINVIRAL.md` §4b.)*
 
 ---
 

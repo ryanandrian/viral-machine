@@ -65,16 +65,35 @@ def _compute_performance_scores(rows: list) -> list:
     subs_norm  = _minmax_normalize([r.get("subscriber_gain") or 0 for r in rows])
     scores = []
     for i, r in enumerate(rows):
-        avg_view_pct = min(100.0, r.get("avg_view_pct") or 0.0)
         ctr          = min(100.0, (r.get("ctr") or 0.0) * 100)  # ctr 0–1 → %; nyatanya selalu 0 (lihat header)
         views        = max(1, r.get("views") or 1)
         like_rate    = min(100.0, ((r.get("likes") or 0) / views) * 100)
+        # ── [19-Agu] "DATA TIDAK ADA" ≠ "PERFORMA SEBURUK MUNGKIN" ──────────────────────────────
+        # Dulu: `r.get("avg_view_pct") or 0.0` ⇒ retensi yang BELUM TERAMBIL jadi 0,0 lalu dibobot
+        # 0,30 ⇒ video yang datanya belum turun dinilai GAGAL TOTAL. Bahwa itu label PALSU bisa
+        # dibuktikan tanpa berdebat: video ber-`views > 0` MUSTAHIL punya retensi 0% — kalau ada
+        # yang menonton, ada durasi yang tertonton. Jadi 0 di sana bukan performa, tapi KETIADAAN.
+        # Besarnya, apa adanya: hari ini 2 dari 132 video (1%) — TAPI cakupan retensi per bulan
+        # terukur 4% · 0% · 51% · 49% · 92% (Apr–Agu), jadi pada bulan seperti Mei nyaris SELURUH
+        # label palsu. Bahayanya muncul tiap kali pengambilan analitik tersendat — sudah 2x terjadi.
+        # Penanganannya = degradasi JUJUR yang memang dijanjikan docstring berkas ini: dimensi yang
+        # datanya tak ada DIKELUARKAN, bobot sisanya dinormalkan ulang — bukan diisi angka karangan.
+        _retensi = r.get("avg_view_pct")
+        _ada_penonton = (r.get("views") or 0) > 0
+        _retensi_tak_diketahui = (_retensi is None) or (not _retensi and _ada_penonton)
+        _bagian = {
+            "ctr":                  ctr,
+            "subscriber_gain_norm": subs_norm[i],
+            "views_norm":           views_norm[i],
+            "like_rate":            like_rate,
+        }
+        if not _retensi_tak_diketahui:
+            _bagian["avg_view_pct"] = min(100.0, _retensi or 0.0)
+        # Normalisasi ulang: bobot dimensi yang hilang dibagikan ke dimensi yang datanya ADA,
+        # sehingga skor tetap berskala 0–100 dan video tak dihukum karena ketiadaan data.
+        _total_bobot = sum(PERF_WEIGHTS[k] for k in _bagian) or 1.0
         scores.append(round(
-            avg_view_pct * PERF_WEIGHTS["avg_view_pct"]
-            + ctr        * PERF_WEIGHTS["ctr"]
-            + subs_norm[i] * PERF_WEIGHTS["subscriber_gain_norm"]
-            + views_norm[i] * PERF_WEIGHTS["views_norm"]
-            + like_rate  * PERF_WEIGHTS["like_rate"], 2))
+            sum(nilai * PERF_WEIGHTS[k] for k, nilai in _bagian.items()) / _total_bobot, 2))
     return scores
 
 

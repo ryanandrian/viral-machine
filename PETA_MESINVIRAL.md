@@ -50,6 +50,31 @@ bahwa mutu mengikuti model yang ia pilih.
    (kaitannya −0,13 sampai +0,08 — praktis nol). Artinya mesin memutuskan memakai ukuran yang
    terbukti tidak meramalkan apa pun. Angka ini sudah ada di database dan belum pernah ditindak.
 
+## 4b. Cara membedakan mana yang benar — permintaan owner 19-Agu
+
+Owner: *"setiap sesi anda meyakinkan menyatakan bug, lalu sesi berikutnya anda hina rancangan
+sendiri. Saya tidak punya pegangan mana yang benar."* **Sebabnya: dua hal dicampur.**
+
+| | **TERUKUR** | **PENDAPAT** |
+|---|---|---|
+| Contoh | vendor menolak dengan galat 404 · suara tak muncul di layar · jawaban terpotong di 2000 & lengkap di 4000 · kecepatan bicara tertulis 2,4 terukur 1,91 | seberapa percaya pada sinyal lemah · jumlah gambar ikut babak atau panjang tayangan · mutu jadi tombol atau ikut model |
+| Bisa diulang siapa pun? | **Ya** — ukur lagi, angkanya sama | Tidak — tergantung yang menilai |
+| Boleh disebut **bug**? | **Ya** | **TIDAK.** Ini keputusan rancangan |
+| Dijaga apa? | **penjaga uji** — sesi berikutnya yang membaliknya ditolak mesin | **keputusan owner bertanggal** |
+
+**Ukuran untuk owner:** kalau Claude menyebut sesuatu bug, tanya *"apa angkanya, dan bagaimana saya
+mengukurnya sendiri?"* **Tak bisa menjawab ⇒ itu pendapat, bukan bug.**
+
+**Jangan timbang keyakinan Claude.** Terbukti 19-Agu: dalam satu sesi ia mengoreksi diri **12 kali**.
+
+**⛔ UNTUK SESI BERIKUTNYA:** keputusan owner yang tercatat bertanggal **HARAM disebut bug**. Mau
+mengubahnya? Datang ke owner dengan ANGKA, bukan dengan keyakinan.
+
+*Contoh nyata 19-Agu:* Claude menyebut "mesin percaya 100% pada korelasi lemah" sebagai **bug**,
+lalu **menariknya sendiri** setelah ditegur — yang terukur hanyalah *0 dari 5 korelasi mencapai
+ambang layak-percaya (±0,171 pada 132 video; terkuat 0,081)*. Apakah mesin **seharusnya** menakar
+keyakinan dari kekuatan sinyal = **KEPUTUSAN OWNER, belum diketok.**
+
 ## 5. Yang tidak boleh dikerjakan tanpa ketokan owner
 
 Memasang ke server · mengubah setelan milik tenant · mengubah perilaku-saat-gagal (rem, retry) ·
