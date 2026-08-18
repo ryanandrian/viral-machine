@@ -238,6 +238,15 @@ class AnthropicMessagesAdapter(_BaseAdapter):
                            error_class=_ec, human_message=_human) from e
 
 
+# ── [18-Agu] Angka JATAH TOKEN — TERUKUR, bukan tebakan ───────────────────────────────────────
+# Jawaban sah untuk permintaan terbesar (5 topik x 13 keterangan) TERUKUR 1.235-1.280 token.
+# Gemini 3.6/3.7/flash-latest: TERPOTONG di 2000, LULUS di 4000 (3x berturut, 18-Agu).
+# Groq MENOLAK 8000 — galat 413 "Request too large". Maka 4000 = titik yang menyembuhkan tanpa
+# ditolak vendor. Model boleh menyatakan batasnya sendiri lewat `ai_models.default_params`.
+_BATAS_JATAH_BAWAAN = 4000
+_MIN_JATAH_NAIK = 2000
+
+
 class OpenAIChatAdapter(_BaseAdapter):
     """Protokol OpenAI Chat Completions (kompatibel banyak vendor via base_url).
     JSON via response_format={'type':'json_object'}.
@@ -255,6 +264,35 @@ class OpenAIChatAdapter(_BaseAdapter):
 
     # Memo per-proses: (base_url|'openai', model) -> {param_lama: pengganti|None(=ditanggalkan)}
     _PARAM_ADAPTATIONS: dict = {}
+    # Memo jatah token yang SUDAH terbukti perlu — kunci (vendor, model, JATAH-YANG-DIMINTA).
+    # Jatah-yang-diminta IKUT jadi kunci dengan sengaja: tiap tugas punya ukuran jawaban sendiri
+    # (penilai naskah 500 · hook 1.200 · seleksi topik 2.000). Tanpa itu, pelajaran dari tugas
+    # besar menular ke tugas kecil dan model diberi ruang bicara jauh di atas rancangannya.
+    # Pola sama dgn _PARAM_ADAPTATIONS: belajar sekali, panggilan berikutnya langsung bersih.
+    _JATAH_NAIK: dict = {}
+
+    @staticmethod
+    def _terpotong(resp) -> bool:
+        """Vendor MENYATAKAN jawabannya terpotong. Fail-safe: bentuk tak dikenal → BUKAN terpotong
+        (yang RAGU tidak boleh memicu percobaan berbayar)."""
+        try:
+            alasan = str(getattr(resp.choices[0], "finish_reason", "") or "").lower()
+        except Exception:
+            return False
+        return alasan in ("length", "max_tokens")
+
+    @staticmethod
+    def _batas_jatah(model: str) -> int:
+        """Batas atas jatah = DATA (`ai_models.default_params.max_output_tokens`) bila model
+        menyatakannya; else angka terukur. Fail-soft: gangguan katalog TIDAK memblokir produksi."""
+        try:
+            row = (_catalog.get_models() or {}).get(model) or {}
+            nilai = (row.get("default_params") or {}).get("max_output_tokens")
+            if nilai and int(nilai) > 0:
+                return int(nilai)
+        except Exception:
+            pass
+        return _BATAS_JATAH_BAWAAN
 
     @staticmethod
     def _parse_param_rejection(err: Exception):
@@ -305,6 +343,14 @@ class OpenAIChatAdapter(_BaseAdapter):
 
         # Terapkan adaptasi yang SUDAH dipelajari utk (vendor, model) ini — langsung bersih.
         memo_key = (self.base_url or "openai", model)
+        # Jatah yang sudah terbukti perlu (dipelajari dari jawaban terpotong sebelumnya) dipakai
+        # SEJAK AWAL — hanya untuk permintaan JSON, dan hanya bila LEBIH BESAR (nol penurunan).
+        _jatah_diminta = max_tokens
+        if as_json:
+            _memo_jatah = self._JATAH_NAIK.get((memo_key, _jatah_diminta))
+            if _memo_jatah and _memo_jatah > body.get("max_tokens", 0):
+                body["max_tokens"] = _memo_jatah
+                max_tokens = _memo_jatah
         for old, new in (self._PARAM_ADAPTATIONS.get(memo_key) or {}).items():
             if old in body:
                 val = body.pop(old)
@@ -334,12 +380,55 @@ class OpenAIChatAdapter(_BaseAdapter):
                 raise LLMError(f"Provider '{self.display_name}' gagal: parameter model '{model}' "
                                f"tak kunjung diterima setelah adaptasi berulang.")
             # B2 cost-tracking: usage menumpang di respons yg sama (nol overhead). Fail-soft.
-            try:
-                from src.utils import cost_meter
-                u = getattr(resp, "usage", None)
-                cost_meter.add_llm(model, getattr(u, "prompt_tokens", 0), getattr(u, "completion_tokens", 0))
-            except Exception:
-                pass
+            def _catat(r):
+                try:
+                    from src.utils import cost_meter
+                    u = getattr(r, "usage", None)
+                    cost_meter.add_llm(model, getattr(u, "prompt_tokens", 0), getattr(u, "completion_tokens", 0))
+                except Exception:
+                    pass
+
+            _catat(resp)
+
+            # ── [18-Agu] JAWABAN TERPOTONG: naikkan jatahnya, JANGAN ulangi yang sama ────────────
+            # Jatah token = SATU kantong untuk berpikir + menjawab. Model generasi baru memakainya
+            # untuk berpikir, jawabannya terpotong, JSON gugur. Pemanggil lalu mengulang permintaan
+            # IDENTIK 3x (terukur pada kegagalan tenant BISIK NUSANTARA): tenant ditagih 3x untuk
+            # sesuatu yang MUSTAHIL berhasil, dan diberi tahu sebab yang salah.
+            #
+            # Ditangani DI SINI, bukan di 11 pemanggil: satu tempat, langsung benar untuk seluruh
+            # jalur (seleksi topik · penulis naskah · penilai · hook · analis) dan untuk vendor yang
+            # BELUM ADA. Riwayat: mekanisme ini saya temukan sendiri di `ede8a88` (16-Jul) lalu
+            # HANYA diperbaiki di jalur uji — inilah separuh yang tertinggal.
+            #
+            # Hanya untuk permintaan JSON: JSON separuh tak terpakai, sedangkan teks biasa yang
+            # terpotong masih berguna (pemanggil judul/kalimat pendek) ⇒ perilakunya tak disentuh.
+            if as_json and self._terpotong(resp):
+                _batas = self._batas_jatah(model)
+                _naik = min(max(max_tokens * 2, _MIN_JATAH_NAIK), _batas)
+                if _naik > max_tokens:
+                    from loguru import logger
+                    logger.warning(f"[LLM] '{model}' ({memo_key[0]}): jawaban TERPOTONG pada jatah "
+                                   f"{max_tokens} → diulang dengan {_naik} (sekali, berbatas {_batas})")
+                    # Dimemo: panggilan berikutnya dalam proses ini LANGSUNG memakai jatah besar —
+                    # tanpa ini, tiap percobaan pemanggil membayar dua kali (boros yang kita cabut).
+                    self._JATAH_NAIK[(memo_key, _jatah_diminta)] = _naik
+                    for _k in ("max_tokens", "max_completion_tokens"):
+                        if _k in body:
+                            body[_k] = _naik
+                    resp = client.chat.completions.create(**body)
+                    _catat(resp)
+                if self._terpotong(resp):
+                    # Sudah di jatah tertinggi dan MASIH terpotong ⇒ model ini memang tak sanggup
+                    # menyelesaikan permintaan sebesar ini. Terukur 18-Agu: GPT-OSS 20B menghabiskan
+                    # 4000 token dan hanya menghasilkan 2 dari 5 topik. Gagal JUJUR + tenant diberi
+                    # tahu tindakannya (ganti model) — bukan dibiarkan menebak.
+                    raise LLMError(
+                        f"Provider '{self.display_name}' gagal: jawaban model '{model}' terpotong "
+                        f"pada jatah {_naik} token (batas {_batas}).",
+                        human_message=(f"Model AI penulis naskah '{model}' tidak sanggup "
+                                       f"menyelesaikan permintaan ini — jawabannya selalu terpotong. "
+                                       f"Pilih model lain di setting channel."))
             return (resp.choices[0].message.content or "").strip()
         except LLMError:
             raise
