@@ -28,12 +28,10 @@ kredit tenant tidak terbakar).
 - Pembayaran, jadwal, penerbitan YouTube, notifikasi, dan penagihan biaya AI: berjalan.
 - Mesin **benar-benar mengukur** performa: 239 video RAD sudah dianalisa.
 
-## 3. Yang rusak sekarang — 1 hal
+## 3. Yang rusak sekarang — NOL
 
-1. **Gambar terlalu sedikit untuk panjang cerita.** Satu gambar bisa menemani sampai 19 detik
-   narasi, jadi terasa tidak nyambung. Jumlah gambar diikat ke jumlah babak cerita, bukan ke
-   panjang tayangan. *(Perbaikannya sudah dirancang sejak Juni — **menunggu ketokan owner**, dan
-   dokumennya melarang mengubahnya tanpa itu.)*
+Tidak ada kerusakan **terukur** yang belum ditangani. *(Ukuran "rusak" di peta ini = ada angka yang
+bisa diukur ulang siapa pun — lihat §4b. Yang tinggal pendapat masuk daftar improvement §4c.)*
 
 **Sudah diperbaiki 19-Agu, menunggu izin pasang:** jawaban AI terpotong lalu diulang 3× sia-sia
 (uang tenant terbakar tanpa peluang berhasil) · tombol mutu gambar yang tak berpengaruh di 9 dari
@@ -49,6 +47,20 @@ bahwa mutu mengikuti model yang ia pilih.
    lima ukuran yang dipakai memilih topik **hampir tidak berhubungan** dengan hasil nyata
    (kaitannya −0,13 sampai +0,08 — praktis nol). Artinya mesin memutuskan memakai ukuran yang
    terbukti tidak meramalkan apa pun. Angka ini sudah ada di database dan belum pernah ditindak.
+
+## 4c. Improvement — bekerja sesuai rancangan, rancangannya bisa lebih baik
+
+**Ini BUKAN kerusakan.** Mesin menuruti kontraknya dengan benar; yang dipertanyakan rancangannya.
+Keputusannya milik owner.
+
+1. **Jumlah gambar mengikuti babak cerita, bukan panjang tayangan.** Kontraknya tertulis: preset
+   15 dtk = 2 gambar · 30 = 3 · 60 = 5 · 90 = 7, dan mesin menurutinya dengan benar. Akibatnya satu
+   gambar bisa menemani sampai 19 detik narasi, dan owner menilai hasilnya kurang nyambung.
+   Perbaikannya **sudah dirancang sejak Juni** (mekanisme slot per-babak) dan dokumennya sendiri
+   menulis *"JANGAN ubah tanpa keputusan owner"*. **Menunggu ketokan.**
+   *(⚠️ 19-Agu Claude sempat menaruh butir ini di daftar "rusak" — pelanggaran pertama aturan §4b,
+   terjadi di dokumen yang dibuat untuk mencegahnya, ditemukan owner lewat satu pertanyaan:
+   "itu bug atau improvement?")*
 
 ## 4b. Cara membedakan mana yang benar — permintaan owner 19-Agu
 
