@@ -99,6 +99,13 @@
 > **Aturan pakai:** dokumen di luar kelompok 1 **TIDAK BOLEH** dijadikan acuan implementasi tanpa
 > diverifikasi ulang ke KODE + DB LIVE (CLAUDE.md §1.2).
 
+**KELOMPOK 0 — PETA UNTUK OWNER (1).** `PETA_MESINVIRAL.md` — satu halaman, bahasa owner, dibaca
+3 menit: apa yang mesin kerjakan · apa yang terbukti jalan (berangka) · apa yang rusak · apa yang
+dijanjikan tapi belum dibangun · apa yang haram tanpa ketokan owner · cara owner memeriksa hasil
+kerja tanpa perlu memercayai laporan. **Lahir dari teguran owner 19-Agu:** *"tidak ada satupun
+pegangan arsitektur."* **WAJIB diperbarui setiap kali daftar rusak/belum-dibangun berubah** — peta
+basi = owner kehilangan pegangan lagi.
+
 **KELOMPOK 1 — SSOT HIDUP, DIJAGA MESIN (10).** Boleh dipercaya: bila isinya melenceng dari kode, uji
 MERAH. Tiap satunya sudah dibuktikan merah dengan sengaja membusukkan dokumennya.
 `CLAUDE.md` · `SISA_KERJA_GO_LIVE.md` · `AI_ERROR_MANAGEMENT_ARCHITECTURE.md` ·
