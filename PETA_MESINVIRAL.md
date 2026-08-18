@@ -33,10 +33,39 @@ kredit tenant tidak terbakar).
 Tidak ada kerusakan **terukur** yang belum ditangani. *(Ukuran "rusak" di peta ini = ada angka yang
 bisa diukur ulang siapa pun — lihat §4b. Yang tinggal pendapat masuk daftar improvement §4c.)*
 
-**Sudah diperbaiki 19-Agu, menunggu izin pasang:** jawaban AI terpotong lalu diulang 3× sia-sia
-(uang tenant terbakar tanpa peluang berhasil) · tombol mutu gambar yang tak berpengaruh di 9 dari
-12 channel — kini hanya muncul pada model yang benar-benar menerimanya, dan tenant diberi tahu
-bahwa mutu mengikuti model yang ia pilih.
+**✅ Diperbaiki & TERPASANG 19-Agu** (commit `6ee14b1`, dibuktikan hidup di server): jawaban AI
+terpotong lalu diulang 3× sia-sia · tombol mutu gambar yang tak berpengaruh di 9 dari 12 channel ·
+mesin berhenti menganggap "data tidak ada" sebagai "performa seburuk mungkin" · pesan galat menyebut
+nama model & penyedia · suara & model yang ditawarkan tapi tak bisa dipakai.
+
+## 3b. 🔴 DUGAAN BUG — belum dibuktikan, WAJIB DIKEJAR SESI BERIKUTNYA
+
+> Belum boleh masuk daftar §3 karena **belum ada uji yang merah** (aturan §4b). Tapi **tidak boleh
+> hilang** — dua-duanya lahir dari definisi bug owner 19-Agu, dan yang kedua adalah data yang SUDAH
+> diukur lalu ditinggalkan (yaitu pelanggaran definisi itu oleh Claude sendiri).
+
+1. **Hasil belajar dikumpulkan lalu tidak dipakai.** Mesin menyimpan **10 topik terbaik + 10 hook
+   terbaik** per channel, tapi hanya **3 + 3** yang dikirim ke mesin AI — **7 dari 10 dibuang di
+   depan pintu**, berapa pun jumlah video tenant. RAD The Explorer (239 video) mendapat jendela yang
+   sama dengan channel 18 video. Menurut definisi owner (*"data yang dikumpulkan tapi tidak
+   digunakan"*) ini **BUG**, bukan improvement. **Langkah pertama: buktikan merah dulu.**
+
+2. **80 dari 144 kegagalan produksi tak punya golongan** (terukur 19-Agu, paginasi penuh). Tanpa
+   golongan, tenant diberi pesan tumpul dan rem otomatis tak bisa memutuskan dengan benar. Sidik
+   jarinya sudah diukur — dan **belum satu pun ditelusuri sampai akar**:
+
+   | Jumlah | Bentuk kegagalan |
+   |---|---|
+   | 27 | tak ada topik terpilih |
+   | **21** | **gambar** |
+   | **14** | **suara** |
+   | 7 | gerbang durasi menolak naskah |
+   | 5 | rem laju vendor |
+   | 2 | vendor menolak JSON |
+   | 4 | lain-lain (naskah gagal · waktu habis · durasi di luar batas) |
+
+   Kelompok **gambar (21)** dan **suara (14)** yang paling perlu dibedah — keduanya belum pernah
+   diperiksa isinya.
 
 ## 4. Yang dijanjikan tapi belum dibangun — 2 hal, dan ini yang terbesar
 
