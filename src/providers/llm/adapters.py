@@ -238,13 +238,38 @@ class AnthropicMessagesAdapter(_BaseAdapter):
                            error_class=_ec, human_message=_human) from e
 
 
-# ── [18-Agu] Angka JATAH TOKEN — TERUKUR, bukan tebakan ───────────────────────────────────────
+# ── [18-Agu] Angka JATAH TOKEN — TERUKUR, dan sejak 20-Agu DARI DATABASE ──────────────────────
 # Jawaban sah untuk permintaan terbesar (5 topik x 13 keterangan) TERUKUR 1.235-1.280 token.
 # Gemini 3.6/3.7/flash-latest: TERPOTONG di 2000, LULUS di 4000 (3x berturut, 18-Agu).
 # Groq MENOLAK 8000 — galat 413 "Request too large". Maka 4000 = titik yang menyembuhkan tanpa
 # ditolak vendor. Model boleh menyatakan batasnya sendiri lewat `ai_models.default_params`.
-_BATAS_JATAH_BAWAAN = 4000
-_MIN_JATAH_NAIK = 2000
+#
+# [20-Agu] KEDUA ANGKA PINDAH KE `app_config` — teguran owner: "aplikasi ini anda bangun full
+# configuration, minim hardcode, semuanya bisa diadjust lewat database (admin panel), ini rancangan
+# anda, tapi anda rusak rancangan anda sendiri." BENAR: saya menanamnya sebagai literal 18-Agu,
+# beberapa jam setelah mengutip aturan "nilai bisnis dari DB, nol literal di kode". Vendor & model
+# berganti generasi terus (2x dalam 3 hari), jadi owner WAJIB bisa menyetelnya tanpa deploy.
+# Angka di bawah tinggal sebagai CADANGAN fail-soft: gangguan DB tak boleh melumpuhkan produksi.
+_BATAS_JATAH_CADANGAN = 4000
+_MIN_JATAH_NAIK_CADANGAN = 2000
+
+
+def _batas_jatah_global() -> int:
+    """Batas atas jatah token — DATA (`app_config.llm_jatah_token_batas_atas`), admin-editable."""
+    try:
+        from src.config.app_config import get_int
+        return get_int("llm_jatah_token_batas_atas", _BATAS_JATAH_CADANGAN)
+    except Exception:
+        return _BATAS_JATAH_CADANGAN
+
+
+def _min_jatah_naik() -> int:
+    """Lantai kenaikan jatah — DATA (`app_config.llm_jatah_token_kenaikan_min`), admin-editable."""
+    try:
+        from src.config.app_config import get_int
+        return get_int("llm_jatah_token_kenaikan_min", _MIN_JATAH_NAIK_CADANGAN)
+    except Exception:
+        return _MIN_JATAH_NAIK_CADANGAN
 
 
 class OpenAIChatAdapter(_BaseAdapter):
@@ -292,7 +317,7 @@ class OpenAIChatAdapter(_BaseAdapter):
                 return int(nilai)
         except Exception:
             pass
-        return _BATAS_JATAH_BAWAAN
+        return _batas_jatah_global()
 
     @staticmethod
     def _parse_param_rejection(err: Exception):
@@ -405,7 +430,7 @@ class OpenAIChatAdapter(_BaseAdapter):
             # terpotong masih berguna (pemanggil judul/kalimat pendek) ⇒ perilakunya tak disentuh.
             if as_json and self._terpotong(resp):
                 _batas = self._batas_jatah(model)
-                _naik = min(max(max_tokens * 2, _MIN_JATAH_NAIK), _batas)
+                _naik = min(max(max_tokens * 2, _min_jatah_naik()), _batas)
                 if _naik > max_tokens:
                     from loguru import logger
                     logger.warning(f"[LLM] '{model}' ({memo_key[0]}): jawaban TERPOTONG pada jatah "
