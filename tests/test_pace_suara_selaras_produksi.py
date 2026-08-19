@@ -108,5 +108,47 @@ class TestPaceSelarasProduksi(unittest.TestCase):
             "setiap suara baru langsung mewarisi kesalahannya (persis insiden 18-Agu).")
 
 
+class TestSSOTDurasiTakBolehDiam(unittest.TestCase):
+    """SSOT durasi WAJIB memuat larangan yang dilanggar 18-Agu + insidennya.
+
+    Owner 20-Agu: *"salah satu gerbang aturan kerja terkait dokumen arsitektur sebagai SSOT, apakah
+    harus selalu saya ingatkan? saya lelah kalau begini terus."* — Larangan **"JANGAN dikalibrasi
+    ulang membuta"** SUDAH tertulis di `QC_CONTENT_ARCHITECTURE.md` sebelum insiden, dan tetap
+    dilanggar karena tak ada yang menolak. Uji ini membuat dokumen itu **tak bisa kehilangan**
+    larangan maupun catatan insidennya — sehingga sesi berikutnya membacanya, bukan diingatkan owner.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        with open(os.path.join(AKAR, "QC_CONTENT_ARCHITECTURE.md"), encoding="utf-8") as f:
+            cls.doc = f.read()
+
+    def test_larangan_kalibrasi_membuta_masih_di_TEMPATNYA(self):
+        """KOREKSI ATAS PENJAGA PALSU SAYA SENDIRI (20-Agu): versi pertama hanya memeriksa apakah
+        kalimat larangan ADA di dokumen — dan ia SELALU ada, sebab teks insiden yang saya tulis
+        MENGUTIPnya. Sabotase (menghapus larangan dari baris ROOT-CAUSE) tetap hijau ⇒ penjaga yang
+        tak bisa gagal. Kini yang diperiksa: larangan itu ada di BARIS ROOT-CAUSE — tempat mengikat
+        yang dibaca sesi baru — bukan di mana pun."""
+        baris_root = [l for l in self.doc.splitlines() if "ROOT-CAUSE FINAL" in l]
+        self.assertTrue(baris_root, "baris ROOT-CAUSE FINAL hilang dari SSOT durasi")
+        self.assertIn(
+            "JANGAN dikalibrasi ulang membuta", baris_root[0],
+            "Larangan itu hilang dari baris ROOT-CAUSE — inilah kalimat yang seharusnya mencegah "
+            "insiden 18-Agu (8 produksi tenant terbuang, Rp 37.956). Mengutipnya di tempat lain "
+            "TIDAK menggantikan: sesi baru membaca baris root-cause.")
+
+    def test_insidennya_tercatat_agar_tak_terulang(self):
+        self.assertIn(
+            "INSIDEN 18/19-Agu", self.doc,
+            "Insiden pelanggaran larangan itu tak tercatat di SSOT durasi. Tanpa catatan, sesi "
+            "berikutnya mengulang jalan yang sama dan owner lagi yang harus mengingatkan.")
+
+    def test_cara_sah_mengukur_disebut(self):
+        """Dua cara sah menurut rancangan — supaya sesi berikutnya tak mengarang cara ketiga."""
+        for jalan in ("ukur_jeda_suara.py", "tts_delivery_samples"):
+            self.assertIn(jalan, self.doc,
+                          f"cara sah mengukur pace '{jalan}' tak disebut di SSOT durasi")
+
+
 if __name__ == "__main__":
     unittest.main()
