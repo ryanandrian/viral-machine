@@ -585,11 +585,23 @@ video uji yang bisa diunduh. Jangkarnya akun, dan akun baru = jatah baru. Menutu
 | T6 | Kartu klaim + tombol **"Lepas klaim"** + jejak `admin_audit` | `api/admin/channel-claims/route.ts` + `admin/(panel)/tenants/page.tsx` | ✅ **SELESAI** — pakai `ConfirmDialog` yang sudah ada (nol komponen baru) |
 | T7a | Uji + sabotase | `tests/test_klaim_channel_tak_bisa_dicolong.py` | ✅ **SELESAI** — 16 uji · 9 dibuktikan MERAH dulu · 6 sabotase semua merah |
 | T7b | Dokumen: §7 ini · `LIFECYCLE §4.2` · `_KEEP_TABLES` · `PAYMENT §10e-2` | — | ✅ **SELESAI** |
-| T7c | Artikel panduan tenant **#12 `connect-youtube`** (published) — **diff → ketok owner → baru tayang** | `docs_articles` | ⬜ **menunggu ketok owner** |
-| T7d | **Deploy BE + FE**, lalu **isi-mundur DIULANG** (temuan §7c-2) | skrip resmi | ⬜ **menunggu izin owner** |
+| T7c | Artikel panduan tenant **#12 `connect-youtube`** — butir baru di *Jebakan umum*, dwibahasa | `docs_articles` | ✅ **SELESAI & TAYANG** (redaksi diketok owner 20-Agu; tetap `published`) |
+| T7d | **Deploy BE + FE** + **isi-mundur DIULANG** (temuan §7c-2) | skrip resmi | ✅ **TERPASANG 20-Agu** — `deploy_be` OK (`mv-worker`+`mv-webhook` active, health 200) · `deploy_fe` OK (situs 200) · commit `79c7317` · isi-mundur ulang: 15→15, **0 koneksi ber-identitas tanpa klaim** |
 
-**Bukti terukur saat T1–T7b selesai (2026-08-20):** 1188 uji hijau · build FE lulus · tabel klaim 15 baris ·
-`channel_claim_enabled = 1` · 0 foreign key · 0 policy RLS.
+**Bukti terukur (2026-08-20):** 1191 uji hijau · build FE lulus · tabel klaim 15 baris · `channel_claim_enabled = 1` ·
+0 foreign key · 0 policy RLS.
+
+**§7h. BUKTI DI SERVER — dijalankan pasca-deploy pada DATA NYATA (bukan simulasi):**
+
+| Skenario | Hasil di server |
+|---|---|
+| Akun BARU menyambung channel yang sudah diklaim (`THETANGGA PROPERTY`) | **DITOLAK** — pemilik dikenali |
+| Pemilik SAH menyambung ulang channelnya sendiri | **BOLEH** (penjaga tidak kebablasan) |
+| Channel yang belum pernah diklaim | **BOLEH** |
+| Penjaga & saklar induk di server | ada · `channel_claim_enabled = 1` |
+
+⇒ **§7 TUNTAS.** Sisa pekerjaan: nihil. Yang tetap terbuka menurut §7d (di luar §7 ini) = pendaftar ulang
+yang tak pernah menyambung YouTube; itu keputusan produk terpisah, bukan sisa kerja §7.
 
 ## §7g. Bukti yang diwajibkan (uji MERAH dulu, lalu sabotase)
 
