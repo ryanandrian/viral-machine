@@ -374,8 +374,14 @@ Tabel yang bisa ditulis browser (RLS non-SELECT) = 6: `channels`(insert/update) 
 `run_direct` sukses (`producer.py:376-382`) — yaitu jalur yang justru akan DIKUNCI. **Tenant bisa terjebak.**
 
 ### Fakta jatah trial
-- `trial_started_at` **TIDAK PERNAH diubah** oleh jalur perpanjangan mana pun (diverifikasi ke 3 kode + data:
-  semua tenant `trial_started_at == created_at`) ⇒ **jangkar andal, tak bisa di-reset diam-diam**.
+- `trial_started_at` **TIDAK PERNAH diubah** oleh jalur perpanjangan mana pun (diverifikasi ke 3 kode + data)
+  ⇒ **jangkar andal, tak bisa di-reset diam-diam** — **untuk akun yang memilikinya.**
+  ⚠️ **KOREKSI LAPANGAN 2026-08-20:** klaim lama *"semua tenant `trial_started_at == created_at`"* **tidak lagi benar** —
+  **16 dari 18** tenant cocok, **2 tenant `trial_started_at` KOSONG** (jangkar akunnya tidak ada sama sekali).
+  Dan jangkar ini mengikat **AKUN**, bukan channel: akun baru = jangkar baru ⇒ ia **tidak** menghalangi
+  pendaftaran ulang. Tidak ada apa pun di DB yang mengikat **channel YouTube** ke satu akun MesinViral
+  (dua indeks unik yang ada di-scope `(tenant_id, …)` — `migrations/0146`). Lubang ini masih **terbuka**;
+  terukur 2026-08-20: **0** channel dipakai >1 tenant, jadi belum ada kerusakan.
 - Trial **bisa** diperpanjang berulang; link 1-klik gratis **belum pernah dipakai** (0 kejadian `[lifecycle]` di
   worker.log). Perpanjangan nyata 100% = aksi admin (`admin_audit`: m.yusroon 27-Jul 7 hari; ryan.andrian 2-Jul).
 - Bukti kebocoran NYATA: **m.yusroon** (status `trial`, jatah paket Trial **1 video/hari**) menekan uji **11×**,
@@ -387,8 +393,9 @@ Tabel yang bisa ditulis browser (RLS non-SELECT) = 6: `channels`(insert/update) 
 ### Fakta teknis pendukung
 - `app_config`: `value` **integer** + `value_text` **text** (13 kenop pakai value_text). Layar admin sudah mendukung
   **angka · teks/JSON · dropdown (`options`) · readonly (`ops_*`)** — `admin/(panel)/app-config/page.tsx:51,276-286`.
-- Volume: `direct_jobs` 98 · `tenant_configs` 17 · `app_config` 110 · `channels` 10 ⇒ fungsi gerbang di RLS = sepele.
-- Migrasi terakhir = **0189**. Berikutnya 0190/0191.
+- Volume: `direct_jobs` 137 · `tenant_configs` 18 · `app_config` 119 · `channels` 13 · `niches` 58 ⇒ fungsi gerbang di RLS = sepele.
+  *(disamakan ke lapangan 2026-08-20; angka 02-Agu = 98/17/110/10.)*
+- Migrasi terakhir = **0202** *(disamakan 2026-08-20; 02-Agu = 0189)*. Berikutnya 0203.
 - Fungsi DB pola yang bisa dicontoh: `channel_missing(ch)` / `tenant_ai_key_ok(...)` — `STABLE SECURITY DEFINER`.
 - Panel uji menampilkan `j.error` **apa adanya** (`test-niche-panel.tsx:69`) = teks Indonesia mentah ⇒ pesan
   penolakan baru **wajib** pakai KODE + terjemahan FE (§3.5 CLAUDE.md), bukan teks mentah.

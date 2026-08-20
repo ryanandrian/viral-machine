@@ -26,7 +26,8 @@
 - **NOL function/trigger Supabase terdampak** (audited): tak ada fungsi DB sentuh credentials; trigger `handle_new_tenant` (signup) tak terkait; FK `channel_credentials → channels.id ON DELETE CASCADE` (kredensial ikut terhapus saat channel dihapus = bersih).
 
 ## 3b. ⚠️ GOTCHA KRUSIAL — token = per-IDENTITAS CHANNEL, bukan per-akun-Google (insiden 2026-07-13)
-Satu akun Google bisa memuat BEBERAPA channel (contoh nyata ryan: `ryan.andrian.diputra@gmail.com` =
+Satu akun Google bisa memuat BEBERAPA channel (**terukur lapangan 2026-08-20: 4 tenant** punya >1 channel tersambung — satu di antaranya **4 channel**;
+contoh nyata ryan: `ryan.andrian.diputra@gmail.com` =
 RAD The Explorer [utama] + Mesin Viral (Test) [channel kedua] → 2 baris `tenant_youtube_accounts`,
 2 token). Analytics API `channel==MINE` = channel IDENTITAS token itu SAJA — menanyakan video channel
 lain memakai token ini dibalas Google **SUKSES-TAPI-KOSONG (tanpa error)**. Insiden nyata: gerbang
@@ -59,13 +60,19 @@ dan menyapu data HANYA channel itu — jangan pernah lintas-channel dgn satu tok
 - mv-web `.env.local`: `NEXT_PUBLIC_YT_REDIRECT_URI=https://mesinviral.com/api/youtube/oauth/callback` (rebuild wajib — NEXT_PUBLIC di-bake). `MV_API_BASE=http://localhost:8088` (Next→vault internal).
 
 ## 6. ALUR CONNECT (cara kerja runtime)
+> ⛔ **BASI — JANGAN DIPAKAI SEBAGAI ACUAN ALUR (diuji ke lapangan 2026-08-20).** Langkah di bawah menggambarkan
+> **BYO-CC** (tenant mengisi client_id/secret app Google-nya sendiri) yang **sudah diganti** OAuth PLATFORM:
+> kode nyata memakai `_platform_client()`, dan tabel `channel_credentials` yang disebut di sini **sudah tidak ada**.
+> **Acuan alur yang sah = `src/billing/youtube_oauth.py` sendiri.** Blok ini disimpan sebagai catatan sejarah.
 1. FE `/channels/[id]`→Settings→Koneksi YouTube: tenant isi client_id/secret app Google-nya → POST `/api/youtube/connect` `{client_id, client_secret, channel_id, ret:/channels/[id]}`.
 2. Route Next (authed, tenant_id dari sesi) → `vault(MV_API_BASE)/api/youtube/oauth/init` (+X-Internal-Secret) → `youtube_oauth.init_connection` simpan client ke `channel_credentials` + `sign_state(channel_id)` → balas `authorize_url` Google.
 3. Browser → consent Google → Google redirect ke `https://mesinviral.com/api/youtube/oauth/callback?code&state` → nginx → `mv-webhook:8088` → `handle_callback`: tukar code→token, `_fetch_channel_id` (mine=true), `_store_tokens(channel_id, yt_channel_id)` ke `channel_credentials` → redirect browser ke `APP_BASE_URL/channels/[id]?youtube=connected`.
 4. Worker publish/analytics: `load_google_credentials(tenant_id, channel_id)` → channel_credentials → refresh token sendiri per channel.
 
 ## 7. SISA / BELUM SELESAI (lanjutkan di sini)
-- **[AKSI OWNER, eksternal Google]** Daftarkan `https://mesinviral.com/api/youtube/oauth/callback` di **Authorized redirect URIs app YouTube tenant** (ryan = `963179529813-vikbs304…`; tiap tenant di app-nya sendiri — BYO-CC). Lalu uji e2e connect channel BARU via /channels/[id]. **Tanpa ini, tombol connect channel baru gagal di langkah Google.** (Channel ryan existing TAK terpengaruh.)
+- ⛔ **SUDAH TIDAK BERLAKU (2026-08-20)** — butir ini lahir dari model BYO-CC yang sudah diganti OAuth PLATFORM
+  (opsi B2 §8 = ADOPTED); redirect URI didaftarkan **sekali** di app platform, bukan per tenant. *(teks asli:)*
+  **[AKSI OWNER, eksternal Google]** Daftarkan `https://mesinviral.com/api/youtube/oauth/callback` di **Authorized redirect URIs app YouTube tenant** (ryan = `963179529813-vikbs304…`; tiap tenant di app-nya sendiri — BYO-CC). Lalu uji e2e connect channel BARU via /channels/[id]. **Tanpa ini, tombol connect channel baru gagal di langkah Google.** (Channel ryan existing TAK terpengaruh.)
 - **[Belum, opsional refinement]** `channel_analytics.fetch_and_store` masih per-TENANT (sekali per tenant, pakai creds channel pertama) — belum filter video per-channel. AMAN untuk single-channel; untuk multi-channel, video channel lain ter-skip anggun (pakai creds salah). Perbaiki: fetch per-channel + filter `videos.channel_id` (HATI-HATI: video NULL channel_id bisa ter-exclude → jangan rusak single-channel).
 - **[Belum, deferred — JANGAN gabung]** Konversi `channel_id` TEXT→UUID FK NOT NULL di content_inventory/production_runs/pipeline_*/video_analytics/channel_insights (data-hygiene, risiko tinggi).
 
@@ -73,7 +80,9 @@ dan menyapu data HANYA channel itu — jangan pernah lintas-channel dgn satu tok
 Saat ini BYO-CC: tiap tenant bikin GCP app + daftar redirect + isi client_id/secret (friksi — lihat `ONBOARDING_FUNNEL_PLAN.md`). Alternatif **B2**: 1 OAuth app PLATFORM terverifikasi Google → tenant cukup klik "Authorize"+consent (tanpa GCP/secret). Perlu: verifikasi Google (sensitive scopes) + kuota bersama. **Kode per-channel sekarang SUDAH siap menampung B2** — tinggal ganti sumber client_id/secret dari "input tenant" → "app platform" (tanpa rombak alur per-channel).
 
 ## 9. CARA VERIFIKASI ULANG (perintah, pasca-compaction)
-- DB: `select * from channel_credentials` (PK channels.id; ryan ada).
+- DB: ~~`select * from channel_credentials`~~ **tabel ini sudah DI-DROP (migr 0095)** — gantinya:
+  `select tenant_id, yt_channel_id, yt_channel_title from tenant_youtube_accounts` (model POOL).
+  Terukur 2026-08-20: **21 koneksi, 15 ber-identitas, 0 channel dipakai >1 tenant.**
 - Service: `ssh vps 'systemctl is-active mv-webhook'` (harus active, :8088).
 - Callback publik: `curl -s -o /dev/null -w "%{http_code}" https://mesinviral.com/api/youtube/oauth/callback` → **302**.
 - Loader/status (di VPS, `load_dotenv("/home/rad4vm/viral-machine-v2/.env")` dulu): `connection_status(RY, channel_id=CH)` → `connected:true`.

@@ -23,7 +23,7 @@
 | `hook_templates` | — | ✅ **SUDAH DI-DROP** (F1, migr 0118) — baris ini arsip temuan |
 | `default_hashtags` | publisher (fallback hashtag deskripsi) | ✅ sehat |
 | `narration_persona` | prompt naskah (TONE/STYLE/AVOID/ARC/HOOK) + scoring derive | ✅ sehat (dict 5 key). **Jalur ke telinga = via TEKS naskah**; parameter vokal TTS = `voice_expression` (§1.5) |
-| `visual_style` | prompt image Tahap-2 (key bebas) · hook-frame + rewrite (key SPESIFIK `base_style,color_palette,atmosphere`) | 🟡 **mismatch bentuk**: 2 konsumen butuh 3 key inti; kalau admin isi key lain saja → jatuh ke default hardcode |
+| `visual_style` | prompt image Tahap-2 (key bebas) · hook-frame + rewrite (key SPESIFIK `base_style,color_palette,atmosphere`) | 🟡 **mismatch bentuk MASIH ADA** (mekanismenya belum ditutup): 2 konsumen butuh 3 key inti; kalau admin isi key lain saja → jatuh ke default hardcode. **Terukur 2026-08-20: 58/58 niche kini mengisi ketiga kunci inti ⇒ 0 niche terdampak hari ini.** Korban nyata terakhir = `sunnah_harian` (kosong `color_palette`+`atmosphere` sejak 15-Agu, dilengkapi migr `0202`). Risiko tetap hidup untuk niche BARU yang dibuat admin/tenant. |
 | `visual_fallbacks` | "EXEMPLAR SHOTS" few-shot prompt + padding kandidat | ✅ sehat |
 | `mood_priority` | music_selector (safety-net + fallback cascade) · producer (rotasi mood LRU) | ✅ sehat |
 | `music_config` | music_selector (mode auto/random/fixed) | ✅ sehat |
