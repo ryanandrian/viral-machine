@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Search, X, Bell, Pause, Send, CalendarPlus, CalendarClock, RotateCcw, Trash2, Tv, LockOpen } from "lucide-react";
 import ConfirmDialog from "@/components/confirm-dialog";
 import "./tenants.css";
@@ -14,6 +14,17 @@ function Bi({ id, en }: { id: string; en: string }) {
 }
 
 const COLORS = ["#1d4ed8", "#9f1239", "#047857", "#7c3aed", "#b45309", "#0891b2", "#be185d"];
+
+// Klaim channel YouTube (CHANNEL_LOCK §7). `connected` = koneksinya masih ada di pool;
+// false = terkunci TAPI sudah dicabut — justru pola pemakai yang mencoba pindah akun.
+type Claim = {
+  yt_channel_id: string; tenant_id: string; yt_channel_title: string | null;
+  claimed_at: string; yt_channel_thumb: string | null; connected: boolean;
+};
+const CFILTERS: [string, string, string][] = [
+  ["all", "Semua", "All"], ["connected", "Tersambung", "Connected"],
+  ["detached", "Terputus", "Detached"], ["orphan", "Akun dihapus", "Account deleted"],
+];
 
 type Row = {
   tenant_id: string; handle: string; email: string; plan: string; status: string; comp: boolean;
@@ -90,9 +101,11 @@ export default function AdminTenantsPage() {
   const [confirm, setConfirm] = useState<null | "reactivate" | "delete">(null);
   const [toast, setToast] = useState<string | null>(null);
   // KLAIM CHANNEL YOUTUBE (CHANNEL_LOCK_ACTIVATION_PLAN §7) — satu-satunya jalur buka kuncian.
-  const [claims, setClaims] = useState<{ yt_channel_id: string; tenant_id: string; yt_channel_title: string | null; claimed_at: string }[]>([]);
+  const [claims, setClaims] = useState<Claim[]>([]);
   const [claimLepas, setClaimLepas] = useState<string | null>(null);
   const [tab, setTab] = useState<"tenants" | "claims">("tenants");
+  const [cFilter, setCFilter] = useState("all");
+  const [cq, setCq] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true); setErr(null);
@@ -141,6 +154,23 @@ export default function AdminTenantsPage() {
   // Klaim menyimpan tenant_id apa adanya; tampilkan handle-nya supaya kolom Tenant bisa dibaca.
   // Tak ketemu = akun sudah dihapus (klaim SENGAJA bertahan — CHANNEL_LOCK §7).
   const tenantOf = useCallback((id: string) => rows.find((r) => r.tenant_id === id), [rows]);
+  const cKpi = useMemo(() => ({
+    total: claims.length,
+    detached: claims.filter((c) => !c.connected).length,
+    orphan: claims.filter((c) => !rows.some((r) => r.tenant_id === c.tenant_id)).length,
+    tenants: new Set(claims.map((c) => c.tenant_id)).size,
+  }), [claims, rows]);
+  const cView = useMemo(() => claims.filter((c) => {
+    const orphan = !rows.some((r) => r.tenant_id === c.tenant_id);
+    if (cFilter === "connected" && !c.connected) return false;
+    if (cFilter === "detached" && c.connected) return false;
+    if (cFilter === "orphan" && !orphan) return false;
+    const q = cq.trim().toLowerCase();
+    if (!q) return true;
+    const h = tenantOf(c.tenant_id)?.handle ?? "";
+    return (c.yt_channel_title ?? "").toLowerCase().includes(q)
+        || c.yt_channel_id.toLowerCase().includes(q) || h.toLowerCase().includes(q);
+  }), [claims, rows, cFilter, cq, tenantOf]);
 
   const view = rows.filter((t) => (filter === "all" || t.status === filter)
     && (!q.trim() || `${t.handle} ${t.email} ${t.tenant_id}`.toLowerCase().includes(q.trim().toLowerCase())));
@@ -260,43 +290,71 @@ export default function AdminTenantsPage() {
       </table></div></div>
       </>)}
 
-      {tab === "claims" && (
-        <div className="card">
-          <div className="card-head">
-            <h3 className="card-title"><Tv size={15} /> <Bi id="Klaim channel YouTube" en="YouTube channel claims" /></h3>
-            <span className="card-sub">{claims.length} <Bi id="channel terkunci" en="locked channels" /></span>
-          </div>
-          <div className="card-body" style={{ paddingBottom: 0 }}>
-            <p className="muted" style={{ fontSize: "var(--text-sm)", margin: 0 }}>
-              <Bi id="Satu channel YouTube hanya boleh dipakai satu akun MesinViral. Lepaskan hanya setelah kepemilikannya Anda pastikan — tindakan ini tercatat di jejak admin."
-                  en="One YouTube channel may only be used by one MesinViral account. Release only after you have verified ownership — the action is recorded in the admin audit trail." />
-            </p>
-          </div>
-          <div style={{ overflowX: "auto" }}><table className="tbl adm-tbl">
-            <thead><tr><th><Bi id="Channel" en="Channel" /></th><th>Tenant</th><th><Bi id="Diklaim" en="Claimed" /></th><th /></tr></thead>
-            <tbody>
-              {claims.length === 0 && <tr><td colSpan={4} className="muted" style={{ padding: "1.5rem", textAlign: "center" }}><Bi id="Belum ada channel yang terkunci." en="No locked channels yet." /></td></tr>}
-              {claims.map((c) => (
-                <tr key={c.yt_channel_id}>
-                  <td>
-                    <div style={{ color: "var(--text-primary)", fontWeight: 500 }}>{c.yt_channel_title || "—"}</div>
-                    <div className="muted" style={{ fontSize: "var(--text-xs)" }}>{c.yt_channel_id}</div>
-                  </td>
-                  <td>
-                    {tenantOf(c.tenant_id)
-                      ? <a href={`/admin/tenants?q=${encodeURIComponent(tenantOf(c.tenant_id)!.handle)}`}>{tenantOf(c.tenant_id)!.handle}</a>
-                      : <span className="badge badge-default"><Bi id="akun dihapus" en="account deleted" /></span>}
-                  </td>
-                  <td className="muted">{c.claimed_at?.slice(0, 10) || "—"}</td>
-                  <td style={{ textAlign: "right" }}>
-                    <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setClaimLepas(c.yt_channel_id)}><LockOpen size={14} /> <Bi id="Lepas" en="Release" /></button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table></div>
-        </div>
-      )}
+      {tab === "claims" && (<>
+      <div className="adm-kpi-strip">
+        <div className="adm-kpic"><div className="l"><Bi id="Channel terkunci" en="Locked channels" /></div><div className="v">{cKpi.total}</div></div>
+        <div className="adm-kpic"><div className="l"><Bi id="Tenant terlibat" en="Tenants involved" /></div><div className="v">{cKpi.tenants}</div></div>
+        <div className="adm-kpic"><div className="l"><Bi id="Terputus" en="Detached" /></div><div className="v">{cKpi.detached}</div></div>
+        <div className="adm-kpic"><div className="l"><Bi id="Akun dihapus" en="Account deleted" /></div><div className="v">{cKpi.orphan}</div></div>
+      </div>
+
+      <div className="adm-filters" style={{ display: "flex", gap: ".625rem", alignItems: "center", flexWrap: "wrap" }}>
+        <input className="input" style={{ minWidth: 220 }} placeholder="Cari channel / tenant…" value={cq} onChange={(e) => setCq(e.target.value)} />
+        <div className="segmented">{CFILTERS.map(([k, id, en]) => <button key={k} aria-selected={cFilter === k} onClick={() => setCFilter(k)}><Bi id={id} en={en} /></button>)}</div>
+        <div className="adm-selbox"><Search size={14} /> {cView.length} <Bi id="channel" en="channels" /></div>
+      </div>
+
+      <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl adm-tbl">
+        <thead><tr><th><Bi id="Channel YouTube" en="YouTube channel" /></th><th><Bi id="Terkunci ke" en="Locked to" /></th><th>Status</th><th><Bi id="Diklaim" en="Claimed" /></th><th /></tr></thead>
+        <tbody>
+          {cView.length === 0 && (
+            <tr><td colSpan={5} className="muted" style={{ padding: "1.5rem", textAlign: "center" }}>
+              {claims.length === 0
+                ? <Bi id="Belum ada channel yang terkunci." en="No locked channels yet." />
+                : <Bi id="Tidak ada yang cocok dengan pencarian." en="Nothing matches your search." />}
+            </td></tr>
+          )}
+          {cView.map((c, i) => {
+            const t = tenantOf(c.tenant_id);
+            return (
+              <tr key={c.yt_channel_id}>
+                <td>
+                  <span className="adm-tn-cell">
+                    {c.yt_channel_thumb
+                      ? <img src={c.yt_channel_thumb} alt="" className="adm-tn-av" style={{ objectFit: "cover" }} referrerPolicy="no-referrer" />
+                      : <span className="adm-tn-av" style={{ background: COLORS[i % COLORS.length] }}><Tv size={14} /></span>}
+                    <div>
+                      <div style={{ color: "var(--text-primary)", fontWeight: 500 }}>{c.yt_channel_title || "—"}</div>
+                      <a className="muted" style={{ fontSize: "var(--text-xs)" }} href={`https://youtube.com/channel/${c.yt_channel_id}`} target="_blank" rel="noopener noreferrer">youtube.com/channel/{c.yt_channel_id.slice(0, 14)}…</a>
+                    </div>
+                  </span>
+                </td>
+                <td>
+                  {t
+                    ? <><div><a href={`/admin/tenants?q=${encodeURIComponent(t.handle)}`}>{t.handle || "—"}</a></div><div className="muted" style={{ fontSize: "var(--text-xs)" }}>{t.email || c.tenant_id.slice(0, 8)}</div></>
+                    : <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="akun sudah dihapus" en="account deleted" /></span>}
+                </td>
+                <td>
+                  {c.connected
+                    ? <span className="badge badge-success"><Bi id="Tersambung" en="Connected" /></span>
+                    : <span className="badge badge-warning" title="Klaim tetap mengunci walau koneksinya sudah dicabut"><Bi id="Terputus" en="Detached" /></span>}
+                  {!t && <span className="badge badge-default" style={{ marginLeft: 6 }}><Bi id="tanpa akun" en="orphan" /></span>}
+                </td>
+                <td className="muted">{c.claimed_at?.slice(0, 10) || "—"}</td>
+                <td style={{ textAlign: "right" }}>
+                  <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setClaimLepas(c.yt_channel_id)}><LockOpen size={14} /> <Bi id="Lepas" en="Release" /></button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table></div></div>
+
+      <p className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".75rem" }}>
+        <Bi id="Satu channel YouTube hanya boleh dipakai satu akun MesinViral — inilah yang menutup masa coba berulang dengan email baru. “Terputus” berarti koneksinya sudah dicabut tetapi channelnya tetap terkunci. Melepas klaim tercatat di jejak admin."
+            en="One YouTube channel may only be used by one MesinViral account — this is what closes repeat trials via a new email. “Detached” means the connection was removed but the channel stays locked. Releasing a claim is recorded in the admin audit trail." />
+      </p>
+      </>)}
 
       <div className={`adm-scrim${cur ? " open" : ""}`} onClick={() => setSel(null)} />
       <aside className={`adm-drawer${cur ? " open" : ""}`}>

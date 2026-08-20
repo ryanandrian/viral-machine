@@ -16,7 +16,21 @@ export async function GET() {
     .select("yt_channel_id, tenant_id, yt_channel_title, claimed_at")
     .order("claimed_at", { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ rows: data ?? [] });
+
+  // Perkaya untuk layar: foto channel (dipakai app di /channels/[id]) + apakah koneksinya masih ada.
+  // "Terkunci tapi terputus" adalah keadaan yang WAJIB terlihat admin: itu justru pola pemakai yang
+  // mencabut koneksi lalu mencoba akun baru (CHANNEL_LOCK §7).
+  const { data: pool } = await admin
+    .from("tenant_youtube_accounts")
+    .select("yt_channel_id, yt_channel_thumb")
+    .not("yt_channel_id", "is", null);
+  const thumb = new Map((pool ?? []).map((a) => [a.yt_channel_id as string, a.yt_channel_thumb as string | null]));
+  const rows = (data ?? []).map((c) => ({
+    ...c,
+    yt_channel_thumb: thumb.get(c.yt_channel_id) ?? null,
+    connected: thumb.has(c.yt_channel_id),
+  }));
+  return NextResponse.json({ rows });
 }
 
 export async function DELETE(req: Request) {
