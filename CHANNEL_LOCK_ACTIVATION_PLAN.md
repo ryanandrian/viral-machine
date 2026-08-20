@@ -469,3 +469,121 @@ Pekerjaan ini dianggap SELESAI hanya bila SEMUA terpenuhi & tervalidasi:
 A,B,C ✅ · D ✅ (indikator 🔴/🟢 per card + aktivasi enabled saat semua hijau + link tiap indikator) ·
 trend-radar = **platform account** (analisis kuota §0.3, angka resmi Google) · card channel-setting terpisah & urut ·
 `.env` platform-only, kredensial tenant 100% di DB · **Replicate = OPSI (bukan dibuang); hanya env-fallback yang dibuang.**
+
+---
+
+# §7. KLAIM CHANNEL YOUTUBE — kuncian anti trial-berulang *(dibuka 2026-08-20, SSOT kerja aktif)*
+
+> **Sesi baru / pasca-compacting: baca §7 ini saja, lalu lanjut dari baris ⬜ pertama di §7f.**
+> Acuan alur OAuth yang sah = **`src/billing/youtube_oauth.py`** (bukan `PER_CHANNEL_OAUTH_MIGRATION §6` — sudah basi).
+
+## §7a. Persoalan (ketokan owner 2026-08-20)
+
+Tenant masa coba boleh mendaftar ulang — itu haknya. Yang **tidak** boleh: membawa channel YouTube yang
+sudah terdaftar di akun lain, sehingga masa coba bisa diputar tanpa batas dengan email baru. Owner:
+*"kuncinya bukan di pendaftaran, tapi di integrasi."*
+
+**Terukur di lapangan 2026-08-20 (jangan audit ulang):**
+
+| Fakta | Angka |
+|---|---|
+| Dua indeks unik yang ada di-scope **per-tenant**, bukan global (`migrations/0146`) | `(tenant_id, platform_channel_id)` · `(tenant_id, yt_channel_id)` |
+| `disconnect()` **MENGHAPUS** baris pool → kuncian di tabel itu akan lenyap | `youtube_oauth.py:304` |
+| Jangkar `trial_started_at` mengikat **AKUN**, bukan channel; 2 dari 18 tenant bahkan kosong | akun baru = jangkar baru |
+| Channel dipakai >1 tenant hari ini | **0** (dari 15 koneksi ber-identitas / 21 total) — lubang masih bersih |
+| Tenant dengan >1 channel di satu akun Google | **4 tenant**, satu di antaranya **4 channel** |
+| Tabel pool **tidak menyimpan** email/akun Google | ⇒ mengunci per-akun-Google **mustahil secara data** |
+| Koneksi tanpa identitas (`yt_channel_id` NULL) | **6** — tak bisa diklaim, jangan disentuh |
+| Trend-radar | **kunci API biasa** (`YOUTUBE_PLATFORM_API_KEY`), **bukan OAuth** ⇒ tidak lewat callback, **tidak ikut terkunci** |
+
+## §7b. Arsitektur
+
+**Satu catatan klaim per channel YouTube. Kunci ditegakkan DATABASE, bukan baris `if`** — baris `if` bisa
+dilupakan sesi berikutnya dan **kalah pada perlombaan** (dua akun menyambung di detik yang sama).
+
+```
+tabel youtube_channel_claims
+  yt_channel_id     text  PRIMARY KEY   <- DI SINI kuncian itu hidup
+  tenant_id         text  NOT NULL      <- pemilik sekarang
+  yt_channel_title  text                <- agar admin bisa membacanya
+  claimed_at        timestamptz
+  TANPA foreign key · TANPA cascade     <- SENGAJA, lihat §7c
+```
+
+**Titik periksa = SATU:** `handle_callback` (`youtube_oauth.py`), tepat di `_find_existing_connection`,
+di dalam layanan `mv-webhook` (:8088).
+
+**URUTAN OPERASI (menentukan — salah urut = bug):**
+1. Identitas channel dibaca. *(Gagal baca sudah ditolak jujur hari ini — `identity_failed`. Nol kerja baru.)*
+2. **Klaim diperiksa LEBIH DULU** daripada dedup se-tenant. Kalau dedup jalan dulu, alur
+   "sudah terhubung → segarkan token" bisa mendahului penolakan.
+3. Klaim milik **tenant lain** → **TOLAK**: placeholder dibuang, token **TIDAK** disimpan,
+   **token TIDAK dicabut ke Google** (alasan di §7c-1), balas **KODE** `?youtube=channel_claimed`.
+4. Klaim **milik tenant ini** atau **belum ada** → jalan seperti hari ini (dedup/simpan tak diubah).
+5. Klaim ditulis **SESUDAH** token tersimpan sukses. Bila penulisan klaim bentrok (perlombaan),
+   koneksi yang baru tersimpan **dibatalkan** — tidak meninggalkan setengah keadaan.
+
+**Jalur buka (mandat owner "setiap kunci punya jalur buka", `PAYMENT §10e-2`):**
+
+| Kunci | Jalur buka yang sah |
+|---|---|
+| Klaim channel YouTube | **admin "Lepas klaim"** (tercatat `admin_audit`) · **saklar induk** `app_config.klaim_channel_aktif = 0` (seketika, tanpa deploy) |
+
+Tenant **sengaja tidak** diberi jalur — ketokan owner: *"tidak ada alasan tenant memindahkan channel ke akun
+MesinViral lain kecuali memang berniat curang."* Tiga kejadian sah (pemulihan akun · agensi menyerahkan ke
+klien · channel benar-benar dijual) semuanya lewat pintu admin.
+
+## §7c. EMPAT TEMUAN EVALUASI FINAL — dua di antaranya akan melahirkan bug baru
+
+**1. JANGAN cabut token ke Google saat menolak.** Rencana awal saya mencabutnya. Tapi 4 tenant hari ini punya
+beberapa channel di **satu akun Google**; mencabut refresh token berisiko membatalkan grant lain dari akun
+yang sama ⇒ merusak koneksi tenant yang sedang sehat. **Menolak = cukup tidak menyimpan + buang placeholder.**
+
+**2. Celah di antara migrasi dan deploy.** Koneksi yang terjadi **setelah** isi-mundur tapi **sebelum** penjaga
+hidup tidak punya klaim ⇒ channelnya bisa diklaim akun lain kelak. **Penutup: isi-mundur dijalankan ULANG
+sesudah BE deploy** (idempoten) sebagai bagian tetap dari tahap deploy, bukan pilihan.
+
+**3. Saklar induk belum ada.** Konvensi owner: tiap gerbang punya saklar di `app_config` yang bisa dimatikan
+seketika tanpa deploy. Tanpa itu, kalau penjaga salah menolak di produksi, satu-satunya jalan = deploy ulang.
+⇒ tambah kenop `klaim_channel_aktif` (1 = aktif).
+
+**4. Urutan periksa** — sudah masuk §7b langkah 2.
+
+## §7d. Yang kuncian ini TIDAK menutup (kejujuran, bukan janji)
+
+Kuncian ini menghentikan **produksi gratis berkelanjutan ke channel nyata** — untuk menerbitkan, tenant WAJIB
+menyambung channel, dan di situ ia ditolak. Yang **tidak** dihentikan: pendaftar ulang yang **tak pernah**
+menyambung YouTube tetap memperoleh jatah uji akunnya (`app_config.trial_test_quota`, kini **3**) dalam bentuk
+video uji yang bisa diunduh. Jangkarnya akun, dan akun baru = jatah baru. Menutup itu butuh jangkar lain
+(nomor telepon/pembayaran) = **keputusan produk terpisah, di luar §7 ini.**
+
+## §7e. Batas kerja
+
+**Tidak disentuh:** pipa produksi · penerbitan · niche/DNA · pembayaran · pendaftaran · gerbang uji ·
+`tests/test_gerbang_tetap_terpasang.py`. **Nol berkas `.md` baru** (§1.1) — dokumen menempel di sini,
+`PAYMENT §10e-2` (matriks), dan artikel panduan **#12 `connect-youtube`** (published, sort 27 — diff → ketok → tayang).
+
+## §7f. TAHAPAN & PROGRESS *(update kolom Status saat kerja — ini yang dibaca sesi berikutnya)*
+
+| # | Tahap | Berkas / sasaran | Status |
+|---|---|---|---|
+| T0 | Verifikasi pra-kode: trend-radar tidak lewat OAuth | — | ✅ **SELESAI 2026-08-20** — kunci API, bukan OAuth |
+| T1 | Migrasi `0203`: tabel klaim (PK, tanpa FK/cascade) + isi-mundur + **pemeriksaan gagal-berisik** bila satu `yt_channel_id` menunjuk >1 tenant | `migrations/0203_*.sql` | ⬜ |
+| T2 | RLS service-role saja (tiru pola `tenant_youtube_accounts` migr 0091: tenant baca miliknya, **nol aturan tulis**) | migrasi sama | ⬜ |
+| T3 | Kenop `app_config.klaim_channel_aktif` (saklar induk) | migrasi sama + `/admin/app-config` | ⬜ |
+| T4 | Penjaga di `handle_callback` — urutan §7b, kode galat `channel_claimed` | `src/billing/youtube_oauth.py` | ⬜ |
+| T5 | Terjemahan kode galat ID/EN di layar | `apps/web/src/app/(app)/channels/[id]/page.tsx` (+`/integrations`) | ⬜ |
+| T6 | Tombol admin **"Lepas klaim"** + jejak `admin_audit` | `apps/web/src/app/admin/(panel)/…` | ⬜ |
+| T7 | Uji (§7g) · dokumen (§7e) · deploy BE+FE · **isi-mundur ULANG pasca-deploy** (temuan §7c-2) | — | ⬜ |
+
+## §7g. Bukti yang diwajibkan (uji MERAH dulu, lalu sabotase)
+
+1. Tenant B menyambung channel milik tenant A → **ditolak**. **Wajib dibuktikan MERAH** di kode sekarang (hari ini berhasil).
+2. Tenant A cabut → sambung ulang channelnya sendiri → **tetap boleh**.
+3. Satu akun Google, dua channel milik tenant sama → **dua-duanya boleh** (jangan ulangi insiden §3b `PER_CHANNEL_OAUTH_MIGRATION`).
+4. Koneksi tanpa identitas → **tak tersentuh**.
+5. Saklar induk `klaim_channel_aktif = 0` → penjaga diam, alur kembali seperti sebelum §7.
+6. **Sabotase:** penjaga dilepas → uji 1 merah · kunci primer dilepas → uji perlombaan merah · saklar diabaikan → uji 5 merah.
+   Tidak merah ⇒ ujinya palsu, dibuang.
+
+Hermetik: nol jaringan.

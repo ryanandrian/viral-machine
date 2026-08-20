@@ -571,6 +571,7 @@ tak merender, tak mengunggah; bila sebabnya belum diperbaiki, rem menyala lagi s
 | Tautan unduh hasil uji / stok | sama dengan gerbang produksi (masa tenggang tetap boleh) |
 | **Rem channel** | "Jalankan ulang" (bila uji boleh) · **otomatis** saat reaktivasi · **"Pulihkan produksi"** (baru — untuk yang produksinya boleh tapi ujinya terkunci) |
 | Saklar induk gerbang | `/admin/app-config` → **Gerbang Uji Aktif = Tidak** (seketika, tanpa deploy) |
+| **Klaim channel YouTube** *(baru 2026-08-20 — rencana & progress di `CHANNEL_LOCK_ACTIVATION_PLAN.md` §7)* | admin **"Lepas klaim"** (tercatat `admin_audit`) · saklar induk `app_config.klaim_channel_aktif = 0`. **Tenant sengaja tanpa jalur** (ketokan owner: pindah channel antar-akun = niat curang) |
 
 ### Berkas tambahan dari audit (di luar tracker §10e)
 | Berkas | Perubahan |
