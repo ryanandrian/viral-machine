@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Search, X, Bell, Pause, Send, CalendarPlus, CalendarClock, RotateCcw, Trash2 } from "lucide-react";
+import { Search, X, Bell, Pause, Send, CalendarPlus, CalendarClock, RotateCcw, Trash2, Tv, LockOpen } from "lucide-react";
 import ConfirmDialog from "@/components/confirm-dialog";
 import "./tenants.css";
 
@@ -92,6 +92,7 @@ export default function AdminTenantsPage() {
   // KLAIM CHANNEL YOUTUBE (CHANNEL_LOCK_ACTIVATION_PLAN §7) — satu-satunya jalur buka kuncian.
   const [claims, setClaims] = useState<{ yt_channel_id: string; tenant_id: string; yt_channel_title: string | null; claimed_at: string }[]>([]);
   const [claimLepas, setClaimLepas] = useState<string | null>(null);
+  const [tab, setTab] = useState<"tenants" | "claims">("tenants");
 
   const load = useCallback(async () => {
     setLoading(true); setErr(null);
@@ -136,6 +137,10 @@ export default function AdminTenantsPage() {
     setDetail(null);
     fetch(`/api/admin/tenants/${sel}`).then((r) => r.ok ? r.json() : null).then(setDetail);
   }, [sel]);
+
+  // Klaim menyimpan tenant_id apa adanya; tampilkan handle-nya supaya kolom Tenant bisa dibaca.
+  // Tak ketemu = akun sudah dihapus (klaim SENGAJA bertahan — CHANNEL_LOCK §7).
+  const tenantOf = useCallback((id: string) => rows.find((r) => r.tenant_id === id), [rows]);
 
   const view = rows.filter((t) => (filter === "all" || t.status === filter)
     && (!q.trim() || `${t.handle} ${t.email} ${t.tenant_id}`.toLowerCase().includes(q.trim().toLowerCase())));
@@ -212,6 +217,16 @@ export default function AdminTenantsPage() {
         <div><h1>Tenants</h1><div className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Kelola semua akun pelanggan" en="Manage all customer accounts" /></div></div>
       </div>
 
+      <div className="segmented" style={{ marginBottom: "1.25rem" }}>
+        <button aria-selected={tab === "tenants"} onClick={() => setTab("tenants")}>
+          <Bi id="Tenant" en="Tenants" /> <span style={{ opacity: 0.6 }}>{rows.length}</span>
+        </button>
+        <button aria-selected={tab === "claims"} onClick={() => setTab("claims")}>
+          <Bi id="Klaim Channel" en="Channel Claims" /> <span style={{ opacity: 0.6 }}>{claims.length}</span>
+        </button>
+      </div>
+
+      {tab === "tenants" && (<>
       <div className="adm-kpi-strip">
         <div className="adm-kpic"><div className="l"><Bi id="Total tenant" en="Total tenants" /></div><div className="v">{kpi?.total ?? "—"}</div></div>
         <div className="adm-kpic"><div className="l">MRR</div><div className="v">{kpi ? idr(kpi.mrr_idr) : "—"}</div></div>
@@ -223,35 +238,6 @@ export default function AdminTenantsPage() {
         <input className="input" style={{ minWidth: 220 }} placeholder="Cari tenant (email / id)…" value={q} onChange={(e) => setQ(e.target.value)} />
         <div className="segmented">{FILTERS.map(([k, id, en]) => <button key={k} aria-selected={filter === k} onClick={() => setFilter(k)}><Bi id={id} en={en} /></button>)}</div>
         <div className="adm-selbox"><Search size={14} /> {view.length} <Bi id="tenant" en="tenants" /></div>
-      </div>
-
-      <div className="card" style={{ marginTop: "1rem" }}>
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: ".75rem", flexWrap: "wrap", marginBottom: ".5rem" }}>
-          <div>
-            <h2 style={{ fontSize: "var(--text-base)", margin: 0 }}><Bi id="Klaim Channel YouTube" en="YouTube Channel Claims" /></h2>
-            <div className="muted" style={{ fontSize: "var(--text-sm)" }}>
-              <Bi id="Satu channel YouTube hanya boleh dipakai satu akun MesinViral — ini yang menutup masa coba berulang dengan email baru. Lepaskan HANYA bila kepemilikannya sudah Anda pastikan (pemulihan akun · agensi menyerahkan ke klien · channel benar-benar dijual)."
-                  en="One YouTube channel may only be used by one MesinViral account — this is what closes repeat trials via a new email. Release ONLY after you have verified ownership (account recovery · agency handing over to a client · channel genuinely sold)." />
-            </div>
-          </div>
-          <div className="adm-selbox">{claims.length} <Bi id="klaim" en="claims" /></div>
-        </div>
-        <div style={{ overflowX: "auto" }}><table className="tbl adm-tbl">
-          <thead><tr><th><Bi id="Channel" en="Channel" /></th><th>Tenant</th><th><Bi id="Diklaim" en="Claimed" /></th><th /></tr></thead>
-          <tbody>
-            {claims.length === 0 && <tr><td colSpan={4} className="muted" style={{ padding: "1.25rem", textAlign: "center" }}><Bi id="Belum ada klaim." en="No claims yet." /></td></tr>}
-            {claims.map((c) => (
-              <tr key={c.yt_channel_id}>
-                <td>{c.yt_channel_title || "—"}<div className="muted" style={{ fontSize: "var(--text-xs)" }}>{c.yt_channel_id}</div></td>
-                <td style={{ fontFamily: "var(--font-mono, monospace)", fontSize: "var(--text-xs)" }}>{c.tenant_id}</td>
-                <td>{c.claimed_at?.slice(0, 10) || "—"}</td>
-                <td style={{ textAlign: "right" }}>
-                  <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => setClaimLepas(c.yt_channel_id)}><Bi id="Lepas klaim" en="Release claim" /></button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table></div>
       </div>
 
       <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl adm-tbl">
@@ -272,6 +258,45 @@ export default function AdminTenantsPage() {
           ))}
         </tbody>
       </table></div></div>
+      </>)}
+
+      {tab === "claims" && (
+        <div className="card">
+          <div className="card-head">
+            <h3 className="card-title"><Tv size={15} /> <Bi id="Klaim channel YouTube" en="YouTube channel claims" /></h3>
+            <span className="card-sub">{claims.length} <Bi id="channel terkunci" en="locked channels" /></span>
+          </div>
+          <div className="card-body" style={{ paddingBottom: 0 }}>
+            <p className="muted" style={{ fontSize: "var(--text-sm)", margin: 0 }}>
+              <Bi id="Satu channel YouTube hanya boleh dipakai satu akun MesinViral. Lepaskan hanya setelah kepemilikannya Anda pastikan — tindakan ini tercatat di jejak admin."
+                  en="One YouTube channel may only be used by one MesinViral account. Release only after you have verified ownership — the action is recorded in the admin audit trail." />
+            </p>
+          </div>
+          <div style={{ overflowX: "auto" }}><table className="tbl adm-tbl">
+            <thead><tr><th><Bi id="Channel" en="Channel" /></th><th>Tenant</th><th><Bi id="Diklaim" en="Claimed" /></th><th /></tr></thead>
+            <tbody>
+              {claims.length === 0 && <tr><td colSpan={4} className="muted" style={{ padding: "1.5rem", textAlign: "center" }}><Bi id="Belum ada channel yang terkunci." en="No locked channels yet." /></td></tr>}
+              {claims.map((c) => (
+                <tr key={c.yt_channel_id}>
+                  <td>
+                    <div style={{ color: "var(--text-primary)", fontWeight: 500 }}>{c.yt_channel_title || "—"}</div>
+                    <div className="muted" style={{ fontSize: "var(--text-xs)" }}>{c.yt_channel_id}</div>
+                  </td>
+                  <td>
+                    {tenantOf(c.tenant_id)
+                      ? <a href={`/admin/tenants?q=${encodeURIComponent(tenantOf(c.tenant_id)!.handle)}`}>{tenantOf(c.tenant_id)!.handle}</a>
+                      : <span className="badge badge-default"><Bi id="akun dihapus" en="account deleted" /></span>}
+                  </td>
+                  <td className="muted">{c.claimed_at?.slice(0, 10) || "—"}</td>
+                  <td style={{ textAlign: "right" }}>
+                    <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setClaimLepas(c.yt_channel_id)}><LockOpen size={14} /> <Bi id="Lepas" en="Release" /></button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table></div>
+        </div>
+      )}
 
       <div className={`adm-scrim${cur ? " open" : ""}`} onClick={() => setSel(null)} />
       <aside className={`adm-drawer${cur ? " open" : ""}`}>
