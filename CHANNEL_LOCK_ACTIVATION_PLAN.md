@@ -527,7 +527,7 @@ di dalam layanan `mv-webhook` (:8088).
 
 | Kunci | Jalur buka yang sah |
 |---|---|
-| Klaim channel YouTube | **admin "Lepas klaim"** (tercatat `admin_audit`) · **saklar induk** `app_config.klaim_channel_aktif = 0` (seketika, tanpa deploy) |
+| Klaim channel YouTube | **admin "Lepas klaim"** (tercatat `admin_audit`) · **saklar induk** `app_config.channel_claim_enabled = 0` (seketika, tanpa deploy) |
 
 Tenant **sengaja tidak** diberi jalur — ketokan owner: *"tidak ada alasan tenant memindahkan channel ke akun
 MesinViral lain kecuali memang berniat curang."* Tiga kejadian sah (pemulihan akun · agensi menyerahkan ke
@@ -545,9 +545,18 @@ sesudah BE deploy** (idempoten) sebagai bagian tetap dari tahap deploy, bukan pi
 
 **3. Saklar induk belum ada.** Konvensi owner: tiap gerbang punya saklar di `app_config` yang bisa dimatikan
 seketika tanpa deploy. Tanpa itu, kalau penjaga salah menolak di produksi, satu-satunya jalan = deploy ulang.
-⇒ tambah kenop `klaim_channel_aktif` (1 = aktif).
+⇒ tambah kenop **`channel_claim_enabled`** (1 = aktif). *(Nama disamakan dgn gaya kenop yang sudah ada: `test_gate_enabled`, `nurture_enabled`.)*
 
 **4. Urutan periksa** — sudah masuk §7b langkah 2.
+
+**5. TABRAKAN PDP ⟷ KUNCIAN — tidak terpikir saat merencanakan; ditangkap penjaga lama saat dikerjakan.**
+`tests/test_purge_pdp_lengkap.py` menuntut TIAP tabel ber-`tenant_id` punya keputusan retensi, dan
+`youtube_channel_claims` langsung membuatnya merah. Persoalannya nyata: hak hapus data (UU PDP) menuntut
+pengenal tenant dibuang, kuncian menuntut klaim BERTAHAN. Kalau klaim ikut terhapus, penyalahguna dapat
+jalan pintas **paling mudah**: hapus akun → daftar baru → sambung channel yang sama.
+**Jalan tengah (pola yang SUDAH dipakai `tenant_configs` & `feedback_submissions`):** baris **disimpan**,
+`tenant_id` **dianonimkan** ke `__dihapus__` ⇒ nol pengenal tenant tersisa, channel tetap terkunci,
+pelepasan tetap hanya lewat admin. Terdaftar di `_KEEP_TABLES` (`renewal.py`) + `LIFECYCLE §4.2` baris SISAKAN.
 
 ## §7d. Yang kuncian ini TIDAK menutup (kejujuran, bukan janji)
 
@@ -567,14 +576,20 @@ video uji yang bisa diunduh. Jangkarnya akun, dan akun baru = jatah baru. Menutu
 
 | # | Tahap | Berkas / sasaran | Status |
 |---|---|---|---|
-| T0 | Verifikasi pra-kode: trend-radar tidak lewat OAuth | — | ✅ **SELESAI 2026-08-20** — kunci API, bukan OAuth |
-| T1 | Migrasi `0203`: tabel klaim (PK, tanpa FK/cascade) + isi-mundur + **pemeriksaan gagal-berisik** bila satu `yt_channel_id` menunjuk >1 tenant | `migrations/0203_*.sql` | ⬜ |
-| T2 | RLS service-role saja (tiru pola `tenant_youtube_accounts` migr 0091: tenant baca miliknya, **nol aturan tulis**) | migrasi sama | ⬜ |
-| T3 | Kenop `app_config.klaim_channel_aktif` (saklar induk) | migrasi sama + `/admin/app-config` | ⬜ |
-| T4 | Penjaga di `handle_callback` — urutan §7b, kode galat `channel_claimed` | `src/billing/youtube_oauth.py` | ⬜ |
-| T5 | Terjemahan kode galat ID/EN di layar | `apps/web/src/app/(app)/channels/[id]/page.tsx` (+`/integrations`) | ⬜ |
-| T6 | Tombol admin **"Lepas klaim"** + jejak `admin_audit` | `apps/web/src/app/admin/(panel)/…` | ⬜ |
-| T7 | Uji (§7g) · dokumen (§7e) · deploy BE+FE · **isi-mundur ULANG pasca-deploy** (temuan §7c-2) | — | ⬜ |
+| T0 | Verifikasi pra-kode: trend-radar tidak lewat OAuth | — | ✅ **SELESAI** — kunci API, bukan OAuth |
+| T1 | Migrasi `0203`: tabel klaim (PK, tanpa FK/cascade) + isi-mundur + pemeriksaan gagal-berisik | `migrations/0203_klaim_channel_youtube.sql` | ✅ **SELESAI & TERPASANG DI DB** — 15 klaim terisi, 0 FK, 0 bentrok |
+| T2 | RLS service-role saja | migrasi sama | ✅ **SELESAI** — RLS nyala, **0 policy**, hak anon/authenticated dicabut |
+| T3 | Kenop `channel_claim_enabled` (saklar induk) + label dwibahasa di layar admin | migrasi sama + `admin/(panel)/app-config/page.tsx` | ✅ **SELESAI** — nilai live = 1 |
+| T4 | Penjaga di `handle_callback` (urutan §7b, kode `channel_claimed`) | `src/billing/youtube_oauth.py` | ✅ **SELESAI** — `klaim_pemilik_lain` · `klaim_catat` · `KlaimTakTerbaca` (fail-closed) |
+| T5 | Terjemahan kode galat ID/EN | `(app)/integrations` + `(app)/channels/[id]` | ✅ **SELESAI** — `channel_claimed` & `claim_check_failed` |
+| T6 | Kartu klaim + tombol **"Lepas klaim"** + jejak `admin_audit` | `api/admin/channel-claims/route.ts` + `admin/(panel)/tenants/page.tsx` | ✅ **SELESAI** — pakai `ConfirmDialog` yang sudah ada (nol komponen baru) |
+| T7a | Uji + sabotase | `tests/test_klaim_channel_tak_bisa_dicolong.py` | ✅ **SELESAI** — 16 uji · 9 dibuktikan MERAH dulu · 6 sabotase semua merah |
+| T7b | Dokumen: §7 ini · `LIFECYCLE §4.2` · `_KEEP_TABLES` · `PAYMENT §10e-2` | — | ✅ **SELESAI** |
+| T7c | Artikel panduan tenant **#12 `connect-youtube`** (published) — **diff → ketok owner → baru tayang** | `docs_articles` | ⬜ **menunggu ketok owner** |
+| T7d | **Deploy BE + FE**, lalu **isi-mundur DIULANG** (temuan §7c-2) | skrip resmi | ⬜ **menunggu izin owner** |
+
+**Bukti terukur saat T1–T7b selesai (2026-08-20):** 1188 uji hijau · build FE lulus · tabel klaim 15 baris ·
+`channel_claim_enabled = 1` · 0 foreign key · 0 policy RLS.
 
 ## §7g. Bukti yang diwajibkan (uji MERAH dulu, lalu sabotase)
 
@@ -582,7 +597,7 @@ video uji yang bisa diunduh. Jangkarnya akun, dan akun baru = jatah baru. Menutu
 2. Tenant A cabut → sambung ulang channelnya sendiri → **tetap boleh**.
 3. Satu akun Google, dua channel milik tenant sama → **dua-duanya boleh** (jangan ulangi insiden §3b `PER_CHANNEL_OAUTH_MIGRATION`).
 4. Koneksi tanpa identitas → **tak tersentuh**.
-5. Saklar induk `klaim_channel_aktif = 0` → penjaga diam, alur kembali seperti sebelum §7.
+5. Saklar induk `channel_claim_enabled = 0` → penjaga diam, alur kembali seperti sebelum §7.
 6. **Sabotase:** penjaga dilepas → uji 1 merah · kunci primer dilepas → uji perlombaan merah · saklar diabaikan → uji 5 merah.
    Tidak merah ⇒ ujinya palsu, dibuang.
 

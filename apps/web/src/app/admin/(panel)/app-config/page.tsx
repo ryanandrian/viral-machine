@@ -64,6 +64,13 @@ const CFG_META: Record<string, { label: BiTxt; group: string; unit: BiTxt; desc?
     desc: { id: "Saklar induk. Ya = tenant yang langganannya tidak aktif TIDAK bisa menjalankan uji produksi, uji niche, maupun jalankan-ulang. Tidak = gerbang mati total, perilaku kembali seperti sebelum gerbang dipasang.", en: "Master switch. Yes = tenants without an active subscription cannot run channel tests, niche tests, or re-runs. No = gate fully off, behaviour reverts to before the gate existed." },
     hint: { id: "jaring pengaman: bisa dimatikan seketika tanpa deploy", en: "safety net: can be switched off instantly, no deploy" },
   },
+
+  channel_claim_enabled: {
+    label: { id: "Kuncian Klaim Channel", en: "Channel Claim Lock" }, group: G_GERBANG, unit: U_NONE,
+    options: ["1", "0"], optionLabels: { "1": { id: "Ya — channel terkunci ke satu akun", en: "Yes — channel locked to one account" }, "0": { id: "Tidak — kuncian mati", en: "No — lock off" } },
+    desc: { id: "Channel YouTube yang sudah terdaftar di satu akun MesinViral tidak bisa disambungkan ke akun lain — menutup masa coba berulang dengan email baru.", en: "A YouTube channel registered to one MesinViral account cannot be connected to another — closes repeat trials via a new email." },
+    hint: { id: "Pelepasan klaim hanya lewat admin. Matikan hanya bila kuncian salah menolak tenant sah.", en: "Claims are released by admin only. Turn off only if the lock wrongly refuses a legitimate tenant." },
+  },
   test_allowed_statuses: {
     label: { id: "Status Yang Boleh Menguji", en: "Statuses Allowed To Test" }, group: G_GERBANG, unit: U_NONE,
     desc: { id: "Daftar status langganan yang boleh menjalankan uji. Masa tenggang (grace) sengaja TIDAK termasuk: produksi rutinnya tetap jalan, tapi tombol ujinya dikunci sampai tagihan dibayar.", en: "Subscription statuses allowed to run tests. Grace is deliberately excluded: routine production keeps running, but test buttons stay locked until the invoice is paid." },

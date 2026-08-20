@@ -217,6 +217,75 @@ def _find_existing_connection(tenant_id: str, yt_channel_id: str, exclude_id: st
     return (res.data or [{}])[0].get("id")
 
 
+class KlaimTakTerbaca(RuntimeError):
+    """Tabel klaim tak bisa dibaca. GAGAL JUJUR (§1.3): berhenti + beri tahu, jangan diam-diam
+    membuka kuncian. Perilaku-saat-gagal = keputusan owner; bawaan = menolak (fail-closed)."""
+
+
+def _klaim_aktif() -> bool:
+    """SAKLAR INDUK `app_config.channel_claim_enabled` (mandat owner: tiap gerbang bisa dimatikan
+    seketika tanpa deploy). Gagal baca kenop = tetap AKTIF (jangan membuka kuncian karena kenop error)."""
+    try:
+        from src.config.app_config import get_int
+        return get_int("channel_claim_enabled", 1) == 1
+    except Exception as e:  # pragma: no cover - fail-soft kenop
+        logger.warning(f"[klaim] kenop tak terbaca ({e}) - kuncian dianggap AKTIF")
+        return True
+
+
+def klaim_pemilik_lain(tenant_id: str, yt_channel_id: str | None) -> str | None:
+    """`tenant_id` pemilik LAIN bila channel ini sudah diklaim akun MesinViral lain; None = boleh lanjut.
+
+    Kuncian anti masa-coba-berulang - CHANNEL_LOCK_ACTIVATION_PLAN.md §7. Kunci pada identitas
+    CHANNEL, bukan akun Google: satu akun Google sah memuat beberapa channel (terukur 2026-08-20:
+    4 tenant, satu punya 4) dan tabel pool bahkan tidak menyimpan email Google.
+    """
+    ch = (yt_channel_id or "").strip()
+    if not ch:
+        return None            # koneksi tanpa identitas: tak ada yang bisa diklaim
+    if not _klaim_aktif():
+        return None            # saklar induk mati
+    try:
+        res = (_sb().table("youtube_channel_claims").select("tenant_id")
+               .eq("yt_channel_id", ch).limit(1).execute())
+        rows = res.data or []
+    except Exception as e:
+        raise KlaimTakTerbaca(str(e)) from e
+    if not rows:
+        return None
+    pemilik = rows[0].get("tenant_id")
+    return None if pemilik == tenant_id else pemilik
+
+
+def klaim_catat(tenant_id: str, yt_channel_id: str | None, title: str | None = None) -> bool:
+    """Catat klaim - dipanggil SESUDAH token tersimpan sukses (§7b-5: klaim sebelum simpan =
+    koneksi gagal meninggalkan klaim -> tenant terkunci dari channelnya sendiri oleh bug kita).
+
+    False = BENTROK (perlombaan: akun lain menang di detik yang sama) -> pemanggil WAJIB membatalkan
+    koneksi yang baru tersimpan. Kunci primer tabel yang memutuskan, bukan baris `if` ini.
+    """
+    ch = (yt_channel_id or "").strip()
+    if not ch or not _klaim_aktif():
+        return True
+    try:
+        _sb().table("youtube_channel_claims").insert(
+            {"yt_channel_id": ch, "tenant_id": tenant_id, "yt_channel_title": title}).execute()
+        return True
+    except Exception as e:
+        # Bentrok kunci primer ATAU galat lain -> tentukan lewat pemilik sebenarnya, jangan menebak.
+        try:
+            res = (_sb().table("youtube_channel_claims").select("tenant_id")
+                   .eq("yt_channel_id", ch).limit(1).execute())
+            rows = res.data or []
+        except Exception:
+            logger.error(f"[klaim] gagal mencatat & gagal memeriksa ulang ({e})")
+            return False
+        if rows and rows[0].get("tenant_id") == tenant_id:
+            return True        # sudah tercatat atas nama tenant ini (idempoten)
+        logger.warning(f"[klaim] bentrok: channel {ch} diklaim akun lain saat penyimpanan berjalan")
+        return False
+
+
 def _delete_placeholder(tenant_id: str, account_id: str) -> None:
     """Hapus baris pool HANYA bila masih placeholder (belum pernah punya refresh_token) —
     jangan pernah menghapus koneksi hidup. Fail-soft."""
@@ -287,13 +356,36 @@ def handle_callback(code: str | None, state: str | None, error: str | None = Non
             return _err("identity_failed")
         # [B11] Batch 1.2 — DEDUP: channel YouTube ini sudah terhubung? → segarkan token di baris LAMA,
         # buang placeholder baru, beri pesan ramah (bukan baris ganda / bukan error menakutkan).
+        # KUNCIAN KLAIM (CHANNEL_LOCK_ACTIVATION_PLAN §7) - WAJIB sebelum dedup se-tenant, kalau
+        # tidak alur "sudah terhubung -> segarkan token" mendahului penolakan.
+        try:
+            pemilik_lain = klaim_pemilik_lain(tenant_id, identity["id"])
+        except KlaimTakTerbaca as e:
+            logger.error(f"[klaim] tabel klaim tak terbaca ({e}) - koneksi DIBATALKAN (fail-closed)")
+            _delete_placeholder(tenant_id, account_id)
+            return _err("claim_check_failed")
+        if pemilik_lain:
+            # SENGAJA TIDAK mencabut token ke Google (§7c-1): 4 tenant punya beberapa channel di SATU
+            # akun Google; mencabut berisiko membatalkan grant lain dan merusak koneksi yang sehat.
+            # Cukup tidak menyimpan + buang placeholder.
+            _delete_placeholder(tenant_id, account_id)
+            logger.warning(
+                f"[klaim] tenant={tenant_id} DITOLAK: channel {identity['id']} sudah diklaim akun lain")
+            return _err("channel_claimed")
         existing = _find_existing_connection(tenant_id, identity["id"], exclude_id=account_id)
         if existing:
             _store_tokens(tenant_id, existing, creds, identity=identity)
+            klaim_catat(tenant_id, identity["id"], identity.get("title"))
             _delete_placeholder(tenant_id, account_id)
             logger.info(f"[yt-oauth] tenant={tenant_id} channel {identity['id']} sudah terhubung → token disegarkan (akun={existing})")
             return f"{app}{ret}?youtube=already&channel={quote(identity.get('title') or identity['id'])}"
         _store_tokens(tenant_id, account_id, creds, identity=identity)
+        if not klaim_catat(tenant_id, identity["id"], identity.get("title")):
+            # Perlombaan: akun lain menang di detik yang sama. Jangan tinggalkan setengah keadaan -
+            # koneksi yang baru tersimpan dibatalkan (kunci primer tabel yang memutuskan).
+            disconnect(tenant_id, account_id)
+            logger.warning(f"[klaim] tenant={tenant_id} kalah perlombaan klaim {identity['id']} - koneksi dibatalkan")
+            return _err("channel_claimed")
         logger.info(f"[yt-oauth] tenant={tenant_id} akun={account_id} tersambung (yt={identity['id']} \"{identity.get('title','')}\")")
         return f"{app}{ret}?youtube=connected&channel={quote(identity.get('title') or identity['id'])}"
     except Exception as e:

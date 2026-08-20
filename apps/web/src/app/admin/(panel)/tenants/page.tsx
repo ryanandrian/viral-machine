@@ -89,6 +89,9 @@ export default function AdminTenantsPage() {
   const [lifeModal, setLifeModal] = useState<{ action: "extend" | "postpone_deletion"; days: string } | null>(null);
   const [confirm, setConfirm] = useState<null | "reactivate" | "delete">(null);
   const [toast, setToast] = useState<string | null>(null);
+  // KLAIM CHANNEL YOUTUBE (CHANNEL_LOCK_ACTIVATION_PLAN §7) — satu-satunya jalur buka kuncian.
+  const [claims, setClaims] = useState<{ yt_channel_id: string; tenant_id: string; yt_channel_title: string | null; claimed_at: string }[]>([]);
+  const [claimLepas, setClaimLepas] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setErr(null);
@@ -98,6 +101,23 @@ export default function AdminTenantsPage() {
     setRows(j.rows); setKpi(j.kpi); setLoading(false);
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  const loadClaims = useCallback(async () => {
+    const r = await fetch("/api/admin/channel-claims");
+    if (r.ok) setClaims((await r.json()).rows ?? []);
+  }, []);
+  useEffect(() => { loadClaims(); }, [loadClaims]);
+
+  const lepasKlaim = async (id: string) => {
+    setBusy(true);
+    const r = await fetch("/api/admin/channel-claims", {
+      method: "DELETE", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ yt_channel_id: id }),
+    });
+    setBusy(false); setClaimLepas(null);
+    setToast(r.ok ? "Klaim dilepas — channel boleh disambungkan akun lain." : `Gagal melepas (${r.status})`);
+    if (r.ok) loadClaims();
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { setSel(null); setCompose(null); setCompModal(null); } };
@@ -203,6 +223,35 @@ export default function AdminTenantsPage() {
         <input className="input" style={{ minWidth: 220 }} placeholder="Cari tenant (email / id)…" value={q} onChange={(e) => setQ(e.target.value)} />
         <div className="segmented">{FILTERS.map(([k, id, en]) => <button key={k} aria-selected={filter === k} onClick={() => setFilter(k)}><Bi id={id} en={en} /></button>)}</div>
         <div className="adm-selbox"><Search size={14} /> {view.length} <Bi id="tenant" en="tenants" /></div>
+      </div>
+
+      <div className="card" style={{ marginTop: "1rem" }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: ".75rem", flexWrap: "wrap", marginBottom: ".5rem" }}>
+          <div>
+            <h2 style={{ fontSize: "var(--text-base)", margin: 0 }}><Bi id="Klaim Channel YouTube" en="YouTube Channel Claims" /></h2>
+            <div className="muted" style={{ fontSize: "var(--text-sm)" }}>
+              <Bi id="Satu channel YouTube hanya boleh dipakai satu akun MesinViral — ini yang menutup masa coba berulang dengan email baru. Lepaskan HANYA bila kepemilikannya sudah Anda pastikan (pemulihan akun · agensi menyerahkan ke klien · channel benar-benar dijual)."
+                  en="One YouTube channel may only be used by one MesinViral account — this is what closes repeat trials via a new email. Release ONLY after you have verified ownership (account recovery · agency handing over to a client · channel genuinely sold)." />
+            </div>
+          </div>
+          <div className="adm-selbox">{claims.length} <Bi id="klaim" en="claims" /></div>
+        </div>
+        <div style={{ overflowX: "auto" }}><table className="tbl adm-tbl">
+          <thead><tr><th><Bi id="Channel" en="Channel" /></th><th>Tenant</th><th><Bi id="Diklaim" en="Claimed" /></th><th /></tr></thead>
+          <tbody>
+            {claims.length === 0 && <tr><td colSpan={4} className="muted" style={{ padding: "1.25rem", textAlign: "center" }}><Bi id="Belum ada klaim." en="No claims yet." /></td></tr>}
+            {claims.map((c) => (
+              <tr key={c.yt_channel_id}>
+                <td>{c.yt_channel_title || "—"}<div className="muted" style={{ fontSize: "var(--text-xs)" }}>{c.yt_channel_id}</div></td>
+                <td style={{ fontFamily: "var(--font-mono, monospace)", fontSize: "var(--text-xs)" }}>{c.tenant_id}</td>
+                <td>{c.claimed_at?.slice(0, 10) || "—"}</td>
+                <td style={{ textAlign: "right" }}>
+                  <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => setClaimLepas(c.yt_channel_id)}><Bi id="Lepas klaim" en="Release claim" /></button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table></div>
       </div>
 
       <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl adm-tbl">
@@ -363,6 +412,17 @@ export default function AdminTenantsPage() {
         </>
       )}
 
+      <ConfirmDialog
+        open={!!claimLepas}
+        title={<Bi id="Lepas klaim channel ini?" en="Release this channel claim?" />}
+        message={<Bi id="Sesudah dilepas, channel YouTube ini boleh disambungkan ke akun MesinViral mana pun — termasuk akun masa coba yang baru. Pastikan kepemilikannya sudah Anda verifikasi. Tindakan ini tercatat di jejak admin."
+                     en="Once released, this YouTube channel may be connected to any MesinViral account — including a brand-new trial account. Make sure you have verified ownership. This action is recorded in the admin audit trail." />}
+        confirmLabel={<Bi id="Ya, lepas klaim" en="Yes, release claim" />}
+        confirmClass="btn-destructive"
+        busy={busy}
+        onConfirm={() => claimLepas && lepasKlaim(claimLepas)}
+        onCancel={() => setClaimLepas(null)}
+      />
       <ConfirmDialog
         open={confirm === "reactivate"}
         title={<Bi id="Aktifkan kembali (bersih)?" en="Reactivate (clean)?" />}

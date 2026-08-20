@@ -171,6 +171,10 @@ _PURGE_TABLES = [
 
 # SENGAJA DISIMPAN saat hard-delete. Tiap baris = KEPUTUSAN OWNER YANG SUDAH DIKETOK + kutipan SPEC-nya,
 # supaya sesi berikutnya tidak menanyakannya ulang kepada owner (teguran 04-Agu: "buat apa file MD dibuat?").
+# Penanda pemilik yang akunnya sudah dihapus (UU PDP): bukan tenant mana pun, jadi klaimnya tetap
+# mengunci channel, tetapi nol pengenal tenant tersisa. Pelepasan = admin.
+TENANT_DIHAPUS = "__dihapus__"
+
 _KEEP_TABLES = {
     "payments":             "kewajiban legal/akuntansi — LIFECYCLE §4.2 'bukti bayar/legal'",
     "tenant_configs":       "LIFECYCLE §4.2 — ditandai deleted + PII di-strip (anonim), bukan dihapus",
@@ -185,6 +189,13 @@ _KEEP_TABLES = {
     # tenant kembali & bayar, `partner.record_settlement_commission` tak menemukan atribusi → tenant
     # dianggap "bukan bawaan siapa pun" (§1b) → AGEN KEHILANGAN KOMISI SELAMANYA tanpa tahu.
     "tenant_attribution":   "AGENT §1.3/§2 — atribusi PERMANEN; dihapus = agen kehilangan komisi bila tenant kembali",
+    # CHANNEL_LOCK_ACTIVATION_PLAN §7: klaim channel YouTube ADA justru untuk bertahan melewati
+    # penghapusan. Dihapus di sini = kuncian anti-masa-coba-berulang lenyap persis lewat jalur yang
+    # paling mudah dipakai penyalahguna: hapus akun → daftar baru → sambung channel yang sama.
+    # PDP dipenuhi TANPA membuka lubang: barisnya DISIMPAN, `tenant_id`-nya DIANONIMKAN (pola sama
+    # dgn tenant_configs/feedback di §4 bawah) ⇒ nol pengenal tenant tersisa, channel tetap terkunci,
+    # dan pelepasannya lewat admin (satu-satunya jalur buka).
+    "youtube_channel_claims": "CHANNEL_LOCK §7 — klaim disimpan (anti masa-coba-berulang), tenant_id dianonimkan",
 }
 
 # Menunggu keputusan owner. KOSONG per 2026-08-04 — keempat temuan audit sudah terjawab oleh SPEC yang
@@ -256,6 +267,16 @@ def _hard_delete_tenant(sb, tenant_id: str) -> None:
         gagal.append("feedback_submissions.email")
         logger.error(f"[Billing] anonimkan email feedback {tenant_id} GAGAL — email masih tersimpan "
                      f"padahal tenant minta data dihapus (UU PDP): {e}")
+    try:
+        # Klaim channel: BARIS DISIMPAN, pemiliknya DIANONIMKAN (CHANNEL_LOCK §7 + `_KEEP_TABLES`).
+        # Sesudahnya `klaim_pemilik_lain` melihat pemilik "__dihapus__" ≠ tenant mana pun ⇒ channel
+        # TETAP terkunci sampai admin melepasnya. Itu memang yang diinginkan: menghapus akun tidak boleh
+        # jadi jalan pintas mengambil kembali channel untuk masa coba berikutnya.
+        sb.table("youtube_channel_claims").update({"tenant_id": TENANT_DIHAPUS}).eq("tenant_id", tenant_id).execute()
+    except Exception as e:
+        gagal.append("youtube_channel_claims.tenant_id")
+        logger.error(f"[Billing] anonimkan klaim channel {tenant_id} GAGAL — pengenal tenant masih "
+                     f"tersimpan padahal tenant minta data dihapus (UU PDP): {e}")
     try:
         sb.table("tenant_configs").update({
             "subscription_status": "deleted", "display_handle": None, "telegram_chat_id": None,
