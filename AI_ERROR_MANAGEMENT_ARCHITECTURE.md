@@ -1225,6 +1225,34 @@ Dihitung **hanya saat `is_active` → false** (nol biaya untuk perubahan lain).
    itu saya rakit dari mengurai teks bebas, dan `failed_model` yang sesungguhnya kosong.
    **Klaim itu ditarik.**
 
+### §9b-lanjutan · PINTU KETIGA: hasil UJI menyampai ke katalog *(22-Agu, perintah owner)*
+
+Karantina (§9b) tersambung ke jalur **produksi**. 22-Agu ditemukan pintu **ketiga** untuk bukti yang
+SAMA: owner menguji `gemini-2.5-flash` dari panel, Google menjawab
+*"This model models/gemini-2.5-flash is **no longer available to new users**. Please update your code
+to use models/gemini-3.6-flash"* — frasa itu **persis kata-global B1**. Tapi karantina tak menyala:
+jalur uji berhenti di `cost_hint.audit`, dan modelnya tetap `is_active=true` sampai admin
+mematikannya sendiri. Kelas cacat yang sama dengan 17-Agu: bukti sama, satu pintu bersuara ke
+katalog, satu pintu diam.
+
+| Pintu | Jalur | Menyampai ke katalog? |
+|---|---|---|
+| produksi gagal | `producer` → `karantina` | ✅ sejak 21-Agu |
+| channel diam | gerbang kesiapan → `channel_blockers` | ✅ sejak 21-Agu (alasan, bukan karantina) |
+| **tombol Uji admin** | `model_tester` → `cost_hint.audit` | ✅ **sejak 22-Agu** |
+
+**Yang dijaga:** penilaian TIDAK diulang di `model_tester` — ambang A+(B1|B2|B3) tetap satu-satunya,
+di `karantina_model`. `dasar` diambil dari galat yang sesungguhnya (**tidak dipatok** — uji bisa gagal
+karena kunci salah/kuota habis, dan itu bukan bukti model mati). Yang dinilai = **galat vendor apa
+adanya**, bukan teks yang kami rakit (kata "no longer available" hanya hidup di jawaban vendor).
+Fail-soft mutlak: kegagalan karantina haram menelan hasil uji.
+Penjaga: `tests/test_hasil_uji_menyambung_ke_karantina.py` (6 uji · 5 sabotase merah).
+
+**Tindakan nyata hari itu:** `gemini-2.5-flash` dimatikan atas perintah owner, dengan jejak berisi
+jawaban Google apa adanya. Gerbang `0208` langsung menahan penyalaan ulang (`belum_lulus_uji`), dan
+`Abyss ID` — channel AKTIF yang memakainya — kini menyebut alasannya di layar tenant: nama model +
+nama penyedia, bukan label kosong.
+
 ## §10 PENJAGA ANTI-DRIFT (supaya dokumen ini TETAP SSOT)
 
 > **Tiga penjaga, dan batas masing-masing — ditulis supaya hijau tak pernah lagi dibaca sebagai

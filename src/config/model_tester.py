@@ -133,6 +133,26 @@ def test_model(model_key: str, key: str = "") -> dict:
         note = f"GAGAL uji manual admin {stamp_date}: {str(e)[:160]}"
         _stamp_audit(sb, model_key, note)
         logger.warning(f"[model_tester] {model_key} GAGAL: {e}")
+        # ── [22-Agu] JALUR UJI DISAMBUNGKAN KE KARANTINA (perintah owner) ──────────────────────
+        # Pemicu: `gemini-2.5-flash` diuji dan Google menjawab "no longer available to new users"
+        # — frasa itu PERSIS kata-global B1 milik karantina. Tapi karantina tak menyala, karena ia
+        # hanya tersambung ke jalur PRODUKSI. Jalur uji berhenti di `cost_hint.audit`, dan modelnya
+        # tetap ditawarkan ke tenant sampai admin mematikannya sendiri.
+        # ⇒ Dua pintu lagi untuk bukti yang SAMA — kelas cacat 17-Agu (AI_ERROR_MGMT §9b).
+        #
+        # Penilaiannya TIDAK diulang di sini: ambang A + (B1|B2|B3) sudah ada di `karantina_model`
+        # dan sudah dijaga uji. Menyalinnya ke sini = dua sumber kebenaran untuk "apakah model mati".
+        # `dasar` diambil dari galat yang SESUNGGUHNYA (adapter mengisinya), tidak dipatok — uji bisa
+        # gagal karena kunci salah / kuota habis / jaringan, dan itu BUKAN bukti model mati.
+        # Yang dinilai = galat vendor apa adanya (`str(e)`), bukan `note` yang KAMI rakit: kata
+        # seperti "no longer available" hanya hidup di jawaban vendor.
+        # FAIL-SOFT MUTLAK: karantina adalah pembelajaran katalog, bukan jalur kerja. Kegagalannya
+        # haram membuat admin melihat "uji gagal" padahal ujinya sendiri sudah menjawab.
+        try:
+            from src.orchestrator.karantina_model import karantina
+            karantina(sb, model_key, getattr(e, "dasar", "") or "", str(e))
+        except Exception as ke:
+            logger.warning(f"[model_tester] penilaian karantina gagal — non-fatal: {ke}")
         return {"ok": False, "error": str(e)[:220]}
 
     _stamp_audit(sb, model_key, f"{'LULUS' if ok else 'GAGAL'} uji manual admin {stamp_date}")
