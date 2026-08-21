@@ -54,7 +54,7 @@
 | Tabel | Peran | Kolom kunci |
 |---|---|---|
 | `ai_providers` | Vendor AI (INDUK). 1 baris = 1 penyedia. | `provider_key`(PK), `display_name`, `adapter`, `auth_type`, `key_group`, `base_url`, `price_feed_prefix`, `free_tier_note`, `is_active` |
-| `ai_models` | Model (DETAIL provider). | `model_key`(PK), `provider_key`(FK), `component`(llm/tts/image/video), `model_id`(id resmi vendor), `display_name`, `quality_tier`, `sort_order`, `pricing`(jsonb), `pricing_locked`, `pricing_pending`, `cost_hint`(jsonb; berisi `audit`), `is_active` |
+| `ai_models` | Model (DETAIL provider). | `model_key`(PK), `provider_key`(FK), `component`(llm/tts/image/video), `model_id`(id resmi vendor), `display_name`, `quality_tier`, `sort_order`, `pricing`(jsonb), `pricing_locked`, `pricing_pending`, `cost_hint`(jsonb; berisi `audit` — stempel hasil tombol Uji), `is_active`, **`unavailable_since`** + **`unavailable_reason`** (21-Agu: jejak karantina otomatis saat model TERBUKTI mati di vendor; ditulis mesin. ⚠️ **belum ada jalur bersih dari panel** — lihat §9) |
 | `tts_profiles` | Protokol TTS per provider. | `provider_key`(PK), `adapter`, `tts_class`(timed/fast_fallback), `delivery_wps`, `speed_param`, `param_schema`, `is_active` |
 | `voice_catalog` | Katalog suara (per provider TTS). | `voice_key`(PK), `provider_key`, `locale`, `language`, `gender`, `delivery_wps`, `preview_url`, `default_settings`, `is_active` |
 | `content_languages` | Bahasa konten yg didukung. | `locale`(PK), `display_name`, `quality_tier`(official/experimental), `caption_font`, `is_active` |
@@ -64,7 +64,7 @@
 | `tenant_youtube_accounts` | Koneksi YouTube tenant (OAuth). | `tenant_id`, `channel/token` |
 | `channels` | Channel tenant + penugasan AI. | `id`(PK), `tenant_id`, `llm_library`+`llm_model`+`llm_account_id`, `tts_provider`+`tts_model`+`voice_key`+`tts_account_id`, `visual_mode`(`ai_image:<model_key>`)+`visual_account_id`, `content_language`, `duration_preset` |
 | `tenant_configs` | Config tenant-wide + langganan. | `tenant_id`, `plan_type`, `subscription_status`, `usd_idr_rate`(display) |
-| `production_runs` | Ledger tiap run produksi (+biaya). | `run_metadata`(jsonb: `ai_usage`, `cost`) |
+| `production_runs` | Ledger tiap run produksi (+biaya). | `run_metadata`(jsonb: `ai_usage`, `cost`), `error_class`, **`failed_model`** (21-Agu: model yang ditolak vendor — dipakai bukti-silang antar-tenant untuk karantina; tanpa FK supaya riwayat utuh walau katalog berubah) |
 | `system_state` | Stempel sinkron. | `ai_price_synced_at`, `fx_synced_at` |
 | `app_config` | Konfigurasi platform. | `usd_idr_rate`, `usd_idr_rate_locked` |
 
@@ -158,12 +158,13 @@ kunci: channels.*_account_id → tenant_ai_accounts (decrypt Fernet)
 | `src/config/tenant_config.py` | `load_tenant_config()` (gabung channels + tenant_configs; **cache TTL 120s** — perubahan setelan terbaca tanpa restart worker, fix insiden 2026-07-08), `_set_key_from_pool()` (ambil kunci elemen dari `tenant_ai_accounts` sesuai `*_account_id`), `llm_model_for(task)` (**penyedia channel ≠ tenant → `llm_models` tenant gugur, model channel dipakai semua task** — G3-slice 2026-07-08). |
 | `src/intelligence/config.py` | `TenantConfig`, `tenant_config_from_channel()` (channel row → config; `content_language`→bahasa). |
 | `src/providers/llm/__init__.py` | `build_llm_provider(cfg)` — resolve provider dari katalog + `ADAPTERS[adapter]`; gagal-jujur bila adapter tak didukung. |
-| `src/providers/llm/adapters.py` | `ADAPTERS` (registry: `openai_chat`, `anthropic_messages`); `.complete()` + `cost_meter.add_llm()`. |
+| `src/providers/llm/adapters.py` | `ADAPTERS` (registry: `openai_chat`, `anthropic_messages`, **`fal_any_llm`** — ditambah sesudah 9-Jul); `.complete()` + `cost_meter.add_llm()`. |
 | `src/providers/llm/catalog.py` | `get_providers()` — muat `ai_providers` **aktif** dari DB (cache). |
-| `src/providers/tts/__init__.py` | `build_tts_provider()`, `_adapter_registry()` (`elevenlabs`/`openai_speech`/`edge`/`gemini_speech`). |
+| `src/providers/tts/__init__.py` | `build_tts_provider()`, `_adapter_registry()` (`elevenlabs`/`openai_speech`/`edge`/`gemini_speech`/**`fal_tts`**). ⚠️ Protokol TTS dibaca dari **`tts_profiles.adapter`**, BUKAN `ai_providers.adapter`. Peta legacy `_LEGACY_ADAPTER` hanya menutup 3 penyedia lama (`elevenlabs`·`openai_tts`·`edge_tts`) bila kolomnya NULL — penyedia BARU dengan adapter kosong gagal jujur (`TTSError`). |
 | `src/providers/tts/{elevenlabs,openai_tts,edge_tts,gemini_tts}.py` | Adapter TTS; `.generate()` + `cost_meter.add_tts()`. |
-| `src/providers/visual/ai_image.py` | `AIImageProvider`, `_TRANSPORTS` (`openai`/`gemini`/`cloudflare` — Replicate+Together DIBUANG TUNTAS 2026-07-09, wajib kartu kredit & kalah dari Cloudflare gratis), `_generate_image()` + `cost_meter.add_image()`. Cloudflare (2026-07-08): kunci pool `ACCOUNT_ID:API_TOKEN`, prompt murni tanpa negative (NSFW filter CF false-positive), free-tier 10k neuron/hari — model `cf-flux-schnell` LULUS uji nyata. |
-| `src/config/format_catalog.py` | `tts_adapter()`, `tts_class()` — baca protokol dari `tts_profiles`. |
+| `src/providers/visual/ai_image.py` | `AIImageProvider`, `_TRANSPORTS` (`openai`/`gemini`/`cloudflare`/**`fal`** — Replicate+Together DIBUANG TUNTAS 2026-07-09, wajib kartu kredit & kalah dari Cloudflare gratis), `_generate_image()` + `cost_meter.add_image()`. Cloudflare (2026-07-08): kunci pool `ACCOUNT_ID:API_TOKEN`, prompt murni tanpa negative (NSFW filter CF false-positive), free-tier 10k neuron/hari — model `cf-flux-schnell` LULUS uji nyata. |
+| `src/providers/visual/ai_video.py` | `AIVideoProvider` (text-to-video 1 klip 9:16, `component='video'`). Transport = **`provider_key` mentah**, dan hari ini hanya **`fal`**. Butuh `duration_presets` ber-`render_mode='ai_video'` aktif, serta `default_params` `{aspect_ratio,duration,duration_param,allowed_durations}`. ⚠️ Gambar & video **tak punya lapis adapter** — vendor baru SELALU butuh kode kecuali `provider_key`-nya persis salah satu transport yang ada. |
+| `src/config/format_catalog.py` | `tts_adapter()`, `tts_class()`, `tts_max_chars()` — baca protokol & batas huruf dari `tts_profiles`. ⚠️ Dibaca **tanpa** filter `is_active`: mematikan `tts_profiles` tidak menghentikan produksi, ia hanya menyembunyikan penyedia dari pemilih tenant. |
 | `src/production/{tts_engine,video_renderer,visual_assembler}.py` | Sintesis suara, rakit visual, render video. |
 | `src/intelligence/script_engine.py` | Hasilkan naskah + prompt visual (LLM). |
 
@@ -197,4 +198,85 @@ biaya_video_IDR = biaya_video_USD × app_config.usd_idr_rate  (tampilan)
 
 ---
 
-*Dokumen ini mencerminkan kode s/d commit `f2ea9a1`+ (v2-backend, 2026-07-09 — termasuk purge tuntas Replicate+Together; sebelumnya: alur uji/recover channel + reaper + siklus hidup kartu hasil). Bila menambah adapter baru: daftarkan di registry kode (`src/providers/*`) — cermin `catalog_valid_values` memuatnya otomatis pada restart service berikutnya. Bila arsitektur berubah, UPDATE dokumen ini di commit yang sama.*
+---
+
+## 9. PRASYARAT & KORIDOR menambah provider/model — *ditetapkan 22-Agu atas permintaan owner*
+
+> Owner 21-Agu: *"anda harus menetapkan prasyarat yang jelas untuk menambahkan provider dan model baru
+> yang sesuai dengan kondisi mesin (bisa di support oleh mesin) tanpa menimbulkan masalah."*
+> Bagian ini menetapkannya. Prasyarat **registry galat** ada terpisah di `AI_ERROR_MANAGEMENT §5`.
+
+### 9.1 KORIDOR — 7 langkah, urut, tak boleh dilompati
+
+| # | Langkah | Layar | Berlaku |
+|---|---|---|---|
+| 1 | Buat **Provider** | tab Providers | semua |
+| 2 | Buat **Model** (`＋ Model` dari baris provider) | tab AI Models | semua |
+| 3 | **Setelan suara** (`tts_profiles`) + ≥1 **karakter suara** (`voice_catalog`) | tab Voice | **hanya `tts`** |
+| 4 | **Preset durasi** ber-`render_mode='ai_video'` aktif | tab Durasi | **hanya `video`** |
+| 5 | **Uji** — panggilan NYATA ke vendor → `cost_hint.audit` | tombol Uji | semua |
+| 6 | Nyalakan (`is_active`) | saklar | semua |
+| 7 | Tenant memasang kunci → memilih model di channel | Integrasi & Channel | semua |
+
+**Fakta yang menopang urutan ini (terukur 22-Agu):**
+- Provider **tidak tampil** di layar Integrasi tenant sampai ia punya **≥1 model** (aktif atau tidak).
+  ⇒ langkah 1 tanpa langkah 2 = provider tak terlihat siapa pun.
+- Model **nonaktif tetap bisa diuji** (injeksi `model_row`, 8-Jul) ⇒ urutan "buat → uji → nyalakan" sah,
+  bukan telur-ayam.
+- Layar Integrasi sengaja membaca model **aktif + nonaktif** + badge *"model segera hadir"* ⇒ baris baru
+  yang lahir nonaktif **tidak** menyembunyikan providernya.
+- 41 dari 41 model aktif ber-`cost_hint.audit` = LULUS ⇒ langkah 5 sudah jadi **kebiasaan**, tapi
+  **belum jadi aturan yang ditegakkan mesin** (janji §8 "Model aktif = pasti jalan" bersandar pada
+  disiplin admin).
+
+### 9.2 Prasyarat per kolom — dan akibat NYATA bila salah
+
+| Kolom | Aturan | Akibat bila salah/kosong |
+|---|---|---|
+| `ai_providers.adapter` | ∈ `catalog_valid_values` — **dropdown**, mustahil salah ketik | protokol tak dikenal = **butuh pekerjaan KODE** |
+| `ai_providers.auth_type` | `api_key` / `none` — dropdown | `api_key` tanpa resep uji ⇒ kunci `unchecked` = **tersimpan tapi tak pernah dipakai** |
+| `ai_providers.key_group` | vendor pemilik kunci; 1 kunci melayani semua elemennya | **kunci tenant tak ditemukan** meski sudah dipasang |
+| `ai_providers.base_url` | wajib untuk vendor OpenAI-compatible | panggilan ke alamat salah |
+| `ai_models.model_id` | **ID resmi vendor** (bukan `model_key`), sertakan versi | gagal di vendor tiap produksi |
+| `ai_models.default_params` | **gambar** `{size,steps}` · **video** `{aspect_ratio,duration,duration_param,allowed_durations}` · naskah/suara `{}` | dikirim **apa adanya** ke vendor: kunci ngawur = 400, dan penolakan parameter berkelas `UNKNOWN` = **boleh diulang** ⇒ kredit tenant terbakar (anatomi insiden `seed`, 37 kejadian) |
+| `ai_models.pricing` | wajib sebelum dinyalakan; `per_request_usd`/`per_second_usd`/trio video **tak pernah** ditulis sinkron otomatis | biaya tenant **dilaporkan lebih murah dari kenyataan**, produksi tetap jalan (**nol rem berbasis biaya**) |
+| `tts_profiles.adapter` | ∈ `tts_adapter` | penyedia BARU dengan adapter kosong ⇒ `TTSError` |
+| `tts_profiles.delivery_wps` | wajib benar | kosong ⇒ jatuh **senyap** ke 2.4 ⇒ anggaran kata salah ⇒ durasi melenceng ⇒ QC menolak |
+| `voice_catalog.preview_url` | wajib (ditegakkan `tests/test_katalog_suara_tak_menipu.py`) | tenant memilih suara tanpa mendengarnya |
+| `galat_registry.PENYEDIA` | wajib punya baris (`AI_ERROR_MANAGEMENT §5`) | galat vendor → `UNKNOWN` = **diulang 3×** ⇒ **kredit TENANT terbakar** |
+
+### 9.3 CUKUP DATA vs BUTUH KODE — pembeda "mudah" atau tidak
+
+| Komponen | Sumber dispatch | Didukung hari ini |
+|---|---|---|
+| naskah | `ai_providers.adapter` | `anthropic_messages` · `openai_chat` · `fal_any_llm` |
+| suara | **`tts_profiles.adapter`** | `fal_tts` · `elevenlabs` · `openai_speech` · `edge` · `gemini_speech` |
+| gambar | **`provider_key` mentah** (nol lapis adapter) | `openai` · `gemini` · `cloudflare` · `fal` |
+| video | **`provider_key` mentah** (nol lapis adapter) | `fal` **saja** |
+
+⇒ Vendor berprotokol OpenAI-chat = **cukup data, nol kode**. Selain itu **butuh kode**.
+
+### 9.4 TITIK LEMAH TERUKUR 22-Agu — kondisi lapangan, bukan daftar kerja
+
+Dokumen ini menulis bahwa admin "set TTS profile / Voice / Bahasa / Durasi" di BABAK 1. Diperiksa ke
+kode 22-Agu: **`tts_profiles` tak punya jalur BUAT dari panel** — ia satu-satunya tabel yang boleh
+DIHAPUS panel tapi tak bisa dibuat darinya. Itu sebab TTS Gemini dulu lahir dari **skrip**, bukan layar.
+
+| Titik | Keadaan terukur |
+|---|---|
+| `tts_profiles.display_name` + `adapter` | **DIBUANG SENYAP** — form mengirim, whitelist API tak memuatnya ⇒ hilang, toast tetap "Tersimpan". Efek ikutan: `ENUM_COLS.tts_profiles.adapter` = **kode mati** |
+| `tts_profiles` (barisnya) | tak bisa dibuat dari panel (lihat di atas) |
+| `ai_models.default_params` | ada di form, **nol label manusiawi & nol arahan** — padahal penentu gambar/video. **Titik terlemah seluruh rantai** |
+| Koridor §9.1 | **nol** tuntunan di layar: jenis `tts` butuh langkah 3, `video` butuh langkah 4 — tak disebut sepatah pun |
+| Jendela pop-up katalog | lebar **440px** untuk form 15 isian (voice) & baris JSON panjang (models) ⇒ **terpotong** |
+| Form `voice` · `moods` · `durations` | 7 · 2 · 2 isian **tanpa label manusiawi**; 4 · 0 · 3 berlabel **tanpa arahan** |
+| `ai_models.unavailable_since`/`unavailable_reason` | ditulis mesin, **nol jalur bersih dari panel** — melanggar mandat "setiap kunci punya jalur buka" |
+| `ai_providers.request_param_schema` | **HIDUP** (dibaca `src/providers/llm/__init__.py`) tapi tak terkelola panel. ⚠️ dokumen lain pernah menyebutnya "kolom mati" — **klaim itu SALAH & sudah ditarik** |
+| `ai_models.quality_tier` | **nol pembaca di mesin** — murni tampilan pemilih tenant |
+| Duplikasi | `refGuard` (hapus) & `channelTerdampak` (matikan) menghitung "channel yang memakai baris ini" di **dua tempat** |
+| Fosil data | `groq` punya `tts_profiles` + 2 `voice_catalog` tapi **nol model `tts`** (migr 0138) |
+
+*Rencana perbaikan + progresnya TIDAK ditulis di sini (dokumen ini bukan daftar kerja) — backlognya di
+`SISA_KERJA_GO_LIVE.md`.*
+
+*Dokumen ini mencerminkan kode s/d 2026-08-22 (§9 + koreksi registry/kolom); badan §1–§8 s/d commit `f2ea9a1`+ (2026-07-09 — termasuk purge tuntas Replicate+Together; sebelumnya: alur uji/recover channel + reaper + siklus hidup kartu hasil). Bila menambah adapter baru: daftarkan di registry kode (`src/providers/*`) — cermin `catalog_valid_values` memuatnya otomatis pada restart service berikutnya. Bila arsitektur berubah, UPDATE dokumen ini di commit yang sama.*

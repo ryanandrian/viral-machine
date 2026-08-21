@@ -159,6 +159,14 @@ kegagalan yang 100% milik kita. Owner: *"pesan errornya tidak jelas hanya kode s
    Bila error ditelan lapisan atas, pastikan propagasi (pola `last_*` tts_engine).
 6. **Uji** (unit classifier + persistensi + keputusan berhenti/ulangi) → set status ✅ + commit kode & dokumen BERSAMAAN.
 
+> **Prasyarat KATALOG (bukan registry galat) bukan milik dokumen ini.** SSOT-nya
+> `ARSITEKTUR_AI_PROVIDER_MODEL.md` — peta rantai AI end-to-end (5 babak: admin menyediakan katalog →
+> sinkron harga → tenant menyetor kredensial → tenant menugaskan di channel → mesin memproduksi).
+> §5 di atas hanya menetapkan prasyarat **registry galat**, yaitu langkah yang tanpa dokumen itu
+> membuat galat vendor jatuh ke `UNKNOWN` = boleh diulang ⇒ kredit tenant terbakar.
+> *(22-Agu: §5b/§5c/§5d sempat ditulis di sini dan DIHAPUS — isinya menduplikasi
+> `ARSITEKTUR_AI_PROVIDER_MODEL.md` yang sudah lengkap sejak 9-Jul. Lapis ganda dokumen = kekusutan.)*
+
 ## §6 Tata-kelola (anti-drift, anti-asumsi)
 - Pemetaan bersumber **dokumen resmi penyedia (WAJIB)** + sampel nyata (untuk bentuk kabel). **HARAM MENEBAK**; di luar keduanya → `UNKNOWN`.
 - **Penyedia/model baru TIDAK boleh dinyalakan sebelum tabel galatnya dipetakan** (§5 langkah 1–2).
