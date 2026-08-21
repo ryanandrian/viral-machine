@@ -141,6 +141,9 @@
 .radio-pill { padding: 0.4375rem 0.75rem; border: 1px solid var(--border-strong); border-radius: var(--r-md); font-size: var(--text-sm); cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; transition: all var(--d-fast); background: none; color: var(--text-secondary); }
 .radio-pill.sel { border-color: var(--brand); background: var(--brand-soft); color: var(--brand); }
 .radio-pill svg { width: 15px; height: 15px; }
+/* Pilihan yang sudah tidak ditawarkan lagi (mis. model AI dipensiunkan vendor) — TETAP TERLIHAT
+   supaya tenant tahu apa yang rusak, tapi tak bisa dipilih. Konvensi sama dengan .btn:disabled. */
+.radio-pill[aria-disabled="true"] { opacity: 0.45; pointer-events: none; border-style: dashed; }
 
 /* ---------- Form/config primitives — GLOBAL (F2-13b §10.F): dulu hanya di config.css → channels/[id]+pricing polos. Dipindah agar semua halaman bisa pakai. ---------- */
 .fld { margin-bottom: 1rem; }

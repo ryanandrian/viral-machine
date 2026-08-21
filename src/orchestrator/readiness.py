@@ -15,15 +15,37 @@ from loguru import logger
 
 
 def channel_readiness(sb, ch: dict) -> dict:
-    """Return {ready: bool, missing: [str], check_failed: bool}.
-    check_failed=True → cek tak tuntas (error transient) → producer FAIL-OPEN (jangan skip channel sehat)."""
+    """Return {ready: bool, missing: [str], check_failed: bool, reasons: [dict]}.
+    check_failed=True → cek tak tuntas (error transient) → producer FAIL-OPEN (jangan skip channel sehat).
+    `reasons` = alasan BERSTRUKTUR (migr 0204) untuk keadaan yang bisa diukur pasti: baris katalog yang
+    ditunjuk channel sudah tidak aktif / tidak ada. Kosong bila channel siap atau sebabnya di luar itu."""
     cid = str(ch.get("id") or ch.get("channel_id") or "")
     if not cid:
-        return {"ready": False, "missing": ["akses/channel"], "check_failed": True}
+        return {"ready": False, "missing": ["akses/channel"], "check_failed": True, "reasons": []}
     try:
         r = sb.rpc("channel_missing_by_id", {"p_channel_id": cid}).execute()
         missing = list(r.data or [])
-        return {"ready": len(missing) == 0, "missing": missing, "check_failed": False}
+        # ── ALASAN BERSTRUKTUR (migr 0204) ─────────────────────────────────────────────────────
+        # Label `missing` adalah KUNCI MESIN (checklist layar tenant mencocokkan katanya) — ia tak
+        # boleh diubah. `reasons` menjawab pertanyaan yang label tak bisa jawab: "belum dipilih" vs
+        # "pilihan Anda sudah dipensiunkan penyedianya". Tanpa ini, log skip producer hanya berbunyi
+        # "kurang: model naskah" — tak bisa didiagnosa siapa pun, dan itulah sebab 4 channel
+        # (2 tenant BERBAYAR) diam 4 hari pada 17-Agu.
+        #
+        # Diambil HANYA saat channel tidak siap. Producer memutari SELURUH channel tiap ±16 detik;
+        # mengambilnya untuk channel sehat = satu panggilan DB sia-sia per channel per siklus.
+        reasons: list = []
+        if missing:
+            try:
+                b = sb.rpc("channel_blockers_by_id", {"p_channel_id": cid}).execute()
+                reasons = list(b.data or [])
+            except Exception as e:
+                # FAIL-SOFT: alasan hanyalah keterangan tambahan. Kegagalannya HARAM mengubah
+                # `ready`/`check_failed` — kalau ikut mengubah, channel sehat bisa berhenti karena
+                # hiasan yang gagal dibaca.
+                logger.warning(f"[Readiness] alasan channel {cid} tak terbaca (non-fatal): {e}")
+        return {"ready": len(missing) == 0, "missing": missing, "check_failed": False,
+                "reasons": reasons}
     except Exception as e:
         logger.warning(f"[Readiness] cek channel {cid} gagal: {e}")
-        return {"ready": False, "missing": [], "check_failed": True}
+        return {"ready": False, "missing": [], "check_failed": True, "reasons": []}

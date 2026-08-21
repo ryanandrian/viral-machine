@@ -1093,6 +1093,55 @@ ternyata tambalan penyeimbang untuk bug yang sudah diperbaiki.
 langganan/jatah uji — [B24]), yang **bukan** `ErrorClass` dan bukan kegagalan AI. Penerjemahnya
 terpisah (`components/gate-message.tsx`). Dokumen ini hanya mengatur kegagalan AI.
 
+## §9b PINTU KEDUA — channel yang DIAM *(dibuka 2026-08-21, Batch A terpasang)*
+
+§9 di atas mengikat jalur **produksi berjalan**. Ada jalur KEDUA yang selama ini **tidak tersambung
+ke arsitektur ini sama sekali**, dan di situlah kerusakan 17-Agu terjadi:
+
+| Pintu | Jalur | Terklasifikasi | Tenant diberi tahu |
+|---|---|---|---|
+| Model mati saat produksi **JALAN** | pipeline → adapter → registry §4 → `MODEL_UNAVAILABLE` | ✅ | ✅ sebut model + penyedia |
+| Model mati saat channel **DIAM** | gerbang kesiapan → label `'model naskah'` → **skip senyap** | ❌ | ❌ |
+
+**Akibat terukur:** 4 channel berhenti **4 hari** (2 tenant BERBAYAR langganan aktif) tanpa seorang
+pun diberi tahu; log dibanjiri **20.979 baris** dalam 5 hari. BISIK NUSANTARA yang lewat pintu-1
+dapat pesan jelas dan beres sendiri — yang lewat pintu-2 **tidak punya suara sama sekali**.
+
+### Kenapa labelnya TIDAK boleh diperbaiki (kontrak yang mengikat selamanya)
+
+`channel_missing()` mengembalikan **16 label pendek**, dan label itu adalah **KUNCI MESIN**: checklist
+7 baris di layar tenant mencocokkan **katanya** (`channels/[id]/page.tsx` → `has("naskah")` dst).
+Mengubah teksnya membuat checklist itu **salah** — hijau padahal rusak. Itu kelas kerusakan 17-Agu.
+⇒ Perbaikan **wajib aditif**. Ke-16 label dikunci uji (`tests/test_alasan_terhalang_bukan_label_telanjang.py`).
+
+### Bentuk perbaikannya (migr `0204`)
+
+```
+SEKARANG : { ready:false, missing:["model naskah"] }
+SESUDAH  : { ready:false, missing:["model naskah"],            ← IDENTIK
+             reasons:[{slot,code,model,provider,provider_name}] }   ← BARU
+```
+
+- `channel_blockers(ch)` + `channel_blockers_by_id(uuid)` = fungsi **BARU**; `channel_missing()` **tak disentuh**.
+- `code` memakai kosakata `ErrorClass` yang sudah ada — **nol kosakata baru**: `model_unavailable` ·
+  `voice_unavailable` · `model_not_in_catalog`.
+- **Lingkup sengaja sempit:** hanya keadaan yang bisa diukur pasti (baris katalog yang ditunjuk channel
+  sudah tidak aktif / tidak ada). Sisanya tetap label-saja — tak diklaim lebih dari yang terbukti.
+- `readiness.py` meneruskannya **fail-soft** dan **hanya saat channel tidak siap** (producer memutari
+  seluruh channel tiap ±16 detik; mengambilnya untuk channel sehat = panggilan DB sia-sia).
+
+### Dua kalimat yang berubah, dan kenapa
+
+| Sebelum | Sesudah | Sebab |
+|---|---|---|
+| titik merah "Penulis Naskah (LLM)" tanpa keterangan | *"Pilihan Anda `llama-3.3-70b-versatile` sudah tidak tersedia di Groq — pilih penggantinya."* | tenant punya **3 slot AI**; tanpa nama model & penyedia, "pilih model lain" tak bisa dikerjakan |
+| pilihan tenant **hilang** dari daftar model | pil **TERKUNCI** bertanda *"tidak lagi tersedia"* | pemilih menyaring `is_active=true`; **melihat ≠ memilih** — jalur simpan tak memvalidasi katalog, jadi pil yang bisa diklik akan MENAMBAH channel menggantung |
+
+### Batas jujur
+
+Belum tercakup: model **aktif** tapi `provider_key`-nya ≠ `channels.llm_library` (paket campuran) —
+gerbang tetap menahannya, tapi lewat label telanjang. Tercatat, bukan diklaim selesai.
+
 ## §10 PENJAGA ANTI-DRIFT (supaya dokumen ini TETAP SSOT)
 
 > **Tiga penjaga, dan batas masing-masing — ditulis supaya hijau tak pernah lagi dibaca sebagai
@@ -1140,6 +1189,23 @@ Bila salah satu bergeser tanpa yang lain, uji MERAH sebelum sempat menyesatkan s
 - dokumen tidak boleh memuat anchor `file:baris` (aturan §3 — nomor baris selalu basi)
 
 ## §11 CHANGELOG
+- **2026-08-21** — **§9b PINTU KEDUA TERSAMBUNG (Batch A: langkah 1·2·3·5 dari rencana owner).**
+  Pemicu: owner melaporkan 2 kegagalan; penelusuran menemukan yang **tidak** dilaporkan — 4 channel
+  (2 tenant BERBAYAR) mati 4 hari sejak 17-Agu 20:42 karena model naskahnya dimatikan di katalog
+  tanpa seorang pun diberi tahu. **Migr `0204`** (aditif): `channel_blockers` + `channel_blockers_by_id`
+  + kunci `reasons` pada `channel_readiness`; `channel_missing` & ke-16 labelnya **tak disentuh**.
+  `readiness.py` meneruskan alasan (fail-soft, hanya saat tidak siap) · `producer.py` mencatat skip
+  **sekali per KEADAAN** dengan penanda TERPISAH (`_READY_SUDAH_DICATAT`) — penanda cabang langganan
+  di-`discard` tepat sebelum cek kesiapan, jadi memakainya di sini tak akan bekerja — dan alasannya
+  ikut tercatat · layar channel + onboarding menyebut nama model & penyedianya · model terpilih yang
+  mati tetap TERLIHAT tapi **terkunci** (`.radio-pill[aria-disabled]` ditambahkan ke **pustaka**
+  `components.css` mengikuti konvensi `.btn:disabled` — nol gaya tempelan, nol komponen FE baru).
+  **Bukti:** 20 uji baru, **12 dibuktikan MERAH dulu**, **11 sabotase** semuanya merah (dua di
+  antaranya menangkap **uji palsu saya sendiri** — pemeriksaan yang tetap hijau walau perendernya
+  dicabut; keduanya diganti) · 1211 uji hijau · build FE lulus · rujukan menggantung **tetap 5
+  (4 di channel aktif)** ⇒ **nol data tenant disentuh** (prinsip owner 21-Agu) · 16 label utuh ·
+  8 channel sehat **nol tuduhan palsu**. Kegagalan `TRANSIENT` yang menuduh tenant (langkah 4) &
+  karantina katalog (6a) = **Batch B**, belum dikerjakan.
 - **2026-08-15** — **§8L: AKAR "MESIN MATI MENDADAK" DITEMUKAN — PENERJEMAHNYA VERSI PRA-RILIS.**
   Mesin produksi berjalan di atas **Python 3.11.0rc1** (*release candidate*, Agu-2022) dan penerjemah
   itu **merusak memorinya sendiri**. Bukti dari catatan **KERNEL**: **11 crash antara 3-Jul dan

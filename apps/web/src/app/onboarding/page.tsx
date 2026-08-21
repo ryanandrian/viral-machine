@@ -30,6 +30,9 @@ export default function OnboardingPage() {
   const [chName, setChName] = useState<string>("");
   const [chReady, setChReady] = useState<boolean | null>(null);
   const [chMissing, setChMissing] = useState<string[]>([]);
+  // Alasan BERSTRUKTUR (migr 0204). Layar ini menampilkan LABEL MENTAH ke tenant BARU — tanpa
+  // alasan, tenant baru membaca jargon mesin ("model naskah") dan tak tahu apa yang harus dikerjakan.
+  const [chReasons, setChReasons] = useState<{ slot: string; code: string; model: string; provider: string; provider_name: string | null }[]>([]);
 
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -44,7 +47,7 @@ export default function OnboardingPage() {
     const ch = (chs as { id: string; channel_name: string | null }[] | null)?.[0];
     if (ch) {
       setChId(ch.id); setChName(ch.channel_name || "Channel");
-      try { const { data: rd } = await supabase.rpc("channel_readiness", { p_channel_id: ch.id }); if (rd) { setChReady((rd as { ready: boolean }).ready); setChMissing((rd as { missing: string[] }).missing || []); } } catch {}
+      try { const { data: rd } = await supabase.rpc("channel_readiness", { p_channel_id: ch.id }); if (rd) { setChReady((rd as { ready: boolean }).ready); setChMissing((rd as { missing: string[] }).missing || []); setChReasons((rd as { reasons?: { slot: string; code: string; model: string; provider: string; provider_name: string | null }[] }).reasons || []); } } catch {}
     }
     setLoading(false);
   }, [supabase]);
@@ -98,6 +101,16 @@ export default function OnboardingPage() {
             <ul style={{ listStyle: "none", margin: "0 0 0.875rem", padding: 0, display: "grid", gap: "0.3rem" }}>
               {chMissing.map((m) => <li key={m} style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "var(--text-sm)" }}><span style={{ width: 9, height: 9, borderRadius: "50%", background: "var(--danger,#ef4444)", flex: "none" }} /> {m}</li>)}
             </ul>
+            {chReasons.length > 0 && (
+              <ul style={{ listStyle: "none", margin: "-0.5rem 0 0.875rem", padding: 0, display: "grid", gap: "0.25rem" }}>
+                {chReasons.map((x) => (
+                  <li key={`${x.slot}-${x.model}`} style={{ ...muted, fontSize: "var(--text-xs)" }}>
+                    <Bi id={`Pilihan Anda "${x.model}" sudah tidak tersedia di ${x.provider_name || x.provider || "penyedianya"} — pilih penggantinya di halaman channel.`}
+                        en={`Your choice "${x.model}" is no longer available at ${x.provider_name || x.provider || "its provider"} — pick a replacement on the channel page.`} />
+                  </li>
+                ))}
+              </ul>
+            )}
           </>
         )}
         {chId && <Link href={`/channels/${chId}`} className="btn btn-secondary btn-sm" style={{ marginTop: chReady ? 0 : "0.25rem" }}><Bi id="Buka channel" en="Open channel" /> <ArrowRight size={14} /></Link>}

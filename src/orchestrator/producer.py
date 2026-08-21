@@ -29,6 +29,12 @@ from src.utils import s3_buffer
 # berarti. Sengaja di tingkat proses: pekerja hidup terus, dan bila ia direstart wajar bila keadaan
 # itu dicatat sekali lagi — satu baris per restart, bukan ribuan per hari.
 _SKIP_SUDAH_DICATAT: set[str] = set()
+# [2026-08-21] Penanda TERPISAH untuk cabang "belum READY". SENGAJA bukan `_SKIP_SUDAH_DICATAT`:
+# penanda itu di-`discard` tepat SEBELUM cek kesiapan (baris `_SKIP_SUDAH_DICATAT.discard(cid)`),
+# jadi memakainya di sini = penanda dibuang tiap siklus = banjir log tetap terjadi.
+# Terukur sebelum perbaikan: 20.979 baris dalam 5 hari (±1 baris/17 detik) untuk 4 channel yang sama —
+# sinyal tenggelam, dan setiap diagnosa harus mengaduk berkas puluhan MB berisi pengulangan.
+_READY_SUDAH_DICATAT: dict[str, str] = {}
 
 
 def _yt_video_id(url: str) -> str | None:
@@ -782,8 +788,20 @@ def plan_and_submit(sb, pool: ThreadPoolExecutor, sem: threading.Semaphore) -> i
         # (lindungi channel sehat — mis. ryan — dari berhenti karena gangguan sesaat).
         _rd = channel_readiness(sb, ch)
         if not _rd["ready"] and not _rd["check_failed"]:
-            logger.info(f"[Producer] skip ch={cid} — channel belum READY (kurang: {', '.join(_rd['missing'])})")
+            # DICATAT SEKALI per KEADAAN (bukan tiap siklus) + alasan BERSTRUKTUR ikut disebut.
+            # "kurang: model naskah" tak bisa didiagnosa siapa pun; nama model & penyedianya SUDAH
+            # ada di tangan pada titik ini (migr 0204) — membuangnya berarti sesi berikutnya menebak.
+            # Syarat & `continue` TIDAK diubah ⇒ channel mana yang berproduksi mustahil ikut berubah.
+            _sebab = "; ".join(
+                f"{r.get('slot')}: {r.get('model')} ({r.get('provider_name') or r.get('provider') or '?'}) "
+                f"{r.get('code')}" for r in (_rd.get("reasons") or []))
+            _keadaan = f"{','.join(_rd['missing'])}|{_sebab}"
+            if _READY_SUDAH_DICATAT.get(cid) != _keadaan:
+                logger.info(f"[Producer] skip ch={cid} — channel belum READY (kurang: "
+                            f"{', '.join(_rd['missing'])})" + (f" — {_sebab}" if _sebab else ""))
+                _READY_SUDAH_DICATAT[cid] = _keadaan
             continue
+        _READY_SUDAH_DICATAT.pop(cid, None)   # kembali siap → kelak dicatat lagi bila rusak lagi
         # REM DARURAT (§4b/F7): N produksi beruntun gagal/bermasalah → STOP channel + alarm SEKETIKA.
         # [ERROR-MGMT 2026-07-18] REM SEGERA (setelah 1×) bila kegagalan TERAKHIR = kelas non-retryable
         # (kredit habis / pembayaran gagal) — mustahil sembuh dgn diulang → hemat biaya LLM percobaan

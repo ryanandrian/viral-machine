@@ -156,7 +156,11 @@ export default function ChannelDetailPage() {
   const [confirmCfg, setConfirmCfg] = useState<null | { title: React.ReactNode; message: React.ReactNode; confirmLabel: React.ReactNode; confirmClass: string; onConfirm: () => void }>(null);
   // F2-07/F1-09: status efektif
   const [sub, setSub] = useState<string | null>(null);
-  const [rd, setRd] = useState<{ ready: boolean; missing: string[] } | null>(null);
+  // `missing` = LABEL (kunci mesin — checklist di bawah mencocokkan katanya, JANGAN diubah).
+  // `reasons` = alasan BERSTRUKTUR (migr 0204): menjawab yang label tak bisa jawab — "belum dipilih"
+  // vs "pilihan Anda sudah dipensiunkan penyedianya".
+  type Alasan = { slot: string; code: string; model: string; provider: string; provider_name: string | null };
+  const [rd, setRd] = useState<{ ready: boolean; missing: string[]; reasons?: Alasan[] } | null>(null);
   // F2-13b: data per-channel utk tab (channel_insights + production_runs + publish_slots)
   const [chCmp, setChCmp] = useState<Compliance | null>(null);
   const [chIns, setChIns] = useState<Insights | null>(null);
@@ -441,6 +445,19 @@ export default function ChannelDetailPage() {
     basic: { id: "Basic", en: "Basic" }, standard: { id: "Standard", en: "Standard" },
     premium: { id: "Premium", en: "Premium" }, fast: { id: "Cepat", en: "Fast" },
   };
+  // Pemilih model menyaring `is_active=true`, jadi begitu sebuah model dimatikan, pilihan yang
+  // SUDAH dipakai tenant HILANG dari daftar: tenant melihat titik merah + daftar tanpa pilihannya
+  // + nol penjelasan (insiden 17-Agu, 4 channel diam 4 hari). Pil di bawah mengembalikannya
+  // supaya TERLIHAT — tapi TERKUNCI. Melihat ≠ memilih: jalur simpan (`saveAiPart`) tidak
+  // memvalidasi katalog dan trigger aktivasi hanya menyala saat TRANSISI aktif, jadi pil yang
+  // bisa diklik justru akan MENAMBAH channel menggantung baru.
+  const pilMati = (dipilih: string, opsi: { model_key: string }[]) =>
+    dipilih && !opsi.some((m) => m.model_key === dipilih) ? (
+      <span className="radio-pill sel" aria-disabled="true"
+            title="Model ini sudah tidak tersedia di penyedianya — pilih penggantinya">
+        {dipilih} · <Bi id="tidak lagi tersedia" en="no longer available" />
+      </span>
+    ) : null;
   const isFreeModel = (m: ModelOpt) => provMap[m.provider_key]?.auth === "none";
   function priceTitle(m: ModelOpt, comp: string): string {
     if (isFreeModel(m)) return "Gratis — tanpa biaya";
@@ -627,7 +644,7 @@ export default function ChannelDetailPage() {
     } catch { /* fail-soft */ }
     setSub((cfg as { subscription_status?: string } | null)?.subscription_status ?? null);
     { const w = (cfg as { viral_score_weights?: LearnedWeights } | null)?.viral_score_weights; setChLearned(w && w.weights ? w : null); }
-    try { const { data: rdd } = await supabase.rpc("channel_readiness", { p_channel_id: id }); if (rdd) setRd(rdd as { ready: boolean; missing: string[] }); } catch { /* non-fatal */ }
+    try { const { data: rdd } = await supabase.rpc("channel_readiness", { p_channel_id: id }); if (rdd) setRd(rdd as { ready: boolean; missing: string[]; reasons?: Alasan[] }); } catch { /* non-fatal */ }
     // F2-13b: insight per-channel (channel_insights by channel_id) + runs per-channel (production_runs).
     const { data: ci } = await supabase.from("channel_insights")
       .select("compliance,performance_grade,videos_analyzed,niche_weights,top_hooks,avoid_patterns,content_type_perf,top_topics,computed_at")
@@ -918,14 +935,29 @@ export default function ChannelDetailPage() {
             ) : (() => {
               // Checklist PENUH 🟢/🔴 (§2.3): tiap syarat tampil — hijau=lengkap, merah=kurang + link ke lokasi perbaikan.
               const has = (s: string) => rd.missing.some((m) => m.toLowerCase().includes(s));
+              // Alasan per-slot (llm/tts/voice/visual) — kalimat yang BISA DIKERJAKAN tenant.
+              // Tanpa ini tenant hanya melihat titik merah: itulah sebab 4 channel diam 4 hari (17-Agu).
+              const alasanSlot = (slot: string) => (rd.reasons ?? []).filter((x) => x.slot === slot);
+              // HELPER, bukan komponen baru (aturan owner: pakai pustaka yang ada). Kelas `.muted`
+              // + peubah `--text-xs` = pustaka yang sudah dipakai seluruh layar ini.
+              const alasanJsx = (slot: string) => alasanSlot(slot).map((x) => {
+                const p = x.provider_name || x.provider || "penyedianya";
+                return (<div key={`${x.slot}-${x.model}`} className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.15rem" }}>
+                  {x.code === "model_unavailable" || x.code === "voice_unavailable"
+                    ? <Bi id={`Pilihan Anda "${x.model}" sudah tidak tersedia di ${p} — pilih penggantinya.`}
+                          en={`Your choice "${x.model}" is no longer available at ${p} — pick a replacement.`} />
+                    : <Bi id={`Pilihan Anda "${x.model}" tidak ada lagi di katalog — pilih penggantinya.`}
+                          en={`Your choice "${x.model}" is no longer in the catalogue — pick a replacement.`} />}
+                </div>);
+              });
               const REQS = [
-                { id: "Niche", en: "Niche", bad: rd.missing.includes("niche"), kred: false, tab: "settings" as const },
-                { id: "Penulis Naskah (LLM)", en: "Script Writer (LLM)", bad: has("naskah"), kred: has("kunci naskah"), tab: "settings" as const },
-                { id: "Pengisi Suara (TTS)", en: "Voice (TTS)", bad: has("suara"), kred: has("kunci suara"), tab: "settings" as const },
-                { id: "Pembuat Visual", en: "Visual generator", bad: has("visual"), kred: has("kunci visual"), tab: "settings" as const },
-                { id: "Jadwal tayang", en: "Publish schedule", bad: has("jadwal"), kred: false, tab: "schedule" as const },
-                { id: "Koneksi YouTube + target", en: "YouTube connection + target", bad: has("youtube"), kred: false, tab: "settings" as const },
-                { id: "Telegram", en: "Telegram", bad: rd.missing.includes("Telegram"), kred: true, tab: "settings" as const },
+                { id: "Niche", en: "Niche", bad: rd.missing.includes("niche"), kred: false, tab: "settings" as const, slot: "" },
+                { id: "Penulis Naskah (LLM)", en: "Script Writer (LLM)", bad: has("naskah"), kred: has("kunci naskah"), tab: "settings" as const, slot: "llm" },
+                { id: "Pengisi Suara (TTS)", en: "Voice (TTS)", bad: has("suara"), kred: has("kunci suara"), tab: "settings" as const, slot: "tts" },
+                { id: "Pembuat Visual", en: "Visual generator", bad: has("visual"), kred: has("kunci visual"), tab: "settings" as const, slot: "visual" },
+                { id: "Jadwal tayang", en: "Publish schedule", bad: has("jadwal"), kred: false, tab: "schedule" as const, slot: "" },
+                { id: "Koneksi YouTube + target", en: "YouTube connection + target", bad: has("youtube"), kred: false, tab: "settings" as const, slot: "" },
+                { id: "Telegram", en: "Telegram", bad: rd.missing.includes("Telegram"), kred: true, tab: "settings" as const, slot: "" },
               ];
               return (
                 <>
@@ -934,7 +966,10 @@ export default function ChannelDetailPage() {
                       <li key={r.id} style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "var(--text-sm)", padding: "0.3rem 0" }}>
                         {r.bad ? <span style={{ width: 9, height: 9, borderRadius: "50%", background: "var(--danger,#ef4444)", flexShrink: 0 }} />
                                : <Check size={14} style={{ color: "var(--success)", flexShrink: 0 }} />}
-                        <span style={{ flex: 1, color: r.bad ? "var(--text-primary)" : "var(--text-secondary)" }}><Bi id={r.id} en={r.en} /></span>
+                        <span style={{ flex: 1, color: r.bad ? "var(--text-primary)" : "var(--text-secondary)" }}>
+                          <Bi id={r.id} en={r.en} />
+                          {r.bad && r.slot ? alasanJsx(r.slot) : null}
+                        </span>
                         {r.bad && (r.kred
                           ? <Link href="/integrations" className="link" style={{ fontSize: "var(--text-xs)" }}><Bi id="Perbaiki →" en="Fix →" /></Link>
                           : <button className="link" style={{ fontSize: "var(--text-xs)", background: "none", border: "none", cursor: "pointer", padding: 0, color: "var(--brand)" }} onClick={() => setTab(r.tab)}><Bi id="Perbaiki →" en="Fix →" /></button>)}
@@ -1135,7 +1170,7 @@ export default function ChannelDetailPage() {
             <div className="radio-row">{[...new Set(llmOpts.map((m) => m.provider_key))].map((pk) => <span key={pk} className={`radio-pill${llmProv === pk ? " sel" : ""}`} onClick={() => { setLlmProv(pk); setLlmModel(""); setLlmAcct(""); }}>{provMap[pk]?.name ?? pk}</span>)}</div></div>
           {llmProv && (
             <div className="fld-row"><div className="k"><Bi id="Model" en="Model" /></div>
-              <div className="radio-row">{llmOpts.filter((m) => m.provider_key === llmProv).map((m) => <span key={m.model_key} title={priceTitle(m, "llm")} className={`radio-pill${llmModel === m.model_key ? " sel" : ""}`} onClick={() => setLlmModel(m.model_key)}>{m.display_name}<ModelBadges m={m} /></span>)}</div></div>
+              <div className="radio-row">{pilMati(llmModel, llmOpts.filter((m) => m.provider_key === llmProv))}{llmOpts.filter((m) => m.provider_key === llmProv).map((m) => <span key={m.model_key} title={priceTitle(m, "llm")} className={`radio-pill${llmModel === m.model_key ? " sel" : ""}`} onClick={() => setLlmModel(m.model_key)}>{m.display_name}<ModelBadges m={m} /></span>)}</div></div>
           )}
           {acctPicker(llmProv, llmAcct, setLlmAcct)}
           {saveBar({ ubah: dirty.llm, sibuk: savingAi === "llm", simpan: saveLlm, batal: undo.llm,
@@ -1150,7 +1185,7 @@ export default function ChannelDetailPage() {
             <div className="radio-row">{ttsOpts.map((p) => <span key={p.provider_key} className={`radio-pill${ttsProv === p.provider_key ? " sel" : ""}`} onClick={() => { setTtsProv(p.provider_key); setTtsModel(""); setVoiceKey(""); setTtsAcct(""); }}>{p.display_name}</span>)}</div></div>
           {ttsProv && ttsModelOpts.filter((m) => m.provider_key === ttsProv).length > 0 && (
             <div className="fld-row"><div className="k"><Bi id="Model suara" en="Voice model" /><div className="sub"><Bi id="kualitas vs kecepatan" en="quality vs speed" /></div></div>
-              <div className="radio-row">{ttsModelOpts.filter((m) => m.provider_key === ttsProv).map((m) => <span key={m.model_key} title={priceTitle(m, "tts")} className={`radio-pill${ttsModel === m.model_key ? " sel" : ""}`} onClick={() => setTtsModel(m.model_key)}>{m.display_name}<ModelBadges m={m} /></span>)}</div></div>
+              <div className="radio-row">{pilMati(ttsModel, ttsModelOpts.filter((m) => m.provider_key === ttsProv))}{ttsModelOpts.filter((m) => m.provider_key === ttsProv).map((m) => <span key={m.model_key} title={priceTitle(m, "tts")} className={`radio-pill${ttsModel === m.model_key ? " sel" : ""}`} onClick={() => setTtsModel(m.model_key)}>{m.display_name}<ModelBadges m={m} /></span>)}</div></div>
           )}
           {ttsProv && (() => {
             // Kecocokan bahasa konten channel (0131): cocok = locale voice se-bahasa ATAU voice Multilingual.
@@ -1181,7 +1216,7 @@ export default function ChannelDetailPage() {
             <div className="radio-row">{[...new Set(imgOpts.map((m) => m.provider_key))].map((pk) => <span key={pk} className={`radio-pill${visualProv === pk ? " sel" : ""}`} onClick={() => { setVisualProv(pk); setImgModel(""); setVisualAcct(""); }}>{provMap[pk]?.name ?? pk}</span>)}</div></div>
           {visualProv && (
             <div className="fld-row"><div className="k"><Bi id="Model" en="Model" /><div className="sub"><Bi id="gambar atau video" en="image or video" /></div></div>
-              <div className="radio-row">{imgOpts.filter((m) => m.provider_key === visualProv).map((m) => <span key={m.model_key} title={priceTitle(m, m.component || "image")} className={`radio-pill${imgModel === m.model_key ? " sel" : ""}`} onClick={() => setImgModel(m.model_key)}>{m.display_name}<ModelBadges m={m} /></span>)}</div></div>
+              <div className="radio-row">{pilMati(imgModel, imgOpts.filter((m) => m.provider_key === visualProv))}{imgOpts.filter((m) => m.provider_key === visualProv).map((m) => <span key={m.model_key} title={priceTitle(m, m.component || "image")} className={`radio-pill${imgModel === m.model_key ? " sel" : ""}`} onClick={() => setImgModel(m.model_key)}>{m.display_name}<ModelBadges m={m} /></span>)}</div></div>
           )}
           {/* [19-Agu] Kenop mutu HANYA untuk model yang MENYATAKAN menerimanya (`default_params.
               supports_quality_tier` — pola sama dgn `supports_seed`, default TIDAK ⇒ model & vendor
