@@ -258,7 +258,7 @@ biaya_video_IDR = biaya_video_USD × app_config.usd_idr_rate  (tampilan)
 
 ### 9.4 TITIK LEMAH — status 22-Agu (B1–B6 SUDAH ditutup; sisanya kondisi lapangan)
 
-> **Penjaganya:** `tests/test_panel_katalog_menuntun_bukan_menjebak.py` — 17 uji, **14 dibuktikan
+> **Penjaganya:** `tests/test_panel_katalog_menuntun_bukan_menjebak.py` (B1–B6) + `tests/test_katalog_nol_fosil_nol_lapis_ganda.py` (F1–F5: fosil, kolom tak terwiring, lapis ganda penghitung, penjaga hapus) — 17 uji, **14 dibuktikan
 > MERAH dulu**, **20 sabotase** semuanya merah. Sabotase menangkap **9 uji palsu saya sendiri**
 > (substring `xhelp_id` masih memuat `help_id` · dua bahasa diperiksa sebagai satu teks · kata
 > `catch` bebas · jendela karakter yang tak mencapai kodenya · kata "suara" yang sudah ada di
@@ -277,10 +277,12 @@ DIHAPUS panel tapi tak bisa dibuat darinya. Itu sebab TTS Gemini dulu lahir dari
 | ~~Jendela pop-up katalog~~ | ✅ **DITUTUP 22-Agu (B1)** — form katalog 720px, sisanya 560px, pola `min(px,vw)` dipertahankan agar tetap responsif. Dulu **440px** untuk form 15 isian (voice) & baris JSON panjang (models) ⇒ **terpotong** |
 | ~~Form `voice` · `moods` · `durations`~~ | ✅ **DITUTUP 22-Agu (B3)** — seluruh isian di 7 form katalog kini berlabel manusiawi; isian yang berakibat bila salah punya arahan dwibahasa. Dulu: 7 · 2 · 2 tanpa label; 4 · 0 · 3 tanpa arahan |
 | ~~`ai_models.unavailable_since`/`unavailable_reason`~~ | ✅ **DITUTUP 22-Agu (B5)** — menyalakan kembali model membersihkan jejaknya, **hanya** pada arah nyala (karantina menulis jejak saat mematikan). Kedua kolom sengaja **tetap di luar** whitelist: jejak adalah tulisan MESIN, admin tak boleh mengarangnya |
-| `ai_providers.request_param_schema` | **HIDUP** (dibaca `src/providers/llm/__init__.py`) tapi tak terkelola panel. ⚠️ dokumen lain pernah menyebutnya "kolom mati" — **klaim itu SALAH & sudah ditarik** |
-| `ai_models.quality_tier` | **nol pembaca di mesin** — murni tampilan pemilih tenant |
-| Duplikasi | `refGuard` (hapus) & `channelTerdampak` (matikan) menghitung "channel yang memakai baris ini" di **dua tempat** |
-| Fosil data | `groq` punya `tts_profiles` + 2 `voice_catalog` tapi **nol model `tts`** (migr 0138) |
+| ~~`ai_providers.request_param_schema`~~ | ✅ **DITUTUP 22-Agu (F2)** — kini ada di form penyedia, berlabel + arahan dwibahasa, diurai sebagai JSON (tanpa penguraian ia tersimpan sebagai string mentah dan mesin membacanya kosong — gagal senyap). Dulu **HIDUP tapi tak terkelola**; dokumen lain pernah menyebutnya "kolom mati" — **klaim itu SALAH & sudah ditarik** |
+| `ai_models.quality_tier` | **nol pembaca di mesin** — murni tampilan pemilih tenant. Bukan fosil: ia DIPAKAI layar tenant, jadi dibiarkan |
+| ~~3 kolom fosil~~ | ✅ **DIBUANG 22-Agu (F1, migr `0207`)** — `tts_profiles.has_word_timeframe` (sumber kebenaran KEDUA untuk `tts_class`, nilainya cermin 1:1), `voice_catalog.pace_sample_n` + `pace_updated_at` (0 dari 44 terisi). Nol pembaca & nol penulis. Kalibrasi tempo yang sungguhan hidup di `tts_pace_calibration` |
+| ~~`voice_catalog` boleh dihapus TANPA penjaga~~ | ✅ **DITUTUP 22-Agu (F5)** — **bug yang ditemukan saat menyatukan penghitung**: tabel ini ada di `DELETABLE` tapi `refGuard` tak punya cabang untuknya ⇒ karakter suara yang sedang dipakai channel tenant bisa TERHAPUS dan channel itu menggantung. Saat ditemukan: 6 channel memakai suara, 3 di antaranya AKTIF. Kini ditolak + disarankan nonaktifkan, dan **setiap** tabel `DELETABLE` wajib punya penjaga (dikunci uji) |
+| ~~Duplikasi penghitung~~ | ✅ **DITUTUP 22-Agu (F3)** — satu fungsi `channelPemakai(a, table, key, hanyaAktif)` melayani kedua jalur. Beda yang SAH dipertahankan: MEMATIKAN → channel aktif saja · MENGHAPUS → semua channel. Gagal baca pada jalur hapus **menahan** (bukan meloloskan) |
+| ~~Fosil data `groq`~~ | ✅ **DIBERSIHKAN 22-Agu (F4)** — 1 setelan suara + 2 karakter suara dihapus (nol model `tts`, nol channel memakainya; penyedia `groq` untuk NASKAH tak disentuh & tetap aktif). Bila Groq TTS kelak dihidupkan, barisnya lahir otomatis lewat B6 |
 
 *Rencana perbaikan + progresnya TIDAK ditulis di sini (dokumen ini bukan daftar kerja) — backlognya di
 `SISA_KERJA_GO_LIVE.md`.*

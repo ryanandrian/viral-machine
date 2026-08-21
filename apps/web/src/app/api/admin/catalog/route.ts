@@ -39,6 +39,11 @@ const CATALOG: Record<string, { pk: string; cols: string[] }> = {
 
 // Kolom jsonb: nilai string dari form di-JSON.parse agar tersimpan sbg objek (bukan string mentah).
 const JSONB_COLS: Record<string, string[]> = {
+  // [22-Agu F2] `ai_providers.request_param_schema` DIBACA mesin saat membangun penyedia naskah,
+  // tapi tak ada jalur mengisinya dari panel ⇒ objek terwiring separuh. Kini bisa diisi, dan
+  // WAJIB diurai di sini: tanpa penguraian, teks admin tersimpan sebagai string mentah, mesin
+  // membacanya sebagai objek kosong, dan tak seorang pun diberi tahu — gagal SENYAP.
+  ai_providers: ["request_param_schema"],
   voice_catalog: ["default_settings"],
   tts_profiles: ["param_schema"],
   moods: ["keywords"],
@@ -162,24 +167,40 @@ export async function GET() {
 }
 
 // PATCH: { table, key, patch } — update baris katalog (whitelist tabel+kolom). + admin_audit.
-/** Channel AKTIF yang masih menunjuk baris katalog ini. Dipakai untuk memperlihatkan DAMPAK
- *  sebelum admin mematikannya (17-Agu: 4 channel berhenti 4 hari tanpa ada yang tahu).
- *  Hanya membaca; nol perubahan. Gagal baca → daftar kosong (jangan menghalangi admin karena
- *  hiasan yang gagal dibaca). */
+/** Channel yang menunjuk baris katalog ini — SATU-SATUNYA penghitung untuk pertanyaan itu.
+ *
+ *  [22-Agu F3] Sebelumnya pertanyaan yang sama dijawab DUA tempat: `refGuard` (jalur HAPUS) dan
+ *  `channelTerdampak` (jalur MATIKAN, dibuat 21-Agu). Dua sumber kebenaran untuk satu pertanyaan =
+ *  lapis ganda; kalau salah satu diperbaiki dan yang lain lupa, angka yang dilihat admin berbeda
+ *  dari kenyataan. Kini satu fungsi, dua pemakai.
+ *
+ *  `hanyaAktif` adalah perbedaan yang SAH antara keduanya, bukan kelalaian:
+ *    · MEMATIKAN → hanya channel AKTIF (yang jeda/mati tak berhenti produksi karena ini)
+ *    · MENGHAPUS → SEMUA channel (baris yang dirujuk channel mana pun tak boleh hilang)
+ *  Hanya membaca; nol perubahan. Gagal baca → daftar kosong pada jalur MATIKAN (hiasan yang gagal
+ *  dibaca tak boleh menghalangi admin) — jalur HAPUS menanganinya sendiri (lihat `refGuard`). */
+async function channelPemakai(a: ReturnType<typeof createAdminClient>, table: string, key: string,
+                              hanyaAktif = false): Promise<string[]> {
+  let q = a.from("channels")
+    .select("channel_name, is_active, llm_model, tts_model, voice_key, visual_mode, tts_provider, llm_library, content_language");
+  if (hanyaAktif) q = q.eq("is_active", true);
+  const { data, error } = await q;
+  if (error) throw error;
+  const rows = (data ?? []) as Record<string, string | null>[];
+  return rows.filter((c) => {
+    const vModel = (c.visual_mode ?? "").includes(":") ? (c.visual_mode ?? "").split(":")[1] : null;
+    if (table === "ai_models") return c.llm_model === key || c.tts_model === key || vModel === key;
+    if (table === "voice_catalog") return c.voice_key === key;
+    if (table === "content_languages") return c.content_language === key;
+    // penyedia / mesin suara: channel terdampak bila slotnya memakai penyedia itu
+    return c.tts_provider === key || c.llm_library === key;
+  }).map((c) => c.channel_name || "(tanpa nama)");
+}
+
+/** Jalur MEMATIKAN: channel AKTIF yang masih memakainya, untuk memperlihatkan DAMPAK sebelum
+ *  saklar berpindah (17-Agu: 4 channel berhenti 4 hari tanpa ada yang tahu). Fail-soft. */
 async function channelTerdampak(a: ReturnType<typeof createAdminClient>, table: string, key: string) {
-  try {
-    const { data } = await a.from("channels")
-      .select("channel_name, llm_model, tts_model, voice_key, visual_mode, tts_provider, llm_library")
-      .eq("is_active", true);
-    const rows = (data ?? []) as Record<string, string | null>[];
-    return rows.filter((c) => {
-      const vModel = (c.visual_mode ?? "").includes(":") ? (c.visual_mode ?? "").split(":")[1] : null;
-      if (table === "ai_models") return c.llm_model === key || c.tts_model === key || vModel === key;
-      if (table === "voice_catalog") return c.voice_key === key;
-      // penyedia / mesin suara: channel terdampak bila slotnya memakai penyedia itu
-      return c.tts_provider === key || c.llm_library === key;
-    }).map((c) => c.channel_name || "(tanpa nama)");
-  } catch { return [] as string[]; }
+  try { return await channelPemakai(a, table, key, true); } catch { return [] as string[]; }
 }
 
 export async function PATCH(req: Request) {
@@ -308,23 +329,41 @@ const DELETABLE = new Set(["music_library", "voice_catalog", "ai_models", "ai_pr
 // ditolak ber-alasan (409), bukan merusak channel/niche yang merujuknya.
 async function refGuard(a: ReturnType<typeof createAdminClient>, table: string, key: string): Promise<string | null> {
   const cnt = async (q: PromiseLike<{ count: number | null }>) => ((await q).count ?? 0);
+  // [22-Agu F3] Bagian "channel yang memakai" memakai penghitung BERSAMA `channelPemakai`
+  // (SEMUA channel — beda dari jalur mematikan yang hanya peduli channel aktif). Sisa pemeriksaan
+  // per-tabel di bawah TIDAK disentuh: ia menanyakan hal LAIN (jumlah model, voice, track musik,
+  // niche, pengaturan tenant), bukan channel.
+  // Gagal baca di sini HARAM diam-diam meloloskan hapus: kalau daftar pemakai tak terbaca, kita
+  // TAHAN dengan alasan jelas, bukan menganggap "tidak ada yang memakainya".
+  const pemakaiChannel = async (): Promise<string[]> => {
+    try { return await channelPemakai(a, table, key); }
+    catch { throw new Error("daftar channel pemakai gagal dibaca — hapus ditahan demi keamanan"); }
+  };
   if (table === "ai_models") {
-    const n = await cnt(a.from("channels").select("id", { count: "exact", head: true })
-      .or(`llm_model.eq.${key},tts_model.eq.${key},visual_mode.eq.ai_image:${key},visual_mode.eq.ai_video:${key}`));
+    const n = (await pemakaiChannel()).length;
     if (n > 0) return `dipakai ${n} channel — nonaktifkan saja, jangan hapus`;
   }
   if (table === "ai_providers") {
     const m = await cnt(a.from("ai_models").select("model_key", { count: "exact", head: true }).eq("provider_key", key));
     if (m > 0) return `punya ${m} model — hapus/pindahkan modelnya dulu`;
-    const n = await cnt(a.from("channels").select("id", { count: "exact", head: true }).or(`llm_library.eq.${key},tts_provider.eq.${key}`));
+    const n = (await pemakaiChannel()).length;
     if (n > 0) return `dipakai ${n} channel`;
   }
+  // [22-Agu F5] BUG yang ditemukan saat menyatukan penghitung: `voice_catalog` ADA di DELETABLE
+  // tapi tak punya penjaga di sini ⇒ karakter suara yang sedang dipakai channel tenant BISA
+  // TERHAPUS, dan channel itu langsung menggantung tanpa peringatan apa pun. Terukur saat
+  // ditemukan: 6 channel memakai suara, 3 di antaranya AKTIF. Pola penolakannya mengikuti
+  // `ai_models` yang sudah ada: tolak + sarankan nonaktifkan, jangan menjebak admin.
+  if (table === "voice_catalog") {
+    const n = (await pemakaiChannel()).length;
+    if (n > 0) return `dipakai ${n} channel — nonaktifkan saja, jangan hapus`;
+  }
   if (table === "content_languages") {
-    const n = await cnt(a.from("channels").select("id", { count: "exact", head: true }).eq("content_language", key));
+    const n = (await pemakaiChannel()).length;
     if (n > 0) return `dipakai ${n} channel`;
   }
   if (table === "tts_profiles") {
-    const n = await cnt(a.from("channels").select("id", { count: "exact", head: true }).eq("tts_provider", key));
+    const n = (await pemakaiChannel()).length;
     if (n > 0) return `dipakai ${n} channel`;
     const v = await cnt(a.from("voice_catalog").select("voice_key", { count: "exact", head: true }).eq("provider_key", key));
     if (v > 0) return `punya ${v} voice — hapus voice-nya dulu`;

@@ -291,31 +291,40 @@ class TestE_MematikanModelMENYEBUT_DAMPAKNYA(unittest.TestCase):
     LAYAR = "apps/web/src/app/admin/(panel)/catalog/page.tsx"
 
     def test_rute_admin_menghitung_channel_terdampak(self):
-        """Dua versi uji ini sudah gugur karena LOLOS-LEMAH:
+        """Tiga versi uji ini sudah gugur, dan sebabnya berbeda-beda:
         (1) `"channels" in src` — lolos dari kata di komentar;
-        (2) `from("channels")` di SELURUH berkas — lolos karena rute ini SUDAH mengueri
-            `channels` 5× untuk hitungan pemakaian (kode lama), jadi menghapus penghitung
-            dampak seluruhnya tetap hijau.
-        Yang dikunci sekarang: kuerinya ada DI DALAM penghitung dampak, dan cabang PATCH
-        benar-benar MEMANGGIL penghitung itu."""
+        (2) `from("channels")` di SELURUH berkas — lolos karena rute ini sudah mengueri `channels`
+            untuk hitungan pemakaian, jadi menghapus penghitung dampak tetap hijau;
+        (3) menuntut kuerinya berada DI DALAM `channelTerdampak` — itu mengikat TEMPAT, bukan
+            perilaku. 22-Agu kuerinya sengaja dipindah ke penghitung BERSAMA `channelPemakai`
+            karena pertanyaan yang sama tadinya dijawab dua tempat (lapis ganda). Uji yang
+            mengikat tempat memaksa lapis ganda itu dipertahankan.
+
+        Yang dikunci sekarang = PERILAKUNYA: ada penghitung yang mengueri `channels` dan bisa
+        menyaring hanya yang AKTIF, dan jalur MEMATIKAN benar-benar memakainya dengan saringan itu."""
         src = _baca(self.RUTE)
-        i = src.find("async function channelTerdampak")
+        i = src.find("async function channelPemakai")
         self.assertGreater(i, 0,
-                           "Penghitung channel terdampak tak ada ⇒ mematikan model tak tahu siapa "
-                           "yang memakainya, dan itulah persisnya kerusakan 17-Agu.")
-        blok = src[i:src.find("export async function PATCH", i)]
+                           "Penghitung channel pemakai tak ada ⇒ mematikan model tak tahu siapa yang "
+                           "memakainya, dan itulah persisnya kerusakan 17-Agu.")
+        blok = src[i:src.find("\nasync function channelTerdampak", i)]
         self.assertTrue(
             re.search(r'from\("channels"\)', blok),
-            "Penghitung dampak tak MENGUERI `channels` — angkanya tak berasal dari kenyataan.")
+            "Penghitung tak MENGUERI `channels` — angkanya tak berasal dari kenyataan.")
         self.assertTrue(
             re.search(r'eq\("is_active",\s*true\)', blok),
-            "Dampak dihitung tanpa menyaring channel AKTIF ⇒ channel mati/jeda ikut dihitung dan "
+            "Penghitung tak bisa menyaring channel AKTIF ⇒ channel mati/jeda ikut dihitung dan "
             "angkanya menakut-nakuti admin tanpa sebab.")
-        j = src.find("perlu_konfirmasi")
+        j = src.find("async function channelTerdampak")
+        self.assertGreater(j, 0, "jalur MEMATIKAN tak punya pemanggilnya sendiri")
         self.assertTrue(
-            re.search(r"channelTerdampak\(", src[max(0, j - 900):j + 200]),
-            "Penghitung dampak ADA tapi cabang PATCH tak pernah memanggilnya — kode mati, "
-            "admin tetap mematikan model tanpa suara.")
+            re.search(r"channelPemakai\(\s*a,\s*table,\s*key,\s*true\s*\)", src[j:j + 500]),
+            "Jalur MEMATIKAN tidak meminta 'hanya channel aktif' ⇒ konfirmasi memakai angka yang salah.")
+        k = src.find("perlu_konfirmasi")
+        self.assertTrue(
+            re.search(r"channelTerdampak\(", src[max(0, k - 900):k + 200]),
+            "Penghitung ADA tapi cabang PATCH tak pernah memanggilnya — kode mati, admin tetap "
+            "mematikan model tanpa suara.")
 
     def test_hanya_saat_DIMATIKAN_bukan_saat_dihidupkan(self):
         src = _baca(self.RUTE)
