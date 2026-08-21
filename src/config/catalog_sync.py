@@ -12,11 +12,6 @@ Field yang dicerminkan:
   visual_transport  — kunci _TRANSPORTS visual (platform = provider_key).
   auth_type         — cara kunci: api_key (butuh token) / none (gratis, mis. edge).
   component         — jenis model yang didukung pipeline: llm/image/video/tts.
-  galat_registry_provider — kunci `galat_registry.PENYEDIA`. Dicerminkan sejak 21-Agu karena
-      GERBANG KELAYAKAN KATALOG (migr 0206) harus bisa menolak menyalakan penyedia yang belum
-      punya baris registry galat: tanpa baris itu, galat vendor jatuh ke `UNKNOWN` = BOLEH DIULANG
-      ⇒ kunci salah / saldo habis diulang 3× dan membakar kredit TENANT. Kebenarannya di KODE,
-      dan gerbang hidup di DB — jadi ia hanya bisa bertemu lewat cermin ini.
 """
 from __future__ import annotations
 import os
@@ -82,14 +77,6 @@ def collect_valid_values() -> List[Dict[str, str]]:
             rows.append({"field": "visual_transport", "value": k, "label": _label("visual", k)})
     except Exception as e:
         logger.warning(f"[catalog_sync] registry visual gagal dibaca: {e}")
-
-    # Registry GALAT per-penyedia (galat_registry.PENYEDIA) — dipakai gerbang kelayakan 0206.
-    try:
-        from src.providers import galat_registry as _reg
-        for k in sorted(_reg.PENYEDIA.keys()):
-            rows.append({"field": "galat_registry_provider", "value": k, "label": _label("galat", k)})
-    except Exception as e:
-        logger.warning(f"[catalog_sync] registry GALAT gagal dibaca: {e}")
 
     for v, lbl in AUTH_TYPES:
         rows.append({"field": "auth_type", "value": v, "label": lbl})
