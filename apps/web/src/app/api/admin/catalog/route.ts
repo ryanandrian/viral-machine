@@ -25,7 +25,11 @@ const CATALOG: Record<string, { pk: string; cols: string[] }> = {
   voice_catalog: { pk: "voice_key", cols: ["provider_key", "vendor_voice_id", "display_name", "locale", "language", "gender", "age", "accent", "use_case", "description", "default_settings", "niche_default", "preview_url", "delivery_wps", "pace_locked", "is_active", "sort_order"] },
   music_library: { pk: "id", cols: ["is_active", "is_default", "name", "mood", "niche", "bpm", "duration_s"] },
   fonts: { pk: "name", cols: ["is_active"] },   // nama/berkas/ass_scale lahir dari berkas saat unggah — bukan ketikan
-  tts_profiles: { pk: "provider_key", cols: ["is_active", "delivery_wps", "tts_class", "speed_param", "param_schema", "max_chars_per_request"] },
+  // [22-Agu B4] `display_name` & `adapter` DITAMBAHKAN. Sebelumnya form mengirim keduanya tapi
+  // whitelist ini tak memuatnya ⇒ loop tulis (yang hanya mengiterasi `def.cols`) membuangnya, dan
+  // admin tetap melihat toast "Tersimpan". Efek ikutan: validasi enum `ENUM_COLS.tts_profiles.adapter`
+  // di bawah adalah KODE MATI — ia menjaga kolom yang tak pernah sampai. Kini keduanya hidup.
+  tts_profiles: { pk: "provider_key", cols: ["display_name", "adapter", "is_active", "delivery_wps", "tts_class", "speed_param", "max_chars_per_request", "param_schema"] },
   moods: { pk: "mood_id", cols: ["keywords", "is_active"] },   // NICHE_DNA F4: kelola mood + keyword deteksi (dwibahasa)
   niche_property_presets: { pk: "id", cols: ["property", "preset_key", "label", "label_en", "description", "description_en", "value", "apply_mode", "sort_order", "is_active"] },
   // Kendali preset durasi (owner 2026-07-06): kolom engine-critical (beats/visual_beats/render_mode)
@@ -201,6 +205,19 @@ export async function PATCH(req: Request) {
   const a = createAdminClient();
   try { await assertEnums(a, table, clean); } catch (e) { return valErrResponse(e); }
 
+  // ── [22-Agu B5] MENYALAKAN MODEL = MEMBERSIHKAN JEJAK KARANTINA ───────────────────────────
+  // Migr 0205 menulis sendiri: "Ditulis mesin; dibersihkan admin saat menghidupkan kembali."
+  // Sampai 22-Agu janji itu TIDAK ADA jalurnya: panel tak bisa menyentuh kedua kolom, jadi jejak
+  // melekat selamanya dan model hidup tetap bertanda "mati di vendor" — kunci tanpa jalur buka
+  // (sudah ditegur owner, PAYMENT §10e-2). Ini melunasi hutang itu, bukan fitur baru.
+  // HANYA saat is_active → true: karantina MENULIS jejak ketika mematikan, jadi membersihkannya di
+  // jalur mati akan menghapus bukti yang baru saja ditulis mesin.
+  // Kedua kolom sengaja TIDAK masuk whitelist: jejak adalah tulisan MESIN, admin tak boleh mengarangnya.
+  if (table === "ai_models" && "is_active" in clean && clean.is_active === true) {
+    clean.unavailable_since = null;
+    clean.unavailable_reason = null;
+  }
+
   // ── DAMPAK MEMATIKAN BARIS KATALOG — terlihat SEBELUM tombol ditekan (AI_ERROR_MGMT §9b) ────
   // 17-Agu: model `llama-3.3-70b-versatile` dimatikan (benar — vendor memang mematikannya), tapi
   // saklar itu berpindah TANPA SUARA. Tidak ada yang memberi tahu bahwa 3 channel tenant masih
@@ -248,6 +265,39 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   await a.from("admin_audit").insert({ admin_uid: g.user.id, action: `catalog.create.${table}`, detail: { key: row[def.pk] } });
+
+  // ── [22-Agu B6] MODEL SUARA BARU → SIAPKAN BARIS SETELAN SUARANYA ─────────────────────────
+  // `tts_profiles` adalah SATU-SATUNYA tabel yang boleh dihapus dari panel tapi tak bisa dibuat
+  // darinya. Itu sebab mesin suara Gemini dulu lahir dari SKRIP, bukan dari layar owner.
+  // Rancangan 21-Agu (tombol Tambah baru di tab Voice) DITOLAK owner: "anda membuat jalur baru."
+  // Rancangan ini: barisnya lahir dari langkah yang admin SUDAH lakukan — membuat model
+  // ber-`component='tts'` (langkah 2 koridor ARSITEKTUR_AI_PROVIDER_MODEL §9.1). Nol tombol,
+  // nol tab, nol berkas layar tersentuh; melengkapinya memakai editor ✎ yang SUDAH ADA.
+  // LAHIR NONAKTIF: layar tenant menyaring `tts_profiles.is_active` ⇒ baris ini tak terlihat
+  // tenant sampai admin melengkapi protokolnya dan menyalakannya.
+  // TIDAK MENIMPA: baris yang sudah ada dibiarkan apa adanya — tempo/kelas/batas huruf di sana
+  // sudah dipakai produksi.
+  // FAIL-SOFT: ini kemudahan, bukan jalur kerja. Kegagalannya HARAM membatalkan pembuatan model
+  // yang sudah benar.
+  if (table === "ai_models" && String(clean.component ?? "") === "tts") {
+    try {
+      const pk = String(clean.provider_key ?? "");
+      const { data: sudahAda } = await a.from("tts_profiles").select("provider_key").eq("provider_key", pk).maybeSingle();
+      if (pk && !sudahAda) {
+        const { data: prov } = await a.from("ai_providers").select("display_name").eq("provider_key", pk).maybeSingle();
+        await a.from("tts_profiles").insert({
+          provider_key: pk,
+          display_name: (prov as { display_name?: string } | null)?.display_name ?? pk,
+          adapter: null,               // WAJIB diisi admin lewat ✎ — protokol tak boleh ditebak sistem
+          tts_class: "fast_fallback",  // paling konservatif: tanpa klaim timestamp presisi
+          delivery_wps: 2.4,           // angka jatuh-senyap yang sudah jadi bawaan mesin (bukan angka baru)
+          is_active: false,
+        });
+      }
+    } catch (e) {
+      console.warn("[catalog] siapkan tts_profiles gagal — non-fatal:", (e as Error)?.message);
+    }
+  }
   return NextResponse.json({ ok: true, row: data });
 }
 

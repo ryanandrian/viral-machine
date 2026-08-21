@@ -256,7 +256,13 @@ biaya_video_IDR = biaya_video_USD × app_config.usd_idr_rate  (tampilan)
 
 ⇒ Vendor berprotokol OpenAI-chat = **cukup data, nol kode**. Selain itu **butuh kode**.
 
-### 9.4 TITIK LEMAH TERUKUR 22-Agu — kondisi lapangan, bukan daftar kerja
+### 9.4 TITIK LEMAH — status 22-Agu (B1–B6 SUDAH ditutup; sisanya kondisi lapangan)
+
+> **Penjaganya:** `tests/test_panel_katalog_menuntun_bukan_menjebak.py` — 17 uji, **14 dibuktikan
+> MERAH dulu**, **20 sabotase** semuanya merah. Sabotase menangkap **9 uji palsu saya sendiri**
+> (substring `xhelp_id` masih memuat `help_id` · dua bahasa diperiksa sebagai satu teks · kata
+> `catch` bebas · jendela karakter yang tak mencapai kodenya · kata "suara" yang sudah ada di
+> kalimat pertama). Semuanya diganti.
 
 Dokumen ini menulis bahwa admin "set TTS profile / Voice / Bahasa / Durasi" di BABAK 1. Diperiksa ke
 kode 22-Agu: **`tts_profiles` tak punya jalur BUAT dari panel** — ia satu-satunya tabel yang boleh
@@ -264,13 +270,13 @@ DIHAPUS panel tapi tak bisa dibuat darinya. Itu sebab TTS Gemini dulu lahir dari
 
 | Titik | Keadaan terukur |
 |---|---|
-| `tts_profiles.display_name` + `adapter` | **DIBUANG SENYAP** — form mengirim, whitelist API tak memuatnya ⇒ hilang, toast tetap "Tersimpan". Efek ikutan: `ENUM_COLS.tts_profiles.adapter` = **kode mati** |
-| `tts_profiles` (barisnya) | tak bisa dibuat dari panel (lihat di atas) |
-| `ai_models.default_params` | ada di form, **nol label manusiawi & nol arahan** — padahal penentu gambar/video. **Titik terlemah seluruh rantai** |
-| Koridor §9.1 | **nol** tuntunan di layar: jenis `tts` butuh langkah 3, `video` butuh langkah 4 — tak disebut sepatah pun |
-| Jendela pop-up katalog | lebar **440px** untuk form 15 isian (voice) & baris JSON panjang (models) ⇒ **terpotong** |
-| Form `voice` · `moods` · `durations` | 7 · 2 · 2 isian **tanpa label manusiawi**; 4 · 0 · 3 berlabel **tanpa arahan** |
-| `ai_models.unavailable_since`/`unavailable_reason` | ditulis mesin, **nol jalur bersih dari panel** — melanggar mandat "setiap kunci punya jalur buka" |
+| ~~`tts_profiles.display_name` + `adapter`~~ | ✅ **DITUTUP 22-Agu (B4)** — dulu DIBUANG SENYAP — form mengirim, whitelist API tak memuatnya ⇒ hilang, toast tetap "Tersimpan". Efek ikutan: `ENUM_COLS.tts_profiles.adapter` = **kode mati** |
+| ~~`tts_profiles` (barisnya)~~ | ✅ **DITUTUP 22-Agu (B6)** — barisnya kini **disiapkan otomatis** saat admin membuat model ber-`component='tts'` (langkah 2 koridor), lahir **NONAKTIF** dengan `adapter` **kosong** (protokol tak boleh ditebak sistem), tak menimpa baris yang sudah ada, dan **fail-soft**. Dilengkapi lewat editor ✎ yang SUDAH ADA di tabel setelan suara. **Nol tombol/tab baru** — rancangan 21-Agu yang menambah pintu baru DITOLAK owner |
+| ~~`ai_models.default_params`~~ | ✅ **DITUTUP 22-Agu (B2)** — kini berlabel manusiawi + arahan dwibahasa yang menyebut contoh siap-tempel per jenis. Dulu: **nol label & nol arahan** — padahal penentu gambar/video. **Titik terlemah seluruh rantai** |
+| ~~Koridor §9.1~~ | ✅ **DITUTUP 22-Agu (B3)** — arahan pada isian **Jenis model** menunjuk tab tujuannya (tab Voice utk suara, tab Durasi utk video) lalu Uji → nyalakan. Dulu: **nol** tuntunan di layar: jenis `tts` butuh langkah 3, `video` butuh langkah 4 — tak disebut sepatah pun |
+| ~~Jendela pop-up katalog~~ | ✅ **DITUTUP 22-Agu (B1)** — form katalog 720px, sisanya 560px, pola `min(px,vw)` dipertahankan agar tetap responsif. Dulu **440px** untuk form 15 isian (voice) & baris JSON panjang (models) ⇒ **terpotong** |
+| ~~Form `voice` · `moods` · `durations`~~ | ✅ **DITUTUP 22-Agu (B3)** — seluruh isian di 7 form katalog kini berlabel manusiawi; isian yang berakibat bila salah punya arahan dwibahasa. Dulu: 7 · 2 · 2 tanpa label; 4 · 0 · 3 tanpa arahan |
+| ~~`ai_models.unavailable_since`/`unavailable_reason`~~ | ✅ **DITUTUP 22-Agu (B5)** — menyalakan kembali model membersihkan jejaknya, **hanya** pada arah nyala (karantina menulis jejak saat mematikan). Kedua kolom sengaja **tetap di luar** whitelist: jejak adalah tulisan MESIN, admin tak boleh mengarangnya |
 | `ai_providers.request_param_schema` | **HIDUP** (dibaca `src/providers/llm/__init__.py`) tapi tak terkelola panel. ⚠️ dokumen lain pernah menyebutnya "kolom mati" — **klaim itu SALAH & sudah ditarik** |
 | `ai_models.quality_tier` | **nol pembaca di mesin** — murni tampilan pemilih tenant |
 | Duplikasi | `refGuard` (hapus) & `channelTerdampak` (matikan) menghitung "channel yang memakai baris ini" di **dua tempat** |

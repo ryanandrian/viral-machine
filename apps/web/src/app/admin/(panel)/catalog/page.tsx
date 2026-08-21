@@ -58,45 +58,61 @@ const FIELD_META: Record<string, Record<string, { id: string; en: string; help_i
     free_tier_note: { id: "Catatan gratis harian", en: "Free tier note", help_id: "Tampil ke tenant bila vendor memberi kuota gratis. Kosongkan bila tidak ada.", help_en: "Shown to tenants when the vendor has a free quota. Leave empty otherwise." },
   },
   models: {
-    provider_key: { id: "Penyedia (induk)", en: "Provider (parent)" },
-    component: { id: "Jenis model", en: "Model type", help_id: "llm = penulis naskah · tts = suara · image/video = visual", help_en: "llm = script writer · tts = voice · image/video = visuals" },
+    provider_key: { id: "Penyedia (induk)", en: "Provider (parent)", help_id: "Model selalu milik satu penyedia. Penyedianya wajib ADA dan AKTIF, kalau tidak model ini tak akan dipakai mesin.", help_en: "A model always belongs to one provider. That provider must EXIST and be ACTIVE, otherwise the engine will not use this model." },
+    component: { id: "Jenis model", en: "Model type",
+      help_id: "llm = penulis naskah · tts = suara · image/video = visual. BELUM SELESAI DI SINI: jenis tts masih butuh setelan suara + minimal 1 karakter suara (tab Voice); jenis video masih butuh preset durasi video yang aktif (tab Durasi). Terakhir: klik Uji, baru nyalakan.",
+      help_en: "llm = script writer · tts = voice · image/video = visuals. NOT DONE HERE: tts also needs a voice engine + at least 1 voice character (Voice tab); video also needs an active AI-video duration preset (Durasi tab). Finally: hit Uji, then enable." },
     model_key: { id: "ID internal", en: "Internal ID", help_id: "Kunci unik di katalog kita, permanen. Contoh: gpt-4o-mini", help_en: "Unique key in our catalog, permanent. E.g.: gpt-4o-mini" },
     model_id: { id: "ID resmi di vendor", en: "Vendor model ID", help_id: "Salin PERSIS dari dokumentasi vendor (sertakan versi). Contoh: FLUX.1-schnell. Salah ketik = gagal produksi — buktikan dgn tombol Uji.", help_en: "Copy EXACTLY from vendor docs (include version). Typos fail production — prove with the Test button." },
     display_name: { id: "Nama tampil", en: "Display name", help_id: "Jelas versinya untuk manusia. Contoh: GPT-4o mini", help_en: "Human-clear incl. version. E.g.: GPT-4o mini" },
     quality_tier: { id: "Tingkat kualitas", en: "Quality tier", help_id: "Dipakai tenant memilih sesuai budget: basic/standard/premium/fast", help_en: "Used by tenants to pick per budget: basic/standard/premium/fast" },
     sort_order: { id: "Urutan tampil", en: "Sort order", help_id: "Angka kecil tampil lebih dulu di pemilih tenant.", help_en: "Smaller numbers appear first in tenant pickers." },
+    default_params: { id: "Parameter khusus model (JSON)", en: "Model-specific params (JSON)",
+      help_id: 'Dikirim APA ADANYA ke vendor — kunci ngawur = produksi gagal. Naskah & suara: biarkan kosong. Gambar: {"size":"1024x1536","steps":4}. Video: {"aspect_ratio":"9:16","duration":8,"duration_param":"duration","allowed_durations":[5,8]}. Salin nama parameter PERSIS dari dokumentasi vendor.',
+      help_en: 'Sent AS-IS to the vendor — a wrong key fails production. Script & voice: leave empty. Image: {"size":"1024x1536","steps":4}. Video: {"aspect_ratio":"9:16","duration":8,"duration_param":"duration","allowed_durations":[5,8]}. Copy parameter names EXACTLY from the vendor docs.' },
   },
   ttsprof: {
-    provider_key: { id: "ID Penyedia", en: "Provider ID" },
-    display_name: { id: "Nama tampil", en: "Display name" },
+    provider_key: { id: "ID Penyedia", en: "Provider ID", help_id: "Wajib SAMA PERSIS dengan ID penyedia di tab Providers — barisnya berpasangan satu-satu dengan penyedia itu.", help_en: "Must match the provider ID in the Providers tab EXACTLY — this row pairs one-to-one with that provider." },
+    display_name: { id: "Nama tampil", en: "Display name", help_id: "Nama mesin suara yang dilihat tenant. Contoh: Gemini TTS.", help_en: "Voice-engine name tenants see. E.g.: Gemini TTS." },
     adapter: { id: "Protokol TTS", en: "TTS protocol", help_id: "Pilih dari daftar yang didukung kode.", help_en: "Pick from code-supported list." },
     tts_class: { id: "Kelas timing", en: "Timing class", help_id: "timed = ada word-timestamp (caption karaoke presisi) · fast_fallback = tanpa timestamp presisi", help_en: "timed = word timestamps (precise karaoke captions) · fast_fallback = no precise timestamps" },
     delivery_wps: { id: "Tempo dasar (kata/detik)", en: "Base pace (words/sec)", help_id: "Dipakai menghitung panjang naskah. Rentang 1.0–4.0.", help_en: "Used for script length budgeting. Range 1.0–4.0." },
     speed_param: { id: "Nama parameter kecepatan", en: "Speed param name", help_id: "speed / rate — kosongkan bila vendor tak punya.", help_en: "speed / rate — empty if unsupported." },
-    param_schema: { id: "Skema parameter (JSON)", en: "Param schema (JSON)" },
+    param_schema: { id: "Skema parameter (JSON)", en: "Param schema (JSON)", help_id: "Kosongkan kalau tidak yakin. Isian ini hanya untuk penyedia yang menuntut bentuk parameter khusus.", help_en: "Leave empty when unsure. Only for providers that demand a specific parameter shape." },
+  },
+  moods: {
+    mood_id: { id: "ID mood", en: "Mood ID", help_id: "Huruf kecil tanpa spasi, permanen. Dirujuk track musik & paket mood niche.", help_en: "Lowercase, no spaces, permanent. Referenced by music tracks & niche mood packs." },
+    keywords: { id: "Kata pemicu (JSON)", en: "Trigger words (JSON)", help_id: 'Kata yang dicari mesin DI DALAM NASKAH untuk memilih musik. WAJIB campur Indonesia + Inggris, mis. ["misterius","mysterious"] — daftar Inggris-saja membuat deteksi mati untuk naskah Indonesia.', help_en: 'Words the engine looks for INSIDE THE SCRIPT to pick music. MUST mix Indonesian + English, e.g. ["misterius","mysterious"] — an English-only list kills detection for Indonesian scripts.' },
   },
   languages: {
     locale: { id: "Kode bahasa", en: "Locale code", help_id: "Format BCP-47. Contoh: id-ID", help_en: "BCP-47 format. E.g.: id-ID" },
-    display_name: { id: "Nama tampil", en: "Display name" },
+    display_name: { id: "Nama tampil", en: "Display name", help_id: "Nama bahasa yang dilihat tenant. Contoh: Bahasa Indonesia.", help_en: "Language name tenants see. E.g.: Indonesian." },
     quality_tier: { id: "Status dukungan", en: "Support status", help_id: "official = teruji penuh · experimental = coba-coba", help_en: "official = fully tested · experimental = trial" },
-    caption_font: { id: "Font caption", en: "Caption font" },
+    caption_font: { id: "Font caption", en: "Caption font", help_id: "Font untuk teks di video bahasa ini. Wajib ada & aktif di tab Fonts, kalau tidak render jatuh ke font cadangan.", help_en: "Font for on-screen text in this language. Must exist and be active in the Fonts tab, otherwise rendering falls back to the safety font." },
   },
   voice: {
-    voice_key: { id: "ID Voice (dari vendor)", en: "Voice ID (from vendor)", help_id: "Salin persis voice_id milik vendor.", help_en: "Copy the vendor's voice_id exactly." },
-    provider_key: { id: "Penyedia", en: "Provider" },
-    display_name: { id: "Nama tampil", en: "Display name" },
+    voice_key: { id: "ID Voice (dari vendor)", en: "Voice ID (from vendor)", help_id: "Salin persis voice_id milik vendor. Permanen — dirujuk channel tenant & kalibrasi tempo, jadi jangan diubah setelah dipakai.", help_en: "Copy the vendor's voice_id exactly. Permanent — referenced by tenant channels & pace calibration, so don't change it after use." },
+    provider_key: { id: "Penyedia", en: "Provider", help_id: "Penyedia suara pemilik karakter ini. Setelan suara penyedia itu wajib AKTIF, kalau tidak suaranya tak akan berbunyi.", help_en: "The voice provider that owns this character. That provider's voice engine must be ACTIVE, otherwise the voice stays silent." },
+    display_name: { id: "Nama tampil", en: "Display name", help_id: "Nama yang dilihat tenant saat memilih suara. Buat jelas & mudah dibedakan.", help_en: "What tenants see when picking a voice. Keep it clear and easy to tell apart." },
+    vendor_voice_id: { id: "ID suara di sisi vendor", en: "Vendor-side voice ID", help_id: "Isi HANYA bila penyedia agregator memakai ID berbeda (mis. fal menyajikan suara ElevenLabs). Kosong = sama dengan ID Voice di atas.", help_en: "Fill ONLY when an aggregator uses a different ID (e.g. fal serving ElevenLabs voices). Empty = same as the Voice ID above." },
+    age: { id: "Perkiraan usia suara", en: "Apparent age", help_id: "Keterangan pemilih untuk tenant. Contoh: young, middle-aged.", help_en: "Picker hint for tenants. E.g.: young, middle-aged." },
+    accent: { id: "Aksen (opsional)", en: "Accent (optional)", help_id: "Kosongkan bila netral.", help_en: "Leave empty when neutral." },
+    use_case: { id: "Cocok untuk", en: "Best for", help_id: "Keterangan pemilih. Contoh: narration, conversational.", help_en: "Picker hint. E.g.: narration, conversational." },
+    description: { id: "Keterangan", en: "Description", help_id: "Satu kalimat watak suaranya — dibaca tenant saat memilih.", help_en: "One line about the voice's character — read by tenants when choosing." },
+    niche_default: { id: "Jadi pilihan awal untuk niche (opsional)", en: "Default for niche (optional)", help_id: "Kosongkan bila tidak ingin suara ini jadi pilihan awal niche mana pun.", help_en: "Leave empty unless this voice should be a niche's default." },
     locale: { id: "Kode bahasa", en: "Locale", help_id: "Contoh: id-ID", help_en: "E.g.: id-ID" },
     language: { id: "Bahasa", en: "Language", help_id: "Contoh: Indonesian", help_en: "E.g.: Indonesian" },
-    gender: { id: "Gender suara", en: "Voice gender" },
+    gender: { id: "Gender suara", en: "Voice gender", help_id: "Dipakai tenant menyaring pilihan suara. Salah isi = tenant menerima suara yang tak diharapkan.", help_en: "Used by tenants to filter voices. Wrong value = tenants get an unexpected voice." },
     delivery_wps: { id: "Tempo voice (kata/detik)", en: "Voice pace (words/sec)", help_id: "Kosongkan = ikut tempo engine. Rentang 1.0–4.0.", help_en: "Empty = engine default. Range 1.0–4.0." },
-    preview_url: { id: "Contoh suara (URL .mp3)", en: "Voice sample (.mp3 URL)" },
+    preview_url: { id: "Contoh suara (URL .mp3)", en: "Voice sample (.mp3 URL)", help_id: "WAJIB. Tanpa contoh suara, tenant memilih tanpa pernah mendengarnya.", help_en: "REQUIRED. Without a sample, tenants pick a voice they have never heard." },
     default_settings: { id: "Setelan default (JSON)", en: "Default settings (JSON)", help_id: 'Contoh: {"stability":0.3,"style":0.5}', help_en: 'E.g.: {"stability":0.3,"style":0.5}' },
   },
   durations: {
-    seconds: { id: "Durasi (detik)", en: "Duration (seconds)" },
-    use_case: { id: "Kegunaan (teks ID)", en: "Use case (ID text)" },
-    use_case_en: { id: "Kegunaan (teks EN)", en: "Use case (EN text)" },
-    notes: { id: "Catatan admin", en: "Admin notes" },
+    seconds: { id: "Durasi (detik)", en: "Duration (seconds)", help_id: "Permanen — dirujuk channel tenant. Preset video AI wajib cocok dengan durasi yang didukung modelnya.", help_en: "Permanent — referenced by tenant channels. An AI-video preset must match the durations its model supports." },
+    use_case: { id: "Kegunaan (teks ID)", en: "Use case (ID text)", help_id: "Tampil ke tenant saat memilih durasi. Tulis manfaatnya, bukan angkanya.", help_en: "Shown to tenants when picking a duration. Describe the benefit, not the number." },
+    use_case_en: { id: "Kegunaan (teks EN)", en: "Use case (EN text)", help_id: "Versi Inggris dari kalimat di atas — layar tenant dwibahasa.", help_en: "English version of the line above — the tenant screen is bilingual." },
+    notes: { id: "Catatan admin", en: "Admin notes", help_id: "Hanya untuk admin; tidak pernah tampil ke tenant.", help_en: "Admin-only; never shown to tenants." },
+    trailing_silence_override: { id: "Jeda akhir — timpa (detik)", en: "Trailing silence override (sec)", help_id: "Kosong = ikut bawaan 2,5 detik. Angka besar memakan jendela narasi: naskah dipadatkan dan suara terdengar dikejar.", help_en: "Empty = follow the 2.5s default. A large value eats the narration window: the script gets compressed and the voice sounds rushed." },
   },
 };
 
@@ -985,7 +1001,7 @@ export default function AdminCatalogPage() {
       {add && ADD_FIELDS[tab] && (
         <>
           <div className="cat-scrim open" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 60 }} onClick={() => setAdd(null)} />
-          <div className="card" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(440px,92vw)", maxHeight: "85vh", overflowY: "auto", zIndex: 61, padding: "1.25rem" }}>
+          <div className="card" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(720px,92vw)", maxHeight: "85vh", overflowY: "auto", zIndex: 61, padding: "1.25rem" }}>
             <div style={{ display: "flex", alignItems: "center", marginBottom: "0.75rem" }}><strong>Tambah {ADD_FIELDS[tab].table}</strong><button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} onClick={() => setAdd(null)}><X size={16} /></button></div>
             <div style={{ display: "grid", gap: "0.5rem" }}>
               {ADD_FIELDS[tab].fields.map(([k, label]) =>
@@ -1001,7 +1017,7 @@ export default function AdminCatalogPage() {
       {rowEdit && ADD_FIELDS[rowEdit.mapKey] && (
         <>
           <div className="cat-scrim open" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 60 }} onClick={() => setRowEdit(null)} />
-          <div className="card" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(440px,92vw)", maxHeight: "85vh", overflowY: "auto", zIndex: 61, padding: "1.25rem" }}>
+          <div className="card" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(720px,92vw)", maxHeight: "85vh", overflowY: "auto", zIndex: 61, padding: "1.25rem" }}>
             <div style={{ display: "flex", alignItems: "center", marginBottom: "0.75rem" }}><strong>Edit {ADD_FIELDS[rowEdit.mapKey].table}</strong><button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} onClick={() => setRowEdit(null)}><X size={16} /></button></div>
             <div style={{ display: "grid", gap: "0.5rem" }}>
               {ADD_FIELDS[rowEdit.mapKey].fields.map(([k, label]) =>
@@ -1026,7 +1042,7 @@ export default function AdminCatalogPage() {
       {tm && (
         <>
           <div className="cat-scrim open" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 60 }} onClick={() => { if (!tmBusy) setTm(null); }} />
-          <div className="card" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(460px,92vw)", zIndex: 61, padding: "1.25rem" }}>
+          <div className="card" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(560px,92vw)", zIndex: 61, padding: "1.25rem" }}>
             <div style={{ display: "flex", alignItems: "center", marginBottom: "0.5rem" }}><strong><Bi id="Uji model:" en="Test model:" /> {tm.name}</strong><button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} disabled={tmBusy} onClick={() => setTm(null)}><X size={16} /></button></div>
             <p className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "0.6rem" }}>
               <Bi id="Menjalankan panggilan NYATA sekali ke vendor untuk membuktikan model ini benar jalan di pipeline — uji memakai kuota vendor." en="Runs one REAL call to the vendor to prove this model works in the pipeline — the test uses vendor quota." />{" "}
@@ -1046,7 +1062,7 @@ export default function AdminCatalogPage() {
       {fUp && (
         <>
           <div className="cat-scrim open" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 60 }} onClick={() => { if (!uploading) setFUp(null); }} />
-          <div className="card" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(440px,92vw)", maxHeight: "85vh", overflowY: "auto", zIndex: 61, padding: "1.25rem" }}>
+          <div className="card" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(560px,92vw)", maxHeight: "85vh", overflowY: "auto", zIndex: 61, padding: "1.25rem" }}>
             <div style={{ display: "flex", alignItems: "center", marginBottom: "0.75rem" }}><strong><Bi id="Unggah font (→ S3)" en="Upload font (→ S3)" /></strong><button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} disabled={uploading} onClick={() => setFUp(null)}><X size={16} /></button></div>
             <div style={{ display: "grid", gap: "0.6rem" }}>
               <div><label className="label"><Bi id="Berkas (.ttf / .otf, maks 10MB)" en="File (.ttf / .otf, max 10MB)" /></label><input className="input" type="file" accept=".ttf,.otf,font/ttf,font/otf" onChange={(e) => setFUp({ ...fUp, file: e.target.files?.[0] ?? null })} /></div>
@@ -1061,7 +1077,7 @@ export default function AdminCatalogPage() {
       {mUp && (
         <>
           <div className="cat-scrim open" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 60 }} onClick={() => { if (!uploading) setMUp(null); }} />
-          <div className="card" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(440px,92vw)", maxHeight: "85vh", overflowY: "auto", zIndex: 61, padding: "1.25rem" }}>
+          <div className="card" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(560px,92vw)", maxHeight: "85vh", overflowY: "auto", zIndex: 61, padding: "1.25rem" }}>
             <div style={{ display: "flex", alignItems: "center", marginBottom: "0.75rem" }}><strong><Bi id="Unggah musik (→ S3)" en="Upload music (→ S3)" /></strong><button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} disabled={uploading} onClick={() => setMUp(null)}><X size={16} /></button></div>
             <div style={{ display: "grid", gap: "0.6rem" }}>
               <div><label className="label">Berkas (.mp3, maks 25MB)</label><input className="input" type="file" accept="audio/mpeg,.mp3" onChange={(e) => onMusicFile(e.target.files?.[0] ?? null)} /></div>
