@@ -1093,7 +1093,7 @@ ternyata tambalan penyeimbang untuk bug yang sudah diperbaiki.
 langganan/jatah uji — [B24]), yang **bukan** `ErrorClass` dan bukan kegagalan AI. Penerjemahnya
 terpisah (`components/gate-message.tsx`). Dokumen ini hanya mengatur kegagalan AI.
 
-## §9b PINTU KEDUA — channel yang DIAM *(dibuka 2026-08-21; Batch A terpasang, Batch B siap-deploy)*
+## §9b PINTU KEDUA — channel yang DIAM *(dibuka 2026-08-21; Batch A & B TERPASANG di produksi)*
 
 §9 di atas mengikat jalur **produksi berjalan**. Ada jalur KEDUA yang selama ini **tidak tersambung
 ke arsitektur ini sama sekali**, dan di situlah kerusakan 17-Agu terjadi:
@@ -1282,8 +1282,17 @@ Bila salah satu bergeser tanpa yang lain, uji MERAH sebelum sempat menyesatkan s
   *"is not found **or you do not have access to it"*** → **alarm admin saja**; **404 telanjang** →
   **tidak** (persis ambang yang diminta). **Batas jujur** (§9b): B2 **tidak retroaktif**, dan klaim
   rencana *"2 tenant berbeda"* **ditarik** — 4 dari 7 run riwayat tak menyimpan nama model.
-  Sisa: **Batch C** (6c panel katalog: buang-senyap `tts_profiles`, bisa membuat mesin TTS, gerbang
-  kelayakan aktivasi, lahir nonaktif, paritas form↔whitelist) & **Batch D** (penjaga §7 + dokumen).
+  ⛔ **Batch C (6c) DIKERJAKAN lalu DIBATALKAN & DIKEMBALIKAN SELURUHNYA pada hari yang sama atas
+  keputusan owner** — sebabnya bukan uji dan bukan bug: rancangannya menambah **PINTU BARU** di panel
+  (tombol "Tambah mesin suara" di tab Voice), padahal yang diminta **memperbaiki jalur yang SUDAH ADA**;
+  menambah model TTS memang sudah punya tempatnya di tab **AI Models**. Kode di-revert (terbukti
+  identik dgn sebelum — nol berkas berbeda), 4 trigger + 2 fungsi `catalog_missing*` di-DROP, 9 baris
+  cermin dihapus; katalog aktif kembali 9/41/5/42, nol channel tersentuh, nol galat.
+  ⚠️ **Rancangan 6c apa adanya SUDAH DITOLAK — jangan kerjakan ulang.** Perbaikan panel wajib
+  MENEMPEL pada jalur yang ada, dan menambah tombol/tab/pintu baru **haram tanpa ketokan owner
+  terpisah**. Sisa nyata yang belum dikerjakan & masih sah (semuanya TAK terlihat di layar, nol pintu
+  baru): isian `tts_profiles` dibuang senyap · baris baru lahir hidup sebelum diuji · nol penjaga
+  paritas form↔whitelist API. **Batch D** (penjaga §7 + dokumen) belum dikerjakan.
 - **2026-08-21** — **§9b PINTU KEDUA TERSAMBUNG (Batch A: langkah 1·2·3·5 dari rencana owner).**
   Pemicu: owner melaporkan 2 kegagalan; penelusuran menemukan yang **tidak** dilaporkan — 4 channel
   (2 tenant BERBAYAR) mati 4 hari sejak 17-Agu 20:42 karena model naskahnya dimatikan di katalog
