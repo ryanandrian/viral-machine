@@ -32,6 +32,9 @@ type Cat = {
     pause_source?: string | null; pause_measured_at?: string | null }[];
   // Teks ALAT UKUR biaya jeda (0185) — read-only; mengubah isinya = mengubah alat ukurnya.
   duration_probe_texts?: { lang: string; idx: number; clauses: string[]; is_active: boolean }[];
+  // Kelayakan baris katalog (migr 0206, dihitung SEKALI di server): { tabel: { key: [kode…] } }.
+  // Hanya baris yang BELUM layak yang disebut — baris layak tak ikut, payload tetap kecil.
+  catalog_missing?: Record<string, Record<string, string[]>>;
 };
 
 // Kolom yang WAJIB dropdown (nilai-sah dari registry KODE via catalog_valid_values) — anti-typo.
@@ -100,6 +103,29 @@ const FIELD_META: Record<string, Record<string, { id: string; en: string; help_i
   },
 };
 
+// Kode kekurangan dari `catalog_missing` (migr 0206) → kalimat dwibahasa. Menyebut AKIBAT, bukan
+// nama kolom: admin non-teknis harus tahu apa yang rusak kalau ia memaksa, bukan cuma kolom mana.
+const KURANG_TEKS: Record<string, { id: string; en: string }> = {
+  baris_tak_ada:            { id: "Baris ini tidak ditemukan lagi.", en: "This row no longer exists." },
+  adapter_kosong:           { id: "Protokol koneksi belum dipilih.", en: "Connection protocol not set." },
+  adapter_tak_didukung:     { id: "Protokol ini belum didukung mesin — butuh pekerjaan kode, bukan salah ketik.", en: "This protocol isn't supported by the engine yet — needs code work, not a typo fix." },
+  auth_type_tak_sah:        { id: "Cara autentikasi belum sah (api_key / none).", en: "Auth method invalid (api_key / none)." },
+  tak_ada_di_registry_galat:{ id: "Penyedia ini belum terdaftar di daftar galat: kegagalan vendor akan diulang 3× dan membakar kredit tenant.", en: "Provider missing from the error registry: vendor failures will retry 3× and burn tenant credit." },
+  penyedia_tak_ada:         { id: "Penyedia induknya tidak ada.", en: "Parent provider missing." },
+  penyedia_nonaktif:        { id: "Penyedia induknya masih nonaktif — nyalakan penyedianya dulu.", en: "Parent provider is inactive — enable it first." },
+  model_id_kosong:          { id: "ID resmi vendor belum diisi — produksi akan gagal di vendor.", en: "Vendor model ID empty — production will fail at the vendor." },
+  harga_kosong:             { id: "Harga belum ada: biaya tenant akan dilaporkan lebih murah dari kenyataan.", en: "Pricing missing: tenant cost will be under-reported." },
+  component_tak_sah:        { id: "Jenis model belum sah (llm/tts/image/video).", en: "Model type invalid (llm/tts/image/video)." },
+  mesin_suara_tak_ada:      { id: "Mesin suara untuk penyedia ini belum dibuat.", en: "Voice engine for this provider doesn't exist yet." },
+  mesin_suara_mati:         { id: "Mesin suara penyedia ini masih mati — suaranya tak akan berbunyi.", en: "This provider's voice engine is off — voices won't play." },
+  nol_suara_aktif:          { id: "Belum ada satu pun karakter suara aktif untuk penyedia ini.", en: "No active voice characters for this provider yet." },
+  preset_video_tak_ada:     { id: "Belum ada preset durasi video aktif — model video tak akan terpakai.", en: "No active AI-video duration preset — the video model can't be used." },
+  tempo_kosong:             { id: "Tempo dasar belum diisi: panjang naskah salah hitung dan durasi video melenceng.", en: "Base pace empty: script budgeting breaks and video duration drifts." },
+  bahasa_kosong:            { id: "Kode bahasa belum diisi.", en: "Locale empty." },
+  contoh_suara_kosong:      { id: "Contoh suara (.mp3) belum ada — tenant memilih tanpa mendengar.", en: "Voice sample (.mp3) missing — tenants would pick blind." },
+};
+const kurangTeks = (k: string) => KURANG_TEKS[k] ?? { id: k, en: k };
+
 // Penerjemah KODE error API → pesan dwibahasa (aturan: API kirim kode, FE menerjemahkan).
 function errText(code: string, detail?: Record<string, unknown> | null): React.ReactNode {
   const col = String(detail?.col ?? "");
@@ -111,6 +137,19 @@ function errText(code: string, detail?: Record<string, unknown> | null): React.R
     case "out_of_range": return <Bi id={`${col}: di luar rentang ${detail?.min}–${detail?.max}.`} en={`${col}: outside range ${detail?.min}–${detail?.max}.`} />;
     case "pk_required": return <Bi id={`${col}: wajib diisi.`} en={`${col}: required.`} />;
     case "no_editable_fields": return <Bi id="Tidak ada perubahan untuk disimpan." en="No changes to save." />;
+    case "activation_blocked": {
+      // Gerbang kelayakan (migr 0206) menahan PENYALAAN. Bukan kerusakan, bukan salah ketik —
+      // syaratnya belum lengkap, dan tiap syarat disebut apa adanya beserta akibatnya.
+      const kurang = (detail?.missing as string[] | undefined) ?? [];
+      return (
+        <span>
+          <Bi id="Belum bisa dinyalakan — syaratnya belum lengkap:" en="Can't be enabled yet — requirements incomplete:" />
+          <ul style={{ margin: "0.35rem 0 0", paddingLeft: "1.1rem" }}>
+            {kurang.map((k) => <li key={k}><Bi id={kurangTeks(k).id} en={kurangTeks(k).en} /></li>)}
+          </ul>
+        </span>
+      );
+    }
     default: return code || <Bi id="Gagal menyimpan." en="Save failed." />;
   }
 }
@@ -209,7 +248,13 @@ export default function AdminCatalogPage() {
   // [DURASI-F5] bobot antar-adegan + preset terpilih utk pratinjau porsi narasi.
   const [beatW, setBeatW] = useState<BeatW[]>([]);
   const [wPreset, setWPreset] = useState<string>("");
-  const [add, setAdd] = useState<Record<string, string> | null>(null);
+  // [21-Agu] `add` kini membawa SASARANNYA sendiri (`mapKey`), sepola `rowEdit` yang sudah ada.
+  // Dulu `createRow` menebak tabel dari TAB yang terbuka. Itu bisa hidup selama satu tab = satu
+  // tabel — tapi tab Voice memuat DUA tabel (voice_catalog + tts_profiles, hierarki engine→voice),
+  // jadi tombol Tambah mesin suara akan mengirim barisnya ke `voice_catalog`: kerusakan senyap,
+  // bukan galat. Satu pola untuk Tambah & Edit, bukan dua.
+  const [add, setAdd] = useState<{ mapKey: string; values: Record<string, string> } | null>(null);
+  const bukaTambah = (mapKey: string, awal: Record<string, string> = {}) => { setFormErr(null); setAdd({ mapKey, values: awal }); };
   // A4: error form INLINE di modal (bukan toast 2 dtk) — {node ReactNode, col field bermasalah}.
   const [formErr, setFormErr] = useState<{ node: React.ReactNode; col?: string } | null>(null);
   // A5: cari/saring tab AI Models (skala ratusan model).
@@ -548,10 +593,12 @@ export default function AdminCatalogPage() {
 
   async function createRow() {
     if (!add) return;
-    const def = ADD_FIELDS[tab];
+    const def = ADD_FIELDS[add.mapKey];
     setFormErr(null);
-    const r = await fetch("/api/admin/catalog", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table: def.table, row: add }) });
-    if (r.ok) { const mk = add.model_key; setToast("Ditambah"); setAdd(null); await load(); if (def.table === "ai_models" && mk) await probePrice(String(mk)); }
+    const r = await fetch("/api/admin/catalog", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table: def.table, row: add.values }) });
+    // Baris baru LAHIR NONAKTIF (dipaksa server, migr 0206) — beri tahu apa adanya, jangan biarkan
+    // admin menyangka barisnya sudah dipakai tenant.
+    if (r.ok) { const mk = add.values.model_key; setToast("Ditambah — masih NONAKTIF, nyalakan setelah diuji"); setAdd(null); await load(); if (def.table === "ai_models" && mk) await probePrice(String(mk)); }
     else { const j = await r.json().catch(() => ({})); setFormErr({ node: errText(String(j.error ?? r.status), j.detail), col: (j.detail as { col?: string } | null)?.col }); }
   }
 
@@ -569,6 +616,21 @@ export default function AdminCatalogPage() {
     })();
     return () => { batal = true; };
   }, [data?.fonts]);
+
+  // Kekurangan baris katalog (migr 0206) — MENCEGAH, bukan menolak: admin melihat apa yang kurang
+  // SEBELUM menyentuh saklar, bukan menabrak dinding sesudah menekan. Fungsi biasa, bukan komponen
+  // baru (aturan owner), memakai `.badge .badge-warning` yang SUDAH ada di pustaka — nol CSS baru.
+  const kurangDari = (table: string, k: string): string[] => data?.catalog_missing?.[table]?.[k] ?? [];
+  const lencanaKurang = (table: string, k: string) => {
+    const kurang = kurangDari(table, k);
+    if (!kurang.length) return null;
+    return (
+      <span className="badge badge-warning" style={{ marginLeft: "0.375rem" }}
+            title={kurang.map((x) => kurangTeks(x).id).join(" · ")}>
+        <AlertTriangle size={11} /> <Bi id="belum layak" en="not eligible" />
+      </span>
+    );
+  };
 
   const Switch = ({ table, k, on }: { table: string; k: string; on: boolean }) => (
     <label className="switch"><input type="checkbox" checked={on} onChange={(e) => toggle(table, k, e.target.checked)} /><span className="track" /><span className="thumb" /></label>
@@ -669,7 +731,7 @@ export default function AdminCatalogPage() {
       {loading && tab !== "durations" && <div className="card card-pad muted">Memuat…</div>}
       {!loading && data && (<>
         {tab === "providers" && (<>
-          <div className="cat-toolbar"><span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Provider AI = INDUK. Model adalah detailnya — tambah model langsung dari baris provider (＋ Model)." en="AI providers = PARENT. Models are their details — add a model straight from the provider row." /></span><div className="right"><button className="btn btn-default btn-sm" onClick={() => setAdd({})}><Plus size={14} /> <Bi id="Tambah provider" en="Add provider" /></button></div></div>
+          <div className="cat-toolbar"><span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Provider AI = INDUK. Model adalah detailnya — tambah model langsung dari baris provider (＋ Model)." en="AI providers = PARENT. Models are their details — add a model straight from the provider row." /></span><div className="right"><button className="btn btn-default btn-sm" onClick={() => bukaTambah("providers")}><Plus size={14} /> <Bi id="Tambah provider" en="Add provider" /></button></div></div>
           <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl cat-tbl">
             <thead><tr><th>provider_key</th><th>display</th><th>adapter</th><th>auth</th><th>key_group</th><th><Bi id="model" en="models" /></th><th>active</th><th></th></tr></thead>
             <tbody>{data.ai_providers.map((p) => {
@@ -682,8 +744,8 @@ export default function AdminCatalogPage() {
                   <td className="muted">{p.auth_type as string}</td>
                   <td className="mono" style={{ fontSize: "var(--text-xs)" }}>{(p.key_group as string) || pk}</td>
                   <td><span className={`badge ${nModels > 0 ? "badge-default" : "badge-warning"}`}>{nModels}</span></td>
-                  <td><Switch table="ai_providers" k={pk} on={p.is_active as boolean} /></td>
-                  <td style={{ whiteSpace: "nowrap" }}><button className="btn btn-secondary btn-sm" title="Tambah model utk provider ini" onClick={() => { setTab("models"); setAdd({ provider_key: pk }); }}><Plus size={12} /> Model</button> <button className="btn btn-ghost btn-sm" title="Edit provider" onClick={() => openRowEdit("providers", p)}>✎</button><button className="btn btn-ghost btn-sm" title="Hapus provider (ditolak bila masih dirujuk)" onClick={() => delAsset("ai_providers", pk, (p.display_name as string) || pk)}><Trash2 size={13} /></button></td>
+                  <td><Switch table="ai_providers" k={pk} on={p.is_active as boolean} />{lencanaKurang("ai_providers", pk)}</td>
+                  <td style={{ whiteSpace: "nowrap" }}><button className="btn btn-secondary btn-sm" title="Tambah model utk provider ini" onClick={() => { setTab("models"); bukaTambah("models", { provider_key: pk }); }}><Plus size={12} /> Model</button> <button className="btn btn-ghost btn-sm" title="Edit provider" onClick={() => openRowEdit("providers", p)}>✎</button><button className="btn btn-ghost btn-sm" title="Hapus provider (ditolak bila masih dirujuk)" onClick={() => delAsset("ai_providers", pk, (p.display_name as string) || pk)}><Trash2 size={13} /></button></td>
                 </tr>
               );
             })}</tbody>
@@ -691,7 +753,7 @@ export default function AdminCatalogPage() {
         </>)}
 
         {tab === "models" && (<>
-          <div className="cat-toolbar"><span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Model = DETAIL dari provider (dikelompokkan per provider)." en="Models = details of a provider (grouped by provider)." /></span><div className="right"><button className="btn btn-default btn-sm" onClick={() => { setFormErr(null); setAdd({}); }}><Plus size={14} /> <Bi id="Tambah model" en="Add model" /></button></div></div>
+          <div className="cat-toolbar"><span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Model = DETAIL dari provider (dikelompokkan per provider)." en="Models = details of a provider (grouped by provider)." /></span><div className="right"><button className="btn btn-default btn-sm" onClick={() => bukaTambah("models")}><Plus size={14} /> <Bi id="Tambah model" en="Add model" /></button></div></div>
           {/* A5: cari + saring jenis — skala ratusan model (reuse .input + .radio-pill) */}
           <div style={{ display: "flex", gap: ".5rem", alignItems: "center", flexWrap: "wrap", margin: "0 0 .6rem" }}>
             <input className="input" style={{ height: 30, maxWidth: 260 }} placeholder="Cari model / ID / provider…" value={mSearch} onChange={(e) => setMSearch(e.target.value)} />
@@ -741,7 +803,7 @@ export default function AdminCatalogPage() {
                     )}
                   </td>
                   <td className="muted">{m.quality_tier as string}</td>
-                  <td><Switch table="ai_models" k={mk} on={m.is_active as boolean} /></td>
+                  <td><Switch table="ai_models" k={mk} on={m.is_active as boolean} />{lencanaKurang("ai_models", mk)}</td>
                   <td style={{ whiteSpace: "nowrap" }}>{(() => {
                     const au = String((m.cost_hint as { audit?: string } | null)?.audit || "");
                     if (au.startsWith("LULUS")) return <span className="badge badge-success" title={au} style={{ fontSize: "0.65rem", marginRight: ".3rem" }}>✓ <Bi id="Teruji" en="Tested" /></span>;
@@ -834,7 +896,7 @@ export default function AdminCatalogPage() {
         </>)}
 
         {tab === "voice" && (<>
-          <div className="cat-toolbar"><span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Voice catalog + kelas TTS provider" en="Voice catalog + TTS provider classes" /></span><div className="right"><button className="btn btn-default btn-sm" onClick={() => setAdd({})}><Plus size={14} /> <Bi id="Tambah voice" en="Add voice" /></button></div></div>
+          <div className="cat-toolbar"><span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Voice catalog + kelas TTS provider" en="Voice catalog + TTS provider classes" /></span><div className="right"><button className="btn btn-default btn-sm" onClick={() => bukaTambah("voice")}><Plus size={14} /> <Bi id="Tambah voice" en="Add voice" /></button></div></div>
           <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl cat-tbl">
             <thead><tr><th>voice_key</th><th>provider</th><th>display</th><th>locale</th><th>gender</th><th title="Pace voice (kata/detik @speed 1.0). Kosong = ikut pace DASAR engine di bawah. Override per-voice (mis. voice lebih cepat).">Pace voice</th><th title="Angka yang BENAR-BENAR dipakai mesin untuk meramal durasi, hasil kalibrasi otomatis dari suara nyata. MENIMPA kolom di sebelah kiri. Ditulis mesin — tak bisa diedit di sini; kunci lewat pace_locked bila ingin angka Anda yang menang.">Dipakai mesin (kalibrasi)</th><th>Contoh suara</th><th>active</th><th></th></tr></thead>
             <tbody>
@@ -893,17 +955,17 @@ export default function AdminCatalogPage() {
                         : <button className="btn btn-ghost btn-sm" title="Set contoh" onClick={() => setPrevEdit({ key: v.voice_key as string, url: (v.preview_url as string) || "" })}>✎</button>}
                     </span>
                   </td>
-                  <td><Switch table="voice_catalog" k={v.voice_key as string} on={v.is_active as boolean} /></td>
+                  <td><Switch table="voice_catalog" k={v.voice_key as string} on={v.is_active as boolean} />{lencanaKurang("voice_catalog", v.voice_key as string)}</td>
                   <td><button className="btn btn-ghost btn-sm" title="Hapus voice (+ contoh S3)" onClick={() => delAsset("voice_catalog", v.voice_key as string, (v.display_name as string) || (v.voice_key as string))}><Trash2 size={13} /></button></td>
                 </tr>
               ))}
             </tbody>
           </table></div></div>
-          <div className="cat-toolbar" style={{ marginTop: "1.25rem" }}><span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Pace DASAR & kelas per-ENGINE — fallback untuk SEMUA voice (tts_profiles). 'Pace voice' di atas menimpa ini khusus per-voice." en="Per-ENGINE base pace & class — fallback for ALL voices (tts_profiles). 'Pace voice' above overrides this per-voice." /></span></div>
+          <div className="cat-toolbar" style={{ marginTop: "1.25rem" }}><span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Pace DASAR & kelas per-ENGINE — fallback untuk SEMUA voice (tts_profiles). 'Pace voice' di atas menimpa ini khusus per-voice." en="Per-ENGINE base pace & class — fallback for ALL voices (tts_profiles). 'Pace voice' above overrides this per-voice." /></span><div className="right"><button className="btn btn-default btn-sm" onClick={() => bukaTambah("ttsprof")}><Plus size={14} /> <Bi id="Tambah mesin suara" en="Add voice engine" /></button></div></div>
           <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl cat-tbl">
             <thead><tr><th>provider_key</th><th title="timed = punya timestamp per-kata (caption presisi); fast_fallback = tanpa timestamp (murah/gratis)">class</th><th className="num" title="Pace DASAR engine (kata/dtk) — fallback semua voice di engine ini">delivery_wps (engine)</th><th className="num" title="Batas huruf SATU permintaan ke penyedia ini, dari dokumentasi RESMI vendor. Naskah lebih panjang (video Regular 2-12 menit) dipotong di batas kalimat. Kosong = pakai kenop global yang konservatif — JANGAN diisi angka karangan: salah isi = produksi gagal di tengah naskah panjang.">batas huruf/permintaan</th><th>active</th></tr></thead>
             <tbody>{data.tts_profiles.map((p) => (
-              <tr key={p.provider_key as string}><td className="mono">{p.provider_key as string}</td><td>{p.tts_class as string}</td><td className="num">{String(p.delivery_wps)}</td><td className="num">{p.max_chars_per_request != null ? String(p.max_chars_per_request) : <span className="muted" style={{ fontSize: "0.7rem" }}>— kenop global</span>}</td><td><Switch table="tts_profiles" k={p.provider_key as string} on={p.is_active as boolean} /> <button className="btn btn-ghost btn-sm" title="Edit profil engine" onClick={() => openRowEdit("ttsprof", p)}>✎</button></td></tr>
+              <tr key={p.provider_key as string}><td className="mono">{p.provider_key as string}</td><td>{p.tts_class as string}</td><td className="num">{String(p.delivery_wps)}</td><td className="num">{p.max_chars_per_request != null ? String(p.max_chars_per_request) : <span className="muted" style={{ fontSize: "0.7rem" }}>— kenop global</span>}</td><td><Switch table="tts_profiles" k={p.provider_key as string} on={p.is_active as boolean} />{lencanaKurang("tts_profiles", p.provider_key as string)} <button className="btn btn-ghost btn-sm" title="Edit profil engine" onClick={() => openRowEdit("ttsprof", p)}>✎</button></td></tr>
             ))}</tbody>
           </table></div></div>
           <div className="cat-toolbar" style={{ marginTop: "1.25rem" }}><span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="ALAT UKUR biaya jeda per tanda baca. Mesin menyusun tiap baris jadi 5 versi ber-HURUF IDENTIK (tanpa tanda / koma / em-dash / elipsis / titik), lalu mengukur selisih durasinya — jadi selisih itu hanya bisa milik tandanya. Read-only: mengubah isinya berarti mengubah alat ukurnya." en="Pause-cost MEASURING INSTRUMENT. The engine turns each row into 5 versions with IDENTICAL letters (none / comma / em-dash / ellipsis / period) and measures the duration difference — so the difference can only belong to the mark. Read-only: changing it changes the instrument." /></span></div>
@@ -924,7 +986,7 @@ export default function AdminCatalogPage() {
         </>)}
 
         {tab === "languages" && (<>
-          <div className="cat-toolbar"><span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Bahasa konten — dikelola admin, dibaca per-channel" en="Content languages — admin-managed" /></span><div className="right"><button className="btn btn-default btn-sm" onClick={() => setAdd({})}><Plus size={14} /> <Bi id="Tambah bahasa" en="Add language" /></button></div></div>
+          <div className="cat-toolbar"><span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Bahasa konten — dikelola admin, dibaca per-channel" en="Content languages — admin-managed" /></span><div className="right"><button className="btn btn-default btn-sm" onClick={() => bukaTambah("languages")}><Plus size={14} /> <Bi id="Tambah bahasa" en="Add language" /></button></div></div>
           <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl cat-tbl">
             <thead><tr><th>locale</th><th><Bi id="Bahasa" en="Language" /></th><th>Tier</th><th>font</th><th>Active</th></tr></thead>
             <tbody>{data.content_languages.map((l) => (
@@ -940,7 +1002,7 @@ export default function AdminCatalogPage() {
         </>)}
 
         {tab === "moods" && data && (<>
-          <div className="cat-toolbar"><span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Mood musik + kata pemicu deteksi dari naskah (campur ID+EN). Dipakai pemilih musik & paket mood niche." en="Music moods + script detection trigger words (mix ID+EN)." /></span><div className="right"><button className="btn btn-default btn-sm" onClick={() => setAdd({})}><Plus size={14} /> <Bi id="Tambah mood" en="Add mood" /></button></div></div>
+          <div className="cat-toolbar"><span className="muted" style={{ fontSize: "var(--text-sm)" }}><Bi id="Mood musik + kata pemicu deteksi dari naskah (campur ID+EN). Dipakai pemilih musik & paket mood niche." en="Music moods + script detection trigger words (mix ID+EN)." /></span><div className="right"><button className="btn btn-default btn-sm" onClick={() => bukaTambah("moods")}><Plus size={14} /> <Bi id="Tambah mood" en="Add mood" /></button></div></div>
           <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl cat-tbl">
             <thead><tr><th>mood</th><th><Bi id="Track di library" en="Library tracks" /></th><th><Bi id="Kata pemicu (deteksi dari naskah)" en="Trigger words" /></th><th>Active</th><th></th></tr></thead>
             <tbody>{data.moods.map((m) => {
@@ -982,14 +1044,14 @@ export default function AdminCatalogPage() {
       {/* A7: saran key_group dari vendor existing (nilai baru tetap boleh) */}
       <datalist id="kg-dl">{[...new Set((data?.ai_providers ?? []).map((p) => String(p.key_group || p.provider_key)))].sort().map((kg) => <option key={kg} value={kg} />)}</datalist>
 
-      {add && ADD_FIELDS[tab] && (
+      {add && ADD_FIELDS[add.mapKey] && (
         <>
           <div className="cat-scrim open" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 60 }} onClick={() => setAdd(null)} />
           <div className="card" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(440px,92vw)", maxHeight: "85vh", overflowY: "auto", zIndex: 61, padding: "1.25rem" }}>
-            <div style={{ display: "flex", alignItems: "center", marginBottom: "0.75rem" }}><strong>Tambah {ADD_FIELDS[tab].table}</strong><button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} onClick={() => setAdd(null)}><X size={16} /></button></div>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: "0.75rem" }}><strong>Tambah {ADD_FIELDS[add.mapKey].table}</strong><button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} onClick={() => setAdd(null)}><X size={16} /></button></div>
             <div style={{ display: "grid", gap: "0.5rem" }}>
-              {ADD_FIELDS[tab].fields.map(([k, label]) =>
-                fieldBlock(tab, k, label, add[k] ?? "", (v) => setAdd({ ...add, [k]: v }), false)
+              {ADD_FIELDS[add.mapKey].fields.map(([k, label]) =>
+                fieldBlock(add.mapKey, k, label, add.values[k] ?? "", (v) => setAdd({ ...add, values: { ...add.values, [k]: v } }), false)
               )}
               {formErr && !formErr.col && <div style={{ color: "var(--danger)", fontSize: "var(--text-xs)" }}>{formErr.node}</div>}
               <button className="btn btn-primary btn-sm" style={{ justifySelf: "end", marginTop: "0.25rem" }} onClick={createRow}><Bi id="Simpan" en="Save" /></button>

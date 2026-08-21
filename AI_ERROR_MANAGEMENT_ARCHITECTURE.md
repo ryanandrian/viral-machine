@@ -1217,6 +1217,75 @@ Dihitung **hanya saat `is_active` → false** (nol biaya untuk perubahan lain).
    itu saya rakit dari mengurai teks bebas, dan `failed_model` yang sesungguhnya kosong.
    **Klaim itu ditarik.**
 
+## §9c GERBANG KELAYAKAN KATALOG — model/penyedia baru jadi MUDAH & AMAN *(Batch C, 2026-08-21)*
+
+§9b menutup jalur *"model mati tapi masih ditawarkan"*. §9c menutup jalur **hulunya**: baris katalog
+yang **belum layak** tak lagi bisa dinyalakan, dan yang diketik admin benar-benar tersimpan.
+
+### Empat cacat yang ditutup — semuanya bisa ditunjuk barisnya
+
+| Cacat | Bukti | Akibat nyata |
+|---|---|---|
+| `tts_profiles.adapter` & `display_name` **dibuang senyap** | form mengirimnya (`ADD_FIELDS.ttsprof`), whitelist `CATALOG.tts_profiles.cols` tak memuatnya, loop tulis hanya mengiterasi `def.cols` | admin mengetik protokol → toast **"Tersimpan"** → nilainya hilang. Efek samping: validasi enum `ENUM_COLS.tts_profiles.adapter` adalah **kode mati** |
+| **Mesin suara baru mustahil dibuat** dari panel | terukur: `DELETABLE` − tabel yang punya jalur-buat = **{`tts_profiles`}**, satu-satunya | **pengakuan: mesin suara Gemini lahir dari SKRIP, bukan dari layar owner.** Panel bisa MENGHAPUS yang tak bisa ia BUAT |
+| Baris baru **hidup sebelum diuji** | POST tak pernah menyetel `is_active` ⇒ bawaan DB, dan bawaan itu `true` (`0014_tts_profiles.sql:13` · `0038_voice_catalog.sql:12`) | penyedia/model setengah-jadi langsung terpapar tenant |
+| Menyalakan baris tak-layak **tak ditahan apa pun** | nol pemeriksa di jalur mana pun | model TTS menyala padahal `tts_profiles`-nya mati = **anatomi insiden TTS Gemini** |
+
+### Yang dibangun (migr `0206`, aditif)
+
+- **`catalog_missing(p_table, p_key) → text[]`** — sepola `channel_missing()`: mengembalikan **daftar
+  KODE**, bukan kalimat. Kalimatnya milik FE (aturan dwibahasa: API kirim kode, FE menerjemahkan).
+  17 syarat, mencakup Gerbang 0/1/2: protokol didukung mesin · `auth_type` sah · **ada baris
+  `galat_registry.PENYEDIA`** · penyedia induk aktif · `model_id` terisi · harga ada · TTS: mesin
+  suara aktif + ≥1 suara aktif · video: ada preset `ai_video` · `delivery_wps` terisi · contoh suara ada.
+- **Trigger `trg_catalog_activation_gate`** pada 4 tabel katalog. **Dua pembatas** yang membuatnya
+  tak bisa merusak apa pun yang hidup: `new.is_active = true` (⇒ **MEMATIKAN tetap bebas**, §9b) dan
+  `not coalesce(old.is_active,false)` (⇒ baris yang **sudah** aktif tak pernah diperiksa — jawaban
+  untuk baris LAMA).
+- **`catalog_missing_all() → jsonb`** — satu pintu baca untuk panel. Gunanya **MENCEGAH**, bukan
+  menolak: lencana *"belum layak"* + alasannya tampil **sebelum** admin menyentuh saklar. Satu
+  panggilan, bukan 105.
+- **Cermin `galat_registry_provider`** di `catalog_valid_values` (`catalog_sync.py`). Syarat termahal
+  itu hidup di **kode Python**, gerbangnya hidup di **DB** — keduanya hanya bisa bertemu lewat cermin
+  yang memang sudah dirancang untuk ini. Cermin mati = gerbang **buta** tanpa terlihat (dijaga uji).
+- **Rute API**: whitelist diperbaiki · `is_active=false` **eksplisit** saat POST (bawaan DB dibuat
+  tak relevan, bukan diasumsikan — bawaan `ai_models`/`ai_providers` tak bisa diintrospeksi lewat
+  klien) · galat trigger diterjemahkan jadi kode `activation_blocked` + daftar kekurangan (409:
+  bukan 500 karena bukan kerusakan, bukan 400 karena bukan salah ketik).
+- **Layar**: tombol **Tambah mesin suara** pada toolbar yang sudah ada di tab Voice (hierarki
+  engine→voice tak dipecah, nol tab baru) · `add` kini membawa `mapKey`-nya sendiri **sepola
+  `rowEdit`** — satu pola untuk Tambah & Edit, bukan dua · lencana memakai `.badge-warning` dari
+  **pustaka** (nol CSS baru, nol komponen baru).
+
+### Kenapa gerbangnya di DB, bukan di API
+
+Karena jalur yang **memutari panel** sudah terbukti dipakai: mesin suara Gemini saya nyalakan lewat
+**skrip**. Gerbang yang hanya hidup di API tak akan menahan tangan saya sendiri. Di DB ia menahan
+semua jalur tulis — panel, skrip, dan SQL manual.
+
+### Aman secara TERUKUR, bukan secara harapan
+
+Diukur pada katalog **produksi** sebelum ditulis: 9 penyedia aktif · 41 model aktif · 5 mesin suara
+aktif · 42 suara aktif = **NOL** yang melanggar ke-17 syarat. Memasangnya tidak mengunci satu pun
+baris yang hari ini hidup.
+
+### Penjaganya
+
+`tests/test_katalog_lahir_layak_bukan_asal_hidup.py` — 17 uji, **12 dibuktikan MERAH dulu**,
+**14 sabotase** semuanya merah. Termasuk penjaga **KELAS**, bukan penjaga satu kolom: setiap kolom
+di form katalog **wajib** ada di whitelist API (paritas), sehingga kelas buang-senyap ini tak bisa
+terulang untuk tabel lain. Sabotase menangkap **4 uji palsu saya sendiri** — tiga di antaranya
+diselamatkan **komentar** (komentar SQL yang mengutip syarat trigger), satu lagi mengukur hal yang
+salah (menuduh `fonts`/`music_library` timpang padahal keduanya dibuat lewat pengunggah berkas).
+
+### Batas jujur §9c
+
+Tetap TIDAK diperbaiki, dicatat bukan disembunyikan: `saveAiPart` menerima model apa pun tanpa
+memeriksa katalog untuk channel yang **sudah** aktif · **nol rem berbasis biaya** di mana pun ·
+`preview_url` masih ditempel manual (belum ada pembangkit) · preset video baru masih butuh SQL
+(`render_mode`/`beats` sengaja di luar allowlist, keputusan owner 2026-07-06) · `request_param_schema`
+& `content_languages.tts_providers_supported` = kolom mati · `tts_class` tanpa pemanggil produksi.
+
 ## §10 PENJAGA ANTI-DRIFT (supaya dokumen ini TETAP SSOT)
 
 > **Tiga penjaga, dan batas masing-masing — ditulis supaya hijau tak pernah lagi dibaca sebagai
@@ -1264,6 +1333,25 @@ Bila salah satu bergeser tanpa yang lain, uji MERAH sebelum sempat menyesatkan s
 - dokumen tidak boleh memuat anchor `file:baris` (aturan §3 — nomor baris selalu basi)
 
 ## §11 CHANGELOG
+- **2026-08-21** — **§9c Batch C: GERBANG KELAYAKAN KATALOG — model/penyedia baru jadi mudah & aman.**
+  Migr `0206` (aditif): `catalog_missing` (17 syarat, daftar KODE sepola `channel_missing`) +
+  trigger pada 4 tabel katalog (**hanya** transisi ke aktif ⇒ mematikan tetap bebas, baris lama tak
+  pernah diperiksa) + `catalog_missing_all` (satu pintu baca, bukan 105 panggilan) · cermin
+  `galat_registry_provider` di `catalog_sync.py` (syarat termahal hidup di kode, gerbang di DB —
+  hanya bertemu lewat cermin) · whitelist `tts_profiles` menerima `adapter`+`display_name` (validasi
+  enum yang selama ini **kode mati** jadi hidup) · POST menulis `is_active=false` **eksplisit** ·
+  penolakan → kode `activation_blocked` + daftar kekurangan, diterjemahkan dwibahasa di layar ·
+  tombol **Tambah mesin suara** pada toolbar yang sudah ada (nol tab baru, nol komponen baru, nol
+  CSS baru — `.badge-warning` pustaka) · `add` membawa `mapKey` sepola `rowEdit`.
+  **Bukti:** 17 uji baru (**12 merah dulu**) · **14 sabotase semuanya MERAH** — menangkap **4 uji
+  palsu saya sendiri**: tiga diselamatkan **komentar SQL** yang mengutip syarat trigger, satu
+  mengukur hal yang salah · **1248 uji hijau** · build FE lulus · gerbang diukur pada katalog
+  produksi lebih dulu: **NOL** dari 9 penyedia + 41 model + 5 mesin suara + 42 suara aktif melanggar
+  ⇒ nol baris hidup yang terkunci. Penjaga anti-drift §10 **menangkap** berkas uji baru yang belum
+  disebut dokumen — dokumen dilengkapi, penjaga tidak disentuh.
+  ⏳ **Migr `0206` BELUM diterapkan ke DB**: tak ada `psql`, tak ada `DATABASE_URL`, MCP Supabase
+  belum terautentikasi. Dilaporkan, bukan diakali. Sampai diterapkan, gerbang **belum menahan
+  apa pun** dan perbaikan lain di batch ini tetap berlaku.
 - **2026-08-21** — **§9b Batch B: KATALOG BELAJAR + kegagalan KAMI berhenti menuduh tenant.**
   Migr `0205` (aditif): `ai_models.unavailable_since`/`unavailable_reason` + `production_runs.failed_model`.
   Modul **baru** `src/orchestrator/karantina_model.py` — karantina hanya dari **A + (B1|B2|B3)**,

@@ -25,7 +25,11 @@ const CATALOG: Record<string, { pk: string; cols: string[] }> = {
   voice_catalog: { pk: "voice_key", cols: ["provider_key", "vendor_voice_id", "display_name", "locale", "language", "gender", "age", "accent", "use_case", "description", "default_settings", "niche_default", "preview_url", "delivery_wps", "pace_locked", "is_active", "sort_order"] },
   music_library: { pk: "id", cols: ["is_active", "is_default", "name", "mood", "niche", "bpm", "duration_s"] },
   fonts: { pk: "name", cols: ["is_active"] },   // nama/berkas/ass_scale lahir dari berkas saat unggah — bukan ketikan
-  tts_profiles: { pk: "provider_key", cols: ["is_active", "delivery_wps", "tts_class", "speed_param", "param_schema", "max_chars_per_request"] },
+  // [21-Agu] `adapter` & `display_name` DITAMBAHKAN. Sebelumnya form mengirimnya tapi whitelist ini
+  // tak memuatnya ⇒ loop tulis (yang hanya mengiterasi `def.cols`) membuangnya, dan admin tetap
+  // melihat toast "Tersimpan". Efek sampingnya: validasi enum `ENUM_COLS.tts_profiles.adapter`
+  // di bawah adalah KODE MATI — ia menjaga kolom yang tak pernah sampai. Kini keduanya hidup.
+  tts_profiles: { pk: "provider_key", cols: ["display_name", "adapter", "is_active", "delivery_wps", "tts_class", "speed_param", "param_schema", "max_chars_per_request"] },
   moods: { pk: "mood_id", cols: ["keywords", "is_active"] },   // NICHE_DNA F4: kelola mood + keyword deteksi (dwibahasa)
   niche_property_presets: { pk: "id", cols: ["property", "preset_key", "label", "label_en", "description", "description_en", "value", "apply_mode", "sort_order", "is_active"] },
   // Kendali preset durasi (owner 2026-07-06): kolom engine-critical (beats/visual_beats/render_mode)
@@ -60,6 +64,19 @@ const valErrResponse = (e: unknown, status = 400) =>
   e instanceof ValErr
     ? NextResponse.json({ error: e.code, detail: e.detail ?? null }, { status })
     : NextResponse.json({ error: (e as Error).message }, { status });
+
+/** Galat trigger gerbang kelayakan (migr 0206) → jawaban ber-KODE + daftar kekurangan.
+ *  Trigger sengaja mengirim DAFTAR KODE, bukan kalimat: kalimatnya milik FE (dwibahasa ID/EN).
+ *  Bukan galat gerbang → null, biar penanganan galat lain tidak berubah sedikit pun. */
+const PENANDA_GERBANG = "CATALOG_ACTIVATION_BLOCKED:";
+function gerbangResponse(error: { message?: string } | null) {
+  const m = error?.message ?? "";
+  const i = m.indexOf(PENANDA_GERBANG);
+  if (i < 0) return null;
+  const kurang = m.slice(i + PENANDA_GERBANG.length).split(",").map((x) => x.trim()).filter(Boolean);
+  // 409: syarat belum lengkap — BUKAN 500 (bukan kerusakan) dan bukan 400 (bukan salah ketik admin).
+  return NextResponse.json({ error: "activation_blocked", detail: { missing: kurang } }, { status: 409 });
+}
 
 function coerceValue(table: string, col: string, val: unknown): unknown {
   // jsonb: string → objek; kosong → undefined (jangan tulis, pakai default DB)
@@ -119,7 +136,7 @@ export async function GET() {
   const g = await requireSuperAdmin();
   if (g.error) return g.error;
   const a = createAdminClient();
-  const [ai_models, ai_providers, music_library, content_languages, voice_catalog, tts_profiles, moods, fonts, duration_presets, valid_values, pace_calib, probe_texts] = await Promise.all([
+  const [ai_models, ai_providers, music_library, content_languages, voice_catalog, tts_profiles, moods, fonts, duration_presets, valid_values, pace_calib, probe_texts, kelayakan] = await Promise.all([
     a.from("ai_models").select("*").order("component").order("sort_order"),
     a.from("ai_providers").select("*").order("provider_key"),
     a.from("music_library").select("id, name, niche, mood, duration_s, bpm, object_key, is_active, is_default, source").order("niche").order("name"),
@@ -140,6 +157,10 @@ export async function GET() {
     // Teks ALAT UKUR biaya jeda (0185). Read-only di layar: mengubah isinya = mengubah alat ukurnya,
     // jadi ia harus TERLIHAT (janji migrasi 0185) tapi tidak diubah tanpa sengaja.
     a.from("duration_probe_texts").select("lang,idx,clauses,is_active").order("lang").order("idx"),
+    // Kelayakan SELURUH baris katalog dalam SEKALI jalan (migr 0206 `catalog_missing_all`).
+    // Gunanya MENCEGAH: admin melihat apa yang kurang sebelum menyentuh saklar. Fail-soft —
+    // ini keterangan, bukan jalur kerja; gagal baca tak boleh membuat panel gelap.
+    a.rpc("catalog_missing_all"),
   ]);
   // public_url musik (S3) untuk tombol Play di catalog. voice_catalog sudah simpan preview_url.
   const music = (music_library.data ?? []).map((m) => ({
@@ -154,6 +175,7 @@ export async function GET() {
     catalog_valid_values: valid_values.data ?? [],
     tts_pace_calibration: pace_calib.data ?? [],
     duration_probe_texts: probe_texts.data ?? [],
+    catalog_missing: kelayakan.data ?? {},
   });
 }
 
@@ -219,7 +241,12 @@ export async function PATCH(req: Request) {
   }
 
   const { data, error } = await a.from(table).update(clean).eq(def.pk, key).select("*").single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    // Gerbang kelayakan menahan penyalaan → kode + daftar kekurangan, bukan pesan mentah Postgres.
+    const gerbang = gerbangResponse(error);
+    if (gerbang) return gerbang;
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
   await a.from("admin_audit").insert({ admin_uid: g.user.id, action: `catalog.update.${table}`, detail: { key, fields: Object.keys(clean) } });
   return NextResponse.json({ ok: true, row: data });
 }
@@ -236,6 +263,13 @@ export async function POST(req: Request) {
   try {
     for (const c of def.cols) if (c in row) { const v = coerceValue(table, c, row[c]); if (v !== undefined) clean[c] = v; }
   } catch (e) { return valErrResponse(e); }
+  // ── LAHIR NONAKTIF (rencana 6c-4) ──────────────────────────────────────────────────────────
+  // Dulu `is_active` tak pernah disetel di sini ⇒ mengikuti bawaan DB, dan bawaan itu `true`
+  // (terukur: 0014_tts_profiles.sql:13 · 0038_voice_catalog.sql:12). Akibatnya penyedia/model
+  // yang BELUM diuji langsung ditawarkan ke tenant. Ditulis EKSPLISIT — bawaan DB (yang untuk
+  // `ai_models`/`ai_providers` tak bisa diintrospeksi lewat klien) jadi tak relevan, bukan
+  // diasumsikan. Menyalakannya = langkah TERPISAH yang melewati gerbang kelayakan (migr 0206).
+  if (CATALOG[table].cols.includes("is_active")) clean.is_active = false;
   const a = createAdminClient();
   try { await assertEnums(a, table, clean); } catch (e) { return valErrResponse(e); }
   // A3 anti-bingung: ID (PK) sudah terpakai → 409 kode 'duplicate_key' (bukan error mentah Postgres 500).
