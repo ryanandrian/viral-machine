@@ -70,6 +70,21 @@ const valErrResponse = (e: unknown, status = 400) =>
     ? NextResponse.json({ error: e.code, detail: e.detail ?? null }, { status })
     : NextResponse.json({ error: (e as Error).message }, { status });
 
+/** Galat trigger "aktif wajib terbukti" (migr 0208) → jawaban ber-KODE, bukan pesan mentah DB.
+ *  Sebabnya dua, dan keduanya perlu kalimat berbeda di layar:
+ *    belum_lulus_uji                → model belum pernah lulus uji sama sekali
+ *    uji_lebih_tua_dari_kematian    → PERNAH lulus, tapi ujinya lebih tua dari bukti kematiannya
+ *                                     (kasus `gemini-2.5-flash`: lulus 6-Jul, mati 18-Agu) */
+const PENANDA_TERBUKTI = "MODEL_BELUM_TERBUKTI:";
+function terbuktiResponse(error: { message?: string } | null) {
+  const m = error?.message ?? "";
+  const i = m.indexOf(PENANDA_TERBUKTI);
+  if (i < 0) return null;
+  const sebab = m.slice(i + PENANDA_TERBUKTI.length).trim().split(/\s/)[0] || "belum_lulus_uji";
+  // 409: syaratnya belum terpenuhi — bukan kerusakan (500), bukan salah ketik (400).
+  return NextResponse.json({ error: "belum_terbukti", detail: { sebab } }, { status: 409 });
+}
+
 function coerceValue(table: string, col: string, val: unknown): unknown {
   // jsonb: string → objek; kosong → undefined (jangan tulis, pakai default DB)
   if (JSONB_COLS[table]?.includes(col)) {
@@ -128,7 +143,7 @@ export async function GET() {
   const g = await requireSuperAdmin();
   if (g.error) return g.error;
   const a = createAdminClient();
-  const [ai_models, ai_providers, music_library, content_languages, voice_catalog, tts_profiles, moods, fonts, duration_presets, valid_values, pace_calib, probe_texts] = await Promise.all([
+  const [ai_models, ai_providers, music_library, content_languages, voice_catalog, tts_profiles, moods, fonts, duration_presets, valid_values, pace_calib, probe_texts, chSlot] = await Promise.all([
     a.from("ai_models").select("*").order("component").order("sort_order"),
     a.from("ai_providers").select("*").order("provider_key"),
     a.from("music_library").select("id, name, niche, mood, duration_s, bpm, object_key, is_active, is_default, source").order("niche").order("name"),
@@ -149,6 +164,10 @@ export async function GET() {
     // Teks ALAT UKUR biaya jeda (0185). Read-only di layar: mengubah isinya = mengubah alat ukurnya,
     // jadi ia harus TERLIHAT (janji migrasi 0185) tapi tidak diubah tanpa sengaja.
     a.from("duration_probe_texts").select("lang,idx,clauses,is_active").order("lang").order("idx"),
+    // [22-Agu G1] Slot AI tiap channel — dipakai menghitung "dipakai berapa channel" per baris
+    // katalog. SATU kueri (13 baris hari ini), bukan satu kueri per model. Sampai 22-Agu admin
+    // baru tahu dampaknya pada DETIK ia mematikan model; angkanya bisa diketahui sebelum itu.
+    a.from("channels").select("is_active, llm_model, tts_model, voice_key, visual_mode, tts_provider, llm_library, content_language"),
   ]);
   // public_url musik (S3) untuk tombol Play di catalog. voice_catalog sudah simpan preview_url.
   const music = (music_library.data ?? []).map((m) => ({
@@ -163,7 +182,38 @@ export async function GET() {
     catalog_valid_values: valid_values.data ?? [],
     tts_pace_calibration: pace_calib.data ?? [],
     duration_probe_texts: probe_texts.data ?? [],
+    // {tabel: {kunci: {total, aktif}}} — dihitung di server sekali, dipakai layar tanpa kueri lagi.
+    catalog_pemakaian: hitungPemakaian((chSlot.data ?? []) as Record<string, string | boolean | null>[]),
   });
+}
+
+/** Hitung "dipakai berapa channel" untuk SETIAP baris katalog, dari satu potret slot channel.
+ *  Logikanya SAMA dengan `channelPemakai` (satu-satunya sumber kebenaran untuk pertanyaan itu);
+ *  di sini ia dijalankan sekali untuk semua kunci sekaligus, bukan per baris. */
+function hitungPemakaian(rows: Record<string, string | boolean | null>[]) {
+  const out: Record<string, Record<string, { total: number; aktif: number }>> = {
+    ai_models: {}, ai_providers: {}, tts_profiles: {}, voice_catalog: {}, content_languages: {},
+  };
+  const tambah = (tabel: string, kunci: string | null, aktif: boolean) => {
+    if (!kunci) return;
+    const t = (out[tabel][kunci] ??= { total: 0, aktif: 0 });
+    t.total += 1;
+    if (aktif) t.aktif += 1;
+  };
+  for (const c of rows) {
+    const aktif = c.is_active === true;
+    const vm = String(c.visual_mode ?? "");
+    const vModel = vm.includes(":") ? vm.split(":")[1] : null;
+    tambah("ai_models", String(c.llm_model ?? "") || null, aktif);
+    tambah("ai_models", String(c.tts_model ?? "") || null, aktif);
+    tambah("ai_models", vModel, aktif);
+    tambah("voice_catalog", String(c.voice_key ?? "") || null, aktif);
+    tambah("content_languages", String(c.content_language ?? "") || null, aktif);
+    tambah("ai_providers", String(c.llm_library ?? "") || null, aktif);
+    tambah("ai_providers", String(c.tts_provider ?? "") || null, aktif);
+    tambah("tts_profiles", String(c.tts_provider ?? "") || null, aktif);
+  }
+  return out;
 }
 
 // PATCH: { table, key, patch } — update baris katalog (whitelist tabel+kolom). + admin_audit.
@@ -234,9 +284,25 @@ export async function PATCH(req: Request) {
   // HANYA saat is_active → true: karantina MENULIS jejak ketika mematikan, jadi membersihkannya di
   // jalur mati akan menghapus bukti yang baru saja ditulis mesin.
   // Kedua kolom sengaja TIDAK masuk whitelist: jejak adalah tulisan MESIN, admin tak boleh mengarangnya.
+  // [22-Agu G5] KOREKSI B5. Versi pertama membersihkan jejak hanya karena model DINYALAKAN — jadi
+  // bukti kematian hilang tanpa satu pun uji yang membuktikan model hidup lagi. Itu terjadi pada
+  // `gemini-2.5-flash` beberapa jam setelah B5 dipasang: jejaknya terhapus, lencana "✓ Teruji"
+  // (dari 6 Juli) tetap tampil, dan tak ada apa pun yang mengingatkan admin.
+  // Sekarang: jejak dibersihkan HANYA bila ada uji yang LEBIH BARU daripada jejak itu — yakni
+  // bukti bahwa model benar-benar hidup kembali. Kalau tidak, jejaknya DIBIARKAN (dan trigger 0208
+  // menahan penyalaannya sampai admin menekan Uji).
   if (table === "ai_models" && "is_active" in clean && clean.is_active === true) {
-    clean.unavailable_since = null;
-    clean.unavailable_reason = null;
+    const { data: baris } = await a.from("ai_models")
+      .select("cost_hint, unavailable_since").eq("model_key", key).maybeSingle();
+    const r = baris as { cost_hint?: { audit?: string } | null; unavailable_since?: string | null } | null;
+    const audit = r?.cost_hint?.audit ?? "";
+    const mati = r?.unavailable_since ?? null;
+    const tglUji = /\d{4}-\d{2}-\d{2}/.exec(audit)?.[0] ?? null;
+    const ujiLebihBaru = !!(tglUji && mati && new Date(tglUji) >= new Date(mati));
+    if (!mati || ujiLebihBaru) {
+      clean.unavailable_since = null;
+      clean.unavailable_reason = null;
+    }
   }
 
   // ── DAMPAK MEMATIKAN BARIS KATALOG — terlihat SEBELUM tombol ditekan (AI_ERROR_MGMT §9b) ────
@@ -257,7 +323,12 @@ export async function PATCH(req: Request) {
   }
 
   const { data, error } = await a.from(table).update(clean).eq(def.pk, key).select("*").single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    // Gerbang "aktif wajib terbukti" (0208) menahan penyalaan → kode, bukan pesan mentah Postgres.
+    const terbukti = terbuktiResponse(error);
+    if (terbukti) return terbukti;
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
   await a.from("admin_audit").insert({ admin_uid: g.user.id, action: `catalog.update.${table}`, detail: { key, fields: Object.keys(clean) } });
   return NextResponse.json({ ok: true, row: data });
 }

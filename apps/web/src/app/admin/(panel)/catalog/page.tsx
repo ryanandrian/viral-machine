@@ -32,6 +32,8 @@ type Cat = {
     pause_source?: string | null; pause_measured_at?: string | null }[];
   // Teks ALAT UKUR biaya jeda (0185) — read-only; mengubah isinya = mengubah alat ukurnya.
   duration_probe_texts?: { lang: string; idx: number; clauses: string[]; is_active: boolean }[];
+  // [22-Agu G1] {tabel: {kunci: {total, aktif}}} — dihitung server, sekali per muat.
+  catalog_pemakaian?: Record<string, Record<string, { total: number; aktif: number }>>;
 };
 
 // Kolom yang WAJIB dropdown (nilai-sah dari registry KODE via catalog_valid_values) — anti-typo.
@@ -130,6 +132,13 @@ function errText(code: string, detail?: Record<string, unknown> | null): React.R
     case "out_of_range": return <Bi id={`${col}: di luar rentang ${detail?.min}–${detail?.max}.`} en={`${col}: outside range ${detail?.min}–${detail?.max}.`} />;
     case "pk_required": return <Bi id={`${col}: wajib diisi.`} en={`${col}: required.`} />;
     case "no_editable_fields": return <Bi id="Tidak ada perubahan untuk disimpan." en="No changes to save." />;
+    case "belum_terbukti":
+      // Gerbang 0208: "model aktif = pasti jalan" ditegakkan mesin. Dua sebab, dua kalimat.
+      return String(detail?.sebab ?? "") === "uji_lebih_tua_dari_kematian"
+        ? <Bi id="Model ini pernah lulus uji, TAPI ujinya lebih tua daripada bukti bahwa vendor mematikannya. Klik Uji dulu untuk membuktikan model benar-benar hidup lagi."
+             en="This model passed a test, BUT that test is older than the evidence that the vendor retired it. Hit Uji first to prove it is alive again." />
+        : <Bi id="Belum bisa dinyalakan: model ini belum pernah lulus uji. Klik Uji dulu — tenant tak boleh jadi orang pertama yang menemukan model ini tak jalan."
+             en="Can't be enabled: this model has never passed a test. Hit Uji first — tenants must not be the first to discover it doesn't work." />;
     default: return code || <Bi id="Gagal menyimpan." en="Save failed." />;
   }
 }
@@ -589,6 +598,47 @@ export default function AdminCatalogPage() {
     return () => { batal = true; };
   }, [data?.fonts]);
 
+  // [22-Agu G1] "Dipakai berapa channel" — admin tahu SEBELUM menyentuh saklar, bukan pada detik
+  // ia mematikannya. Memakai `.badge` pustaka; nol komponen baru.
+  const pemakaiModel = (table: string, k: string) => {
+    const p = data?.catalog_pemakaian?.[table]?.[k];
+    const total = p?.total ?? 0, aktif = p?.aktif ?? 0;
+    if (total === 0) return <span className="muted" style={{ fontSize: "0.7rem" }}>—</span>;
+    return (
+      <span className={`badge ${aktif > 0 ? "badge-warning" : "badge-default"}`}
+            title={aktif > 0 ? `${aktif} channel AKTIF memakainya — mematikan ini menghentikan produksi mereka`
+                             : `${total} channel memakainya, semuanya sedang jeda/mati`}>
+        {aktif > 0 ? aktif : total}{aktif > 0 && total > aktif ? `/${total}` : ""}
+      </span>
+    );
+  };
+
+  // [22-Agu G3] Umur bukti uji. "✓ Teruji" tanpa tanggal MENYESATKAN: uji 6 Juli dan uji hari ini
+  // terlihat sama meyakinkan, padahal yang pertama tak membuktikan apa pun tentang keadaan
+  // sekarang — itu persis yang terjadi pada `gemini-2.5-flash` (lulus 6-Jul, mati di vendor 18-Agu).
+  const AMBANG_BASI_HARI = 30;
+  const umurUji = (audit: string): { hari: number | null; basi: boolean } => {
+    const m = /\d{4}-\d{2}-\d{2}/.exec(audit || "");
+    if (!m) return { hari: null, basi: false };
+    const hari = Math.floor((Date.now() - new Date(m[0]).getTime()) / 86400000);
+    return { hari, basi: hari > AMBANG_BASI_HARI };
+  };
+
+  // [22-Agu G2] Jejak karantina SUDAH dikirim rute sejak 21-Agu (`select("*")`) tapi layar nol kali
+  // menampilkannya — data dikumpulkan tapi tak dipakai. Inilah sebab admin bisa menyalakan model
+  // yang terbukti mati tanpa peringatan apa pun.
+  const jejakKarantina = (m: Record<string, unknown>) => {
+    const sejak = m.unavailable_since as string | null;
+    if (!sejak) return null;
+    const alasan = String(m.unavailable_reason ?? "");
+    return (
+      <span className="badge badge-error" style={{ fontSize: "0.65rem", marginRight: ".3rem" }}
+            title={`Terbukti mati di vendor sejak ${String(sejak).slice(0, 16)}${alasan ? " — " + alasan : ""}`}>
+        <AlertTriangle size={11} /> <Bi id="terbukti mati" en="proven dead" />
+      </span>
+    );
+  };
+
   const Switch = ({ table, k, on }: { table: string; k: string; on: boolean }) => (
     <label className="switch"><input type="checkbox" checked={on} onChange={(e) => toggle(table, k, e.target.checked)} /><span className="track" /><span className="thumb" /></label>
   );
@@ -718,7 +768,7 @@ export default function AdminCatalogPage() {
             {["llm", "tts", "image", "video"].map((c) => <span key={c} className={`radio-pill${mComp === c ? " sel" : ""}`} onClick={() => setMComp(mComp === c ? "" : c)}>{c}</span>)}
           </div>
           <div className="card"><div style={{ overflowX: "auto" }}><table className="tbl cat-tbl">
-            <thead><tr><th>provider</th><th>model_key</th><th>component</th><th><Bi id="harga (USD, auto-sync harian)" en="pricing (USD, auto-synced daily)" /></th><th>tier</th><th>active</th><th></th></tr></thead>
+            <thead><tr><th>provider</th><th>model_key</th><th>component</th><th title="Channel yang memakai model ini — angka kuning = channel AKTIF, mematikan model menghentikan produksi mereka"><Bi id="dipakai" en="in use" /></th><th><Bi id="harga (USD, auto-sync harian)" en="pricing (USD, auto-synced daily)" /></th><th>tier</th><th>active</th><th></th></tr></thead>
             <tbody>{[...data.ai_models].filter((m) => {
               if (mComp && m.component !== mComp) return false;
               const q = mSearch.trim().toLowerCase();
@@ -731,6 +781,7 @@ export default function AdminCatalogPage() {
                 <tr key={mk}>
                   <td className="mono" style={{ color: "var(--text-primary)" }}>{i === 0 || arr[i - 1].provider_key !== m.provider_key ? (m.provider_key as string) : <span className="muted" style={{ opacity: .35 }}>·</span>}</td>
                   <td className="mono">{mk}</td><td><span className="badge badge-default">{m.component as string}</span></td>
+                  <td>{pemakaiModel("ai_models", mk)}</td>
                   <td style={{ maxWidth: 300 }}>
                     {priceEdit?.key === mk ? (
                       <span style={{ display: "inline-flex", gap: ".3rem", alignItems: "center", flexWrap: "wrap" }}>
@@ -761,9 +812,15 @@ export default function AdminCatalogPage() {
                   </td>
                   <td className="muted">{m.quality_tier as string}</td>
                   <td><Switch table="ai_models" k={mk} on={m.is_active as boolean} /></td>
-                  <td style={{ whiteSpace: "nowrap" }}>{(() => {
+                  <td style={{ whiteSpace: "nowrap" }}>{jejakKarantina(m)}{(() => {
                     const au = String((m.cost_hint as { audit?: string } | null)?.audit || "");
-                    if (au.startsWith("LULUS")) return <span className="badge badge-success" title={au} style={{ fontSize: "0.65rem", marginRight: ".3rem" }}>✓ <Bi id="Teruji" en="Tested" /></span>;
+                    const uu = umurUji(au);
+                    if (au.startsWith("LULUS")) return (
+                      <span className={`badge ${uu.basi ? "badge-warning" : "badge-success"}`} title={au}
+                            style={{ fontSize: "0.65rem", marginRight: ".3rem" }}>
+                        ✓ <Bi id="Teruji" en="Tested" />{uu.hari != null ? ` · ${uu.hari}h` : ""}
+                        {uu.basi ? <> · <Bi id="BASI" en="STALE" /></> : null}
+                      </span>);
                     if (au) return <span className="badge badge-warning" title={au} style={{ fontSize: "0.65rem", marginRight: ".3rem" }}>✗ <Bi id="belum lolos" en="not passed" /></span>;
                     return <span className="muted" title="Belum pernah diuji — klik Uji" style={{ fontSize: "0.65rem", marginRight: ".3rem" }}><Bi id="belum diuji" en="not tested" /></span>;
                   })()}<button className="btn btn-ghost btn-sm" title="Uji model — jalankan nyata ke vendor (butir-1: aktif = terbukti jalan)" onClick={() => { setTmMsg(null); setTmKey(""); setTm({ mk, name: (m.display_name as string) || mk, needsKey: (data.ai_providers.find((p) => String(p.provider_key) === String(m.provider_key))?.auth_type) === "api_key" }); }}><Bi id="Uji" en="Test" /></button><button className="btn btn-ghost btn-sm" title="Edit model" onClick={() => openRowEdit("models", m)}>✎</button><button className="btn btn-ghost btn-sm" title="Hapus model (ditolak bila dipakai channel)" onClick={() => delAsset("ai_models", mk, (m.display_name as string) || mk)}><Trash2 size={13} /></button></td>

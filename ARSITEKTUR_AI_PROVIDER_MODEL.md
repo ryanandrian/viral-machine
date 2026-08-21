@@ -189,7 +189,7 @@ biaya_video_IDR = biaya_video_USD × app_config.usd_idr_rate  (tampilan)
 
 | Janji ke tenant | Ditegakkan oleh |
 |---|---|
-| Model aktif = pasti jalan | Tombol **Uji** (`model_tester`) + stempel `cost_hint.audit` + badge FE |
+| Model aktif = pasti jalan | Tombol **Uji** (`model_tester`) + stempel `cost_hint.audit` + badge FE — **dan sejak 22-Agu DITEGAKKAN MESIN**: trigger `trg_gate_aktif_terbukti` (migr `0208`) menolak menyalakan model yang auditnya bukan `LULUS`, **atau** yang auditnya **lebih tua dari `unavailable_since`**-nya. Sampai 22-Agu janji ini bersandar DISIPLIN saja |
 | "Valid" = token benar bisa dipakai | `validate_ai_key` (uji nyata, termasuk EL scoped) |
 | Yang muncul di Channel = pasti aktif & jalan | filter provider aktif (FE) + `assertEnums` + `get_providers()` (aktif-only) |
 | Harga akurat & otomatis | `price_sync` (feed + prefix data-driven, no hardcode) |
@@ -256,9 +256,30 @@ biaya_video_IDR = biaya_video_USD × app_config.usd_idr_rate  (tampilan)
 
 ⇒ Vendor berprotokol OpenAI-chat = **cukup data, nol kode**. Selain itu **butuh kode**.
 
-### 9.4 TITIK LEMAH — status 22-Agu (B1–B6 SUDAH ditutup; sisanya kondisi lapangan)
+### 9.4 TITIK LEMAH — status 22-Agu (B1–B6 · F1–F5 · G1–G5 SUDAH ditutup)
 
-> **Penjaganya:** `tests/test_panel_katalog_menuntun_bukan_menjebak.py` (B1–B6) + `tests/test_katalog_nol_fosil_nol_lapis_ganda.py` (F1–F5: fosil, kolom tak terwiring, lapis ganda penghitung, penjaga hapus) — 17 uji, **14 dibuktikan
+> **Pemicu G1–G5:** owner menyalakan kembali `gemini-2.5-flash` dari panel dan bertanya *"MENGAPA
+> TIDAK ADA INDIKATOR UNTUK YANG MATI?"*. Terukur saat itu: lencana berbunyi **"✓ Teruji"** — dari
+> **6 Juli** — sementara model itu **terbukti mati di vendor 18-Agu** dan `Abyss ID` (channel AKTIF)
+> memakainya. Jejak karantina SUDAH dikirim rute ke layar tapi layar **nol kali** menampilkannya,
+> dan **B5 (dipasang beberapa jam sebelumnya) justru MENGHAPUS jejak itu** saat model dinyalakan —
+> penghapus bukti dibangun sebelum penampil bukti. Cacat rancangan saya.
+>
+> | | Ditutup |
+> |---|---|
+> | **G1** | tabel AI Models menyebut **"dipakai berapa channel"** (kuning = ada channel AKTIF) — dihitung server sekali per muat, bukan per baris |
+> | **G2** | jejak karantina **DITAMPILKAN** sebagai lencana `terbukti mati` + alasan vendor di tooltip |
+> | **G3** | lencana uji menyebut **umurnya** (`✓ Teruji · 47h`) dan berubah kuning + bertanda **BASI** di atas 30 hari — "✓ Teruji" tanpa tanggal menyamakan uji 6-Jul dengan uji hari ini |
+> | **G4** | migr `0208` — **menyalakan wajib TERBUKTI**: audit `LULUS` **dan lebih baru dari bukti kematian**. Di DB, bukan panel, karena jalur yang memutari panel sudah terbukti dipakai. Terukur: 43/43 model aktif lolos ⇒ nol terkunci |
+> | **G5** | **koreksi B5**: jejak dibersihkan HANYA bila ada uji yang lebih baru daripada jejak itu — bukan sekadar karena model dinyalakan |
+>
+> **Bukti G4 pada kasus nyata (bertransaksi, seluruhnya di-rollback):** 43 baris aktif tersunting
+> tanpa ditahan · mematikan tetap bebas · 3 model tanpa uji **ditolak** · audit 6-Jul + kematian
+> 18-Agu **ditolak** (`uji_lebih_tua_dari_kematian`) · audit 22-Agu sesudah kematian **lolos**.
+
+#### Sisa kondisi lapangan
+
+> **Penjaganya:** `tests/test_panel_katalog_menuntun_bukan_menjebak.py` (B1–B6) + `tests/test_katalog_nol_fosil_nol_lapis_ganda.py` (F1–F5) + `tests/test_panel_mengatakan_kebenaran_status_model.py` (G1–G5: pemakaian, jejak karantina, umur uji, gerbang terbukti, koreksi pembersihan) — 17 uji, **14 dibuktikan
 > MERAH dulu**, **20 sabotase** semuanya merah. Sabotase menangkap **9 uji palsu saya sendiri**
 > (substring `xhelp_id` masih memuat `help_id` · dua bahasa diperiksa sebagai satu teks · kata
 > `catch` bebas · jendela karakter yang tak mencapai kodenya · kata "suara" yang sudah ada di
