@@ -1093,7 +1093,7 @@ ternyata tambalan penyeimbang untuk bug yang sudah diperbaiki.
 langganan/jatah uji — [B24]), yang **bukan** `ErrorClass` dan bukan kegagalan AI. Penerjemahnya
 terpisah (`components/gate-message.tsx`). Dokumen ini hanya mengatur kegagalan AI.
 
-## §9b PINTU KEDUA — channel yang DIAM *(dibuka 2026-08-21, Batch A terpasang)*
+## §9b PINTU KEDUA — channel yang DIAM *(dibuka 2026-08-21; Batch A terpasang, Batch B siap-deploy)*
 
 §9 di atas mengikat jalur **produksi berjalan**. Ada jalur KEDUA yang selama ini **tidak tersambung
 ke arsitektur ini sama sekali**, dan di situlah kerusakan 17-Agu terjadi:
@@ -1142,6 +1142,81 @@ SESUDAH  : { ready:false, missing:["model naskah"],            ← IDENTIK
 Belum tercakup: model **aktif** tapi `provider_key`-nya ≠ `channels.llm_library` (paket campuran) —
 gerbang tetap menahannya, tapi lewat label telanjang. Tercatat, bukan diklaim selesai.
 
+### Batch B — KATALOG BELAJAR, dan kegagalan KAMI berhenti menuduh tenant
+
+Dua cacat yang tersisa dari pintu-2, keduanya **aditif**, nol data tenant disentuh.
+
+#### B-1 · Gagal-baca sesaat HARAM berbunyi seperti kelalaian tenant
+
+RAD The Explorer gagal 20-Agu 21:00 dengan *"Kredensial wajib belum lengkap: visual_api_key"* lalu
+**berhasil 21:07** tanpa seorang pun menyentuh apa pun. Kredensialnya tak pernah berubah. Yang
+terjadi: jaringan ke DB terputus sekejap → kode menyetel kunci **kosong** → gerbang membacanya
+*"tenant belum mengisi"*. **Kegagalan kami, dituduhkan ke tenant.**
+
+Tiga titik yang menelan galat kini **bersuara** dan menandai `TenantRunConfig.baca_gagal`
+(`_set_key_from_pool` · `_visual_provider` · `niche_visual_style`). Gerbang kredensial di
+`pipeline.py` **bercabang atas penanda itu**, bukan menebak dari teks di hilir:
+
+| Sebab | Golongan | Kalimat ke tenant |
+|---|---|---|
+| tenant memang belum mengisi | *(seperti dulu)* | "Kredensial wajib belum lengkap: …" |
+| **KAMI gagal membacanya sesaat** | **`TRANSIENT`** + `milik_kita=True` | *"Setelan channel gagal dibaca sesaat — sistem akan otomatis mencoba kembali. Tidak ada yang perlu Anda ubah."* (redaksi diketok owner 21-Agu) |
+
+`TRANSIENT` ada **di luar** `FAST_FAIL` ⇒ **ambang rem tidak bergeser** (dikunci uji dua arah).
+Kejujuran kalimatnya terukur: producer adalah loop hidup ±16 detik, dan RAD memang pulih dalam 7 menit.
+
+#### B-2 · Karantina model — bukti yang SUDAH di tangan, nol rupiah
+
+Mesin sudah membuktikan kematian model (**7 run** `model_unavailable`), tapi **nol baris kode pernah
+menyentuh `ai_models`**. Model yang terbukti mati tetap ditawarkan ke tenant berikutnya (Abyss ID
+diam **24 hari**). Rancangan semula — membuktikan dengan memanggil vendor memakai kunci admin/Test
+Lab — **ditolak owner 21-Agu**: itu membakar kredit owner diam-diam. **Dibuang.**
+
+Penggantinya memakai bukti yang sudah kami pegang. **Nol panggilan berbayar** (dikunci uji):
+
+| | Bukti | Kenapa ia menutup ambiguitas |
+|---|---|---|
+| **A** *(wajib)* | `Putusan.dasar` = `kode/teks-vendor` / `terusan-agregator` | vendor menyebut modelnya sendiri |
+| **B1** | kata **GLOBAL** di pesan vendor: `decommission` · `no longer available` · `deprecated` · `retired` · `sunset` · `has been removed` | kata itu tak mungkin berarti "akun *Anda* tak punya akses" ⇒ **1 tenant cukup** |
+| **B2** | **≥2 tenant BERBEDA** gagal pada model yang sama (`production_runs.failed_model`) | dua kunci API independen tak bisa sama-sama kehilangan akses karena kebetulan |
+| **B3** | model hilang dari umpan harga publik (`price_sync` sudah menghitungnya tiap 24 jam) | lemah sendirian, **kuat** sebagai penguat A |
+
+**A tanpa B ⇒ NOL karantina**, hanya alarm admin ber-bukti. **404 telanjang** (`dasar` =
+`status-http-umum`) **HARAM** mengarantina — 404 bisa berarti alamat salah di sisi KITA.
+Migr `0205` menambah `ai_models.unavailable_since` + `unavailable_reason` + `production_runs.failed_model`
+(tanpa FK: riwayat harus utuh walau katalog berubah). Karantina **terasa ≤5 menit**, bukan seketika —
+katalog Python ber-cache TTL 300 dtk. **Jalur buka:** admin menghidupkan kembali di panel; karantina
+**tidak pernah** menyala sendiri.
+
+> **⚠️ RANTAI YANG RAPUH, dan kerapuhannya tak terlihat dari membaca kodenya.** B1 mencari kata
+> **Inggris milik vendor**. Pesan-manusiawi kami berbahasa **Indonesia** — terukur:
+> `bukti_global("Model AI ini sudah tidak tersedia di penyedianya")` = `None`. Jadi mengalirkan
+> `human_message`/`error_message` ke karantina (dan itu terasa **lebih rapi**) membuat B1 **mustahil**
+> menyala dan seluruh jalur ini jadi **kode mati** — tanpa satu uji merah. Yang dialirkan **wajib**
+> galat teknis (`result["error"]`, memuat pesan vendor apa adanya). Dikunci lewat **AST**, bukan
+> pencocokan teks: sabotase membuktikan `pass  # karantina(sb, …)` lolos dari pencocokan teks.
+
+#### B-3 · Mematikan baris katalog menyebut DAMPAKNYA
+
+17-Agu saklar berpindah **tanpa suara**. Kini rute admin menghitung channel **aktif** yang masih
+menunjuk baris itu dan mengembalikan `{perlu_konfirmasi, dipakai:[…]}` **status 200** — layar
+menamai channelnya lewat `ConfirmDialog` **yang sudah ada di pustaka**. Ini **BUKAN penolakan**:
+kalau vendor mematikan model, admin **wajib** tetap bisa mematikannya — blokir keras = *"kunci tanpa
+jalur buka"* (sudah ditegur owner, `PAYMENT §10e-2`). Header `x-konfirmasi-dampak` = jalan LANJUT.
+Dihitung **hanya saat `is_active` → false** (nol biaya untuk perubahan lain).
+
+#### Batas jujur Batch B — dua hal yang TIDAK boleh dibaca sebagai selesai
+
+1. **B2 tidak retroaktif.** `production_runs.failed_model` baru lahir di migr `0205`; **ketujuh** run
+   riwayat berisi `NULL`. ⇒ bukti-silang antar-tenant mulai berlaku **ke depan**, bukan ke belakang.
+   Praktiknya: B1 bekerja seketika (terbukti mengarantina `llama-3.3-70b-versatile` pada pesan Groq
+   nyata), B2 mengumpulkan bukti dari kegagalan berikutnya.
+2. **KOREKSI angka rencana.** Rencana 21-Agu menulis *"`gemini-2.5-flash` gagal di 2 tenant berbeda ⇒
+   B2 menyala"*. Diperiksa ke DB: **tidak bisa dipertanggungjawabkan.** Dua tenant memang pernah
+   gagal `model_unavailable`, tapi **4 dari 7 run tidak menyimpan nama model apa pun** — angka "2"
+   itu saya rakit dari mengurai teks bebas, dan `failed_model` yang sesungguhnya kosong.
+   **Klaim itu ditarik.**
+
 ## §10 PENJAGA ANTI-DRIFT (supaya dokumen ini TETAP SSOT)
 
 > **Tiga penjaga, dan batas masing-masing — ditulis supaya hijau tak pernah lagi dibaca sebagai
@@ -1189,6 +1264,26 @@ Bila salah satu bergeser tanpa yang lain, uji MERAH sebelum sempat menyesatkan s
 - dokumen tidak boleh memuat anchor `file:baris` (aturan §3 — nomor baris selalu basi)
 
 ## §11 CHANGELOG
+- **2026-08-21** — **§9b Batch B: KATALOG BELAJAR + kegagalan KAMI berhenti menuduh tenant.**
+  Migr `0205` (aditif): `ai_models.unavailable_since`/`unavailable_reason` + `production_runs.failed_model`.
+  Modul **baru** `src/orchestrator/karantina_model.py` — karantina hanya dari **A + (B1|B2|B3)**,
+  **nol panggilan berbayar** (rancangan uji-berbayar dengan kunci admin **dibuang** atas keberatan
+  owner 21-Agu) · gerbang kredensial `pipeline.py` bercabang atas `baca_gagal` yang ditandai di
+  **titik kejadian** (`tenant_config.py`, 3 titik) dan digolongkan `TRANSIENT`+`milik_kita` dengan
+  redaksi owner · rute+layar katalog admin menyebut channel aktif yang terdampak sebelum model
+  dimatikan (`ConfirmDialog` pustaka, **status 200 — konfirmasi, bukan larangan**).
+  **Bukti:** 20 uji baru · **26 sabotase semuanya MERAH** — dan sabotase menangkap **3 uji palsu
+  saya sendiri**: (a) `from("channels")` lolos karena rute ini sudah mengueri `channels` **5× di
+  kode lama**, (b) mengganti `ErrorClass.TRANSIENT`→`UNKNOWN` tetap hijau karena **komentar** di
+  sebelahnya menyebut kata itu, (c) `pass  # karantina(…)` mematikan panggilannya tanpa satu uji
+  merah ⇒ penjaganya dipindah ke **AST**. Ketiganya diganti. · **1231 uji hijau** · build FE lulus ·
+  rujukan menggantung **tetap 5 (4 di channel aktif)** ⇒ **nol data tenant disentuh** · putusan
+  karantina dijalankan pada **riwayat nyata**: pesan Groq `model_decommissioned` → **KARANTINA**;
+  *"is not found **or you do not have access to it"*** → **alarm admin saja**; **404 telanjang** →
+  **tidak** (persis ambang yang diminta). **Batas jujur** (§9b): B2 **tidak retroaktif**, dan klaim
+  rencana *"2 tenant berbeda"* **ditarik** — 4 dari 7 run riwayat tak menyimpan nama model.
+  Sisa: **Batch C** (6c panel katalog: buang-senyap `tts_profiles`, bisa membuat mesin TTS, gerbang
+  kelayakan aktivasi, lahir nonaktif, paritas form↔whitelist) & **Batch D** (penjaga §7 + dokumen).
 - **2026-08-21** — **§9b PINTU KEDUA TERSAMBUNG (Batch A: langkah 1·2·3·5 dari rencana owner).**
   Pemicu: owner melaporkan 2 kegagalan; penelusuran menemukan yang **tidak** dilaporkan — 4 channel
   (2 tenant BERBAYAR) mati 4 hari sejak 17-Agu 20:42 karena model naskahnya dimatikan di katalog

@@ -87,6 +87,14 @@ class TenantRunConfig:
     tenant_id:   str
     plan_type:   str = "starter"
 
+    # [2026-08-21] PENANDA GAGAL-BACA — memisahkan kegagalan KAMI dari kelalaian TENANT.
+    # Insiden RAD 20-Agu 21:00: jaringan ke DB terputus sekejap → kunci di-set KOSONG → gerbang
+    # melaporkannya sebagai "Kredensial wajib belum lengkap" ⇒ tenant dituduh atas kegagalan kami.
+    # (Buktinya: channel yang sama BERHASIL 21:07 tanpa seorang pun menyentuh apa pun.)
+    # Hilir HARAM menebak sebabnya dari teks — sudah pernah memakan korban (lihat catatan
+    # `milik_kita` di src/exceptions.py). Karena itu ditandai DI TITIK KEJADIAN.
+    baca_gagal: list = field(default_factory=list)
+
     # Pipeline settings
     niche:              str   = ""   # diset dari DB; '' → fail-loud (no global default)
     niche_fallback:     Optional[str] = None  # Phase 1.2: fallback PILIHAN tenant (bukan global mystery)
@@ -431,7 +439,13 @@ class TenantConfigManager:
             config.niche_visual_fallbacks = []
             config.niche_voice_expression = None
             config._visual_niche_loaded   = eff_niche
-            logger.warning(f"[TenantConfig] Gagal load niche visual data ({eff_niche}): {e}")
+            # KOSONG di sini bukan sekadar hiasan: gaya visual jatuh ke DEFAULT HARDCODE, dan itu
+            # kelas cacat yang sudah memakan korban (`sunnah_harian`, 15-Agu — DNA benar di DB tapi
+            # mesin memakai default). Ditandai supaya kegagalan baca tak lagi tampak seperti
+            # "niche ini memang tak punya DNA".
+            config.baca_gagal.append(f"niche_visual({eff_niche}): {type(e).__name__}")
+            logger.error(f"[TenantConfig] Gagal load niche visual data ({eff_niche}): {e} — "
+                         f"gaya visual akan memakai default, BUKAN DNA niche")
 
     # Kolom channels per-channel (F1-04) → field TenantRunConfig. Hanya overlay bila NOT NULL
     # (NULL = belum dikonfigurasi → pakai nilai tenant; transisi aman).
@@ -520,7 +534,13 @@ class TenantConfigManager:
                     f"llm={config.llm_model} visual={config.visual_mode}")
 
     def _visual_provider(self, config: "TenantRunConfig") -> Optional[str]:
-        """Penyedia visual dari model di visual_mode (ai_image:/ai_video:<model> → ai_models.provider_key)."""
+        """Penyedia visual dari model di visual_mode (ai_image:/ai_video:<model> → ai_models.provider_key).
+
+        [2026-08-21] Dulu SELURUH kegagalan di sini `return None` TANPA satu baris log, dan None itu
+        membuat `_set_key_from_pool` menyetel `visual_api_key` kosong → gerbang berkata "kredensial
+        tenant belum lengkap". Inilah titik yang membuat kegagalan RAD 20-Agu 21:00 tak bisa dilacak
+        dan dituduhkan ke tenant. Sekarang: gagal BERSUARA + ditandai `baca_gagal`.
+        """
         vm = getattr(config, "visual_mode", "") or ""
         mkey = vm.split(":", 1)[1] if ":" in vm else ""
         if not mkey or not self._supabase:
@@ -528,8 +548,15 @@ class TenantConfigManager:
         try:
             r = self._supabase.table("ai_models").select("provider_key").eq("model_key", mkey).limit(1).execute()
             row = (r.data or [None])[0]
-            return row.get("provider_key") if row else None
-        except Exception:
+            if row is None:
+                # Bukan gagal-baca: modelnya memang tak ada di katalog. Bukan tuduhan ke tenant,
+                # tapi tetap harus terdengar — ini rujukan menggantung (alasannya di migr 0204).
+                logger.warning(f"[TenantConfig] model visual '{mkey}' tak ada di katalog — penyedia tak diketahui")
+                return None
+            return row.get("provider_key")
+        except Exception as e:
+            logger.error(f"[TenantConfig] penyedia visual '{mkey}' gagal dibaca: {e} — kunci visual akan kosong")
+            config.baca_gagal.append(f"visual_provider: {type(e).__name__}")
             return None
 
     def _set_key_from_pool(self, config: "TenantRunConfig", tenant_id: str, provider: Optional[str],
@@ -573,6 +600,9 @@ class TenantConfigManager:
         except Exception as e:
             logger.error(f"[TenantConfig] resolve pool key provider={provider} acct={account_id} gagal: {e} — kosong (no-fallback)")
             setattr(config, key_attr, "")
+            # Kosong ini AKIBAT KEGAGALAN KAMI, bukan kelalaian tenant → ditandai supaya gerbang
+            # di hilir memakai kalimat yang benar (TRANSIENT, "sistem akan otomatis mencoba kembali").
+            config.baca_gagal.append(f"{key_attr}: {type(e).__name__}")
 
     def _load_from_supabase(self, tenant_id: str) -> Optional[TenantRunConfig]:
         """Load config dari Supabase. Return None jika gagal."""

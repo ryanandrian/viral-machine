@@ -135,6 +135,28 @@ class Pipeline:
             # ── STEP 0: Validasi kredensial wajib (fail-loud SEBELUM produksi 35 mnt) ──
             _missing = run_config.missing_credentials() if run_config else []
             if _missing:
+                # ── DUA SEBAB, DUA KALIMAT (insiden RAD 20-Agu 21:00) ─────────────────────────
+                # Nilai kosong bisa lahir dari DUA hal yang tindakannya berlawanan:
+                #   (a) tenant memang belum mengisi        → tenant yang harus bertindak
+                #   (b) KAMI gagal membacanya sesaat       → tenant tak boleh disuruh apa pun
+                # Dulu keduanya keluar dengan kalimat (a). Akibat nyata: jaringan ke DB terputus
+                # sekejap → tenant dituduh "kredensial belum lengkap", padahal channel yang sama
+                # BERHASIL 7 menit kemudian tanpa seorang pun menyentuh apa pun.
+                # `baca_gagal` ditandai DI TITIK KEJADIAN (tenant_config.py) — bukan ditebak dari teks.
+                _baca_gagal = list(getattr(run_config, "baca_gagal", []) or [])
+                if _baca_gagal:
+                    raise ConfigError(
+                        "Setelan channel gagal dibaca sesaat: " + "; ".join(_baca_gagal),
+                        step="validation",
+                        # TRANSIENT = pulih sendiri (di luar FAST_FAIL, jadi ambang rem TIDAK bergeser).
+                        error_class=ErrorClass.TRANSIENT,
+                        # milik_kita: permukaan hilir HARAM menempelkan "kegagalan di layanan AI Anda".
+                        milik_kita=True,
+                        # Redaksi diketok owner 21-Agu: JANGAN "coba lagi" (memerintah tenant) —
+                        # ini mesin otomatis, dan producer memang mencoba lagi tiap ±16 detik.
+                        human_message=("Setelan channel gagal dibaca sesaat — sistem akan otomatis "
+                                       "mencoba kembali. Tidak ada yang perlu Anda ubah."),
+                    )
                 raise ConfigError(
                     "Kredensial wajib belum lengkap: " + "; ".join(_missing),
                     step="validation",
@@ -800,6 +822,12 @@ class Pipeline:
             _ec = getattr(e, "error_class", ErrorClass.UNKNOWN)
             result["error_class"]  = _ec.value if isinstance(_ec, ErrorClass) else str(_ec or ErrorClass.UNKNOWN.value)
             result["human_error"]  = getattr(e, "human_message", None)
+            # [2026-08-21] ASAL putusan + MODEL yang ditolak — dibawa keluar, tidak dibuang.
+            # Dipakai producer untuk (a) menyimpan `production_runs.failed_model` dan (b) menilai
+            # bukti karantina katalog. Tanpa `dasar`, karantina mustahil membedakan "vendor menyebut
+            # modelnya mati" dari "404 telanjang" ⇒ bisa mematikan model yang masih HIDUP.
+            result["error_dasar"]  = getattr(e, "dasar", "") or ""
+            result["failed_model"] = getattr(e, "model", "") or ""
             result["elapsed_seconds"] = elapsed
             try:
                 from src.utils import cost_meter

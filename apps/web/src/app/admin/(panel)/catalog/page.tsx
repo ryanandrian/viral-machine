@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { Plus, Target, ArrowRight, X, Trash2, AlertTriangle } from "lucide-react";
 import PresetTables from "@/components/preset-tables";
+import ConfirmDialog from "@/components/confirm-dialog";   // PUSTAKA yang sudah ada — bukan komponen baru
 import "./catalog.css";
 
 // E2 Admin Catalog (Phase 10.4-10.7) — DATA NYATA via /api/admin/catalog (service_role).
@@ -343,10 +344,26 @@ export default function AdminCatalogPage() {
     );
   };
 
-  async function toggle(table: string, key: string, value: boolean) {
-    const r = await fetch("/api/admin/catalog", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table, key, patch: { is_active: value } }) });
-    if (r.ok) { setToast("Tersimpan"); await load(); } else setToast("Gagal");
+  // ── DAMPAK MEMATIKAN — terlihat SEBELUM tombol ditekan (AI_ERROR_MGMT §9b) ────────────────
+  // 17-Agu: model dimatikan (benar — vendor memang mematikannya) tapi saklarnya berpindah TANPA
+  // SUARA; 3 channel tenant berhenti dan tak seorang pun tahu selama 4 HARI, dua di antaranya
+  // tenant BERBAYAR. Server menjawab {perlu_konfirmasi, dipakai[]} dan layar MENYEBUT namanya.
+  // BUKAN penolakan: admin tetap bisa melanjutkan (vendor bisa mematikan model sewaktu-waktu).
+  const [dampak, setDampak] = useState<{ table: string; key: string; dipakai: string[] } | null>(null);
+
+  async function kirimToggle(table: string, key: string, value: boolean, konfirmasi = false) {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (konfirmasi) headers["x-konfirmasi-dampak"] = "1";
+    const r = await fetch("/api/admin/catalog", { method: "PATCH", headers, body: JSON.stringify({ table, key, patch: { is_active: value } }) });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok && j?.perlu_konfirmasi) { setDampak({ table, key, dipakai: j.dipakai ?? [] }); return; }
+    if (r.ok) { setToast("Tersimpan"); setDampak(null); await load(); } else setToast("Gagal");
   }
+
+  async function toggle(table: string, key: string, value: boolean) {
+    await kirimToggle(table, key, value);
+  }
+
   // F2-06: admin set contoh suara (preview_url) per voice — tenant ▶ memutarnya (nol biaya runtime).
   const [prevEdit, setPrevEdit] = useState<{ key: string; url: string } | null>(null);
   async function savePreview(key: string, url: string) {
@@ -1059,6 +1076,17 @@ export default function AdminCatalogPage() {
         </>
       )}
 
+      <ConfirmDialog
+        open={!!dampak}
+        title={<Bi id="Matikan meski sedang dipakai?" en="Disable even though it is in use?" />}
+        message={<Bi
+          id={`${dampak?.dipakai.length ?? 0} channel aktif memakai ini: ${(dampak?.dipakai ?? []).join(", ")}. Produksi mereka akan BERHENTI sampai tenant memilih penggantinya — dan tenant akan melihat pesan yang menyebut nama model ini. Lanjutkan?`}
+          en={`${dampak?.dipakai.length ?? 0} active channel(s) use this: ${(dampak?.dipakai ?? []).join(", ")}. Their production will STOP until the tenant picks a replacement — tenants will see a message naming this model. Continue?`} />}
+        confirmLabel={<Bi id="Ya, matikan" en="Yes, disable" />}
+        confirmClass="btn-destructive"
+        onConfirm={() => dampak && kirimToggle(dampak.table, dampak.key, false, true)}
+        onCancel={() => setDampak(null)}
+      />
       {toast && <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 70, background: "#1f2937", color: "#fff", padding: "0.625rem 1rem", borderRadius: 8, border: "1px solid rgba(255,255,255,0.12)", boxShadow: "0 6px 20px rgba(0,0,0,0.35)", fontSize: "var(--text-sm)" }}>{toast}</div>}
     </>
   );

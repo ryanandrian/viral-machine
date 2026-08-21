@@ -158,6 +158,26 @@ export async function GET() {
 }
 
 // PATCH: { table, key, patch } — update baris katalog (whitelist tabel+kolom). + admin_audit.
+/** Channel AKTIF yang masih menunjuk baris katalog ini. Dipakai untuk memperlihatkan DAMPAK
+ *  sebelum admin mematikannya (17-Agu: 4 channel berhenti 4 hari tanpa ada yang tahu).
+ *  Hanya membaca; nol perubahan. Gagal baca → daftar kosong (jangan menghalangi admin karena
+ *  hiasan yang gagal dibaca). */
+async function channelTerdampak(a: ReturnType<typeof createAdminClient>, table: string, key: string) {
+  try {
+    const { data } = await a.from("channels")
+      .select("channel_name, llm_model, tts_model, voice_key, visual_mode, tts_provider, llm_library")
+      .eq("is_active", true);
+    const rows = (data ?? []) as Record<string, string | null>[];
+    return rows.filter((c) => {
+      const vModel = (c.visual_mode ?? "").includes(":") ? (c.visual_mode ?? "").split(":")[1] : null;
+      if (table === "ai_models") return c.llm_model === key || c.tts_model === key || vModel === key;
+      if (table === "voice_catalog") return c.voice_key === key;
+      // penyedia / mesin suara: channel terdampak bila slotnya memakai penyedia itu
+      return c.tts_provider === key || c.llm_library === key;
+    }).map((c) => c.channel_name || "(tanpa nama)");
+  } catch { return [] as string[]; }
+}
+
 export async function PATCH(req: Request) {
   const g = await requireSuperAdmin();
   if (g.error) return g.error;
@@ -180,6 +200,24 @@ export async function PATCH(req: Request) {
   }
   const a = createAdminClient();
   try { await assertEnums(a, table, clean); } catch (e) { return valErrResponse(e); }
+
+  // ── DAMPAK MEMATIKAN BARIS KATALOG — terlihat SEBELUM tombol ditekan (AI_ERROR_MGMT §9b) ────
+  // 17-Agu: model `llama-3.3-70b-versatile` dimatikan (benar — vendor memang mematikannya), tapi
+  // saklar itu berpindah TANPA SUARA. Tidak ada yang memberi tahu bahwa 3 channel tenant masih
+  // memakainya. Mereka berhenti, dan tak seorang pun tahu selama 4 HARI — dua di antaranya tenant
+  // BERBAYAR langganan aktif.
+  // Ini BUKAN penolakan: kalau vendor mematikan model, admin WAJIB tetap bisa mematikannya —
+  // blokir keras = "kunci tanpa jalur buka" (sudah ditegur owner, PAYMENT §10e-2). Yang berubah
+  // hanya satu: akibatnya terlihat sebelum bertindak, bukan empat hari sesudahnya.
+  // Dikirim HANYA saat is_active berubah menjadi TIDAK aktif (nol biaya untuk perubahan lain).
+  if ((table === "ai_models" || table === "ai_providers" || table === "voice_catalog" || table === "tts_profiles")
+      && "is_active" in clean && clean.is_active === false && !req.headers.get("x-konfirmasi-dampak")) {
+    const terdampak = await channelTerdampak(a, table, String(key));
+    if (terdampak.length > 0) {
+      return NextResponse.json({ perlu_konfirmasi: true, dipakai: terdampak }, { status: 200 });
+    }
+  }
+
   const { data, error } = await a.from(table).update(clean).eq(def.pk, key).select("*").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   await a.from("admin_audit").insert({ admin_uid: g.user.id, action: `catalog.update.${table}`, detail: { key, fields: Object.keys(clean) } });

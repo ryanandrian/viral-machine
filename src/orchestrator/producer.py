@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 from loguru import logger
 
 from src.orchestrator import inventory
-from src.exceptions import FAST_FAIL
+from src.exceptions import FAST_FAIL, ErrorClass
 
 # [ERROR-MGMT] nilai string ErrorClass yang memicu rem-segera (persis set FAST_FAIL exceptions.py).
 _FAST_FAIL_VALUES = frozenset(ec.value for ec in FAST_FAIL)
@@ -146,15 +146,38 @@ def _record_production_run(channel_row: dict, result: dict, status: str,
             "qc_passed":       qc_passed,
             "viral_score":     script.get("viral_score"),
             "llm_provider":    script.get("llm_provider_used"),
+            # [2026-08-21] Model yang DITOLAK vendor. Dulu hanya `llm_provider` yang disimpan, dan
+            # nama modelnya cuma hidup di teks bebas — padahal vendor SUDAH menyebutkannya. Tanpa
+            # kolom ini, bukti-silang antar-tenant (satu-satunya bukti karantina yang BEBAS BIAYA)
+            # mustahil dihitung. Owner menolak pembuktian berbayar dengan kunci admin (21-Agu).
+            "failed_model":    result.get("failed_model") or None,
             "elapsed_seconds": result.get("elapsed_seconds"),
             "error_message":   error,
             "error_class":     result.get("error_class"),   # [ERROR-MGMT] makna → circuit-breaker semantik
+            # (karantina katalog dinilai di bawah, SESUDAH baris ini tersimpan — supaya bukti-silang
+            #  antar-tenant menghitung kegagalan ini juga)
             # video_title = judul AKHIR (yang tampil di YouTube) — FE Runs menampilkan ini, bukan
             # topik internal (owner 2026-07-10: 1 video sempat tampil beda nama di Runs vs Studio).
             "run_metadata":    {"scheduled": True, "mode": "buffer", "video_title": script.get("title", ""), **_cost_fields(result), **_mutu_fields(result)},
         }).execute()
     except Exception as e:
         logger.warning(f"[Producer] tulis production_runs (scheduled) gagal — non-fatal: {e}")
+
+    # ── KATALOG BELAJAR (AI_ERROR_MGMT §9b) ──────────────────────────────────────────────────
+    # Sinyal "model mati" dulu berhenti di baris di atas: katalog tak pernah tahu, jadi model yang
+    # TERBUKTI mati tetap ditawarkan ke tenant BERIKUTNYA (Abyss ID diam 24 hari; 17-Agu 4 channel
+    # / 2 tenant BERBAYAR diam 4 hari). Dinilai SESUDAH baris tersimpan supaya bukti-silang
+    # antar-tenant ikut menghitung kegagalan ini.
+    # NOL panggilan berbayar — owner menolak pembuktian dengan kunci admin (21-Agu).
+    try:
+        if (result.get("error_class") or "") == ErrorClass.MODEL_UNAVAILABLE.value:
+            from src.orchestrator.karantina_model import karantina
+            karantina(sb, result.get("failed_model") or "",
+                      result.get("error_dasar") or "", result.get("error") or "")
+    except Exception as e:
+        # Fail-soft MUTLAK: karantina adalah pembelajaran katalog, bukan jalur produksi.
+        # Kegagalannya HARAM menghentikan apa pun.
+        logger.warning(f"[Producer] penilaian karantina model gagal — non-fatal: {e}")
 
 
 def _cost_fields(result: dict) -> dict:

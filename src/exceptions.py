@@ -71,7 +71,7 @@ class PipelineError(Exception):
 
     def __init__(self, message: str = "", *, step: str | None = None, category: str | None = None,
                  error_class: "ErrorClass" = ErrorClass.UNKNOWN, human_message: str | None = None,
-                 milik_kita: bool = False):
+                 milik_kita: bool = False, dasar: str = "", model: str = ""):
         super().__init__(message)
         self.step = step
         if category:
@@ -87,6 +87,14 @@ class PipelineError(Exception):
         # 10 FFmpeg) ditimpakan kepada penyedia AI tenant. Dokumen resmi penyedia bahkan menyatakan
         # sendiri kelompok ini (mis. Cloudflare 3003/5004/3006 = permintaan KITA cacat).
         self.milik_kita = milik_kita
+        # [2026-08-21] ASAL PUTUSAN + MODEL YANG GAGAL — dibawa keluar, bukan dibuang.
+        # `dasar` (galat_registry.Putusan.dasar) membedakan "vendor menyebut modelnya sendiri" dari
+        # "404 telanjang dari jaring generik". Tanpa itu, karantina katalog mustahil membedakan
+        # kematian model dari alamat yang salah di sisi kita — dan bisa mematikan model yang HIDUP.
+        # `model` = model_key yang ditolak; vendor SUDAH menyebutkannya, membuangnya membuat
+        # bukti-silang antar-tenant (satu-satunya bukti bebas-biaya) mustahil dihitung.
+        self.dasar = dasar
+        self.model = model
 
 
 class ConfigError(PipelineError):

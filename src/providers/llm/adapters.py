@@ -62,6 +62,20 @@ _HUMAN_KUOTA_HARIAN = ("Jatah HARIAN penyedia AI (penulis naskah) sudah terpakai
 _RX_HARIAN = re.compile(r"per day|daily limit|/day|harian", re.I)
 
 
+class _Vonis(tuple):
+    """(kelas, anjuran) — TETAP bisa di-unpack dua nilai (pemanggil & uji lama tak tersentuh),
+    plus `.dasar` untuk yang perlu tahu ASAL putusan. `dasar` inilah pembeda antara "vendor
+    menyebut modelnya mati" dan "404 telanjang" — dan tanpa pembeda itu karantina katalog bisa
+    mematikan model yang masih hidup (lihat src/orchestrator/karantina_model.py).
+
+    (Tanpa `__slots__`: subkelas `tuple` tak mengizinkannya — Python menolak di waktu impor.)"""
+
+    def __new__(cls, kelas, anjuran, dasar: str = ""):
+        obj = super().__new__(cls, (kelas, anjuran))
+        obj.dasar = dasar
+        return obj
+
+
 def _classify_openai_compat_error(exc: Exception, penyedia: str = "", *,
                                   model: str = "", penyedia_nama: str = "") -> tuple[ErrorClass, str | None]:
     """Galat transport OpenAI-compatible → (ErrorClass, anjuran untuk tenant).
@@ -99,11 +113,11 @@ def _classify_openai_compat_error(exc: Exception, penyedia: str = "", *,
     for nama in _kandidat:
         p = golongkan(nama, status=_status, kode=_kode, teks=blob)
         if p.dasar.startswith(("kode/teks-vendor", "terusan-agregator")):
-            return p.kelas, _anjuran(p.kelas, blob, _ident)
+            return _Vonis(p.kelas, _anjuran(p.kelas, blob, _ident), p.dasar)
 
     # Tak ada kode vendor yang cocok → jaring generik (batas berkala · semantik HTTP).
     p = golongkan(penyedia or "", status=_status, kode=_kode, teks=blob)
-    return p.kelas, (_anjuran(p.kelas, blob, _ident) if p.kelas is not ErrorClass.UNKNOWN else None)
+    return _Vonis(p.kelas, (_anjuran(p.kelas, blob, _ident) if p.kelas is not ErrorClass.UNKNOWN else None), p.dasar)
 
 
 def _identitas(model: str, penyedia_nama: str) -> str:
@@ -233,9 +247,11 @@ class AnthropicMessagesAdapter(_BaseAdapter):
             # "tak dikenal": diulang 3x walau kunci salah, dan tenant tak diberi tahu apa pun yang
             # bisa dikerjakan. Anthropic satu-satunya vendor dengan kode TAGIHAN tersendiri (402
             # `billing_error`); tanpa penggolongan, itu ikut hilang.
-            _ec, _human = _classify_openai_compat_error(e, self.provider_key, model=model, penyedia_nama=self.display_name)
+            _vonis = _classify_openai_compat_error(e, self.provider_key, model=model, penyedia_nama=self.display_name)
+            _ec, _human = _vonis
             raise LLMError(f"Provider '{self.display_name}' gagal: {e}",
-                           error_class=_ec, human_message=_human) from e
+                           error_class=_ec, human_message=_human,
+                           dasar=getattr(_vonis, 'dasar', ''), model=model) from e
 
 
 # ── [18-Agu] Angka JATAH TOKEN — TERUKUR, dan sejak 20-Agu DARI DATABASE ──────────────────────
@@ -460,9 +476,11 @@ class OpenAIChatAdapter(_BaseAdapter):
         except Exception as e:
             # [ERROR-MGMT 2026-07-20] klasifikasi ber-bukti-sampel → error_class + pesan manusiawi
             # mengalir terstruktur (rem-cepat FAST_FAIL di hilir membaca MAKNA, bukan teks).
-            _ec, _human = _classify_openai_compat_error(e, self.provider_key, model=model, penyedia_nama=self.display_name)
+            _vonis = _classify_openai_compat_error(e, self.provider_key, model=model, penyedia_nama=self.display_name)
+            _ec, _human = _vonis
             raise LLMError(f"Provider '{self.display_name}' gagal: {e}",
-                           error_class=_ec, human_message=_human) from e
+                           error_class=_ec, human_message=_human,
+                           dasar=getattr(_vonis, 'dasar', ''), model=model) from e
 
 
 class FalAnyLlmAdapter(_BaseAdapter):
@@ -522,9 +540,11 @@ class FalAnyLlmAdapter(_BaseAdapter):
                     detail = e.read()[:300].decode("utf-8", "replace")
                 except Exception:
                     detail = ""
-            _ec, _human = _classify_openai_compat_error(e, self.provider_key, model=model, penyedia_nama=self.display_name)
+            _vonis = _classify_openai_compat_error(e, self.provider_key, model=model, penyedia_nama=self.display_name)
+            _ec, _human = _vonis
             raise LLMError(f"Provider '{self.display_name}' gagal: {e} {detail}".strip(),
-                           error_class=_ec, human_message=_human) from e
+                           error_class=_ec, human_message=_human,
+                           dasar=getattr(_vonis, 'dasar', ''), model=model) from e
         # B2 cost-tracking: usage menumpang di respons yg sama (nol overhead). Fail-soft.
         # Dicatat SEBELUM cabang galat — permintaan yang ditolak pun sudah memakai uang tenant
         # (pola yang sama dipakai pipeline: "run gagal pun uang TERPAKAI — tetap dicatat").
@@ -543,9 +563,11 @@ class FalAnyLlmAdapter(_BaseAdapter):
         # cabang galat transport di bawah — bukan penilai kedua.
         if data.get("error"):
             _pesan = str(data["error"])
-            _ec, _human = _classify_openai_compat_error(Exception(_pesan), self.provider_key, model=model, penyedia_nama=self.display_name)
+            _vonis = _classify_openai_compat_error(Exception(_pesan), self.provider_key, model=model, penyedia_nama=self.display_name)
+            _ec, _human = _vonis
             raise LLMError(f"Provider '{self.display_name}' gagal: {_pesan}",
-                           error_class=_ec, human_message=_human)
+                           error_class=_ec, human_message=_human,
+                           dasar=getattr(_vonis, 'dasar', ''), model=model)
         teks = (data.get("output") or "").strip()
         if not teks:
             raise LLMError(f"Provider '{self.display_name}' mengembalikan jawaban kosong.")
