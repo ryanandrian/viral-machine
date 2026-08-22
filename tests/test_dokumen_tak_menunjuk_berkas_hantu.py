@@ -32,12 +32,33 @@ MEM = "/home/rad/.claude/projects/-home-rad-viral-machine/memory"
 
 # Dokumen yang WAJIB bersih dari rujukan hantu: yang dibaca sesi baru sebagai perintah.
 # (Dokumen arsip/histori boleh menyebut berkas lama — itu memang catatan sejarah.)
-WAJIB_BERSIH = ["SISA_KERJA_GO_LIVE.md", "CLAUDE.md"]
+#
+# [22-Agu] DIPERLUAS ke dokumen ARSITEKTUR SSOT atas mandat owner: "tidak boleh ada 1 pun dokumen
+# yang terlewat sehingga kedepannya bisa menyesatkan." Terukur saat diperluas: penjaga ini hanya
+# mencakup 2 dari belasan dokumen, sehingga `CHANNEL_LOCK_ACTIVATION_PLAN.md` masih mendaftarkan
+# `api/channels/[id]/keys/route.ts` sebagai bagian PETA — padahal berkasnya sudah dihapus sebagai
+# dead-code oleh dokumen itu sendiri. Sesi baru yang membaca peta itu akan mengejar ruang kosong.
+# Dokumen SSOT dibaca sebagai KEBENARAN, jadi rujukan hantu di sana lebih menyesatkan, bukan kurang.
+WAJIB_BERSIH = [
+    "SISA_KERJA_GO_LIVE.md", "CLAUDE.md",
+    "AI_ERROR_MANAGEMENT_ARCHITECTURE.md",   # SSOT galat/karantina/pintu kedua & ketiga
+    "ARSITEKTUR_AI_PROVIDER_MODEL.md",       # SSOT rantai provider/model end-to-end
+    "CHANNEL_LOCK_ACTIVATION_PLAN.md",       # SSOT kredensial + gerbang channel aktif
+]
 
 # Penanda bahwa baris itu sedang MENJELASKAN berkasnya tiada (bukan memerintahkan membacanya).
 PENANDA_KOREKSI = re.compile(
     r"SUDAH TIDAK ADA|TIDAK ADA|TIADA|HILANG|dibuang|DICABUT|peta-silang|RANJAU|"
+    # [22-Agu] "KOREKSI" ditambahkan: blok koreksi di AI_ERROR_MGMT §7 menyebut `test_errmgmt.py`
+    # justru untuk MENYATAKAN berkas itu tiada — kalimatnya terpotong baris, sehingga penanda
+    # "TIDAK ADA" jatuh di baris berikutnya dan pemindai salah menuduhnya hantu.
+    r"KOREKSI|"
     r"tak pernah|BASI|dihapus", re.I)
+
+# Awalan jalur yang MEMANG bukan bagian repo — menyebutnya bukan rujukan hantu.
+# `scratchpad/` = berkas kerja sesi (di luar repo, sengaja tak dilacak git); CHANNEL_LOCK menyebut
+# `scratchpad/run_web.py`/`run_vault.py` sebagai instruksi operasional menjalankan server lokal.
+LUAR_REPO = ("scratchpad/",)
 
 # Baris RENCANA menyebut berkas yang memang BELUM dibangun — itu sah, bukan rujukan hantu.
 # (Diverifikasi 05-Agu: `src/config/system_secrets.py` di item S2 dan `reels_publisher.py`/
@@ -55,6 +76,37 @@ def _baris(dok: str):
 class TestPemindaiBenar(unittest.TestCase):
     """Pagar-untuk-pagar: alat ukur yang salah lebih berbahaya daripada tak mengukur
     (terbukti 6× dalam satu sesi 04/05-Agu)."""
+
+    def test_cakupan_memuat_dokumen_SSOT(self):
+        """PAGAR UNTUK PAGAR. Sabotase 22-Agu membuktikan celahnya: mencabut satu dokumen dari
+        `WAJIB_BERSIH` membuat rujukan hantu di dokumen itu lolos TANPA satu uji pun merah.
+        Cakupan adalah bagian dari penjaga, jadi ia sendiri wajib dijaga — kalau tidak, penjaga ini
+        bisa dilumpuhkan dengan menghapus satu baris daftar."""
+        WAJIB = ["SISA_KERJA_GO_LIVE.md", "CLAUDE.md",
+                 "AI_ERROR_MANAGEMENT_ARCHITECTURE.md",
+                 "ARSITEKTUR_AI_PROVIDER_MODEL.md",
+                 "CHANNEL_LOCK_ACTIVATION_PLAN.md"]
+        kurang = [d for d in WAJIB if d not in WAJIB_BERSIH]
+        self.assertEqual(
+            [], kurang,
+            f"Dokumen SSOT ini dicabut dari cakupan pemindai: {kurang}. Dokumen SSOT dibaca sesi "
+            "baru sebagai KEBENARAN — rujukan hantu di sana lebih menyesatkan, bukan kurang. "
+            "Mandat owner 22-Agu: 'tidak boleh ada 1 pun dokumen yang terlewat'.")
+
+    def test_pengecualian_LUAR_REPO_tak_menelan_repo(self):
+        """PAGAR UNTUK PAGAR. Sabotase membuktikan: menambah `src/` atau `apps/` ke `LUAR_REPO`
+        membuat SELURUH rujukan hantu di kode lolos. Pengecualian hanya sah untuk jalur yang
+        memang BUKAN bagian repo."""
+        for awalan in LUAR_REPO:
+            akar_nyata = os.path.join(AKAR, awalan.rstrip("/"))
+            self.assertFalse(
+                os.path.isdir(akar_nyata),
+                f"`{awalan}` ada sebagai direktori NYATA di repo, tapi dipakai sebagai pengecualian "
+                "'luar repo' ⇒ seluruh rujukan hantu di bawahnya jadi tak terperiksa.")
+        for dilarang in ("src/", "apps/", "tests/", "migrations/", "scripts/"):
+            self.assertNotIn(
+                dilarang, LUAR_REPO,
+                f"`{dilarang}` adalah direktori repo — memasukkannya ke LUAR_REPO melumpuhkan pemindai")
 
     def test_dokumen_wajib_bersih_memang_ada(self):
         for d in WAJIB_BERSIH:
@@ -104,6 +156,8 @@ class TestTakAdaRujukanHantu(unittest.TestCase):
                     continue                      # koreksi ATAU rencana (berkas belum dibangun) = sah
                 for jalur in re.findall(r"`([A-Za-z0-9_./-]+\.(?:py|ts|tsx|sql|sh|md))`", baris):
                     j = jalur.lstrip("./")
+                    if j.startswith(LUAR_REPO):
+                        continue                  # berkas kerja di luar repo — bukan rujukan hantu
                     if os.path.exists(os.path.join(AKAR, j)):
                         continue
                     if glob.glob(os.path.join(AKAR, "**", os.path.basename(j)), recursive=True):

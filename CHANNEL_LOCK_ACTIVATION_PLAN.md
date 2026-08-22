@@ -164,7 +164,7 @@ Indikator **🟢 = TERVERIFIKASI BEKERJA**, bukan sekadar "terisi". Hanya yang *
 - `app/(app)/channels/[id]/page.tsx` — **Channel Setting**; panel "Produksi AI" (penyedia→model→kunci inline), `pausePlay()` gate, `load()` RPC `channel_readiness`, `effectiveStatus()`.
 - `app/(app)/channels/page.tsx` — daftar channel; `toggleActive()`; badge Active/Paused.
 - `app/(app)/config/[tab]/page.tsx` — tab `niches` + `notifications` (TETAP); tab AI-key sudah dibuang.
-- `app/api/channels/[id]/keys/route.ts` — route kunci → `vault()` (`lib/youtube.ts`, BASE `MV_API_BASE`/localhost:8088).
+- ~~`app/api/channels/[id]/keys/route.ts`~~ — **BERKAS SUDAH DIHAPUS** (dead-code, dibereskan sesuai §3 dokumen ini). Diverifikasi 22-Agu: yang ada di `api/channels/[id]/` hanya `resume` & `test`. Kunci AI kini lewat KOLAM `tenant_ai_accounts` (§0.4), bukan route per-channel.
 - `app/onboarding/page.tsx` — buat channel pertama (draft).
 - Pola route dinamis: `export async function POST(req, { params }: { params: Promise<{id:string}> })` + `const {id}=await params`. Auth: `createClient()` + `supabase.auth.getUser()`.
 
@@ -394,7 +394,7 @@ Format: tiap fase punya **Plan** (yang akan dilakukan) & **Realisasi** (diisi sa
 - **Realisasi:** ✅ **SELESAI + DEPLOYED (verified audit 2026-07-01)** — Channel Setting card-terpisah + pemilih AKUN per-elemen (llm/tts/visual `account_id`, auto-bila-1/pilih-bila->1) + YouTube di kartu identitas + Kesiapan di Overview. FE `channels/[id]/page.tsx:116-429` (verified). Bagian dari deploy `06c5e90`/`bb80162`.
 
 ### Fase 7 — FE: indikator 🔴/🟢 + lock konsisten (Kesiapan di OVERVIEW)
-- **FE:** komponen bersama `lib/channel-status.ts` + `<ChannelStatusBadge>` (pindah `effectiveStatus`); dipakai
+- **FE:** komponen bersama `lib/channel-status.tsx` + `<ChannelStatusBadge>` (pindah `effectiveStatus`); dipakai
   `channels/[id]` (badge header), `channels/page.tsx` (card daftar), `dashboard`. RPC batch `channels_readiness_mine()` (migr baru) utk daftar.
   **Kartu "Kesiapan & Aktivasi" di tab OVERVIEW** (naikkan kartu readiness yg sudah ada): tiap syarat 🔴/🟢 + link ke konfigurasinya (peta string `channel_missing`→kalimat+tautan); tombol Aktifkan enabled hanya semua 🟢.
   **Card daftar `/channels` (redesign world-class):** status-first + aksi state-driven + sinyal nyata (Video=`videos` published, sparkline produksi=`production_runs`) + empty-state + overflow ⋯ + perbaiki handle (`youtube.com/channel/{id}`, bukan `@platform_channel_id`).
