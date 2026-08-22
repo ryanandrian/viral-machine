@@ -343,6 +343,9 @@ def produce_one(channel_row: dict) -> int | None:
                     qc_reason=qc.get("reason", ""),
                     recommendation=qc.get("recommendation", ""),
                     run_config=tc,
+                    # Nama channel: `tc` (lembar dari baris channels) tak memuatnya → tanpa ini
+                    # header pesan jatuh ke nomor tenant, hal yang sudah ditegur owner 10-Jul.
+                    channel_name=channel_row.get("channel_name") or "",
                 )
             except Exception as _te:
                 logger.warning(f"[Producer] notif review-pending gagal — non-fatal: {_te}")

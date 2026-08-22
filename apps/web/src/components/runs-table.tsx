@@ -83,6 +83,33 @@ function ReviewVenue({ d, issueRunIds }: { d: RunRow; issueRunIds: Set<string> }
   return <span className="muted" style={s}><span data-id>kedaluwarsa — dibuang otomatis (TTL)</span><span data-en>expired — auto-removed (TTL)</span></span>;
 }
 
+// Hasil "Jalankan ulang" milik satu run gagal. `source_run_id` dulu KOLOM MATI (nol pembaca):
+// sesudah ulangan berhasil, baris asalnya tetap berlencana "Gagal" tanpa keterangan — owner 22-Agu:
+// *"terkesan produksi ulangnya gagal"* — dan tombol ulang tetap hidup (sekali tekan = kredit terbakar).
+type Ulangan = { jobStatus: string; runNo: string | null; runStatus: string | null };
+
+// Owner 22-Agu: "sudah diulang" saja MASIH terkesan gagal → sebut hasilnya + NOMOR run hasilnya.
+function UlanganNote({ u }: { u?: Ulangan }) {
+  if (!u) return null;
+  const s: CSSProperties = { fontSize: "var(--text-xs)", whiteSpace: "nowrap" };
+  if (u.jobStatus === "pending" || u.jobStatus === "producing")
+    return <span className="muted" style={s}><span data-id>sedang diulang…</span><span data-en>re-running…</span></span>;
+  if (u.jobStatus === "failed" && !u.runNo)
+    return <span className="muted" style={s}><span data-id>ulangan juga gagal</span><span data-en>re-run also failed</span></span>;
+  if (!u.runNo)   // ulangan tuntas tapi baris hasilnya di luar jendela data → jangan mengklaim sukses
+    return <span className="muted" style={s}><span data-id>sudah diulang</span><span data-en>re-run done</span></span>;
+  const h = statusKey(u.runStatus);
+  const teks = h === "completed" ? { id: "sudah diulang dan sukses", en: "re-run succeeded" }
+    : h === "review" ? { id: "sudah diulang — hasilnya ada catatan QC", en: "re-run done — result has a QC note" }
+    : h === "failed" ? { id: "ulangan juga gagal", en: "re-run also failed" }
+    : { id: "sudah diulang", en: "re-run done" };
+  return (
+    <a className="link" style={s} href={`/runs/${u.runNo}`} onClick={(e) => e.stopPropagation()}>
+      <span data-id>{teks.id}</span><span data-en>{teks.en}</span>{` · RUN #${u.runNo}`}
+    </a>
+  );
+}
+
 const PL_NAMES = ["Trend Radar", "Topic Select", "Script", "Hook", "TTS", "Visual", "Render", "Publish"];
 const STEP_ICON: Record<string, [string, string, LucideIcon]> = {
   done: ["var(--success)", "var(--success-soft)", Check], run: ["var(--info)", "var(--info-soft)", Loader2],
@@ -100,6 +127,7 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
   const [confirmCfg, setConfirmCfg] = useState<null | { title: ReactNode; message: ReactNode; confirmLabel: ReactNode; onConfirm: () => void }>(null);
   const [chMap, setChMap] = useState<Record<string, string>>({});
   const [issueRunIds, setIssueRunIds] = useState<Set<string>>(new Set());  // run dgn item tinjau LIVE di /review
+  const [ulangan, setUlangan] = useState<Record<string, Ulangan>>({});      // run_id asal → hasil "Jalankan ulang"
   const [views, setViews] = useState<Record<string, number>>({});
   const [usdRate, setUsdRate] = useState(16500);   // kurs tampilan (app_config usd_idr_rate; fallback = default migrasi)
   const [loading, setLoading] = useState(true);
@@ -123,18 +151,33 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
     // Banner "Produksi langsung" — WAJIB scope channel juga (cegah job channel lain bocor ke tab channel ini).
     let djSel = supabase.from("direct_jobs").select("id,status,job_type,niche").in("status", ["pending", "producing"]);
     if (channelId) djSel = djSel.eq("channel_id", channelId);
-    const [{ data: runs }, { data: chs }, { data: dj }, vw, { data: ci }, { data: rateRow }] = await Promise.all([
+    // Pekerjaan "Jalankan ulang" (SEMUA keadaan, bukan hanya yang berjalan) → keterangan pada baris asalnya.
+    let rjSel = supabase.from("direct_jobs").select("status,source_run_id,run_id,created_at").eq("job_type", "retry");
+    if (channelId) rjSel = rjSel.eq("channel_id", channelId);
+    const [{ data: runs }, { data: chs }, { data: dj }, vw, { data: ci }, { data: rateRow }, { data: rj }] = await Promise.all([
       prSel.order("created_at", { ascending: false }).limit(2000),
       supabase.from("channels").select("id,channel_name"),
       djSel.order("created_at", { ascending: false }),
       supabase.rpc("get_tenant_video_views"),
       ciSel.order("created_at", { ascending: true }),
       supabase.from("app_config").select("value").eq("key", "usd_idr_rate").maybeSingle(),
+      rjSel.order("created_at", { ascending: true }),
     ]);
     const _rate = Number((rateRow as { value?: number } | null)?.value);
     if (_rate > 0) setUsdRate(_rate);
     setDirect(dj ?? []);
-    setData((runs as RunRow[]) ?? []);
+    const runsArr = ((runs as RunRow[]) ?? []);
+    setData(runsArr);
+    // Nomor run hasil = `production_runs.id` yang ber-`run_id` SAMA dengan pekerjaan ulangannya
+    // (bukan potongan teks "direct-xxxxxxxx" — perakitan begitu pecah bila pola penamaan berubah).
+    const perRunId = new Map(runsArr.filter((r) => r.run_id).map((r) => [r.run_id as string, r]));
+    const petaUlangan: Record<string, Ulangan> = {};
+    for (const j of ((rj as { status: string; source_run_id: string | null; run_id: string | null }[]) ?? [])) {
+      if (!j.source_run_id) continue;
+      const hasil = j.run_id ? perRunId.get(j.run_id) : undefined;   // urut naik → ulangan TERBARU menang
+      petaUlangan[j.source_run_id] = { jobStatus: j.status, runNo: hasil?.id ?? null, runStatus: hasil?.status ?? null };
+    }
+    setUlangan(petaUlangan);
     type CiRow = { id: number; status: string; niche: string | null; channel_id: string | null; metadata: { run_id?: string; script?: { title?: string; topic?: string }; duration_secs?: number; viral_score?: number; insights_grade?: string } | null; created_at: string };
     const ciRows = ((ci as CiRow[]) ?? []);
     // Item tinjau LIVE → run tsb ditinjau di /review (bukan Studio, bukan kedaluwarsa).
@@ -269,7 +312,10 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
               <span className="dot" />{d.status === "producing" ? "Berjalan" : "Antre"} · {d.job_type}{d.niche ? ` · ${prettyNiche(d.niche)}` : ""}
             </span>
           ))}
-          <span className="muted" style={{ fontSize: "var(--text-xs)" }}><span data-id>diproses worker → progress muncul di sini</span><span data-en>processed by worker → progress appears here</span></span>
+          {/* Kalimat lama menjanjikan "progress muncul di sini" — panel ini hanya menampilkan lencana
+              Antre/Berjalan, dan langkah-per-langkahnya memang sudah ada di halaman run (owner 22-Agu:
+              di Runs tak perlu info yang sudah ada di run detail). Janjinya dicabut, bukan ditambah lapis. */}
+          <span className="muted" style={{ fontSize: "var(--text-xs)" }}><span data-id>sedang diproses — hasilnya muncul di daftar setelah selesai</span><span data-en>being processed — it appears in the list once finished</span></span>
         </div>
       )}
 
@@ -354,7 +400,7 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
                     <td><span className="ch-cell muted">{d.channel_id ? (chMap[d.channel_id] ?? "—") : "—"}</span></td>
                     <td><span className="muted">{prettyNiche(d.niche)}</span></td>
                     <td><div className="topic-cell">{runTitle(d) || <span className="muted">—</span>}</div></td>
-                    <td><Badge st={st} />{st === "review" && <div style={{ marginTop: 3 }}><ReviewVenue d={d} issueRunIds={issueRunIds} /></div>}</td>
+                    <td><Badge st={st} />{st === "review" && <div style={{ marginTop: 3 }}><ReviewVenue d={d} issueRunIds={issueRunIds} /></div>}{st === "failed" && <div style={{ marginTop: 3 }}><UlanganNote u={ulangan[d.run_id ?? ""]} /></div>}</td>
                     <td className="num mono" style={{ fontSize: "var(--text-xs)" }}>{fmtDur(d.elapsed_seconds)}</td>
                     <td className="num mono" style={{ fontSize: "var(--text-xs)" }}>{(() => {
                       const c = (d.run_metadata as { cost?: { usd?: number; unpriced?: string[] } } | null)?.cost;
@@ -406,7 +452,7 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
                 <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setSelected(null)}><X size={16} /></button>
               </div>
               <div className="drawer-body">
-                <div style={{ display: "flex", alignItems: "center", gap: ".6rem", flexWrap: "wrap" }}><Badge st={st} />{st === "review" && <ReviewVenue d={selected} issueRunIds={issueRunIds} />}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: ".6rem", flexWrap: "wrap" }}><Badge st={st} />{st === "review" && <ReviewVenue d={selected} issueRunIds={issueRunIds} />}{st === "failed" && <UlanganNote u={ulangan[selected.run_id ?? ""]} />}</div>
                 <div>
                   <div className="sec-label"><span data-id>Ringkasan</span><span data-en>Summary</span></div>
                   <div className="kv"><span className="k">Durasi</span><span className="v">{fmtDur(selected.elapsed_seconds)}</span></div>

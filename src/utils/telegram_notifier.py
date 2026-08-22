@@ -221,15 +221,29 @@ class TelegramNotifier:
         return self._send(chat_id, text)
 
     def notify_review_pending(self, tenant_id: str, title: str, qc_reason: str,
-                              recommendation: str = "", run_config=None) -> bool:
+                              recommendation: str = "", run_config=None,
+                              channel_name: str = "") -> bool:
         """Video JADI tapi ber-catatan QC → masuk antrean Review (jalur TERJADWAL/Opsi C).
         (Owner 2026-07-10): tanpa notif ini tenant tak tahu ada video menunggu keputusan →
         didiamkan → TTL buang otomatis → biaya produksi hangus senyap. Arahan aksi jelas.
-        Chat & toggle per-tenant via run_config (pola notify_qc_fail); TTL & URL config-driven."""
-        chat_id = self._get_chat_id(run_config)
+
+        [2026-08-22] NOMOR DI-RESOLVE SENDIRI — dulu HANYA dari `run_config`, dan itu membuat pesan
+        ini mati total di satu-satunya jalur yang memanggilnya. Sebabnya bukan salah redaksi:
+        `producer.produce_one` memberikan `intelligence.config.TenantConfig` (lembar dari baris
+        `channels`) yang TIDAK punya kolom `telegram_*` — hanya `TenantRunConfig` (tenant_configs)
+        yang punya. Nomor selalu kosong → keluar `False` TANPA satu baris log (pengirim hanya
+        mencatat saat benar-benar mengirim), jadi kegagalannya tak terlihat: 11 video ber-catatan QC
+        (4 channel, 4 tenant, 19-Jul → 22-Agu) nol pesan, sementara 12 video jalur langsung/uji —
+        yang memakai lembar TenantRunConfig — terkirim semua.
+        Polanya menyeragamkan `notify_circuit_break`/`notify_published` di berkas ini (resolve dari
+        `tenant_configs`), BUKAN jalur baru. Saklar tenant tetap yang menentukan: `telegram_enabled`
+        di lembar diperiksa lebih dulu, dan `_chat_id_for_tenant` juga memeriksanya di DB."""
+        if run_config is not None and not getattr(run_config, "telegram_enabled", True):
+            return False   # tenant mematikan notif — hormati (perilaku lama, jangan diakali)
+        chat_id = self._get_chat_id(run_config) or self._chat_id_for_tenant(tenant_id)
         if not chat_id:
             return False
-        channel  = self._channel_name(run_config, {"tenant_id": tenant_id})
+        channel  = channel_name or self._channel_name(run_config, {"tenant_id": tenant_id})
         ttl_days = max(1, round(float(os.getenv("BUFFER_TTL_HOURS", "72")) / 24))
         base     = (os.getenv("APP_BASE_URL", "") or "").rstrip("/")
         lines = [

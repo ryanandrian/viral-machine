@@ -94,6 +94,10 @@ export default function RunDetailPage() {
   // buku-besar riwayat.) Tanpa penanda ini halaman selalu menawarkan tombol "Tinjau" → 8 dari 9 run
   // ber-catatan QC (jalur uji, TAK PERNAH membuat baris inventory) menabrak halaman KOSONG.
   const [punyaItemTinjau, setPunyaItemTinjau] = useState(false);
+  // Hasil "Jalankan ulang" milik run INI. `direct_jobs.source_run_id` dulu KOLOM MATI (nol pembaca):
+  // sesudah ulangan berhasil, kotak merah + tombol ulang tetap tampil apa adanya → owner 22-Agu
+  // *"terkesan produksi ulangnya gagal"*, dan sekali tekan lagi = produksi baru + kredit AI terbakar.
+  const [ulangan, setUlangan] = useState<{ jobStatus: string; runNo: string | null; runStatus: string | null } | null>(null);
 
   // Jalankan ulang run yang gagal — direct_job retry (mis. setelah beli kredit AI).
   // [B24 §10a pintu 3] Tombol ini menulis LANGSUNG dari browser ke tabel antrean — tidak melewati
@@ -151,6 +155,25 @@ export default function RunDetailPage() {
     } else {
       setPunyaItemTinjau(false);
     }
+    // Ulangan run ini (kalau ada). Nomor run hasil diambil dari BARIS `production_runs` ber-`run_id`
+    // sama — bukan dirakit dari potongan teks "direct-xxxxxxxx". RLS men-scope ke tenant.
+    if (r?.run_id) {
+      const { data: rj } = await supabase.from("direct_jobs")
+        .select("status, run_id, created_at").eq("job_type", "retry").eq("source_run_id", r.run_id)
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      const j = rj as { status: string; run_id: string | null } | null;
+      if (!j) { setUlangan(null); }
+      else {
+        let runNo: string | null = null, runStatus: string | null = null;
+        if (j.run_id) {
+          const { data: hasil } = await supabase.from("production_runs")
+            .select("id, status").eq("run_id", j.run_id).maybeSingle();
+          const h = hasil as { id: string; status: string | null } | null;
+          runNo = h?.id ?? null; runStatus = h?.status ?? null;
+        }
+        setUlangan({ jobStatus: j.status, runNo, runStatus });
+      }
+    } else { setUlangan(null); }
     // live-tail: log pipeline di-key oleh run_id → UTAMAKAN run_id (queue_id fallback).
     let q = supabase.from("pipeline_run_logs").select("id,level,step,category,message,created_at");
     if (r?.run_id) q = q.eq("run_id", r.run_id);
@@ -193,6 +216,13 @@ export default function RunDetailPage() {
   );
 
   const st = statusKey(run.status);
+  // Tombol ditutup HANYA saat menekan lagi jelas merugikan: ulangan masih jalan, atau ulangan sudah
+  // menghasilkan run yang BUKAN gagal. Ulangan yang juga gagal → tombol tetap terbuka (kunci wajib
+  // punya jalur buka — `PAYMENT_AND_TENANT_GATE_ARCHITECTURE.md §10e-2`).
+  const ulanganMenutup = !!ulangan && (
+    ulangan.jobStatus === "pending" || ulangan.jobStatus === "producing"
+    || (!!ulangan.runStatus && statusKey(ulangan.runStatus) !== "failed")
+  );
   const seen = new Set(logs.map((l) => { const s = (l.step || "").toLowerCase(); return STEP_DEFS.find((d) => s.includes(d.key))?.key; }).filter(Boolean) as string[]);
   // review = produk JADI (semua langkah selesai KECUALI publish — masih di buffer/ditinjau).
   const stepState = (key: string): StepState =>
@@ -278,7 +308,29 @@ export default function RunDetailPage() {
         <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", flexWrap: "wrap", padding: "0.875rem 1.25rem", background: "var(--error-soft)", border: "1px solid color-mix(in srgb,var(--error) 30%,transparent)", borderRadius: "var(--r-md)", marginBottom: "1rem" }}>
           <AlertTriangle size={16} style={{ color: "var(--error)", flex: "none" }} />
           <span style={{ fontSize: "var(--text-sm)", flex: 1 }}>{run.error_message || "Produksi gagal."}</span>
-          <button className="btn btn-secondary btn-sm" onClick={retry} disabled={!run.channel_id} title={run.channel_id ? "Produksi ulang job ini" : "Channel tak diketahui"}><RefreshCw size={14} /> <span data-id>Jalankan ulang</span><span data-en>Re-run</span></button>
+          {/* Owner 22-Agu: "sudah diulang" saja MASIH terkesan gagal → sebut hasilnya + nomor run hasil. */}
+          {ulangan && (
+            ulangan.jobStatus === "pending" || ulangan.jobStatus === "producing"
+              ? <span className="badge badge-info" style={{ fontSize: "0.6875rem" }}><Bi id="sedang diulang…" en="re-running…" /></span>
+              : ulangan.runNo
+                ? <a className="badge badge-success" style={{ fontSize: "0.6875rem" }} href={`/runs/${ulangan.runNo}`}>
+                    {statusKey(ulangan.runStatus) === "completed"
+                      ? <Bi id="sudah diulang dan sukses" en="re-run succeeded" />
+                      : statusKey(ulangan.runStatus) === "review"
+                        ? <Bi id="sudah diulang — hasilnya ada catatan QC" en="re-run done — result has a QC note" />
+                        : statusKey(ulangan.runStatus) === "failed"
+                          ? <Bi id="ulangan juga gagal" en="re-run also failed" />
+                          : <Bi id="sudah diulang" en="re-run done" />}
+                    {` · RUN #${ulangan.runNo}`}
+                  </a>
+                : <span className="badge badge-default" style={{ fontSize: "0.6875rem" }}>
+                    {ulangan.jobStatus === "failed"
+                      ? <Bi id="ulangan juga gagal" en="re-run also failed" />
+                      : <Bi id="sudah diulang" en="re-run done" />}
+                  </span>
+          )}
+          <button className="btn btn-secondary btn-sm" onClick={retry} disabled={!run.channel_id || ulanganMenutup}
+                  title={ulanganMenutup ? "Run ini sudah dijalankan ulang — lihat hasilnya" : run.channel_id ? "Produksi ulang job ini" : "Channel tak diketahui"}><RefreshCw size={14} /> <span data-id>Jalankan ulang</span><span data-en>Re-run</span></button>
           {retryMsg && <span style={{ flexBasis: "100%", fontSize: "var(--text-xs)", color: "var(--text-secondary)" }}>{retryMsg}</span>}
         </div>
       )}

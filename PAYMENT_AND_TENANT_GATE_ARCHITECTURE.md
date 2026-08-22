@@ -346,7 +346,7 @@ jadi Publik sendiri** → mendapat konten tanpa bayar. Kebocoran **NILAI**, buka
 | 2 | Publish terjadwal | mesin | ✅ ya | `publisher.py:73` |
 | 3 | **Test Run** (`job_type='test'`) → unggah PRIVAT ke YouTube tenant | API (service_role) | ❌ **TIDAK** | `api/channels/[id]/test/route.ts:31` |
 | 4 | **Test Niche** (`test_nopub`) → presigned URL 10 mnt (bisa diunduh) | API (service_role) | ❌ **TIDAK** | `api/niches/mine/test/route.ts:45` + `lib/test-run.ts:16` |
-| 5 | **Jalankan ulang** (`retry`) → unggah PRIVAT (default `publish_privacy='private'`) | 🔴 **browser → DB LANGSUNG** | ❌ **TIDAK** | `runs/[id]/page.tsx:93` |
+| 5 | **Jalankan ulang** (`retry`) → unggah PRIVAT (default `publish_privacy='private'`) | 🔴 **browser → DB LANGSUNG** | ❌ **TIDAK** | `runs/[id]/page.tsx` fungsi `retry()` |
 | 6 | Unduh stok gudang | API | ❌ **TIDAK** (stok tenant non-aktif kini **0**) | `api/review/preview/route.ts` |
 | 7 | Test niche admin (`admin_test`) | API | — comp internal | `api/admin/niches/[id]/test/route.ts:23` |
 
