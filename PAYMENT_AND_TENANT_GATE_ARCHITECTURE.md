@@ -1,5 +1,8 @@
 # 💳🔐 PAYMENT & TENANT GATE ARCHITECTURE — MesinViral
 
+> ⚠️ **Lingkup: pembayaran langganan & gerbang tenant.** *Harga model AI & estimasi biaya produksi* = `ARSITEKTUR_AI_PROVIDER_MODEL.md` §4+§7 (SSOT) — bukan di sini.
+
+
 > **🚧 DIBUKA KEMBALI 2026-08-02 — [G-UJI] GERBANG UJI PRODUKSI (§10).** Deep-dive 2-Agu menemukan **4 pintu
 > yang menghasilkan video TANPA memeriksa status langganan** (Test Run · Test Niche · Jalankan-ulang · unduh stok)
 > + **5 jalur reaktivasi yang tak satu pun melepas rem channel**. Rencana + tracker progress = **§10 (SSOT kerja ini)**.

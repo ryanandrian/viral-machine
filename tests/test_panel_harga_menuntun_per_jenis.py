@@ -35,34 +35,39 @@ def _tanpa_komentar(isi):
 
 
 class TestEditorHargaMenuntunPerJenis(unittest.TestCase):
+    """[Diperbarui 23-Agu] Versi pertama uji ini mematok penuntun yang DIKETIK di layar
+    (`SATUAN_HARGA` di page.tsx). Itu justru penyakitnya: pengetahuan satuan diketik ulang di layar,
+    lalu membusuk sendiri. Kini penuntun & kotak isian DITURUNKAN dari cermin registry kode
+    (`catalog_valid_values`, field `pricing_unit:<jenis>`) — jadi yang dijaga: layar TIDAK BOLEH
+    punya daftar satuannya sendiri, dan WAJIB membaca cermin itu untuk jenis baris yang disunting.
+    Kelengkapan 4 jenis dijaga di sumbernya oleh `test_gerbang_rantai_biaya.py` G2."""
 
-    def test_ada_penuntun_satuan_untuk_keempat_jenis(self):
+    def test_layar_membaca_cermin_satuan(self):
+        """Yang diperiksa: cermin benar-benar DISARING per jenis. Versi pertama uji ini lolos saat
+        syarat saringnya diganti `false` — karena kata 'pricing_unit:' masih ada di tempat lain."""
         isi = _tanpa_komentar(_baca())
-        m = re.search(r"(SATUAN_HARGA|PENUNTUN_HARGA|satuanHarga)\s*[:=]", isi)
-        self.assertIsNotNone(m, "tak ada penuntun satuan harga per jenis model")
-        blok = isi[m.start():m.start() + 900]
-        for jenis in ("llm", "tts", "image", "video"):
-            self.assertRegex(blok, rf"\b{jenis}\b", f"penuntun tak memuat jenis '{jenis}'")
+        self.assertRegex(isi, r"field\s*===\s*`pricing_unit:\$\{",
+                         "panel tak menyaring cermin satuan per jenis → ia menanam daftarnya sendiri")
 
-    def test_penuntun_benar_benar_dipakai_editor(self):
-        """Penjaga tak boleh jadi kode mati: penuntun WAJIB dibaca saat merender editor harga."""
+    def test_penuntun_dan_kotak_isian_mengikuti_JENIS_baris(self):
+        """Turunan wajib per-JENIS: satu daftar untuk semua jenis = jebakan lama kembali."""
         isi = _tanpa_komentar(_baca())
-        m = re.search(r"(SATUAN_HARGA|PENUNTUN_HARGA|satuanHarga)", isi)
+        m = re.search(r"const\s+(satuanJenis|satuanUntukJenis)\s*=\s*\(?\s*(\w+)", isi)
+        self.assertIsNotNone(m, "tak ada penurun satuan per-jenis")
         nama = m.group(1)
-        pakai = re.findall(rf"(?<![a-zA-Z_]){re.escape(nama)}(?![a-zA-Z_])", isi)
-        self.assertGreaterEqual(len(pakai), 2, f"'{nama}' didefinisikan tapi tak pernah dibaca — kode mati")
-        # Jangkar = BLOK editor harga itu sendiri. (Versi pertama uji ini memakai kemunculan
-        # `savePricing` PERTAMA — yaitu definisi fungsinya, jauh di atas editor — jadi jendelanya
-        # tak pernah mencapai kodenya: pola uji palsu #3.)
         awal = isi.index("priceEdit?.key === mk")
         akhir = isi.index("setPriceEdit(null)", awal)
-        self.assertIn(nama, isi[awal:akhir], "penuntun tak dipakai di dalam editor harga")
+        self.assertIn(nama, isi[awal:akhir],
+                      "editor harga tak memakai penurun satuan → kotak isiannya kembali tetap")
+        self.assertRegex(isi, rf"{nama}\(String\(m\.component",
+                         "penurun tak diberi JENIS baris yang sedang disunting")
 
-    def test_menyebut_satuan_yang_dikenal_mesin_biaya(self):
-        """Satuan yang disebut wajib yang BENAR-BENAR dihitung mesin biaya (bukan karangan)."""
+    def test_layar_tak_punya_daftar_satuan_sendiri(self):
+        """Dijaga ganda dengan G1 — di sini dari sisi maknanya: nol nama satuan diketik di layar."""
         isi = _tanpa_komentar(_baca())
         for satuan in ("per_1m_chars", "per_image", "per_second_usd", "in_per_1m"):
-            self.assertIn(satuan, isi, f"satuan {satuan} tak disebut di panel")
+            self.assertNotIn(satuan, isi,
+                             f"nama satuan '{satuan}' masih diketik di layar (harus dari cermin)")
 
 
 class TestAsalHargaTerlihat(unittest.TestCase):
@@ -81,7 +86,7 @@ class TestAsalHargaTerlihat(unittest.TestCase):
         Versi pertama uji ini lolos saat isinya diganti `{"·"}` — karena kata 'source' masih ada
         di atribut `title`. Yang diperiksa sekarang: percabangan atas nilai `source`."""
         isi = _tanpa_komentar(_baca())
-        i = isi.index("fmtPricing(pr)")
+        i = isi.index("fmtPricing(pr,")
         blok = isi[i:i + 900]
         self.assertRegex(blok, r"pr\s*\.\s*source[^=]{0,60}===\s*\"manual\"\s*\?",
                          "asal harga tak dipercabangkan → keterangannya tak bisa membedakan apa pun")

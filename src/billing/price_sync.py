@@ -70,15 +70,14 @@ def _feed_entry(feed: dict, model_id: str, provider_prefix: str | None = None) -
     (Riwayat insiden prefix tertanam: 'elevenlabs/' 2026-07-04; gemini/groq 2026-07-06.)"""
     if model_id in feed:
         return feed[model_id]
-    seen = set()
-    prefs = ([provider_prefix.rstrip("/") + "/"] if provider_prefix else []) +             ["openai/", "anthropic/", "elevenlabs/", "azure/",
-             "gemini/", "groq/", "vertex_ai/"]
-    for pref in prefs:
-        if pref in seen:
-            continue
-        seen.add(pref)
-        if pref + model_id in feed:
-            return feed[pref + model_id]
+    # [23-Agu] Daftar prefix vendor yang DITANAM di kode dibuang. Alasannya bukan kerapian:
+    # mencocokkan model ke prefix vendor LAIN berarti memakai HARGA VENDOR LAIN (agregator menagih
+    # tarifnya sendiri). Terukur sebelum dibuang: **0 model aktif** bergantung pada daftar itu.
+    # Prefix kini murni DATA (`ai_providers.price_feed_prefix`, fallback provider_key).
+    if provider_prefix:
+        kunci = provider_prefix.rstrip("/") + "/" + model_id
+        if kunci in feed:
+            return feed[kunci]
     return None
 
 
@@ -93,30 +92,52 @@ def _openrouter_map() -> dict:
             pr = e.get("pricing") or {}
             pin, pout = float(pr.get("prompt") or 0), float(pr.get("completion") or 0)
             if mid and (pin > 0 or pout > 0):
-                out[mid] = {"in_per_1m": round(pin * 1e6, 4), "out_per_1m": round(pout * 1e6, 4)}
+                from src.billing.ai_cost import kunci_token_naskah
+                k_in, k_out = kunci_token_naskah()
+                out[mid] = {k_in: round(pin * 1e6, 4), k_out: round(pout * 1e6, 4)}
     except Exception as e:
         logger.warning(f"[price_sync] fallback OpenRouter gagal: {e}")
     return out
 
 
-def _to_pricing(e: dict, now: str) -> dict:
-    """Normalisasi entri LiteLLM → skema pricing kita. (gpt-image-1 family = PER-TOKEN:
-    output pakai output_cost_per_image_token, input pakai input_cost_per_token.)"""
-    out_tok = e.get("output_cost_per_token") or e.get("output_cost_per_image_token")
-    return {
-        "in_per_1m":    round(float(e["input_cost_per_token"]) * 1e6, 4) if e.get("input_cost_per_token") else None,
-        "out_per_1m":   round(float(out_tok) * 1e6, 4) if out_tok else None,
-        "per_image":    float(e["output_cost_per_image"]) if e.get("output_cost_per_image") else None,
-        "per_1m_chars": round(float(e["input_cost_per_character"]) * 1e6, 4) if e.get("input_cost_per_character") else None,
-        "source": "litellm", "synced_at": now,
-    }
+def _to_pricing(e: dict, now: str, component: str | None = None) -> dict:
+    """Normalisasi entri umpan → harga kita, **HANYA satuan yang sah untuk JENIS baris itu**.
+
+    [23-Agu] Dulu tanpa `component`: satu pemetaan dipakai untuk semua jenis, sehingga harga TEKS
+    ditulis ke baris SUARA — `gemini-2.5-flash-preview-tts` tercatat $2,5/1jt padahal tarif resmi
+    audionya **$10** (4x terlalu murah; 4 channel aktif, 16 produksi). Sumber kebenarannya satu:
+    DAFTAR SATUAN di `ai_cost` (SSOT `ARSITEKTUR_AI_PROVIDER_MODEL.md` §7b). Kolom umpan yang
+    bermakna GANDA sengaja tak terdaftar untuk jenis bersangkutan ⇒ ditolak otomatis, bukan
+    ditebak. Jenis tak dikenal → kosong (gagal jujur), bukan menebak dgn pemetaan jenis lain."""
+    from src.billing.ai_cost import satuan_untuk
+
+    out: dict = {"source": "litellm", "synced_at": now}
+    per_skema: dict = {}
+    for sat in satuan_untuk(component or ""):
+        for kolom in sat.umpan:
+            nilai = e.get(kolom)
+            if nilai in (None, 0):
+                continue
+            angka = float(nilai) * sat.kali
+            per_skema.setdefault(sat.skema, {})[sat.kunci] = (
+                round(angka, 4) if sat.kali != 1 else float(angka))
+            break
+    # Skema yang harga ESENSIAL-nya tak ada TIDAK ditulis: baris yang memuat separuh harga akan
+    # TAMPAK berharga di panel padahal biayanya mustahil dihitung — itu kelas cacat 23-Agu.
+    for sat in satuan_untuk(component or ""):
+        if sat.wajib and sat.kunci not in per_skema.get(sat.skema, {}):
+            per_skema.pop(sat.skema, None)
+    for isi in per_skema.values():
+        out.update(isi)
+    return out
 
 
 def _sanity_violation(old: dict | None, new: dict) -> str | None:
     """Perubahan drastis (> SANITY_FACTOR× naik/turun) pada field mana pun → alasan (str), aman → None."""
     if not old:
         return None
-    for k in ("in_per_1m", "out_per_1m", "per_image", "per_1m_chars"):
+    from src.billing.ai_cost import semua_kunci_harga
+    for k in semua_kunci_harga():
         o, n = old.get(k), new.get(k)
         if o and n and float(o) > 0 and float(n) > 0:
             ratio = float(n) / float(o)
@@ -200,7 +221,7 @@ def sync_prices(sb=None, force: bool = False, only_model_key: str | None = None)
         e = _feed_entry(feed, m.get("model_id") or m["model_key"],
                         provider_prefix=prefix_map.get(m.get("provider_key") or "")) if feed else None
         if e:
-            pricing = _to_pricing(e, now)
+            pricing = _to_pricing(e, now, component=m.get("component"))
             if all(v is None for k, v in pricing.items() if k not in ("source", "synced_at")):
                 pricing = None
         if pricing is None and m.get("component") == "llm":
@@ -212,7 +233,7 @@ def sync_prices(sb=None, force: bool = False, only_model_key: str | None = None)
             # mandek di angka manual lama selamanya. Model berpenanda polos: split → dirinya sendiri.
             fo = orm.get((m.get("model_id") or m["model_key"]).split("/")[-1])
             if fo:
-                pricing = {**fo, "per_image": None, "per_1m_chars": None, "source": "openrouter", "synced_at": now}
+                pricing = {**fo, "source": "openrouter", "synced_at": now}
         if pricing is None:
             missing.append(m["model_key"])
             continue

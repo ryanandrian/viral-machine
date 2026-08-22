@@ -21,7 +21,7 @@ def reset() -> None:
     # bukan per huruf. WAJIB terdaftar di sini — `_bucket()` mengembalikan None untuk keranjang tak
     # dikenal, jadi keranjang yang lupa didaftarkan membuat add_* jadi no-op SENYAP (pencatatan hilang
     # tanpa jejak). Dikunci uji `test_biaya_ai_tak_bisa_nol_senyap.py`.
-    _tl.data = {"llm": {}, "image": {}, "tts": {}, "tts_tokens": {}, "video": {}}
+    _tl.data = {"llm": {}, "image": {}, "tts": {}, "tts_tokens": {}, "tts_seconds": {}, "video": {}}
 
 
 def _bucket(kind: str) -> dict | None:
@@ -72,6 +72,16 @@ def add_tts_tokens(model: str, tokens_in: int, tokens_out: int) -> None:
     cur = b.setdefault(model, {"tokens_in": 0, "tokens_out": 0})
     cur["tokens_in"] += int(tokens_in or 0)
     cur["tokens_out"] += int(tokens_out or 0)
+
+
+def add_tts_seconds(model: str, seconds: float) -> None:
+    """Durasi audio NYATA (detik) untuk suara ber-tagih per-detik — mis. `gpt-4o-mini-tts`, yang
+    vendornya mengirim audio mentah TANPA hitungan token sehingga satuan lain tak bisa dihitung.
+    Diukur dari berkas audio yang baru saja jadi (bukan ditaksir), dicatat SEKALI di mesin suara."""
+    b = _bucket("tts_seconds")
+    if b is None or not model:
+        return
+    b[model] = round(float(b.get(model, 0.0)) + float(seconds or 0.0), 3)
 
 
 def summary() -> dict:

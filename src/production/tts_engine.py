@@ -498,7 +498,13 @@ class TTSEngine:
                 # edge gratis → harga 0 di katalog). Dicatat per model TTS channel. Fail-soft.
                 try:
                     from src.utils import cost_meter
-                    cost_meter.add_tts(config.get("tts_model") or primary, len(text))
+                    _mk = config.get("tts_model") or primary
+                    cost_meter.add_tts(_mk, len(text))
+                    # [23-Agu] Detik audio NYATA (sudah diukur di atas utk gerbang durasi) — satuan
+                    # tagih sebagian vendor (mis. `gpt-4o-mini-tts`, yang mengirim audio mentah tanpa
+                    # hitungan token sehingga satuan lain mustahil dihitung). Diukur, bukan ditaksir.
+                    if _raw_secs and _raw_secs > 0:
+                        cost_meter.add_tts_seconds(_mk, _raw_secs)
                 except Exception:
                     pass
                 return audio_path, word_timestamps

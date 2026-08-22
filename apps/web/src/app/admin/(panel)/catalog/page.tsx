@@ -541,7 +541,13 @@ export default function AdminCatalogPage() {
 
   // B2 cost-tracking: edit manual harga model (USD per satuan). Simpan manual → pricing_locked=true
   // (sinkron feed harian TIDAK menimpa). Utk model di luar feed (ElevenLabs = tergantung paket langganan).
-  const [priceEdit, setPriceEdit] = useState<{ key: string; in1m: string; out1m: string; img: string; chars1m: string; sec: string } | null>(null);
+  const [priceEdit, setPriceEdit] = useState<{ key: string; comp: string; nilai: Record<string, string> } | null>(null);
+  // Satuan harga yang sah per JENIS model — dibaca dari cermin registry kode (`catalog_valid_values`,
+  // field `pricing_unit:<jenis>`). [23-Agu] Sebelumnya nama & label satuan DIKETIK di layar ini dan
+  // di layar tenant; keduanya lalu membusuk sendiri (layar tenant tak punya cabang video → model
+  // video tampil "/gambar"). Kini nol satuan diketik di kode layar: daftar & labelnya milik mesin.
+  const satuanJenis = (comp: string) =>
+    (data?.catalog_valid_values ?? []).filter((v) => v.field === `pricing_unit:${comp}`);
   async function savePricing() {
     if (!priceEdit) return;
     const num = (s: string) => (s.trim() === "" ? null : Number(s));
@@ -549,7 +555,9 @@ export default function AdminCatalogPage() {
     // harga VIDEO ber-basis-klip (per_video_base_usd/base_seconds/per_extra_second_usd) TERHAPUS
     // saat admin menyimpan dari form. Kini kunci di luar form dipertahankan; +field /detik (video).
     const prev = (data?.ai_models.find((m) => String(m.model_key) === priceEdit.key)?.pricing as Record<string, unknown> | null) ?? {};
-    const pricing = { ...prev, in_per_1m: num(priceEdit.in1m), out_per_1m: num(priceEdit.out1m), per_image: num(priceEdit.img), per_1m_chars: num(priceEdit.chars1m), per_second_usd: num(priceEdit.sec), source: "manual", synced_at: new Date().toISOString() };
+    // MERGE di atas harga lama: kunci di luar form (mis. pendamping harga basis-klip) dipertahankan.
+    const diisi = Object.fromEntries(satuanJenis(priceEdit.comp).map((u) => [u.value, num(priceEdit.nilai[u.value] ?? "")]));
+    const pricing = { ...prev, ...diisi, source: "manual", synced_at: new Date().toISOString() };
     const r = await fetch("/api/admin/catalog", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table: "ai_models", key: priceEdit.key, patch: { pricing, pricing_locked: true } }) });
     if (r.ok) { setToast("Harga disimpan (terkunci dari sinkron otomatis)"); setPriceEdit(null); await load(); } else { const j = await r.json().catch(() => ({})); setToast(`Gagal: ${j.error ?? ""}`); }
   }
@@ -565,29 +573,14 @@ export default function AdminCatalogPage() {
     const r = await fetch("/api/admin/catalog", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table: "ai_models", key, patch: { pricing_locked: locked } }) });
     if (r.ok) { setToast(locked ? "Harga dikunci (sinkron tak menimpa)" : "Harga dibuka (ikut sinkron harian)"); await load(); } else setToast("Gagal");
   }
-  // Satuan harga yang BENAR-BENAR dihitung mesin biaya (`src/billing/ai_cost.py`) per jenis model.
-  // Editor harga menampilkan lima kotak untuk semua jenis; tanpa penuntun ini admin menebak — dan
-  // satuan yang salah = harga terisi tapi biaya tetap dilaporkan NOL (insiden 22-Agu: model suara
-  // Gemini ber-harga token, 4 channel aktif, 16 produksi biaya suara Rp 0).
-  const SATUAN_HARGA: Record<string, string> = {
-    llm:   "naskah: in/1M + out/1M (per_1m_chars & /img tak dipakai) · atau per_request_usd utk tarif per-panggilan",
-    tts:   "suara: /1M chr (per_1m_chars). Vendor yang menagih per TOKEN (mis. Gemini): isi in/1M + out/1M — biaya dihitung dari hitungan token yang dikirim vendor",
-    image: "gambar: /img (per_image). Vendor yang menagih per TOKEN (mis. gpt-image-1): isi in/1M + out/1M",
-    video: "video: /dtk (per_second_usd) · atau harga basis-klip (per_video_base_usd) via kolom pricing",
-  };
-
-  const fmtPricing = (p: Record<string, unknown> | null | undefined): string => {
+  // Rincian harga = turunan cermin satuan: tiap satuan yang punya nilai dicetak dengan LABEL milik
+  // mesin. Jenis model baru / satuan baru muncul sendiri; tak ada cabang per-jenis yang bisa basi.
+  const fmtPricing = (p: Record<string, unknown> | null | undefined, comp?: string): string => {
     if (!p) return "";
-    const parts: string[] = [];
-    if (p.in_per_1m != null) parts.push(`in $${p.in_per_1m}/1M`);
-    if (p.out_per_1m != null) parts.push(`out $${p.out_per_1m}/1M`);
-    if (p.per_image != null) parts.push(`$${p.per_image}/img`);
-    if (p.per_1m_chars != null) parts.push(`$${p.per_1m_chars}/1M chr`);
-    // Harga VIDEO ([B6]): per-detik ATAU basis-klip + detik-tambahan — dulu tak dikenal formatter
-    // → kolom harga model video tampil KOSONG (temuan owner 2026-07-15, "tidak jelas berfungsi").
-    if (p.per_second_usd != null) parts.push(`$${p.per_second_usd}/dtk`);
-    if (p.per_video_base_usd != null) parts.push(`$${p.per_video_base_usd}/klip${p.base_seconds != null ? ` ${p.base_seconds}s` : ""}${p.per_extra_second_usd != null ? ` +$${p.per_extra_second_usd}/dtk` : ""}`);
-    return parts.join(" · ");
+    const daftar = comp ? satuanJenis(comp) : (data?.catalog_valid_values ?? []).filter((v) => v.field.startsWith("pricing_unit:"));
+    const dipakai = new Map<string, string>();
+    daftar.forEach((u) => { if (p[u.value] != null && !dipakai.has(u.value)) dipakai.set(u.value, `$${p[u.value]}${u.label}`); });
+    return [...dipakai.values()].join(" · ");
   };
 
   // NICHE_DNA F4: edit keyword deteksi mood (dipakai music_selector mendeteksi mood dari NASKAH —
@@ -800,20 +793,23 @@ export default function AdminCatalogPage() {
                   <td style={{ maxWidth: 300 }}>
                     {priceEdit?.key === mk ? (
                       <span style={{ display: "inline-flex", gap: ".3rem", alignItems: "center", flexWrap: "wrap" }}>
-                        <input className="input" style={{ height: 26, width: 70 }} placeholder="in/1M" value={priceEdit.in1m} onChange={(e) => setPriceEdit({ ...priceEdit, in1m: e.target.value })} />
-                        <input className="input" style={{ height: 26, width: 70 }} placeholder="out/1M" value={priceEdit.out1m} onChange={(e) => setPriceEdit({ ...priceEdit, out1m: e.target.value })} />
-                        <input className="input" style={{ height: 26, width: 70 }} placeholder="/img" value={priceEdit.img} onChange={(e) => setPriceEdit({ ...priceEdit, img: e.target.value })} />
-                        <input className="input" style={{ height: 26, width: 76 }} placeholder="/1M chr" value={priceEdit.chars1m} onChange={(e) => setPriceEdit({ ...priceEdit, chars1m: e.target.value })} />
-                        <input className="input" style={{ height: 26, width: 64 }} placeholder="/dtk" title="Harga video per-detik (USD) — harga basis-klip diedit via kolom pricing model (dipertahankan otomatis)" value={priceEdit.sec} onChange={(e) => setPriceEdit({ ...priceEdit, sec: e.target.value })} />
+                        {satuanJenis(String(m.component ?? "")).map((u) => (
+                          <input key={u.value} className="input" style={{ height: 26, width: 84 }}
+                                 placeholder={u.label} title={`${u.value} — satuan: ${u.label}`}
+                                 value={priceEdit.nilai[u.value] ?? ""}
+                                 onChange={(e) => setPriceEdit({ ...priceEdit, nilai: { ...priceEdit.nilai, [u.value]: e.target.value } })} />
+                        ))}
                         <span className="muted" style={{ fontSize: "0.625rem", flexBasis: "100%" }}>
-                          {SATUAN_HARGA[String(m.component ?? "")] ?? "satuan tergantung jenis model"}
+                          {satuanJenis(String(m.component ?? "")).length
+                            ? `satuan yang dihitung mesin untuk jenis "${m.component}": ` + satuanJenis(String(m.component ?? "")).map((u) => u.label).join(" · ") + " — kosongkan yang tak berlaku"
+                            : "jenis model ini belum punya satuan harga yang dikenal mesin"}
                         </span>
                         <button className="btn btn-default btn-sm" onClick={savePricing}>✓</button>
                         <button className="btn btn-ghost btn-sm" onClick={() => setPriceEdit(null)}>✕</button>
                       </span>
                     ) : (
                       <span style={{ display: "inline-flex", gap: ".4rem", alignItems: "center", flexWrap: "wrap" }}>
-                        {pr ? <span className="muted" style={{ fontSize: "var(--text-xs)" }}>{fmtPricing(pr)}
+                        {pr ? <span className="muted" style={{ fontSize: "var(--text-xs)" }}>{fmtPricing(pr, String(m.component ?? ""))}
                           {/* Asal harga: 16 dari 42 model aktif TIDAK ADA di umpan harga publik (semua
                               model video, ElevenLabs, Cloudflare, Edge, fal) ⇒ harganya wajib diketik
                               admin. Tanpa keterangan ini admin tak bisa membedakan "datang sendiri"
@@ -824,10 +820,13 @@ export default function AdminCatalogPage() {
                           : (m.is_active ? <span className="badge badge-warning" title="Model aktif tanpa harga → biaya video tampil 'belum lengkap'">⚠️ kosong</span> : <span className="muted" style={{ fontSize: "0.7rem" }}>—</span>)}
                         {m.pricing_locked ? <span title="Terkunci — sinkron otomatis tak menimpa (klik utk buka)" style={{ cursor: "pointer" }} onClick={() => toggleLock(mk, false)}>🔒</span>
                           : pr ? <span title="Ikut sinkron harian (klik utk kunci)" style={{ cursor: "pointer", opacity: .45 }} onClick={() => toggleLock(mk, true)}>🔓</span> : null}
-                        <button className="btn btn-ghost btn-sm" title="Edit harga manual" onClick={() => setPriceEdit({ key: mk, in1m: String(pr?.in_per_1m ?? ""), out1m: String(pr?.out_per_1m ?? ""), img: String(pr?.per_image ?? ""), chars1m: String(pr?.per_1m_chars ?? ""), sec: String(pr?.per_second_usd ?? "") })}>✎</button>
+                        <button className="btn btn-ghost btn-sm" title="Edit harga manual" onClick={() => setPriceEdit({
+                          key: mk, comp: String(m.component ?? ""),
+                          nilai: Object.fromEntries(satuanJenis(String(m.component ?? "")).map((u) => [u.value, String(pr?.[u.value] ?? "")])),
+                        })}>✎</button>
                         {(m.pricing_pending as Record<string, unknown> | null) && (
                           <span style={{ display: "inline-flex", gap: ".3rem", alignItems: "center", padding: ".15rem .4rem", borderRadius: 6, background: "var(--warning-soft)", fontSize: "0.6875rem" }} title={String((m.pricing_pending as Record<string, unknown>).reason ?? "")}>
-                            ⚠️ <Bi id="usulan baru:" en="new proposal:" /> {fmtPricing(m.pricing_pending as Record<string, unknown>)}
+                            ⚠️ <Bi id="usulan baru:" en="new proposal:" /> {fmtPricing(m.pricing_pending as Record<string, unknown>, String(m.component ?? ""))}
                             <button className="btn btn-default btn-sm" style={{ height: 20, padding: "0 .4rem", fontSize: "0.625rem" }} onClick={() => resolvePending(mk, m.pricing_pending as Record<string, unknown>, true)}><Bi id="Terapkan" en="Apply" /></button>
                             <button className="btn btn-ghost btn-sm" style={{ height: 20, padding: "0 .4rem", fontSize: "0.625rem" }} onClick={() => resolvePending(mk, m.pricing_pending as Record<string, unknown>, false)}><Bi id="Abaikan" en="Dismiss" /></button>
                           </span>

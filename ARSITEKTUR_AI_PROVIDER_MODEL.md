@@ -2,6 +2,16 @@
 
 > **STATUS: DOKUMEN REFERENSI — SELESAI (permintaan owner 2026-07-07).** Bukan daftar kerja; tak ada item menggantung di sini. Peta arsitektur untuk dipahami owner+Claude. Update bila arsitektur berubah.
 
+> ## 🎯 DOKUMEN INI ADALAH **SSOT** UNTUK DUA HAL (ditetapkan owner 23-Agu-2026)
+> **(1) sinkronisasi harga model AI** — §4 · **(2) estimasi biaya produksi** — §7, §7a–§7e.
+> Tarif per-satuan & rumus biaya **HARAM hidup di dokumen lain** (dijaga `tests/test_gerbang_rantai_biaya.py`
+> G7). Dokumen lain menunjuk ke sini; `DESAIN_PRODUK_SAAS §10` sudah dicabut angkanya karena
+> bertentangan 3× dengan katalog hidup. **Angka HIDUP tidak di dokumen** — ia di `ai_models.pricing`
+> (katalog) dan `production_runs.run_metadata.cost` (per produksi). Dokumen ini menjelaskan **aturannya**.
+>
+> **Beda topik yang sering tertukar:** *harga langganan* (paket tenant) = `finalisasi_tier_plan.md` +
+> `PAYMENT_AND_TENANT_GATE_ARCHITECTURE.md`. *Harga model AI & biaya produksi* = **di sini**.
+
 > **Tujuan dokumen:** peta LENGKAP & akurat rantai AI, dari admin mendaftarkan provider/model → integrasi tenant → dipakai mesin (worker/pipeline) → sinkronisasi harga → biaya produksi per 1 video. Semua nama file & fungsi di bawah **terverifikasi langsung dari kode & DB live** (2026-07-07), bukan asumsi.
 >
 > **Prinsip yang menopang seluruh arsitektur ini:**
@@ -189,6 +199,145 @@ biaya_tts   = Σ (chars/1e6 × per_1m_chars)
 biaya_video_USD = biaya_llm + biaya_image + biaya_tts        → disimpan di production_runs.run_metadata.cost
 biaya_video_IDR = biaya_video_USD × app_config.usd_idr_rate  (tampilan)
 ```
+
+---
+
+## 7a. Definisi metrik biaya — apa yang MASUK, apa yang TIDAK
+
+Tanpa bagian ini dua orang membaca angka yang sama dengan arti berbeda. *(Kerangka FinOps
+"Unit Economics" mengharuskan definisi + asumsi + cakupan biaya ditulis; lihat §7e.)*
+
+| Metrik | Definisi | Di mana |
+|---|---|---|
+| **Biaya per produksi** | Σ (jumlah terukur × tarif tercantum) untuk satu run pipeline | `production_runs.run_metadata.cost.usd` |
+| **Biaya per tenant** | Σ biaya per produksi dalam jendela waktu | kartu Biaya AI dashboard (30 hari) |
+
+**MASUK hitungan:** naskah (semua panggilan LLM termasuk pemilih topik/hook/penilai) · suara · gambar
+(termasuk thumbnail bila dibuat mesin gambar) · video · **run yang GAGAL** (uang tetap terpakai) ·
+run uji tenant & "jalankan ulang" (memakai kunci tenant).
+
+**TIDAK masuk:** langganan MesinViral · infrastruktur kami (VPS/S3) · run uji **admin** (kunci admin,
+bukan kunci tenant) · **percobaan yang gagal di tengah sebelum vendor membalas** — kita hanya bisa
+menghitung yang vendor sebutkan atau yang bisa kita ukur; bila vendor tetap menagihnya, angka kita
+lebih rendah dari kenyataan. Ini batas yang **tak bisa dihapus rancangan apa pun**.
+
+**Asumsi yang menempel pada angka** (wajib disebut, bukan disembunyikan):
+1. Tarif = **tarif tercantum** (*list price*) penyedia, **bukan** tagihan nyata tenant (*billed cost*)
+   — kita tak pernah melihat tagihan tenant (BYOK). Karena itu layar menyebutnya **"perkiraan"**.
+2. Tarif per-detik (bila dipakai) adalah **perkiraan yang vendor terbitkan sendiri**; klip sangat
+   pendek bisa lebih mahal dari itu.
+3. Kurs USD→IDR = tampilan saja (`app_config.usd_idr_rate`); nilai tersimpan selalu USD.
+
+---
+
+## 7b. DAFTAR SATUAN HARGA — tabel kanonik  *(TERPASANG 23-Agu; sumbernya `src/billing/ai_cost.py` → `SATUAN_HARGA`)*
+
+**Sebab bagian ini ada.** 23-Agu ditemukan 10 cacat di rantai ini, dan akarnya satu: pengetahuan
+"satuan apa berlaku untuk jenis apa, dihitung sekali di mana" tersebar di **4 tempat** yang tak saling
+tahu. Kosakata FinOps FOCUS menamai celah tempat seluruh cacat itu hidup:
+
+| Istilah | Artinya di sini | Contoh cacat 23-Agu |
+|---|---|---|
+| **satuan terukur** (*Consumed Unit*) | yang mesin kita **ukur** | 1113 **huruf** |
+| **satuan tagih** (*Pricing Unit*) | yang vendor **tagih** | **token audio** Gemini |
+| **tarif tercantum** (*List Unit Price*) | tarif resmi per satuan tagih | $10/1jt token audio |
+| **biaya tercantum** (*List Cost*) ≠ **biaya tertagih** (*Billed Cost*) | yang kita tampilkan vs tagihan tenant | perkiraan vs tak terlihat |
+
+Harga tersimpan dalam **satuan tagih**; pemakaian tercatat dalam **satuan terukur**. Bila konversinya
+tak ada, satuan itu **tak bisa dihitung** — dan wajib dinyatakan begitu, bukan dikira-kira.
+
+| Jenis | Prioritas | Kunci harga | Satuan tagih | Satuan terukur (keranjang meter) | Kolom umpan yang BOLEH | Kolom yang **HARAM** |
+|---|---|---|---|---|---|---|
+| naskah | 1 | `per_request_usd` | per panggilan | `llm.calls` | *(manual saja)* | — |
+| naskah | 2 | `in_per_1m`/`out_per_1m` | token | `llm.tokens_in/out` | `input_cost_per_token`, `output_cost_per_token` | — |
+| suara | 1 | `per_1m_chars` | huruf | `tts` (huruf) | `input_cost_per_character` | — |
+| suara | 2 | `in_per_1m`/`out_per_1m` | **token audio** | `tts_tokens` (token dari vendor) | `output_cost_per_audio_token`, `input_cost_per_token` | **`output_cost_per_token`** |
+| suara | 3 | `per_second_usd` | detik audio | `tts_seconds` *(dicatat mesin suara)* | `output_cost_per_second` | — |
+| gambar | 1 | `per_image` | per gambar | `image` (jumlah) | `output_cost_per_image` | — |
+| gambar | 2 | `in_per_1m`/`out_per_1m` | token gambar | `llm.tokens_in/out` | `output_cost_per_image_token`, `input_cost_per_token` | **`output_cost_per_token`** |
+
+**Harga ESENSIAL per skema.** Satuan bertanda wajib (`wajib=True` di daftar) harus ada, kalau tidak
+skemanya **tak berlaku** — hari ini: harga token **audio** (suara) dan token **gambar**. Sebabnya
+terukur: harga *masukan* hanya ±1% tagihan; menagih hanya itu menghasilkan angka **kecil yang masuk
+akal tapi salah**, dan barisnya jadi **TAMPAK berharga** di panel. Lebih baik jujur "belum terhitung".
+| video | 1 | `per_second_usd` | detik | `video.seconds` | `output_cost_per_second` | — |
+| video | 2 | `per_video_base_usd` + `base_seconds` + `per_extra_second_usd` | klip + detik lebih | `video.clips/seconds` | *(manual saja)* | — |
+
+**Dua aturan yang membuat cacat 23-Agu mustahil kembali:**
+1. **PRIORITAS ⇒ satu model satu tagihan.** Satuan bernomor kecil menang; sisanya dilewati. Model
+   ber-`per_image` tak bisa lagi ditagih ulang lewat token *(cacat +7,6% pada gambar Gemini)*.
+2. **`output_cost_per_token` HARAM untuk suara & gambar.** Di umpan publik kolom itu bermakna **dua**
+   hal tanpa penanda: pada `gemini-2.5-pro-preview-tts` ia harga audio yang benar ($10), pada
+   `gemini-2.5-flash-preview-tts` ia harga **teks** ($2,5) — dan itulah asal cacat "4× terlalu murah".
+   Menerimanya = menebak. Disiplin yang sama dengan tangga bukti karantina: **pasti → bertindak,
+   ambigu → lapor.**
+
+---
+
+## 7c. Asal setiap angka (provenance) — wajib, bukan anjuran
+
+`pricing.source` + `pricing.synced_at` menyebut dari mana angka itu datang. Untuk harga yang
+**diketik admin**, `pricing.note` **wajib** menyebut sumber + tanggal (contoh yang sudah ada:
+`"source": "fal_api 2026-07-16"`). Alasannya terukur: **16 dari 42 model aktif tidak ada di umpan
+publik mana pun** (seluruh 5 model video, ElevenLabs, fal, Cloudflare, Edge) ⇒ harganya memang harus
+diketik, dan tanpa catatan asal tak ada yang bisa memeriksanya ulang.
+
+---
+
+## 7d. Pembandingan dengan sumber LUAR — berjadwal, tercatat
+
+Uji tak bisa menelepon vendor; **nilai harga yang salah tapi masuk akal tak terdeteksi mesin apa pun.**
+Penutupnya: pembandingan dengan sumber luar, dicatat bertanggal di bawah ini.
+
+| Tanggal | Yang dibanding | Hasil |
+|---|---|---|
+| 2026-08-23 | tarif resmi Google vs katalog (`gemini-2.5-flash-preview-tts`) | **katalog SALAH**: $2,5 vs resmi **$10** audio/1jt token → satuan ambigu, ditolak §7b |
+| 2026-08-23 | tarif resmi OpenAI vs katalog (`gpt-4o-mini-tts`) | katalog $10 vs resmi **$12** audio/1jt token; umpan **punya** kolom benarnya, pemeta kita membuangnya |
+| 2026-08-23 | log vendor vs meter (huruf suara Gemini) | vendor terima **1113**, meter catat **2226** → dicatat dua lapis |
+| 2026-08-23 | hitung-ulang run nyata #503 & #504 | identik dengan yang tersimpan (nol regresi penghitung) |
+| 2026-08-23 | cakupan umpan atas 42 model aktif | 26 otomatis · **16 wajib manual** |
+
+**Jadwal:** pemeriksaan harian mesin (`report_unpriced_models`, terpasang 22-Agu) melaporkan model yang
+**gagal dihitung** dari bukti produksi. Pembandingan **tarif** ke sumber resmi = manual, dicatat di
+tabel ini setiap kali dilakukan. *(Rencana S3: mesin ikut membandingkan catatan-vs-kenyataan tiap hari
+— huruf vs naskah terkirim, gambar vs adegan, detik vs durasi.)*
+
+**Keadaan terpasang (23-Agu, gerbang G1–G7 HIJAU + tiap gerbang disabotase):**
+- ✅ Daftar satuan §7b = **satu-satunya sumber**; penghitung biaya satu putaran atas daftar, nol
+  cabang per-kasus · prioritas **"satu model satu tagihan"** · sinkron **menolak kolom ambigu** dan
+  tak menulis skema yang harga esensialnya kosong · prefix umpan **hanya dari DB** (daftar 7 prefix
+  yang ditanam dibuang; 0 model bergantung padanya) · huruf suara dicatat **sekali** (di mesin suara)
+  · **detik audio** dicatat → model suara ber-tagih per-detik terhitung otomatis · satuan+label
+  **dicerminkan ke DB** (`catalog_valid_values`, `pricing_unit:<jenis>`, migr **0209** memberi izin
+  baca) dan **ketiga layar membacanya** — nol nama satuan diketik di kode layar · kurs hanya dari
+  `app_config` (angka cadangan di kode dibuang; kurs belum ada → tampil USD, bukan Rp palsu).
+- **Bukti ambang:** 244 run riwayat dihitung ulang → **227 identik**, **17 berbeda dengan SATU sebab
+  yang sama** (hitung-ganda gambar Gemini hilang, −7,2%…−7,7%), **nol selisih tak terjelaskan**.
+  Sinkron kering atas 47 baris → **3 baris berubah**, 44 tak bergerak:
+  `gemini-2.5-flash-image` (token teks $2,5 → token gambar $30, per-gambar tetap) ·
+  `gemini-2.5-flash-preview-tts` (satuan ambigu **dibuang** → belum terhitung, jujur) ·
+  `gpt-4o-mini-tts` (token audio $10 → **$12** = tarif resmi, + per-detik → **terhitung otomatis**).
+- 🔵 **Belum:** dasar tagih agregator **fal** (4 jenis lewat satu penyedia; 0 channel aktif) belum
+  diverifikasi ke dokumen vendor — harga naskah fal kini datang dari sumber cadangan, yaitu tarif
+  **vendor asal**, bukan tarif fal. · pemeriksaan harian catatan-vs-kenyataan (huruf vs naskah,
+  gambar vs adegan, detik vs durasi).
+
+---
+
+## 7e. Batas jujur & tingkat kematangan
+
+**Yang mesin TIDAK bisa jamin** (sebut, jangan sembunyikan): nilai tarif yang salah-tapi-masuk-akal ·
+tagihan vendor atas percobaan yang gagal sebelum ia membalas · cara tagih yang belum pernah kita kenal
+(butuh 1 baris di §7b — tapi ia **tak akan diam**: muncul di laporan harian).
+
+**Tingkat kematangan** (tangga FinOps *crawl → walk → run*): kita di **crawl** menuju **walk** —
+biaya teknis per produksi, mulai bisa dipercaya untuk keputusan. **Bukan** "run".
+
+**FOCUS (FinOps Open Cost and Usage Specification) — diperiksa 23-Agu, TIDAK diadopsi sebagai format.**
+Sebabnya terverifikasi: FOCUS menormalkan **ekspor tagihan dari penyedia**, dan kita tak pernah
+menerimanya (BYOK: tagihan milik tenant; vendor AI kita tak menerbitkan format itu). Yang **diadopsi**
+hanya kosakatanya (§7b) karena ia menamai celah penyebab cacat. **Pemicu meninjau ulang:** bila
+MesinViral membayar AI-nya sendiri (bukan BYOK), atau vendor mulai menerbitkan ekspor FOCUS.
 
 ---
 

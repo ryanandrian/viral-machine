@@ -12,6 +12,12 @@ Field yang dicerminkan:
   visual_transport  — kunci _TRANSPORTS visual (platform = provider_key).
   auth_type         — cara kunci: api_key (butuh token) / none (gratis, mis. edge).
   component         — jenis model yang didukung pipeline: llm/image/video/tts.
+  pricing_unit:<jenis> — SATUAN HARGA yang sah untuk jenis model itu, dari DAFTAR SATUAN di
+                      `src/billing/ai_cost.py` (SSOT: ARSITEKTUR_AI_PROVIDER_MODEL §7b). Layar
+                      panel & layar tenant MEMBACA ini — jadi tak ada satu pun nama satuan/label
+                      yang diketik di kode layar. [23-Agu] Sebelumnya pengetahuan itu diketik ulang
+                      di 2 layar; salah satunya tak punya cabang video sehingga model video
+                      menampilkan harga "/gambar" selama berbulan-bulan.
 """
 from __future__ import annotations
 import os
@@ -90,6 +96,15 @@ def collect_valid_values() -> List[Dict[str, str]]:
         rows.append({"field": "gender", "value": v, "label": lbl})
     for v, lbl in TTS_CLASSES:
         rows.append({"field": "tts_class", "value": v, "label": lbl})
+
+    # Satuan harga per jenis model — DITURUNKAN dari daftar, tak diketik ulang di sini.
+    try:
+        from src.billing.ai_cost import SATUAN_HARGA
+        for sat in SATUAN_HARGA:
+            rows.append({"field": f"pricing_unit:{sat.jenis}", "value": sat.kunci,
+                         "label": sat.label})
+    except Exception as e:
+        logger.warning(f"[catalog_sync] daftar satuan harga gagal dibaca: {e}")
     return rows
 
 

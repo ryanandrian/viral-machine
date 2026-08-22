@@ -127,7 +127,9 @@ export default function DashboardPage() {
       allCost = allCost.concat((more as CostRow[] | null) ?? []);
       if (!more || (more as CostRow[]).length < 1000) break;
     }
-    const rate = Number((rateRow as { value?: number } | null)?.value) || 16500;
+    // Kurs = nilai bisnis, HANYA dari app_config (angka cadangan di kode dibuang 23-Agu:
+    // dua layar bisa berbeda kurs). Belum terbaca → tampilkan USD, bukan Rp palsu.
+    const rate = Number((rateRow as { value?: number } | null)?.value) || 0;
     let usd = 0, nCost = 0, adaKurang = false;
     allCost.forEach((row) => {
       const u = row.run_metadata?.cost?.usd;
@@ -294,9 +296,9 @@ export default function DashboardPage() {
               <span className="badge badge-outline">BYOK</span>
             </div>
             {aiCost ? (<>
-              <div style={{ fontSize: "var(--text-2xl)", fontWeight: 700, marginTop: "0.5rem" }}>Rp {Math.round(aiCost.idr).toLocaleString("id-ID")}</div>
+              <div style={{ fontSize: "var(--text-2xl)", fontWeight: 700, marginTop: "0.5rem" }}>{aiCost.rate > 0 ? `Rp ${Math.round(aiCost.idr).toLocaleString("id-ID")}` : `$${aiCost.usd.toFixed(2)}`}</div>
               <p className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.25rem" }}>
-                <Bi id={`${aiCost.videos} produksi · rata-rata Rp ${Math.round(aiCost.idr / aiCost.videos).toLocaleString("id-ID")}/video — dibayar ke provider via kunci AI-mu (bukan ke kami); ${aiCost.kurang ? "perkiraan minimum: sebagian komponen belum bisa dirinci karena penyedianya menagih dengan satuan yang belum bisa kami hitung — angka sebenarnya bisa lebih tinggi" : "perkiraan dari tarif resmi provider"} (kurs ${aiCost.rate.toLocaleString("id-ID")}).`}
+                <Bi id={`${aiCost.videos} produksi · rata-rata ${aiCost.rate > 0 ? `Rp ${Math.round(aiCost.idr / aiCost.videos).toLocaleString("id-ID")}` : `$${(aiCost.usd / aiCost.videos).toFixed(4)}`}/video — dibayar ke provider via kunci AI-mu (bukan ke kami); ${aiCost.kurang ? "perkiraan minimum: sebagian komponen belum bisa dirinci karena penyedianya menagih dengan satuan yang belum bisa kami hitung — angka sebenarnya bisa lebih tinggi" : "perkiraan dari tarif resmi provider"} ${aiCost.rate > 0 ? ` (kurs ${aiCost.rate.toLocaleString("id-ID")})` : " — kurs belum tersedia, angka dalam USD"}.`}
                     en={`${aiCost.videos} productions · avg Rp ${Math.round(aiCost.idr / aiCost.videos).toLocaleString("id-ID")}/video — paid to providers via your own keys; ${aiCost.kurang ? "minimum estimate: some components cannot be itemised because their provider bills in a unit we cannot compute yet — the real figure may be higher" : "estimated from official provider prices"}.`} />
               </p>
             </>) : (

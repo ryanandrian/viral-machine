@@ -112,7 +112,10 @@ class GeminiTTSProvider(TTSProvider):
             # Fail-soft: apa pun yang gagal di sini TIDAK boleh menggagalkan produksi.
             try:
                 from src.utils import cost_meter
-                cost_meter.add_tts(self.model, len(text))
+                # Huruf TIDAK dicatat di sini: `tts_engine` sudah mencatatnya untuk SEMUA penyedia.
+                # [23-Agu] Dulu dicatat di kedua tempat → vendor menerima 1113 huruf, meter mencatat
+                # 2226 (run #503). Tak terlihat hanya karena harga per-huruf model ini kosong.
+                # Adapter hanya mencatat yang mesin suara TAK BISA lihat: hitungan token vendor.
                 u = data.get("usageMetadata") or {}
                 if u.get("promptTokenCount") or u.get("candidatesTokenCount"):
                     cost_meter.add_tts_tokens(self.model,

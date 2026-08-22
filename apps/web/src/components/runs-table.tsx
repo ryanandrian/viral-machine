@@ -129,7 +129,10 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
   const [issueRunIds, setIssueRunIds] = useState<Set<string>>(new Set());  // run dgn item tinjau LIVE di /review
   const [ulangan, setUlangan] = useState<Record<string, Ulangan>>({});      // run_id asal → hasil "Jalankan ulang"
   const [views, setViews] = useState<Record<string, number>>({});
-  const [usdRate, setUsdRate] = useState(16500);   // kurs tampilan (app_config usd_idr_rate; fallback = default migrasi)
+  // Kurs = NILAI BISNIS → hanya dari `app_config.usd_idr_rate`. [23-Agu] Angka cadangan yang
+  // ditanam di kode dibuang: dua layar bisa menampilkan kurs berbeda, dan tenant tak punya cara
+  // tahu mana yang benar. Kurs belum terbaca (0) → tampilkan USD apa adanya, bukan Rp palsu.
+  const [usdRate, setUsdRate] = useState(0);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<StKey | "all" | "queued">("all");
   const [selected, setSelected] = useState<RunRow | null>(null);
@@ -413,7 +416,7 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
                       const belumLengkap = !!c.unpriced?.length;
                       return <span title={belumLengkap
                         ? "Perkiraan — sebagian komponen belum bisa dirinci karena penyedianya menagih dengan satuan yang belum bisa kami hitung. Angka sebenarnya bisa lebih tinggi."
-                        : "Perkiraan dari tarif resmi penyedia"}>{belumLengkap ? "≈" : ""}Rp {Math.round(c.usd * usdRate).toLocaleString("id-ID")}</span>;
+                        : "Perkiraan dari tarif resmi penyedia"}>{belumLengkap ? "≈" : ""}{usdRate > 0 ? `Rp ${Math.round(c.usd * usdRate).toLocaleString("id-ID")}` : `$${c.usd.toFixed(4)}`}</span>;
                     })()}</td>
                     <td className="num">{d.youtube_video_id && views[d.youtube_video_id] != null ? <b style={{ color: "var(--text-primary)", fontWeight: 600 }}>{fmtK(views[d.youtube_video_id])}</b> : <span className="muted">—</span>}</td>
                     <td><span className="muted" style={{ fontSize: "var(--text-xs)", whiteSpace: "nowrap" }}>{fmtWhen(d.created_at)}</span></td>

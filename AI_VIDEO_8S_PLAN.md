@@ -74,6 +74,10 @@ Verifikasi **dokumen resmi vendor** (web, bukan ingatan model) sesuai kriteria o
 - **Keluaran:** matriks perbandingan + rekomendasi 1 transport perdana + model perdana → **KETOK OWNER** (gerbang F0→F1).
 - **REALISASI:** ✅ **RISET SELESAI 2026-07-14 (verifikasi web dokumen resmi + agregator) — PROPOSAL DIAJUKAN, MENUNGGU KETOK OWNER.** Hasil:
 
+  > ⚠️ Tarif di tabel ini = **CUPLIKAN riset 07-2026, BUKAN ACUAN.** Ia bahan keputusan pemilihan
+  > transport, bukan sumber harga. Acuan harga & biaya = `ARSITEKTUR_AI_PROVIDER_MODEL.md` §4+§7;
+  > angka hidupnya di katalog `ai_models.pricing`.
+
   | Kandidat | Pola API | 9:16 | Durasi | Harga (verifikasi 07-2026) | Catatan |
   |---|---|---|---|---|---|
   | **fal.ai (agregator) — REKOMENDASI** | Queue seragam SEMUA model: `POST queue.fal.run/{model}` → request_id+status_url → poll → hasil; webhook opsional; auth `Authorization: Key` (1 kunci semua model) | ✓ | per-model (Kling: 5/10s) | per-detik/per-video per-model (Kling 3 ~$0.03–0.28/s · Wan 2.5 $0.05/s · Veo 3 $0.4/s) + **API harga programatik `GET api.fal.ai/v1/models/pricing`** | Persis kriteria owner: parameter seragam + billing seragam + katalog 1000+ model → vendor TAK terkunci; pricing API = auto-sync harga BYOK (selaras B2) |

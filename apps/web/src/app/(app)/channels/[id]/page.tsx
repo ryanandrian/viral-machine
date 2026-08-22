@@ -190,6 +190,11 @@ export default function ChannelDetailPage() {
   const [ttsOpts, setTtsOpts] = useState<{ provider_key: string; display_name: string }[]>([]);
   const [ttsModelOpts, setTtsModelOpts] = useState<ModelOpt[]>([]);  // ai_models component='tts' (migr 0087)
   const [usdIdr, setUsdIdr] = useState<number>(0);  // kurs tampilan biaya model (0 = belum tersedia)
+  // Satuan harga per jenis model — dari cermin registry KODE (`catalog_valid_values`, migr 0209).
+  // [23-Agu] Dulu satuannya diketik di layar ini: `llm → /1jt token · tts → /1jt karakter ·
+  // SELAIN ITU → /gambar`. Cabang itu lahir saat baru ada 3 jenis, dan sejak model VIDEO ada,
+  // harga model video tampil "≈ Rp —/gambar" — salah, tanpa suara. Kini nol satuan di kode layar.
+  const [satuanHarga, setSatuanHarga] = useState<{ field: string; value: string; label: string }[]>([]);
   const [voiceAll, setVoiceAll] = useState<VoiceOpt[]>([]);
   const [llmProv, setLlmProv] = useState("");     // penyedia LLM (= llm_library); pilih DULU, lalu model
   const [llmModel, setLlmModel] = useState("");
@@ -464,9 +469,9 @@ export default function ChannelDetailPage() {
     const p = m.pricing as Record<string, number | null> | null;
     if (!p) return "Harga belum tersedia";
     const rp = (usd?: number | null) => usd != null && usdIdr ? `Rp${Math.round(usd * usdIdr).toLocaleString("id-ID")}` : (usd != null ? `$${usd}` : "—");
-    if (comp === "llm") return `≈ ${rp(p.in_per_1m)}/1jt token masuk · ${rp(p.out_per_1m)}/1jt keluar`;
-    if (comp === "tts") return `≈ ${rp(p.per_1m_chars)}/1jt karakter`;
-    return `≈ ${rp(p.per_image)}/gambar`;
+    const satuan = satuanHarga.filter((u) => u.field === `pricing_unit:${comp}`);
+    const bagian = satuan.filter((u) => p[u.value] != null).map((u) => `${rp(p[u.value])}${u.label}`);
+    return bagian.length ? `≈ ${bagian.join(" · ")}` : "Harga belum tersedia";
   }
   function ModelBadges({ m }: { m: ModelOpt }) {
     const t = m.quality_tier ? TIER_LABEL[m.quality_tier] : null;
@@ -607,6 +612,8 @@ export default function ChannelDetailPage() {
     // 1a/1b: sertakan tier + harga (petunjuk budget di pill) & urutkan sort_order (kurasi admin) lalu nama.
     const { data: amRaw } = await supabase.from("ai_models").select("model_key,provider_key,component,display_name,quality_tier,pricing,sort_order,default_params").eq("is_active", true).order("sort_order").order("display_name");
     const am = ((amRaw ?? []) as (ModelOpt & { component: string })[]).filter((m) => activeProv.has(m.provider_key));
+    const { data: svRaw } = await supabase.from("catalog_valid_values").select("field,value,label").like("field", "pricing_unit:%");
+    setSatuanHarga((svRaw ?? []) as { field: string; value: string; label: string }[]);
     // [B6] F3: peta render_mode per-preset (utk gating preset⇄model video di titik input).
     const { data: dps } = await supabase.from("duration_presets").select("seconds,render_mode").eq("is_active", true);
     setPresetModes(Object.fromEntries(((dps ?? []) as { seconds: number; render_mode: string | null }[]).map((p) => [p.seconds, p.render_mode ?? "image_seq"])));

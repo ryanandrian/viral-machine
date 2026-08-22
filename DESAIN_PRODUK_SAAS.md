@@ -653,33 +653,21 @@ admin.mesinviral.com (Internal — super-admin only; login terpisah /admin/login
 
 ## 10. ⭐ UNIT ECONOMICS & MARGIN ANALYSIS
 
-### Cost Real per Video Shorts 60 Detik (Juni 2026)
+### Biaya AI per video — ACUAN PINDAH
 
-#### Pipeline Cost Breakdown
+⚠️ **Tabel tarif Juni-2026 DICABUT 23-Agu-2026** (bukan diperbarui — dicabut). Ia bertentangan **tiga
+kali** dengan katalog hidup dan sudah menyesatkan pekerjaan nyata: `gpt-image-1-mini` ditulis
+per-GAMBAR padahal vendor menagihnya **per token** · tarif ElevenLabs 4× di atas katalog · menyebut
+**Pexels & R2** yang keduanya sudah **pensiun**. Angka tarif **haram** hidup di dua dokumen: yang
+kedua pasti membusuk, dan sesi berikutnya akan "memperbaiki" yang sudah benar.
 
-| Engine | Calculation | Cost (USD) |
-|---|---|---|
-| **Claude Sonnet 4.6** (script gen, 3000 in + 2500 out tokens) | $3/M in + $15/M out | $0.0465 |
-| **Claude Haiku 4.5** (4 utility calls — niche/hook/scoring/rewrite, 1500 in + 800 out each) | $1/M in + $5/M out × 4 | $0.022 |
-| **ElevenLabs Multilingual v2** (~825 chars script) | $0.00022/char | $0.181 |
-| *Alternative: ElevenLabs Flash* | $0.00011/char | $0.091 |
-| **gpt-image-1-mini medium** (6 images per video) | $0.015/image × 6 | $0.090 |
-| *Alternative: gpt-image-1-mini low* | $0.005/image × 6 | $0.030 |
-| **YouTube API + Pexels + R2** | quota free + storage | $0.001 |
-| **Total Premium** | – | **$0.34** |
-| **Total Cost-Optimized** | – | **$0.19** |
+**Acuan tunggal (SSOT) biaya AI & sinkronisasi harga = `ARSITEKTUR_AI_PROVIDER_MODEL.md` §4 + §7.**
+Di sana: definisi metrik · satuan tagih vs satuan terukur · rumus · asal tiap angka · apa yang MASUK
+dan TIDAK masuk hitungan · batas yang mesin tak bisa jamin. Angka **hidup** ada di katalog
+(`ai_models.pricing`) dan di tiap produksi (`production_runs.run_metadata.cost`) — bukan di dokumen.
 
-**Konversi IDR (kurs Rp 16K/USD):** Rp 3.040 – Rp 5.440 per video.
-
-#### Volume Cost Implication (per tenant per bulan)
-
-| Tier | Video/bulan max | AI cost premium | AI cost optimized |
-|---|---|---|---|
-| Starter | 150 | $51 (Rp 816K) | $28 (Rp 448K) |
-| Pro | 900 | $306 (Rp 4.9M) | $171 (Rp 2.7M) |
-| Scale | 7,200 | $2,448 (Rp 39M) | $1,368 (Rp 22M) |
-
-**KRITIS:** Karena BYOK, **tenant yang bayar langsung ke Anthropic/OpenAI/ElevenLabs**. MesinViral hanya jual orchestration layer.
+Yang **tetap** di sini (dan bukan tarif): strategi BYOK (§5), struktur paket, dan biaya infrastruktur
+kita sendiri per tenant di bawah — itu milik dokumen ini, bukan milik SSOT biaya AI.
 
 ### MesinViral Infra Cost per Tenant per Bulan
 

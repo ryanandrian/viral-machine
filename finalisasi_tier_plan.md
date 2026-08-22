@@ -1,5 +1,8 @@
 # 🎯 FINALISASI TIER PLAN — CETAK BIRU TERPADU (pricing · paket · pembayaran · upgrade · diskon · trial · tenant khusus)
 
+> ⚠️ **Dokumen ini soal HARGA LANGGANAN (paket tenant)** — bukan harga model AI. *Harga model AI & estimasi biaya produksi* = `ARSITEKTUR_AI_PROVIDER_MODEL.md` §4+§7 (SSOT). Dua topik ini pernah tertukar; tarif per-satuan model AI haram ditulis di sini.
+
+
 > **Status:** ✅ **CLOSED 2026-07-13** — 5 tahap / 21 item + lanjutan audit-hardcode SELESAI & DEPLOYED
 > seluruhnya (VPS `fd0a88c`). Dokumen = arsip referensi; status hidup selanjutnya di SISA_KERJA_GO_LIVE.md.
 > **Mandat owner:** (1) seluruh issue skop ini = proses SALING TERINTEGRASI → penyelesaian WAJIB
