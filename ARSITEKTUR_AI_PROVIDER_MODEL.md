@@ -269,7 +269,7 @@ biaya_video_IDR = biaya_video_USD × app_config.usd_idr_rate  (tampilan)
 > |---|---|
 > | **G1** | tabel AI Models menyebut **"dipakai berapa channel"** (kuning = ada channel AKTIF) — dihitung server sekali per muat, bukan per baris |
 > | **G2** | jejak karantina **DITAMPILKAN** sebagai lencana `terbukti mati` + alasan vendor di tooltip |
-> | **G3** | lencana uji menyebut **umurnya** (`✓ Teruji · 47h`) dan berubah kuning + bertanda **BASI** di atas 30 hari — "✓ Teruji" tanpa tanggal menyamakan uji 6-Jul dengan uji hari ini |
+> | ~~**G3**~~ | ⛔ **DIBUANG owner 22-Agu.** Label `BASI` + umur uji menetapkan kewajiban kerja (uji ulang tiap 30 hari) **tanpa kesepakatan owner**, ambangnya **hardcode** (nilai bisnis wajib dari config), dan angka 30 itu **karangan** dari dua titik data. Akibat terukur: **29 dari 42 model (69%) berlencana kuning** ⇒ peringatan yang menyala di dua pertiga baris MENYEMBUNYIKAN yang benar-benar bermasalah. Risikonya sudah dijaga karantina + label `terbukti mati` dengan biaya NOL dan tanpa beban kerja admin. Dilarang kembali oleh uji. |
 > | **G4** | migr `0208` — **menyalakan wajib TERBUKTI**: audit `LULUS` **dan lebih baru dari bukti kematian**. Di DB, bukan panel, karena jalur yang memutari panel sudah terbukti dipakai. Terukur: 43/43 model aktif lolos ⇒ nol terkunci |
 > | **G5** | **koreksi B5**: jejak dibersihkan HANYA bila ada uji yang lebih baru daripada jejak itu — bukan sekadar karena model dinyalakan |
 >

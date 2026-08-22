@@ -97,42 +97,54 @@ class TestG2_JejakKarantinaDITAMPILKAN(unittest.TestCase):
                       "tak bisa menilai apakah model itu layak dicoba lagi")
 
 
-class TestG3_LencanaUjiMenYEBUT_UMURNYA(unittest.TestCase):
-    """"✓ Teruji" tanpa tanggal MENYESATKAN: uji 6 Juli dan uji hari ini terlihat sama, padahal
-    yang pertama tak membuktikan apa pun tentang keadaan sekarang (kasus `gemini-2.5-flash`)."""
+class TestG3_LabelBASI_DIBUANG_DanHaramKembali(unittest.TestCase):
+    """Label "BASI" + umur uji DIBUANG atas keputusan owner 22-Agu, beserta tiga kesalahan yang
+    membuatnya lahir — dan ketiganya dikunci di sini supaya tak terulang:
 
-    def test_umur_uji_dihitung_dan_ditampilkan(self):
-        layar = _baca(LAYAR)
-        # Tuntut DEFINISI-nya, bukan sekadar kemunculan kata: sabotase me-rename definisinya dan
-        # pemanggil lama tetap menyebut namanya, sehingga pencarian kata tetap hijau.
-        self.assertTrue(
-            re.search(r"const\s+umurUji\s*=", layar),
-            "Penghitung umur uji tak ada ⇒ lencana '✓ Teruji' dari 6 Juli terlihat sama "
-            "meyakinkannya dengan uji hari ini.")
-        # Jangkar = KODE lencananya, bukan kemunculan pertama kata "LULUS" (yang ada di komentar).
-        # Cacat jangkar-jendela ini sudah tertangkap tiga kali hari ini; jangan diulang.
-        i = layar.find('au.startsWith("LULUS")')
-        self.assertGreater(i, 0, "lencana status uji tak ditemukan")
-        blok = layar[max(0, i - 400):i + 900]
-        self.assertTrue(
-            re.search(r"umurUji|uu\.hari|uu\.basi", blok),
-            "lencana status uji tak memakai umur uji — angkanya dihitung tapi tak dipakai")
+      (a) **aturan tanpa kesepakatan.** Label itu menetapkan kewajiban kerja baru (uji ulang tiap
+          30 hari) yang owner tak pernah setujui.
+      (b) **nilai bisnis hardcode.** `AMBANG_BASI_HARI = 30` ditulis di kode; aturan kerja owner:
+          nilai bisnis dari DB/config, NOL literal di kode.
+      (c) **angka karangan.** 30 dipilih dari dua titik data (uji 43 & 47 hari) — perasaan, bukan
+          pengukuran.
 
-    def test_uji_BASI_ditandai_berbeda(self):
+    Akibat terukur sebelum dibuang: **29 dari 42 model aktif (69%) berlencana kuning.** Peringatan
+    yang menyala di dua pertiga baris MENYEMBUNYIKAN yang benar-benar bermasalah — kebalikan dari
+    tujuannya.
+
+    Yang sudah menjaga risiko ini dengan biaya NOL dan tanpa beban kerja admin: model yang mati saat
+    PRODUKSI (§9b) maupun saat UJI (pintu ketiga) langsung dikarantina + berlabel `terbukti mati`.
+    Umur uji tak menambah apa pun di atas itu, dan menuntut admin menguji ratusan model tiap bulan
+    dengan biaya nyata (uji gambar/video Rp 250–800 per model)."""
+
+    def test_label_basi_tidak_kembali(self):
         layar = _baca(LAYAR)
-        # Kata `basi` juga ada di DEFINISI penghitung, jadi mencarinya di sekitar definisi selalu
-        # hijau — sabotase membuktikannya. Yang dikunci: lencananya MERENDER penanda itu, dan
-        # warnanya berubah.
+        for dilarang in ('id="BASI"', 'en="STALE"', "AMBANG_BASI", "umurUji", "hariSejakUji"):
+            self.assertNotIn(
+                dilarang, layar,
+                f"`{dilarang}` kembali. Label umur-uji DIBUANG owner 22-Agu: ia menetapkan aturan "
+                "tanpa kesepakatan, ambangnya hardcode, dan angkanya karangan — sementara 69% "
+                "tabel jadi kuning. Yang menjaga risiko ini: karantina + label `terbukti mati`.")
+
+    def test_lencana_uji_kembali_seperti_semula(self):
+        layar = _baca(LAYAR)
         i = layar.find('au.startsWith("LULUS")')
-        self.assertGreater(i, 0, "lencana status uji tak ditemukan")
-        blok = layar[i:i + 900]
-        self.assertTrue(
-            re.search(r'id="BASI"|id="basi"|id="Kedaluwarsa"', blok),
-            "lencana tak pernah MENAMPILKAN penanda uji basi ⇒ admin tetap ditenangkan lencana "
-            "hijau padahal buktinya usang")
-        self.assertTrue(
-            re.search(r"uu\.basi\s*\?\s*\"badge-warning\"", blok.replace("'", '"')),
-            "warna lencana tak berubah saat uji basi ⇒ perbedaannya tak terlihat sekilas")
+        self.assertGreater(i, 0, "lencana status uji hilang")
+        # Potong TEPAT pada pernyataannya. Jendela lebar menangkap lencana TETANGGA
+        # ("belum lolos", memang kuning dan memang sah) — cacat jangkar yang sama, keempat kalinya.
+        blok = layar[i:layar.find(";", layar.find("</span>", i)) + 1]
+        self.assertIn("badge-success", blok, "lencana LULUS tak lagi hijau")
+        self.assertNotIn("badge-warning", blok,
+                         "lencana LULUS masih bisa berubah warna karena umur ⇒ BASI kembali diam-diam")
+        self.assertNotIn("·", blok, "lencana LULUS masih menempelkan keterangan tambahan (umur uji)")
+
+    def test_ambang_umur_HARAM_hardcode_di_mana_pun(self):
+        """Kalau kelak owner MEMINTA penanda umur, ambangnya wajib dari config — bukan literal."""
+        layar = _baca(LAYAR)
+        self.assertFalse(
+            re.search(r"const\s+\w*(BASI|STALE|UMUR)\w*\s*=\s*\d+", layar),
+            "ambang umur ditulis sebagai literal di kode. Nilai bisnis wajib dari DB/config, "
+            "supaya owner bisa mengubahnya tanpa deploy.")
 
 
 class TestG4_MenyalakanWAJIB_TERBUKTI(unittest.TestCase):

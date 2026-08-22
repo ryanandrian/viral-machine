@@ -613,17 +613,6 @@ export default function AdminCatalogPage() {
     );
   };
 
-  // [22-Agu G3] Umur bukti uji. "✓ Teruji" tanpa tanggal MENYESATKAN: uji 6 Juli dan uji hari ini
-  // terlihat sama meyakinkan, padahal yang pertama tak membuktikan apa pun tentang keadaan
-  // sekarang — itu persis yang terjadi pada `gemini-2.5-flash` (lulus 6-Jul, mati di vendor 18-Agu).
-  const AMBANG_BASI_HARI = 30;
-  const umurUji = (audit: string): { hari: number | null; basi: boolean } => {
-    const m = /\d{4}-\d{2}-\d{2}/.exec(audit || "");
-    if (!m) return { hari: null, basi: false };
-    const hari = Math.floor((Date.now() - new Date(m[0]).getTime()) / 86400000);
-    return { hari, basi: hari > AMBANG_BASI_HARI };
-  };
-
   // [22-Agu G2] Jejak karantina SUDAH dikirim rute sejak 21-Agu (`select("*")`) tapi layar nol kali
   // menampilkannya — data dikumpulkan tapi tak dipakai. Inilah sebab admin bisa menyalakan model
   // yang terbukti mati tanpa peringatan apa pun.
@@ -814,13 +803,17 @@ export default function AdminCatalogPage() {
                   <td><Switch table="ai_models" k={mk} on={m.is_active as boolean} /></td>
                   <td style={{ whiteSpace: "nowrap" }}>{jejakKarantina(m)}{(() => {
                     const au = String((m.cost_hint as { audit?: string } | null)?.audit || "");
-                    const uu = umurUji(au);
-                    if (au.startsWith("LULUS")) return (
-                      <span className={`badge ${uu.basi ? "badge-warning" : "badge-success"}`} title={au}
-                            style={{ fontSize: "0.65rem", marginRight: ".3rem" }}>
-                        ✓ <Bi id="Teruji" en="Tested" />{uu.hari != null ? ` · ${uu.hari}h` : ""}
-                        {uu.basi ? <> · <Bi id="BASI" en="STALE" /></> : null}
-                      </span>);
+                    // [22-Agu] Label "BASI" + umur uji DIBUANG atas keputusan owner. Tiga kesalahan
+                    // saya: menetapkan aturan (uji ulang tiap 30 hari) TANPA kesepakatan owner ·
+                    // ambangnya hardcode, padahal nilai bisnis wajib dari config · angka 30 itu
+                    // KARANGAN dari dua titik data. Akibatnya 29 dari 42 model (69%) berlencana
+                    // kuning — peringatan yang menyala di dua pertiga baris justru MENYEMBUNYIKAN
+                    // yang benar-benar bermasalah.
+                    // Yang sudah menjaga hal ini, dengan biaya nol dan tanpa beban kerja admin:
+                    // model yang mati saat PRODUKSI atau saat UJI langsung dikarantina + berlabel
+                    // `terbukti mati` (AI_ERROR_MGMT §9b + pintu ketiga). Umur uji tak menambah
+                    // apa pun di atas itu, dan menuntut admin menguji ratusan model tiap bulan.
+                    if (au.startsWith("LULUS")) return <span className="badge badge-success" title={au} style={{ fontSize: "0.65rem", marginRight: ".3rem" }}>✓ <Bi id="Teruji" en="Tested" /></span>;
                     if (au) return <span className="badge badge-warning" title={au} style={{ fontSize: "0.65rem", marginRight: ".3rem" }}>✗ <Bi id="belum lolos" en="not passed" /></span>;
                     return <span className="muted" title="Belum pernah diuji — klik Uji" style={{ fontSize: "0.65rem", marginRight: ".3rem" }}><Bi id="belum diuji" en="not tested" /></span>;
                   })()}<button className="btn btn-ghost btn-sm" title="Uji model — jalankan nyata ke vendor (butir-1: aktif = terbukti jalan)" onClick={() => { setTmMsg(null); setTmKey(""); setTm({ mk, name: (m.display_name as string) || mk, needsKey: (data.ai_providers.find((p) => String(p.provider_key) === String(m.provider_key))?.auth_type) === "api_key" }); }}><Bi id="Uji" en="Test" /></button><button className="btn btn-ghost btn-sm" title="Edit model" onClick={() => openRowEdit("models", m)}>✎</button><button className="btn btn-ghost btn-sm" title="Hapus model (ditolak bila dipakai channel)" onClick={() => delAsset("ai_models", mk, (m.display_name as string) || mk)}><Trash2 size={13} /></button></td>
