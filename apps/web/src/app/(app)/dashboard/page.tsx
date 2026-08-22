@@ -72,7 +72,7 @@ export default function DashboardPage() {
   const [noChannel, setNoChannel] = useState(false);
   const [loading, setLoading] = useState(true);
   // B2 BYOK cost-tracking: total biaya AI 30 hari (Σ run_metadata.cost.usd × kurs app_config) — REAL.
-  const [aiCost, setAiCost] = useState<{ idr: number; usd: number; videos: number; rate: number } | null>(null);
+  const [aiCost, setAiCost] = useState<{ idr: number; usd: number; videos: number; rate: number; kurang: boolean } | null>(null);
 
   const load = useCallback(async () => {
     const since30 = new Date(Date.now() - 30 * 864e5).toISOString();
@@ -119,7 +119,7 @@ export default function DashboardPage() {
       .filter((x) => x.eff.key === "incomplete" || x.eff.key === "halted"));
     // Biaya AI 30 hari: hanya run yg PUNYA cost (produksi pasca-fitur); label jujur di kartu.
     // Paginasi (urutan stabil created_at+run_id; cap 8 hal = 8k run/30hr, cukup 10ch×24vid; audit 2026-07-11).
-    type CostRow = { run_metadata?: { cost?: { usd?: number } } };
+    type CostRow = { run_metadata?: { cost?: { usd?: number; unpriced?: string[] } } };
     let allCost = (costRows as CostRow[] | null) ?? [];
     for (let cp = 1; allCost.length === cp * 1000 && cp < 8; cp++) {
       const { data: more } = await supabase.from("production_runs").select("run_metadata").gte("created_at", since30)
@@ -128,12 +128,15 @@ export default function DashboardPage() {
       if (!more || (more as CostRow[]).length < 1000) break;
     }
     const rate = Number((rateRow as { value?: number } | null)?.value) || 16500;
-    let usd = 0, nCost = 0;
+    let usd = 0, nCost = 0, adaKurang = false;
     allCost.forEach((row) => {
       const u = row.run_metadata?.cost?.usd;
       if (typeof u === "number" && u > 0) { usd += u; nCost += 1; }
+      // [2026-08-22] Kartu ini dulu MENJUMLAHKAN angka yang tak lengkap tanpa satu penanda pun —
+      // tempat paling menyesatkan di seluruh aplikasi untuk urusan biaya (diam-diam kurang).
+      if (row.run_metadata?.cost?.unpriced?.length) adaKurang = true;
     });
-    setAiCost(nCost > 0 ? { idr: usd * rate, usd, videos: nCost, rate } : null);
+    setAiCost(nCost > 0 ? { idr: usd * rate, usd, videos: nCost, rate, kurang: adaKurang } : null);
     setLoading(false);
   }, [supabase]);
 
@@ -293,8 +296,8 @@ export default function DashboardPage() {
             {aiCost ? (<>
               <div style={{ fontSize: "var(--text-2xl)", fontWeight: 700, marginTop: "0.5rem" }}>Rp {Math.round(aiCost.idr).toLocaleString("id-ID")}</div>
               <p className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.25rem" }}>
-                <Bi id={`${aiCost.videos} produksi · rata-rata Rp ${Math.round(aiCost.idr / aiCost.videos).toLocaleString("id-ID")}/video — dibayar ke provider via kunci AI-mu (bukan ke kami); konsumsi terukur nyata × harga resmi provider (kurs ${aiCost.rate.toLocaleString("id-ID")}).`}
-                    en={`${aiCost.videos} productions · avg Rp ${Math.round(aiCost.idr / aiCost.videos).toLocaleString("id-ID")}/video — paid to providers via your own keys; measured usage × official provider prices.`} />
+                <Bi id={`${aiCost.videos} produksi · rata-rata Rp ${Math.round(aiCost.idr / aiCost.videos).toLocaleString("id-ID")}/video — dibayar ke provider via kunci AI-mu (bukan ke kami); ${aiCost.kurang ? "perkiraan minimum: sebagian komponen belum bisa dirinci karena penyedianya menagih dengan satuan yang belum bisa kami hitung — angka sebenarnya bisa lebih tinggi" : "perkiraan dari tarif resmi provider"} (kurs ${aiCost.rate.toLocaleString("id-ID")}).`}
+                    en={`${aiCost.videos} productions · avg Rp ${Math.round(aiCost.idr / aiCost.videos).toLocaleString("id-ID")}/video — paid to providers via your own keys; ${aiCost.kurang ? "minimum estimate: some components cannot be itemised because their provider bills in a unit we cannot compute yet — the real figure may be higher" : "estimated from official provider prices"}.`} />
               </p>
             </>) : (
               <p className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.75rem" }}><Bi id="Belum ada data — biaya nyata per video tercatat otomatis mulai produksi berikutnya." en="No data yet — real per-video cost is recorded automatically from the next production." /></p>

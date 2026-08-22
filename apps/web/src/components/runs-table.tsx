@@ -384,7 +384,7 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
             <thead><tr>
               <th>ID</th><th>Channel</th><th>Niche</th><th><span data-id>Judul</span><span data-en>Title</span></th><th>Status</th>
               <th className="num" title="Waktu proses produksi">Proses</th>
-              <th className="num" title="Biaya AI BYOK nyata (konsumsi terukur × harga resmi provider) — dibayar kunci Anda sendiri">Biaya AI</th>
+              <th className="num" title="Perkiraan biaya AI (BYOK) dari tarif resmi penyedia — dibayar dengan kunci AI Anda sendiri, bukan ke kami">Biaya AI</th>
               <th className="num">Views</th><th>Started</th><th></th>
             </tr></thead>
             <tbody>
@@ -405,7 +405,15 @@ export default function RunsTable({ channelId }: { channelId?: string }) {
                     <td className="num mono" style={{ fontSize: "var(--text-xs)" }}>{(() => {
                       const c = (d.run_metadata as { cost?: { usd?: number; unpriced?: string[] } } | null)?.cost;
                       if (!c || typeof c.usd !== "number") return <span className="muted">—</span>;
-                      return <span title={c.unpriced?.length ? `belum lengkap — model tanpa harga: ${c.unpriced.join(", ")}` : "konsumsi terukur × harga resmi provider"}>Rp {Math.round(c.usd * usdRate).toLocaleString("id-ID")}{c.unpriced?.length ? "⚠️" : ""}</span>;
+                      // [2026-08-22] Dulu: tanda ⚠️ + DAFTAR KUNCI MODEL internal. Di mata tenant itu
+                      // terbaca "aplikasinya rusak", padahal sebabnya cara vendor menagih — dan kunci
+                      // model adalah nomor internal kita (owner sudah pernah menyuruh mencabut nomor
+                      // internal dari pesan tenant). Kini: penanda NETRAL "≈" + kalimat manusia yang
+                      // menyebut ARAH kekurangannya. `unpriced` tetap dipakai sebagai penanda, tak dicetak.
+                      const belumLengkap = !!c.unpriced?.length;
+                      return <span title={belumLengkap
+                        ? "Perkiraan — sebagian komponen belum bisa dirinci karena penyedianya menagih dengan satuan yang belum bisa kami hitung. Angka sebenarnya bisa lebih tinggi."
+                        : "Perkiraan dari tarif resmi penyedia"}>{belumLengkap ? "≈" : ""}Rp {Math.round(c.usd * usdRate).toLocaleString("id-ID")}</span>;
                     })()}</td>
                     <td className="num">{d.youtube_video_id && views[d.youtube_video_id] != null ? <b style={{ color: "var(--text-primary)", fontWeight: 600 }}>{fmtK(views[d.youtube_video_id])}</b> : <span className="muted">—</span>}</td>
                     <td><span className="muted" style={{ fontSize: "var(--text-xs)", whiteSpace: "nowrap" }}>{fmtWhen(d.created_at)}</span></td>

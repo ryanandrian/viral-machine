@@ -18,7 +18,7 @@ Price Sync (B2 + ketahanan, owner 2026-07-04) — sinkron OTOMATIS harga satuan 
 
 import os
 import time as _time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import requests
 from loguru import logger
@@ -31,6 +31,8 @@ FALLBACK_URL = os.getenv("AI_PRICE_FALLBACK_URL", "https://openrouter.ai/api/v1/
 SYNC_INTERVAL_HOURS = float(os.getenv("AI_PRICE_SYNC_HOURS", "24"))
 SANITY_FACTOR = float(os.getenv("AI_PRICE_SANITY_FACTOR", "3"))
 STALE_DAYS = float(os.getenv("AI_PRICE_STALE_DAYS", "7"))
+# Jendela bukti untuk laporan "gagal dihitung" (hari). Knob infra (pola STALE_DAYS).
+UNPRICED_WINDOW_DAYS = float(os.getenv("AI_UNPRICED_WINDOW_DAYS", "3"))
 
 
 FX_URL = os.getenv("FX_RATE_URL", "https://open.er-api.com/v6/latest/USD")  # kurs pasar publik, tanpa key
@@ -237,6 +239,46 @@ def sync_prices(sb=None, force: bool = False, only_model_key: str | None = None)
 
     _check_staleness(sb, rows)
     return {"updated": updated, "held": held, "missing": missing}
+
+
+def report_unpriced_models(sb=None) -> dict:
+    """Model yang GAGAL DIHITUNG biayanya pada produksi NYATA → alarm admin 1×/hari.
+
+    KENAPA BERBASIS BUKTI, BUKAN ATURAN PER-JENIS (owner 2026-08-22). Mesin biaya sudah menuliskan
+    kegagalannya sendiri di tiap run (`run_metadata.cost.unpriced`) — tapi **nol pembaca**, sehingga
+    biaya suara 4 channel aktif dilaporkan Rp 0 selama 16 produksi tanpa seorang pun tahu. Daftar
+    aturan "jenis X pakai satuan Y" tak dipakai di sini dengan sengaja: vendor berikutnya bisa
+    menagih dengan satuan yang belum ada hari ini, dan daftar semacam itu PASTI tertinggal —
+    hasilnya nol senyap yang sama. Produksi nyata tak bisa tertinggal.
+
+    Nol alarm palsu secara konstruksi: hanya menyala bila uang nyata SUDAH tak terhitung.
+    Fail-soft total: apa pun yang gagal di sini tak boleh mengganggu petugas harian."""
+    try:
+        sb = sb or _sb()
+        sejak = (datetime.now(timezone.utc) - timedelta(days=UNPRICED_WINDOW_DAYS)).isoformat()
+        rows = (sb.table("production_runs").select("run_metadata")
+                .gte("created_at", sejak).execute().data or [])
+        hitung: dict[str, int] = {}
+        for r in rows:
+            for mk in (((r.get("run_metadata") or {}).get("cost") or {}).get("unpriced") or []):
+                hitung[str(mk)] = hitung.get(str(mk), 0) + 1
+        if not hitung:
+            return {"unpriced": {}}
+        if _time.time() - _state_get_epoch(sb, "ai_unpriced_alerted_at") < 86400:
+            return {"unpriced": hitung, "alerted": False}
+        from src.utils.telegram_notifier import TelegramNotifier   # lazy: pola berkas ini
+        baris = "\n".join(f"• <code>{TelegramNotifier.aman(k)}</code> — {v} produksi"
+                           for k, v in sorted(hitung.items(), key=lambda x: -x[1]))
+        _notify_admin(
+            f"⚠️ <b>Biaya AI TIDAK TERHITUNG</b> ({int(UNPRICED_WINDOW_DAYS)} hari terakhir)\n{baris}\n"
+            f"Biaya yang dilaporkan ke tenant jadi LEBIH MURAH dari kenyataan. Sebab yang mungkin: "
+            f"harga belum ada di katalog (isi manual di Catalog → AI Models), atau vendor menagih "
+            f"dengan satuan yang mesin belum bisa hitung.")
+        _state_set_epoch(sb, "ai_unpriced_alerted_at")
+        return {"unpriced": hitung, "alerted": True}
+    except Exception as e:
+        logger.warning(f"[price_sync] laporan biaya-tak-terhitung gagal (non-fatal): {e}")
+        return {"unpriced": {}}
 
 
 def sync_fx_rate(sb=None, force: bool = False) -> dict:

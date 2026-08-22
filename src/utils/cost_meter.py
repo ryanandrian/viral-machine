@@ -17,7 +17,11 @@ _tl = threading.local()
 
 def reset() -> None:
     """Mulai pencatatan utk run di thread ini (dipanggil pipeline di awal run)."""
-    _tl.data = {"llm": {}, "image": {}, "tts": {}, "video": {}}
+    # `tts_tokens` = keranjang KEDUA untuk suara: sebagian vendor (Gemini) menagih suara PER TOKEN,
+    # bukan per huruf. WAJIB terdaftar di sini — `_bucket()` mengembalikan None untuk keranjang tak
+    # dikenal, jadi keranjang yang lupa didaftarkan membuat add_* jadi no-op SENYAP (pencatatan hilang
+    # tanpa jejak). Dikunci uji `test_biaya_ai_tak_bisa_nol_senyap.py`.
+    _tl.data = {"llm": {}, "image": {}, "tts": {}, "tts_tokens": {}, "video": {}}
 
 
 def _bucket(kind: str) -> dict | None:
@@ -56,6 +60,18 @@ def add_tts(model: str, chars: int) -> None:
     if b is None or not model:
         return
     b[model] = b.get(model, 0) + int(chars or 0)
+
+
+def add_tts_tokens(model: str, tokens_in: int, tokens_out: int) -> None:
+    """Token NYATA dari balasan vendor untuk suara ber-tagih token (mis. Gemini TTS: token audio).
+    TERPISAH dari keranjang `llm` supaya biaya suara tidak nyasar ke rincian naskah, dan terpisah
+    dari keranjang `tts` (huruf) supaya penghitung biaya bisa memilih satuan tanpa risiko ganda."""
+    b = _bucket("tts_tokens")
+    if b is None or not model:
+        return
+    cur = b.setdefault(model, {"tokens_in": 0, "tokens_out": 0})
+    cur["tokens_in"] += int(tokens_in or 0)
+    cur["tokens_out"] += int(tokens_out or 0)
 
 
 def summary() -> dict:

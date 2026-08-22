@@ -174,14 +174,18 @@ kunci: channels.*_account_id → tenant_ai_accounts (decrypt Fernet)
 **Biaya produksi per 1 video:**
 | File | Fungsi/proses |
 |---|---|
-| `src/utils/cost_meter.py` | Meteran konsumsi thread-local: `reset()`, `add_llm(model,tin,tout)`, `add_image(model,n)`, `add_tts(model,chars)`, `summary()`. |
-| `src/billing/ai_cost.py` | `compute_cost_usd(ai_usage)` — konsumsi × harga katalog (`ai_models.pricing`) → `{usd, breakdown:{llm,image,tts}, unpriced, priced_at}`. Model gambar ber-tagih token (gpt-image) dihitung di bucket llm. |
+| `src/utils/cost_meter.py` | Meteran konsumsi thread-local: `reset()`, `add_llm(model,tin,tout)`, `add_image(model,n)`, `add_tts(model,chars)`, **`add_tts_tokens(model,tin,tout)`** (22-Agu), `summary()`. ⚠️ Keranjang baru WAJIB didaftarkan di `reset()` — `_bucket()` mengembalikan `None` untuk keranjang tak dikenal, jadi `add_*` jadi **no-op senyap**. |
+| `src/billing/ai_cost.py` | `compute_cost_usd(ai_usage)` — konsumsi × harga katalog (`ai_models.pricing`) → `{usd, breakdown:{llm,image,tts,video}, unpriced, priced_at}`. Model gambar ber-tagih token (gpt-image) dihitung di bucket llm. **Suara ber-tagih token** (Gemini TTS) dihitung di bucket `tts` dari `tts_tokens`. |
+| `src/billing/price_sync.py` → `report_unpriced_models` | **(22-Agu)** Laporan harian **berbasis BUKTI PRODUKSI**: model yang gagal dihitung biayanya pada run nyata (`cost.unpriced`, jendela `AI_UNPRICED_WINDOW_DAYS`=3) → alarm admin 1×/hari. Dipanggil `buffer_janitor.run_once`. **Sengaja tidak** memakai daftar aturan "jenis X → satuan Y": vendor baru bisa menagih dengan satuan yang belum ada hari ini, daftar semacam itu PASTI tertinggal. |
 
 **Rumus biaya (jujur = konsumsi terukur × harga katalog):**
 ```
 biaya_llm   = Σ (tokens_in/1e6 × in_per_1m + tokens_out/1e6 × out_per_1m)
 biaya_image = Σ (jumlah_gambar × per_image)          [kecuali gpt-image → via token llm]
 biaya_tts   = Σ (chars/1e6 × per_1m_chars)
+              ATAU, bila model TAK punya per_1m_chars & vendor mengirim hitungan token (Gemini TTS):
+              Σ (tts_tokens.in/1e6 × in_per_1m + tts_tokens.out/1e6 × out_per_1m)
+              Nol dari keduanya → masuk `unpriced` (JUJUR). Urutan per-huruf DULU ⇒ tak mungkin ganda.
 biaya_video_USD = biaya_llm + biaya_image + biaya_tts        → disimpan di production_runs.run_metadata.cost
 biaya_video_IDR = biaya_video_USD × app_config.usd_idr_rate  (tampilan)
 ```
@@ -195,8 +199,8 @@ biaya_video_IDR = biaya_video_USD × app_config.usd_idr_rate  (tampilan)
 | Model aktif = pasti jalan | Tombol **Uji** (`model_tester`) + stempel `cost_hint.audit` + badge FE — **dan sejak 22-Agu DITEGAKKAN MESIN**: trigger `trg_gate_aktif_terbukti` (migr `0208`) menolak menyalakan model yang auditnya bukan `LULUS`, **atau** yang auditnya **lebih tua dari `unavailable_since`**-nya. Sampai 22-Agu janji ini bersandar DISIPLIN saja |
 | "Valid" = token benar bisa dipakai | `validate_ai_key` (uji nyata, termasuk EL scoped) |
 | Yang muncul di Channel = pasti aktif & jalan | filter provider aktif (FE) + `assertEnums` + `get_providers()` (aktif-only) |
-| Harga akurat & otomatis | `price_sync` (feed + prefix data-driven, no hardcode) |
-| Biaya per video benar | `cost_meter` → `compute_cost_usd` (× `usd_idr_rate`) |
+| Harga akurat & otomatis | `price_sync` (feed + prefix data-driven, no hardcode). **BATAS TERUKUR (22-Agu): 16 dari 42 model aktif TIDAK ADA di umpan publik** — seluruh 5 model video, ElevenLabs (3), fal (11 total), Cloudflare, Edge ⇒ harganya **wajib diketik admin**. Panel menyebut asalnya (`manual` / `otomatis`) supaya penambahan vendor baru tak salah harap |
+| Biaya per video benar | `cost_meter` → `compute_cost_usd` (× `usd_idr_rate`). **Kegagalan hitung tak lagi senyap** (22-Agu): tiap run mencatat `cost.unpriced`, dan `report_unpriced_models` melaporkannya harian ke admin. Layar tenant menyebutnya **perkiraan** (bukan "nyata") + penanda `≈` bila ada komponen yang belum terhitung — nol kode internal model dicetak ke tenant |
 | Adapter/vendor baru tanpa bongkar skrip | `catalog_sync` (cermin registry kode, self-heal) |
 
 ---
@@ -242,7 +246,7 @@ biaya_video_IDR = biaya_video_USD × app_config.usd_idr_rate  (tampilan)
 | `ai_providers.base_url` | wajib untuk vendor OpenAI-compatible | panggilan ke alamat salah |
 | `ai_models.model_id` | **ID resmi vendor** (bukan `model_key`), sertakan versi | gagal di vendor tiap produksi |
 | `ai_models.default_params` | **gambar** `{size,steps}` · **video** `{aspect_ratio,duration,duration_param,allowed_durations}` · naskah/suara `{}` | dikirim **apa adanya** ke vendor: kunci ngawur = 400, dan penolakan parameter berkelas `UNKNOWN` = **boleh diulang** ⇒ kredit tenant terbakar (anatomi insiden `seed`, 37 kejadian) |
-| `ai_models.pricing` | wajib sebelum dinyalakan; `per_request_usd`/`per_second_usd`/trio video **tak pernah** ditulis sinkron otomatis | biaya tenant **dilaporkan lebih murah dari kenyataan**, produksi tetap jalan (**nol rem berbasis biaya**) |
+| `ai_models.pricing` | wajib sebelum dinyalakan; `per_request_usd`/`per_second_usd`/trio video **tak pernah** ditulis sinkron otomatis. **SATUANNYA harus yang dikenali `ai_cost` untuk JENIS itu** — bukan sekadar "ada isinya": umpan menulis satuan yang vendor pakai, dan itu bisa bukan satuan yang mesin kita hitung *(22-Agu: `gemini-2.5-flash-preview-tts` ber-harga token pada baris `component=tts` → biaya suara **Rp 0** di 4 channel aktif selama 16 produksi; lencana "harga kosong" tak menyala karena harganya memang tidak kosong)*. Penuntun satuan per jenis kini tampil di editor harga panel | biaya tenant **dilaporkan lebih murah dari kenyataan**, produksi tetap jalan (**nol rem berbasis biaya**). **Sejak 22-Agu tak lagi senyap:** `report_unpriced_models` melapor harian dari bukti produksi |
 | `tts_profiles.adapter` | ∈ `tts_adapter` | penyedia BARU dengan adapter kosong ⇒ `TTSError` |
 | `tts_profiles.delivery_wps` | wajib benar | kosong ⇒ jatuh **senyap** ke 2.4 ⇒ anggaran kata salah ⇒ durasi melenceng ⇒ QC menolak |
 | `voice_catalog.preview_url` | wajib (ditegakkan `tests/test_katalog_suara_tak_menipu.py`) | tenant memilih suara tanpa mendengarnya |

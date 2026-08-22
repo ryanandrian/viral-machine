@@ -81,13 +81,26 @@ def compute_cost_usd(ai_usage: dict, sb=None) -> dict | None:
         br["image"] += n * float(p.get("per_image") or 0)
         synced = synced or p.get("synced_at")
 
+    # SUARA — DUA satuan. Per-huruf (ElevenLabs, OpenAI tts-1) ATAU per-token (Gemini TTS: vendor
+    # menagih token audio dan mengirim hitungannya sendiri di balasan; dicatat meter di `tts_tokens`).
+    # Urutannya menentukan: per-huruf DULU, jadi model yang punya harga huruf TAK MUNGKIN terhitung
+    # dua kali walau tokennya juga tercatat. Nol dari keduanya → JUJUR masuk daftar tanpa-harga
+    # (haram menaksir token dari jumlah huruf — itu mengarang angka).
+    _tts_tok = ai_usage.get("tts_tokens") or {}
     for model, chars in (ai_usage.get("tts") or {}).items():
         p = prices.get(model)
-        if not p or p.get("per_1m_chars") is None:
-            unpriced.append(model)
+        if p and p.get("per_1m_chars") is not None:
+            br["tts"] += (chars / 1e6) * float(p.get("per_1m_chars") or 0)
+            synced = synced or p.get("synced_at")
             continue
-        br["tts"] += (chars / 1e6) * float(p.get("per_1m_chars") or 0)
-        synced = synced or p.get("synced_at")
+        tok = _tts_tok.get(model) or {}
+        if p and (tok.get("tokens_in") or tok.get("tokens_out")) and (
+                p.get("in_per_1m") is not None or p.get("out_per_1m") is not None):
+            br["tts"] += (float(tok.get("tokens_in", 0) or 0) / 1e6) * float(p.get("in_per_1m") or 0) \
+                       + (float(tok.get("tokens_out", 0) or 0) / 1e6) * float(p.get("out_per_1m") or 0)
+            synced = synced or p.get("synced_at")
+            continue
+        unpriced.append(model)
 
     # [B6] F2 — video-gen: per-detik ATAU basis-per-klip + detik-tambahan (mis. Kling $0.35/5s + $0.07/s).
     for model, u in (ai_usage.get("video") or {}).items():

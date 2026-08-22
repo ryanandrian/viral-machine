@@ -100,10 +100,24 @@ class GeminiTTSProvider(TTSProvider):
                     raise TTSError(f"Gemini TTS: konversi PCM→MP3 gagal: {res.stderr[-200:]}")
             finally:
                 Path(raw).unlink(missing_ok=True)
-            # B2 cost-tracking: karakter input (satuan tagihan TTS) — pola sama provider lain. Fail-soft.
+            # B2 cost-tracking. DUA satuan dicatat, keduanya dari data yang sudah di tangan:
+            #  • huruf  — catatan pemakaian (satuan tagihan ElevenLabs/OpenAI tts-1 dsb)
+            #  • token  — Gemini menagih suara PER TOKEN, dan hitungannya DIKIRIM VENDOR di balasan
+            #             yang baru saja kita terima (`usageMetadata`). Pola ini sudah terpasang &
+            #             terbukti di mesin gambar (`visual/ai_image.py`).
+            # [2026-08-22] Sebelum ini hanya huruf yang dicatat, dengan komentar saya sendiri
+            # "satuan tagihan TTS" — sebuah ASUMSI. Akibatnya biaya suara 4 channel aktif dilaporkan
+            # Rp 0 selama 16 produksi. Token TIDAK boleh ditaksir dari panjang teks (= angka karangan):
+            # vendor tak mengirim hitungan ⇒ biaya jujur dilaporkan "belum terhitung".
+            # Fail-soft: apa pun yang gagal di sini TIDAK boleh menggagalkan produksi.
             try:
                 from src.utils import cost_meter
                 cost_meter.add_tts(self.model, len(text))
+                u = data.get("usageMetadata") or {}
+                if u.get("promptTokenCount") or u.get("candidatesTokenCount"):
+                    cost_meter.add_tts_tokens(self.model,
+                                              u.get("promptTokenCount", 0),
+                                              u.get("candidatesTokenCount", 0))
             except Exception:
                 pass
             return output_path

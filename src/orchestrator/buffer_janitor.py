@@ -296,6 +296,14 @@ def run_once(sb=None) -> dict:
         sync_prices(sb)
     except Exception as e:
         logger.warning(f"[janitor] price_sync gagal (non-fatal): {e}")
+    # Laporan harian: model yang GAGAL DIHITUNG biayanya pada produksi NYATA (bukti, bukan teori
+    # katalog) → alarm admin 1×/hari. Tanpa ini, biaya yang tak terhitung tetap senyap: mesin sudah
+    # menuliskannya di tiap run sejak lama, tapi tak ada yang membacanya (insiden 22-Agu). Fail-soft.
+    try:
+        from src.billing.price_sync import report_unpriced_models
+        report_unpriced_models(sb)
+    except Exception as e:
+        logger.warning(f"[janitor] laporan biaya-tak-terhitung gagal (non-fatal): {e}")
     # Kurs USD→IDR harian (tampilan biaya BYOK; hormati usd_idr_rate_locked). Fail-soft.
     try:
         from src.billing.price_sync import sync_fx_rate

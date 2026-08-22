@@ -565,6 +565,17 @@ export default function AdminCatalogPage() {
     const r = await fetch("/api/admin/catalog", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table: "ai_models", key, patch: { pricing_locked: locked } }) });
     if (r.ok) { setToast(locked ? "Harga dikunci (sinkron tak menimpa)" : "Harga dibuka (ikut sinkron harian)"); await load(); } else setToast("Gagal");
   }
+  // Satuan harga yang BENAR-BENAR dihitung mesin biaya (`src/billing/ai_cost.py`) per jenis model.
+  // Editor harga menampilkan lima kotak untuk semua jenis; tanpa penuntun ini admin menebak — dan
+  // satuan yang salah = harga terisi tapi biaya tetap dilaporkan NOL (insiden 22-Agu: model suara
+  // Gemini ber-harga token, 4 channel aktif, 16 produksi biaya suara Rp 0).
+  const SATUAN_HARGA: Record<string, string> = {
+    llm:   "naskah: in/1M + out/1M (per_1m_chars & /img tak dipakai) · atau per_request_usd utk tarif per-panggilan",
+    tts:   "suara: /1M chr (per_1m_chars). Vendor yang menagih per TOKEN (mis. Gemini): isi in/1M + out/1M — biaya dihitung dari hitungan token yang dikirim vendor",
+    image: "gambar: /img (per_image). Vendor yang menagih per TOKEN (mis. gpt-image-1): isi in/1M + out/1M",
+    video: "video: /dtk (per_second_usd) · atau harga basis-klip (per_video_base_usd) via kolom pricing",
+  };
+
   const fmtPricing = (p: Record<string, unknown> | null | undefined): string => {
     if (!p) return "";
     const parts: string[] = [];
@@ -794,12 +805,22 @@ export default function AdminCatalogPage() {
                         <input className="input" style={{ height: 26, width: 70 }} placeholder="/img" value={priceEdit.img} onChange={(e) => setPriceEdit({ ...priceEdit, img: e.target.value })} />
                         <input className="input" style={{ height: 26, width: 76 }} placeholder="/1M chr" value={priceEdit.chars1m} onChange={(e) => setPriceEdit({ ...priceEdit, chars1m: e.target.value })} />
                         <input className="input" style={{ height: 26, width: 64 }} placeholder="/dtk" title="Harga video per-detik (USD) — harga basis-klip diedit via kolom pricing model (dipertahankan otomatis)" value={priceEdit.sec} onChange={(e) => setPriceEdit({ ...priceEdit, sec: e.target.value })} />
+                        <span className="muted" style={{ fontSize: "0.625rem", flexBasis: "100%" }}>
+                          {SATUAN_HARGA[String(m.component ?? "")] ?? "satuan tergantung jenis model"}
+                        </span>
                         <button className="btn btn-default btn-sm" onClick={savePricing}>✓</button>
                         <button className="btn btn-ghost btn-sm" onClick={() => setPriceEdit(null)}>✕</button>
                       </span>
                     ) : (
                       <span style={{ display: "inline-flex", gap: ".4rem", alignItems: "center", flexWrap: "wrap" }}>
-                        {pr ? <span className="muted" style={{ fontSize: "var(--text-xs)" }}>{fmtPricing(pr)}</span>
+                        {pr ? <span className="muted" style={{ fontSize: "var(--text-xs)" }}>{fmtPricing(pr)}
+                          {/* Asal harga: 16 dari 42 model aktif TIDAK ADA di umpan harga publik (semua
+                              model video, ElevenLabs, Cloudflare, Edge, fal) ⇒ harganya wajib diketik
+                              admin. Tanpa keterangan ini admin tak bisa membedakan "datang sendiri"
+                              dari "menunggu diketik" saat menambah vendor/model baru. */}
+                          <span style={{ marginLeft: ".35rem", opacity: .7 }} title={String(pr.source ?? "")}>
+                            {String(pr.source ?? "") === "manual" ? "· manual" : "· otomatis"}
+                          </span></span>
                           : (m.is_active ? <span className="badge badge-warning" title="Model aktif tanpa harga → biaya video tampil 'belum lengkap'">⚠️ kosong</span> : <span className="muted" style={{ fontSize: "0.7rem" }}>—</span>)}
                         {m.pricing_locked ? <span title="Terkunci — sinkron otomatis tak menimpa (klik utk buka)" style={{ cursor: "pointer" }} onClick={() => toggleLock(mk, false)}>🔒</span>
                           : pr ? <span title="Ikut sinkron harian (klik utk kunci)" style={{ cursor: "pointer", opacity: .45 }} onClick={() => toggleLock(mk, true)}>🔓</span> : null}
