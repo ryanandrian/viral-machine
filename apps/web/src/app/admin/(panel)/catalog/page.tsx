@@ -121,6 +121,14 @@ const FIELD_META: Record<string, Record<string, { id: string; en: string; help_i
   },
 };
 
+// [22-Agu] Kolom yang mengubah IDENTITAS/ROUTING model — terkunci selama masih dipakai channel.
+// `channels` menyimpan rujukan model sebagai TEKS tanpa foreign key (nol FK ke `ai_models`), jadi
+// mengubahnya tidak "mengalir" ke channel: ia MEMUTUS rujukannya. Terbuka kembali bila nol pemakai.
+const KOLOM_TERKUNCI_BILA_DIPAKAI: Record<string, string[]> = {
+  models: ["provider_key", "component", "model_id"],
+  voice:  ["provider_key"],
+};
+
 // Penerjemah KODE error API → pesan dwibahasa (aturan: API kirim kode, FE menerjemahkan).
 function errText(code: string, detail?: Record<string, unknown> | null): React.ReactNode {
   const col = String(detail?.col ?? "");
@@ -132,6 +140,12 @@ function errText(code: string, detail?: Record<string, unknown> | null): React.R
     case "out_of_range": return <Bi id={`${col}: di luar rentang ${detail?.min}–${detail?.max}.`} en={`${col}: outside range ${detail?.min}–${detail?.max}.`} />;
     case "pk_required": return <Bi id={`${col}: wajib diisi.`} en={`${col}: required.`} />;
     case "no_editable_fields": return <Bi id="Tidak ada perubahan untuk disimpan." en="No changes to save." />;
+    case "identitas_terkunci": {
+      const dipakai = (detail?.dipakai as string[] | undefined) ?? [];
+      return <Bi
+        id={`Tidak bisa diubah: model ini masih dipakai ${dipakai.length} channel (${dipakai.slice(0, 3).join(", ")}). Mengubah penyedia, jenis, atau ID vendornya akan memutus channel mereka. Buat model BARU untuk versi terbaru, lalu biarkan tenant memilih sendiri.`}
+        en={`Cannot change: this model is still used by ${dipakai.length} channel(s) (${dipakai.slice(0, 3).join(", ")}). Changing its provider, type, or vendor ID would break them. Create a NEW model for the newer version and let tenants pick it themselves.`} />;
+    }
     case "belum_terbukti":
       // Gerbang 0208: "model aktif = pasti jalan" ditegakkan mesin. Dua sebab, dua kalimat.
       return String(detail?.sebab ?? "") === "uji_lebih_tua_dari_kematian"
@@ -355,7 +369,7 @@ export default function AdminCatalogPage() {
   // A1/A2: satu blok field utk kedua modal — label manusiawi (Bi) + kode kolom kecil + bantuan + tanda error.
   // FUNGSI render (dipanggil {fieldBlock(...)}), BUKAN komponen bersarang — komponen yang didefinisikan
   // di dalam komponen berganti identitas tiap render → React remount subtree → input kehilangan fokus tiap ketikan.
-  const fieldBlock = (mapKey: string, k: string, fallbackLabel: string, value: string, onChange: (v: string) => void, disabled: boolean, pkNote?: boolean) => {
+  const fieldBlock = (mapKey: string, k: string, fallbackLabel: string, value: string, onChange: (v: string) => void, disabled: boolean, pkNote?: boolean, dipakaiOleh?: number) => {
     const meta = FIELD_META[mapKey]?.[k];
     const isErr = formErr?.col === k;
     return (
@@ -364,6 +378,7 @@ export default function AdminCatalogPage() {
           {meta ? <Bi id={meta.id} en={meta.en} /> : fallbackLabel}
           <span className="muted mono" style={{ fontSize: "0.625rem", marginLeft: 6 }}>{k}</span>
           {pkNote && <span className="muted"> — <Bi id="terkunci" en="locked" /></span>}
+          {dipakaiOleh ? <span className="muted"> — <Bi id={`terkunci, dipakai ${dipakaiOleh} channel`} en={`locked, used by ${dipakaiOleh} channel(s)`} /></span> : null}
         </label>
         {renderField(mapKey, k, value, onChange, disabled)}
         {meta?.help_id && <div className="muted" style={{ fontSize: "0.6875rem", marginTop: 2, lineHeight: 1.4 }}><Bi id={meta.help_id} en={meta.help_en ?? meta.help_id} /></div>}
@@ -1073,9 +1088,20 @@ export default function AdminCatalogPage() {
           <div className="card" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(720px,92vw)", maxHeight: "85vh", overflowY: "auto", zIndex: 61, padding: "1.25rem" }}>
             <div style={{ display: "flex", alignItems: "center", marginBottom: "0.75rem" }}><strong>Edit {ADD_FIELDS[rowEdit.mapKey].table}</strong><button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} onClick={() => setRowEdit(null)}><X size={16} /></button></div>
             <div style={{ display: "grid", gap: "0.5rem" }}>
-              {ADD_FIELDS[rowEdit.mapKey].fields.map(([k, label]) =>
-                fieldBlock(rowEdit.mapKey, k, label, rowEdit.values[k] ?? "", (v) => setRowEdit({ ...rowEdit, values: { ...rowEdit.values, [k]: v } }), k === PK_OF[rowEdit.mapKey], k === PK_OF[rowEdit.mapKey])
-              )}
+              {ADD_FIELDS[rowEdit.mapKey].fields.map(([k, label]) => {
+                // Terkunci bila: (a) kunci utama, atau (b) kolom identitas DAN masih dipakai channel.
+                // Data pemakaian datang dari GET yang sama dengan tabelnya; bila belum ada, JANGAN
+                // mengunci — isian mati tanpa sebab = admin terjebak tanpa jalur buka.
+                const tabel = ADD_FIELDS[rowEdit.mapKey].table;
+                const pkRow = rowEdit.values[PK_OF[rowEdit.mapKey]] ?? "";
+                const pakai = data?.catalog_pemakaian?.[tabel]?.[pkRow];
+                const dipakai = pakai?.total ?? 0;
+                const kunciIdentitas = (KOLOM_TERKUNCI_BILA_DIPAKAI[rowEdit.mapKey] ?? []).includes(k) && dipakai > 0;
+                const isPk = k === PK_OF[rowEdit.mapKey];
+                return fieldBlock(rowEdit.mapKey, k, label, rowEdit.values[k] ?? "",
+                  (v) => setRowEdit({ ...rowEdit, values: { ...rowEdit.values, [k]: v } }),
+                  isPk || kunciIdentitas, isPk, kunciIdentitas ? dipakai : undefined);
+              })}
               {(() => {
                 // [Jeda-akhir] pratinjau dampak hidup + kunci Simpan saat nilai di luar rentang (§3.1)
                 const durPrev = rowEdit.mapKey === "durations" ? durOverridePreview(rowEdit.values) : null;

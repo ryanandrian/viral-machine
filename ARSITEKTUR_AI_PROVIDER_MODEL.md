@@ -143,6 +143,9 @@ Worker (systemd `mv-worker`) menjalankan loop konkuren. **Producer** mengambil c
 ```
 channels.llm_library  → get_providers()[key].adapter → ADAPTERS[adapter] → provider.complete()
 channels.tts_provider → tts_profiles.adapter → _adapter_registry()[adapter] → provider.generate()
+   model suara: channels.tts_model → resolve_model_id() → ai_models.model_id → dikirim ke vendor
+   (22-Agu: SEBELUM ini jalur suara mengirim model_key APA ADANYA — melanggar §2. Model ber-key≠id
+    LULUS tombol Uji tapi PASTI gagal produksi; kini selaras dgn naskah/gambar/video.)
 channels.visual_mode  → platform=provider_key → _TRANSPORTS[platform] → _generate_image()
 kunci: channels.*_account_id → tenant_ai_accounts (decrypt Fernet)
 ```
@@ -302,6 +305,8 @@ DIHAPUS panel tapi tak bisa dibuat darinya. Itu sebab TTS Gemini dulu lahir dari
 | `ai_models.quality_tier` | **nol pembaca di mesin** — murni tampilan pemilih tenant. Bukan fosil: ia DIPAKAI layar tenant, jadi dibiarkan |
 | ~~3 kolom fosil~~ | ✅ **DIBUANG 22-Agu (F1, migr `0207`)** — `tts_profiles.has_word_timeframe` (sumber kebenaran KEDUA untuk `tts_class`, nilainya cermin 1:1), `voice_catalog.pace_sample_n` + `pace_updated_at` (0 dari 44 terisi). Nol pembaca & nol penulis. Kalibrasi tempo yang sungguhan hidup di `tts_pace_calibration` |
 | ~~`voice_catalog` boleh dihapus TANPA penjaga~~ | ✅ **DITUTUP 22-Agu (F5)** — **bug yang ditemukan saat menyatukan penghitung**: tabel ini ada di `DELETABLE` tapi `refGuard` tak punya cabang untuknya ⇒ karakter suara yang sedang dipakai channel tenant bisa TERHAPUS dan channel itu menggantung. Saat ditemukan: 6 channel memakai suara, 3 di antaranya AKTIF. Kini ditolak + disarankan nonaktifkan, dan **setiap** tabel `DELETABLE` wajib punya penjaga (dikunci uji) |
+| ~~Jalur suara mengirim `model_key`~~ | ✅ **DITUTUP 22-Agu** — produksi suara kini memakai `model_id` seperti tiga jenis lain (satu titik: `tts_engine._get_provider_config`, memakai penerjemah yang sudah ada, fail-safe dipertahankan). Terukur: 11 model suara, **nol** ber-key≠id ⇒ nol perubahan perilaku; yang ditutup adalah kegagalan-yang-menunggu (LULUS Uji tapi gagal produksi). Biaya tetap terhitung — `ai_cost._pricing_map` memetakan kedua bentuk ID. |
+| ~~Tombol Edit terbuka penuh~~ | ✅ **DITUTUP 22-Agu** — `provider_key`·`component`·`model_id` **readonly selama model dipakai channel** (dua lapis: layar + server, karena penjaga di panel saja tak menahan jalur skrip). `channels` menyimpan rujukan sebagai TEKS tanpa FK (nol FK ke `ai_models`) ⇒ mengubahnya MEMUTUS rujukan, bukan mengalirkannya. Terbuka kembali bila nol pemakai. **Tidak** dikunci: `is_active` (mematikan wajib tetap bisa) · nama · tier · urutan · harga. Terukur: 15 dari 47 model terkunci, 32 masih bebas. |
 | ~~Duplikasi penghitung~~ | ✅ **DITUTUP 22-Agu (F3)** — satu fungsi `channelPemakai(a, table, key, hanyaAktif)` melayani kedua jalur. Beda yang SAH dipertahankan: MEMATIKAN → channel aktif saja · MENGHAPUS → semua channel. Gagal baca pada jalur hapus **menahan** (bukan meloloskan) |
 | ~~Fosil data `groq`~~ | ✅ **DIBERSIHKAN 22-Agu (F4)** — 1 setelan suara + 2 karakter suara dihapus (nol model `tts`, nol channel memakainya; penyedia `groq` untuk NASKAH tak disentuh & tetap aktif). Bila Groq TTS kelak dihidupkan, barisnya lahir otomatis lewat B6 |
 

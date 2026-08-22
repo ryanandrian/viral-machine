@@ -276,6 +276,32 @@ export async function PATCH(req: Request) {
   const a = createAdminClient();
   try { await assertEnums(a, table, clean); } catch (e) { return valErrResponse(e); }
 
+  // ── [22-Agu] IDENTITAS MODEL TERKUNCI SELAMA MASIH DIPAKAI ────────────────────────────────
+  // Owner 22-Agu: "tombol edit berbahaya jika dibiarkan terbuka penuh… kolom yang tidak boleh
+  // diubah karena sudah ada tenant yang menggunakan harus dibuat readonly."
+  // Tiga kolom ini mengubah IDENTITAS/ROUTING model, dan `channels` menyimpan rujukannya sebagai
+  // TEKS tanpa foreign key (terukur: NOL FK ke `ai_models`) — jadi tak ada jaring pengaman:
+  //   provider_key → model pindah vendor ⇒ kunci tenant diambil dari vendor yang SALAH
+  //   component    → jenis berubah ⇒ channel memakai model di slot yang salah
+  //   model_id     → SELURUH tenant pemakainya berpindah model TANPA memilih (= ikut campur data
+  //                  tenant, yang owner larang; pola yang benar: model mati dibiarkan mati, versi
+  //                  baru jadi model BARU, tenant memilih sendiri)
+  // SENGAJA TIDAK dikunci: `is_active` (mematikan wajib tetap bisa — vendor bisa memensiunkan
+  // sewaktu-waktu), `display_name`, `quality_tier`, `sort_order`, `pricing`, `default_params`.
+  // Terbuka kembali begitu NOL channel memakainya — supaya salah-isi masih bisa diperbaiki.
+  // Lapis ini di SERVER, bukan hanya layar: penjaga yang hidup di panel saja tak menahan jalur
+  // skrip (mesin suara Gemini dulu dinyalakan lewat skrip, bukan panel).
+  const KOLOM_IDENTITAS = ["provider_key", "component", "model_id"];
+  if (table === "ai_models" && KOLOM_IDENTITAS.some((c) => c in clean)) {
+    const pemakai = await channelPemakai(a, table, String(key));
+    if (pemakai.length > 0) {
+      const diubah = KOLOM_IDENTITAS.filter((c) => c in clean);
+      return NextResponse.json(
+        { error: "identitas_terkunci", detail: { kolom: diubah, dipakai: pemakai } },
+        { status: 409 });
+    }
+  }
+
   // ── [22-Agu B5] MENYALAKAN MODEL = MEMBERSIHKAN JEJAK KARANTINA ───────────────────────────
   // Migr 0205 menulis sendiri: "Ditulis mesin; dibersihkan admin saat menghidupkan kembali."
   // Sampai 22-Agu janji itu TIDAK ADA jalurnya: panel tak bisa menyentuh kedua kolom, jadi jejak

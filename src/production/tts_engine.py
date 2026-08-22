@@ -39,6 +39,22 @@ def _build_full_script(script: dict) -> str:
     return " ".join(parts)
 
 
+def _resolve_model_id(nama: str) -> str:
+    """`model_key` katalog → `model_id` resmi vendor. Pembungkus tipis atas penerjemah yang SUDAH
+    ADA (`providers.llm.catalog.resolve_model_id`): ia generik untuk SELURUH jenis model (memuat
+    `ai_models` tanpa filter component), bukan hanya llm, dan sudah fail-safe.
+    Dibungkus di sini agar impornya lazy (jangan memuat katalog saat modul ini diimpor) dan agar
+    kegagalan impor pun tak menjatuhkan produksi suara — sepola fail-safe penerjemahnya sendiri."""
+    if not nama:
+        return nama
+    try:
+        from src.providers.llm.catalog import resolve_model_id
+        return resolve_model_id(nama)
+    except Exception as e:
+        logger.warning(f"[TTS] resolve model_id '{nama}' gagal ({e}) — pakai nama apa adanya")
+        return nama
+
+
 def _get_provider_config(tenant_config: TenantConfig) -> dict:
     """F1-05/§10.B FINAL: Load config CHANNEL-AWARE (provider+voice dari channel; voice ter-resolve di
     load_tenant_config = channels.voice_key SAJA — voice = channel, niche provider-agnostik). NO fallback
@@ -56,7 +72,17 @@ def _get_provider_config(tenant_config: TenantConfig) -> dict:
         # menerjemahkannya ke identitas vendor (voice_catalog.vendor_voice_id) di SALINAN config —
         # nilai di sini tetap kunci katalog, sebab dipakai sampel pace & atribusi video di bawah.
         "tts_voice":           rc.tts_voice,
-        "tts_model":           rc.tts_model or "",
+        # [22-Agu] DESAIN DITAATI: yang dikirim ke vendor adalah **ID VENDOR** (`ai_models.model_id`),
+        # sama seperti jalur naskah/gambar/video. Sebelum ini jalur suara mengirim `channels.tts_model`
+        # (= `model_key`, kunci KATALOG) APA ADANYA — melanggar desain katalog sendiri
+        # (ARSITEKTUR_AI_PROVIDER_MODEL §2) dan menanam kegagalan yang menunggu: model suara
+        # ber-`model_key` ≠ `model_id` LULUS tombol Uji (uji memang sudah memakai `model_id`) tapi
+        # PASTI GAGAL produksi. Uji yang berbohong = kelas kerusakan paling mahal, dan persis
+        # insiden yang membuat penerjemahan ini ditambahkan ke jalur naskah 20-Jul.
+        # Biaya tetap terhitung: `ai_cost._pricing_map` memetakan `model_key` DAN `model_id` ke
+        # harga yang sama. Terukur saat dipasang: nol model suara ber-key≠id ⇒ nol perubahan
+        # perilaku hari ini, hanya kegagalan-yang-menunggu yang ditutup.
+        "tts_model":           _resolve_model_id(rc.tts_model or ""),
         "tts_api_key":         rc.tts_api_key or "",
         "tts_voice_settings":  getattr(rc, "tts_voice_settings", {}) or {},          # delivery override per-tenant (mis. ryan speed)
         "tts_voice_default_settings": getattr(rc, "tts_voice_default_settings", {}) or {},  # baseline delivery dari voice_catalog
