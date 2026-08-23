@@ -64,8 +64,11 @@ SATUAN_VENDOR: dict[str, tuple[str, float]] = {
     "requests":                     ("naskah_panggilan", 1.0),
     "1000 characters":              ("suara_huruf",      1000.0),
     "seconds":                      ("video_detik",      1.0),
-    # BELUM dipetakan (formulanya belum punya pencatat pemakaian — F4b):
-    #   "megapixels" → gambar_megapiksel · "1m tokens" → video_token
+    # [F4b] fal menyebut dua satuan ini di API harganya; pencatat pemakaiannya kini ada (megapiksel
+    # tertagih & token video, diukur dari berkas hasil). Tarif token video disimpan per SEJUTA token,
+    # sedangkan fal menyebutkannya per "1m tokens" ⇒ pengalinya 1 (satuannya sudah sama).
+    "megapixels":                   ("gambar_megapiksel", 1.0),
+    "1m tokens":                    ("video_token",       1.0),
 }
 
 

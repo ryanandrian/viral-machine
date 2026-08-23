@@ -25,7 +25,7 @@ def reset() -> None:
     # dikenal, jadi keranjang yang lupa didaftarkan membuat add_* jadi no-op SENYAP (pencatatan hilang
     # tanpa jejak). Dikunci uji `test_biaya_ai_tak_bisa_nol_senyap.py`.
     _tl.data = {"llm": {}, "image": {}, "tts": {}, "tts_tokens": {}, "tts_seconds": {}, "video": {},
-                "biaya_vendor": {}}
+                "biaya_vendor": {}, "image_megapiksel": {}, "video_token": {}}
 
 
 def _bucket(kind: str) -> dict | None:
@@ -57,6 +57,49 @@ def add_video(model: str, seconds: float, clips: int = 1) -> None:
     cur = b.setdefault(model, {"seconds": 0.0, "clips": 0})
     cur["seconds"] += float(seconds or 0)
     cur["clips"] += int(clips)
+
+
+def add_image_megapiksel(model: str, piksel) -> None:
+    """[F4b] MEGAPIKSEL TERTAGIH satu gambar — fal menagih per megapiksel, **dibulatkan KE ATAS**.
+
+    Pembulatan terjadi DI SINI, per gambar, sebab itulah cara vendor menagih: 1080×1920 = 2,0736 MP
+    ditagih **3 MP**. Kalau dijumlahkan dulu lalu dibulatkan di akhir, angkanya lebih kecil dari
+    tagihan sesungguhnya — dan selisihnya membesar seiring jumlah gambar.
+
+    `piksel` = jumlah piksel gambar yang SUNGGUH jadi (diukur dari berkasnya, bukan dari setelan
+    katalog). Tak terukur / ngawur → tidak dicatat, sehingga biayanya dilaporkan **belum terhitung**
+    (jujur) alih-alih ditaksir dari jumlah gambar."""
+    import math
+    b = _bucket("image_megapiksel")
+    if b is None or not model:
+        return
+    try:
+        px = float(piksel)
+    except (TypeError, ValueError):
+        return
+    if px <= 0:
+        return
+    b[model] = float(b.get(model, 0.0)) + float(math.ceil(px / 1_000_000))
+
+
+def add_video_token(model: str, *, lebar, tinggi, fps, detik) -> None:
+    """[F4b] TOKEN VIDEO TERTAGIH satu klip: (tinggi × lebar × fps × durasi) ÷ 1024 — cara fal
+    menagih seedance.
+
+    Keempat faktanya wajib TERUKUR dari berkas hasil. Satu saja nol/tak terbaca → tidak dicatat,
+    dan biayanya dilaporkan **belum terhitung**. Sengaja begitu: menebak salah satu faktor (mis.
+    memakai fps katalog padahal vendor mengirim lain) menghasilkan angka yang tampak pasti tapi
+    salah — kelas cacat yang seluruh rantai ini dibereskan untuk menghindarinya."""
+    b = _bucket("video_token")
+    if b is None or not model:
+        return
+    try:
+        w, h, f, d = float(lebar), float(tinggi), float(fps), float(detik)
+    except (TypeError, ValueError):
+        return
+    if min(w, h, f, d) <= 0:
+        return
+    b[model] = round(float(b.get(model, 0.0)) + (w * h * f * d) / 1024.0, 3)
 
 
 def add_tts(model: str, chars: int) -> None:

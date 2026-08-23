@@ -70,6 +70,10 @@ SATUAN_HARGA = (
     Satuan("tts", "suara_detik", "per_second_usd", "detik audio", "tts_seconds", (), ("output_cost_per_second",), 1, "produk", "/detik audio"),
     # ── gambar: per-gambar MENGECUALIKAN token (model gambar ber-tagih token jatuh ke skema token naskah) ──
     Satuan("image", "gambar_satuan", "per_image", "gambar", "image", (), ("output_cost_per_image",), 1, "produk", "/gambar"),
+    # ── gambar ber-tagih MEGAPIKSEL (fal): jumlahnya sudah DIBULATKAN KE ATAS per gambar di
+    #    pencatat — pembulatan adalah bagian dari cara vendor menagih, bukan pembulatan tampilan ──
+    Satuan("image", "gambar_megapiksel", "per_megapixel_usd", "megapiksel (dibulatkan ke atas)",
+           "image_megapiksel", (), (), 1, "produk", "/megapiksel"),
     # ── gambar ber-tagih TOKEN (gpt-image-1 dst): kolom keluarannya `output_cost_per_image_token`,
     #    BUKAN `output_cost_per_token` (yang bermakna ganda). Pemakaiannya tercatat di keranjang
     #    naskah krn adapter gambar mencatat token di sana ⇒ tetap SEKALI tagih (skema ini hanya
@@ -81,6 +85,10 @@ SATUAN_HARGA = (
     Satuan("video", "video_detik", "per_second_usd", "detik video", "video", ("seconds",), ("output_cost_per_second",), 1, "produk", "/detik"),
     Satuan("video", "video_klip", "per_video_base_usd", "klip + detik lebih", "video", ("clips", "seconds"), (), 1,
            "video_bertingkat", "/klip", ("base_seconds", "per_extra_second_usd")),
+    # ── video ber-tagih TOKEN (fal seedance): jumlah token = (tinggi×lebar×fps×durasi)÷1024, dihitung
+    #    di pencatat dari fakta yang DIUKUR pada berkas hasil (bukan dari setelan katalog) ──
+    Satuan("video", "video_token", "per_1m_video_tokens_usd", "sejuta token video", "video_token",
+           (), (), 1e6, "produk", "/1jt token video"),
     # ── token naskah = PALING AKHIR: model gambar/suara ber-tagih token jatuh ke sini HANYA bila
     #    satuan jenisnya sendiri tak ada ⇒ tak pernah tertagih dua kali ──
     Satuan("llm", "naskah_token", "in_per_1m", "sejuta token masuk", "llm", ("tokens_in",), ("input_cost_per_token",), 1e6, "produk", "/1jt token masuk"),
@@ -212,7 +220,11 @@ KERANJANG_BIAYA = {"llm": "llm", "image": "image", "tts": "tts", "tts_tokens": "
                    # NASKAH (penyedia router), jadi rinciannya masuk baris naskah. Bila kelak router
                    # yang sama melayani gambar/video, pencatatnya ditambah di jalur itu — G3 menjaga
                    # jumlah pencatat supaya penambahan itu tak bisa menyelinap tanpa terlihat.
-                   "biaya_vendor": "llm"}
+                   "biaya_vendor": "llm",
+                   # [F4b] Satuan tagih fal: megapiksel (gambar) & token video. Keranjangnya sendiri
+                   # supaya jumlah gambar/detik yang lama TETAP tercatat apa adanya — yang berubah
+                   # hanya DASAR tagihnya, dan formula baris model yang memilih.
+                   "image_megapiksel": "image", "video_token": "video"}
 
 # Formula yang memang TIDAK BUTUH TARIF apa pun di baris modelnya. Tanpa daftar ini, baris yang
 # benar (vendor menyebut biayanya / vendor tak menagih) akan dituduh "celah data" dan dilaporkan
@@ -287,10 +299,9 @@ def _biaya_skema(skema: str, harga: dict, pemakaian_per_keranjang: dict) -> floa
 #                                      (ThreadPool sejumlah core), jadi selisih penghitung akun
 #                                      mustahil diatribusikan ke satu produksi. Tempatnya di
 #                                      rekonsiliasi tingkat TENANT (F8), bukan di sini.
-#   gambar_megapiksel · video_token  → F4b (bersama pencatat pemakaiannya di jalur gambar/video)
 #   kuota_gratis                     → butuh penghitungan kuota harian per akun tenant (SSOT §7e)
-FORMULA_BELUM_DIDUKUNG = frozenset({
-    "selisih_akun", "gambar_megapiksel", "video_token", "kuota_gratis"})
+# (gambar_megapiksel & video_token DIDUKUNG sejak F4b — pencatatnya mengukur berkas hasil.)
+FORMULA_BELUM_DIDUKUNG = frozenset({"selisih_akun", "kuota_gratis"})
 
 
 def _formula_map(sb=None) -> dict:

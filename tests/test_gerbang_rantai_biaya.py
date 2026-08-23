@@ -34,7 +34,9 @@ AKAR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RUMAH_SATUAN = "src/billing/ai_cost.py"
 
 KUNCI_SATUAN = ("in_per_1m", "out_per_1m", "per_1m_chars", "per_image", "per_second_usd",
-                "per_video_base_usd", "per_extra_second_usd", "base_seconds", "per_request_usd")
+                "per_video_base_usd", "per_extra_second_usd", "base_seconds", "per_request_usd",
+                # [F4b] dua satuan tagih fal — ikut dijaga sejak lahir, bukan menyusul
+                "per_megapixel_usd", "per_1m_video_tokens_usd")
 KOLOM_UMPAN = ("input_cost_per_character", "output_cost_per_audio_token", "output_cost_per_second",
                "output_cost_per_image", "output_cost_per_image_token", "input_cost_per_token",
                "output_cost_per_token")
@@ -395,8 +397,10 @@ class G9_FormulaHargaLengkapDanDijelaskan(unittest.TestCase):
         """Formula ber-satuan wajib menyebut satuan; yang TIDAK menghitung wajib TIDAK punya satuan
         (kalau punya, ia diam-diam ikut menghitung → sumber angka ganda)."""
         from src.billing.ai_cost import satuan_formula
-        TANPA_HITUNG = {"biaya_dilaporkan", "selisih_akun", "gratis", "kuota_gratis",
-                        "gambar_megapiksel", "video_token"}   # dua terakhir: rumusnya, bukan tabel satuan
+        # [F4b] `gambar_megapiksel` & `video_token` DIKELUARKAN dari daftar ini: sejak pencatat
+        # pemakaiannya ada (megapiksel tertagih & token video, diukur dari berkas hasil), keduanya
+        # MENGHITUNG dan wajib punya satuan. Penjaga inilah yang menangkap ketidaksesuaiannya.
+        TANPA_HITUNG = {"biaya_dilaporkan", "selisih_akun", "gratis", "kuota_gratis"}
         for x in self._katalog():
             with self.subTest(x.kunci):
                 punya = bool(satuan_formula(x.kunci))

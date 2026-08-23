@@ -118,6 +118,20 @@ class AIVideoProvider(VisualProvider):
             cost_meter.add_video(self.model_config.get("model_id") or "", float(billed_s or actual))
         except Exception:
             pass
+        # [F4b] Sebagian model (fal seedance) ditagih per TOKEN = (tinggi×lebar×fps×durasi)÷1024 —
+        # detik saja tak cukup, sebab tagihannya ikut berubah bila resolusi atau fps berubah.
+        # Keempat faktanya DIUKUR dari berkas hasil (satu panggilan ffprobe, sama seperti durasi):
+        # yang menentukan tagihan adalah apa yang vendor SUNGGUH kirim, bukan angka di katalog kita —
+        # kita bahkan tidak pernah menyebutkan fps ke vendor. Gagal-lunak: satu fakta saja tak
+        # terbaca → tidak dicatat → biayanya dilaporkan jujur "belum terhitung", produksi jalan terus.
+        try:
+            _w, _h, _fps = self._probe_dimensi(out_path)
+            from src.utils import cost_meter
+            cost_meter.add_video_token(self.model_config.get("model_id") or "",
+                                       lebar=_w, tinggi=_h, fps=_fps,
+                                       detik=float(billed_s or actual))
+        except Exception as _e:
+            logger.debug(f"[AIVideo] dimensi klip tak terbaca untuk hitungan biaya: {_e}")
 
         logger.info(f"[AIVideo] ✓ Klip jadi: {out_path.name} {actual:.1f}s ({size_mb:.1f}MB) via {self.ai_model}")
         return [VideoClip(
@@ -181,6 +195,32 @@ class AIVideoProvider(VisualProvider):
             return float((r.stdout or "0").strip() or 0)
         except Exception:
             return 0.0
+
+    @staticmethod
+    def _probe_dimensi(path: Path) -> tuple[float, float, float]:
+        """[F4b] Lebar · tinggi · fps NYATA berkas klip via ffprobe — bukti, bukan asumsi.
+
+        Dipakai untuk model yang ditagih per TOKEN video. Sengaja MENGUKUR, bukan memakai angka
+        katalog: kita tidak pernah menyebutkan fps kepada vendor, dan resolusi yang dikirim vendor
+        bisa berbeda dari yang kita minta. Gagal / tak terbaca → (0,0,0) supaya pencatat menolaknya
+        dan biayanya dilaporkan jujur belum-terhitung."""
+        try:
+            r = subprocess.run(
+                ["ffprobe", "-v", "error", "-select_streams", "v:0",
+                 "-show_entries", "stream=width,height,avg_frame_rate",
+                 "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
+                capture_output=True, text=True, timeout=30,
+            )
+            baris = [x.strip() for x in (r.stdout or "").splitlines() if x.strip()]
+            if len(baris) < 3:
+                return 0.0, 0.0, 0.0
+            lebar, tinggi = float(baris[0]), float(baris[1])
+            # avg_frame_rate berbentuk pecahan ("24/1", "30000/1001")
+            atas, _, bawah = baris[2].partition("/")
+            fps = float(atas) / float(bawah or 1)
+            return lebar, tinggi, fps
+        except Exception:
+            return 0.0, 0.0, 0.0
 
     # F5-06: registry transport per-PLATFORM (mirror ai_image). Tambah platform (mis. replicate)
     # = +1 method `_generate_<x>` + 1 entri; MODEL-nya via ai_models (DB, nol kode).

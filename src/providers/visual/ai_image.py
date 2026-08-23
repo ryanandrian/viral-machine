@@ -529,6 +529,20 @@ class AIImageProvider(VisualProvider):
             cost_meter.add_image(self.model_config.get("model_id") or "")
         except Exception:
             pass
+        # [F4b] Sebagian vendor (fal) menagih per MEGAPIKSEL, dibulatkan KE ATAS — jumlah gambar saja
+        # tak cukup untuk menghitungnya. Ukurannya DIUKUR dari berkas yang baru jadi, bukan diambil
+        # dari setelan katalog: yang menentukan tagihan adalah apa yang vendor SUNGGUH kirim (kita
+        # bahkan tak selalu mengirim width/height — Cloudflare sengaja tanpa itu). Gagal-lunak
+        # mutlak: ukuran tak terbaca → tidak dicatat → biayanya dilaporkan jujur "belum terhitung",
+        # dan produksi TIDAK terganggu.
+        try:
+            from PIL import Image
+            with Image.open(output_path) as im:
+                _w, _h = im.size
+            from src.utils import cost_meter
+            cost_meter.add_image_megapiksel(self.model_config.get("model_id") or "", _w * _h)
+        except Exception as _e:
+            logger.debug(f"[AIImage] ukuran gambar tak terbaca untuk hitungan biaya: {_e}")
 
     def _seed_boleh_dikirim(self) -> bool:
         """Kirim `seed` HANYA bila skema resmi model menyatakan menerimanya (`params.supports_seed`).

@@ -375,22 +375,28 @@ nyata akun vendor **tidak bisa** hari ini (9 penyedia aktif tak menerbitkannya �
 keputusan owner · satu kunci bisa dipakai di luar MesinViral) — jalannya lewat penyedia **router**
 yang sudah disiapkan F5.
 
-**PEKERJAAN BERIKUTNYA — menunggu ketokan owner (bukan pekerjaan yang terlupa):**
-- **F4b** — flux ×2 (satuan **megapiksel**, dibulatkan ke atas) & seedance ×2 (satuan **token video**
-  `(t×l×fps×durasi)÷1024`) jadi otomatis. Butuh **pencatat pemakaian baru** di `visual/ai_image.py` +
-  `visual/ai_video.py` ⇒ **menyentuh jalur produksi**, jadi DIKERJAKAN TERAKHIR: gagal-lunak, satu
-  titik pencatat per jenis (dijaga G3). Hari ini keempatnya berharga manual bercatatan tanggal, jadi
-  **tak ada angka yang salah** — yang belum otomatis hanyalah pemutakhirannya.
+**✅ F4b SELESAI 23-Agu** — gambar per megapiksel (dibulatkan ke atas) & video per token, faktanya
+**DIUKUR dari berkas hasil** (fps pun diukur — kita tak pernah menyebutkannya ke vendor). Nol geseran
+angka hari ini; nol migrasi. **URUTAN WAJIB: deploy dulu**, baru sinkron harian memutakhirkan keempat
+baris fal itu sendiri — jangan dibalik.
+
+**SISA — HANYA menunggu keputusan owner, bukan pekerjaan yang terlupa:**
+- **`selisih_akun`** — saran saya: **JANGAN dipasang** per-produksi (produksi serentak ⇒ dua produksi
+  tenant yang sama saling mencuri biaya). Bila diinginkan, tempatnya rekonsiliasi tingkat tenant.
+- **Rincian biaya per komponen di layar tenant** — sudah dihitung & disimpan di setiap produksi tapi
+  NOL pembaca, dan kelas tampilannya sudah ada di kode layar tanpa dipakai. Menyambungkannya =
+  menambah elemen di layar tenant ⇒ ketokan. Sekalian: atribusi baris gambar untuk model ber-tagih token.
+- **Uji suara sepanjang produksi** — nol bukti kegagalan, dan berbiaya nyata tiap tekan.
 
 **Alat bukti yang WAJIB dipakai tiap langkah** (skrip ada di direktori kerja sesi; bila hilang, tulis
 ulang — logikanya sederhana): hitung-ulang seluruh run riwayat sebelum-vs-sesudah (**ambang: satu
 selisih tak terjelaskan → BERHENTI & lapor**) · sinkron dijalankan **KERING** dulu · alarm
 `tests/test_gerbang_rantai_biaya.py` (**G1–G14, 51 uji**) dibuktikan merah lalu hijau lalu
 **disabotase** — begitu juga `test_uji_model_sekelas_produksi.py` (F6) dan
-`test_rekonsiliasi_biaya_harian.py` (F8). Uji penuh saat ini: **1412 hijau**.
-**Empat butir yang menunggu ketokan owner** (jangan dikerjakan tanpa itu): `selisih_akun` ·
-rincian biaya per komponen di layar tenant (+ atribusi baris gambar) · uji suara sepanjang produksi ·
-F4b. Rinciannya di §7f.
+`test_rekonsiliasi_biaya_harian.py` (F8). Uji penuh saat ini: **1425 hijau**.
+**Tiga butir yang menunggu KEPUTUSAN owner** (bukan pekerjaan yang terlupa): `selisih_akun` ·
+rincian biaya per komponen di layar tenant (+ atribusi baris gambar) · uji suara sepanjang produksi.
+Rinciannya di §7f.
 
 ---
 
@@ -416,7 +422,8 @@ harga internet sebagai kebenaran. Empat kebenaran yang riset 23-Agu tetapkan:
 | **F1** | Katalog formula (**15**) + formula di 47 baris model + panel menjelaskannya | ✅ **SELESAI 23-Agu** (migr `0210`; 47/47 terisi; penghitung BELUM membacanya = nol perubahan biaya) |
 | **F2** | Penghitung biaya memakai formula (ganti logika urutan-prioritas) | ✅ **SELESAI 23-Agu** — 246 run dihitung ulang: **246 IDENTIK, 0 berbeda** |
 | **F3** | Sumber tarif diatur dari panel + 3 pagar (ambigu ditolak · agregator · terkunci) | ✅ **SELESAI 23-Agu** (migr `0211`; sinkron kering: **2 baris bergerak**, 13 tanpa-sumber dipertahankan) |
-| **F4** | Sumber API resmi penyedia (migr `0212`/`0213`) → **7 dari 12** model fal otomatis; 4 menunggu **F4b**, veo dikunci manual | ✅ **SELESAI 23-Agu** |
+| **F4** | Sumber API resmi penyedia (migr `0212`/`0213`) → **7 dari 12** model fal otomatis; veo dikunci manual | ✅ **SELESAI 23-Agu** |
+| **F4b** | 4 baris fal terakhir: gambar per **megapiksel dibulatkan ke atas** & video per **token**, faktanya DIUKUR dari berkas hasil | ✅ **SELESAI 23-Agu** (13 uji · **11 sabotase**, 3 menangkap celah penjaga saya sendiri · **nol geseran angka**; nol migrasi — sinkron menulis sendiri sesudah deploy) |
 | **F5** | Formula "biaya dilaporkan vendor" disambungkan | ✅ **SELESAI 23-Agu** (biaya vendor dipakai apa adanya; `G14` 8 uji + **11 sabotase**) · ⛔ **"selisih penghitung akun" TIDAK dipasang** — alasan terukur di bawah, butuh ketok owner |
 | **F6** | **Tombol Uji memakai perintah selengkap produksi** (temuan terbesar 23-Agu) | ✅ **SELESAI 23-Agu** (uji naskah = kontrak produksi: JSON + jatah penuh; 7 uji, **5 sabotase**, 1 di antaranya menangkap celah penjaga saya sendiri) |
 | **F7** | Pulihkan baris yang tarifnya SALAH + beri JEJAK & KUNCI (3 naskah fal sudah lewat F4) | ✅ **SELESAI 23-Agu** (migr `0214`; 2 angka dibetulkan · 5 diberi jejak · 246 run → **244 identik, 2 terjelaskan**) |
@@ -620,6 +627,44 @@ Begitu penyedia router ditambahkan, rekonsiliasi taksiran-vs-laporan-vendor menj
    "Gambar: Rp 0" sambil membayar gambar di baris naskah. **Tidak saya ubah**: perilaku itu tertulis
    sebagai rancangan di `ai_cost`, dan mengubahnya sekarang = menebak apa yang mau ditampilkan.
 
+**CATATAN PELAKSANAAN F4b (23-Agu).** Empat baris fal ditagih dengan cara yang **tak bisa diwakili
+satu angka tetap**: gambar per **megapiksel dibulatkan KE ATAS**, video seedance per **token**
+`(tinggi×lebar×fps×durasi)÷1024`. Katalog kita menyimpannya sebagai angka yang dihitung TANGAN untuk
+satu ukuran (1080×1920, 24fps) — benar hari ini, dan berhenti benar **tanpa suara** begitu resolusi,
+fps, atau durasi berubah. Kelas yang sama dengan tarif suara Gemini: bukan angka hilang, tapi angka
+yang berhenti cocok dengan cara vendor menagih.
+**Yang dikerjakan:** dua keranjang meter baru (`image_megapiksel`, `video_token`) + dua pencatat, dan
+**faktanya DIUKUR dari berkas hasil** — ukuran gambar dari berkasnya, dimensi & **fps** klip dari
+`ffprobe` (satu panggilan, sama seperti probe durasi yang sudah ada). Sengaja mengukur, bukan memakai
+angka katalog: kita **tak pernah menyebutkan fps** kepada vendor, dan resolusi yang dikirim vendor bisa
+berbeda dari yang diminta ⇒ angka katalog adalah TEBAKAN. Pembulatan megapiksel terjadi **per gambar**
+di pencatat (itu cara vendor menagih; membulatkan di akhir menghasilkan angka lebih kecil dari
+tagihan). Gagal-lunak mutlak: satu fakta tak terukur → tak dicatat → biaya dilaporkan **jujur**
+belum-terhitung, produksi jalan terus.
+**NOL MIGRASI, NOL TULISAN TANGAN:** karena satuan vendor `megapixels` / `1m tokens` sekarang punya
+jalan ke formula kita, **sinkron harian menulis tarif DAN formulanya sendiri** sesudah deploy.
+Dibuktikan dengan **sinkron KERING ke API resmi fal** (endpoint harga, nol kredit): flux-schnell
+`$0,003/MP` · flux-dev `$0,025/MP` · seedance-lite `$1/1jt token` · seedance-pro `$2,5/1jt token`,
+dan formulanya bergerak `gambar_satuan → gambar_megapiksel` · `video_detik → video_token`.
+**AMBANG — nol geseran hari ini:** flux-dev 1080×1920 = 2,07 MP → ditagih **3 MP** × $0,025 =
+**$0,075** = persis `per_image` sekarang · seedance-pro 1080×1920 24fps 8s = **388.800 token** ×
+$2,5/1jt = **$0,972** = persis 8 dtk × $0,1215 sekarang. Jadi F4b **tidak menggeser satu angka pun**;
+yang ia beli adalah angka yang tetap benar bila ukuran/fps/durasi berubah. veo tetap **DIKUNCI** —
+API fal menyebut $0,15 (beraudio) padahal pipeline kita mematikan audio ($0,10); sinkron kering
+membuktikan kuncinya menahan.
+**BUKTI:** 13 uji, **14 dibuktikan MERAH lebih dulu** · **11 sabotase, semuanya tertangkap — dan 3 di
+antaranya menemukan celah di penjaga saya sendiri**: uji memakai `assertFalse` pada nilai yang
+kebetulan 0 sehingga lolos saat penolaknya dicabut (dua kali), dan **mengganti pengukuran berkas
+dengan angka tetap 1080/1920/24 lolos seluruh uji lama** — padahal itu justru inti F4b. Ketiganya
+ditutup (kunci wajib TIDAK ADA, angka negatif besar dipakai, dan fakta yang diserahkan ke pencatat
+haram berupa angka tetap di kode) · 246 run dihitung ulang: **nol geseran baru**, ke-19 selisih tetap
+yang sama & tetap bernama · **0 run riwayat** punya keranjang baru · 1425 uji hijau · build FE lulus.
+**Nol channel aktif memakai flux/seedance** hari ini ⇒ radius perubahan ini nol bagi tenant.
+**Urutan yang WAJIB:** deploy dulu, baru sinkron harian memutakhirkan keempat baris itu sendiri.
+Menyinkronkannya SEBELUM deploy akan membuat mesin lama (yang belum mengenal formula) melihat kunci
+tarif yang tak ia pahami ⇒ biaya flux/seedance dilaporkan belum-terhitung. Nol channel aktif memakainya,
+tapi urutannya tetap jangan dibalik.
+
 **ATURAN MENGIKAT tiap langkah** *(dilanggar = pengerusakan; sudah terjadi 21-Agu)*:
 - **Satu langkah sekali jalan**, berhenti, lapor angkanya, baru langkah berikutnya.
 - **Ambang berhenti:** seluruh produksi lama dihitung ulang; **satu selisih tak terjelaskan → BERHENTI & lapor.**
@@ -659,10 +704,10 @@ melaporkan biayanya sendiri kita **berhenti menaksir**. **Bukan "run"**, dan sya
 sudah jelas: ground truth dari luar (biaya yang vendor laporkan lewat penyedia router) + rekonsiliasi
 berjadwal terhadapnya.
 
-**RANTAI HARGA & BIAYA — DITUTUP 23-Agu.** F1–F7 tuntas, F8 sebagian (alasannya di §7f). Sisa yang
-menunggu **ketokan owner**, bukan pekerjaan yang terlupa: `selisih_akun` (produksi serentak) ·
-menampilkan rincian biaya per komponen di layar tenant · atribusi baris gambar untuk model ber-tagih
-token · uji suara sepanjang produksi · **F4b** (flux/seedance otomatis — menyentuh jalur produksi).
+**RANTAI HARGA & BIAYA — DITUTUP 23-Agu.** F1–F7 + F4b tuntas; F8 sebagian (ground truth dari luar
+belum tersedia — alasannya di §7f). Sisa yang menunggu **KEPUTUSAN owner**, bukan pekerjaan yang
+terlupa: `selisih_akun` (saran: jangan dipasang per-produksi) · menampilkan rincian biaya per komponen
+di layar tenant + atribusi baris gambar untuk model ber-tagih token · uji suara sepanjang produksi.
 
 **FOCUS (FinOps Open Cost and Usage Specification) — diperiksa 23-Agu, TIDAK diadopsi sebagai format.**
 Sebabnya terverifikasi: FOCUS menormalkan **ekspor tagihan dari penyedia**, dan kita tak pernah
