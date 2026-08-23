@@ -69,14 +69,47 @@ def test_model(model_key: str, key: str = "") -> dict:
     try:
         if comp == "llm":
             from src.providers.llm import build_llm_provider
+            from src.providers.llm.base import parse_json_lenient
+            from src.config import ambang
             p = build_llm_provider({"llm_library": pk, "llm_model": model_id, "llm_api_key": key})
-            # max_tokens 16→512 (owner 2026-07-16): model BERNALAR (GPT-5/Claude 5) memakai jatah token
-            # yang sama utk berpikir internal dulu — 16 habis utk nalar → jawaban KOSONG → vonis gagal
-            # palsu. 512 = ruang nalar + jawaban; biaya uji tetap receh. Produksi tak tersentuh
-            # (jalurnya sudah 350–2000 token).
-            out = p.complete(system="", user="Reply with exactly one word: OK", model=model_id, max_tokens=512, temperature=0)
-            ok = bool(out and out.strip())
-            result = f"LULUS — model menjawab: {out.strip()[:50]}" if ok else "GAGAL — balasan kosong (kemungkinan jatah token uji habis utk nalar internal model)"
+            # ── [F6, 23-Agu] UJI SEKELAS PRODUKSI ────────────────────────────────────────────
+            # Sebelumnya: `user="Reply with exactly one word: OK"`, 512 token, TANPA as_json.
+            # Terukur 23-Agu: 4 dari 6 model APIMaster LULUS panggilan pendek itu lalu GAGAL pada
+            # perintah naskah sesungguhnya — jawabannya terpotong di batas keluaran, JSON gugur.
+            # Artinya lencana "✓ Teruji" bisa BOHONG, dan gerbang aktivasi (migr 0208) yang
+            # menegakkan stempel audit ikut tertipu: tenant yang memilih model itu menabrak dinding
+            # di produksi pertamanya.
+            #
+            # Yang diuji sekarang = KONTRAK YANG SAMA yang diandalkan seluruh jalur naskah:
+            # `as_json=True` + jatah token sebesar jatah TERBESAR produksi + hasilnya wajib bisa
+            # diurai oleh parser yang SAMA dengan produksi (`parse_json_lenient`). Jatah token
+            # bawaannya 2000 = jatah terbesar `script_engine`; ia kenop admin (bukan angka mati),
+            # dan penjaga uji menolak bila bawaan ini turun di bawah jatah produksi.
+            # Biaya: satu panggilan berjatah 2000 token keluaran — masih receh untuk model naskah,
+            # tapi memang lebih mahal dari uji lama; itu harga dari lencana yang tidak berbohong.
+            jatah = ambang.angka("uji_model_max_tokens", 2000)
+            out = p.complete(
+                system="You are a professional viral video scriptwriter. Reply with JSON only.",
+                user=('Tulis satu paragraf naskah video pendek berbahasa Indonesia, sekitar 90 kata, '
+                      'bertema "pagi di pasar tradisional". Balas HANYA JSON: {"text": "..."}'),
+                model=model_id, max_tokens=jatah, temperature=1.0, as_json=True)
+            try:
+                teks = str((parse_json_lenient(out) or {}).get("text") or "").strip()
+            except Exception as pe:
+                teks = ""
+                logger.info(f"[model_tester] {model_key}: balasan tak bisa diurai jadi JSON: {pe}")
+            ok = bool(teks)
+            if ok:
+                result = (f"LULUS — menjawab JSON yang bisa dipakai produksi "
+                          f"({len(teks.split())} kata): {teks[:60]}…")
+            else:
+                # Sebab dipisah supaya admin tahu tindakannya: balasan KOSONG ≠ balasan yang ADA
+                # tapi tak bisa dipakai (batas keluaran model terlalu rendah untuk naskah kita).
+                result = ("GAGAL — balasan kosong (jatah token habis untuk nalar internal model)"
+                          if not (out or "").strip() else
+                          f"GAGAL — model menjawab tapi hasilnya TAK BISA DIPAKAI produksi: bukan "
+                          f"JSON utuh (kemungkinan batas keluaran model lebih kecil dari jatah "
+                          f"naskah {jatah} token). Cuplikan: {str(out)[:80]}…")
 
         elif comp == "tts":
             from src.providers.tts import build_tts_provider

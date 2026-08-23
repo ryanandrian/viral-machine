@@ -365,10 +365,10 @@ biayanya **pasti, bukan taksiran**, dan panel tak lagi menuduhnya "harga kosong"
 ⛔ *"selisih penghitung akun"* **sengaja TIDAK dipasang** (produksi serentak ⇒ mustahil diatribusikan
 per-produksi) — alasan lengkap di §7f, **menunggu ketokan owner**; tempatnya F8.
 
+**✅ F6 SELESAI 23-Agu** — lencana "✓ Teruji" berhenti bisa berbohong untuk model naskah. Dua batas
+jujurnya (stempel lama dari uji lemah · uji suara masih pendek) ada di §7f.
+
 **PEKERJAAN BERIKUTNYA — urutan yang direncanakan (risiko terkecil dulu):**
-- **F6** — **tombol Uji memakai perintah selengkap produksi**: 4 dari 6 model APIMaster lolos
-  panggilan pendek lalu GAGAL pada perintah naskah asli (mentok batas keluaran 2.000 token). Lencana
-  "✓ Teruji" hari ini bisa berbohong.
 - **F8** — rekonsiliasi berjadwal (taksiran vs pemakaian nyata akun) + alarm + SSOT ditutup.
 - **F4b** — flux ×2 (satuan **megapiksel**, dibulatkan ke atas) & seedance ×2 (satuan **token video**
   `(t×l×fps×durasi)÷1024`) jadi otomatis. Butuh **pencatat pemakaian baru** di `visual/ai_image.py` +
@@ -408,7 +408,7 @@ harga internet sebagai kebenaran. Empat kebenaran yang riset 23-Agu tetapkan:
 | **F3** | Sumber tarif diatur dari panel + 3 pagar (ambigu ditolak · agregator · terkunci) | ✅ **SELESAI 23-Agu** (migr `0211`; sinkron kering: **2 baris bergerak**, 13 tanpa-sumber dipertahankan) |
 | **F4** | Sumber API resmi penyedia (migr `0212`/`0213`) → **7 dari 12** model fal otomatis; 4 menunggu **F4b**, veo dikunci manual | ✅ **SELESAI 23-Agu** |
 | **F5** | Formula "biaya dilaporkan vendor" disambungkan | ✅ **SELESAI 23-Agu** (biaya vendor dipakai apa adanya; `G14` 8 uji + **11 sabotase**) · ⛔ **"selisih penghitung akun" TIDAK dipasang** — alasan terukur di bawah, butuh ketok owner |
-| **F6** | **Tombol Uji memakai perintah selengkap produksi** (temuan terbesar 23-Agu) | ⬜ |
+| **F6** | **Tombol Uji memakai perintah selengkap produksi** (temuan terbesar 23-Agu) | ✅ **SELESAI 23-Agu** (uji naskah = kontrak produksi: JSON + jatah penuh; 7 uji, **5 sabotase**, 1 di antaranya menangkap celah penjaga saya sendiri) |
 | **F7** | Pulihkan baris yang tarifnya SALAH + beri JEJAK & KUNCI (3 naskah fal sudah lewat F4) | ✅ **SELESAI 23-Agu** (migr `0214`; 2 angka dibetulkan · 5 diberi jejak · 246 run → **244 identik, 2 terjelaskan**) |
 | **F8** | Rekonsiliasi berjadwal (taksiran vs pemakaian nyata akun) + alarm + SSOT ditutup | ⬜ |
 
@@ -549,6 +549,30 @@ ini dengan angka yang **tampak** pasti. Tempatnya yang benar = **rekonsiliasi ti
 membandingkan total taksiran vs total pemakaian akun untuk satu periode, bukan per-produksi. Sampai
 diketok owner, formula itu tetap dilaporkan **belum-terhitung** (jujur, berisik). Model APIMaster
 sebaiknya memakai `naskah_token` dengan tarif resmi APIMaster.
+
+**CATATAN PELAKSANAAN F6 (23-Agu).** Tombol Uji naskah dulu memanggil vendor dengan
+`"Reply with exactly one word: OK"`, jatah **512** token, **tanpa** menuntut JSON. Produksi memanggil
+hal yang jauh berbeda: `as_json=True` dengan jatah **1.200–2.000**, dan hasilnya wajib bisa diurai.
+Bedanya bukan teori — **4 dari 6 model APIMaster LULUS panggilan pendek itu lalu GAGAL** pada
+perintah naskah sesungguhnya (jawaban terpotong di batas keluaran, JSON gugur). Akibatnya lencana
+**"✓ Teruji"** bisa BOHONG, dan gerbang DB `trg_gate_aktif_terbukti` (migr `0208`) yang menolak
+menyalakan model tanpa audit LULUS **ikut tertipu** — ia menegakkan stempel yang isinya tak sepadan.
+**Kini uji naskah memakai KONTRAK YANG SAMA dengan produksi:** minta JSON · jatah token = jatah
+TERBESAR produksi (kenop `uji_model_max_tokens`, bawaan 2000) · hasilnya diurai oleh parser **yang
+sama** (`parse_json_lenient`) · dan **kunci yang produksi baca** wajib ada & tak kosong. Vonis
+gagalnya memisahkan dua sebab supaya admin tahu tindakannya: balasan **kosong** (jatah habis untuk
+nalar internal) vs balasan **ada tapi tak bisa dipakai** (batas keluaran model lebih kecil dari jatah
+naskah kita). Dialog Uji di panel menyebut apa adanya bahwa untuk model naskah kuota yang terpakai
+lebih besar dari sekadar cek koneksi.
+**BUKTI:** 7 uji, **5 dibuktikan MERAH lebih dulu** · **5 sabotase, semuanya tertangkap** — dan
+sabotase-lah yang menemukan celah di penjaga saya sendiri (JSON **sah tapi tanpa kunci** yang produksi
+baca tetap diluluskan; uji ke-7 ditambahkan untuk itu) · 1406 uji hijau · build FE lulus.
+**BATAS JUJUR — wajib disebut:** (1) **20 dari 20 model naskah aktif** hari ini ber-stempel LULUS dari
+uji **LAMA yang lemah**; stempel itu **tidak** dibatalkan (membatalkannya = mengunci model yang sedang
+dipakai tanpa alasan terukur, dan itu keputusan owner). Menekan Uji sekali akan memperbaruinya.
+(2) Uji **suara** masih memakai satu frasa pendek, padahal produksi mengirim naskah penuh — kelas yang
+mungkin sama, tapi **belum ada satu pun bukti kegagalannya**, dan uji suara sepanjang produksi
+berbiaya nyata tiap tekan. Tidak diubah tanpa ketokan owner.
 
 **ATURAN MENGIKAT tiap langkah** *(dilanggar = pengerusakan; sudah terjadi 21-Agu)*:
 - **Satu langkah sekali jalan**, berhenti, lapor angkanya, baru langkah berikutnya.

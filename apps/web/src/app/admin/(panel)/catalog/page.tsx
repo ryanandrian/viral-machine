@@ -267,7 +267,7 @@ export default function AdminCatalogPage() {
   const [mSearch, setMSearch] = useState("");
   const [mComp, setMComp] = useState("");
   // Uji model (butir-1): dialog kunci uji + jalankan nyata.
-  const [tm, setTm] = useState<{ mk: string; name: string; needsKey: boolean } | null>(null);
+  const [tm, setTm] = useState<{ mk: string; name: string; needsKey: boolean; jenis: string } | null>(null);
   const [tmKey, setTmKey] = useState("");
   const [tmBusy, setTmBusy] = useState(false);
   const [tmMsg, setTmMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -927,7 +927,7 @@ export default function AdminCatalogPage() {
                     if (au.startsWith("LULUS")) return <span className="badge badge-success" title={au} style={{ fontSize: "0.65rem", marginRight: ".3rem" }}>✓ <Bi id="Teruji" en="Tested" /></span>;
                     if (au) return <span className="badge badge-warning" title={au} style={{ fontSize: "0.65rem", marginRight: ".3rem" }}>✗ <Bi id="belum lolos" en="not passed" /></span>;
                     return <span className="muted" title="Belum pernah diuji — klik Uji" style={{ fontSize: "0.65rem", marginRight: ".3rem" }}><Bi id="belum diuji" en="not tested" /></span>;
-                  })()}<button className="btn btn-ghost btn-sm" title="Uji model — jalankan nyata ke vendor (butir-1: aktif = terbukti jalan)" onClick={() => { setTmMsg(null); setTmKey(""); setTm({ mk, name: (m.display_name as string) || mk, needsKey: (data.ai_providers.find((p) => String(p.provider_key) === String(m.provider_key))?.auth_type) === "api_key" }); }}><Bi id="Uji" en="Test" /></button><button className="btn btn-ghost btn-sm" title="Edit model" onClick={() => openRowEdit("models", m)}>✎</button><button className="btn btn-ghost btn-sm" title="Hapus model (ditolak bila dipakai channel)" onClick={() => delAsset("ai_models", mk, (m.display_name as string) || mk)}><Trash2 size={13} /></button></td>
+                  })()}<button className="btn btn-ghost btn-sm" title="Uji model — jalankan nyata ke vendor (butir-1: aktif = terbukti jalan)" onClick={() => { setTmMsg(null); setTmKey(""); setTm({ mk, name: (m.display_name as string) || mk, jenis: String(m.component ?? ""), needsKey: (data.ai_providers.find((p) => String(p.provider_key) === String(m.provider_key))?.auth_type) === "api_key" }); }}><Bi id="Uji" en="Test" /></button><button className="btn btn-ghost btn-sm" title="Edit model" onClick={() => openRowEdit("models", m)}>✎</button><button className="btn btn-ghost btn-sm" title="Hapus model (ditolak bila dipakai channel)" onClick={() => delAsset("ai_models", mk, (m.display_name as string) || mk)}><Trash2 size={13} /></button></td>
                 </tr>
               );
             })}</tbody>
@@ -1223,6 +1223,11 @@ export default function AdminCatalogPage() {
             <div style={{ display: "flex", alignItems: "center", marginBottom: "0.5rem" }}><strong><Bi id="Uji model:" en="Test model:" /> {tm.name}</strong><button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} disabled={tmBusy} onClick={() => setTm(null)}><X size={16} /></button></div>
             <p className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: "0.6rem" }}>
               <Bi id="Menjalankan panggilan NYATA sekali ke vendor untuk membuktikan model ini benar jalan di pipeline — uji memakai kuota vendor." en="Runs one REAL call to the vendor to prove this model works in the pipeline — the test uses vendor quota." />{" "}
+              {/* [F6] Ukuran panggilan uji disebut apa adanya. Model naskah diuji dengan perintah
+                  SEBESAR produksi (JSON + jatah token penuh) karena uji pendek pernah meluluskan 4
+                  model yang lalu gagal di produksi — jadi kuota yang terpakai memang lebih besar
+                  dari sekadar "cek koneksi". Admin berhak tahu sebelum menekan. */}
+              {tm.jenis === "llm" ? <Bi id="Untuk model naskah, ujinya memakai perintah SEBESAR produksi (minta JSON, jatah token penuh) — sebab uji pendek pernah meluluskan model yang lalu gagal di produksi. Kuota yang terpakai lebih besar dari sekadar cek koneksi." en="For script models the test uses a FULL production-sized prompt (JSON, full token budget) — a short test once passed models that later failed in production. It consumes more quota than a mere connection check." /> : null}{" "}
               {tm.needsKey ? <Bi id="Tempel token uji (TIDAK disimpan), atau kosongkan untuk memakai kunci Test Lab bila tersedia." en="Paste a test token (NOT stored), or leave empty to use the Test Lab key if available." /> : <Bi id="Provider gratis — tanpa kunci." en="Free provider — no key needed." />}{" "}
               <Bi id="Hasil disimpan sebagai jejak audit." en="Result is saved as an audit trail." />
             </p>
