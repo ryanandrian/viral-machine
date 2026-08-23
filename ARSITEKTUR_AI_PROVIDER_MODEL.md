@@ -296,6 +296,10 @@ Penutupnya: pembandingan dengan sumber luar, dicatat bertanggal di bawah ini.
 | 2026-08-23 | log vendor vs meter (huruf suara Gemini) | vendor terima **1113**, meter catat **2226** → dicatat dua lapis |
 | 2026-08-23 | hitung-ulang run nyata #503 & #504 | identik dengan yang tersimpan (nol regresi penghitung) |
 | 2026-08-23 | cakupan umpan atas 42 model aktif | 26 otomatis · **16 wajib manual** |
+| 2026-08-23 **(F7)** | tarif resmi Google, dibaca langsung dari halamannya (`gemini-2.5-flash-preview-tts`) | resmi **$0,50 masuk / $10,00 audio keluar** ⇒ katalog ($0,3/$2,5) DIBETULKAN + DIKUNCI (migr `0214`) |
+| 2026-08-23 **(F7)** | tarif API resmi ElevenLabs vs 4 baris katalog | `eleven_v3` **$180 → $100** (umpan memberi tarif KELEBIHAN KUOTA; 1,8× lolos penjaga lonjakan yang butuh 3×) · `multilingual_v2` $100 · `flash/turbo_v2_5` $50 = **sudah benar**, yang hilang JEJAKNYA |
+| 2026-08-23 **(F7)** | tarif resmi Cloudflare Workers AI vs baris `cf-flux-schnell` | **$0 masih BENAR**: 10.000 neuron/hari gratis; flux-1-schnell = 4 petak × 4,8 + 8 langkah × 9,6 = **96 neuron/gambar** ⇒ 104 gambar/hari per akun tenant gratis, puncak NYATA terukur **22/hari** = kelonggaran 4,7× |
+| 2026-08-23 **(F7)** | hitung-ulang 246 run, tarif lama vs baru | **244 identik · 2 berbeda · nol tak terjelaskan**; komponen suara **×3,96**, total per video **+4,1…+4,5%** |
 
 **Jadwal:** pemeriksaan harian mesin (`report_unpriced_models`, terpasang 22-Agu) melaporkan model yang
 **gagal dihitung** dari bukti produksi. Pembandingan **tarif** ke sumber resmi = manual, dicatat di
@@ -324,6 +328,57 @@ tabel ini setiap kali dilakukan. *(Rencana S3: mesin ikut membandingkan catatan-
 
 ---
 
+## 7f-0. ⏩ MULAI DARI SINI (sesi baru / pasca-compacting) — keadaan per 23-Agu-2026
+
+> **Baca 7f-0 lalu §7f. Jangan menyentuh rantai harga/biaya sebelum keduanya dibaca.**
+
+**KEADAAN DEPLOY — PENTING.** Produksi (VPS) masih di **`3f7b7b8`**. Tujuh commit ada **HANYA di
+komputer lokal, BELUM di-push, BELUM di-deploy**: `3754ad8` (daftar satuan) · `3a249a0` (rencana §7f)
+· `d759732` (F1) · `f7a9a48` (F2) · `0cca434` (F3) · `0f4df20` (F4) · `d46745e` (perbaikan G1).
+⚠️ **Deploy = izin owner terpisah.** Jangan push/deploy tanpa diminta.
+
+**DATABASE PRODUKSI SUDAH BERUBAH** (migrasi + sinkron nyata sudah dijalankan — JANGAN diulang):
+`0209` izin baca cermin · `0210` kolom `pricing_model` + 47 baris terisi · `0211` kenop URL sumber
+harga · `0212` `ai_providers.price_api_url` + **veo dikunci** · `0213` `price_endpoint_id` untuk 3
+baris naskah fal · `0214` **F7**: 2 tarif dibetulkan + 7 baris diberi jejak & kunci.
+Sinkron nyata: 35 baris tersinkron · 1 ditahan · 5 tanpa-sumber.
+
+**⏳ MENUNGGU TINDAKAN OWNER (bukan pekerjaan Claude):**
+1. **Izin deploy** tujuh commit di atas.
+2. **Panel → Catalog → AI Models:** usulan harga `gemini-2.5-flash-image` (token $2,5 → **$30**, 12×)
+   **DITAHAN penjaga lonjakan**, menunggu tombol *Terapkan/Abaikan*. Nol dampak biaya (formulanya
+   per-gambar), tapi biarkan tercatat sampai diputuskan.
+3. **Ganti kunci APIMaster** — pernah tertulis di percakapan 23-Agu. (Berkas kunci ada di direktori
+   kerja sesi lama; ikut hilang, tak perlu dicari.)
+
+**✅ F7 SELESAI 23-Agu (migr `0214` SUDAH diterapkan ke DB — jangan diulang).** Tak ada lagi tarif
+keliru yang diketahui: suara Gemini **$0,50/$10,00** dan `eleven_v3` **$100**, keduanya **DIKUNCI** +
+bercatatan sumber & tanggal; 5 baris lain diberi jejak tanpa menyentuh angkanya. Penjaga `G13`
+menegakkan §7c. Rinciannya di CATATAN PELAKSANAAN F7 di §7f.
+
+**PEKERJAAN BERIKUTNYA — urutan yang direncanakan (risiko terkecil dulu):**
+- **F5** — formula *"biaya dilaporkan vendor"* & *"selisih penghitung akun"* disambungkan (OpenRouter
+  mengirim `usage.cost` tiap balasan; APIMaster lewat `/v1/dashboard/billing/usage`, satuan **SEN**).
+  Nol taksiran = kelas cacat ini mati di akarnya untuk penyedia router. **Tak menyentuh jalur produksi
+  gambar/video.**
+- **F6** — **tombol Uji memakai perintah selengkap produksi**: 4 dari 6 model APIMaster lolos
+  panggilan pendek lalu GAGAL pada perintah naskah asli (mentok batas keluaran 2.000 token). Lencana
+  "✓ Teruji" hari ini bisa berbohong.
+- **F8** — rekonsiliasi berjadwal (taksiran vs pemakaian nyata akun) + alarm + SSOT ditutup.
+- **F4b** — flux ×2 (satuan **megapiksel**, dibulatkan ke atas) & seedance ×2 (satuan **token video**
+  `(t×l×fps×durasi)÷1024`) jadi otomatis. Butuh **pencatat pemakaian baru** di `visual/ai_image.py` +
+  `visual/ai_video.py` ⇒ **menyentuh jalur produksi**, jadi DIKERJAKAN TERAKHIR: gagal-lunak, satu
+  titik pencatat per jenis (dijaga G3). Hari ini keempatnya berharga manual bercatatan tanggal, jadi
+  **tak ada angka yang salah** — yang belum otomatis hanyalah pemutakhirannya.
+
+**Alat bukti yang WAJIB dipakai tiap langkah** (skrip ada di direktori kerja sesi; bila hilang, tulis
+ulang — logikanya sederhana): hitung-ulang seluruh run riwayat sebelum-vs-sesudah (**ambang: satu
+selisih tak terjelaskan → BERHENTI & lapor**) · sinkron dijalankan **KERING** dulu · alarm
+`tests/test_gerbang_rantai_biaya.py` (**G1–G13, 43 uji**) dibuktikan merah lalu hijau lalu
+**disabotase**. Uji penuh saat ini: **1391 hijau**.
+
+---
+
 ## 7f. RENCANA & PROGRES F1–F8 — *tertulis di sini supaya TIDAK HILANG saat compacting / sesi baru*
 
 > **Sesi baru: baca bagian ini SEBELUM menyentuh apa pun di rantai harga/biaya.** Ditetapkan owner
@@ -349,7 +404,7 @@ harga internet sebagai kebenaran. Empat kebenaran yang riset 23-Agu tetapkan:
 | **F4** | Sumber API resmi penyedia (migr `0212`/`0213`) → **7 dari 12** model fal otomatis; 4 menunggu **F4b**, veo dikunci manual | ✅ **SELESAI 23-Agu** |
 | **F5** | Formula "biaya dilaporkan vendor" + "selisih penghitung akun" disambungkan | ⬜ |
 | **F6** | **Tombol Uji memakai perintah selengkap produksi** (temuan terbesar 23-Agu) | ⬜ |
-| **F7** | Pulihkan 4 baris rusak (3 naskah fal → $0,001/panggilan · `eleven_v3` → $100) + syarat Cloudflare | ⬜ |
+| **F7** | Pulihkan baris yang tarifnya SALAH + beri JEJAK & KUNCI (3 naskah fal sudah lewat F4) | ✅ **SELESAI 23-Agu** (migr `0214`; 2 angka dibetulkan · 5 diberi jejak · 246 run → **244 identik, 2 terjelaskan**) |
 | **F8** | Rekonsiliasi berjadwal (taksiran vs pemakaian nyata akun) + alarm + SSOT ditutup | ⬜ |
 
 **15 formula** (kelompok → nama) — *koreksi: 15, bukan 14; `video_klip` (per klip + detik tambahan) DIPERTAHANKAN karena nyata dipakai Kling dan angkanya identik dengan per-detik untuk klip ≥ jatah dasar; memaksa migrasi = mengubah data tanpa perlu*: *tanpa taksiran* — biaya dilaporkan per panggilan · selisih
@@ -433,6 +488,28 @@ menyebut angka **beraudio** $0,15, jadi sinkron otomatis akan 50% terlalu mahal.
 memakai tarif per-token Google). Dibuktikan hitungan tangan; channelnya nonaktif. Penjaga `G12`
 (7 uji) + 5 sabotase tertangkap.
 
+**CATATAN PELAKSANAAN F7 (23-Agu).** Dua tarif yang **mesin mustahil menangkap** dibetulkan dari
+halaman resmi vendor (§7d), lalu — ini bagian yang menentukan — **diberi JEJAK dan DIKUNCI**. Keduanya
+lolos SELURUH pengaman yang ada: penjaga lonjakan butuh 3× (selisih `eleven_v3` 1,8×), dan biayanya
+tetap **terhitung** sehingga laporan "biaya tak terhitung" pun diam. **suara Gemini** $0,3/$2,5 →
+**$0,50/$10,00** (4 channel AKTIF; komponen suara **×3,96**, total per video **+4,1…+4,5%**) ·
+**`eleven_v3`** $180 → **$100** (nol channel memakainya, tapi sinkron akan mempertahankan angka salah
+itu selamanya bila tak dikunci). **5 baris lain angkanya SUDAH benar tapi tak punya jejak** — 3
+ElevenLabs, Edge, Cloudflare — diberi catatan sumber+tanggal **tanpa menyentuh nilai tarifnya**.
+Untuk Cloudflare jejaknya memuat **aritmetikanya + batas kapan ia berhenti benar** (96 neuron/gambar
+⇒ 104 gambar/hari gratis per akun tenant; puncak nyata 22/hari).
+**Penjaga `G13` (1 uji) menegakkan aturan §7c yang sudah tertulis sejak 22-Agu tapi NOL mesin pernah
+memeriksanya** — dibuktikan **MERAH lebih dulu: 5 dari 6 baris ketikan-tangan melanggarnya**, lalu
+**5 sabotase pada BENDA yang dijaga** (jejak dicabut · catatan dihapus · kunci dilepas ×2 · 4 baris
+sekaligus) **semuanya tertangkap**. Perilaku "baris terkunci tak ditimpa sinkron" **tidak** dijaga
+ulang di sini — sudah ada penjaganya (`test_harga_otomatis_model_fal.py`); lapis ganda = pengerusakan.
+**AMBANG:** migrasi dijalankan **KERING** dulu → tepat **7 baris bergerak, tepat 2 berubah angkanya,
+nol formula bergeser, 47 baris tetap 47**; hitung-ulang 246 run → **244 identik, 2 berbeda dan
+keduanya memakai suara Gemini, nol tak terjelaskan**; sinkron kering sesudahnya → baris terkunci
+**6 → 8** (dua baris itu kini aman). **Riwayat biaya tenant TIDAK ditulis ulang** — layar membaca
+angka yang tersimpan per produksi, jadi yang benar berlaku mulai produksi BERIKUTNYA dan nol angka
+lama tenant berubah. **Berlaku tanpa deploy** (tarif dibaca dari DB oleh mesin yang sudah terpasang).
+
 **ATURAN MENGIKAT tiap langkah** *(dilanggar = pengerusakan; sudah terjadi 21-Agu)*:
 - **Satu langkah sekali jalan**, berhenti, lapor angkanya, baru langkah berikutnya.
 - **Ambang berhenti:** seluruh produksi lama dihitung ulang; **satu selisih tak terjelaskan → BERHENTI & lapor.**
@@ -455,6 +532,15 @@ OpenRouter 0 model video, APIMaster 7.
 **Yang mesin TIDAK bisa jamin** (sebut, jangan sembunyikan): nilai tarif yang salah-tapi-masuk-akal ·
 tagihan vendor atas percobaan yang gagal sebelum ia membalas · cara tagih yang belum pernah kita kenal
 (butuh 1 baris di §7b — tapi ia **tak akan diam**: muncul di laporan harian).
+
+**KUOTA GRATIS HARIAN — batas jujur yang berlaku HARI INI (F7, 23-Agu).** `cf-flux-schnell` tercatat
+**$0/gambar**, dan itu BENAR selama pemakaian harian akun tenant di bawah kuota gratis Cloudflare
+(10.000 neuron/hari). Aritmetikanya: 96 neuron/gambar ⇒ **104 gambar/hari masih gratis**; puncak nyata
+yang terukur **22 gambar/hari per tenant** = kelonggaran 4,7×. **DI ATAS kuota, biayanya jadi nyata
+sementara mesin tetap melaporkan $0** — formula `kuota_gratis` ada di katalog formula tapi penghitung
+**belum mendukungnya** (butuh penghitungan neuron harian per akun tenant). Ini **tidak** disembunyikan
+di angka: jejaknya tertulis di baris modelnya sendiri (§7c). Pemicu meninjau ulang: ada tenant yang
+melewati ±100 gambar/hari pada satu akun Cloudflare.
 
 **Tingkat kematangan** (tangga FinOps *crawl → walk → run*): kita di **crawl** menuju **walk** —
 biaya teknis per produksi, mulai bisa dipercaya untuk keputusan. **Bukan** "run".

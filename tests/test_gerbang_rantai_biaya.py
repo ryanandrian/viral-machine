@@ -627,3 +627,61 @@ class G12_SumberResmiPenyedia(unittest.TestCase):
                 if "_kunci_platform" in _isi(rel) and rel != self.KODE:
                     pemakai.append(rel)
         self.assertEqual(pemakai, [], f"kunci platform dipakai di luar jalur harga: {pemakai}")
+
+
+class G13_TarifKetikanTanganWajibBerjejak(unittest.TestCase):
+    """F7 — tarif yang MESIN tak bisa verifikasi wajib berjejak manusia, dan wajib TERKUNCI.
+
+    Batas yang §7e sebut apa adanya: **nilai tarif yang salah-tapi-masuk-akal tak terdeteksi mesin
+    apa pun.** Dua buktinya nyata dan keduanya bertahan berbulan-bulan: sumber harga umum memberi
+    `eleven_v3` tarif KELEBIHAN-KUOTA (1,8× tarif API resmi) dan memberi suara Gemini tarif TEKS
+    pada kolom yang bermakna ganda (4× terlalu murah — 4 channel AKTIF). Tak satu pun alarm menyala:
+    penjaga lonjakan butuh 3× (1,8× lolos), dan biayanya tetap TERHITUNG sehingga laporan
+    "biaya tak terhitung" pun diam. Yang menangkap keduanya hanya **pembandingan ke halaman tarif
+    resmi vendor** — pekerjaan manusia, sekali per baris.
+
+    Maka yang bisa ditegakkan mesin tinggal satu, dan justru inilah yang menentukan: begitu manusia
+    memverifikasinya, **jejaknya wajib tertinggal di barisnya** (sumber + TANGGAL, agar siapa pun
+    bisa memeriksanya ulang) dan baris itu wajib **TERKUNCI** — kalau tidak, sinkron harian menimpanya
+    kembali besok pagi dan seluruh pemeriksaan manusia itu hangus tanpa suara.
+
+    §7c sudah mewajibkannya sejak 22-Agu. Sampai F7 **nol mesin memeriksanya**, dan **5 dari 6**
+    baris melanggarnya — termasuk empat baris ElevenLabs/Edge yang angkanya BENAR tapi tak seorang
+    pun bisa membuktikan dari mana.
+
+    Perilaku "baris terkunci tak ditimpa sinkron" SUDAH dijaga
+    `test_harga_otomatis_model_fal.py::test_harga_yang_dikunci_admin_tetap_tak_tersentuh` —
+    sengaja TIDAK diulang di sini (lapis ganda = pengerusakan, CLAUDE.md §2)."""
+
+    POLA_TAHUN = re.compile(r"20\d\d")
+
+    def test_harga_ketikan_tangan_menyebut_sumber_dan_tanggal(self):
+        try:
+            import os as _os
+            from dotenv import load_dotenv
+            load_dotenv(os.path.join(AKAR, ".env"))
+            from supabase import create_client
+            sb = create_client(_os.getenv("SUPABASE_URL"),
+                               _os.getenv("SUPABASE_SERVICE_ROLE_KEY") or _os.getenv("SUPABASE_KEY"))
+            baris = (sb.table("ai_models")
+                     .select("model_key,pricing,pricing_locked").execute().data)
+        except Exception as e:                                   # noqa: BLE001
+            self.skipTest(f"katalog DB tak terbaca di lingkungan ini ({type(e).__name__}) — "
+                          f"pemeriksaan ini menuntut DB live")
+        manual = [b for b in baris
+                  if isinstance(b.get("pricing"), dict)
+                  and str((b["pricing"] or {}).get("source") or "").strip().lower() == "manual"]
+        self.assertTrue(manual, "nol baris harga ketikan-tangan di katalog — mustahil, periksa kueri")
+        cacat = []
+        for b in manual:
+            p = b["pricing"] or {}
+            catatan = str(p.get("note") or "")
+            if not b.get("pricing_locked"):
+                cacat.append(f"{b['model_key']}: TIDAK TERKUNCI — sinkron harian akan menimpanya")
+            if not self.POLA_TAHUN.search(catatan):
+                cacat.append(f"{b['model_key']}: catatan asal tanpa TANGGAL → mustahil diperiksa "
+                             f"ulang (isi: '{catatan[:40]}')")
+        self.assertFalse(cacat,
+                         "HARGA KETIKAN TANGAN TANPA JEJAK (SSOT §7c) — tarif salah-tapi-masuk-akal "
+                         "tak bisa ditangkap mesin, jadi jejak manusia inilah satu-satunya penutupnya:\n"
+                         + "\n".join(f"  · {c}" for c in cacat))
