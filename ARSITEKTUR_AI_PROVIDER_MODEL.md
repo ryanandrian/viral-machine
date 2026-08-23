@@ -335,7 +335,8 @@ tabel ini setiap kali dilakukan. *(Rencana S3: mesin ikut membandingkan catatan-
 **KEADAAN DEPLOY — PENTING.** Produksi (VPS, mesin **dan** web) masih di **`3f7b7b8`** — diperiksa
 langsung ke server 23-Agu. Seluruh commit F1–F7 ada **HANYA di komputer lokal, BELUM di-push, BELUM
 di-deploy**: `3754ad8` (daftar satuan) · `3a249a0` (rencana §7f) · `d759732` (F1) · `f7a9a48` (F2) ·
-`0cca434` (F3) · `0f4df20` (F4) · `d46745e` (perbaikan G1) · `245f501` (F7) · F5.
+`0cca434` (F3) · `0f4df20` (F4) · `d46745e` (perbaikan G1) · `245f501` (F7) · `8de61f0` (F5) ·
+`4fbdeef` (F6) · `5e6411b` (F8) — **sebelas commit**.
 ⚠️ **Deploy = izin owner terpisah.** Jangan push/deploy tanpa diminta.
 **Yang SUDAH berlaku di produksi tanpa deploy:** perbaikan tarif F7 — mesin yang terpasang membaca
 tarif dari DB, dan migr `0214` sudah diterapkan. Perbaikan F1–F6 (cara hitung, panel, adapter) baru
