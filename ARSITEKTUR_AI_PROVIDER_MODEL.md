@@ -343,7 +343,7 @@ harga internet sebagai kebenaran. Empat kebenaran yang riset 23-Agu tetapkan:
 
 | Langkah | Isi | Status |
 |---|---|---|
-| **F1** | Katalog formula (14) + formula di 47 baris model + panel menjelaskannya | ⬜ |
+| **F1** | Katalog formula (**15**) + formula di 47 baris model + panel menjelaskannya | ✅ **SELESAI 23-Agu** (migr `0210`; 47/47 terisi; penghitung BELUM membacanya = nol perubahan biaya) |
 | **F2** | Penghitung biaya memakai formula (ganti logika daftar-satuan) | ⬜ |
 | **F3** | Sumber tarif diatur dari panel + 3 pagar (ambigu ditolak · agregator · terkunci) | ⬜ |
 | **F4** | Sumber API resmi fal → 11 dari 12 model fal otomatis | ⬜ |
@@ -352,11 +352,25 @@ harga internet sebagai kebenaran. Empat kebenaran yang riset 23-Agu tetapkan:
 | **F7** | Pulihkan 4 baris rusak (3 naskah fal → $0,001/panggilan · `eleven_v3` → $100) + syarat Cloudflare | ⬜ |
 | **F8** | Rekonsiliasi berjadwal (taksiran vs pemakaian nyata akun) + alarm + SSOT ditutup | ⬜ |
 
-**14 formula** (kelompok → nama): *tanpa taksiran* — biaya dilaporkan per panggilan · selisih
+**15 formula** (kelompok → nama) — *koreksi: 15, bukan 14; `video_klip` (per klip + detik tambahan) DIPERTAHANKAN karena nyata dipakai Kling dan angkanya identik dengan per-detik untuk klip ≥ jatah dasar; memaksa migrasi = mengubah data tanpa perlu*: *tanpa taksiran* — biaya dilaporkan per panggilan · selisih
 penghitung akun · **naskah** — token masuk+keluar · per panggilan · **suara** — per huruf · token
 audio · per detik audio · **gambar** — per gambar · token gambar · per megapiksel dibulatkan ke atas ·
 **video** — per detik (beda bila audio nyala) · token video `(t×l×fps×durasi)÷1024` · **lain** —
 kuota gratis harian · gratis.
+
+**CATATAN PELAKSANAAN F1 (23-Agu).** Kolom `ai_models.pricing_model` (migr `0210`) + 47 baris terisi
+dalam migrasi yang SAMA, dengan formula yang **mereproduksi angka hari ini** (dipilih dari kunci harga
+yang sudah ada, mengikuti urutan prioritas penghitung) ⇒ **nol perubahan biaya, nol channel tenant
+tersentuh**. Sebaran: naskah_token 25 · suara_huruf 9 · gambar_satuan 4 · video_detik 4 ·
+gambar_token 2 · suara_token 2 · video_klip 1. Migrasi memakai **ambang**: bila hasilnya tak sama
+dengan hitungan kering, transaksi dibatalkan. Formula dicerminkan ke `catalog_valid_values`
+(`pricing_model:<jenis>`, label = "nama — penjelasan") → panel menyaring pilihan **per jenis model**,
+menampilkan penjelasan cara hitung di bawah field, dan menandai baris **⚠️ formula belum dipilih**;
+API memvalidasi nilainya terhadap cermin. Nol nama/penjelasan formula diketik di kode layar.
+**Pemindahan formula ke yang lebih tepat** (gambar fal → per megapiksel · seedance → token video ·
+Cloudflare → kuota gratis) **sengaja DITUNDA ke F4/F7**, bersama tarif aslinya dari sumber resmi —
+memindahkannya sekarang berarti mengubah angka tanpa sumber tarif yang benar. Penjaga: `G9` di
+`tests/test_gerbang_rantai_biaya.py` (7 uji, 6 sabotase tertangkap).
 
 **ATURAN MENGIKAT tiap langkah** *(dilanggar = pengerusakan; sudah terjadi 21-Agu)*:
 - **Satu langkah sekali jalan**, berhenti, lapor angkanya, baru langkah berikutnya.

@@ -77,7 +77,7 @@ class TestAsalHargaTerlihat(unittest.TestCase):
         # Yang diperiksa: field `source` benar-benar DIBACA dari baris harga (bukan kata 'source'
         # muncul entah di mana). Versi pertama uji ini memakai pola yang tak cocok dengan bentuk
         # bacaan sebenarnya (`pr.source`) — uji yang salah, bukan kode yang salah.
-        self.assertRegex(isi, r"\bpr\s*\.\s*source\b|pricing\s*\.\s*source\b",
+        self.assertRegex(isi, r"\bpr\s*\??\s*\.\s*source\b|pricing\s*\??\s*\.\s*source\b",
                          "kolom harga tak membaca asal harga (otomatis vs manual)")
         self.assertRegex(isi, r"manual", "kata pembeda asal harga ('manual') tak tampil")
 
@@ -88,7 +88,7 @@ class TestAsalHargaTerlihat(unittest.TestCase):
         isi = _tanpa_komentar(_baca())
         i = isi.index("fmtPricing(pr,")
         blok = isi[i:i + 900]
-        self.assertRegex(blok, r"pr\s*\.\s*source[^=]{0,60}===\s*\"manual\"\s*\?",
+        self.assertRegex(blok, r"pr\s*\??\s*\.\s*source[^=]{0,60}===\s*\"manual\"\s*\?",
                          "asal harga tak dipercabangkan → keterangannya tak bisa membedakan apa pun")
         self.assertIn("otomatis", blok, "keadaan 'otomatis' tak pernah tampil")
 

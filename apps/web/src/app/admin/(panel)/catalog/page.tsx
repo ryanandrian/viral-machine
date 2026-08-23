@@ -40,7 +40,10 @@ type Cat = {
 // Sinkron dgn ENUM_COLS di api/admin/catalog/route.ts (validasi server sbg backstop).
 const ENUM_FIELD_SRC: Record<string, Record<string, string[]>> = {
   providers: { adapter: ["llm_adapter", "tts_adapter", "visual_transport"], auth_type: ["auth_type"] },
-  models: { component: ["component"], quality_tier: ["model_tier"] },
+  // pricing_model = FORMULA harga (migr 0210). Pilihannya DISARING per jenis model saat dirender,
+  // memakai cermin `pricing_model:<jenis>` + `pricing_model:*` (registry kode ai_cost.FORMULA).
+  models: { component: ["component"], quality_tier: ["model_tier"],
+            pricing_model: ["pricing_model:llm", "pricing_model:tts", "pricing_model:image", "pricing_model:video", "pricing_model:*"] },
   languages: { quality_tier: ["language_tier"] },
   voice: { gender: ["gender"] },
   ttsprof: { adapter: ["tts_adapter"], tts_class: ["tts_class"] },
@@ -67,6 +70,9 @@ const FIELD_META: Record<string, Record<string, { id: string; en: string; help_i
     component: { id: "Jenis model", en: "Model type",
       help_id: "llm = penulis naskah · tts = suara · image/video = visual. BELUM SELESAI DI SINI: jenis tts masih butuh setelan suara + minimal 1 karakter suara (tab Voice); jenis video masih butuh preset durasi video yang aktif (tab Durasi). Terakhir: klik Uji, baru nyalakan.",
       help_en: "llm = script writer · tts = voice · image/video = visuals. NOT DONE HERE: tts also needs a voice engine + at least 1 voice character (Voice tab); video also needs an active AI-video duration preset (Durasi tab). Finally: hit Uji, then enable." },
+    pricing_model: { id: "Formula harga", en: "Pricing formula",
+      help_id: "CARA mesin menghitung biaya model ini — bukan sekadar satuannya. Pilihannya sudah disaring sesuai jenis model; penjelasan tiap formula muncul di bawah setelah dipilih. Formula yang tepat WAJIB dipilih: kalau salah, biaya tenant dilaporkan keliru tanpa satu pun tanda. Model dari penyedia yang MELAPORKAN biayanya sendiri (mis. OpenRouter) pilih 'biaya dilaporkan vendor' — tak perlu tarif sama sekali.",
+      help_en: "HOW the engine computes this model's cost — not just the unit. Options are filtered by model type; the chosen formula's explanation appears below. Picking the wrong one misreports tenant cost with no warning. For providers that report their own cost (e.g. OpenRouter), pick 'vendor-reported cost' — no rate needed." },
     model_key: { id: "ID internal", en: "Internal ID", help_id: "Kunci unik di katalog kita, permanen. Contoh: gpt-4o-mini", help_en: "Unique key in our catalog, permanent. E.g.: gpt-4o-mini" },
     model_id: { id: "ID resmi di vendor", en: "Vendor model ID", help_id: "Salin PERSIS dari dokumentasi vendor (sertakan versi). Contoh: FLUX.1-schnell. Salah ketik = gagal produksi — buktikan dgn tombol Uji.", help_en: "Copy EXACTLY from vendor docs (include version). Typos fail production — prove with the Test button." },
     display_name: { id: "Nama tampil", en: "Display name", help_id: "Jelas versinya untuk manusia. Contoh: GPT-4o mini", help_en: "Human-clear incl. version. E.g.: GPT-4o mini" },
@@ -162,7 +168,7 @@ const TABS: [string, string][] = [["providers", "Providers"], ["models", "AI Mod
 
 // field minimal untuk "Add" per tabel (PK + wajib)
 const ADD_FIELDS: Record<string, { table: string; fields: [string, string][] }> = {
-  models: { table: "ai_models", fields: [["provider_key", "Provider (induk model ini)"], ["component", "component"], ["model_key", "model_key (PK)"], ["model_id", "model_id (ID resmi di provider — SERTAKAN versi, mis. FLUX.1-schnell)"], ["display_name", "display_name (jelas versinya utk manusia)"], ["quality_tier", "tier (basic/standard/premium/fast)"], ["sort_order", "sort_order (urutan tampil)"], ["default_params", 'default_params JSON — parameter per-model (image: {"size","steps"} · video: {"aspect_ratio","duration","duration_param","allowed_durations"})']] },
+  models: { table: "ai_models", fields: [["provider_key", "Provider (induk model ini)"], ["component", "component"], ["pricing_model", "formula harga (cara mesin menghitung biaya)"], ["model_key", "model_key (PK)"], ["model_id", "model_id (ID resmi di provider — SERTAKAN versi, mis. FLUX.1-schnell)"], ["display_name", "display_name (jelas versinya utk manusia)"], ["quality_tier", "tier (basic/standard/premium/fast)"], ["sort_order", "sort_order (urutan tampil)"], ["default_params", 'default_params JSON — parameter per-model (image: {"size","steps"} · video: {"aspect_ratio","duration","duration_param","allowed_durations"})']] },
   providers: { table: "ai_providers", fields: [["provider_key", "provider_key (PK)"], ["display_name", "display_name"], ["adapter", "adapter (mis. openai_chat)"], ["auth_type", "auth_type (api_key/none)"], ["key_group", "key_group (vendor kunci — mis. openai_tts→openai)"], ["base_url", "base_url (opsional)"], ["price_feed_prefix", "price_feed_prefix (prefix feed harga; kosong = provider_key)"], ["free_tier_note", "free_tier_note (keterangan gratis-harian; tampil ke tenant)"], ["request_param_schema", "request_param_schema JSON (opsional)"]] },
   voice: { table: "voice_catalog", fields: [["voice_key", "voice_key (PK — kunci KATALOG kita; dirujuk channel & kalibrasi pace)"], ["provider_key", "provider_key (mis. elevenlabs)"], ["vendor_voice_id", "vendor_voice_id (ID suara di sisi vendor; kosong = sama dgn voice_key)"], ["display_name", "display_name"], ["locale", "locale (mis. id-ID)"], ["language", "language (mis. Indonesian)"], ["gender", "gender (male/female)"], ["age", "age (mis. young/middle-aged)"], ["accent", "accent (opsional)"], ["use_case", "use_case (mis. narration)"], ["description", "description (opsional)"], ["default_settings", "default_settings JSON {stability,style,speed}"], ["niche_default", "niche_default (opsional)"], ["preview_url", "preview_url (URL contoh suara .mp3, opsional)"], ["delivery_wps", "delivery_wps (pace voice 1.0–4.0; kosong = ikut engine)"]] },
   languages: { table: "content_languages", fields: [["locale", "locale (PK)"], ["display_name", "display_name"], ["quality_tier", "tier (official/experimental)"], ["caption_font", "caption_font"]] },
@@ -283,16 +289,37 @@ export default function AdminCatalogPage() {
   useEffect(() => { if (add) setFormErr(null); }, [add !== null]);  // buka modal Tambah → bersihkan error lama
 
   // Opsi dropdown: provider_key (dari daftar provider) + kolom enum (nilai-sah registry KODE).
-  const fieldOptions = useCallback((mapKey: string, col: string): { value: string; label: string }[] | null => {
+  const fieldOptions = useCallback((mapKey: string, col: string, jenis?: string): { value: string; label: string }[] | null => {
     if (col === "provider_key") {
       const ps = (data?.ai_providers ?? []).map((p) => ({ value: String(p.provider_key), label: String(p.display_name || p.provider_key) }));
       return ps.length ? ps : null;
     }
     const src = ENUM_FIELD_SRC[mapKey]?.[col];
     if (!src) return null;
+    // FORMULA harga: hanya yang SAH untuk jenis model baris ini (+ yang berlaku semua jenis), dan
+    // labelnya nama manusiawi dari cermin — bukan kunci mesin. Penjelasan panjangnya tampil di
+    // bawah field (lihat `fieldBlock`), supaya daftar pilihan tetap rapi.
+    if (col === "pricing_model") {
+      const sah = jenis ? [`pricing_model:${jenis}`, "pricing_model:*"] : src;
+      const o = (data?.catalog_valid_values ?? []).filter((r) => sah.includes(r.field))
+        .map((r) => ({ value: r.value, label: r.label.split(" — ")[0] || r.value }));
+      return o.length ? o : null;
+    }
     // Opsi = nilai kunci NETRAL-bahasa (openai_chat/api_key/llm) — dwi-bahasa-aman (<option> tak bisa <Bi>).
     const opts = (data?.catalog_valid_values ?? []).filter((r) => src.includes(r.field)).map((r) => ({ value: r.value, label: r.value }));
     return opts.length ? opts : null;
+  }, [data]);
+
+  // Nama pendek formula (dari cermin) — dipakai tabel; penjelasan panjangnya jadi tooltip.
+  const namaFormula = useCallback((nilai: string): string => {
+    const r = (data?.catalog_valid_values ?? []).find((x) => x.field.startsWith("pricing_model:") && x.value === nilai);
+    return r ? (r.label.split(" — ")[0] || nilai) : nilai;
+  }, [data]);
+
+  // Penjelasan CARA HITUNG formula terpilih — teksnya milik mesin (cermin), bukan diketik di layar.
+  const penjelasanFormula = useCallback((nilai: string): string => {
+    const r = (data?.catalog_valid_values ?? []).find((x) => x.field.startsWith("pricing_model:") && x.value === nilai);
+    return r ? (r.label.split(" — ").slice(1).join(" — ") || "") : "";
   }, [data]);
 
   // [16-Agu] Uji model VIDEO memakan >1 menit dan sambungan ke layar putus lebih dulu. Insiden
@@ -354,8 +381,8 @@ export default function AdminCatalogPage() {
   }
 
   // Renderer field TERPADU (Add + Edit sama) — dropdown bila kolom enum/FK, else teks. disabled utk PK saat edit.
-  const renderField = (mapKey: string, k: string, value: string, onChange: (v: string) => void, disabled: boolean) => {
-    const opts = disabled ? null : fieldOptions(mapKey, k);
+  const renderField = (mapKey: string, k: string, value: string, onChange: (v: string) => void, disabled: boolean, jenis?: string) => {
+    const opts = disabled ? null : fieldOptions(mapKey, k, jenis);
     if (opts) return (
       <select className="input" value={value ?? ""} onChange={(e) => onChange(e.target.value)}>
         <option value="">— pilih —</option>
@@ -369,7 +396,7 @@ export default function AdminCatalogPage() {
   // A1/A2: satu blok field utk kedua modal — label manusiawi (Bi) + kode kolom kecil + bantuan + tanda error.
   // FUNGSI render (dipanggil {fieldBlock(...)}), BUKAN komponen bersarang — komponen yang didefinisikan
   // di dalam komponen berganti identitas tiap render → React remount subtree → input kehilangan fokus tiap ketikan.
-  const fieldBlock = (mapKey: string, k: string, fallbackLabel: string, value: string, onChange: (v: string) => void, disabled: boolean, pkNote?: boolean, dipakaiOleh?: number) => {
+  const fieldBlock = (mapKey: string, k: string, fallbackLabel: string, value: string, onChange: (v: string) => void, disabled: boolean, pkNote?: boolean, dipakaiOleh?: number, jenis?: string) => {
     const meta = FIELD_META[mapKey]?.[k];
     const isErr = formErr?.col === k;
     return (
@@ -380,7 +407,12 @@ export default function AdminCatalogPage() {
           {pkNote && <span className="muted"> — <Bi id="terkunci" en="locked" /></span>}
           {dipakaiOleh ? <span className="muted"> — <Bi id={`terkunci, dipakai ${dipakaiOleh} channel`} en={`locked, used by ${dipakaiOleh} channel(s)`} /></span> : null}
         </label>
-        {renderField(mapKey, k, value, onChange, disabled)}
+        {renderField(mapKey, k, value, onChange, disabled, jenis)}
+        {k === "pricing_model" && value && penjelasanFormula(value) && (
+          <div className="muted" style={{ fontSize: "0.6875rem", marginTop: 3, lineHeight: 1.45, padding: "0.4rem 0.55rem", background: "var(--surface-2)", borderRadius: "var(--r-sm)" }}>
+            {penjelasanFormula(value)}
+          </div>
+        )}
         {meta?.help_id && <div className="muted" style={{ fontSize: "0.6875rem", marginTop: 2, lineHeight: 1.4 }}><Bi id={meta.help_id} en={meta.help_en ?? meta.help_id} /></div>}
         {isErr && <div style={{ color: "var(--danger)", fontSize: "var(--text-xs)", marginTop: 2 }}>{formErr!.node}</div>}
       </div>
@@ -819,9 +851,24 @@ export default function AdminCatalogPage() {
                               model video, ElevenLabs, Cloudflare, Edge, fal) ⇒ harganya wajib diketik
                               admin. Tanpa keterangan ini admin tak bisa membedakan "datang sendiri"
                               dari "menunggu diketik" saat menambah vendor/model baru. */}
-                          <span style={{ marginLeft: ".35rem", opacity: .7 }} title={String(pr.source ?? "")}>
-                            {String(pr.source ?? "") === "manual" ? "· manual" : "· otomatis"}
-                          </span></span>
+                          <span style={{ marginLeft: ".35rem", opacity: .7 }} title={String(pr?.source ?? "")}>
+                            {String(pr?.source ?? "") === "manual" ? "· manual" : "· otomatis"}
+                          </span>
+                          {/* Formula = CARA hitungnya. Ditampilkan sekilas-pandang supaya admin tak perlu
+                              membuka baris satu per satu; penjelasan lengkapnya ada di form Edit. */}
+                          {m.pricing_model ? (
+                            <div className="muted" style={{ fontSize: "0.625rem", marginTop: 2 }}
+                                 title={penjelasanFormula(String(m.pricing_model))}>
+                              ƒ {namaFormula(String(m.pricing_model))}
+                            </div>
+                          ) : (
+                            <div style={{ marginTop: 2 }}>
+                              <span className="badge badge-warning" style={{ fontSize: "0.625rem" }}
+                                    title="Formula harga belum dipilih — mesin tak tahu cara menghitung biaya model ini.">
+                                ⚠️ <Bi id="formula belum dipilih" en="no pricing formula" />
+                              </span>
+                            </div>
+                          )}</span>
                           : (m.is_active
                               ? <span className="badge badge-warning"
                                       title={`Biaya model ini TIDAK BISA dihitung — satuan harganya kosong. Isi salah satu lewat tombol ✎: ${satuanJenis(String(m.component ?? "")).map((u) => u.label).join(" · ") || "(jenis ini belum punya satuan)"}. Menyimpan manual otomatis mengunci baris dari timpaan sinkron.`}>
@@ -1103,7 +1150,8 @@ export default function AdminCatalogPage() {
             <div style={{ display: "flex", alignItems: "center", marginBottom: "0.75rem" }}><strong>Tambah {ADD_FIELDS[tab].table}</strong><button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: "auto" }} onClick={() => setAdd(null)}><X size={16} /></button></div>
             <div style={{ display: "grid", gap: "0.5rem" }}>
               {ADD_FIELDS[tab].fields.map(([k, label]) =>
-                fieldBlock(tab, k, label, add[k] ?? "", (v) => setAdd({ ...add, [k]: v }), false)
+                fieldBlock(tab, k, label, add[k] ?? "", (v) => setAdd({ ...add, [k]: v }), false,
+                           undefined, undefined, String(add["component"] ?? ""))
               )}
               {formErr && !formErr.col && <div style={{ color: "var(--danger)", fontSize: "var(--text-xs)" }}>{formErr.node}</div>}
               <button className="btn btn-primary btn-sm" style={{ justifySelf: "end", marginTop: "0.25rem" }} onClick={createRow}><Bi id="Simpan" en="Save" /></button>
@@ -1130,7 +1178,8 @@ export default function AdminCatalogPage() {
                 const isPk = k === PK_OF[rowEdit.mapKey];
                 return fieldBlock(rowEdit.mapKey, k, label, rowEdit.values[k] ?? "",
                   (v) => setRowEdit({ ...rowEdit, values: { ...rowEdit.values, [k]: v } }),
-                  isPk || kunciIdentitas, isPk, kunciIdentitas ? dipakai : undefined);
+                  isPk || kunciIdentitas, isPk, kunciIdentitas ? dipakai : undefined,
+                  String(rowEdit.values["component"] ?? ""));
               })}
               {(() => {
                 // [Jeda-akhir] pratinjau dampak hidup + kunci Simpan saat nilai di luar rentang (§3.1)

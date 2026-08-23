@@ -87,6 +87,92 @@ SATUAN_HARGA = (
     Satuan("llm", "naskah_token", "out_per_1m", "sejuta token keluar", "llm", ("tokens_out",), ("output_cost_per_token",), 1e6, "produk", "/1jt token keluar"),
 )
 
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+#  KATALOG FORMULA HARGA — nama CARA TAGIH yang dikenal mesin. SSOT: `ARSITEKTUR_AI_PROVIDER_MODEL.md`
+#  §7b/§7f. Ditetapkan owner 23-Agu-2026: *"sebaiknya kita memiliki kategorisasi pricing untuk
+#  mengelompokkan beberapa model yang memiliki formulasi pricing yang sama."*
+#
+#  KENAPA nama formula, bukan cuma satuan: satuan hanya menyebut UKURAN ("per detik"), sedangkan
+#  formula bisa memuat CARA HITUNGNYA — mis. gambar fal ditagih per megapiksel DIBULATKAN KE ATAS,
+#  video seedance ditagih per token = (tinggi×lebar×fps×durasi)÷1024. Dengan satuan saja, angka itu
+#  harus dihitung tangan lalu disimpan mati; dengan formula, MESIN yang menghitung — jadi bila
+#  resolusi/durasi berubah, biayanya ikut benar sendiri.
+#
+#  Dua formula terbaik justru TIDAK menghitung apa pun: vendor melaporkan biayanya sendiri.
+#  Terverifikasi 23-Agu: OpenRouter mengirim `usage.cost` di setiap balasan; APIMaster menyediakan
+#  penghitung saldo (`/v1/dashboard/billing/usage`, satuan SEN) yang bisa diselisihkan.
+#
+#  jenis "*" = berlaku untuk semua jenis model.
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+
+@dataclass(frozen=True)
+class Formula:
+    kunci: str          # nilai kolom `ai_models.pricing_model`
+    jenis: str          # llm | tts | image | video | *  (jenis model yang boleh memakainya)
+    nama: str           # label pendek untuk panel
+    penjelasan: str     # kalimat untuk admin — apa yang mesin lakukan & tarif apa yang ia butuh
+
+
+FORMULA = (
+    # ── tanpa taksiran: vendor menyebut biayanya sendiri (paling tepat) ──
+    Formula("biaya_dilaporkan", "*", "biaya dilaporkan vendor",
+            "Mesin TIDAK menghitung — biaya diambil dari angka yang vendor kirim di balasan tiap "
+            "panggilan (mis. OpenRouter). Tak perlu tarif apa pun di baris ini."),
+    Formula("selisih_akun", "*", "selisih penghitung akun",
+            "Mesin membaca penghitung pemakaian akun vendor sebelum & sesudah produksi, lalu "
+            "memakai selisihnya (mis. APIMaster). Tak perlu tarif; tak akurat bila satu kunci "
+            "dipakai beberapa produksi serentak."),
+    # ── naskah ──
+    Formula("naskah_panggilan", "llm", "per panggilan",
+            "Tarif tetap per satu panggilan, berapa pun panjang naskahnya. Butuh: tarif per panggilan."),
+    Formula("naskah_token", "llm", "token masuk + keluar",
+            "Jumlah token masuk & keluar dikali tarifnya masing-masing. Butuh: tarif per 1 juta "
+            "token masuk dan keluar."),
+    # ── suara ──
+    Formula("suara_huruf", "tts", "per huruf",
+            "Jumlah huruf naskah dikali tarif. Butuh: tarif per 1 juta huruf."),
+    Formula("suara_token", "tts", "token audio",
+            "Token yang VENDOR laporkan (teks masuk + audio keluar) dikali tarifnya. Butuh: tarif "
+            "per 1 juta token audio (wajib) dan token masuk."),
+    Formula("suara_detik", "tts", "per detik audio",
+            "Durasi audio yang mesin ukur dari berkasnya dikali tarif. Butuh: tarif per detik audio."),
+    # ── gambar ──
+    Formula("gambar_satuan", "image", "per gambar",
+            "Jumlah gambar dikali tarif. Butuh: tarif per gambar."),
+    Formula("gambar_token", "image", "token gambar",
+            "Token yang vendor laporkan dikali tarif token-gambar. Butuh: tarif per 1 juta token "
+            "gambar (wajib) dan token masuk."),
+    Formula("gambar_megapiksel", "image", "per megapiksel (dibulatkan ke atas)",
+            "Ukuran gambar diubah ke megapiksel, DIBULATKAN KE ATAS, lalu dikali tarif — cara fal "
+            "menagih (1080×1920 = 2,07 MP ditagih 3 MP). Butuh: tarif per megapiksel."),
+    # ── video ──
+    Formula("video_detik", "video", "per detik video",
+            "Detik video yang diminta ke vendor dikali tarif. Bila vendor menagih beda saat audio "
+            "dinyalakan, isi tarif yang sesuai setelan kita. Butuh: tarif per detik."),
+    Formula("video_klip", "video", "per klip + detik tambahan",
+            "Tarif dasar per klip untuk jatah detik tertentu, lalu tarif tambahan untuk detik di "
+            "atasnya. Butuh: tarif dasar per klip, jatah detik, tarif detik tambahan."),
+    Formula("video_token", "video", "token video",
+            "Token dihitung dari (tinggi × lebar × fps × durasi) ÷ 1024, lalu dikali tarif — cara "
+            "fal menagih seedance. Butuh: tarif per 1 juta token video."),
+    # ── lain ──
+    Formula("kuota_gratis", "*", "kuota gratis harian, lalu berbayar",
+            "Gratis selama pemakaian harian masih di bawah kuota vendor; di atas itu dihitung per "
+            "satuan. Butuh: besar kuota dan tarif per satuan."),
+    Formula("gratis", "*", "gratis",
+            "Vendor tidak menagih apa pun. Biaya selalu nol."),
+)
+
+# Formula → satuan harga yang ia pakai (turunan daftar satuan; nol penulisan ganda).
+def satuan_formula(kunci: str) -> tuple:
+    return tuple(s for s in SATUAN_HARGA if s.skema == kunci)
+
+
+def formula_untuk_jenis(jenis: str) -> tuple:
+    """Formula yang SAH untuk satu jenis model (termasuk yang berlaku untuk semua jenis)."""
+    return tuple(f for f in FORMULA if f.jenis in (jenis, "*"))
+
+
 # Urutan skema = PRIORITAS (kemunculan pertama di daftar). Dihitung sekali, bukan ditulis dua kali.
 SKEMA_URUT = tuple(dict.fromkeys(s.skema for s in SATUAN_HARGA))
 

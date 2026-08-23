@@ -16,7 +16,9 @@ async function s3DeleteObject(key: string): Promise<void> {
 
 // Whitelist tabel katalog → kolom yang boleh diubah + PK. Mencegah tulis sembarang kolom/tabel.
 const CATALOG: Record<string, { pk: string; cols: string[] }> = {
-  ai_models: { pk: "model_key", cols: ["provider_key", "component", "model_id", "display_name", "quality_tier", "is_active", "sort_order", "cost_hint", "default_params", "pricing", "pricing_locked", "pricing_pending"] },
+  // pricing_model (migr 0210) = NAMA FORMULA harga: menentukan CARA mesin menghitung biaya, bukan
+  // cuma satuannya. Nilai sahnya dari cermin `pricing_model:<jenis>` (registry kode ai_cost.FORMULA).
+  ai_models: { pk: "model_key", cols: ["provider_key", "component", "model_id", "display_name", "quality_tier", "is_active", "sort_order", "cost_hint", "default_params", "pricing", "pricing_locked", "pricing_pending", "pricing_model"] },
   ai_providers: { pk: "provider_key", cols: ["display_name", "adapter", "base_url", "auth_type", "key_group", "is_active", "request_param_schema", "price_feed_prefix", "free_tier_note"] },
   content_languages: { pk: "locale", cols: ["display_name", "quality_tier", "caption_font", "is_active", "sort_order", "tts_providers_supported"] },
   // vendor_voice_id = identitas suara di sisi VENDOR (migr 0181). Kosong = sama dgn voice_key.
@@ -111,7 +113,11 @@ function coerceValue(table: string, col: string, val: unknown): unknown {
 // & tts_profiles.adapter tervalidasi ketat. Sumber tunggal = tabel cermin (di-sync mesin saat startup).
 const ENUM_COLS: Record<string, Record<string, string[]>> = {
   ai_providers:      { adapter: ["llm_adapter", "tts_adapter", "visual_transport"], auth_type: ["auth_type"] },
-  ai_models:         { component: ["component"], quality_tier: ["model_tier"] },
+  ai_models:         { component: ["component"], quality_tier: ["model_tier"],
+                       // Formula harga: terima union semua jenis (kolom `component` yang menentukan
+                       // jenisnya; panel sudah menyaring pilihannya per jenis) → typo tetap ditolak.
+                       pricing_model: ["pricing_model:llm", "pricing_model:tts", "pricing_model:image",
+                                       "pricing_model:video", "pricing_model:*"] },
   content_languages: { quality_tier: ["language_tier"] },
   voice_catalog:     { gender: ["gender"] },
   tts_profiles:      { adapter: ["tts_adapter"], tts_class: ["tts_class"] },

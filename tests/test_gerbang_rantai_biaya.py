@@ -339,3 +339,80 @@ class G8_PenandaHargaMengikutiSatuanTerpakai(unittest.TestCase):
         blok = isi[i:i + 900]
         self.assertIn("satuanJenis", blok,
                       "penanda tak menyebut satuan mana yang harus diisi → admin menebak")
+
+
+class G9_FormulaHargaLengkapDanDijelaskan(unittest.TestCase):
+    """F1 — tiap model menyebut FORMULA hitungnya, dan formulanya DIJELASKAN ke admin.
+
+    Sebelum 23-Agu cara menghitung DITEBAK dari jenis model, dan pengetahuan itu tersebar di 4
+    tempat. Owner menetapkan kategorisasi formula supaya model dengan pola tagih sama dikelompokkan,
+    dan supaya penambahan model baru = memilih formula, bukan menulis kode. Yang dijaga:
+      (a) katalog formula ADA, tiap entri utuh (kunci · jenis · nama · penjelasan)
+      (b) tiap formula yang MENGHITUNG punya satuan harga; yang tidak menghitung memang tak punya
+      (c) formula dicerminkan ke DB → panel & validasi tulis membaca SATU sumber
+      (d) layar TIDAK menanam daftar/penjelasan formula sendiri (kelas cacat yang sudah terbukti)
+    """
+
+    PANEL = "apps/web/src/app/admin/(panel)/catalog/page.tsx"
+    API = "apps/web/src/app/api/admin/catalog/route.ts"
+
+    def _katalog(self):
+        from src.billing.ai_cost import FORMULA
+        return FORMULA
+
+    def test_katalog_formula_ada_dan_utuh(self):
+        f = self._katalog()
+        self.assertGreaterEqual(len(f), 10, "katalog formula terlalu kurus — jenis tagih pasti ada yang tak tertampung")
+        for x in f:
+            with self.subTest(x.kunci):
+                self.assertTrue(x.kunci and x.nama and x.penjelasan, "entri formula tak utuh")
+                self.assertIn(x.jenis, ("llm", "tts", "image", "video", "*"), f"jenis tak dikenal: {x.jenis}")
+                self.assertGreater(len(x.penjelasan), 40,
+                                   "penjelasan terlalu pendek — admin tetap menebak cara hitungnya")
+
+    def test_keempat_jenis_punya_formula(self):
+        from src.config.catalog_sync import COMPONENTS
+        from src.billing.ai_cost import formula_untuk_jenis
+        for j, _ in COMPONENTS:
+            with self.subTest(j):
+                self.assertTrue(formula_untuk_jenis(j), f"jenis '{j}' tak punya satu pun formula")
+
+    def test_formula_yang_menghitung_punya_satuan(self):
+        """Formula ber-satuan wajib menyebut satuan; yang TIDAK menghitung wajib TIDAK punya satuan
+        (kalau punya, ia diam-diam ikut menghitung → sumber angka ganda)."""
+        from src.billing.ai_cost import satuan_formula
+        TANPA_HITUNG = {"biaya_dilaporkan", "selisih_akun", "gratis", "kuota_gratis",
+                        "gambar_megapiksel", "video_token"}   # dua terakhir: rumusnya, bukan tabel satuan
+        for x in self._katalog():
+            with self.subTest(x.kunci):
+                punya = bool(satuan_formula(x.kunci))
+                if x.kunci in TANPA_HITUNG:
+                    continue
+                self.assertTrue(punya, f"formula '{x.kunci}' menghitung tapi tak punya satuan harga")
+
+    def test_formula_dicerminkan_ke_db(self):
+        from src.config.catalog_sync import collect_valid_values
+        baris = [r for r in collect_valid_values() if r["field"].startswith("pricing_model:")]
+        self.assertEqual(len(baris), len(self._katalog()),
+                         "jumlah formula di cermin ≠ katalog kode → panel bisa menawarkan yang tak dikenal mesin")
+        for r in baris:
+            self.assertIn(" — ", r["label"], "label cermin tak memuat penjelasan (nama — penjelasan)")
+
+    def test_panel_membaca_formula_dari_cermin_bukan_menanam(self):
+        isi = _tanpa_komentar(self.PANEL, _isi(self.PANEL))
+        self.assertIn("pricing_model:", isi, "panel tak membaca cermin formula")
+        for kunci in ("naskah_token", "suara_huruf", "video_token", "biaya_dilaporkan"):
+            self.assertNotIn(f'"{kunci}"', isi,
+                             f"nama formula '{kunci}' DITANAM di kode layar — harus dari cermin")
+
+    def test_pilihan_formula_disaring_per_jenis(self):
+        """Semua formula ditawarkan untuk semua jenis = admin bisa memilih yang mustahil dihitung."""
+        isi = _tanpa_komentar(self.PANEL, _isi(self.PANEL))
+        self.assertRegex(isi, r"`pricing_model:\$\{jenis\}`",
+                         "pilihan formula tak disaring menurut jenis model baris itu")
+
+    def test_api_memvalidasi_formula(self):
+        isi = _tanpa_komentar(self.API, _isi(self.API))
+        self.assertRegex(isi, r"pricing_model:\s*\[",
+                         "API tak memvalidasi kolom formula → nilai ngawur bisa tersimpan")
+        self.assertIn('"pricing_model"', isi, "kolom formula tak diizinkan ditulis dari panel")

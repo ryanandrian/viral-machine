@@ -12,6 +12,9 @@ Field yang dicerminkan:
   visual_transport  — kunci _TRANSPORTS visual (platform = provider_key).
   auth_type         — cara kunci: api_key (butuh token) / none (gratis, mis. edge).
   component         — jenis model yang didukung pipeline: llm/image/video/tts.
+  pricing_model:<jenis> — FORMULA HARGA yang sah untuk jenis model itu (katalog kode: ai_cost.FORMULA).
+                      Panel memakainya sebagai pilihan + penjelasan; validasi tulis memakainya
+                      sebagai daftar nilai sah. "*" = berlaku untuk semua jenis.
   pricing_unit:<jenis> — SATUAN HARGA yang sah untuk jenis model itu, dari DAFTAR SATUAN di
                       `src/billing/ai_cost.py` (SSOT: ARSITEKTUR_AI_PROVIDER_MODEL §7b). Layar
                       panel & layar tenant MEMBACA ini — jadi tak ada satu pun nama satuan/label
@@ -97,14 +100,19 @@ def collect_valid_values() -> List[Dict[str, str]]:
     for v, lbl in TTS_CLASSES:
         rows.append({"field": "tts_class", "value": v, "label": lbl})
 
-    # Satuan harga per jenis model — DITURUNKAN dari daftar, tak diketik ulang di sini.
+    # Satuan & FORMULA harga per jenis model — DITURUNKAN dari katalog kode, tak diketik ulang.
     try:
-        from src.billing.ai_cost import SATUAN_HARGA
+        from src.billing.ai_cost import SATUAN_HARGA, FORMULA
         for sat in SATUAN_HARGA:
             rows.append({"field": f"pricing_unit:{sat.jenis}", "value": sat.kunci,
                          "label": sat.label})
+        # Label formula = "nama — penjelasan": panel menampilkannya apa adanya, jadi penjelasan
+        # cara hitung tak perlu diketik ulang di kode layar (itu yang membusuk sebelumnya).
+        for f in FORMULA:
+            rows.append({"field": f"pricing_model:{f.jenis}", "value": f.kunci,
+                         "label": f"{f.nama} — {f.penjelasan}"})
     except Exception as e:
-        logger.warning(f"[catalog_sync] daftar satuan harga gagal dibaca: {e}")
+        logger.warning(f"[catalog_sync] katalog harga gagal dibaca: {e}")
     return rows
 
 
