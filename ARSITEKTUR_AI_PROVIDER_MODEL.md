@@ -334,15 +334,17 @@ tabel ini setiap kali dilakukan. *(Rencana S3: mesin ikut membandingkan catatan-
 
 > **Baca 7f-0 lalu §7f. Jangan menyentuh rantai harga/biaya sebelum keduanya dibaca.**
 
-**KEADAAN DEPLOY — PENTING.** Produksi (VPS, mesin **dan** web) masih di **`3f7b7b8`** — diperiksa
-langsung ke server 23-Agu. Seluruh commit F1–F7 ada **HANYA di komputer lokal, BELUM di-push, BELUM
-di-deploy**: `3754ad8` (daftar satuan) · `3a249a0` (rencana §7f) · `d759732` (F1) · `f7a9a48` (F2) ·
-`0cca434` (F3) · `0f4df20` (F4) · `d46745e` (perbaikan G1) · `245f501` (F7) · `8de61f0` (F5) ·
-`4fbdeef` (F6) · `5e6411b` (F8) — **sebelas commit**.
-⚠️ **Deploy = izin owner terpisah.** Jangan push/deploy tanpa diminta.
-**Yang SUDAH berlaku di produksi tanpa deploy:** perbaikan tarif F7 — mesin yang terpasang membaca
-tarif dari DB, dan migr `0214` sudah diterapkan. Perbaikan F1–F6 (cara hitung, panel, adapter) baru
-berlaku SESUDAH deploy.
+**KEADAAN DEPLOY — SELURUH RANTAI SUDAH TERPASANG (23-Agu 20:15/20:18 WIB, izin owner).**
+Produksi (VPS, mesin **dan** web) di **`516fad1`** — F1 s/d F8 + F4b, 15 commit. Diverifikasi
+langsung ke server: `mv-worker`=active · `mv-webhook`=active · health 200 · `mv-web`=active ·
+situs 200 · worker restart BERSIH (nol galat di log). Migrasi `0209`-`0215` **sudah diterapkan** ke
+DB - jangan diulang. Cermin katalog harga sudah ditulis worker saat start (termasuk satuan baru F4b
+dan daftar formula tanpa-tarif).
+**Yang menyelesaikan diri sendiri pada sinkron harian berikutnya (kurang lebih 18 jam):** 4 baris fal
+(flux x2, seedance x2) berpindah ke formula megapiksel / token-video beserta tarif resmi dari API
+fal. Angkanya identik dengan yang tersimpan sekarang, jadi **nol geseran**.
+**Risiko mesin sinkron LAMA membatalkan perbaikan F4 sudah HILANG** - pagar agregator kini terpasang
+di server.
 
 **DATABASE PRODUKSI SUDAH BERUBAH** (migrasi + sinkron nyata sudah dijalankan — JANGAN diulang):
 `0209` izin baca cermin · `0210` kolom `pricing_model` + 47 baris terisi · `0211` kenop URL sumber
