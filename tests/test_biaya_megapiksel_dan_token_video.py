@@ -184,3 +184,42 @@ class TestJalanDariApiResmiFal(unittest.TestCase):
                         kw.value, ast.Constant,
                         f"'{kw.arg}' diserahkan sebagai ANGKA TETAP di kode — wajib hasil pengukuran "
                         f"berkas, sebab vendor bisa mengirim resolusi/fps yang berbeda")
+
+
+class TestRincianBiayaTakSalahAlamat(unittest.TestCase):
+    """Rincian biaya per komponen HARAM salah alamat.
+
+    Terukur 23-Agu: model gambar yang ditagih per TOKEN (`gpt-image-1-mini`, 82 produksi) biayanya
+    masuk baris **naskah**, sebab token gambar tercatat di keranjang naskah. Totalnya benar; yang
+    salah adalah ALAMATNYA. Hari ini tak berdampak karena rincian itu belum dibaca layar mana pun —
+    tapi begitu ditampilkan, tenant melihat "Gambar: Rp 0" sambil membayar gambar di baris naskah.
+    Memperbaikinya SEKARANG lebih murah daripada menemukannya lagi lewat keluhan tenant.
+
+    Aturannya: baris rincian ditentukan oleh **JENIS MODEL yang skema tagihnya miliki**, bukan oleh
+    keranjang meter tempat pemakaiannya kebetulan tercatat."""
+
+    def test_biaya_gambar_bertagih_token_masuk_baris_GAMBAR(self):
+        h = _hitung({"llm": {"m-gambar": {"tokens_in": 1_000_000, "tokens_out": 1_000_000,
+                                          "calls": 3}}},
+                    {"m-gambar": {"in_per_1m": 1.0, "out_per_1m": 2.0}},
+                    {"m-gambar": "gambar_token"})
+        self.assertAlmostEqual(h["breakdown"]["image"], 3.0, places=6,
+                               msg=f"biaya gambar tidak masuk baris gambar: {h['breakdown']}")
+        self.assertAlmostEqual(h["breakdown"]["llm"], 0.0, places=6,
+                               msg=f"biaya gambar nyasar ke baris naskah: {h['breakdown']}")
+        self.assertAlmostEqual(h["usd"], 3.0, places=6, msg="total ikut berubah — haram")
+
+    def test_baris_naskah_tetap_naskah(self):
+        """Kebalikannya wajib utuh: model naskah tetap di baris naskah (nol regresi)."""
+        h = _hitung({"llm": {"m-naskah": {"tokens_in": 1_000_000, "tokens_out": 0, "calls": 1}}},
+                    {"m-naskah": {"in_per_1m": 3.0, "out_per_1m": 15.0}},
+                    {"m-naskah": "naskah_token"})
+        self.assertAlmostEqual(h["breakdown"]["llm"], 3.0, places=6,
+                               msg=f"biaya naskah nyasar: {h['breakdown']}")
+
+    def test_biaya_suara_bertagih_token_tetap_di_baris_SUARA(self):
+        h = _hitung({"tts_tokens": {"m-suara": {"tokens_in": 1_000_000, "tokens_out": 1_000_000}}},
+                    {"m-suara": {"in_per_1m": 0.5, "out_per_1m": 10.0}},
+                    {"m-suara": "suara_token"})
+        self.assertAlmostEqual(h["breakdown"]["tts"], 10.5, places=6,
+                               msg=f"biaya suara nyasar: {h['breakdown']}")

@@ -383,9 +383,10 @@ baris fal itu sendiri — jangan dibalik.
 **SISA — HANYA menunggu keputusan owner, bukan pekerjaan yang terlupa:**
 - **`selisih_akun`** — saran saya: **JANGAN dipasang** per-produksi (produksi serentak ⇒ dua produksi
   tenant yang sama saling mencuri biaya). Bila diinginkan, tempatnya rekonsiliasi tingkat tenant.
-- **Rincian biaya per komponen di layar tenant** — sudah dihitung & disimpan di setiap produksi tapi
-  NOL pembaca, dan kelas tampilannya sudah ada di kode layar tanpa dipakai. Menyambungkannya =
-  menambah elemen di layar tenant ⇒ ketokan. Sekalian: atribusi baris gambar untuk model ber-tagih token.
+- **Menampilkan rincian biaya per komponen di layar tenant** — angkanya sudah dihitung, disimpan di
+  setiap produksi, dan kini **beralamat benar** (perbaikan 23-Agu), tapi NOL layar membacanya —
+  padahal kelas tampilannya sudah ada di kode layar tanpa dipakai. Menyambungkannya = menambah elemen
+  di layar tenant ⇒ **ketokan owner**. Yang bisa dikerjakan tanpa ketokan sudah dikerjakan.
 - **Uji suara sepanjang produksi** — nol bukti kegagalan, dan berbiaya nyata tiap tekan.
 
 **Alat bukti yang WAJIB dipakai tiap langkah** (skrip ada di direktori kerja sesi; bila hilang, tulis
@@ -393,10 +394,10 @@ ulang — logikanya sederhana): hitung-ulang seluruh run riwayat sebelum-vs-sesu
 selisih tak terjelaskan → BERHENTI & lapor**) · sinkron dijalankan **KERING** dulu · alarm
 `tests/test_gerbang_rantai_biaya.py` (**G1–G14, 51 uji**) dibuktikan merah lalu hijau lalu
 **disabotase** — begitu juga `test_uji_model_sekelas_produksi.py` (F6) dan
-`test_rekonsiliasi_biaya_harian.py` (F8). Uji penuh saat ini: **1425 hijau**.
-**Tiga butir yang menunggu KEPUTUSAN owner** (bukan pekerjaan yang terlupa): `selisih_akun` ·
-rincian biaya per komponen di layar tenant (+ atribusi baris gambar) · uji suara sepanjang produksi.
-Rinciannya di §7f.
+`test_rekonsiliasi_biaya_harian.py` (F8). Uji penuh saat ini: **1428 hijau**.
+**Dua butir yang menunggu KEPUTUSAN owner** (bukan pekerjaan yang terlupa): menampilkan rincian biaya
+per komponen di layar tenant · uji suara sepanjang produksi. Plus satu SARAN: `selisih_akun` jangan
+dipasang. Rinciannya di §7f.
 
 ---
 
@@ -621,11 +622,16 @@ Begitu penyedia router ditambahkan, rekonsiliasi taksiran-vs-laporan-vendor menj
    membuatnya lebih dari sekadar fosil: kelas CSS `.cost-bar`/`.cost-legend`/`.cost-item` **sudah ada**
    di `runs/[id]/run-detail.css` dan juga **tak dipakai siapa pun** — jadi layarnya pernah dirancang
    lalu tak pernah disambungkan. Menyambungkannya = menambah elemen di layar tenant ⇒ **ketokan owner**.
-2. **Model gambar ber-tagih TOKEN masuk baris "naskah", bukan "gambar"** (82 produksi,
-   `gpt-image-1-mini`). Totalnya BENAR, tapi rinciannya salah alamat. Tak berdampak hari ini justru
-   karena butir 1 (nol pembaca) — tapi begitu rincian itu ditampilkan, tenant akan melihat
-   "Gambar: Rp 0" sambil membayar gambar di baris naskah. **Tidak saya ubah**: perilaku itu tertulis
-   sebagai rancangan di `ai_cost`, dan mengubahnya sekarang = menebak apa yang mau ditampilkan.
+2. **Model gambar ber-tagih TOKEN masuk baris "naskah", bukan "gambar"** — **SUDAH DIPERBAIKI
+   23-Agu.** Baris rincian kini ditentukan **jenis model yang skema tagihnya miliki**, bukan
+   keranjang meter tempat pemakaiannya kebetulan tercatat (jenis tak pernah ambigu, keranjang bisa).
+   Terukur pada hitung-ulang 246 produksi: **total TIDAK bergeser** (tetap 19 selisih dari sebab yang
+   sama & sudah bernama), sementara **101 dari 246 produksi** rinciannya salah alamat — biaya gambar
+   tersembunyi di baris naskah, dan baris gambar terbaca **Rp 0**. Riwayat tersimpan **tidak** ditulis
+   ulang; yang benar berlaku mulai produksi berikutnya. Ini bukan lagi keputusan owner: nol layar
+   tersentuh, nol angka total berubah, dan alamat yang salah tak punya pembelaan.
+   Penjaganya: `test_biaya_megapiksel_dan_token_video.py::TestRincianBiayaTakSalahAlamat`
+   (dibuktikan MERAH dulu; dijaga dua arah — naskah tetap naskah, suara tetap suara).
 
 **CATATAN PELAKSANAAN F4b (23-Agu).** Empat baris fal ditagih dengan cara yang **tak bisa diwakili
 satu angka tetap**: gambar per **megapiksel dibulatkan KE ATAS**, video seedance per **token**
@@ -706,8 +712,8 @@ berjadwal terhadapnya.
 
 **RANTAI HARGA & BIAYA — DITUTUP 23-Agu.** F1–F7 + F4b tuntas; F8 sebagian (ground truth dari luar
 belum tersedia — alasannya di §7f). Sisa yang menunggu **KEPUTUSAN owner**, bukan pekerjaan yang
-terlupa: `selisih_akun` (saran: jangan dipasang per-produksi) · menampilkan rincian biaya per komponen
-di layar tenant + atribusi baris gambar untuk model ber-tagih token · uji suara sepanjang produksi.
+terlupa: menampilkan rincian biaya per komponen di layar tenant · uji suara sepanjang produksi. Plus
+satu SARAN: `selisih_akun` jangan dipasang per-produksi (produksi serentak).
 
 **FOCUS (FinOps Open Cost and Usage Specification) — diperiksa 23-Agu, TIDAK diadopsi sebagai format.**
 Sebabnya terverifikasi: FOCUS menormalkan **ekspor tagihan dari penyedia**, dan kita tak pernah

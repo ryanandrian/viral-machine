@@ -407,9 +407,15 @@ def compute_cost_usd(ai_usage: dict, sb=None) -> dict | None:
             nilai = _biaya_skema(skema, harga, pemakaian)
             if nilai is None:
                 continue
-            keranjang_skema = next(s.keranjang for s in SATUAN_HARGA
-                                   if s.skema == skema and s.keranjang in pemakaian)
-            br[KERANJANG_BIAYA[keranjang_skema]] += nilai
+            # Baris rincian = JENIS MODEL yang skema tagih ini miliki, BUKAN keranjang meter tempat
+            # pemakaiannya kebetulan tercatat. [23-Agu] Sebelumnya memakai keranjang, dan itu membuat
+            # model gambar ber-tagih TOKEN (`gpt-image-1-mini`, 82 produksi) biayanya masuk baris
+            # NASKAH — totalnya benar, alamatnya salah. Selama rincian ini belum ditampilkan ia tak
+            # berdampak; begitu ditampilkan, tenant melihat "Gambar: Rp 0" sambil membayar gambar di
+            # baris naskah. Jenis model tak pernah ambigu, keranjang bisa.
+            jenis_skema = next(s.jenis for s in SATUAN_HARGA
+                               if s.skema == skema and s.keranjang in pemakaian)
+            br[jenis_skema] += nilai
             synced = synced or harga.get("synced_at")
             tertagih = True
             break            # ← satu model satu tagihan
