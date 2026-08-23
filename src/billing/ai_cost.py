@@ -192,6 +192,14 @@ def kunci_token_naskah() -> tuple:
     return masuk, keluar
 
 
+def kunci_tunggal_formula(kunci_formula: str) -> str | None:
+    """Kunci tarif SATU-SATUNYA milik sebuah formula, atau None bila formula itu memakai lebih dari
+    satu tarif (mis. token masuk + keluar). Dipakai sinkron harga supaya ia tak perlu MENGETIK nama
+    satuan — kosakata satuan hanya hidup di berkas ini (dijaga G1)."""
+    sat = [s for s in SATUAN_HARGA if s.skema == kunci_formula]
+    return sat[0].kunci if len(sat) == 1 else None
+
+
 def semua_kunci_harga() -> tuple:
     """Semua kunci harga yang dikenal mesin — dipakai penjaga lonjakan harga & validasi pintu admin."""
     return tuple(dict.fromkeys([s.kunci for s in SATUAN_HARGA]

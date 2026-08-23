@@ -56,11 +56,14 @@ def _url_cadangan() -> str:
 # DATA, bukan cabang if: satuan baru = satu baris di sini. Satuan yang belum ada formulanya sengaja
 # TIDAK dipetakan — tarifnya lebih baik tak ditulis daripada ditulis tapi mustahil dihitung
 # (baris akan tampak berharga padahal biayanya nol — kelas cacat 23-Agu).
-SATUAN_VENDOR: dict[str, tuple[str, str, float]] = {
-    # satuan vendor      → (formula,            kunci tarif,        pengali)
-    "requests":            ("naskah_panggilan",  "per_request_usd",  1.0),
-    "1000 characters":     ("suara_huruf",       "per_1m_chars",     1000.0),
-    "seconds":             ("video_detik",       "per_second_usd",   1.0),
+# Kunci tarifnya TIDAK diketik di sini — diturunkan dari formulanya (`kunci_tunggal_formula`),
+# supaya kosakata satuan tetap hidup di SATU berkas saja (dijaga G1; penjaga itu menangkap versi
+# pertama peta ini yang mengetik nama kuncinya).
+SATUAN_VENDOR: dict[str, tuple[str, float]] = {
+    # satuan yang vendor sebutkan → (formula kita,      pengali jumlah)
+    "requests":                     ("naskah_panggilan", 1.0),
+    "1000 characters":              ("suara_huruf",      1000.0),
+    "seconds":                      ("video_detik",      1.0),
     # BELUM dipetakan (formulanya belum punya pencatat pemakaian — F4b):
     #   "megapixels" → gambar_megapiksel · "1m tokens" → video_token
 }
@@ -351,16 +354,24 @@ def sync_prices(sb=None, force: bool = False, only_model_key: str | None = None)
                 _vendor_terakhir[0] = _time.time()
                 if hv:
                     satuan, tarif = hv
+                    kunci_tarif = None
                     peta = SATUAN_VENDOR.get(satuan)
                     if not peta:
                         logger.info(f"[price_sync] {m['model_key']}: satuan vendor '{satuan}' belum "
                                     f"punya formula — tarif TIDAK ditulis (lebih baik kosong daripada "
                                     f"tertulis tapi mustahil dihitung)")
                     else:
-                        formula, kunci_tarif, kali = peta
+                        formula, kali = peta
                         # Satuan 'seconds' dipakai video DAN suara — formulanya ikut jenis barisnya.
                         if satuan == "seconds" and m.get("component") == "tts":
                             formula = "suara_detik"
+                        from src.billing.ai_cost import kunci_tunggal_formula
+                        kunci_tarif = kunci_tunggal_formula(formula)
+                        if not kunci_tarif:
+                            logger.warning(f"[price_sync] formula '{formula}' memakai lebih dari satu "
+                                           f"tarif — tak bisa diisi dari satu angka vendor; dilewati")
+                            kunci_tarif = None
+                    if kunci_tarif:
                         pricing = {kunci_tarif: round(tarif * kali, 6),
                                    "source": f"{pk_}_api", "synced_at": now,
                                    "note": f"tarif resmi {pk_}: {tarif} per {satuan} (cek {now[:10]})"}

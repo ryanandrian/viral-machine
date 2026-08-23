@@ -559,11 +559,16 @@ class G12_SumberResmiPenyedia(unittest.TestCase):
         from src.billing.price_sync import SATUAN_VENDOR
         from src.billing.ai_cost import FORMULA
         self.assertTrue(SATUAN_VENDOR, "peta satuan vendor kosong")
+        from src.billing.ai_cost import kunci_tunggal_formula
         kunci_formula = {f.kunci for f in FORMULA}
-        for satuan, (formula, kunci_tarif, kali) in SATUAN_VENDOR.items():
+        for satuan, (formula, kali) in SATUAN_VENDOR.items():
             with self.subTest(satuan):
                 self.assertIn(formula, kunci_formula, f"satuan '{satuan}' menunjuk formula tak dikenal")
                 self.assertGreater(kali, 0, "pengali tak sah")
+                # Kunci tarifnya WAJIB bisa diturunkan dari formulanya — kalau tidak, sinkron akan
+                # terpaksa mengetik nama satuan (kosakata tersebar; itu akar cacat 23-Agu).
+                self.assertIsNotNone(kunci_tunggal_formula(formula),
+                                     f"formula '{formula}' tak punya kunci tarif tunggal")
 
     def test_satuan_tanpa_formula_tidak_ditulis(self):
         """Satuan yang belum punya formula (megapixels, 1m tokens) HARAM dipetakan diam-diam."""
