@@ -536,3 +536,89 @@ class G11_SumberTarifDiaturAdminDanPagarAgregator(unittest.TestCase):
         isi = _tanpa_komentar("src/billing/price_sync.py", _isi("src/billing/price_sync.py"))
         self.assertRegex(isi, r'component"\) == "llm" and not agr',
                          "sumber cadangan masih dipakai baris agregator → tarif vendor lain masuk")
+
+
+class G12_SumberResmiPenyedia(unittest.TestCase):
+    """F4 — penyedia boleh punya API harga resminya sendiri, dan itu DATA.
+
+    Terbukti 23-Agu: fal menerbitkan tarif + SATUAN TAGIHNYA lewat API resmi. Itu satu-satunya sumber
+    yang berwenang untuk baris agregator (pagar F3). Yang dijaga di sini:
+      (a) peta satuan-vendor → formula adalah DATA (satuan baru = satu baris, bukan cabang if)
+      (b) satuan yang belum punya formula TIDAK ditulis — lebih baik kosong daripada tertulis tapi
+          mustahil dihitung (baris akan tampak berharga padahal biayanya nol)
+      (c) alamat HARGA boleh beda dari penanda model (agregator satu-pintu: fal any-llm)
+      (d) tarif & FORMULA ditulis BERSAMA — kalau tidak, bentuk harga berubah sementara formula lama
+          tetap, dan biayanya jadi "tak terhitung" (jebakan Kling: basis-per-klip → per-detik)
+      (e) ada JEDA antar panggilan API penyedia (fal menolak panggilan berdempet: HTTP 429)
+      (f) kunci platform HANYA untuk endpoint harga — haram dipakai menjalankan model
+    """
+
+    KODE = "src/billing/price_sync.py"
+
+    def test_peta_satuan_vendor_adalah_data(self):
+        from src.billing.price_sync import SATUAN_VENDOR
+        from src.billing.ai_cost import FORMULA
+        self.assertTrue(SATUAN_VENDOR, "peta satuan vendor kosong")
+        kunci_formula = {f.kunci for f in FORMULA}
+        for satuan, (formula, kunci_tarif, kali) in SATUAN_VENDOR.items():
+            with self.subTest(satuan):
+                self.assertIn(formula, kunci_formula, f"satuan '{satuan}' menunjuk formula tak dikenal")
+                self.assertGreater(kali, 0, "pengali tak sah")
+
+    def test_satuan_tanpa_formula_tidak_ditulis(self):
+        """Satuan yang belum punya formula (megapixels, 1m tokens) HARAM dipetakan diam-diam."""
+        from src.billing.price_sync import SATUAN_VENDOR
+        from src.billing.ai_cost import FORMULA_BELUM_DIDUKUNG, FORMULA
+        for satuan in ("megapixels", "1m tokens"):
+            with self.subTest(satuan):
+                peta = SATUAN_VENDOR.get(satuan)
+                if peta is None:
+                    continue          # tak dipetakan = sikap yang benar hari ini
+                self.assertNotIn(peta[0], FORMULA_BELUM_DIDUKUNG,
+                                 f"satuan '{satuan}' dipetakan ke formula yang belum bisa dihitung")
+        # dan formula yang belum didukung wajib tetap dikenal katalog (bukan nama karangan)
+        self.assertTrue(FORMULA_BELUM_DIDUKUNG <= {f.kunci for f in FORMULA})
+
+    def test_alamat_harga_boleh_beda_dari_penanda_model(self):
+        isi = _tanpa_komentar(self.KODE, _isi(self.KODE))
+        self.assertIn("price_endpoint_id", isi,
+                      "alamat harga tak bisa berbeda dari model_id → agregator satu-pintu (fal "
+                      "any-llm) selalu 404 dan tarifnya tak pernah terbaca")
+
+    def test_tarif_dan_formula_ditulis_bersama(self):
+        isi = _tanpa_komentar(self.KODE, _isi(self.KODE))
+        self.assertRegex(isi, r'patch\["pricing_model"\]\s*=\s*formula_baru',
+                         "formula tak ikut ditulis bersama tarif → bentuk harga berubah tapi formula "
+                         "lama tetap, biayanya jadi 'tak terhitung' (jebakan Kling)")
+
+    def test_sumber_resmi_dicoba_sebelum_umpan_umum(self):
+        """Umpan umum tak berwenang untuk baris agregator; sumber resmi harus menang."""
+        isi = _tanpa_komentar(self.KODE, _isi(self.KODE))
+        i_api = isi.index("_harga_vendor(url_api")
+        i_umpan = isi.index("_feed_entry(feed,")
+        self.assertLess(i_api, i_umpan, "umpan umum dicoba lebih dulu daripada sumber resmi penyedia")
+        self.assertRegex(isi, r"if e and pricing is None:",
+                         "umpan umum bisa MENIMPA hasil sumber resmi penyedia")
+
+    def test_ada_jeda_antar_panggilan_api_penyedia(self):
+        from src.billing import price_sync
+        self.assertGreater(price_sync.VENDOR_API_DELAY, 0,
+                           "tak ada jeda → fal menolak panggilan berdempet (429) dan baris terlewat")
+        isi = _tanpa_komentar(self.KODE, _isi(self.KODE))
+        self.assertRegex(isi, r"sleep\(max\(0\.0, VENDOR_API_DELAY",
+                         "jeda didefinisikan tapi tak dipakai (kode mati)")
+
+    def test_kunci_platform_hanya_untuk_harga(self):
+        """Kunci Test Lab owner HARAM dipakai menjalankan model (itu membakar kreditnya)."""
+        akar = AKAR
+        pemakai = []
+        for dp, _, fs in os.walk(os.path.join(akar, "src")):
+            if "__pycache__" in dp:
+                continue
+            for f in fs:
+                if not f.endswith(".py"):
+                    continue
+                rel = os.path.relpath(os.path.join(dp, f), akar)
+                if "_kunci_platform" in _isi(rel) and rel != self.KODE:
+                    pemakai.append(rel)
+        self.assertEqual(pemakai, [], f"kunci platform dipakai di luar jalur harga: {pemakai}")

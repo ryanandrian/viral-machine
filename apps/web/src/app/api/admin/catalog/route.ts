@@ -19,7 +19,9 @@ const CATALOG: Record<string, { pk: string; cols: string[] }> = {
   // pricing_model (migr 0210) = NAMA FORMULA harga: menentukan CARA mesin menghitung biaya, bukan
   // cuma satuannya. Nilai sahnya dari cermin `pricing_model:<jenis>` (registry kode ai_cost.FORMULA).
   ai_models: { pk: "model_key", cols: ["provider_key", "component", "model_id", "display_name", "quality_tier", "is_active", "sort_order", "cost_hint", "default_params", "pricing", "pricing_locked", "pricing_pending", "pricing_model"] },
-  ai_providers: { pk: "provider_key", cols: ["display_name", "adapter", "base_url", "auth_type", "key_group", "is_active", "request_param_schema", "price_feed_prefix", "free_tier_note"] },
+  // price_api_url (migr 0212) = API harga RESMI milik penyedia; ia yang berwenang untuk baris
+  // agregator (umpan umum menawarkan tarif vendor di belakangnya — bukan tarif agregatornya).
+  ai_providers: { pk: "provider_key", cols: ["display_name", "adapter", "base_url", "auth_type", "key_group", "is_active", "request_param_schema", "price_feed_prefix", "price_api_url", "free_tier_note"] },
   content_languages: { pk: "locale", cols: ["display_name", "quality_tier", "caption_font", "is_active", "sort_order", "tts_providers_supported"] },
   // vendor_voice_id = identitas suara di sisi VENDOR (migr 0181). Kosong = sama dgn voice_key.
   // Dipakai penyedia AGREGATOR (fal menyajikan model ElevenLabs yang sama) — voice_key tetap kunci

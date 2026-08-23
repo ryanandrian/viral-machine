@@ -346,7 +346,7 @@ harga internet sebagai kebenaran. Empat kebenaran yang riset 23-Agu tetapkan:
 | **F1** | Katalog formula (**15**) + formula di 47 baris model + panel menjelaskannya | ✅ **SELESAI 23-Agu** (migr `0210`; 47/47 terisi; penghitung BELUM membacanya = nol perubahan biaya) |
 | **F2** | Penghitung biaya memakai formula (ganti logika urutan-prioritas) | ✅ **SELESAI 23-Agu** — 246 run dihitung ulang: **246 IDENTIK, 0 berbeda** |
 | **F3** | Sumber tarif diatur dari panel + 3 pagar (ambigu ditolak · agregator · terkunci) | ✅ **SELESAI 23-Agu** (migr `0211`; sinkron kering: **2 baris bergerak**, 13 tanpa-sumber dipertahankan) |
-| **F4** | Sumber API resmi fal → 11 dari 12 model fal otomatis | ⬜ |
+| **F4** | Sumber API resmi penyedia (migr `0212`/`0213`) → **7 dari 12** model fal otomatis; 4 menunggu **F4b**, veo dikunci manual | ✅ **SELESAI 23-Agu** |
 | **F5** | Formula "biaya dilaporkan vendor" + "selisih penghitung akun" disambungkan | ⬜ |
 | **F6** | **Tombol Uji memakai perintah selengkap produksi** (temuan terbesar 23-Agu) | ⬜ |
 | **F7** | Pulihkan 4 baris rusak (3 naskah fal → $0,001/panggilan · `eleven_v3` → $100) + syarat Cloudflare | ⬜ |
@@ -404,6 +404,34 @@ tarif vendor asal dan menghapus `per_request_usd` — mengunci perilaku yang sal
 dan suara Gemini **masih** $2,5 (resminya $10) — sinkron kini menolak menimpanya, tapi nilai lamanya
 belum dibetulkan. **F7 yang membetulkannya** + mengunci. Sampai itu, biaya suara 4 channel Gemini
 **masih dilaporkan ±4× lebih murah** dari kenyataan. Penjaga `G11` (5 uji) + 5 sabotase tertangkap.
+
+**CATATAN PELAKSANAAN F4 (23-Agu).** Penyedia kini boleh punya **API harga resminya sendiri** sebagai
+DATA (`ai_providers.price_api_url`, migr `0212`; tampil + berarahan di panel Providers). Ia dicoba
+**lebih dulu** daripada umpan umum dan **tak boleh ditimpa** olehnya — sebab hanya agregator yang tahu
+tarifnya sendiri. Satuan tagih yang vendor sebutkan dipetakan ke formula kita lewat **data**
+(`SATUAN_VENDOR`): `requests`→per-panggilan · `1000 characters`→per-huruf · `seconds`→per-detik.
+Tarif **dan FORMULA ditulis bersama** — tanpa itu bentuk harga berubah sementara formula lama tetap,
+dan biayanya jadi "tak terhitung" (jebakan Kling: basis-per-klip → per-detik). **Alamat harga boleh
+beda dari penanda model** (`default_params.price_endpoint_id`, migr `0213`): agregator satu-pintu
+memakai nama model sebagai PARAMETER, bukan alamat — tanpa ini 3 baris naskah fal selalu HTTP 404.
+**Jeda antar panggilan** `AI_PRICE_VENDOR_DELAY_SEC` (bawaan 8 dtk): fal menolak panggilan berdempet
+(429 sesudah ±7). Kunci pemanggil = kunci **platform** dari vault (bukan tenant), **hanya** untuk
+endpoint harga — nol model dijalankan, nol kredit (seluruh riset harga fal 23-Agu = $0).
+
+**HASIL SINKRON NYATA (dijalankan 23-Agu):** 35 baris tersinkron · **1 ditahan penjaga lonjakan**
+(`gemini-2.5-flash-image` token $2,5→$30 = 12× → menunggu persetujuan admin di panel; tak berdampak
+biaya karena formulanya per-gambar) · **5 tanpa-sumber** (flux ×2 `megapixels` + seedance ×2
+`1m tokens` → **F4b**; suara Gemini → satuan ambigu, **F7**).
+**Yang jadi otomatis & BENAR:** 3 naskah fal **$0,001 per PERMINTAAN** (sebelumnya tarif per-token
+vendor asal — inilah cacat yang F7 tak perlu lagi tangani) · 2 suara fal-ElevenLabs ($50/$100 per 1jt
+huruf) · hailuo $0,045/dtk · kling **pindah dari basis-per-klip ke $0,07/detik** (angkanya identik,
+sudah dibuktikan aritmetika). **veo-3.1-fast DIKUNCI manual** ($0,10/dtk tanpa audio) — API fal hanya
+menyebut angka **beraudio** $0,15, jadi sinkron otomatis akan 50% terlalu mahal.
+
+**AMBANG:** 246 run dihitung ulang → **245 identik, 1 berbeda dan TERJELASKAN**: run #466 memakai
+`google/gemini-2.5-flash` **lewat fal**, 5 panggilan → 5 × $0,001 = **$0,005** (sebelumnya $0,0095
+memakai tarif per-token Google). Dibuktikan hitungan tangan; channelnya nonaktif. Penjaga `G12`
+(7 uji) + 5 sabotase tertangkap.
 
 **ATURAN MENGIKAT tiap langkah** *(dilanggar = pengerusakan; sudah terjadi 21-Agu)*:
 - **Satu langkah sekali jalan**, berhenti, lapor angkanya, baru langkah berikutnya.

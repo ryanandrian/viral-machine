@@ -52,6 +52,62 @@ def _url_cadangan() -> str:
         return FALLBACK_URL
 
 
+# Satuan yang DISEBUT sumber harga vendor → (formula kita, kunci tarif, pengali jumlah).
+# DATA, bukan cabang if: satuan baru = satu baris di sini. Satuan yang belum ada formulanya sengaja
+# TIDAK dipetakan — tarifnya lebih baik tak ditulis daripada ditulis tapi mustahil dihitung
+# (baris akan tampak berharga padahal biayanya nol — kelas cacat 23-Agu).
+SATUAN_VENDOR: dict[str, tuple[str, str, float]] = {
+    # satuan vendor      → (formula,            kunci tarif,        pengali)
+    "requests":            ("naskah_panggilan",  "per_request_usd",  1.0),
+    "1000 characters":     ("suara_huruf",       "per_1m_chars",     1000.0),
+    "seconds":             ("video_detik",       "per_second_usd",   1.0),
+    # BELUM dipetakan (formulanya belum punya pencatat pemakaian — F4b):
+    #   "megapixels" → gambar_megapiksel · "1m tokens" → video_token
+}
+
+
+def _harga_vendor(url_pola: str, model_id: str, kunci_api: str) -> tuple[str, float] | None:
+    """Tanya tarif resmi ke API harga milik PENYEDIA (mis. fal). Return (satuan, tarif) atau None.
+
+    [F4, 23-Agu] Satu-satunya sumber yang berwenang untuk baris agregator (pagar F3 menolak tarif
+    vendor lain). Terverifikasi pada API fal: balasan memuat `prices[].unit_price` + `.unit`.
+    BATAS JUJUR: tarif utama ini TIDAK menghitung parameter yang KITA pilih (fal menyebut
+    $0,15/detik untuk veo = BERAUDIO, sedangkan kita mematikan audio → $0,10). Baris yang tarifnya
+    tergantung parameter WAJIB dikunci manual — lihat migr 0212."""
+    try:
+        r = requests.get(url_pola.replace("{model_id}", model_id),
+                         headers={"Authorization": f"Key {kunci_api}"}, timeout=25)
+        if r.status_code != 200:
+            logger.info(f"[price_sync] harga vendor {model_id}: HTTP {r.status_code}")
+            return None
+        harga = ((r.json() or {}).get("prices") or [{}])[0]
+        satuan, tarif = harga.get("unit"), harga.get("unit_price")
+        if not satuan or tarif is None:
+            return None
+        return str(satuan), float(tarif)
+    except Exception as e:
+        logger.warning(f"[price_sync] harga vendor {model_id} gagal: {e}")
+        return None
+
+
+def _kunci_platform(sb, key_group: str) -> str:
+    """Kunci API MILIK PLATFORM (bukan tenant) untuk memanggil API harga penyedia. Kosong = lewati.
+
+    Hanya dipakai untuk endpoint HARGA — nol model dijalankan, nol kredit terpakai (dibuktikan
+    23-Agu: seluruh riset harga fal menghabiskan $0). HARAM dipakai untuk memanggil model."""
+    try:
+        r = (sb.table("tenant_ai_accounts").select("key_enc")
+             .eq("tenant_id", "admin_test_internal").eq("key_group", key_group)
+             .eq("status", "valid").limit(1).execute())
+        if not r.data:
+            return ""
+        from src.utils.crypto import decrypt
+        return decrypt(r.data[0]["key_enc"]) or ""
+    except Exception as e:
+        logger.warning(f"[price_sync] ambil kunci platform '{key_group}' gagal: {e}")
+        return ""
+
+
 def _agregator(provider_key: str) -> bool:
     """Apakah penyedia ini AGREGATOR (menyajikan model vendor lain di bawah namanya sendiri)?
 
@@ -72,6 +128,10 @@ SANITY_FACTOR = float(os.getenv("AI_PRICE_SANITY_FACTOR", "3"))
 STALE_DAYS = float(os.getenv("AI_PRICE_STALE_DAYS", "7"))
 # Jendela bukti untuk laporan "gagal dihitung" (hari). Knob infra (pola STALE_DAYS).
 UNPRICED_WINDOW_DAYS = float(os.getenv("AI_UNPRICED_WINDOW_DAYS", "3"))
+# Jeda antar panggilan ke API harga PENYEDIA. fal membatasi jumlah panggilan (terbukti 23-Agu:
+# HTTP 429 sesudah ±7 panggilan berdempet; jeda 12 dtk aman). Sinkron jalan 1x/hari, jadi
+# 12 baris × jeda ini = ±1,5 menit sekali sehari — murah dibanding baris yang terlewat.
+VENDOR_API_DELAY = float(os.getenv("AI_PRICE_VENDOR_DELAY_SEC", "8"))
 
 
 FX_URL = os.getenv("FX_RATE_URL", "https://open.er-api.com/v6/latest/USD")  # kurs pasar publik, tanpa key
@@ -233,16 +293,19 @@ def sync_prices(sb=None, force: bool = False, only_model_key: str | None = None)
         if last and (_time.time() - last) < SYNC_INTERVAL_HOURS * 3600:
             return {"skipped": True}
 
-    rows = sb.table("ai_models").select("model_key, model_id, component, provider_key, pricing, pricing_locked, pricing_pending").execute().data or []
+    rows = sb.table("ai_models").select("model_key, model_id, component, provider_key, pricing, pricing_locked, pricing_pending, default_params").execute().data or []
     if only_model_key:
         rows = [r for r in rows if r.get("model_key") == only_model_key]
     # Prefix feed per-provider = DATA (ai_providers.price_feed_prefix, fallback provider_key).
     try:
-        _provs = sb.table("ai_providers").select("provider_key, price_feed_prefix").execute().data or []
+        _provs = sb.table("ai_providers").select("provider_key, price_feed_prefix, price_api_url, key_group").execute().data or []
         prefix_map = {r["provider_key"]: (r.get("price_feed_prefix") or r["provider_key"]) for r in _provs}
+        # [F4] Sumber harga RESMI milik penyedia (migr 0212) + grup kunci untuk memanggilnya.
+        api_map = {r["provider_key"]: (r.get("price_api_url") or "") for r in _provs}
+        grup_map = {r["provider_key"]: (r.get("key_group") or r["provider_key"]) for r in _provs}
     except Exception as e:
         logger.warning(f"[price_sync] baca price_feed_prefix gagal ({e}) — pakai fallback legacy")
-        prefix_map = {}
+        prefix_map, api_map, grup_map = {}, {}, {}
 
     feed = None
     try:
@@ -253,6 +316,9 @@ def sync_prices(sb=None, force: bool = False, only_model_key: str | None = None)
     orm = None   # lazy: fallback OpenRouter di-fetch hanya bila dibutuhkan
     now = datetime.now(timezone.utc).isoformat()
     updated, held, missing = 0, [], []
+    kunci_cache: dict = {}      # kunci platform per penyedia (ambil sekali)
+    _vendor_terakhir = [0.0]    # penanda waktu panggilan API penyedia terakhir (untuk jeda)
+    formula_baru: dict = {}     # model_key → formula yang ditetapkan sumber resmi penyedia
 
     for m in rows:
         if m.get("pricing_locked"):
@@ -263,10 +329,46 @@ def sync_prices(sb=None, force: bool = False, only_model_key: str | None = None)
         # nama model vendor ("anthropic/claude-haiku-4.5"), dan kunci itu ADA di umpan dengan tarif
         # ANTHROPIC. Menerimanya = memakai tarif vendor lain untuk penyedia yang menagih sendiri.
         agr = _agregator(m.get("provider_key") or "")
+        pk_ = m.get("provider_key") or ""
+
+        # [F4] SUMBER RESMI PENYEDIA lebih dulu — ia satu-satunya yang berwenang untuk baris
+        # agregator, dan ia menyebut SATUAN TAGIHNYA sendiri sehingga formula kita bisa ikut disetel.
+        url_api = api_map.get(pk_) or ""
+        if url_api:
+            kunci_api = kunci_cache.get(pk_)
+            if kunci_api is None:
+                kunci_api = _kunci_platform(sb, grup_map.get(pk_) or pk_)
+                kunci_cache[pk_] = kunci_api
+            if kunci_api:
+                # Alamat HARGA bisa beda dari penanda model — agregator satu-pintu (fal any-llm)
+                # memakai nama model sebagai PARAMETER, bukan alamat. Keterangannya = DATA
+                # (`default_params.price_endpoint_id`, migr 0213), bukan nama penyedia di kode.
+                alamat_harga = ((m.get("default_params") or {}).get("price_endpoint_id")
+                                or m.get("model_id") or m["model_key"])
+                if _vendor_terakhir[0]:
+                    _time.sleep(max(0.0, VENDOR_API_DELAY - (_time.time() - _vendor_terakhir[0])))
+                hv = _harga_vendor(url_api, alamat_harga, kunci_api)
+                _vendor_terakhir[0] = _time.time()
+                if hv:
+                    satuan, tarif = hv
+                    peta = SATUAN_VENDOR.get(satuan)
+                    if not peta:
+                        logger.info(f"[price_sync] {m['model_key']}: satuan vendor '{satuan}' belum "
+                                    f"punya formula — tarif TIDAK ditulis (lebih baik kosong daripada "
+                                    f"tertulis tapi mustahil dihitung)")
+                    else:
+                        formula, kunci_tarif, kali = peta
+                        # Satuan 'seconds' dipakai video DAN suara — formulanya ikut jenis barisnya.
+                        if satuan == "seconds" and m.get("component") == "tts":
+                            formula = "suara_detik"
+                        pricing = {kunci_tarif: round(tarif * kali, 6),
+                                   "source": f"{pk_}_api", "synced_at": now,
+                                   "note": f"tarif resmi {pk_}: {tarif} per {satuan} (cek {now[:10]})"}
+                        formula_baru[m["model_key"]] = formula
         e = _feed_entry(feed, m.get("model_id") or m["model_key"],
                         provider_prefix=prefix_map.get(m.get("provider_key") or ""),
                         wajib_prefix=agr) if feed else None
-        if e:
+        if e and pricing is None:
             pricing = _to_pricing(e, now, component=m.get("component"))
             if all(v is None for k, v in pricing.items() if k not in ("source", "synced_at")):
                 pricing = None
@@ -292,7 +394,13 @@ def sync_prices(sb=None, force: bool = False, only_model_key: str | None = None)
             sb.table("ai_models").update({"pricing_pending": {**pricing, "reason": reason}}).eq("model_key", m["model_key"]).execute()
             held.append(f"{m['model_key']} ({reason})")
             continue
-        sb.table("ai_models").update({"pricing": pricing, "pricing_pending": None}).eq("model_key", m["model_key"]).execute()
+        patch = {"pricing": pricing, "pricing_pending": None}
+        # Sumber resmi penyedia menyebut SATUAN tagihnya → formulanya ikut disetel. Tanpa ini,
+        # bentuk harga berubah tapi formula lama tetap → biaya jadi "tak terhitung" (mis. Kling
+        # pindah dari basis-per-klip ke per-detik).
+        if m["model_key"] in formula_baru:
+            patch["pricing_model"] = formula_baru[m["model_key"]]
+        sb.table("ai_models").update(patch).eq("model_key", m["model_key"]).execute()
         updated += 1
 
     if (feed is not None or updated) and not only_model_key:
