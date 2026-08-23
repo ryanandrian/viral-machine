@@ -484,3 +484,55 @@ class G10_PenghitungMemakaiFormulaYangDINYATAKAN(unittest.TestCase):
             h = ai_cost.compute_cost_usd(self.PAKAI_DUA)
         self.assertGreater(h["usd"], 0, "gangguan baca peta formula membuat biaya NOL — itu senyap & salah")
         self.assertEqual(h["unpriced"], [], "gangguan kami dilaporkan seolah celah data")
+
+
+class G11_SumberTarifDiaturAdminDanPagarAgregator(unittest.TestCase):
+    """F3 — sumber tarif jadi DATA yang diatur admin, dan tiga pagar ditegakkan.
+
+    Owner 23-Agu: *"table pricing diisi secara otomatis sinkronisasi (url sinkronisasi sebaiknya bisa
+    dikonfigurasi lewat admin panel)"*. Dan riset hari yang sama membuktikan sumber umum BUKAN
+    otoritas untuk semua model — jadi sumbernya harus bisa diganti tanpa deploy, sementara tiga
+    pagar mencegah sumber menulis yang bukan haknya."""
+
+    def test_url_umpan_dibaca_dari_kenop_admin(self):
+        from unittest.mock import patch
+        from src.billing import price_sync
+        with patch("src.config.app_config.get_text", return_value="https://contoh.uji/harga.json"):
+            self.assertEqual(price_sync._url_umpan(), "https://contoh.uji/harga.json",
+                             "URL umpan tak dibaca dari kenop admin → mengganti sumber butuh deploy")
+
+    def test_kenop_kosong_jatuh_ke_bawaan(self):
+        """Gagal-aman: kenop kosong TIDAK boleh mematikan sinkron."""
+        from unittest.mock import patch
+        from src.billing import price_sync
+        with patch("src.config.app_config.get_text", return_value=""):
+            self.assertTrue(price_sync._url_umpan().startswith("http"),
+                            "kenop kosong membuat URL kosong → sinkron mati total")
+
+    def test_penanda_agregator_dari_registry_yang_SUDAH_ADA(self):
+        """Nol penanda baru: jalur harga membaca penanda yang dipakai jalur galat."""
+        from src.billing.price_sync import _agregator
+        from src.providers.galat_registry import PENYEDIA
+        agr = [k for k, v in PENYEDIA.items() if isinstance(v, dict) and v.get("agregator")]
+        self.assertTrue(agr, "registry galat tak lagi menandai satu pun agregator")
+        for k in agr:
+            self.assertTrue(_agregator(k), f"jalur harga tak mengenali agregator '{k}'")
+        self.assertFalse(_agregator("openai"), "penyedia langsung salah dikira agregator")
+
+    def test_baris_agregator_menolak_kunci_persis_umpan(self):
+        """Id model agregator sering berupa nama model VENDOR ('anthropic/claude-haiku-4.5') dan
+        kunci itu ADA di umpan dengan tarif ANTHROPIC. Kunci-persis pun harus ditolak."""
+        from src.billing.price_sync import _feed_entry
+        umpan = {"anthropic/claude-haiku-4.5": {"input_cost_per_token": 1e-06},
+                 "fal/anthropic/claude-haiku-4.5": {"input_cost_per_token": 9e-06}}
+        biasa = _feed_entry(umpan, "anthropic/claude-haiku-4.5", provider_prefix="fal")
+        self.assertIsNotNone(biasa, "penyedia biasa kehilangan kunci-persis — perbaikan jadi merusak")
+        agr = _feed_entry(umpan, "anthropic/claude-haiku-4.5", provider_prefix="fal", wajib_prefix=True)
+        self.assertEqual(agr, umpan["fal/anthropic/claude-haiku-4.5"],
+                         "baris agregator memakai tarif vendor lain (kunci-persis lolos pagar)")
+
+    def test_sumber_cadangan_tak_dipakai_baris_agregator(self):
+        """Sumber cadangan mencari BY SUFFIX → yang ditemukan tarif vendor asal. Haram untuk agregator."""
+        isi = _tanpa_komentar("src/billing/price_sync.py", _isi("src/billing/price_sync.py"))
+        self.assertRegex(isi, r'component"\) == "llm" and not agr',
+                         "sumber cadangan masih dipakai baris agregator → tarif vendor lain masuk")

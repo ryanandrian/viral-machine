@@ -8,9 +8,19 @@ pernah ketahuan. Untuk model yang penandanya berawalan vendor (`google/gemini-2.
 seluruh model naskah fal) pencarian SELALU meleset → harganya tak pernah terisi sendiri, dan
 angka lama yang keliru tak pernah tergantikan.
 
-Yang dijaga PERILAKUNYA, bukan cara mencocokkannya: model berawalan vendor harus mendapat harga
-dari sumber otomatis, model polos tidak boleh berubah perilakunya, dan model yang memang tak ada
-sumbernya tetap dilaporkan jujur sebagai tanpa-sumber (bukan dikosongkan diam-diam).
+⚠️ KOREKSI BESAR 23-Agu-2026 (F3). Uji ini DULU mengharuskan model naskah fal mendapat harga dari
+sumber cadangan (OpenRouter) dan mengharuskan tarif `per_request_usd` lamanya DIHAPUS. Itu ternyata
+MENGUNCI PERILAKU YANG SALAH: fal adalah AGREGATOR — ia menetapkan tarifnya sendiri
+($0,001 PER PERMINTAAN, terverifikasi dari API resmi fal 23-Agu), sementara sumber cadangan mencari
+BY SUFFIX sehingga yang ditemukan adalah tarif VENDOR ASAL (Anthropic/OpenAI/Google per token).
+Akibat nyata: 3 baris naskah fal berharga tarif vendor lain, dan catatan asalnya terhapus.
+
+Niat asli uji ini tetap dijaga — "harga jangan membusuk diam-diam" — tapi caranya diperbaiki:
+baris AGREGATOR yang tak punya sumber sah **dilaporkan sebagai tanpa-sumber** (muncul di laporan
+harian + ditandai di panel), dan harga lamanya TIDAK ditimpa tarif vendor lain.
+
+Yang dijaga PERILAKUNYA: model polos tetap dapat harga otomatis dari sumber cadangan · baris
+agregator TIDAK boleh memakainya · model tanpa sumber dilaporkan jujur · baris terkunci tak tersentuh.
 """
 import os
 import sys
@@ -78,24 +88,22 @@ def _jalankan(models):
 
 class TestHargaOtomatis(unittest.TestCase):
 
-    def test_model_berawalan_vendor_dapat_harga_otomatis(self):
+    def test_baris_agregator_TIDAK_memakai_tarif_vendor_lain(self):
+        """Inti koreksi F3. Model naskah fal ber-tarif per-permintaan (tarif SAH milik fal) tak boleh
+        ditimpa tarif per-token vendor asal yang ditemukan sumber cadangan by-suffix."""
         ringkas, ditulis = _jalankan([
             {"model_key": "google/gemini-2.5-flash", "model_id": "google/gemini-2.5-flash",
              "component": "llm", "provider_key": "fal",
              "pricing": {"per_request_usd": 0.001, "source": "manual"}, "pricing_locked": False},
         ])
-        self.assertIn(
-            "google/gemini-2.5-flash", ditulis,
-            "Model naskah berawalan vendor tidak pernah mendapat harga dari sumber otomatis — "
-            "tabel harganya tinggal angka manual lama yang tak pernah diperbarui siapa pun.")
-        baru = ditulis["google/gemini-2.5-flash"]["pricing"]
-        self.assertEqual(baru["in_per_1m"], 0.3)
-        self.assertEqual(baru["out_per_1m"], 2.5)
         self.assertNotIn(
-            "per_request_usd", baru,
-            "Tarif per-permintaan yang lama harus TERGANTI, bukan menumpang — kalkulator biaya "
-            "memeriksanya lebih dulu, jadi selama ia ada, token yang terpakai diabaikan.")
-        self.assertEqual(ringkas["missing"], [])
+            "google/gemini-2.5-flash", ditulis,
+            "Baris AGREGATOR ditimpa tarif vendor di belakangnya — itu memakai harga pihak lain "
+            "untuk penyedia yang menagih sendiri (cacat 23-Agu).")
+        self.assertIn(
+            "google/gemini-2.5-flash", ringkas["missing"],
+            "Baris agregator tanpa sumber sah WAJIB dilaporkan tanpa-sumber, supaya muncul di "
+            "laporan harian & ditandai di panel — bukan didiamkan.")
 
     def test_model_berpenanda_polos_tidak_berubah_perilakunya(self):
         """REGRESI: seluruh model lama memakai penanda polos — jangan sampai ikut bergeser."""

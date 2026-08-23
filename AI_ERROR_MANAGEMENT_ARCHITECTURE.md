@@ -30,6 +30,15 @@
 > **uji MERAH** (`tests/test_galat_generik.py`).
 > **🔀 AGREGATOR** (fal.ai; blackbox.ai dsb. ke depan) meneruskan galat vendor DI BALIKNYA → ditandai
 > `agregator: True`; tipe `downstream_service_*` memicu penyisiran ulang lintas-vendor.
+>
+> ⚠️ **PENANDA `agregator` PUNYA PEMBACA KEDUA sejak 23-Agu-2026 — JALUR HARGA.** Agregator menetapkan
+> tarifnya sendiri, jadi tarif vendor di belakangnya TAK PERNAH berlaku untuk barisnya. Sebelum ini
+> jalur harga buta terhadap penanda itu: 3 baris naskah fal diberi tarif per-token milik
+> Google/OpenAI/Anthropic dari sumber cadangan, padahal fal menagih **$0,001 per PERMINTAAN**
+> (terverifikasi dari API resmi fal). Kini `price_sync._agregator()` membaca penanda INI — nol
+> penanda baru, nol daftar kembar. **Konsekuensi bila penanda diubah/dihapus: harga model agregator
+> ikut rusak, bukan cuma penggolongan galatnya.** Dijaga `tests/test_gerbang_rantai_biaya.py` (G11).
+> Rincian & aturannya: `ARSITEKTUR_AI_PROVIDER_MODEL.md` §7f.
 
 ---
 

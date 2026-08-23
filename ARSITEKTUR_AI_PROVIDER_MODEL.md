@@ -345,7 +345,7 @@ harga internet sebagai kebenaran. Empat kebenaran yang riset 23-Agu tetapkan:
 |---|---|---|
 | **F1** | Katalog formula (**15**) + formula di 47 baris model + panel menjelaskannya | ✅ **SELESAI 23-Agu** (migr `0210`; 47/47 terisi; penghitung BELUM membacanya = nol perubahan biaya) |
 | **F2** | Penghitung biaya memakai formula (ganti logika urutan-prioritas) | ✅ **SELESAI 23-Agu** — 246 run dihitung ulang: **246 IDENTIK, 0 berbeda** |
-| **F3** | Sumber tarif diatur dari panel + 3 pagar (ambigu ditolak · agregator · terkunci) | ⬜ |
+| **F3** | Sumber tarif diatur dari panel + 3 pagar (ambigu ditolak · agregator · terkunci) | ✅ **SELESAI 23-Agu** (migr `0211`; sinkron kering: **2 baris bergerak**, 13 tanpa-sumber dipertahankan) |
 | **F4** | Sumber API resmi fal → 11 dari 12 model fal otomatis | ⬜ |
 | **F5** | Formula "biaya dilaporkan vendor" + "selisih penghitung akun" disambungkan | ⬜ |
 | **F6** | **Tombol Uji memakai perintah selengkap produksi** (temuan terbesar 23-Agu) | ⬜ |
@@ -384,6 +384,26 @@ dukung (`biaya_dilaporkan`, `selisih_akun`, `gambar_megapiksel`, `video_token`, 
 18 model yang dipakai 60 hari terakhir **semuanya** ber-formula ⇒ nol alarm palsu bagi 9 channel
 aktif. Penjaga `G10` (6 uji) — termasuk **uji pembeda yang MERAH bila penghitung dikembalikan ke
 perilaku pra-F2**; 5 sabotase, semuanya tertangkap.
+
+**CATATAN PELAKSANAAN F3 (23-Agu).** URL sumber harga jadi **kenop admin** (`app_config.ai_price_feed_url`
++ `ai_price_fallback_url`, migr `0211`), dibaca **saat sinkron** (bukan saat impor) ⇒ berlaku tanpa
+deploy; kosong → jatuh ke env lalu bawaan (sinkron tak pernah mati total). Tampil di layar
+**Konfigurasi Aplikasi** grup "Sumber Harga Model AI" dengan penjelasan dwibahasa.
+**PAGAR AGREGATOR:** jalur harga kini membaca penanda `agregator` yang **SUDAH ADA** di
+`galat_registry.PENYEDIA` (nol penanda baru) — baris agregator hanya boleh berharga dari **ruang nama
+agregatornya sendiri**; **kunci-persis pun ditolak** (sebab id model agregator sering berupa nama
+model vendor, mis. `anthropic/claude-haiku-4.5`, dan kunci itu ADA di umpan dengan tarif ANTHROPIC),
+dan **sumber cadangan (router, by-suffix) haram** dipakai baris agregator.
+**Sinkron kering:** 2 baris bergerak (`gemini-2.5-flash-image` token teks $2,5 → token gambar $30 ·
+`gpt-4o-mini-tts` $10 → **$12** + per-detik), 27 tak berubah, 5 terkunci dilewati, **13 dilaporkan
+tanpa-sumber** (12 fal + suara Gemini) — harga lamanya **dipertahankan**, bukan dikosongkan.
+**Uji lama `test_harga_otomatis_model_fal.py` DITULIS ULANG**: ia dulu MEMAKSA baris fal mengambil
+tarif vendor asal dan menghapus `per_request_usd` — mengunci perilaku yang salah. Niat aslinya
+("harga jangan membusuk diam-diam") dijaga lewat pelaporan tanpa-sumber.
+**⚠️ KEADAAN SEMENTARA YANG JUJUR:** 3 baris naskah fal **masih** memuat tarif per-token vendor asal,
+dan suara Gemini **masih** $2,5 (resminya $10) — sinkron kini menolak menimpanya, tapi nilai lamanya
+belum dibetulkan. **F7 yang membetulkannya** + mengunci. Sampai itu, biaya suara 4 channel Gemini
+**masih dilaporkan ±4× lebih murah** dari kenyataan. Penjaga `G11` (5 uji) + 5 sabotase tertangkap.
 
 **ATURAN MENGIKAT tiap langkah** *(dilanggar = pengerusakan; sudah terjadi 21-Agu)*:
 - **Satu langkah sekali jalan**, berhenti, lapor angkanya, baru langkah berikutnya.

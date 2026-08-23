@@ -28,6 +28,45 @@ FEED_URL = os.getenv(
     "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json",
 )
 FALLBACK_URL = os.getenv("AI_PRICE_FALLBACK_URL", "https://openrouter.ai/api/v1/models")
+
+
+def _url_umpan() -> str:
+    """URL sumber harga: kenop admin (`app_config.ai_price_feed_url`) → env → bawaan kode.
+    [F3, 23-Agu] Owner: *"url sinkronisasi sebaiknya bisa dikonfigurasi lewat admin panel"*. Dibaca
+    SAAT SINKRON (bukan saat impor) supaya perubahan berlaku tanpa deploy. Gagal-aman: kosong/gagal
+    baca → jatuh ke env lalu bawaan, jadi sinkron tak pernah mati total karena kenop kosong."""
+    try:
+        from src.config.app_config import get_text
+        return get_text("ai_price_feed_url", FEED_URL) or FEED_URL
+    except Exception as e:
+        logger.warning(f"[price_sync] baca kenop URL umpan gagal ({e}) — pakai bawaan")
+        return FEED_URL
+
+
+def _url_cadangan() -> str:
+    """URL sumber cadangan (router, model naskah saja) — kenop admin → env → bawaan."""
+    try:
+        from src.config.app_config import get_text
+        return get_text("ai_price_fallback_url", FALLBACK_URL) or FALLBACK_URL
+    except Exception:
+        return FALLBACK_URL
+
+
+def _agregator(provider_key: str) -> bool:
+    """Apakah penyedia ini AGREGATOR (menyajikan model vendor lain di bawah namanya sendiri)?
+
+    Penanda ini SUDAH ADA dan sudah dipakai jalur penanganan galat
+    (`galat_registry.PENYEDIA[...]["agregator"]`) — jalur harga tinggal membacanya, bukan bikin
+    penanda baru. [F3, 23-Agu] Kenapa penting untuk HARGA: agregator menetapkan tarifnya SENDIRI,
+    jadi tarif vendor di belakangnya TAK PERNAH berlaku. Terbukti: 3 baris naskah fal diberi tarif
+    per-token milik Google/OpenAI/Anthropic dari sumber cadangan, padahal fal menagih
+    $0,001 PER PERMINTAAN. Gagal-aman: penanda tak terbaca → dianggap BUKAN agregator (perilaku lama)."""
+    try:
+        from src.providers.galat_registry import PENYEDIA
+        return bool((PENYEDIA.get(provider_key or "") or {}).get("agregator"))
+    except Exception as e:
+        logger.warning(f"[price_sync] baca penanda agregator gagal ({e}) — dianggap bukan agregator")
+        return False
 SYNC_INTERVAL_HOURS = float(os.getenv("AI_PRICE_SYNC_HOURS", "24"))
 SANITY_FACTOR = float(os.getenv("AI_PRICE_SANITY_FACTOR", "3"))
 STALE_DAYS = float(os.getenv("AI_PRICE_STALE_DAYS", "7"))
@@ -62,13 +101,14 @@ def _state_set_epoch(sb, key: str) -> None:
         logger.debug(f"[price_sync] tulis system_state {key} gagal: {e}")
 
 
-def _feed_entry(feed: dict, model_id: str, provider_prefix: str | None = None) -> dict | None:
+def _feed_entry(feed: dict, model_id: str, provider_prefix: str | None = None,
+                wajib_prefix: bool = False) -> dict | None:
     """Cari entri feed LiteLLM: kunci persis → prefix SPESIFIK provider (DATA: ai_providers.
     price_feed_prefix, fallback provider_key) → daftar prefix legacy (jaring pengaman regresi).
     NO-HARDCODE (owner 2026-07-06): provider BARU tak lagi butuh bongkar skrip ini — cukup baris
     ai_providers (+isi price_feed_prefix bila nama prefix feed ≠ provider_key, mis. openai_tts→openai).
     (Riwayat insiden prefix tertanam: 'elevenlabs/' 2026-07-04; gemini/groq 2026-07-06.)"""
-    if model_id in feed:
+    if not wajib_prefix and model_id in feed:
         return feed[model_id]
     # [23-Agu] Daftar prefix vendor yang DITANAM di kode dibuang. Alasannya bukan kerapian:
     # mencocokkan model ke prefix vendor LAIN berarti memakai HARGA VENDOR LAIN (agregator menagih
@@ -206,7 +246,7 @@ def sync_prices(sb=None, force: bool = False, only_model_key: str | None = None)
 
     feed = None
     try:
-        feed = requests.get(FEED_URL, timeout=30).json()
+        feed = requests.get(_url_umpan(), timeout=30).json()
     except Exception as e:
         logger.warning(f"[price_sync] feed utama gagal: {e} — coba fallback OpenRouter (LLM saja)")
 
@@ -218,13 +258,21 @@ def sync_prices(sb=None, force: bool = False, only_model_key: str | None = None)
         if m.get("pricing_locked"):
             continue
         pricing = None
+        # PAGAR AGREGATOR (F3): baris milik agregator hanya boleh berharga dari RUANG NAMA
+        # agregatornya sendiri. Kunci-persis pun ditolak — sebab id model agregator sering berupa
+        # nama model vendor ("anthropic/claude-haiku-4.5"), dan kunci itu ADA di umpan dengan tarif
+        # ANTHROPIC. Menerimanya = memakai tarif vendor lain untuk penyedia yang menagih sendiri.
+        agr = _agregator(m.get("provider_key") or "")
         e = _feed_entry(feed, m.get("model_id") or m["model_key"],
-                        provider_prefix=prefix_map.get(m.get("provider_key") or "")) if feed else None
+                        provider_prefix=prefix_map.get(m.get("provider_key") or ""),
+                        wajib_prefix=agr) if feed else None
         if e:
             pricing = _to_pricing(e, now, component=m.get("component"))
             if all(v is None for k, v in pricing.items() if k not in ("source", "synced_at")):
                 pricing = None
-        if pricing is None and m.get("component") == "llm":
+        # Sumber CADANGAN (router) mencari BY SUFFIX — ia menemukan tarif VENDOR ASAL, bukan tarif
+        # agregator. Karena itu baris agregator TIDAK BOLEH memakainya sama sekali.
+        if pricing is None and m.get("component") == "llm" and not agr:
             if orm is None:
                 orm = _openrouter_map()
             # Daftar sumber cadangan dibangun BY SUFFIX (lihat `_openrouter_map`: id vendor/model →
