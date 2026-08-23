@@ -809,7 +809,12 @@ export default function AdminCatalogPage() {
                       </span>
                     ) : (
                       <span style={{ display: "inline-flex", gap: ".4rem", alignItems: "center", flexWrap: "wrap" }}>
-                        {pr ? <span className="muted" style={{ fontSize: "var(--text-xs)" }}>{fmtPricing(pr, String(m.component ?? ""))}
+                        {/* [23-Agu] Penanda dinyalakan oleh SATUAN YANG TERPAKAI, bukan oleh ada/tidaknya
+                            objek harga. Sesudah sinkron menolak satuan ambigu, baris bisa BER-objek-harga
+                            tapi NOL satuan terpakai (mis. suara Gemini) — dulu itu tampak normal: lubang
+                            senyap. Kini ia menyebut PERSIS satuan mana yang harus diisi, jadi alarm harian
+                            punya tempat menyelesaikan diri. */}
+                        {fmtPricing(pr, String(m.component ?? "")) ? <span className="muted" style={{ fontSize: "var(--text-xs)" }}>{fmtPricing(pr, String(m.component ?? ""))}
                           {/* Asal harga: 16 dari 42 model aktif TIDAK ADA di umpan harga publik (semua
                               model video, ElevenLabs, Cloudflare, Edge, fal) ⇒ harganya wajib diketik
                               admin. Tanpa keterangan ini admin tak bisa membedakan "datang sendiri"
@@ -817,7 +822,12 @@ export default function AdminCatalogPage() {
                           <span style={{ marginLeft: ".35rem", opacity: .7 }} title={String(pr.source ?? "")}>
                             {String(pr.source ?? "") === "manual" ? "· manual" : "· otomatis"}
                           </span></span>
-                          : (m.is_active ? <span className="badge badge-warning" title="Model aktif tanpa harga → biaya video tampil 'belum lengkap'">⚠️ kosong</span> : <span className="muted" style={{ fontSize: "0.7rem" }}>—</span>)}
+                          : (m.is_active
+                              ? <span className="badge badge-warning"
+                                      title={`Biaya model ini TIDAK BISA dihitung — satuan harganya kosong. Isi salah satu lewat tombol ✎: ${satuanJenis(String(m.component ?? "")).map((u) => u.label).join(" · ") || "(jenis ini belum punya satuan)"}. Menyimpan manual otomatis mengunci baris dari timpaan sinkron.`}>
+                                  ⚠️ <Bi id="satuan harga kosong" en="no usable price unit" />
+                                </span>
+                              : <span className="muted" style={{ fontSize: "0.7rem" }}>—</span>)}
                         {m.pricing_locked ? <span title="Terkunci — sinkron otomatis tak menimpa (klik utk buka)" style={{ cursor: "pointer" }} onClick={() => toggleLock(mk, false)}>🔒</span>
                           : pr ? <span title="Ikut sinkron harian (klik utk kunci)" style={{ cursor: "pointer", opacity: .45 }} onClick={() => toggleLock(mk, true)}>🔓</span> : null}
                         <button className="btn btn-ghost btn-sm" title="Edit harga manual" onClick={() => setPriceEdit({

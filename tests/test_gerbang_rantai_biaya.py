@@ -312,3 +312,30 @@ class G7_TarifHanyaDiSSOT(unittest.TestCase):
         with open(indeks, encoding="utf-8") as f:
             self.assertIn(SSOT_BIAYA, f.read(),
                           f"{SSOT_BIAYA} tak ditunjuk indeks memori → sesi baru buta terhadapnya")
+
+
+class G8_PenandaHargaMengikutiSatuanTerpakai(unittest.TestCase):
+    """Baris ber-objek-harga tapi NOL satuan terpakai WAJIB ditandai.
+
+    Terukur 23-Agu: sesudah sinkron menolak satuan ambigu, `gemini-2.5-flash-preview-tts` memiliki
+    objek harga (source/synced_at) TANPA satu pun satuan terpakai. Penanda lama hanya melihat
+    ada/tidaknya objek harga ⇒ baris itu tampak NORMAL — lubang senyap yang lahir dari perbaikan
+    sendiri. Alarm harian pun jadi tak bisa ditindak: admin tak tahu satuan mana yang harus diisi."""
+
+    PANEL = "apps/web/src/app/admin/(panel)/catalog/page.tsx"
+
+    def test_penanda_dinyalakan_oleh_satuan_terpakai(self):
+        isi = _tanpa_komentar(self.PANEL, _isi(self.PANEL))
+        # (regex membolehkan tanda kurung bersarang: fmtPricing(pr, String(...)) )
+        self.assertRegex(isi, r"\{fmtPricing\([^\n]*\)\s*\?",
+                         "penanda harga masih melihat ada/tidaknya objek harga, bukan satuan terpakai")
+        self.assertNotRegex(isi, r"\{pr \? <span className=\"muted\"",
+                            "kondisi lama (objek harga ada = dianggap berharga) masih dipakai")
+
+    def test_penanda_menyebut_satuan_yang_harus_diisi(self):
+        """Alarm harian hanya berguna bila ADA tempat yang menyebut tindakannya."""
+        isi = _tanpa_komentar(self.PANEL, _isi(self.PANEL))
+        i = isi.index("badge badge-warning")
+        blok = isi[i:i + 900]
+        self.assertIn("satuanJenis", blok,
+                      "penanda tak menyebut satuan mana yang harus diisi → admin menebak")

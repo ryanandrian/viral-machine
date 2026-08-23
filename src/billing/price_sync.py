@@ -292,9 +292,11 @@ def report_unpriced_models(sb=None) -> dict:
                            for k, v in sorted(hitung.items(), key=lambda x: -x[1]))
         _notify_admin(
             f"⚠️ <b>Biaya AI TIDAK TERHITUNG</b> ({int(UNPRICED_WINDOW_DAYS)} hari terakhir)\n{baris}\n"
-            f"Biaya yang dilaporkan ke tenant jadi LEBIH MURAH dari kenyataan. Sebab yang mungkin: "
-            f"harga belum ada di katalog (isi manual di Catalog → AI Models), atau vendor menagih "
-            f"dengan satuan yang mesin belum bisa hitung.")
+            f"Biaya yang dilaporkan ke tenant jadi LEBIH MURAH dari kenyataan.\n"
+            f"➡️ Buka <b>Catalog → AI Models</b>, cari model di atas: barisnya bertanda "
+            f"<b>⚠️ satuan harga kosong</b> dan menyebut PERSIS satuan mana yang harus diisi. "
+            f"Tekan ✎ lalu isi angkanya dari halaman tarif resmi vendor — menyimpan manual otomatis "
+            f"MENGUNCI baris itu, jadi sinkron harian tak bisa menimpanya lagi.")
         _state_set_epoch(sb, "ai_unpriced_alerted_at")
         return {"unpriced": hitung, "alerted": True}
     except Exception as e:

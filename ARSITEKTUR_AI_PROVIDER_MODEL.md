@@ -324,6 +324,57 @@ tabel ini setiap kali dilakukan. *(Rencana S3: mesin ikut membandingkan catatan-
 
 ---
 
+## 7f. RENCANA & PROGRES F1–F8 — *tertulis di sini supaya TIDAK HILANG saat compacting / sesi baru*
+
+> **Sesi baru: baca bagian ini SEBELUM menyentuh apa pun di rantai harga/biaya.** Ditetapkan owner
+> 23-Agu-2026 sesudah riset sehari penuh (10 cacat ditemukan, semuanya karya Claude sendiri).
+> Penunjuk masuk: `MEMORY.md` → dokumen ini. Backlog satu baris: `SISA_KERJA_GO_LIVE.md`.
+
+**AKAR yang diperbaiki:** kita MENAKSIR biaya (pemakaian × tarif katalog) sambil memperlakukan sumber
+harga internet sebagai kebenaran. Empat kebenaran yang riset 23-Agu tetapkan:
+1. **Sumber harga umum BUKAN otoritas** — terbukti 3×: suara Gemini 4× terlalu murah (diberi tarif
+   teks) · `eleven_v3` 1,8× terlalu mahal (diberi tarif kelebihan-kuota) · tak mampu menyatakan harga
+   yang tergantung setelan kita (veo audio, megapiksel dibulatkan, token video).
+2. **Satuan yang vendor TAGIH ≠ satuan yang kita UKUR** — di celah itu seluruh keluarga bug hidup.
+3. **Ada jalan tanpa taksiran:** vendor melaporkan biayanya sendiri (OpenRouter per panggilan;
+   APIMaster lewat selisih penghitung akun `/v1/dashboard/billing/usage`, satuannya **SEN**).
+4. **Mutu/biaya kanal hanya terbukti dgn perintah PRODUKSI** — 4 dari 6 model APIMaster lolos
+   panggilan pendek lalu GAGAL pada perintah naskah asli (mentok batas keluaran 2.000 token).
+
+| Langkah | Isi | Status |
+|---|---|---|
+| **F1** | Katalog formula (14) + formula di 47 baris model + panel menjelaskannya | ⬜ |
+| **F2** | Penghitung biaya memakai formula (ganti logika daftar-satuan) | ⬜ |
+| **F3** | Sumber tarif diatur dari panel + 3 pagar (ambigu ditolak · agregator · terkunci) | ⬜ |
+| **F4** | Sumber API resmi fal → 11 dari 12 model fal otomatis | ⬜ |
+| **F5** | Formula "biaya dilaporkan vendor" + "selisih penghitung akun" disambungkan | ⬜ |
+| **F6** | **Tombol Uji memakai perintah selengkap produksi** (temuan terbesar 23-Agu) | ⬜ |
+| **F7** | Pulihkan 4 baris rusak (3 naskah fal → $0,001/panggilan · `eleven_v3` → $100) + syarat Cloudflare | ⬜ |
+| **F8** | Rekonsiliasi berjadwal (taksiran vs pemakaian nyata akun) + alarm + SSOT ditutup | ⬜ |
+
+**14 formula** (kelompok → nama): *tanpa taksiran* — biaya dilaporkan per panggilan · selisih
+penghitung akun · **naskah** — token masuk+keluar · per panggilan · **suara** — per huruf · token
+audio · per detik audio · **gambar** — per gambar · token gambar · per megapiksel dibulatkan ke atas ·
+**video** — per detik (beda bila audio nyala) · token video `(t×l×fps×durasi)÷1024` · **lain** —
+kuota gratis harian · gratis.
+
+**ATURAN MENGIKAT tiap langkah** *(dilanggar = pengerusakan; sudah terjadi 21-Agu)*:
+- **Satu langkah sekali jalan**, berhenti, lapor angkanya, baru langkah berikutnya.
+- **Ambang berhenti:** seluruh produksi lama dihitung ulang; **satu selisih tak terjelaskan → BERHENTI & lapor.**
+- **Ambang sinkron:** dijalankan KERING dulu; hanya baris yang seharusnya bergerak, yang bergerak.
+- Alarm **dibuktikan MERAH dulu** → hijau → **disabotase**. `tests/test_gerbang_rantai_biaya.py` (17 alarm).
+- **FE wajib memakai pustaka komponen yang ada** (nol komponen baru), seragam & estetik — bukan asal jadi.
+- **Kolom baru → jawaban untuk baris LAMA wajib ada.** F1: kolom formula nullable, tapi **47 baris diisi
+  dalam batch yang sama**; gerbang aktivasi baru menyala SESUDAH terisi ⇒ nol channel tenant terganggu.
+- Deploy: **izin owner terpisah per langkah**. Ada tenant BERBAYAR yang produksi tiap hari.
+
+**Angka acuan riset 23-Agu** (untuk membandingkan hasil kerja): 47 model terjelaskan · 244 run
+dihitung ulang (227 identik · 17 beda satu sebab) · sinkron kering menggerakkan 3 baris · fal 11/12
+bisa otomatis · `claude-haiku-4-5` lewat APIMaster **$0,00091** vs tarif langsung **$0,00982** ·
+OpenRouter 0 model video, APIMaster 7.
+
+---
+
 ## 7e. Batas jujur & tingkat kematangan
 
 **Yang mesin TIDAK bisa jamin** (sebut, jangan sembunyikan): nilai tarif yang salah-tapi-masuk-akal ·
