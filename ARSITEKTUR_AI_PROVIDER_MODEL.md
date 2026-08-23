@@ -344,7 +344,7 @@ harga internet sebagai kebenaran. Empat kebenaran yang riset 23-Agu tetapkan:
 | Langkah | Isi | Status |
 |---|---|---|
 | **F1** | Katalog formula (**15**) + formula di 47 baris model + panel menjelaskannya | ✅ **SELESAI 23-Agu** (migr `0210`; 47/47 terisi; penghitung BELUM membacanya = nol perubahan biaya) |
-| **F2** | Penghitung biaya memakai formula (ganti logika daftar-satuan) | ⬜ |
+| **F2** | Penghitung biaya memakai formula (ganti logika urutan-prioritas) | ✅ **SELESAI 23-Agu** — 246 run dihitung ulang: **246 IDENTIK, 0 berbeda** |
 | **F3** | Sumber tarif diatur dari panel + 3 pagar (ambigu ditolak · agregator · terkunci) | ⬜ |
 | **F4** | Sumber API resmi fal → 11 dari 12 model fal otomatis | ⬜ |
 | **F5** | Formula "biaya dilaporkan vendor" + "selisih penghitung akun" disambungkan | ⬜ |
@@ -371,6 +371,19 @@ API memvalidasi nilainya terhadap cermin. Nol nama/penjelasan formula diketik di
 Cloudflare → kuota gratis) **sengaja DITUNDA ke F4/F7**, bersama tarif aslinya dari sumber resmi —
 memindahkannya sekarang berarti mengubah angka tanpa sumber tarif yang benar. Penjaga: `G9` di
 `tests/test_gerbang_rantai_biaya.py` (7 uji, 6 sabotase tertangkap).
+
+**CATATAN PELAKSANAAN F2 (23-Agu).** Penghitung kini memakai formula yang **dinyatakan baris model**
+(`_formula_map`, terpisah dari `_pricing_map` supaya kontrak uji lama utuh), bukan menebak dari
+urutan prioritas. Perbedaan dua kelas kegagalan ditegakkan: **celah DATA** (baris tanpa formula) →
+dilaporkan **jujur** sebagai tak-terhitung; **gangguan KAMI** (peta formula tak terbaca) → jatuh ke
+perilaku pra-F2 supaya biaya tak mendadak nol, **tapi dicatat di log** (haram senyap). Formula
+`gratis` → biaya 0 dan **bukan** "tak terhitung" (nol alarm palsu). Formula yang penghitung belum
+dukung (`biaya_dilaporkan`, `selisih_akun`, `gambar_megapiksel`, `video_token`, `kuota_gratis`)
+**HARAM dihitung dengan cara lain** — dilaporkan tak-terhitung sampai langkahnya tiba (F4/F5/F7).
+**Ambang terpenuhi:** 246 run riwayat dihitung ulang sebelum-vs-sesudah → **246 identik, 0 berbeda**;
+18 model yang dipakai 60 hari terakhir **semuanya** ber-formula ⇒ nol alarm palsu bagi 9 channel
+aktif. Penjaga `G10` (6 uji) — termasuk **uji pembeda yang MERAH bila penghitung dikembalikan ke
+perilaku pra-F2**; 5 sabotase, semuanya tertangkap.
 
 **ATURAN MENGIKAT tiap langkah** *(dilanggar = pengerusakan; sudah terjadi 21-Agu)*:
 - **Satu langkah sekali jalan**, berhenti, lapor angkanya, baru langkah berikutnya.

@@ -40,8 +40,16 @@ HARGA = {
 }
 
 
+# [F2, 23-Agu] Formula dinyatakan TEGAS — jangan biarkan `_formula_map` menembak database nyata:
+# hasil uji akan bergantung urutan jalannya (lihat catatan di test_ai_cost_per_request.py).
+FORMULA = {"suara-token": "suara_token", "suara-huruf": "suara_huruf", "naskah": "naskah_token",
+           "naskah-panggil": "naskah_panggilan", "gambar": "gambar_satuan",
+           "video-detik": "video_detik", "video-klip": "video_klip", "model-asing": "naskah_token"}
+
+
 def _hitung(usage: dict) -> dict:
-    with patch.object(ai_cost, "_pricing_map", return_value=HARGA):
+    with patch.object(ai_cost, "_pricing_map", return_value=HARGA), \
+         patch.object(ai_cost, "_formula_map", return_value=FORMULA):
         return ai_cost.compute_cost_usd(usage) or {}
 
 

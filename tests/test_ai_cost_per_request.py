@@ -9,8 +9,30 @@ Tarif per-permintaan dipakai fal any-llm: $0,001 sekali panggil, berapa pun panj
 import src.billing.ai_cost as ac
 
 
-def _pakai_harga(monkeypatch, harga: dict):
+def _pakai_harga(monkeypatch, harga: dict, formula: dict | None = None):
+    """[F2, 23-Agu] Formula tiap model WAJIB dinyatakan di sini juga. Sebelumnya uji ini membiarkan
+    `_formula_map` menembak DATABASE SUNGGUHAN: saat dijalankan sendiri panggilannya gagal (jatuh ke
+    perilaku lama, uji hijau), saat dijalankan bersama uji lain panggilannya BERHASIL dan model
+    karangan ini tak ada formulanya (uji merah). Hasil uji jadi bergantung URUTAN — itu rapuh dan
+    menyesatkan. Formula diturunkan dari kunci harga yang dipakai tiap kasus, jadi maknanya persis
+    sama seperti sebelumnya, hanya kini TEGAS."""
     monkeypatch.setattr(ac, "_pricing_map", lambda sb=None: harga)
+
+    def _turunkan(p: dict) -> str:
+        if p.get("per_request_usd") is not None:
+            return "naskah_panggilan"
+        if p.get("per_1m_chars") is not None:
+            return "suara_huruf"
+        if p.get("per_image") is not None:
+            return "gambar_satuan"
+        if p.get("per_second_usd") is not None:
+            return "video_detik"
+        if p.get("per_video_base_usd") is not None:
+            return "video_klip"
+        return "naskah_token"
+
+    peta = formula if formula is not None else {m: _turunkan(p or {}) for m, p in harga.items()}
+    monkeypatch.setattr(ac, "_formula_map", lambda sb=None: peta)
 
 
 def test_model_per_token_hasilnya_tidak_berubah(monkeypatch):

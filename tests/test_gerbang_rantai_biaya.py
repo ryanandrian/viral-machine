@@ -178,7 +178,9 @@ class G4_SatuModelSatuTagihan(unittest.TestCase):
         harga = {"m-gambar": {"per_image": 0.01, "in_per_1m": 1.0, "out_per_1m": 2.0}}
         pakai = {"image": {"m-gambar": 10},
                  "llm": {"m-gambar": {"tokens_in": 1_000_000, "tokens_out": 1_000_000, "calls": 5}}}
-        with patch.object(ai_cost, "_pricing_map", return_value=harga):
+        # Formula dinyatakan tegas (F2): tanpa ini uji menembak DB nyata → hasilnya bergantung urutan.
+        with patch.object(ai_cost, "_pricing_map", return_value=harga), \
+             patch.object(ai_cost, "_formula_map", return_value={"m-gambar": "gambar_satuan"}):
             h = ai_cost.compute_cost_usd(pakai)
         self.assertAlmostEqual(h["usd"], 10 * 0.01, places=9,
                                msg=f"model ditagih DUA KALI (per-gambar + token): {h['breakdown']}")
@@ -189,7 +191,8 @@ class G4_SatuModelSatuTagihan(unittest.TestCase):
         harga = {"m-suara": {"per_1m_chars": 50.0, "in_per_1m": 1.0, "out_per_1m": 2.0}}
         pakai = {"tts": {"m-suara": 1_000_000},
                  "tts_tokens": {"m-suara": {"tokens_in": 1_000_000, "tokens_out": 1_000_000}}}
-        with patch.object(ai_cost, "_pricing_map", return_value=harga):
+        with patch.object(ai_cost, "_pricing_map", return_value=harga), \
+             patch.object(ai_cost, "_formula_map", return_value={"m-suara": "suara_huruf"}):
             h = ai_cost.compute_cost_usd(pakai)
         self.assertAlmostEqual(h["usd"], 50.0, places=9,
                                msg=f"biaya suara terhitung dua kali: {h['breakdown']}")
@@ -416,3 +419,68 @@ class G9_FormulaHargaLengkapDanDijelaskan(unittest.TestCase):
         self.assertRegex(isi, r"pricing_model:\s*\[",
                          "API tak memvalidasi kolom formula → nilai ngawur bisa tersimpan")
         self.assertIn('"pricing_model"', isi, "kolom formula tak diizinkan ditulis dari panel")
+
+
+class G10_PenghitungMemakaiFormulaYangDINYATAKAN(unittest.TestCase):
+    """F2 — biaya dihitung memakai formula yang BARIS MODELNYA nyatakan, bukan ditebak dari jenis.
+
+    Uji pembeda (yang gagal pada perilaku PRA-F2): model ber-harga per-gambar DAN per-token, yang
+    formulanya menyatakan **token**. Sebelum F2 penghitung memilih per urutan prioritas → per-gambar
+    yang menang. Sesudah F2 → yang dinyatakan baris model yang menang. Bila uji ini hijau di kedua
+    keadaan, artinya ia tak menjaga apa pun."""
+
+    from unittest.mock import patch as _patch
+
+    def _hitung(self, harga: dict, formula: dict, pakai: dict):
+        from unittest.mock import patch
+        from src.billing import ai_cost
+        with patch.object(ai_cost, "_pricing_map", return_value=harga), \
+             patch.object(ai_cost, "_formula_map", return_value=formula):
+            return ai_cost.compute_cost_usd(pakai)
+
+    HARGA_DUA = {"m": {"per_image": 0.01, "in_per_1m": 1.0, "out_per_1m": 2.0}}
+    PAKAI_DUA = {"image": {"m": 10},
+                 "llm": {"m": {"tokens_in": 1_000_000, "tokens_out": 1_000_000, "calls": 3}}}
+
+    def test_formula_menentukan_bukan_prioritas(self):
+        h = self._hitung(self.HARGA_DUA, {"m": "gambar_token"}, self.PAKAI_DUA)
+        self.assertAlmostEqual(h["usd"], 3.0, places=9,
+                               msg=f"formula 'gambar_token' diabaikan; yang dipakai prioritas: {h['breakdown']}")
+
+    def test_formula_lain_pada_data_yang_sama(self):
+        """Arah kedua: data identik, formula beda → hasil beda. Membuktikan formulanya BENAR dibaca."""
+        h = self._hitung(self.HARGA_DUA, {"m": "gambar_satuan"}, self.PAKAI_DUA)
+        self.assertAlmostEqual(h["usd"], 0.1, places=9, msg=f"{h['breakdown']}")
+
+    def test_tanpa_formula_dilaporkan_jujur(self):
+        """Celah DATA (baris tanpa formula) → 'tak terhitung', BUKAN dihitung dengan cara lain."""
+        h = self._hitung(self.HARGA_DUA, {}, self.PAKAI_DUA)
+        self.assertEqual(h["usd"], 0.0)
+        self.assertIn("m", h["unpriced"], "baris tanpa formula malah dihitung diam-diam")
+
+    def test_formula_gratis_nol_dan_bukan_tak_terhitung(self):
+        h = self._hitung({"m": {"per_1m_chars": 0}}, {"m": "gratis"}, {"tts": {"m": 999_999}})
+        self.assertEqual(h["usd"], 0.0)
+        self.assertEqual(h["unpriced"], [], "model GRATIS dilaporkan 'tak terhitung' — alarm palsu")
+
+    def test_formula_belum_didukung_dilaporkan_jujur(self):
+        """Formula yang penghitung belum dukung HARAM dihitung dengan cara lain (angka palsu)."""
+        from src.billing.ai_cost import FORMULA_BELUM_DIDUKUNG
+        self.assertTrue(FORMULA_BELUM_DIDUKUNG, "daftar formula-belum-didukung kosong")
+        for f in sorted(FORMULA_BELUM_DIDUKUNG):
+            with self.subTest(f):
+                h = self._hitung(self.HARGA_DUA, {"m": f}, self.PAKAI_DUA)
+                self.assertEqual(h["usd"], 0.0, f"formula '{f}' belum didukung tapi tetap menghitung")
+                self.assertIn("m", h["unpriced"])
+
+    def test_gagal_baca_peta_formula_tak_membuat_biaya_nol(self):
+        """Gangguan DB = kegagalan KAMI. Biaya tak boleh mendadak nol; jatuh ke perilaku pra-F2."""
+        from unittest.mock import patch
+        from src.billing import ai_cost
+        def meledak(sb=None):
+            raise RuntimeError("DB mati")
+        with patch.object(ai_cost, "_pricing_map", return_value=self.HARGA_DUA), \
+             patch.object(ai_cost, "_formula_map", side_effect=meledak):
+            h = ai_cost.compute_cost_usd(self.PAKAI_DUA)
+        self.assertGreater(h["usd"], 0, "gangguan baca peta formula membuat biaya NOL — itu senyap & salah")
+        self.assertEqual(h["unpriced"], [], "gangguan kami dilaporkan seolah celah data")

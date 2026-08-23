@@ -263,12 +263,40 @@ def _biaya_skema(skema: str, harga: dict, pemakaian_per_keranjang: dict) -> floa
     return total
 
 
+# Formula yang penghitung BELUM dukung — sengaja dilaporkan JUJUR sebagai "tak terhitung", bukan
+# dihitung dengan cara lain. Masing-masing punya langkah pemasangannya sendiri (SSOT §7f):
+#   biaya_dilaporkan · selisih_akun  → F5 (mesin mencatat angka yang vendor laporkan)
+#   gambar_megapiksel · video_token  → F4 (bersama tarif asli dari sumber resmi vendor)
+#   kuota_gratis                     → F7 (bersama data kuotanya)
+FORMULA_BELUM_DIDUKUNG = frozenset({
+    "biaya_dilaporkan", "selisih_akun", "gambar_megapiksel", "video_token", "kuota_gratis"})
+
+
+def _formula_map(sb=None) -> dict:
+    """model_key & model_id → nama FORMULA harga (`ai_models.pricing_model`, migr 0210).
+
+    TERPISAH dari `_pricing_map` dengan sengaja: uji lama mengganti peta harga dengan kamus polos
+    {model: harga}; menggabungkan keduanya akan memecah kontrak itu tanpa alasan."""
+    sb = sb or _sb()
+    rows = sb.table("ai_models").select("model_key, model_id, pricing_model").execute().data or []
+    out = {}
+    for r in rows:
+        f = r.get("pricing_model")
+        if not f:
+            continue
+        out[r["model_key"]] = f
+        if r.get("model_id"):
+            out[r["model_id"]] = f
+    return out
+
+
 def compute_cost_usd(ai_usage: dict, sb=None) -> dict | None:
     """Hitung biaya USD dari ringkasan cost_meter — SATU putaran atas DAFTAR SATUAN, nol cabang
     per-kasus. Return {usd, breakdown, unpriced, priced_at}; None bila usage kosong.
 
-    ATURAN INTI (SSOT §7b): tiap model ditagih memakai **satu skema saja** — skema pertama (menurut
-    urutan daftar) yang harganya ADA dan pemakaiannya ADA. Sisanya dilewati ⇒ hitung-ganda mustahil
+    ATURAN INTI (SSOT §7b/§7f): tiap model ditagih memakai **formula yang baris modelnya nyatakan**
+    (`ai_models.pricing_model`, migr 0210) — bukan ditebak dari jenisnya. Baris tanpa formula
+    dilaporkan JUJUR sebagai tak-terhitung. Sebelum F2 skemanya dipilih dari urutan prioritas; Sisanya dilewati ⇒ hitung-ganda mustahil
     secara struktur. Sebelum 23-Agu, `gemini-2.5-flash-image` ditagih per-gambar DAN per-token
     (+7,6% pada run 503) karena keputusan ini dulu tersebar di cabang if per-jenis.
     """
@@ -279,6 +307,15 @@ def compute_cost_usd(ai_usage: dict, sb=None) -> dict | None:
     except Exception as e:
         logger.warning(f"[ai_cost] baca pricing gagal: {e}")
         return None
+
+    # Formula per model (migr 0210) = penentu CARA hitung. Gagal baca = gangguan KAMI → jatuh ke
+    # perilaku pra-F2 supaya biaya tak mendadak nol, TAPI dicatat (haram senyap).
+    formulas = None
+    try:
+        formulas = _formula_map(sb)
+    except Exception as e:
+        logger.warning(f"[ai_cost] peta formula gagal dibaca ({e}) — memakai urutan prioritas "
+                       f"(perilaku pra-F2); biaya tetap dihitung, tapi ini WAJIB diselidiki")
 
     br = {"llm": 0.0, "image": 0.0, "tts": 0.0, "video": 0.0}
     unpriced, synced = [], None
@@ -294,11 +331,33 @@ def compute_cost_usd(ai_usage: dict, sb=None) -> dict | None:
 
     for model, pemakaian in per_model.items():
         harga = prices.get(model)
-        if not harga:
+        if not harga and (formulas or {}).get(model) != "gratis":
             unpriced.append(model)
             continue
+        formula = (formulas or {}).get(model)
+
+        # Formula GRATIS: vendor tak menagih (mis. Edge). Biaya 0 dan BUKAN "tak terhitung".
+        if formula == "gratis":
+            synced = synced or (harga or {}).get("synced_at")
+            continue
+
+        # Formula yang penghitung belum dukung → JUJUR dilaporkan, bukan dihitung dengan cara lain.
+        if formula in FORMULA_BELUM_DIDUKUNG:
+            unpriced.append(model)
+            continue
+
+        # Skema yang dipakai = yang DINYATAKAN baris model. Bila peta formula tak terbaca
+        # (gangguan DB = kegagalan KAMI, bukan celah data), jatuh ke urutan prioritas = perilaku
+        # sebelum F2 — dan itu DICATAT, tidak senyap.
+        if formula:
+            urut = (formula,)
+        else:
+            if formulas is not None:
+                unpriced.append(model)      # celah DATA: baris tanpa formula → jujur, berisik
+                continue
+            urut = SKEMA_URUT
         tertagih = False
-        for skema in SKEMA_URUT:
+        for skema in urut:
             nilai = _biaya_skema(skema, harga, pemakaian)
             if nilai is None:
                 continue
