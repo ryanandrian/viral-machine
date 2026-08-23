@@ -368,8 +368,13 @@ per-produksi) — alasan lengkap di §7f, **menunggu ketokan owner**; tempatnya 
 **✅ F6 SELESAI 23-Agu** — lencana "✓ Teruji" berhenti bisa berbohong untuk model naskah. Dua batas
 jujurnya (stempel lama dari uji lemah · uji suara masih pendek) ada di §7f.
 
-**PEKERJAAN BERIKUTNYA — urutan yang direncanakan (risiko terkecil dulu):**
-- **F8** — rekonsiliasi berjadwal (taksiran vs pemakaian nyata akun) + alarm + SSOT ditutup.
+**🟡 F8 SEBAGIAN SELESAI 23-Agu** — alarm harian untuk biaya yang salah **tanpa mesin menyadarinya**
+sudah terpasang (nol alarm palsu pada data nyata), dan SSOT ini **DITUTUP**. Pembandingan ke pemakaian
+nyata akun vendor **tidak bisa** hari ini (9 penyedia aktif tak menerbitkannya · tagihan akun tenant =
+keputusan owner · satu kunci bisa dipakai di luar MesinViral) — jalannya lewat penyedia **router**
+yang sudah disiapkan F5.
+
+**PEKERJAAN BERIKUTNYA — menunggu ketokan owner (bukan pekerjaan yang terlupa):**
 - **F4b** — flux ×2 (satuan **megapiksel**, dibulatkan ke atas) & seedance ×2 (satuan **token video**
   `(t×l×fps×durasi)÷1024`) jadi otomatis. Butuh **pencatat pemakaian baru** di `visual/ai_image.py` +
   `visual/ai_video.py` ⇒ **menyentuh jalur produksi**, jadi DIKERJAKAN TERAKHIR: gagal-lunak, satu
@@ -380,7 +385,11 @@ jujurnya (stempel lama dari uji lemah · uji suara masih pendek) ada di §7f.
 ulang — logikanya sederhana): hitung-ulang seluruh run riwayat sebelum-vs-sesudah (**ambang: satu
 selisih tak terjelaskan → BERHENTI & lapor**) · sinkron dijalankan **KERING** dulu · alarm
 `tests/test_gerbang_rantai_biaya.py` (**G1–G14, 51 uji**) dibuktikan merah lalu hijau lalu
-**disabotase**. Uji penuh saat ini: **1399 hijau**.
+**disabotase** — begitu juga `test_uji_model_sekelas_produksi.py` (F6) dan
+`test_rekonsiliasi_biaya_harian.py` (F8). Uji penuh saat ini: **1412 hijau**.
+**Empat butir yang menunggu ketokan owner** (jangan dikerjakan tanpa itu): `selisih_akun` ·
+rincian biaya per komponen di layar tenant (+ atribusi baris gambar) · uji suara sepanjang produksi ·
+F4b. Rinciannya di §7f.
 
 ---
 
@@ -410,7 +419,7 @@ harga internet sebagai kebenaran. Empat kebenaran yang riset 23-Agu tetapkan:
 | **F5** | Formula "biaya dilaporkan vendor" disambungkan | ✅ **SELESAI 23-Agu** (biaya vendor dipakai apa adanya; `G14` 8 uji + **11 sabotase**) · ⛔ **"selisih penghitung akun" TIDAK dipasang** — alasan terukur di bawah, butuh ketok owner |
 | **F6** | **Tombol Uji memakai perintah selengkap produksi** (temuan terbesar 23-Agu) | ✅ **SELESAI 23-Agu** (uji naskah = kontrak produksi: JSON + jatah penuh; 7 uji, **5 sabotase**, 1 di antaranya menangkap celah penjaga saya sendiri) |
 | **F7** | Pulihkan baris yang tarifnya SALAH + beri JEJAK & KUNCI (3 naskah fal sudah lewat F4) | ✅ **SELESAI 23-Agu** (migr `0214`; 2 angka dibetulkan · 5 diberi jejak · 246 run → **244 identik, 2 terjelaskan**) |
-| **F8** | Rekonsiliasi berjadwal (taksiran vs pemakaian nyata akun) + alarm + SSOT ditutup | ⬜ |
+| **F8** | Rekonsiliasi berjadwal + alarm + SSOT ditutup | 🟡 **SEBAGIAN SELESAI 23-Agu**: alarm harian untuk biaya yang salah **tanpa mesin menyadarinya** (6 uji, **6 sabotase**) + SSOT ditutup. ⛔ Pembandingan ke **pemakaian nyata akun vendor** TIDAK BISA hari ini — alasan terukur di bawah |
 
 **15 formula** (kelompok → nama) — *koreksi: 15, bukan 14; `video_klip` (per klip + detik tambahan) DIPERTAHANKAN karena nyata dipakai Kling dan angkanya identik dengan per-detik untuk klip ≥ jatah dasar; memaksa migrasi = mengubah data tanpa perlu*: *tanpa taksiran* — biaya dilaporkan per panggilan · selisih
 penghitung akun · **naskah** — token masuk+keluar · per panggilan · **suara** — per huruf · token
@@ -574,6 +583,42 @@ dipakai tanpa alasan terukur, dan itu keputusan owner). Menekan Uji sekali akan 
 mungkin sama, tapi **belum ada satu pun bukti kegagalannya**, dan uji suara sepanjang produksi
 berbiaya nyata tiap tekan. Tidak diubah tanpa ketokan owner.
 
+**CATATAN PELAKSANAAN F8 (23-Agu).** Alarm yang sudah ada (`report_unpriced_models`, 22-Agu) menyala
+bila penghitung **MENGAKU** gagal. Celah yang tersisa justru lebih berbahaya: penghitung **tidak
+tahu** — angkanya keluar, tampak wajar, nol alarm menyala. Itu bentuk insiden 22-Agu (16 produksi,
+biaya suara Rp 0, seluruh mesin diam). `report_rekonsiliasi_biaya` menutupnya dengan dua tanda yang
+bisa diperiksa dari catatan kita sendiri, **nol panggilan ke vendor**, dan keduanya berarti uang nyata
+tak tertagih: **(a)** ada PANGGILAN tercatat tapi token nol (vendor berhenti melaporkan pemakaian) ·
+**(b)** ada pemakaian, biaya total 0, dan daftar belum-terhitung KOSONG. Dijalankan petugas harian
+(1×/hari, dedup), **gagal-lunak mutlak** — ia pengawas, bukan jalur kerja.
+**BUKTI:** 6 uji dibuktikan MERAH lebih dulu · **6 sabotase, semuanya tertangkap** (termasuk
+"berhenti dipanggil petugas harian" = kode mati, dan "gagal-lunak dicabut") · dijalankan pada **data
+produksi nyata**: `panggilan_tanpa_token = {}` · `nol_senyap = []` ⇒ **nol alarm palsu hari ini**;
+nilainya menangkap REGRESI kelas itu, bukan memperbaiki angka hari ini · 1412 uji hijau.
+
+**⛔ YANG TIDAK BISA DIKERJAKAN HARI INI — pembandingan ke PEMAKAIAN NYATA AKUN VENDOR.** Rencana
+F8 menyebutnya; diperiksa, dan ground truth-nya **tidak tersedia**: (1) tak satu pun dari **9 penyedia
+aktif** kita menerbitkan penghitung pemakaian yang bisa dibaca dengan kunci biasa; (2) membaca tagihan
+akun **tenant** = keputusan owner, bukan keputusan saya — BYOK, itu akun mereka; (3) satu kunci tenant
+bisa dipakai juga di luar MesinViral, jadi selisihnya akan memuat belanja yang bukan milik kita ⇒
+alarm palsu yang **tampak** meyakinkan. Jalan yang BENAR untuk ground truth sudah dipasang di **F5**:
+penyedia router melaporkan biaya per panggilan, tanpa menebak dan tanpa menyentuh tagihan tenant.
+Begitu penyedia router ditambahkan, rekonsiliasi taksiran-vs-laporan-vendor menjadi mungkin dan
+**akurat**; sebelum itu, memaksakannya = memasukkan kembali kelas cacat yang seluruh F1–F7 tutup.
+
+**🔎 DUA TEMUAN DARI PENGUKURAN F8 — dilaporkan, TIDAK saya ubah sendiri (menyentuh layar).**
+1. **`cost.breakdown` punya NOL pembaca.** Rincian biaya per komponen (naskah/suara/gambar/video)
+   dihitung dan disimpan di **setiap** produksi, dan tak ada satu pun yang membacanya. Menurut
+   definisi owner 19-Agu (`[B38]`) *"data yang dikumpulkan tapi tidak digunakan"* = **BUG**. Yang
+   membuatnya lebih dari sekadar fosil: kelas CSS `.cost-bar`/`.cost-legend`/`.cost-item` **sudah ada**
+   di `runs/[id]/run-detail.css` dan juga **tak dipakai siapa pun** — jadi layarnya pernah dirancang
+   lalu tak pernah disambungkan. Menyambungkannya = menambah elemen di layar tenant ⇒ **ketokan owner**.
+2. **Model gambar ber-tagih TOKEN masuk baris "naskah", bukan "gambar"** (82 produksi,
+   `gpt-image-1-mini`). Totalnya BENAR, tapi rinciannya salah alamat. Tak berdampak hari ini justru
+   karena butir 1 (nol pembaca) — tapi begitu rincian itu ditampilkan, tenant akan melihat
+   "Gambar: Rp 0" sambil membayar gambar di baris naskah. **Tidak saya ubah**: perilaku itu tertulis
+   sebagai rancangan di `ai_cost`, dan mengubahnya sekarang = menebak apa yang mau ditampilkan.
+
 **ATURAN MENGIKAT tiap langkah** *(dilanggar = pengerusakan; sudah terjadi 21-Agu)*:
 - **Satu langkah sekali jalan**, berhenti, lapor angkanya, baru langkah berikutnya.
 - **Ambang berhenti:** seluruh produksi lama dihitung ulang; **satu selisih tak terjelaskan → BERHENTI & lapor.**
@@ -606,8 +651,17 @@ sementara mesin tetap melaporkan $0** — formula `kuota_gratis` ada di katalog 
 di angka: jejaknya tertulis di baris modelnya sendiri (§7c). Pemicu meninjau ulang: ada tenant yang
 melewati ±100 gambar/hari pada satu akun Cloudflare.
 
-**Tingkat kematangan** (tangga FinOps *crawl → walk → run*): kita di **crawl** menuju **walk** —
-biaya teknis per produksi, mulai bisa dipercaya untuk keputusan. **Bukan** "run".
+**Tingkat kematangan** (tangga FinOps *crawl → walk → run*): sesudah F1–F8 kita berada di **walk** —
+tiap model menyatakan formula hitungnya, tiap tarif ketikan-tangan berjejak & terkunci, kegagalan
+hitung **berisik** (dua alarm harian: yang mesin sadari DAN yang tidak), dan untuk penyedia yang
+melaporkan biayanya sendiri kita **berhenti menaksir**. **Bukan "run"**, dan syarat naik ke "run"
+sudah jelas: ground truth dari luar (biaya yang vendor laporkan lewat penyedia router) + rekonsiliasi
+berjadwal terhadapnya.
+
+**RANTAI HARGA & BIAYA — DITUTUP 23-Agu.** F1–F7 tuntas, F8 sebagian (alasannya di §7f). Sisa yang
+menunggu **ketokan owner**, bukan pekerjaan yang terlupa: `selisih_akun` (produksi serentak) ·
+menampilkan rincian biaya per komponen di layar tenant · atribusi baris gambar untuk model ber-tagih
+token · uji suara sepanjang produksi · **F4b** (flux/seedance otomatis — menyentuh jalur produksi).
 
 **FOCUS (FinOps Open Cost and Usage Specification) — diperiksa 23-Agu, TIDAK diadopsi sebagai format.**
 Sebabnya terverifikasi: FOCUS menormalkan **ekspor tagihan dari penyedia**, dan kita tak pernah

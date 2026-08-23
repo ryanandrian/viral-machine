@@ -304,6 +304,14 @@ def run_once(sb=None) -> dict:
         report_unpriced_models(sb)
     except Exception as e:
         logger.warning(f"[janitor] laporan biaya-tak-terhitung gagal (non-fatal): {e}")
+    # [F8] Rekonsiliasi: biaya yang SALAH tanpa mesin menyadarinya. Alarm di atas hanya menyala bila
+    # penghitung MENGAKU gagal; yang ini menangkap kebalikannya — angka keluar, tampak wajar, dan nol
+    # alarm menyala (bentuk insiden 22-Agu: 16 produksi, biaya suara Rp 0, seluruh mesin diam).
+    try:
+        from src.billing.price_sync import report_rekonsiliasi_biaya
+        report_rekonsiliasi_biaya(sb)
+    except Exception as e:
+        logger.warning(f"[janitor] rekonsiliasi biaya gagal (non-fatal): {e}")
     # Kurs USD→IDR harian (tampilan biaya BYOK; hormati usd_idr_rate_locked). Fail-soft.
     try:
         from src.billing.price_sync import sync_fx_rate

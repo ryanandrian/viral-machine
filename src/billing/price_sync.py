@@ -471,6 +471,75 @@ def report_unpriced_models(sb=None) -> dict:
         return {"unpriced": {}}
 
 
+def report_rekonsiliasi_biaya(sb=None) -> dict:
+    """[F8] Biaya yang SALAH tanpa mesin menyadarinya → alarm admin 1×/hari.
+
+    BEDA DENGAN `report_unpriced_models`. Yang itu melapor bila penghitung **tahu** ia gagal
+    (`cost.unpriced` terisi). Celah yang tersisa justru yang lebih berbahaya: penghitung **tidak
+    tahu** — angkanya keluar, tampak wajar, nol alarm menyala. Itu bentuk insiden 22-Agu: biaya suara
+    4 channel aktif dilaporkan Rp 0 selama 16 produksi sementara seluruh mesin diam.
+
+    Ground truth yang IDEAL (pemakaian nyata di akun vendor) TIDAK tersedia: tak satu pun dari 9
+    penyedia aktif kita menerbitkan penghitung pemakaian yang bisa dibaca dengan kunci biasa, dan
+    membaca tagihan akun tenant = keputusan owner, bukan keputusan saya (BYOK: itu akun mereka).
+    Maka yang dipakai di sini adalah dua tanda yang bisa diperiksa dari catatan kita sendiri, tanpa
+    satu pun panggilan ke vendor, dan keduanya BERARTI uang nyata tak tertagih:
+      (a) ada PANGGILAN tercatat tapi token nol → vendor berhenti melaporkan pemakaian
+      (b) ada pemakaian, biaya total 0, dan daftar belum-terhitung KOSONG → nol senyap sejati
+    Keduanya **nol pada 246 produksi** saat dipasang (23-Agu) ⇒ nol alarm palsu; nilainya menangkap
+    REGRESI kelas itu. Jendela buktinya memakai kenop yang sudah ada (`AI_UNPRICED_WINDOW_DAYS`) —
+    tujuannya sama (jendela bukti produksi), jadi tak perlu kenop baru.
+
+    Fail-soft mutlak: ini pengawas, bukan jalur kerja. Kegagalannya haram menjatuhkan petugas harian.
+    """
+    try:
+        sb = sb or _sb()
+        sejak = (datetime.now(timezone.utc) - timedelta(days=UNPRICED_WINDOW_DAYS)).isoformat()
+        rows = (sb.table("production_runs").select("id, run_metadata")
+                .gte("created_at", sejak).execute().data or [])
+        tanpa_token: dict[str, int] = {}
+        nol_senyap: list = []
+        for r in rows:
+            meta = r.get("run_metadata") or {}
+            usage = meta.get("ai_usage") or {}
+            biaya = meta.get("cost") or {}
+            for mk, v in (usage.get("llm") or {}).items():
+                if isinstance(v, dict) and int(v.get("calls") or 0) > 0 \
+                        and not int(v.get("tokens_in") or 0) and not int(v.get("tokens_out") or 0):
+                    tanpa_token[str(mk)] = tanpa_token.get(str(mk), 0) + 1
+            if usage and biaya and float(biaya.get("usd") or 0) == 0 \
+                    and not (biaya.get("unpriced") or []):
+                nol_senyap.append(r.get("id"))
+        hasil = {"panggilan_tanpa_token": tanpa_token, "nol_senyap": nol_senyap}
+        if not tanpa_token and not nol_senyap:
+            return hasil
+        if _time.time() - _state_get_epoch(sb, "ai_rekon_alerted_at") < 86400:
+            return {**hasil, "alerted": False}
+        from src.utils.telegram_notifier import TelegramNotifier   # lazy: pola berkas ini
+        baris = []
+        if tanpa_token:
+            baris.append("• <b>Panggilan tercatat tapi pemakaiannya NOL</b> — vendor berhenti "
+                         "mengirim hitungan, jadi panggilan yang sungguh terjadi ditagih Rp 0:")
+            baris += [f"   <code>{TelegramNotifier.aman(k)}</code> — {v} produksi"
+                      for k, v in sorted(tanpa_token.items(), key=lambda x: -x[1])]
+        if nol_senyap:
+            baris.append(f"• <b>Biaya total Rp 0 padahal ada pemakaian</b>, dan mesin TIDAK "
+                         f"mengaku gagal — {len(nol_senyap)} produksi "
+                         f"(mis. #{nol_senyap[0]}).")
+        _notify_admin(
+            f"⚠️ <b>Biaya AI tampak wajar tapi TIDAK BENAR</b> "
+            f"({int(UNPRICED_WINDOW_DAYS)} hari terakhir)\n" + "\n".join(baris) +
+            "\nIni BUKAN kegagalan yang mesin sadari — angkanya keluar dan tampak normal, jadi "
+            "tanpa laporan ini ia bisa berjalan berbulan-bulan.\n"
+            "➡️ Periksa <b>Catalog → AI Models</b> pada model di atas: formula & satuan harganya "
+            "masih cocok dengan cara vendor menagih hari ini?")
+        _state_set_epoch(sb, "ai_rekon_alerted_at")
+        return {**hasil, "alerted": True}
+    except Exception as e:
+        logger.warning(f"[price_sync] rekonsiliasi biaya gagal (non-fatal): {e}")
+        return {}
+
+
 def sync_fx_rate(sb=None, force: bool = False) -> dict:
     """Kurs USD→IDR (`app_config.usd_idr_rate`, TAMPILAN biaya BYOK) — sinkron harian dari kurs pasar
     publik. `usd_idr_rate_locked`=1 (diset otomatis saat admin edit manual) → HORMATI, jangan timpa.
