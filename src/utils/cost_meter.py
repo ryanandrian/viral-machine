@@ -8,6 +8,9 @@ Prinsip:
   meter aktif di thread itu (thread lain, mis. publisher, tak menginisialisasi → no-op, nol polusi).
 - Meter = KONSUMSI saja (token/gambar/karakter). Konversi ke uang = src/billing/ai_cost.py
   (harga satuan dari katalog ai_models.pricing — sinkron otomatis feed komunitas + override admin).
+  SATU pengecualian, disebut namanya supaya tak jadi kejutan: `biaya_vendor` [F5, 23-Agu] menyimpan
+  UANG, bukan konsumsi — yaitu biaya yang VENDOR sendiri sebutkan di balasannya. Untuk penyedia
+  seperti itu menaksir ulang justru MENAMBAH kesalahan; angka vendor sudah final.
 """
 
 import threading
@@ -21,7 +24,8 @@ def reset() -> None:
     # bukan per huruf. WAJIB terdaftar di sini — `_bucket()` mengembalikan None untuk keranjang tak
     # dikenal, jadi keranjang yang lupa didaftarkan membuat add_* jadi no-op SENYAP (pencatatan hilang
     # tanpa jejak). Dikunci uji `test_biaya_ai_tak_bisa_nol_senyap.py`.
-    _tl.data = {"llm": {}, "image": {}, "tts": {}, "tts_tokens": {}, "tts_seconds": {}, "video": {}}
+    _tl.data = {"llm": {}, "image": {}, "tts": {}, "tts_tokens": {}, "tts_seconds": {}, "video": {},
+                "biaya_vendor": {}}
 
 
 def _bucket(kind: str) -> dict | None:
@@ -82,6 +86,34 @@ def add_tts_seconds(model: str, seconds: float) -> None:
     if b is None or not model:
         return
     b[model] = round(float(b.get(model, 0.0)) + float(seconds or 0.0), 3)
+
+
+def add_biaya_vendor(model: str, usd: float) -> None:
+    """[F5] BIAYA yang VENDOR sebutkan sendiri untuk panggilan ini — satu-satunya angka di meteran
+    ini yang berupa UANG, bukan konsumsi. Sengaja, dan sengaja di keranjang SENDIRI.
+
+    KENAPA ADA. Seluruh keluarga cacat 23-Agu lahir dari MENAKSIR (jumlah yang kita ukur × tarif yang
+    kita simpan): satuan bisa salah, tarif bisa basi, pencatat bisa dobel. Untuk penyedia yang
+    melaporkan biayanya per panggilan, rantai itu tak perlu ada — dan angkanya bukan taksiran.
+    Terverifikasi ke dokumen resmi OpenRouter (23-Agu): `usage.cost` SELALU dikirim, satuannya
+    *credit*, dan 1 credit = 1 USD.
+
+    KENAPA KERANJANG SENDIRI. Kalau ditumpangkan ke keranjang token, satu panggilan punya DUA cara
+    ditagih di satu tempat — persis bentuk cacat "tertagih dua kali" yang baru ditutup. Terpisah
+    berarti penghitung memilih salah satu berdasarkan FORMULA yang baris modelnya nyatakan.
+
+    Fail-soft: nilai tak masuk akal / nol / negatif → tak dicatat (biar jalur jujur yang bicara,
+    bukan angka gratis palsu)."""
+    b = _bucket("biaya_vendor")
+    if b is None or not model:
+        return
+    try:
+        nilai = float(usd)
+    except (TypeError, ValueError):
+        return
+    if nilai <= 0:
+        return
+    b[model] = round(float(b.get(model, 0.0)) + nilai, 8)
 
 
 def summary() -> dict:

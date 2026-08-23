@@ -111,6 +111,14 @@ def collect_valid_values() -> List[Dict[str, str]]:
         for f in FORMULA:
             rows.append({"field": f"pricing_model:{f.jenis}", "value": f.kunci,
                          "label": f"{f.nama} — {f.penjelasan}"})
+        # [F5] Formula yang memang TIDAK BUTUH TARIF (vendor menyebut biayanya / vendor tak menagih).
+        # Dicerminkan supaya panel bisa berhenti memberi peringatan "satuan harga kosong" pada baris
+        # yang sebenarnya BENAR — dan supaya layar tak perlu MENGETIK nama formula mana saja itu
+        # (nama formula yang diketik di layar = pengetahuan yang membusuk sendiri, kelas cacat 23-Agu).
+        from src.billing.ai_cost import FORMULA_TANPA_TARIF
+        for kunci in sorted(FORMULA_TANPA_TARIF):
+            nama = next((f.nama for f in FORMULA if f.kunci == kunci), kunci)
+            rows.append({"field": "pricing_model_tanpa_tarif", "value": kunci, "label": nama})
     except Exception as e:
         logger.warning(f"[catalog_sync] katalog harga gagal dibaca: {e}")
     return rows

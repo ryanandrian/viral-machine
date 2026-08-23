@@ -332,10 +332,14 @@ tabel ini setiap kali dilakukan. *(Rencana S3: mesin ikut membandingkan catatan-
 
 > **Baca 7f-0 lalu §7f. Jangan menyentuh rantai harga/biaya sebelum keduanya dibaca.**
 
-**KEADAAN DEPLOY — PENTING.** Produksi (VPS) masih di **`3f7b7b8`**. Tujuh commit ada **HANYA di
-komputer lokal, BELUM di-push, BELUM di-deploy**: `3754ad8` (daftar satuan) · `3a249a0` (rencana §7f)
-· `d759732` (F1) · `f7a9a48` (F2) · `0cca434` (F3) · `0f4df20` (F4) · `d46745e` (perbaikan G1).
+**KEADAAN DEPLOY — PENTING.** Produksi (VPS, mesin **dan** web) masih di **`3f7b7b8`** — diperiksa
+langsung ke server 23-Agu. Seluruh commit F1–F7 ada **HANYA di komputer lokal, BELUM di-push, BELUM
+di-deploy**: `3754ad8` (daftar satuan) · `3a249a0` (rencana §7f) · `d759732` (F1) · `f7a9a48` (F2) ·
+`0cca434` (F3) · `0f4df20` (F4) · `d46745e` (perbaikan G1) · `245f501` (F7) · F5.
 ⚠️ **Deploy = izin owner terpisah.** Jangan push/deploy tanpa diminta.
+**Yang SUDAH berlaku di produksi tanpa deploy:** perbaikan tarif F7 — mesin yang terpasang membaca
+tarif dari DB, dan migr `0214` sudah diterapkan. Perbaikan F1–F6 (cara hitung, panel, adapter) baru
+berlaku SESUDAH deploy.
 
 **DATABASE PRODUKSI SUDAH BERUBAH** (migrasi + sinkron nyata sudah dijalankan — JANGAN diulang):
 `0209` izin baca cermin · `0210` kolom `pricing_model` + 47 baris terisi · `0211` kenop URL sumber
@@ -356,11 +360,12 @@ keliru yang diketahui: suara Gemini **$0,50/$10,00** dan `eleven_v3` **$100**, k
 bercatatan sumber & tanggal; 5 baris lain diberi jejak tanpa menyentuh angkanya. Penjaga `G13`
 menegakkan §7c. Rinciannya di CATATAN PELAKSANAAN F7 di §7f.
 
+**✅ F5 SELESAI 23-Agu** untuk *"biaya dilaporkan vendor"* — begitu penyedia router ditambahkan,
+biayanya **pasti, bukan taksiran**, dan panel tak lagi menuduhnya "harga kosong".
+⛔ *"selisih penghitung akun"* **sengaja TIDAK dipasang** (produksi serentak ⇒ mustahil diatribusikan
+per-produksi) — alasan lengkap di §7f, **menunggu ketokan owner**; tempatnya F8.
+
 **PEKERJAAN BERIKUTNYA — urutan yang direncanakan (risiko terkecil dulu):**
-- **F5** — formula *"biaya dilaporkan vendor"* & *"selisih penghitung akun"* disambungkan (OpenRouter
-  mengirim `usage.cost` tiap balasan; APIMaster lewat `/v1/dashboard/billing/usage`, satuan **SEN**).
-  Nol taksiran = kelas cacat ini mati di akarnya untuk penyedia router. **Tak menyentuh jalur produksi
-  gambar/video.**
 - **F6** — **tombol Uji memakai perintah selengkap produksi**: 4 dari 6 model APIMaster lolos
   panggilan pendek lalu GAGAL pada perintah naskah asli (mentok batas keluaran 2.000 token). Lencana
   "✓ Teruji" hari ini bisa berbohong.
@@ -374,8 +379,8 @@ menegakkan §7c. Rinciannya di CATATAN PELAKSANAAN F7 di §7f.
 **Alat bukti yang WAJIB dipakai tiap langkah** (skrip ada di direktori kerja sesi; bila hilang, tulis
 ulang — logikanya sederhana): hitung-ulang seluruh run riwayat sebelum-vs-sesudah (**ambang: satu
 selisih tak terjelaskan → BERHENTI & lapor**) · sinkron dijalankan **KERING** dulu · alarm
-`tests/test_gerbang_rantai_biaya.py` (**G1–G13, 43 uji**) dibuktikan merah lalu hijau lalu
-**disabotase**. Uji penuh saat ini: **1391 hijau**.
+`tests/test_gerbang_rantai_biaya.py` (**G1–G14, 51 uji**) dibuktikan merah lalu hijau lalu
+**disabotase**. Uji penuh saat ini: **1399 hijau**.
 
 ---
 
@@ -402,7 +407,7 @@ harga internet sebagai kebenaran. Empat kebenaran yang riset 23-Agu tetapkan:
 | **F2** | Penghitung biaya memakai formula (ganti logika urutan-prioritas) | ✅ **SELESAI 23-Agu** — 246 run dihitung ulang: **246 IDENTIK, 0 berbeda** |
 | **F3** | Sumber tarif diatur dari panel + 3 pagar (ambigu ditolak · agregator · terkunci) | ✅ **SELESAI 23-Agu** (migr `0211`; sinkron kering: **2 baris bergerak**, 13 tanpa-sumber dipertahankan) |
 | **F4** | Sumber API resmi penyedia (migr `0212`/`0213`) → **7 dari 12** model fal otomatis; 4 menunggu **F4b**, veo dikunci manual | ✅ **SELESAI 23-Agu** |
-| **F5** | Formula "biaya dilaporkan vendor" + "selisih penghitung akun" disambungkan | ⬜ |
+| **F5** | Formula "biaya dilaporkan vendor" disambungkan | ✅ **SELESAI 23-Agu** (biaya vendor dipakai apa adanya; `G14` 8 uji + **11 sabotase**) · ⛔ **"selisih penghitung akun" TIDAK dipasang** — alasan terukur di bawah, butuh ketok owner |
 | **F6** | **Tombol Uji memakai perintah selengkap produksi** (temuan terbesar 23-Agu) | ⬜ |
 | **F7** | Pulihkan baris yang tarifnya SALAH + beri JEJAK & KUNCI (3 naskah fal sudah lewat F4) | ✅ **SELESAI 23-Agu** (migr `0214`; 2 angka dibetulkan · 5 diberi jejak · 246 run → **244 identik, 2 terjelaskan**) |
 | **F8** | Rekonsiliasi berjadwal (taksiran vs pemakaian nyata akun) + alarm + SSOT ditutup | ⬜ |
@@ -509,6 +514,41 @@ keduanya memakai suara Gemini, nol tak terjelaskan**; sinkron kering sesudahnya 
 **6 → 8** (dua baris itu kini aman). **Riwayat biaya tenant TIDAK ditulis ulang** — layar membaca
 angka yang tersimpan per produksi, jadi yang benar berlaku mulai produksi BERIKUTNYA dan nol angka
 lama tenant berubah. **Berlaku tanpa deploy** (tarif dibaca dari DB oleh mesin yang sudah terpasang).
+
+**CATATAN PELAKSANAAN F5 (23-Agu).** Bila vendor MENYEBUT biayanya sendiri, mesin memakai angka itu
+dan **berhenti menaksir** — seluruh rantai "jumlah yang kita ukur × tarif yang kita simpan" (tempat
+kesepuluh cacat 23-Agu hidup) tidak dilewati sama sekali. Terverifikasi ke dokumen resmi OpenRouter:
+`usage.cost` **selalu** dikirim (parameter `usage:{include:true}` sudah usang & tak berpengaruh),
+satuannya *credit* dan **1 credit = 1 USD** (*"the base currency is US dollars"*). Angka itu dibaca
+dari objek `usage` yang **sudah** kita terima ⇒ **nol panggilan tambahan, nol kredit**.
+**Keranjang meter SENDIRI** (`biaya_vendor`) — bukan ditumpangkan ke keranjang token — sebab satu
+panggilan yang punya dua cara ditagih di satu tempat adalah bentuk cacat "tertagih dua kali" yang
+baru ditutup. Yang menentukan mana yang ditagih tetap **FORMULA di baris modelnya** ⇒ mustahil ganda
+secara struktur. Baris ber-formula ini **tidak butuh tarif apa pun**, dan itu dicerminkan ke DB
+(`pricing_model_tanpa_tarif`) supaya **panel berhenti memberi peringatan PALSU** "satuan harga kosong"
+pada baris yang justru paling akurat — nol nama formula diketik di kode layar. Nama kolom vendor
+**tidak ditebak**: hanya `cost` yang diterima; vendor lain yang memakai nama lain akan muncul di
+laporan harian sebagai belum-terhitung (**berisik**, bukan salah diam-diam). Vendor diam → **JUJUR**
+belum-terhitung, **haram** ditaksir dari token.
+**BUKTI:** `G14` (8 uji, 4 dibuktikan MERAH lebih dulu) + `add_biaya_vendor` masuk batas "satu
+pencatat" `G3` + **11 sabotase, semuanya tertangkap** · hitung-ulang 246 run: **0 run** punya
+keranjang `biaya_vendor` dan **0 baris model** ber-formula ini ⇒ jalur baru mustahil menggeser angka
+riwayat; ke-19 run yang berbeda dari angka TERSIMPAN **seluruhnya bernama** (16 hitung-ganda gambar
+Gemini · 2 gambar+suara Gemini · 1 naskah fal per-permintaan), **nol tak terjelaskan** · 1399 uji
+hijau · build FE lulus. **Batas jujur yang diuji, bukan didugaan:** penjaga cabang LAYAR berbasis
+teks — ia menangkap pencabutan, tapi **tidak** menangkap pelumpuhan isi fungsi sementara namanya
+dibiarkan (dicoba, tetap hijau). Menutupnya butuh penjalan uji layar yang belum ada di proyek ini.
+
+**⛔ F5 SEPARUH DITOLAK DENGAN ALASAN TERUKUR — "selisih penghitung akun" TIDAK dipasang.**
+Rencananya menyebut APIMaster diukur dengan menyelisihkan penghitung pemakaian akun
+(`/v1/dashboard/billing/usage`, satuan SEN) sebelum & sesudah produksi. **Itu mustahil benar di mesin
+kita**: produksi berjalan **SERENTAK** (`ThreadPoolExecutor`, `MAX_CONCURRENT_RENDER` = jumlah core),
+jadi selisih penghitung satu akun tak bisa diatribusikan ke satu produksi — dua produksi tenant yang
+sama akan saling mencuri biaya. Memasangnya = memasukkan kembali kelas cacat yang F1–F7 tutup, kali
+ini dengan angka yang **tampak** pasti. Tempatnya yang benar = **rekonsiliasi tingkat TENANT (F8)**:
+membandingkan total taksiran vs total pemakaian akun untuk satu periode, bukan per-produksi. Sampai
+diketok owner, formula itu tetap dilaporkan **belum-terhitung** (jujur, berisik). Model APIMaster
+sebaiknya memakai `naskah_token` dengan tarif resmi APIMaster.
 
 **ATURAN MENGIKAT tiap langkah** *(dilanggar = pengerusakan; sudah terjadi 21-Agu)*:
 - **Satu langkah sekali jalan**, berhenti, lapor angkanya, baru langkah berikutnya.

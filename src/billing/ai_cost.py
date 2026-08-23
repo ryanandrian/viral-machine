@@ -207,7 +207,17 @@ def semua_kunci_harga() -> tuple:
 
 
 KERANJANG_BIAYA = {"llm": "llm", "image": "image", "tts": "tts", "tts_tokens": "tts",
-                   "tts_seconds": "tts", "video": "video"}
+                   "tts_seconds": "tts", "video": "video",
+                   # [F5] Biaya yang VENDOR laporkan sendiri. Pencatatnya hari ini hanya adapter
+                   # NASKAH (penyedia router), jadi rinciannya masuk baris naskah. Bila kelak router
+                   # yang sama melayani gambar/video, pencatatnya ditambah di jalur itu — G3 menjaga
+                   # jumlah pencatat supaya penambahan itu tak bisa menyelinap tanpa terlihat.
+                   "biaya_vendor": "llm"}
+
+# Formula yang memang TIDAK BUTUH TARIF apa pun di baris modelnya. Tanpa daftar ini, baris yang
+# benar (vendor menyebut biayanya / vendor tak menagih) akan dituduh "celah data" dan dilaporkan
+# belum-terhitung setiap hari — alarm palsu yang mengajari admin mengabaikan alarm.
+FORMULA_TANPA_TARIF = frozenset({"gratis", "biaya_dilaporkan"})
 
 
 def _sb():
@@ -273,11 +283,14 @@ def _biaya_skema(skema: str, harga: dict, pemakaian_per_keranjang: dict) -> floa
 
 # Formula yang penghitung BELUM dukung — sengaja dilaporkan JUJUR sebagai "tak terhitung", bukan
 # dihitung dengan cara lain. Masing-masing punya langkah pemasangannya sendiri (SSOT §7f):
-#   biaya_dilaporkan · selisih_akun  → F5 (mesin mencatat angka yang vendor laporkan)
-#   gambar_megapiksel · video_token  → F4 (bersama tarif asli dari sumber resmi vendor)
-#   kuota_gratis                     → F7 (bersama data kuotanya)
+#   selisih_akun                     → TIDAK AKAN dipasang per-produksi: produksi berjalan SERENTAK
+#                                      (ThreadPool sejumlah core), jadi selisih penghitung akun
+#                                      mustahil diatribusikan ke satu produksi. Tempatnya di
+#                                      rekonsiliasi tingkat TENANT (F8), bukan di sini.
+#   gambar_megapiksel · video_token  → F4b (bersama pencatat pemakaiannya di jalur gambar/video)
+#   kuota_gratis                     → butuh penghitungan kuota harian per akun tenant (SSOT §7e)
 FORMULA_BELUM_DIDUKUNG = frozenset({
-    "biaya_dilaporkan", "selisih_akun", "gambar_megapiksel", "video_token", "kuota_gratis"})
+    "selisih_akun", "gambar_megapiksel", "video_token", "kuota_gratis"})
 
 
 def _formula_map(sb=None) -> dict:
@@ -338,14 +351,28 @@ def compute_cost_usd(ai_usage: dict, sb=None) -> dict | None:
             per_model.setdefault(str(model), {})[keranjang] = nilai
 
     for model, pemakaian in per_model.items():
+        formula = (formulas or {}).get(model)
         harga = prices.get(model)
-        if not harga and (formulas or {}).get(model) != "gratis":
+        if not harga and formula not in FORMULA_TANPA_TARIF:
             unpriced.append(model)
             continue
-        formula = (formulas or {}).get(model)
 
         # Formula GRATIS: vendor tak menagih (mis. Edge). Biaya 0 dan BUKAN "tak terhitung".
         if formula == "gratis":
+            synced = synced or (harga or {}).get("synced_at")
+            continue
+
+        # [F5] VENDOR MENYEBUT BIAYANYA SENDIRI → dipakai apa adanya, mesin tidak menghitung apa pun.
+        # Sengaja TIDAK lewat daftar satuan: daftar itu mengalikan JUMLAH × TARIF, sedangkan ini
+        # sudah berupa jawabannya. Menaruhnya di daftar satuan berarti ia punya "tarif" — dan itu
+        # membuka sumber angka kedua untuk model yang sama (dijaga G9).
+        # Token panggilan yang sama diabaikan di sini ⇒ mustahil tertagih dua kali secara struktur.
+        if formula == "biaya_dilaporkan":
+            usd = pemakaian.get("biaya_vendor")
+            if usd is None:
+                unpriced.append(model)      # vendor tak menyebut → JUJUR, haram ditaksir dari token
+                continue
+            br[KERANJANG_BIAYA["biaya_vendor"]] += float(usd)
             synced = synced or (harga or {}).get("synced_at")
             continue
 

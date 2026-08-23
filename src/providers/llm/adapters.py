@@ -120,6 +120,36 @@ def _classify_openai_compat_error(exc: Exception, penyedia: str = "", *,
     return _Vonis(p.kelas, (_anjuran(p.kelas, blob, _ident) if p.kelas is not ErrorClass.UNKNOWN else None), p.dasar)
 
 
+def _biaya_yang_vendor_sebut(u) -> float | None:
+    """[F5, 23-Agu] BIAYA yang vendor sebutkan sendiri untuk panggilan ini, dari objek `usage` yang
+    sudah kita terima. None = vendor tidak menyebutkannya (mayoritas penyedia langsung).
+
+    Kenapa hanya `cost`, tanpa nama cadangan: nama kolom yang DITEBAK = kelas cacat yang baru
+    ditutup (kolom `output_cost_per_token` bermakna dua hal, dan menerimanya membuat biaya suara 4×
+    terlalu murah selama 16 produksi). `cost` diverifikasi ke dokumen resmi OpenRouter (23-Agu):
+    selalu dikirim, satuannya *credit*, 1 credit = 1 USD. Vendor lain yang memakai nama berbeda akan
+    muncul sebagai "belum terhitung" di laporan harian — BERISIK, bukan salah diam-diam.
+
+    Bentuk balasan bisa objek SDK, dict polos, atau objek pydantic yang menaruh kolom asing di
+    `model_extra`. Nilai yang bukan angka diperlakukan seperti TIDAK ADA (jalur jujur), bukan 0
+    (gratis palsu)."""
+    if u is None:
+        return None
+    nilai = getattr(u, "cost", None)
+    if nilai is None and isinstance(u, dict):
+        nilai = u.get("cost")
+    if nilai is None:
+        extra = getattr(u, "model_extra", None)
+        if isinstance(extra, dict):
+            nilai = extra.get("cost")
+    if nilai is None:
+        return None
+    try:
+        return float(nilai)
+    except (TypeError, ValueError):
+        return None
+
+
 def _identitas(model: str, penyedia_nama: str) -> str:
     """" 'nama-model' (Nama Penyedia)" — sisipan yang membuat anjuran BISA DIKERJAKAN tenant.
     Kosong bila keduanya tak diketahui; separuh diketahui tetap lebih baik daripada tak ada."""
@@ -426,6 +456,13 @@ class OpenAIChatAdapter(_BaseAdapter):
                     from src.utils import cost_meter
                     u = getattr(r, "usage", None)
                     cost_meter.add_llm(model, getattr(u, "prompt_tokens", 0), getattr(u, "completion_tokens", 0))
+                    # [F5] Penyedia router (OpenRouter dst) menyebutkan BIAYA panggilan ini di objek
+                    # usage yang sama — nol panggilan tambahan. Bila disebut, biaya itu yang dipakai
+                    # (bukan taksiran token), dan yang menentukan mana yang ditagih adalah FORMULA
+                    # di baris modelnya ⇒ mustahil tertagih dua kali.
+                    biaya = _biaya_yang_vendor_sebut(u)
+                    if biaya is not None:
+                        cost_meter.add_biaya_vendor(model, biaya)
                 except Exception:
                     pass
 

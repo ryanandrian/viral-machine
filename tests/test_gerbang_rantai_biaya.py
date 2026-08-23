@@ -140,7 +140,11 @@ class G3_SatuPencatatPerJenisPemakaian(unittest.TestCase):
     adapter Gemini → tercatat 2226 padahal vendor menerima 1113."""
 
     BATAS = {"add_tts": 1, "add_image": 1, "add_video": 1, "add_tts_tokens": 1,
-             "add_tts_seconds": 1}
+             "add_tts_seconds": 1,
+             # [F5] Biaya yang vendor laporkan. Batas 1 menjaga DUA arah sekaligus: pencatatnya tak
+             # boleh HILANG (jadi kode mati, biaya router balik jadi taksiran) dan tak boleh
+             # BERTAMBAH diam-diam (dua titik = satu panggilan tercatat dua kali).
+             "add_biaya_vendor": 1}
 
     def _titik_panggil(self, nama: str):
         titik = []
@@ -336,12 +340,19 @@ class G8_PenandaHargaMengikutiSatuanTerpakai(unittest.TestCase):
                             "kondisi lama (objek harga ada = dianggap berharga) masih dipakai")
 
     def test_penanda_menyebut_satuan_yang_harus_diisi(self):
-        """Alarm harian hanya berguna bila ADA tempat yang menyebut tindakannya."""
+        """Alarm harian hanya berguna bila ADA tempat yang menyebut tindakannya.
+
+        [23-Agu] Jangkar diperbaiki: dulu ia mengambil kemunculan PERTAMA "badge badge-warning" lalu
+        membaca 900 huruf. Begitu lencana peringatan lain lahir lebih dulu di berkas (F5: baris yang
+        memang tak butuh tarif), jendelanya tak lagi mencapai kode yang dijaga — dan penjaga jadi
+        merah karena alasan yang salah. Ini pola uji palsu ke-3 yang sudah tercatat. Kini ia
+        berjangkar pada penanda YANG DIMAKSUD, sehingga tak bisa lolos maupun salah-tuduh."""
         isi = _tanpa_komentar(self.PANEL, _isi(self.PANEL))
-        i = isi.index("badge badge-warning")
-        blok = isi[i:i + 900]
+        i = isi.index("satuan harga kosong")
+        blok = isi[max(0, i - 900):i]          # judul lencana ada SESUDAH title= yang menyebut satuan
         self.assertIn("satuanJenis", blok,
-                      "penanda tak menyebut satuan mana yang harus diisi → admin menebak")
+                      "penanda 'satuan harga kosong' tak menyebut satuan mana yang harus diisi → "
+                      "admin menebak, dan alarm harian jadi tak bisa ditindak")
 
 
 class G9_FormulaHargaLengkapDanDijelaskan(unittest.TestCase):
@@ -390,6 +401,13 @@ class G9_FormulaHargaLengkapDanDijelaskan(unittest.TestCase):
             with self.subTest(x.kunci):
                 punya = bool(satuan_formula(x.kunci))
                 if x.kunci in TANPA_HITUNG:
+                    # [23-Agu] Dulu di sini hanya `continue` — janji di docstring ("yang TIDAK
+                    # menghitung wajib TIDAK punya satuan") tak pernah diperiksa, jadi separuh
+                    # penjaga ini KODE MATI. Kalau formula tanpa-hitung diam-diam diberi satuan, ia
+                    # punya "tarif" sekaligus angka dari vendor ⇒ dua sumber untuk model yang sama.
+                    self.assertFalse(punya,
+                                     f"formula '{x.kunci}' tidak menghitung apa pun tapi punya "
+                                     f"satuan harga → sumber angka GANDA untuk satu model")
                     continue
                 self.assertTrue(punya, f"formula '{x.kunci}' menghitung tapi tak punya satuan harga")
 
@@ -685,3 +703,130 @@ class G13_TarifKetikanTanganWajibBerjejak(unittest.TestCase):
                          "HARGA KETIKAN TANGAN TANPA JEJAK (SSOT §7c) — tarif salah-tapi-masuk-akal "
                          "tak bisa ditangkap mesin, jadi jejak manusia inilah satu-satunya penutupnya:\n"
                          + "\n".join(f"  · {c}" for c in cacat))
+
+
+class G14_BiayaYangVendorLaporkanDipakaiApaAdanya(unittest.TestCase):
+    """F5 — bila vendor MENYEBUT biayanya sendiri, mesin memakai angka itu dan BERHENTI menaksir.
+
+    Seluruh keluarga cacat 23-Agu lahir dari MENAKSIR: jumlah yang kita ukur × tarif yang kita
+    simpan. Tiap sambungan di rantai itu bisa membusuk sendiri (satuan salah · tarif basi · dua
+    lapis pencatat). Untuk penyedia yang melaporkan biayanya per panggilan, seluruh rantai itu
+    **tidak perlu ada**. Terverifikasi 23-Agu ke dokumen resmi OpenRouter: `usage.cost` **selalu**
+    dikirim (parameter `usage:{include:true}` sudah usang & tak berpengaruh), satuannya *credit*
+    dan **1 credit = 1 USD** (*"the base currency is US dollars"*). Ini penting untuk arah yang
+    owner tetapkan: *"kedepannya saya ingin hanya menambahkan ai model yang berasal dari router
+    provider seperti apimaster atau openrouter"*.
+
+    Yang dijaga:
+      (a) angka vendor dipakai APA ADANYA — dan baris model tak perlu tarif apa pun
+      (b) vendor TIDAK menyebut → JUJUR "belum terhitung", **haram** ditaksir diam-diam
+      (c) HARAM tertagih dua kali: token panggilan yang sama tak boleh ikut ditagih
+      (d) keranjang meternya benar-benar merekam (keranjang tak terdaftar = pencatatan hilang senyap)
+      (e) pembaca biaya-vendor di adapter tahan bentuk balasan apa pun (objek · dict · tak ada)
+    """
+
+    HARGA_TOKEN = {"m-router": {"in_per_1m": 3.0, "out_per_1m": 15.0, "synced_at": "2026-08-23"}}
+
+    def _hitung(self, pakai, harga, formula):
+        from unittest.mock import patch
+
+        from src.billing import ai_cost
+        with patch.object(ai_cost, "_pricing_map", return_value=harga), \
+             patch.object(ai_cost, "_formula_map", return_value=formula):
+            return ai_cost.compute_cost_usd(pakai)
+
+    def test_biaya_vendor_dipakai_apa_adanya_tanpa_butuh_tarif(self):
+        """Baris model ber-formula ini TIDAK punya tarif — dan itu benar, bukan celah data."""
+        h = self._hitung({"biaya_vendor": {"m-router": 0.0123456}},
+                         {}, {"m-router": "biaya_dilaporkan"})
+        self.assertEqual(h["unpriced"], [],
+                         "biaya yang vendor sebutkan sendiri malah dilaporkan 'belum terhitung'")
+        # places=6 = kontrak pembulatan seluruh modul ini (`round(total, 6)`), bukan kelonggaran
+        # uji: yang dijaga adalah angkanya datang dari vendor, bukan dari taksiran token.
+        self.assertAlmostEqual(h["usd"], 0.0123456, places=6,
+                               msg="angka vendor tidak dipakai apa adanya")
+
+    def test_vendor_tak_menyebut_maka_JUJUR_bukan_nol(self):
+        """Haram menaksir dari token bila formula barisnya menyatakan 'biaya dari vendor'."""
+        h = self._hitung({"llm": {"m-router": {"tokens_in": 1_000_000, "tokens_out": 1_000_000,
+                                               "calls": 1}}},
+                         self.HARGA_TOKEN, {"m-router": "biaya_dilaporkan"})
+        self.assertEqual(h["usd"], 0.0, "biaya ditaksir padahal vendor tak menyebutkannya")
+        self.assertIn("m-router", h["unpriced"], "kegagalan hitung tidak dilaporkan (senyap)")
+
+    def test_haram_tertagih_dua_kali(self):
+        """Panggilan yang sama menghasilkan token DAN biaya-vendor. Hanya SATU yang boleh ditagih."""
+        h = self._hitung({"biaya_vendor": {"m-router": 0.004},
+                          "llm": {"m-router": {"tokens_in": 1_000_000, "tokens_out": 1_000_000,
+                                               "calls": 3}}},
+                         self.HARGA_TOKEN, {"m-router": "biaya_dilaporkan"})
+        self.assertAlmostEqual(h["usd"], 0.004, places=9,
+                               msg=f"tertagih dua kali (token + biaya vendor): {h['breakdown']}")
+
+    def test_formula_lain_tak_tersentuh_biaya_vendor(self):
+        """Kebalikannya juga wajib: baris ber-formula token TIDAK boleh diam-diam memakai angka
+        vendor — kalau tidak, satu perubahan formula bisa menggeser biaya tanpa siapa pun meminta."""
+        h = self._hitung({"biaya_vendor": {"m-router": 999.0},
+                          "llm": {"m-router": {"tokens_in": 1_000_000, "tokens_out": 0, "calls": 1}}},
+                         self.HARGA_TOKEN, {"m-router": "naskah_token"})
+        self.assertAlmostEqual(h["usd"], 3.0, places=9,
+                               msg=f"formula token malah memakai angka vendor: {h['breakdown']}")
+
+    def test_keranjang_biaya_vendor_benar_benar_merekam(self):
+        """`_bucket()` mengembalikan None untuk keranjang tak dikenal ⇒ pencatat jadi no-op SENYAP."""
+        from src.utils import cost_meter
+        cost_meter.reset()
+        cost_meter.add_biaya_vendor("m-router", 0.002)
+        cost_meter.add_biaya_vendor("m-router", 0.003)
+        self.assertAlmostEqual((cost_meter.summary().get("biaya_vendor") or {}).get("m-router", 0),
+                              0.005, places=9,
+                              msg="keranjang biaya-vendor tak ikut di-reset → pencatatan hilang senyap")
+
+    def test_pembaca_biaya_vendor_tahan_bentuk_balasan(self):
+        """Balasan vendor bisa berupa objek SDK, dict polos, atau tak memuatnya sama sekali.
+        Yang tak memuat WAJIB menghasilkan None (→ jalur jujur), bukan 0 (→ gratis palsu)."""
+        from src.providers.llm.adapters import _biaya_yang_vendor_sebut as baca
+
+        class _U:            # bentuk objek (SDK OpenAI-kompatibel)
+            cost = 0.00042
+        self.assertAlmostEqual(baca(_U()), 0.00042, places=9)
+        self.assertAlmostEqual(baca({"cost": 0.5, "prompt_tokens": 9}), 0.5, places=9)
+        self.assertIsNone(baca({"prompt_tokens": 9}), "vendor tanpa biaya malah menghasilkan angka")
+        self.assertIsNone(baca(None), "balasan tanpa usage meledak / menghasilkan angka")
+        self.assertIsNone(baca({"cost": "bukan-angka"}), "nilai tak masuk akal diterima sebagai biaya")
+
+    PANEL_F5 = "apps/web/src/app/admin/(panel)/catalog/page.tsx"
+
+    def test_panel_tak_memberi_peringatan_palsu(self):
+        """Baris yang formulanya TIDAK butuh tarif justru yang paling akurat biayanya. Memberinya
+        lencana "satuan harga kosong" = alarm palsu, dan alarm palsu mengajari admin mengabaikan
+        alarm sungguhan (kelas cacat yang sama dengan 'lencana ✓ Teruji dari uji bulan lalu').
+
+        Dan daftarnya WAJIB dari cermin DB, bukan diketik di layar: nama formula yang ditanam di
+        kode layar adalah pengetahuan yang membusuk sendiri begitu katalog formula bertambah.
+
+        ⚠️ BATAS JUJUR PENJAGA INI (diuji, bukan didugaan). Ia berbasis TEKS, jadi ia menangkap
+        pencabutan (nama fungsi hilang · pengecualian dihapus · cermin berhenti mengirim) tapi TIDAK
+        menangkap pelumpuhan ISI fungsi sementara namanya dibiarkan — disabotase 23-Agu dengan
+        `false && ...` di dalam `tanpaTarif` dan penjaga ini **tetap hijau**. Menutupnya butuh
+        penjalan uji layar (vitest/jest) yang belum ada di proyek ini = keputusan owner, bukan
+        keputusan saya. Sampai itu ada, cabang layar ini bersandar pada tinjauan manusia."""
+        isi = _tanpa_komentar(self.PANEL_F5, _isi(self.PANEL_F5))
+        self.assertIn("pricing_model_tanpa_tarif", isi,
+                      "panel tak mengenali formula yang tak butuh tarif → peringatan PALSU")
+        i = isi.index("satuan harga kosong")
+        self.assertIn("tanpaTarif", isi[max(0, i - 1200):i],
+                      "lencana 'satuan harga kosong' tidak dikecualikan untuk formula tanpa tarif")
+        for f in ("biaya_dilaporkan", "selisih_akun", "gratis"):
+            self.assertNotIn(f'"{f}"', isi,
+                             f"nama formula '{f}' DIKETIK di kode layar — wajib dari cermin DB")
+
+    def test_cermin_menyebut_formula_yang_tak_butuh_tarif(self):
+        """Panel membaca cermin; kalau cerminnya tak memuatnya, perbaikan di atas jadi kode mati."""
+        from src.billing.ai_cost import FORMULA_TANPA_TARIF
+        from src.config.catalog_sync import collect_valid_values
+        ada = {r["value"] for r in collect_valid_values()
+               if r["field"] == "pricing_model_tanpa_tarif"}
+        self.assertEqual(ada, set(FORMULA_TANPA_TARIF),
+                         "cermin 'formula tanpa tarif' tak sama dengan katalog kode → panel bisa "
+                         "menuduh baris yang benar, atau memaafkan baris yang salah")

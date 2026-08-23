@@ -583,6 +583,13 @@ export default function AdminCatalogPage() {
   // video tampil "/gambar"). Kini nol satuan diketik di kode layar: daftar & labelnya milik mesin.
   const satuanJenis = (comp: string) =>
     (data?.catalog_valid_values ?? []).filter((v) => v.field === `pricing_unit:${comp}`);
+  // [F5] Formula yang memang TIDAK butuh tarif (vendor menyebut biayanya sendiri / vendor tak
+  // menagih). Daftarnya dari CERMIN, bukan diketik di sini — layar yang menanam nama formula akan
+  // membusuk sendiri saat katalog formula bertambah. Tanpa ini panel memberi peringatan PALSU
+  // "satuan harga kosong" pada baris yang justru paling akurat.
+  const tanpaTarif = (formula: unknown) =>
+    !!formula && (data?.catalog_valid_values ?? [])
+      .some((v) => v.field === "pricing_model_tanpa_tarif" && v.value === String(formula));
   async function savePricing() {
     if (!priceEdit) return;
     const num = (s: string) => (s.trim() === "" ? null : Number(s));
@@ -872,7 +879,16 @@ export default function AdminCatalogPage() {
                               </span>
                             </div>
                           )}</span>
-                          : (m.is_active
+                          : (tanpaTarif(m.pricing_model)
+                              /* Baris ini TIDAK perlu tarif: vendor menyebut biayanya sendiri di
+                                 tiap balasan (atau tak menagih). Memberinya peringatan "harga
+                                 kosong" = alarm palsu, dan alarm palsu mengajari admin mengabaikan
+                                 alarm yang sungguhan. */
+                              ? <span className="muted" style={{ fontSize: "var(--text-xs)" }}
+                                      title={`Formula "${namaFormula(String(m.pricing_model))}" tidak butuh tarif — biayanya datang dari vendor, bukan dari taksiran. ${penjelasanFormula(String(m.pricing_model))}`}>
+                                  ƒ {namaFormula(String(m.pricing_model))}
+                                </span>
+                              : m.is_active
                               ? <span className="badge badge-warning"
                                       title={`Biaya model ini TIDAK BISA dihitung — satuan harganya kosong. Isi salah satu lewat tombol ✎: ${satuanJenis(String(m.component ?? "")).map((u) => u.label).join(" · ") || "(jenis ini belum punya satuan)"}. Menyimpan manual otomatis mengunci baris dari timpaan sinkron.`}>
                                   ⚠️ <Bi id="satuan harga kosong" en="no usable price unit" />
