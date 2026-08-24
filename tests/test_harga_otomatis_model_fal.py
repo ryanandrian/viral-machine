@@ -21,6 +21,11 @@ harian + ditandai di panel), dan harga lamanya TIDAK ditimpa tarif vendor lain.
 
 Yang dijaga PERILAKUNYA: model polos tetap dapat harga otomatis dari sumber cadangan · baris
 agregator TIDAK boleh memakainya · model tanpa sumber dilaporkan jujur · baris terkunci tak tersentuh.
+
+[24-Agu] Data uji di bawah memuat stempel `cost_hint.audit = "LULUS ..."` karena sinkron kini
+menolak menulis harga untuk model yang belum pernah lulus tombol Uji (butir C: API harga fal
+menjawab 200 OK untuk endpoint yang TIDAK ADA, jadi "200 OK" bukan bukti modelnya ada). Prasyaratnya
+DIPENUHI di data uji, bukan dilonggarkan di kodenya — yang diuji di sini tetap perilaku HARGA.
 """
 import os
 import sys
@@ -94,7 +99,8 @@ class TestHargaOtomatis(unittest.TestCase):
         ringkas, ditulis = _jalankan([
             {"model_key": "google/gemini-2.5-flash", "model_id": "google/gemini-2.5-flash",
              "component": "llm", "provider_key": "fal",
-             "pricing": {"per_request_usd": 0.001, "source": "manual"}, "pricing_locked": False},
+             "pricing": {"per_request_usd": 0.001, "source": "manual"}, "pricing_locked": False,
+             "cost_hint": {"audit": "LULUS uji manual admin 2026-08-23 10:00"},},
         ])
         self.assertNotIn(
             "google/gemini-2.5-flash", ditulis,
@@ -109,7 +115,8 @@ class TestHargaOtomatis(unittest.TestCase):
         """REGRESI: seluruh model lama memakai penanda polos — jangan sampai ikut bergeser."""
         _, ditulis = _jalankan([
             {"model_key": "gpt-4o-mini", "model_id": "gpt-4o-mini", "component": "llm",
-             "provider_key": "openai", "pricing": {"in_per_1m": 0.15}, "pricing_locked": False},
+             "provider_key": "openai", "pricing": {"in_per_1m": 0.15}, "pricing_locked": False,
+             "cost_hint": {"audit": "LULUS uji manual admin 2026-08-23 10:00"},},
         ])
         self.assertEqual(ditulis["gpt-4o-mini"]["pricing"]["in_per_1m"], 0.15)
         self.assertEqual(ditulis["gpt-4o-mini"]["pricing"]["out_per_1m"], 0.6)
@@ -120,7 +127,8 @@ class TestHargaOtomatis(unittest.TestCase):
         ringkas, ditulis = _jalankan([
             {"model_key": "kling-2.5-turbo-pro", "model_id": "kling-2.5-turbo-pro",
              "component": "video", "provider_key": "fal",
-             "pricing": {"per_video_base_usd": 0.35, "source": "manual"}, "pricing_locked": False},
+             "pricing": {"per_video_base_usd": 0.35, "source": "manual"}, "pricing_locked": False,
+             "cost_hint": {"audit": "LULUS uji manual admin 2026-08-23 10:00"},},
         ])
         self.assertEqual(ringkas["missing"], ["kling-2.5-turbo-pro"])
         self.assertNotIn("kling-2.5-turbo-pro", ditulis,

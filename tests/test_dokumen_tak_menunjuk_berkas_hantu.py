@@ -68,6 +68,27 @@ PENANDA_RENCANA = re.compile(r"\bPLAN\b|RENCANA|akan dibangun|\bNEW\b|belum diba
                              re.I)
 
 
+_INDEKS_NAMA: set | None = None
+
+
+def _nama_berkas_repo() -> set:
+    """Semua NAMA BERKAS di repo, disusun SEKALI lalu dipakai ulang.
+
+    [25-Agu] Sebelumnya tiap rujukan yang tak langsung ketemu memicu
+    `glob.glob(AKAR + "/**/" + nama, recursive=True)` — penyusuran SELURUH repo (termasuk
+    `node_modules`, puluhan ribu berkas) **per rujukan**. Dengan dokumen yang bertambah panjang,
+    uji ini berubah dari sekejap menjadi menyandera seluruh suite (>10 menit, tak selesai).
+    Semantiknya DIPERTAHANKAN persis: cakupan penyusuran sama (tanpa pengecualian folder), hanya
+    dikerjakan sekali. Nol perubahan pada apa yang dianggap hantu."""
+    global _INDEKS_NAMA
+    if _INDEKS_NAMA is None:
+        nama = set()
+        for dp, _, fs in os.walk(AKAR):
+            nama.update(fs)
+        _INDEKS_NAMA = nama
+    return _INDEKS_NAMA
+
+
 def _baris(dok: str):
     p = os.path.join(AKAR, dok)
     return open(p, encoding="utf-8", errors="ignore").read().split("\n")
@@ -160,7 +181,7 @@ class TestTakAdaRujukanHantu(unittest.TestCase):
                         continue                  # berkas kerja di luar repo — bukan rujukan hantu
                     if os.path.exists(os.path.join(AKAR, j)):
                         continue
-                    if glob.glob(os.path.join(AKAR, "**", os.path.basename(j)), recursive=True):
+                    if os.path.basename(j) in _nama_berkas_repo():
                         continue                  # disebut tanpa jalur penuh — masih ada di repo
                     if os.path.exists(os.path.join(MEM, os.path.basename(j))):
                         continue                  # berkas memory

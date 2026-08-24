@@ -266,7 +266,9 @@ class AnthropicMessagesAdapter(_BaseAdapter):
             # B2 cost-tracking: usage menumpang di respons yg sama (nol overhead). Fail-soft.
             try:
                 from src.utils import cost_meter
-                cost_meter.add_llm(model, getattr(resp.usage, "input_tokens", 0), getattr(resp.usage, "output_tokens", 0))
+                cost_meter.add_llm(model, getattr(resp.usage, "input_tokens", 0),
+                                   getattr(resp.usage, "output_tokens", 0),
+                                   penyedia=self.provider_key)
             except Exception:
                 pass
             return resp.content[0].text.strip()
@@ -455,14 +457,16 @@ class OpenAIChatAdapter(_BaseAdapter):
                 try:
                     from src.utils import cost_meter
                     u = getattr(r, "usage", None)
-                    cost_meter.add_llm(model, getattr(u, "prompt_tokens", 0), getattr(u, "completion_tokens", 0))
+                    cost_meter.add_llm(model, getattr(u, "prompt_tokens", 0),
+                                       getattr(u, "completion_tokens", 0),
+                                       penyedia=self.provider_key)
                     # [F5] Penyedia router (OpenRouter dst) menyebutkan BIAYA panggilan ini di objek
                     # usage yang sama — nol panggilan tambahan. Bila disebut, biaya itu yang dipakai
                     # (bukan taksiran token), dan yang menentukan mana yang ditagih adalah FORMULA
                     # di baris modelnya ⇒ mustahil tertagih dua kali.
                     biaya = _biaya_yang_vendor_sebut(u)
                     if biaya is not None:
-                        cost_meter.add_biaya_vendor(model, biaya)
+                        cost_meter.add_biaya_vendor(model, biaya, penyedia=self.provider_key)
                 except Exception:
                     pass
 
@@ -589,7 +593,8 @@ class FalAnyLlmAdapter(_BaseAdapter):
             from src.utils import cost_meter
             u = data.get("usage") or {}
             cost_meter.add_llm(model, int(u.get("prompt_tokens") or 0),
-                               int(u.get("completion_tokens") or 0))
+                               int(u.get("completion_tokens") or 0),
+                               penyedia=self.provider_key)
         except Exception:
             pass
         # fal membalas 200 dengan field `error` terisi bila model menolak → tetap GAGAL JUJUR.

@@ -155,3 +155,81 @@ class TestRekonsiliasiBiayaHarian(unittest.TestCase):
                      and getattr(n.func, "id", "") == "report_rekonsiliasi_biaya"]
         self.assertTrue(dipanggil,
                         "rekonsiliasi tak dipanggil petugas harian → alarm ini kode mati")
+
+
+class TestHargaTerkunciTakBolehDilupakan(unittest.TestCase):
+    """Setiap pengecualian yang mesin berikan WAJIB punya masa kedaluwarsa (ketokan owner 24-Agu:
+    *"jangan hanya berfikir saat ini, tapi berfikir kedepannya"*).
+
+    KEADAAN YANG DIPERBAIKI. Alarm harga-basi dulu berbunyi `if pricing_locked: continue` — jadi
+    persisnya TERBALIK terhadap kenyataan: baris **otomatis** dijaga alarm padahal ia memutakhirkan
+    diri sendiri dan hampir mustahil basi, sementara baris **TERKUNCI** — satu-satunya yang BISA
+    basi, sebab tak ada yang memutakhirkannya — tak dijaga apa pun. Untuk hari ini tak terasa
+    (angkanya baru diperiksa tangan); untuk ke depan itu JAMINAN angka salah, senyap, selamanya:
+    vendor mengubah tarif kapan saja.
+
+    Dua baris bahkan tak punya tanggal sama sekali (`veo`, `cf-flux-schnell`) ⇒ mustahil pernah
+    terdeteksi tua. "Tanpa tanggal" karena itu diperlakukan sebagai **belum pernah dipastikan**,
+    bukan sebagai "aman".
+
+    Jendelanya beda dengan yang otomatis, dan itu disengaja: harga yang diperiksa manusia tak perlu
+    ditengok tiap minggu (bawaan 90 hari), sedangkan sumber otomatis yang mandek seminggu sudah
+    pertanda rusak (7 hari)."""
+
+    def _jalankan(self, rows):
+        from src.billing import price_sync
+        pesan: list = []
+        with patch.object(price_sync, "_notify_admin", lambda t: pesan.append(t)), \
+             patch.object(price_sync, "_state_get_epoch", lambda *a, **k: 0), \
+             patch.object(price_sync, "_state_set_epoch", lambda *a, **k: None):
+            price_sync._check_staleness(_SB([], []), rows)
+        return pesan
+
+    @staticmethod
+    def _umur(hari):
+        import datetime as _dt
+        return (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=hari)).isoformat()
+
+    def test_harga_terkunci_yang_lama_tak_diperiksa_dilaporkan(self):
+        pesan = self._jalankan([{"model_key": "m-kunci-tua", "pricing_locked": True,
+                                 "pricing": {"per_1m_chars": 100, "synced_at": self._umur(200)}}])
+        self.assertTrue(pesan, "harga terkunci berumur 200 hari tak dilaporkan — ia takkan pernah "
+                               "ditengok lagi, padahal vendor bisa mengubah tarifnya kapan saja")
+        self.assertIn("m-kunci-tua", pesan[0])
+
+    def test_harga_terkunci_TANPA_tanggal_dilaporkan(self):
+        """Tanpa tanggal = belum pernah dipastikan. Memperlakukannya 'aman' = pengecualian permanen."""
+        pesan = self._jalankan([{"model_key": "m-tanpa-tanggal", "pricing_locked": True,
+                                 "pricing": {"per_second_usd": 0.1}}])
+        self.assertTrue(pesan, "harga terkunci tanpa tanggal tak dilaporkan — mustahil terdeteksi tua")
+        self.assertIn("m-tanpa-tanggal", pesan[0])
+
+    def test_harga_terkunci_yang_baru_diperiksa_TIDAK_dilaporkan(self):
+        """Alarm palsu pada baris yang baru diperiksa = alarm yang diabaikan."""
+        pesan = self._jalankan([{"model_key": "m-baru", "pricing_locked": True,
+                                 "pricing": {"per_1m_chars": 100, "synced_at": self._umur(10)}}])
+        self.assertFalse(pesan, f"alarm palsu pada harga yang baru diperiksa: {pesan}")
+
+    def test_baris_otomatis_tetap_dijaga_jendela_pendek(self):
+        """Nol regresi: sumber otomatis yang mandek > 7 hari tetap berbunyi seperti sebelumnya."""
+        pesan = self._jalankan([{"model_key": "m-otomatis", "pricing_locked": False,
+                                 "pricing": {"in_per_1m": 1.0, "synced_at": self._umur(30)}}])
+        self.assertTrue(pesan, "baris otomatis yang mandek tak lagi dilaporkan — regresi")
+        self.assertIn("m-otomatis", pesan[0])
+
+    def test_dua_sebab_dipisah_karena_tindakannya_beda(self):
+        """Sumber otomatis MANDEK (periksa sumbernya) ≠ harga ketikan tangan yang lama tak
+        diperiksa ulang (buka halaman resmi vendor). Satu kalimat untuk dua tindakan = alarm tumpul."""
+        pesan = self._jalankan([
+            {"model_key": "m-otomatis", "pricing_locked": False,
+             "pricing": {"in_per_1m": 1.0, "synced_at": self._umur(30)}},
+            {"model_key": "m-kunci-tua", "pricing_locked": True,
+             "pricing": {"per_1m_chars": 100, "synced_at": self._umur(200)}}])
+        self.assertTrue(pesan)
+        t = pesan[0]
+        self.assertIn("m-otomatis", t)
+        self.assertIn("m-kunci-tua", t)
+        i_auto, i_kunci = t.index("m-otomatis"), t.index("m-kunci-tua")
+        antara = t[min(i_auto, i_kunci):max(i_auto, i_kunci)]
+        self.assertRegex(antara, r"(?i)(dikunci|terkunci|ketikan tangan|diperiksa ulang)",
+                         "kedua sebab dilebur jadi satu daftar — admin tak tahu mana yang mana")

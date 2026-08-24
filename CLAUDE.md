@@ -80,6 +80,15 @@ seluruh kerusakan sistem".)*
 - **"Jalan" = sudah dijalankan pada data nyata; "terpasang" = sudah deploy.** Sebut yang mana.
 - **Kemarahan owner = luapan, bukan perintah.** Berhenti, jawab, jangan memotong prosedur "demi cepat".
 - **Haram menyalahkan "kode lama/sesi sebelumnya"** — 100% karya saya.
+- **JANGAN MENILAI PERBAIKAN DARI HARI INI SAJA — nilai dari kondisi KE DEPAN.** *(ketokan owner
+  24-Agu.)* Tiap perbaikan wajib dijawab: **(a)** apa yang membuatnya membusuk seiring waktu, **(b)**
+  apa yang terjadi bila jumlahnya jadi 10×, **(c)** siapa yang akan menyadarinya — **mesin atau
+  ingatan manusia?** Jawaban "nanti saya ingatkan/periksa berkala" = **BUKAN jawaban**. *(24-Agu:
+  saya menyimpulkan 9 harga terkunci "wajar dan perlu" — benar hari ini — sementara alarm harga-basi
+  justru **sengaja melewati baris terkunci**, jadi satu-satunya harga yang BISA basi adalah
+  satu-satunya yang tak dijaga apa pun. Saya usulkan "pengingat 3 bulan": bersandar ingatan, dan
+  tak menskala.)* **Setiap pengecualian yang mesin berikan wajib punya masa kedaluwarsa** — pengecualian
+  permanen adalah cara sistem yang benar membusuk.
 - **TERUKUR vs PENDAPAT — pisahkan, jangan campur.** Hanya yang bisa diukur ulang siapa pun boleh
   disebut **bug**; soal rancangan = **pendapat**, dan keputusan owner bertanggal **HARAM disebut bug**
   (mau mengubah → datang dengan ANGKA). *(19-Agu: saya menyebut rancangan saya sendiri "bug" lalu

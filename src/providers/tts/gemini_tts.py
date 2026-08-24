@@ -120,7 +120,8 @@ class GeminiTTSProvider(TTSProvider):
                 if u.get("promptTokenCount") or u.get("candidatesTokenCount"):
                     cost_meter.add_tts_tokens(self.model,
                                               u.get("promptTokenCount", 0),
-                                              u.get("candidatesTokenCount", 0))
+                                              u.get("candidatesTokenCount", 0),
+                                              penyedia=self.provider_name)
             except Exception:
                 pass
             return output_path

@@ -18,6 +18,20 @@ import threading
 _tl = threading.local()
 
 
+def _kunci(penyedia: str, model: str) -> str:
+    """Kunci pencatatan = PENYEDIA + model. Bentuknya TIDAK disusun di sini — diambil dari
+    `ai_cost.kunci_biaya`, satu-satunya rumahnya. [24-Agu] Sebabnya: model yang sama bisa dilayani
+    beberapa penyedia dengan harga yang sangat berbeda (`gpt-4o-mini` langsung vs lewat agregator =
+    beda 150x), dan tanpa penyedia di kunci, biaya keduanya tertukar SENYAP. Dua tempat menyusun
+    kunci = dua bentuk, dan biaya berhenti menemukan harganya.
+    Gagal-aman: penyedia kosong -> kunci = nama model saja (perilaku lama, tetap terhitung)."""
+    try:
+        from src.billing.ai_cost import kunci_biaya
+        return kunci_biaya(penyedia, model)
+    except Exception:
+        return model
+
+
 def reset() -> None:
     """Mulai pencatatan utk run di thread ini (dipanggil pipeline di awal run)."""
     # `tts_tokens` = keranjang KEDUA untuk suara: sebagian vendor (Gemini) menagih suara PER TOKEN,
@@ -32,34 +46,35 @@ def _bucket(kind: str) -> dict | None:
     return getattr(_tl, "data", {}).get(kind) if hasattr(_tl, "data") else None
 
 
-def add_llm(model: str, tokens_in: int, tokens_out: int) -> None:
+def add_llm(model: str, tokens_in: int, tokens_out: int, penyedia: str = "") -> None:
     b = _bucket("llm")
     if b is None or not model:
         return
-    cur = b.setdefault(model, {"tokens_in": 0, "tokens_out": 0, "calls": 0})
+    cur = b.setdefault(_kunci(penyedia, model), {"tokens_in": 0, "tokens_out": 0, "calls": 0})
     cur["tokens_in"] += int(tokens_in or 0)
     cur["tokens_out"] += int(tokens_out or 0)
     cur["calls"] += 1
 
 
-def add_image(model: str, count: int = 1) -> None:
+def add_image(model: str, count: int = 1, penyedia: str = "") -> None:
     b = _bucket("image")
     if b is None or not model:
         return
-    b[model] = b.get(model, 0) + int(count)
+    k = _kunci(penyedia, model)
+    b[k] = b.get(k, 0) + int(count)
 
 
-def add_video(model: str, seconds: float, clips: int = 1) -> None:
+def add_video(model: str, seconds: float, clips: int = 1, penyedia: str = "") -> None:
     """[B6] F2: 1 klip video-gen SUKSES — catat DETIK TERTAGIH vendor (durasi diminta, bukan hasil trim)."""
     b = _bucket("video")
     if b is None or not model:
         return
-    cur = b.setdefault(model, {"seconds": 0.0, "clips": 0})
+    cur = b.setdefault(_kunci(penyedia, model), {"seconds": 0.0, "clips": 0})
     cur["seconds"] += float(seconds or 0)
     cur["clips"] += int(clips)
 
 
-def add_image_megapiksel(model: str, piksel) -> None:
+def add_image_megapiksel(model: str, piksel, penyedia: str = "") -> None:
     """[F4b] MEGAPIKSEL TERTAGIH satu gambar — fal menagih per megapiksel, **dibulatkan KE ATAS**.
 
     Pembulatan terjadi DI SINI, per gambar, sebab itulah cara vendor menagih: 1080×1920 = 2,0736 MP
@@ -79,10 +94,11 @@ def add_image_megapiksel(model: str, piksel) -> None:
         return
     if px <= 0:
         return
-    b[model] = float(b.get(model, 0.0)) + float(math.ceil(px / 1_000_000))
+    k = _kunci(penyedia, model)
+    b[k] = float(b.get(k, 0.0)) + float(math.ceil(px / 1_000_000))
 
 
-def add_video_token(model: str, *, lebar, tinggi, fps, detik) -> None:
+def add_video_token(model: str, *, lebar, tinggi, fps, detik, penyedia: str = "") -> None:
     """[F4b] TOKEN VIDEO TERTAGIH satu klip: (tinggi × lebar × fps × durasi) ÷ 1024 — cara fal
     menagih seedance.
 
@@ -99,39 +115,42 @@ def add_video_token(model: str, *, lebar, tinggi, fps, detik) -> None:
         return
     if min(w, h, f, d) <= 0:
         return
-    b[model] = round(float(b.get(model, 0.0)) + (w * h * f * d) / 1024.0, 3)
+    k = _kunci(penyedia, model)
+    b[k] = round(float(b.get(k, 0.0)) + (w * h * f * d) / 1024.0, 3)
 
 
-def add_tts(model: str, chars: int) -> None:
+def add_tts(model: str, chars: int, penyedia: str = "") -> None:
     b = _bucket("tts")
     if b is None or not model:
         return
-    b[model] = b.get(model, 0) + int(chars or 0)
+    k = _kunci(penyedia, model)
+    b[k] = b.get(k, 0) + int(chars or 0)
 
 
-def add_tts_tokens(model: str, tokens_in: int, tokens_out: int) -> None:
+def add_tts_tokens(model: str, tokens_in: int, tokens_out: int, penyedia: str = "") -> None:
     """Token NYATA dari balasan vendor untuk suara ber-tagih token (mis. Gemini TTS: token audio).
     TERPISAH dari keranjang `llm` supaya biaya suara tidak nyasar ke rincian naskah, dan terpisah
     dari keranjang `tts` (huruf) supaya penghitung biaya bisa memilih satuan tanpa risiko ganda."""
     b = _bucket("tts_tokens")
     if b is None or not model:
         return
-    cur = b.setdefault(model, {"tokens_in": 0, "tokens_out": 0})
+    cur = b.setdefault(_kunci(penyedia, model), {"tokens_in": 0, "tokens_out": 0})
     cur["tokens_in"] += int(tokens_in or 0)
     cur["tokens_out"] += int(tokens_out or 0)
 
 
-def add_tts_seconds(model: str, seconds: float) -> None:
+def add_tts_seconds(model: str, seconds: float, penyedia: str = "") -> None:
     """Durasi audio NYATA (detik) untuk suara ber-tagih per-detik — mis. `gpt-4o-mini-tts`, yang
     vendornya mengirim audio mentah TANPA hitungan token sehingga satuan lain tak bisa dihitung.
     Diukur dari berkas audio yang baru saja jadi (bukan ditaksir), dicatat SEKALI di mesin suara."""
     b = _bucket("tts_seconds")
     if b is None or not model:
         return
-    b[model] = round(float(b.get(model, 0.0)) + float(seconds or 0.0), 3)
+    k = _kunci(penyedia, model)
+    b[k] = round(float(b.get(k, 0.0)) + float(seconds or 0.0), 3)
 
 
-def add_biaya_vendor(model: str, usd: float) -> None:
+def add_biaya_vendor(model: str, usd: float, penyedia: str = "") -> None:
     """[F5] BIAYA yang VENDOR sebutkan sendiri untuk panggilan ini — satu-satunya angka di meteran
     ini yang berupa UANG, bukan konsumsi. Sengaja, dan sengaja di keranjang SENDIRI.
 
@@ -156,7 +175,8 @@ def add_biaya_vendor(model: str, usd: float) -> None:
         return
     if nilai <= 0:
         return
-    b[model] = round(float(b.get(model, 0.0)) + nilai, 8)
+    k = _kunci(penyedia, model)
+    b[k] = round(float(b.get(k, 0.0)) + nilai, 8)
 
 
 def summary() -> dict:

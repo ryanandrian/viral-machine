@@ -330,6 +330,42 @@ tabel ini setiap kali dilakukan. *(Rencana S3: mesin ikut membandingkan catatan-
 
 ---
 
+## 7f-00. 🔴 PEKERJAAN MENGGANTUNG — SELESAIKAN INI DULU (25-Agu, sesudah restart laptop)
+
+> **Ada perubahan SELESAI tapi BELUM TERSIMPAN di direktori kerja.** Ia TIDAK mengganggu produksi
+> (server jalan di `4922451`), jadi tak ada yang mendesak — tapi jangan dibiarkan menggantung, dan
+> **jangan dikerjakan ulang dari nol**: kodenya sudah ada, ujinya sudah ada, migrasinya sudah masuk DB.
+
+**ISI PEKERJAANNYA — A·B·C, disetujui owner 24-Agu:**
+- **A** biaya HARAM tertukar antar penyedia untuk model bernama sama (penyedia ikut jadi bagian kunci
+  pencatatan; bentuk kunci di `ai_cost.kunci_biaya`) — **prasyarat sebelum APIMaster/OpenRouter
+  ditambahkan**, sebab router menyebut model dengan nama persis sama dan selisih harganya 150×.
+- **B** alarm harga-basi kini ikut menjaga baris TERKUNCI (30 hari, angka mati atas ketokan owner;
+  tanpa tanggal = belum pernah dipastikan). Migr `0216` **SUDAH diterapkan** ke DB.
+- **C** sinkron berhenti mempercayai "200 OK" — harga tidak ditulis untuk model yang belum LULUS
+  tombol Uji (API fal menjawab 200 untuk endpoint yang TIDAK ADA); satuan vendor tak dikenal
+  dialarmkan, bukan cuma masuk log.
+Rinciannya di CATATAN PELAKSANAAN A·B·C di §7f. Berkas yang tersentuh terlihat dari `git status`.
+
+**SUDAH DIBUKTIKAN:** 9 uji dibuktikan MERAH dulu · **10 sabotase semuanya tertangkap** · ambang
+riwayat lolos (**nol produksi yang BARU jadi belum-terhitung**) · alarm baru diuji pada 47 baris nyata
+= **nol alarm palsu** · potongan uji yang sudah hijau: **796 · 309 · 131 · 8**.
+
+**SISA — kecil, jangan dibesarkan:**
+1. Jalankan **HANYA** potongan yang belum diverifikasi ulang: `ls tests/*.py | sed -n '63,93p'`
+   (±3 menit). Dua uji di dalamnya sempat merah dan **sudah dibetulkan** (`test_naskah_fal_jalur_hidup.py`).
+2. Bila hijau → **commit sekali**. Gerbang commit menjalankan uji penuh; di mesin ini itu **±10 menit**
+   saat cache dingin, dan tenggat hook-nya 300 detik ⇒ **bisa habis waktu**. Kalau hook gagal karena
+   tenggat, LAPOR ke owner dan minta keputusannya — **jangan mengulang-ulang uji penuh.**
+
+**⛔ ATURAN KERAS DARI OWNER (25-Agu, sesudah laptopnya drop DUA KALI karena saya):**
+> **Jangan menjalankan uji penuh berulang-ulang.** Jalankan hanya uji yang bisa menangkap perubahan
+> yang dibuat. Uji penuh = tugas gerbang commit, SEKALI. **Haram** menjalankan uji di latar
+> (`run_in_background`) atau menumpuk beberapa putaran — laptop owner yang menanggungnya, dan itu
+> sudah membuatnya mati dua kali. Uji kena tenggat → **BERHENTI dan lapor**, jangan diulang.
+
+---
+
 ## 7f-0. ⏩ MULAI DARI SINI (sesi baru / pasca-compacting) — keadaan per 23-Agu-2026
 
 > **Baca 7f-0 lalu §7f. Jangan menyentuh rantai harga/biaya sebelum keduanya dibaca.**
@@ -345,6 +381,9 @@ dan daftar formula tanpa-tarif).
 fal. Angkanya identik dengan yang tersimpan sekarang, jadi **nol geseran**.
 **Risiko mesin sinkron LAMA membatalkan perbaikan F4 sudah HILANG** - pagar agregator kini terpasang
 di server.
+
+**MIGRASI TERBARU (24-Agu):** `0216` = tanggal pemeriksaan pada 9 harga terkunci (butir B).
+Sebelumnya `0215` = tarif `gpt-image-1-mini` dibetulkan. Keduanya SUDAH diterapkan.
 
 **DATABASE PRODUKSI SUDAH BERUBAH** (migrasi + sinkron nyata sudah dijalankan — JANGAN diulang):
 `0209` izin baca cermin · `0210` kolom `pricing_model` + 47 baris terisi · `0211` kenop URL sumber
@@ -674,6 +713,57 @@ yang sama & tetap bernama · **0 run riwayat** punya keranjang baru · 1425 uji 
 Menyinkronkannya SEBELUM deploy akan membuat mesin lama (yang belum mengenal formula) melihat kunci
 tarif yang tak ia pahami ⇒ biaya flux/seedance dilaporkan belum-terhitung. Nol channel aktif memakainya,
 tapi urutannya tetap jangan dibalik.
+
+**CATATAN PELAKSANAAN A·B·C (24-Agu, ketokan owner).** Tiga perbaikan bug di jalur yang SUDAH ada —
+nol jalur baru, nol kolom baru, nol layar tersentuh.
+
+**A · BIAYA TAK BOLEH TERTUKAR ANTAR PENYEDIA.** Ketokan owner: *"yang harus dipastikan tidak
+overlaping adalah model yang sama tapi dari provider yang berbeda (direct, agregator, router)
+masing-masing punya harga yang berbeda."* Diperiksa, dan bugnya nyata: meteran biaya mencatat **nama
+model saja**, peta harga memakai nama itu sebagai kunci, dan `ai_models.model_id` **tak punya aturan
+keunikan** (hanya `model_key`) ⇒ dua baris bernama sama, yang kedua **menimpa** yang pertama tanpa
+suara. Hari ini aman **karena kebetulan** namanya berbeda (`gemini-2.5-flash` vs
+`google/gemini-2.5-flash`), tapi router ber-protokol OpenAI menyebut model dengan nama **persis
+sama** — jadi begitu APIMaster/OpenRouter ditambahkan, tabrakan itu PASTI terjadi, dengan selisih
+**150×** ($0,15 per 1jt token langsung vs $0,001 per panggilan lewat fal).
+**Perbaikannya:** titik pencatat **sudah tahu** penyedianya (`self.provider_key` / `platform` /
+`provider_name`) — ia kini ikut jadi bagian kunci, dan bentuk kuncinya hidup di **satu tempat**
+(`ai_cost.kunci_biaya`). Peta harga & formula mendaftarkan kunci ber-penyedia **selalu**, dan nama
+polos **hanya bila tak ambigu**; nama polos yang dipakai >1 baris sengaja **tidak** didaftarkan ⇒
+catatan tanpa penyedia dilaporkan **jujur** belum-terhitung alih-alih ditebak.
+**AMBANG:** seluruh produksi riwayat dihitung ulang → **nol produksi yang BARU jadi belum-terhitung**;
+101 selisih angka terjelaskan tepat = **19** (F2/F4/F7) **+ 82** (perbaikan tarif `gpt-image-1-mini`,
+migr `0215`). 13 titik pencatat menyerahkan penyedianya, dijaga AST.
+
+**B · GEMBOK TAK LAGI BERARTI DILUPAKAN.** Alarm harga-basi dulu berbunyi `if pricing_locked:
+continue` — persis TERBALIK: baris **otomatis** dijaga alarm padahal ia memutakhirkan diri sendiri,
+sementara baris **TERKUNCI** (satu-satunya yang BISA basi) tak dijaga apa pun. Kini dua kelompok, dua
+jendela: sumber otomatis mandek **7 hari** · harga ketikan tangan belum diperiksa **30 hari**
+(ANGKA MATI, keputusan owner: *"bukan bagian dari produksi, hanya pengingat"*). **Tanpa tanggal =
+belum pernah dipastikan** ⇒ ikut berbunyi. Pesannya **memisahkan dua sebab** karena tindakannya beda,
+dan menyebut cara mematikannya lewat jalur yang sudah ada: **✎ → Simpan** (memperbarui tanggal +
+mengunci ulang) — nol tombol baru. Migr `0216` memberi **tanggal pemeriksaan yang sebenarnya** pada 6
+baris (4 masih bertanggal Juli, 2 tanpa tanggal); tanpa itu alarm berteriak palsu di hari pertama.
+**Dibuktikan pada 47 baris NYATA: nol alarm.**
+
+**C · SINKRON BERHENTI MEMPERCAYAI "200 OK".** Diuji ke API nyata: **API harga fal menjawab HTTP 200
+untuk endpoint yang TIDAK ADA** — nama karangan dijawab tarif GPU bawaannya. Jadi "200 OK" bukan bukti
+modelnya ada, dan satu salah ketik penanda model bisa menulis harga yang tampak wajar untuk model yang
+tak pernah ada; kita selamat hari ini hanya karena satuannya tak dikenali — **kebetulan, bukan
+pemeriksaan**. Penutupnya memakai syarat yang sudah dipegang mesin: **harga tidak ditulis untuk model
+yang belum pernah LULUS tombol Uji**. Terukur: 42 baris aktif **semuanya lulus** ⇒ nol kehilangan
+pemutakhiran; 5 yang belum lulus semuanya **nonaktif**. Berlaku juga untuk probe satu-model dari panel
+(model baru dapat harganya SESUDAH Uji). Ditambah: satuan vendor yang belum punya formula kini
+**dialarmkan**, bukan cuma tercatat di log — vendor mengganti cara tagih adalah kejadian yang wajib
+terlihat.
+
+**BUKTI A·B·C:** 12 + 11 + 4 uji, **9 dibuktikan MERAH lebih dulu** · **10 sabotase, semuanya
+tertangkap** — dan satu di antaranya menemukan celah di penjaga saya sendiri: melumpuhkan penyusun
+kunci di meteran LOLOS seluruh uji lain (sebab uji-uji itu menyusun catatannya sendiri), ditutup
+dengan penjaga perilaku pada meteran yang sesungguhnya · 131 uji rantai biaya hijau · migr `0216`
+dijalankan KERING dulu dengan ambang yang membatalkan sendiri.
+**Utang yang saya betulkan sendiri:** butir C membuat 3 uji lama merah karena data ujinya belum
+memuat stempel "lulus uji" — **prasyaratnya dipenuhi di data uji, bukan dilonggarkan di kodenya.**
 
 **ATURAN MENGIKAT tiap langkah** *(dilanggar = pengerusakan; sudah terjadi 21-Agu)*:
 - **Satu langkah sekali jalan**, berhenti, lapor angkanya, baru langkah berikutnya.

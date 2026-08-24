@@ -132,6 +132,13 @@ def _agregator(provider_key: str) -> bool:
 SYNC_INTERVAL_HOURS = float(os.getenv("AI_PRICE_SYNC_HOURS", "24"))
 SANITY_FACTOR = float(os.getenv("AI_PRICE_SANITY_FACTOR", "3"))
 STALE_DAYS = float(os.getenv("AI_PRICE_STALE_DAYS", "7"))
+# Umur maksimum harga yang DIKUNCI (diketik manusia) sebelum diminta diperiksa ulang.
+# ANGKA MATI, dan itu keputusan owner 24-Agu: *"nilai pengingat bisa dibuat hardcode karena bukan
+# bagian dari produksi, hanya pengingat"* — 30 hari. Bukan pelanggaran aturan nol-hardcode: nilai
+# ini tidak menyentuh biaya, mutu, maupun perilaku produksi; ia hanya menentukan kapan admin
+# diingatkan. Lebih panjang dari jendela otomatis (7 hari) karena harga yang sudah dibandingkan ke
+# halaman resmi vendor tak perlu ditengok tiap minggu — tapi ia juga TAK BOLEH dilupakan selamanya.
+LOCKED_STALE_DAYS = 30.0
 # Jendela bukti untuk laporan "gagal dihitung" (hari). Knob infra (pola STALE_DAYS).
 UNPRICED_WINDOW_DAYS = float(os.getenv("AI_UNPRICED_WINDOW_DAYS", "3"))
 # Jeda antar panggilan ke API harga PENYEDIA. fal membatasi jumlah panggilan (terbukti 23-Agu:
@@ -261,27 +268,64 @@ def _notify_admin(text: str) -> None:
 
 
 def _check_staleness(sb, rows: list) -> None:
-    """Alarm basi: model non-locked ber-synced_at lebih tua dari STALE_DAYS → Telegram admin (1×/hari)."""
+    """Alarm basi — DUA kelompok, sebab tindakannya berbeda jauh.
+
+    [24-Agu, ketokan owner *"jangan hanya berfikir saat ini, tapi berfikir kedepannya"*]
+    Sebelumnya fungsi ini berbunyi `if pricing_locked: continue` — persis TERBALIK terhadap
+    kenyataan. Baris **otomatis** dijaga alarm padahal ia memutakhirkan diri sendiri tiap hari dan
+    hampir mustahil basi; baris **TERKUNCI** — satu-satunya yang BISA basi, karena tak ada yang
+    memutakhirkannya — tak dijaga apa pun. Hari ini tak terasa (angkanya baru diperiksa tangan); ke
+    depan itu JAMINAN angka salah dan senyap selamanya, sebab vendor mengubah tarif kapan saja.
+    Prinsipnya: **setiap pengecualian yang mesin berikan wajib punya masa kedaluwarsa** — pengecualian
+    permanen adalah cara sistem yang benar membusuk.
+
+    Dua jendela, dan bedanya disengaja:
+      • otomatis  — mandek > `AI_PRICE_STALE_DAYS` (7) = pertanda sumbernya rusak
+      • terkunci  — belum diperiksa ulang > `AI_PRICE_LOCKED_STALE_DAYS` (90); harga yang diperiksa
+        manusia tak perlu ditengok tiap minggu. **Tanpa tanggal = BELUM PERNAH dipastikan**, jadi ikut
+        dilaporkan — memperlakukannya "aman" akan membuatnya mustahil terdeteksi tua.
+    """
     try:
-        cutoff = _time.time() - STALE_DAYS * 86400
-        stale = []
+        now = _time.time()
+        batas_auto = now - STALE_DAYS * 86400
+        batas_kunci = now - LOCKED_STALE_DAYS * 86400
+        mandek, belum_diperiksa = [], []
         for m in rows:
             p = m.get("pricing") or {}
-            if m.get("pricing_locked") or not p.get("synced_at"):
+            if not p:
                 continue
-            try:
-                ts = datetime.fromisoformat(str(p["synced_at"]).replace("Z", "+00:00")).timestamp()
-            except Exception:
-                continue
-            if ts < cutoff:
-                stale.append(m["model_key"])
-        if not stale:
+            terkunci = bool(m.get("pricing_locked"))
+            cap = p.get("synced_at")
+            ts = None
+            if cap:
+                try:
+                    ts = datetime.fromisoformat(str(cap).replace("Z", "+00:00")).timestamp()
+                except Exception:
+                    ts = None
+            if terkunci:
+                # tanpa tanggal ⇒ belum pernah dipastikan ⇒ WAJIB dilaporkan
+                if ts is None or ts < batas_kunci:
+                    belum_diperiksa.append(m["model_key"])
+            else:
+                if ts is not None and ts < batas_auto:
+                    mandek.append(m["model_key"])
+        if not mandek and not belum_diperiksa:
             return
         last = _state_get_epoch(sb, "ai_price_stale_alerted_at")
-        if _time.time() - last < 86400:
+        if now - last < 86400:
             return
-        _notify_admin(f"⚠️ <b>Harga model AI BASI</b> (&gt;{int(STALE_DAYS)} hari tanpa sinkron): "
-                      f"<code>{', '.join(stale)}</code>\nSumber feed kemungkinan bermasalah — cek Catalog → AI Models.")
+        baris = []
+        if mandek:
+            baris.append(f"• <b>Sinkron otomatis MANDEK</b> (&gt;{int(STALE_DAYS)} hari): "
+                         f"<code>{', '.join(mandek)}</code>\n  ➡️ sumber harganya kemungkinan "
+                         f"bermasalah — periksa alamat sumber di Konfigurasi Aplikasi.")
+        if belum_diperiksa:
+            baris.append(f"• <b>Harga DIKUNCI yang lama tak diperiksa ulang</b> "
+                         f"(&gt;{int(LOCKED_STALE_DAYS)} hari, atau belum pernah bertanggal): "
+                         f"<code>{', '.join(belum_diperiksa)}</code>\n  ➡️ harga ini diketik manusia "
+                         f"dan mesin TIDAK memutakhirkannya. Buka halaman tarif resmi vendornya, "
+                         f"bandingkan, lalu simpan ulang lewat ✎ (tanggalnya ikut diperbarui).")
+        _notify_admin("⚠️ <b>Harga model AI perlu ditengok</b>\n" + "\n".join(baris))
         _state_set_epoch(sb, "ai_price_stale_alerted_at")
     except Exception as e:
         logger.debug(f"[price_sync] cek staleness gagal: {e}")
@@ -299,7 +343,7 @@ def sync_prices(sb=None, force: bool = False, only_model_key: str | None = None)
         if last and (_time.time() - last) < SYNC_INTERVAL_HOURS * 3600:
             return {"skipped": True}
 
-    rows = sb.table("ai_models").select("model_key, model_id, component, provider_key, pricing, pricing_locked, pricing_pending, default_params").execute().data or []
+    rows = sb.table("ai_models").select("model_key, model_id, component, provider_key, pricing, pricing_locked, pricing_pending, default_params, cost_hint").execute().data or []
     if only_model_key:
         rows = [r for r in rows if r.get("model_key") == only_model_key]
     # Prefix feed per-provider = DATA (ai_providers.price_feed_prefix, fallback provider_key).
@@ -326,8 +370,23 @@ def sync_prices(sb=None, force: bool = False, only_model_key: str | None = None)
     _vendor_terakhir = [0.0]    # penanda waktu panggilan API penyedia terakhir (untuk jeda)
     formula_baru: dict = {}     # model_key → formula yang ditetapkan sumber resmi penyedia
 
+    belum_teruji, satuan_asing = [], []
     for m in rows:
         if m.get("pricing_locked"):
+            continue
+        # ── [C, 24-Agu] HARGA HANYA UNTUK MODEL YANG TERBUKTI ADA ─────────────────────────────
+        # Terbukti hari ini: API harga fal menjawab **HTTP 200 untuk endpoint yang TIDAK ADA** —
+        # nama karangan dijawab dengan tarif GPU bawaannya. Jadi "200 OK" bukan bukti modelnya ada,
+        # dan satu salah ketik pada penanda model bisa menulis harga yang tampak wajar untuk model
+        # yang tak pernah ada. Kita selamat hari ini hanya karena satuannya tak dikenali — itu
+        # kebetulan, bukan pemeriksaan.
+        # Penutupnya bukan menebak nama, tapi syarat yang sudah dipegang mesin: tombol Uji.
+        # Model yang belum pernah LULUS uji tak punya harga yang bermakna. Terukur saat dipasang:
+        # 42 baris aktif SEMUANYA lulus ⇒ nol kehilangan pemutakhiran; 5 yang belum lulus semuanya
+        # NONAKTIF (tak terlihat tenant). Berlaku juga untuk probe satu-model dari panel: model baru
+        # dapat harganya sesudah Uji, bukan sebelum.
+        if not str(((m.get("cost_hint") or {}).get("audit") or "")).strip().upper().startswith("LULUS"):
+            belum_teruji.append(m["model_key"])
             continue
         pricing = None
         # PAGAR AGREGATOR (F3): baris milik agregator hanya boleh berharga dari RUANG NAMA
@@ -360,6 +419,7 @@ def sync_prices(sb=None, force: bool = False, only_model_key: str | None = None)
                     kunci_tarif = None
                     peta = SATUAN_VENDOR.get(satuan)
                     if not peta:
+                        satuan_asing.append(f"{m['model_key']} → '{satuan}'")
                         logger.info(f"[price_sync] {m['model_key']}: satuan vendor '{satuan}' belum "
                                     f"punya formula — tarif TIDAK ditulis (lebih baik kosong daripada "
                                     f"tertulis tapi mustahil dihitung)")
@@ -426,10 +486,23 @@ def sync_prices(sb=None, force: bool = False, only_model_key: str | None = None)
         logger.warning(f"[price_sync] usulan harga DITAHAN (sanity-guard): {held}")
     if missing:
         logger.warning(f"[price_sync] model TANPA harga di semua sumber (isi manual + lock di Catalog): {missing}")
-    logger.info(f"[price_sync] tersinkron: {updated} update, {len(held)} ditahan, {len(missing)} tanpa-sumber")
+    if belum_teruji:
+        logger.info(f"[price_sync] harga TIDAK dimutakhirkan karena belum lulus Uji: {belum_teruji}")
+    if satuan_asing:
+        # Satuan yang vendor sebutkan tapi belum punya formula di sisi kita. Dulu hanya tercatat di
+        # log — dan log tak dibaca siapa pun. Vendor mengganti cara tagih = kejadian yang WAJIB
+        # terlihat, sebab harga barisnya berhenti dimutakhirkan tanpa suara.
+        _notify_admin("ℹ️ <b>Vendor memakai satuan tagih yang belum kita kenal</b>\n"
+                      + "\n".join(f"• <code>{s}</code>" for s in satuan_asing)
+                      + "\nTarifnya TIDAK ditulis (lebih baik kosong daripada tertulis tapi mustahil "
+                        "dihitung). Perlu satu baris satuan baru di mesin — hubungi pengembang.")
+        logger.warning(f"[price_sync] satuan vendor tanpa formula: {satuan_asing}")
+    logger.info(f"[price_sync] tersinkron: {updated} update, {len(held)} ditahan, "
+                f"{len(missing)} tanpa-sumber, {len(belum_teruji)} belum-lulus-uji")
 
     _check_staleness(sb, rows)
-    return {"updated": updated, "held": held, "missing": missing}
+    return {"updated": updated, "held": held, "missing": missing,
+            "belum_teruji": belum_teruji, "satuan_asing": satuan_asing}
 
 
 def report_unpriced_models(sb=None) -> dict:

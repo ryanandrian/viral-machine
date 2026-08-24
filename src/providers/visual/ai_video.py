@@ -115,7 +115,8 @@ class AIVideoProvider(VisualProvider):
         # B2 cost-tracking: detik TERTAGIH vendor (durasi yang diminta; fallback durasi aktual).
         try:
             from src.utils import cost_meter
-            cost_meter.add_video(self.model_config.get("model_id") or "", float(billed_s or actual))
+            cost_meter.add_video(self.model_config.get("model_id") or "", float(billed_s or actual),
+                                 penyedia=self.model_config.get("platform") or "")
         except Exception:
             pass
         # [F4b] Sebagian model (fal seedance) ditagih per TOKEN = (tinggi×lebar×fps×durasi)÷1024 —
@@ -129,7 +130,8 @@ class AIVideoProvider(VisualProvider):
             from src.utils import cost_meter
             cost_meter.add_video_token(self.model_config.get("model_id") or "",
                                        lebar=_w, tinggi=_h, fps=_fps,
-                                       detik=float(billed_s or actual))
+                                       detik=float(billed_s or actual),
+                                       penyedia=self.model_config.get("platform") or "")
         except Exception as _e:
             logger.debug(f"[AIVideo] dimensi klip tak terbaca untuk hitungan biaya: {_e}")
 

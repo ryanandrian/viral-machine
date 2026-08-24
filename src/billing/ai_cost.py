@@ -232,23 +232,75 @@ KERANJANG_BIAYA = {"llm": "llm", "image": "image", "tts": "tts", "tts_tokens": "
 FORMULA_TANPA_TARIF = frozenset({"gratis", "biaya_dilaporkan"})
 
 
+PEMISAH_PENYEDIA = "|"
+
+
+def kunci_biaya(penyedia: str, model: str) -> str:
+    """Kunci pencatatan biaya = **PENYEDIA + model**, disusun di SATU tempat saja.
+
+    KENAPA (ketokan owner 24-Agu). Model yang SAMA bisa dilayani beberapa penyedia — langsung,
+    agregator, router — dan **masing-masing punya harganya sendiri**; tenant boleh memilih salah
+    satunya. Contoh nyata di katalog: `gpt-4o-mini` langsung $0,15 per 1jt token masuk, sementara
+    lewat fal $0,001 **per panggilan** — beda **150×** untuk model yang sama.
+
+    Selama meteran hanya mencatat NAMA MODEL, dua penyedia yang menyebut modelnya dengan nama sama
+    (persis yang dilakukan router ber-protokol OpenAI: `gpt-4o-mini`) akan tertukar biayanya, dan
+    tertukarnya SENYAP — `ai_models.model_id` tak punya aturan keunikan.
+
+    Bentuknya hidup di sini, bukan di meteran: dua tempat menyusun kunci = dua bentuk yang bisa
+    berbeda, dan biaya berhenti menemukan harganya."""
+    p = (penyedia or "").strip().lower()
+    m = (model or "").strip()
+    return f"{p}{PEMISAH_PENYEDIA}{m}" if p and m else m
+
+
 def _sb():
     from supabase import create_client
     return create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
 
 
-def _pricing_map(sb=None) -> dict:
-    """model_key & model_id → pricing dict (dua kunci → cocok apa pun yang tercatat meter)."""
-    sb = sb or _sb()
-    rows = sb.table("ai_models").select("model_key, model_id, pricing").execute().data or []
-    out = {}
+def _peta_baris(rows: list, medan: str) -> dict:
+    """Susun peta pencarian dari baris katalog → nilai `medan`, dengan aturan yang SAMA untuk harga
+    maupun formula (satu tempat, supaya keduanya tak bisa berbeda aturan).
+
+    Tiga bentuk kunci didaftarkan:
+      • `penyedia|model_id` dan `penyedia|model_key` — **selalu**, dan selalu tak ambigu
+      • `model_id` / `model_key` polos — **HANYA bila nama itu dipakai satu baris saja**
+    Nama polos yang dipakai LEBIH DARI SATU baris sengaja TIDAK didaftarkan: catatan lama tak
+    menyebut penyedia, jadi menebak salah satunya bisa salah 150× (`gpt-4o-mini` langsung vs lewat
+    agregator). Tak terdaftar ⇒ dilaporkan **belum terhitung** = jujur, berisik, bisa ditindak."""
+    nilai_baris, hitung = [], {}
     for r in rows:
-        p = r.get("pricing")
-        if isinstance(p, dict) and p:
-            out[r["model_key"]] = p
-            if r.get("model_id"):
-                out[r["model_id"]] = p
+        v = r.get(medan)
+        if medan == "pricing" and not (isinstance(v, dict) and v):
+            continue
+        if medan == "pricing_model" and not v:
+            continue
+        pk = r.get("provider_key") or ""
+        # Nama DI-DEDUP dalam satu baris: mayoritas baris punya model_key == model_id, dan
+        # menghitungnya dua kali membuat baris itu tampak "ambigu terhadap dirinya sendiri" →
+        # nama polosnya tak terdaftar → seluruh riwayat jadi tak-terhitung. (Ditangkap uji.)
+        # Ambiguitas hanya berarti bila nama yang sama dipakai baris LAIN.
+        nama = list(dict.fromkeys(n for n in (r.get("model_key"), r.get("model_id")) if n))
+        nilai_baris.append((pk, nama, v))
+        for n in nama:
+            hitung[n] = hitung.get(n, 0) + 1
+    out: dict = {}
+    for pk, nama, v in nilai_baris:
+        for n in nama:
+            if pk:
+                out[kunci_biaya(pk, n)] = v
+            if hitung.get(n, 0) == 1:          # nama polos hanya bila TIDAK ambigu
+                out[n] = v
     return out
+
+
+def _pricing_map(sb=None) -> dict:
+    """model (per penyedia, + nama polos bila tak ambigu) → pricing dict."""
+    sb = sb or _sb()
+    rows = (sb.table("ai_models")
+            .select("model_key, model_id, provider_key, pricing").execute().data or [])
+    return _peta_baris(rows, "pricing")
 
 
 def _jumlah(pemakaian, medan: tuple):
@@ -310,16 +362,9 @@ def _formula_map(sb=None) -> dict:
     TERPISAH dari `_pricing_map` dengan sengaja: uji lama mengganti peta harga dengan kamus polos
     {model: harga}; menggabungkan keduanya akan memecah kontrak itu tanpa alasan."""
     sb = sb or _sb()
-    rows = sb.table("ai_models").select("model_key, model_id, pricing_model").execute().data or []
-    out = {}
-    for r in rows:
-        f = r.get("pricing_model")
-        if not f:
-            continue
-        out[r["model_key"]] = f
-        if r.get("model_id"):
-            out[r["model_id"]] = f
-    return out
+    rows = (sb.table("ai_models")
+            .select("model_key, model_id, provider_key, pricing_model").execute().data or [])
+    return _peta_baris(rows, "pricing_model")
 
 
 def compute_cost_usd(ai_usage: dict, sb=None) -> dict | None:

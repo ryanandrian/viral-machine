@@ -116,21 +116,30 @@ class TestB_BiayaTercatat(unittest.TestCase):
     def setUp(self):
         cost_meter.reset()
 
+    # [25-Agu] Catatan pemakaian kini ber-KUNCI PENYEDIA + model (`kunci_biaya`). Sebabnya penting
+    # justru untuk berkas ini: model yang SAMA dilayani fal DAN vendor aslinya, dengan harga yang
+    # beda jauh ($0,001 per panggilan vs per token) — tanpa penyedia di kunci, biaya keduanya
+    # tertukar SENYAP. Bentuknya tidak diketik di sini; diambil dari rumahnya.
+    KUNCI = staticmethod(lambda: __import__("src.billing.ai_cost", fromlist=["kunci_biaya"])
+                         .kunci_biaya("fal", "google/gemini-2.5-flash"))
+
     def test_pemakaian_naskah_fal_tercatat(self):
         _panggil({"output": "ok", "error": None,
                   "usage": {"prompt_tokens": 21, "completion_tokens": 16, "total_tokens": 37}})
         llm = cost_meter.summary().get("llm", {})
-        self.assertIn("google/gemini-2.5-flash", llm,
+        k = self.KUNCI()
+        self.assertIn(k, llm,
                       "Naskah lewat fal tidak tercatat sama sekali — biaya tenant terbaca Rp 0.")
-        self.assertEqual(llm["google/gemini-2.5-flash"]["tokens_in"], 21)
-        self.assertEqual(llm["google/gemini-2.5-flash"]["tokens_out"], 16)
-        self.assertEqual(llm["google/gemini-2.5-flash"]["calls"], 1)
+        self.assertIn("fal", k, "penyedia tak ikut tercatat — biaya bisa tertukar dgn vendor asli")
+        self.assertEqual(llm[k]["tokens_in"], 21)
+        self.assertEqual(llm[k]["tokens_out"], 16)
+        self.assertEqual(llm[k]["calls"], 1)
 
     def test_tanpa_laporan_token_pun_panggilannya_tetap_terhitung(self):
         """Penyedia yang tak melaporkan token tidak boleh menghilang dari tagihan."""
         _panggil({"output": "ok", "error": None})
         llm = cost_meter.summary().get("llm", {})
-        self.assertEqual(llm.get("google/gemini-2.5-flash", {}).get("calls"), 1)
+        self.assertEqual(llm.get(self.KUNCI(), {}).get("calls"), 1)
 
 
 class TestC_GalatJujur(unittest.TestCase):

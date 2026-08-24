@@ -526,7 +526,8 @@ class AIImageProvider(VisualProvider):
         # B2 cost-tracking: 1 gambar SUKSES ter-generate (retry gagal tak dihitung — hanya yg jadi). Fail-soft.
         try:
             from src.utils import cost_meter
-            cost_meter.add_image(self.model_config.get("model_id") or "")
+            cost_meter.add_image(self.model_config.get("model_id") or "",
+                                 penyedia=self.model_config.get("platform") or "")
         except Exception:
             pass
         # [F4b] Sebagian vendor (fal) menagih per MEGAPIKSEL, dibulatkan KE ATAS — jumlah gambar saja
@@ -540,7 +541,8 @@ class AIImageProvider(VisualProvider):
             with Image.open(output_path) as im:
                 _w, _h = im.size
             from src.utils import cost_meter
-            cost_meter.add_image_megapiksel(self.model_config.get("model_id") or "", _w * _h)
+            cost_meter.add_image_megapiksel(self.model_config.get("model_id") or "", _w * _h,
+                                            penyedia=self.model_config.get("platform") or "")
         except Exception as _e:
             logger.debug(f"[AIImage] ukuran gambar tak terbaca untuk hitungan biaya: {_e}")
 
@@ -682,7 +684,9 @@ class AIImageProvider(VisualProvider):
                 from src.utils import cost_meter
                 u = getattr(response, "usage", None)
                 if u and (getattr(u, "input_tokens", 0) or getattr(u, "output_tokens", 0)):
-                    cost_meter.add_llm(self.model_config["model_id"], getattr(u, "input_tokens", 0), getattr(u, "output_tokens", 0))
+                    cost_meter.add_llm(self.model_config["model_id"], getattr(u, "input_tokens", 0),
+                                       getattr(u, "output_tokens", 0),
+                                       penyedia=self.model_config.get("platform") or "")
             except Exception:
                 pass
             item = response.data[0]
@@ -739,7 +743,9 @@ class AIImageProvider(VisualProvider):
             from src.utils import cost_meter
             u = data.get("usageMetadata") or {}
             if u.get("promptTokenCount") or u.get("candidatesTokenCount"):
-                cost_meter.add_llm(self.model_config["model_id"], u.get("promptTokenCount", 0), u.get("candidatesTokenCount", 0))
+                cost_meter.add_llm(self.model_config["model_id"], u.get("promptTokenCount", 0),
+                                   u.get("candidatesTokenCount", 0),
+                                   penyedia=self.model_config.get("platform") or "")
         except Exception:
             pass
 

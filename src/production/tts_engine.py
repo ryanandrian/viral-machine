@@ -499,12 +499,12 @@ class TTSEngine:
                 try:
                     from src.utils import cost_meter
                     _mk = config.get("tts_model") or primary
-                    cost_meter.add_tts(_mk, len(text))
+                    cost_meter.add_tts(_mk, len(text), penyedia=provider_name)
                     # [23-Agu] Detik audio NYATA (sudah diukur di atas utk gerbang durasi) — satuan
                     # tagih sebagian vendor (mis. `gpt-4o-mini-tts`, yang mengirim audio mentah tanpa
                     # hitungan token sehingga satuan lain mustahil dihitung). Diukur, bukan ditaksir.
                     if _raw_secs and _raw_secs > 0:
-                        cost_meter.add_tts_seconds(_mk, _raw_secs)
+                        cost_meter.add_tts_seconds(_mk, _raw_secs, penyedia=provider_name)
                 except Exception:
                     pass
                 return audio_path, word_timestamps
