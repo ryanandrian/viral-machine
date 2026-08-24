@@ -330,39 +330,18 @@ tabel ini setiap kali dilakukan. *(Rencana S3: mesin ikut membandingkan catatan-
 
 ---
 
-## 7f-00. 🔴 PEKERJAAN MENGGANTUNG — SELESAIKAN INI DULU (25-Agu, sesudah restart laptop)
+## 7f-00. ✅ A·B·C SELESAI & TERSIMPAN (25-Agu) — tidak ada lagi yang menggantung
 
-> **Ada perubahan SELESAI tapi BELUM TERSIMPAN di direktori kerja.** Ia TIDAK mengganggu produksi
-> (server jalan di `4922451`), jadi tak ada yang mendesak — tapi jangan dibiarkan menggantung, dan
-> **jangan dikerjakan ulang dari nol**: kodenya sudah ada, ujinya sudah ada, migrasinya sudah masuk DB.
-
-**ISI PEKERJAANNYA — A·B·C, disetujui owner 24-Agu:**
-- **A** biaya HARAM tertukar antar penyedia untuk model bernama sama (penyedia ikut jadi bagian kunci
-  pencatatan; bentuk kunci di `ai_cost.kunci_biaya`) — **prasyarat sebelum APIMaster/OpenRouter
-  ditambahkan**, sebab router menyebut model dengan nama persis sama dan selisih harganya 150×.
-- **B** alarm harga-basi kini ikut menjaga baris TERKUNCI (30 hari, angka mati atas ketokan owner;
-  tanpa tanggal = belum pernah dipastikan). Migr `0216` **SUDAH diterapkan** ke DB.
-- **C** sinkron berhenti mempercayai "200 OK" — harga tidak ditulis untuk model yang belum LULUS
-  tombol Uji (API fal menjawab 200 untuk endpoint yang TIDAK ADA); satuan vendor tak dikenal
-  dialarmkan, bukan cuma masuk log.
-Rinciannya di CATATAN PELAKSANAAN A·B·C di §7f. Berkas yang tersentuh terlihat dari `git status`.
-
-**SUDAH DIBUKTIKAN:** 9 uji dibuktikan MERAH dulu · **10 sabotase semuanya tertangkap** · ambang
-riwayat lolos (**nol produksi yang BARU jadi belum-terhitung**) · alarm baru diuji pada 47 baris nyata
-= **nol alarm palsu** · potongan uji yang sudah hijau: **796 · 309 · 131 · 8**.
-
-**SISA — kecil, jangan dibesarkan:**
-1. Jalankan **HANYA** potongan yang belum diverifikasi ulang: `ls tests/*.py | sed -n '63,93p'`
-   (±3 menit). Dua uji di dalamnya sempat merah dan **sudah dibetulkan** (`test_naskah_fal_jalur_hidup.py`).
-2. Bila hijau → **commit sekali**. Gerbang commit menjalankan uji penuh; di mesin ini itu **±10 menit**
-   saat cache dingin, dan tenggat hook-nya 300 detik ⇒ **bisa habis waktu**. Kalau hook gagal karena
-   tenggat, LAPOR ke owner dan minta keputusannya — **jangan mengulang-ulang uji penuh.**
+Commit `b52cf86`, **gerbang commit menjalankan uji penuh dan HIJAU**. Migr `0216` sudah diterapkan.
+Isinya: **A** biaya tak bisa tertukar antar penyedia (prasyarat sebelum APIMaster/OpenRouter) ·
+**B** alarm 30 hari untuk harga ketikan tangan · **C** sinkron berhenti mempercayai "200 OK".
+Rinciannya di CATATAN PELAKSANAAN A·B·C di §7f. ⏳ **Belum di-push, belum di-deploy** — menunggu izin owner.
 
 **⛔ ATURAN KERAS DARI OWNER (25-Agu, sesudah laptopnya drop DUA KALI karena saya):**
 > **Jangan menjalankan uji penuh berulang-ulang.** Jalankan hanya uji yang bisa menangkap perubahan
-> yang dibuat. Uji penuh = tugas gerbang commit, SEKALI. **Haram** menjalankan uji di latar
-> (`run_in_background`) atau menumpuk beberapa putaran — laptop owner yang menanggungnya, dan itu
-> sudah membuatnya mati dua kali. Uji kena tenggat → **BERHENTI dan lapor**, jangan diulang.
+> yang dibuat (mis. rantai biaya = ±131 uji, 2 menit). Uji penuh = tugas **gerbang commit, SEKALI**.
+> **Haram** menjalankan uji di latar (`run_in_background`) atau menumpuk beberapa putaran — laptop
+> owner yang menanggungnya. Uji kena tenggat → **BERHENTI dan lapor**, jangan diulang.
 
 ---
 
