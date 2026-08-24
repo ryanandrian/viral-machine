@@ -330,12 +330,19 @@ tabel ini setiap kali dilakukan. *(Rencana S3: mesin ikut membandingkan catatan-
 
 ---
 
-## 7f-00. ✅ A·B·C SELESAI & TERSIMPAN (25-Agu) — tidak ada lagi yang menggantung
+## 7f-00. ✅ A·B·C TERPASANG DI PRODUKSI (25-Agu 02:46 WIB, izin owner)
 
-Commit `b52cf86`, **gerbang commit menjalankan uji penuh dan HIJAU**. Migr `0216` sudah diterapkan.
+Commit **`fcc9ed5`** — `mv-worker`=active · `mv-webhook`=active · health 200 · worker restart bersih.
+Layar (FE) **tidak ikut** sebab nol berkasnya berubah. Migr `0216` sudah diterapkan sebelumnya.
 Isinya: **A** biaya tak bisa tertukar antar penyedia (prasyarat sebelum APIMaster/OpenRouter) ·
 **B** alarm 30 hari untuk harga ketikan tangan · **C** sinkron berhenti mempercayai "200 OK".
-Rinciannya di CATATAN PELAKSANAAN A·B·C di §7f. ⏳ **Belum di-push, belum di-deploy** — menunggu izin owner.
+Rinciannya di CATATAN PELAKSANAAN A·B·C di §7f.
+
+**BUKTI SEBELUM DEPLOY, bukan sesudah** (ketokan owner: *"anda trial error di production server?"*):
+`scripts/gladi_biaya_channel_aktif.py` menjalankan rantai biaya yang SAMA dengan produksi memakai
+katalog nyata + setelan **9 channel tenant yang sesungguhnya**, jawaban vendor ditiru — nol panggilan
+vendor, nol kredit, nol sentuhan produksi. Hasil: **9 dari 9 channel biayanya terhitung penuh, nol
+"belum terhitung"**. **Jalankan alat ini SEBELUM tiap deploy yang menyentuh rantai biaya.**
 
 **⛔ ATURAN KERAS DARI OWNER (25-Agu, sesudah laptopnya drop DUA KALI karena saya):**
 > **Jangan menjalankan uji penuh berulang-ulang.** Jalankan hanya uji yang bisa menangkap perubahan
