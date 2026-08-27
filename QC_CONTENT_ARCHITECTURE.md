@@ -302,145 +302,88 @@ per-niche **DAN** dibuktikan dengan render nyata.
 | Uji otomatis | **560 lulus** |
 | Audit wiring DB→BE→FE | 11 tabel · 65 kolom diperiksa satu per satu |
 
-### 🔴 JATAH TOKEN NASKAH KEKECILAN — RENCANA SIAP, MENUNGGU KETOK OWNER *(dicatat 27-Agu-2026)*
+### ✅ JATAH TOKEN NASKAH — SEBABNYA **BERPIKIR**, BUKAN PANJANG JAWABAN *(TUNTAS 27-Agu-2026)*
 
-**Pemicu:** channel `JaydenSaverio` (tenant **andarini.nadia**, pro/active, baru bayar 26-Agu) gagal
-produksi 3× dari 5 percobaan dalam 30 menit. Galat: `Groq — Failed to validate JSON` /
-`json_validate_failed`. Begitu tenant pindah ke Gemini, langsung sukses.
+**Pemicu:** `JaydenSaverio` (tenant **andarini.nadia**, baru bayar 26-Agu) gagal produksi 3× dalam
+30 menit. Ditelusuri lebih luas: **10 kegagalan naskah 18–26 Agu di 4 channel** — BISIK NUSANTARA ·
+RETRO REWIND GARAGE · JaydenSaverio · Bang Us-Dat. **Semuanya Groq. Channel Gemini/OpenAI: nol.**
 
-**AKAR (terukur, 100% karya Claude):** permintaan naskah utuh dikirim dengan jatah **`max_tokens=2000`
-DITANAM DI KODE** (`script_engine._generate_one`), sementara naskah kita sendiri lebih besar dari itu.
-Diukur dengan penghitung token sungguhan (`tiktoken o200k_base`) pada **182 naskah produksi**:
+#### ⚠️ ANALISA SAYA YANG PERTAMA SALAH — dicatat, bukan dihapus
 
-| preset | naskah | tengah | p95 | MAKS |
+Saya menyimpulkan sebabnya *"jatah `max_tokens=2000` kekecilan; 51% naskah (93/182) melebihinya"*,
+lengkap dengan tabel p95/maks, dan hampir mengerjakan perbaikan berdasarkan itu. **Angka itu salah
+ukur**: yang saya hitung adalah objek naskah **TERSIMPAN**, yang isinya sudah bercampur turunan mesin
+(`full_script`, `visual_suggestions`, `viral_analysis`, tabel durasi). Diukur ulang pada 184 naskah,
+**hanya bagian yang LLM benar-benar kembalikan**:
+
+| yang diukur | tengah | p95 | terpanjang | > 2.000 |
 |---|---|---|---|---|
-| 60s (5 segmen) | 144 | **1.964** | 2.262 | 3.567 |
-| 90s (7 segmen) | 38 | **2.657** | 3.700 | **3.790** |
+| seluruh objek tersimpan *(turunan mesin ikut)* | 2.184 | 3.017 | 3.915 | **167 / 184** |
+| **jawaban LLM yang sesungguhnya** | **392** | **571** | **670** | **0 / 184** |
 
-⇒ **51% naskah (93/182) MELEBIHI jatah 2.000.** Bukan kadang — mayoritas.
+⇒ Untuk **jawaban**-nya saja, 2.000 sejak awal berlebih. Jatah bukan sebabnya.
 
-**Kenapa tak terlihat berbulan-bulan:** vendor LONGGAR (Gemini/OpenAI) tetap mengirim potongannya →
-jaring "jawaban terpotong → naikkan jatah → ulangi" menyala → produksi berhasil **tapi memanggil
-vendor DUA KALI**. Vendor KETAT (Groq) memvalidasi JSON di sisinya dan **menolak 400 sebelum apa pun
-sampai ke kita** (`failed_generation: ''`) ⇒ jaring itu **tak pernah menyala** (ia dipicu
-`finish_reason=length`) ⇒ gagal total. Galatnya jatuh ke `UNKNOWN` (`json_validate_failed` tak
-terdaftar di `galat_registry` Groq) ⇒ diulang sampai `script_max_retry`=3 ⇒ kredit tenant terbakar.
+#### AKAR SESUNGGUHNYA (terukur langsung ke vendor, 27-Agu)
 
-**Batas atas kenaikan juga mepet:** kenop `llm_jatah_token_batas_atas = 4000`, sementara naskah 90s
-sudah **3.790**. Naskah yang butuh lebih **gagal total dan tak tersimpan** ⇒ angka di tabel di atas
-punya bias-seleksi (yang terukur hanya yang berhasil).
+`openai/gpt-oss-120b` adalah **model bernalar**. Dengan prompt naskah sungguhan:
 
-**RENCANA (satu perubahan, dua angka):**
-- jatah awal **2.000 → 6.000** · batas atas **4.000 → 8.000**
-- **NOL tambahan biaya**: `max_tokens` = BATAS, bukan pesanan; vendor menagih token yang dihasilkan.
-  Malah MENGHEMAT — panggilan kedua pada ~separuh produksi tak lagi perlu.
-- **TIDAK per-preset** (pertanyaan owner terjawab sendiri): jatah token **bukan** alat pengejar durasi
-  — yang mengejar preset adalah **prompt** ("about N words"), **gerbang durasi** (STEP 3.5), dan
-  **refit per-segmen** (`_refit_naskah`). Ketiganya **TIDAK DISENTUH**. Jatah hanya atap; satu angka
-  longgar cukup, preset baru ikut benar sendiri.
+| | jatah 4.500 | jatah 8.000 |
+|---|---|---|
+| token dipakai **berpikir** | 4.498 | habis juga |
+| **isi jawaban** | **0 huruf** | **0 huruf** |
+| `finish_reason` | `length` | `length` |
 
-**Aman terhadap batas model:** Groq `gpt-oss-20b` max output = **65.536** (halaman resmi Groq,
-cek 27-Agu) ⇒ 6.000/8.000 jauh di bawah batas.
+Ia memakai SELURUH jatah untuk berpikir di dalam; jawabannya tak pernah dimulai. **Menaikkan jatah
+tidak menolong — ia hanya berpikir lebih lama.** Yang menolong: **mengekang waktu berpikirnya.**
 
-**KEJUJURAN yang wajib ikut (owner menegur asumsi liar):** klaim awal saya bahwa jatah = "sabuk
-pengaman anti-kecelakaan" **TIDAK BERBUKTI**. Diperiksa **3.311 panggilan / 516 produksi**: token
-keluar per panggilan tengah **479**, p95 **1.290**, TERBESAR **2.930**, dan **NOL kali** melewati
-4.000. Tak pernah ada lonjakan. Alasan yang sah untuk tetap memasang atap hanya satu: tanpa jatah,
-atapnya jadi batas model (65.536) = **±17× kebutuhan wajar**, jadi atap membatasi kerugian bila
-terjadi hal yang belum pernah terjadi — bukan karena bahaya yang sudah terbukti.
+> `reasoning_effort="low"` → berpikir **1.270** + jawaban **805** = 2.075 token → **jawaban UTUH**, `finish=stop`
 
-**BUKTI SEBELUM DISEBUT SELESAI:** uji dibuktikan MERAH dulu · **satu produksi nyata** di channel uji
-dengan model Groq yang tadi gagal (bila berhasil ⇒ sebab terbukti; bila tidak ⇒ lapor apa adanya).
+Kenapa layar tenant hanya memperlihatkan `json_validate_failed` / `json_generate_failed` dengan
+`failed_generation: ''`: dalam mode JSON, Groq **menolak dengan 400 sebelum ada objek jawaban** —
+jadi gejala "kosong + finish=length" mustahil terbaca di sana. Karena itu gejalanya wajib dikenali
+**dari dua sisi**.
 
-**Sisa terkait, BUKAN bagian rencana ini (jangan digabung):** `json_validate_failed` belum punya
-golongan di `galat_registry` (kelas mana = keputusan owner, sebab menentukan apakah channel direm) ·
-9 angka `max_tokens` lain masih ditanam di kode (owner: *"tidak masalah hardcode selama tidak pernah
-menjadi masalah"*) · `ai_models.default_params.max_output_tokens` kosong di **20/20** model aktif.
+#### YANG TERPASANG (`src/providers/llm/adapters.py` — satu tempat, seluruh vendor openai_chat)
 
----
+1. **Vendor menyatakan NOL keluaran dihasilkan** (`json_*_failed` + `failed_generation` KOSONG) →
+   ulangi SEKALI dengan waktu berpikir dikekang. `failed_generation` yang **BERISI** = penyakit lain
+   (model menulis JSON cacat) ⇒ sengaja TIDAK ikut, agar sebabnya tak tersamarkan.
+2. **Jawaban dikembalikan kosong** + jatah habis + ada token berpikir → sama, dari sisi jawaban.
+3. **Terbukti menolong ⇒ DIMEMO** per (vendor, model). Panggilan berikutnya langsung bersih — tak
+   membayar percobaan kosong lagi. Memo hanya sesudah **terbukti**; kekangan yang vendor tolak tidak
+   pernah diingat.
+4. **Vendor menolak karena permintaan kebesaran** (`Limit N, Requested M`) → panjang pertanyaan
+   terhitung EKSAK dari dua angka itu ⇒ jatah yang pas dihitung, diulang SEKALI. Bila pertanyaannya
+   sendiri sudah melebihi batas akun ⇒ **gagal jujur** ber-kelas `QUOTA_EXHAUSTED` dengan tindakan
+   nyata untuk tenant (naikkan paket · preset lebih pendek · penyedia lain).
+5. **Batas yang MODEL nyatakan** (`ai_models.default_params.max_output_tokens`) dan batas yang
+   **vendor sebut** dua-duanya MENGIKAT — yang terkecil menang.
 
-### MASIH TERBUKA (jujur — jangan diklaim tuntas)
+**Dikenali dari GEJALA, bukan dari nama model / daftar vendor** ⇒ model bernalar yang belum ada hari
+ini ikut tertangani tanpa suntingan kode, dan **nol kenop yang harus admin tetapkan.**
 
-1. **Belum di-deploy.** Migrasi **0187 (ratio 1)** dan **0188 (40 kenop)** SENGAJA belum diterapkan:
-   0187 mengubah perilaku produksi, 0188 akan memunculkan barisnya mentah di panel admin yang LIVE.
-   Keduanya menyala bersama deploy. 0185/0186/0189 sudah diterapkan (tak terlihat kode server).
-2. **Layar admin & tenant belum pernah DIKLIK manusia.** Tipe, build, dan kontrak data sudah
-   diverifikasi silang (setiap kolom yang dibaca komponen dikirim API dan ada di DB), dan seluruh
-   rute merespons benar tanpa error server — tapi isi layar saat sudah login belum pernah dilihat.
-   Butuh sesi login; permintaan membuat sesi lokal diblokir penjaga izin (2026-08-02).
-3. **20 suara ElevenLabs/fal belum diukur** (biaya vendor). Jalurnya kini LENGKAP — jalur penanda
-   waktu tersambung dan terbukti bekerja pada ElevenLabs (2026-08-02) — tetapi pengukuran harus
-   dilakukan **SETELAH 0187 menyala**: biaya jeda ikut melambat bersama `speed`, jadi mengukur
-   sekarang membekukan angka dunia lama. Sekali jalan, dengan izin biaya vendor.
-4. **Mutu naskah belum punya alat ukur** yang tumbuh bersama ratusan niche. Kandidat satu-satunya =
-   retensi penonton. **Ini MOAT produk** (DESAIN §8 killer feature #1), bukan pekerjaan sisa.
+#### JATAH: `JATAH_NASKAH_UTUH = 4500` (satu tetapan, 3 titik naskah-utuh)
 
-   **Bahannya SUDAH ADA dan sudah dibaca (analisis BACA-SAJA 2026-08-01, nol perubahan produksi):**
-   170 kurva berisi (100 titik/video), **41 di antaranya bisa disambungkan ke naskah yang
-   menghasilkannya** lewat `content_inventory.metadata->>'run_id'` → `videos.run_id`. Metadata
-   inventory juga menyimpan pilihan produksi tiap video (`hook_pattern`, `tts_voice`, `music_mood`,
-   `visual_seed`, `viral_score`) — jadi pilihan mesin bisa dikorelasikan dengan hasilnya.
+Bukan karena jawabannya panjang, tapi karena **berpikir-yang-dikekang + menjawab = 2.075 token**, dan
+itu sudah melewati 2.000. 4.500 memberi cadangan >2× **dan** masih lewat di Groq: ruang percobaan
+ke-1 = 8.000/menit − prompt ±3.100 = **±4.850**. Dengan 8.000, setiap panggilan Groq ditolak lebih
+dulu lalu dikoreksi — hasilnya benar tapi memboroskan satu perjalanan bolak-balik tiap kali.
+Gemini `gemini-3.5-flash-lite` & `gemini-flash-lite-latest` **diuji menerima 8.000** ⇒ 4.500 aman.
 
-   Yang sudah terbaca dari 41 video itu:
+**TIDAK per-preset dan TIDAK jadi kenop admin:** jatah token bukan alat pengejar durasi — yang
+mengejar preset adalah anggaran kata di prompt + gerbang durasi + `_refit_naskah`, **ketiganya tak
+disentuh**. Bila angka ini pun keliru, mesin & vendor yang mengoreksinya, bukan manusia.
 
-   | bagian naskah | video | penonton hilang (median) |
-   |---|---|---|
-   | **hook** | 41 | **24%** |
-   | mystery_drop | 18 | 3% |
-   | bagian lain | 41 | ±0% (naik-turun kecil = efek loop Shorts) |
+#### BUKTI
 
-   | pola hook | dipakai | daya tahan hook (median) |
-   |---|---|---|
-   | question | 11 | **1,32** |
-   | you_dont_know | 7 | **1,32** |
-   | story_open | 3 | 1,29 |
-   | number_shock | 6 | 1,17 |
-   | **impossible_claim** | **14 (TERBANYAK)** | **1,14 (TERBURUK)** |
+| Bukti | Hasil |
+|---|---|
+| Panggilan nyata Groq, channel & niche yang gagal 23-Agu (RETRO REWIND GARAGE / `automotive_legends`) | **3/3 berhasil** (sebelum perbaikan **1/3**) |
+| Memo kekangan sesudah 1 kali belajar | terpasang; panggilan ke-2 & ke-3 langsung bersih |
+| Regresi Gemini 60s & 90s (jatah 4.500) | **2/2 berhasil**, memo kekangan **tetap kosong** |
+| Penjaga baru `tests/test_jatah_token_model_bernalar.py` | **16 hijau**, **14/14 sabotase merah** |
+| Bug yang penjaga LAMA tangkap di tengah jalan | pembukaan ruang saya menimpa batas katalog model → dibetulkan |
 
-   Artinya: seperempat penonton pergi di HOOK — jauh melampaui bagian lain — dan mesin paling sering
-   memakai pola hook yang paling buruk menahan mereka. Rotasi hook saat ini round-robin (Diversity
-   §9.1), bukan berdasarkan hasil.
-
-   **JUJUR SOAL BATASNYA:** 3–14 video per pola. Ini SINYAL, bukan kesimpulan — cukup untuk
-   memutuskan bahwa mekanismenya layak dibangun, TIDAK cukup untuk langsung dipakai memilih hook.
-   Rancangan yang benar = biarkan mesin mengumpulkan sendiri lalu memutuskan saat buktinya cukup,
-   dengan ambang minimum sampel seperti pada kalibrasi durasi.
-
-   **GERBANG: JANGAN diwiring ke produksi sebelum A2 diketok owner** (PROGRAM_BUKTI_KECERDASAN §6).
-5. **5 dari 6 kunci OpenAI habis kredit tapi berstatus 'valid'** di layar — validasi hanya terjadi
-   saat kunci dipasang.
-6. **Suara `en-US-ChristopherNeural` (channel AKTIF Abyss ID)**: koefisien hurufnya di-fit 31-Jul
-   13:08 dari 7 render (syarat minimum 14) dan **sebelum** biaya jedanya diukur 19:51 — dua dunia
-   tercampur. Diukur ulang 2-Agu dengan 32 render nyata (gratis): angka DB sekarang meleset rata
-   0,97 dtk / terburuk 3,67 dtk; fit dua-tahap yang benar 0,91 / **2,61**. **Tidak ada video keluar
-   band karenanya** (band preset 30 = 22,5–37,5 dtk), jadi ini kerapian — menunggu ketok owner.
-
-### JANGAN DIULANG (tertutup dengan bukti)
-
-- Memperbaiki susunan prompt untuk mengejar durasi — 83 naskah berpasangan.
-- Kecepatan suara sebagai tuas durasi — dilarang owner, dan terbukti tak menghasilkan durasi.
-- Kode memangkas kalimat — membuang fakta.
-- Kalibrasi koefisien PER-NICHE — diuji, TIDAK menang (sel terlalu tipis).
-- Biaya jeda dari regresi — lihat tabel angka di atas.
-- Mencabut separuh rantai (yang MENULIS saja, bukan yang MEMBACA) — itu yang membuat tuas kecepatan
-  hidup sepuluh hari setelah "dicabut".
-- **Memasangkan naskah dengan audio lewat NOMOR URUT.** Skrip kalibrasi luar-jalur menamai berkas
-  audio `voice_001.mp3`, `voice_002.mp3`… mengikuti urutan daftar naskah — sementara kuerinya
-  TIDAK punya `ORDER BY`. Begitu urutan baris berubah, naskah ke-3 dipasangkan dengan audio yang
-  isinya naskah LAIN. Terukur 2026-08-01: skrip yang sama, masukan yang sama, kesalahan melonjak
-  1,35 → 3,97 dtk (terburuk 23,9 dtk) tanpa satu pun tanda. Pemasangan WAJIB berbasis ISI (sidik
-  jari teks), bukan posisi. **Produksi TIDAK rentan** — di sana satu sampel = satu baris berisi
-  teks DAN durasinya sekaligus (`tts_delivery_samples`), jadi pasangannya melekat.
-
-### PETA KODE (grep ulang sebelum dipakai)
-
-`duration_model.py` alat ukur+batas+resep+vonis · `pause_probe.py` ukur biaya jeda (2 cara) ·
-`voice_delivery.py` rasio laju lintas-penyedia · `pace_calibration.py` kalibrasi dua-tahap ·
-`ambang.py` semua kenop dari DB · `script_checker.py` cacat mekanis · `script_engine.py`
-resep→prompt→per-bagian→perbaikan→cacat→satu-perhitungan-akhir · `tts_engine.py` batas waktu +
-penjaga terpotong · `pipeline.py` gerbang + QC · migrasi `0182`–`0188`.
-
----
 ## 3. ARSITEKTUR QC v2 (spec-aware, relatif, berlapis) — ✅ TERPASANG (desain 2026-06-13 → live sejak 2026-06-16; kondisi kode = §2)
 
 QC menjadi **3 lapis**, semua ambang config-driven, ambang relatif diturunkan dari **Duration Preset × Format Profile** run tsb.

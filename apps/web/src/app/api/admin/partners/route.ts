@@ -52,7 +52,11 @@ export async function GET(req: Request) {
     a.from("tenant_attribution").select("agent_id"),
     a.from("commission_ledger").select("agent_id,agent_amount_idr,status,entry_kind"),
     a.from("agent_payouts").select("*").order("period_month", { ascending: false }).limit(60),
-    a.from("app_config").select("key,value").in("key", ["partner_payout_day", "partner_min_payout_idr", "partner_program_enabled"]),
+    // [27-Agu] `value_text` ikut diambil: kenop bertipe TEKS disimpan di sana (`value` hanya
+    // penampung angka). Tanpa itu `partner_default_commission_type` terbaca "0" — dan itulah sebabnya
+    // kedua kenop "Komisi Default (Agen Baru)" yang SSOT §4 janjikan tak pernah dipakai layar,
+    // sehingga nilai awal form agen ditanam sebagai angka mati (melanggar §3.2 nol-literal).
+    a.from("app_config").select("key,value,value_text").in("key", ["partner_payout_day", "partner_min_payout_idr", "partner_program_enabled", "partner_default_commission_type", "partner_default_commission_value"]),
   ]);
   const nTen: Record<string, number> = {}; (att ?? []).forEach((r) => { nTen[r.agent_id] = (nTen[r.agent_id] ?? 0) + 1; });
   const sums: Record<string, { accrued: number; paid: number }> = {};
@@ -67,7 +71,8 @@ export async function GET(req: Request) {
     agents: (agents ?? []).map((x) => ({ ...x, code: codeOf[x.id] ?? null, tenants: nTen[x.id] ?? 0,
       accrued_idr: sums[x.id]?.accrued ?? 0, paid_idr: sums[x.id]?.paid ?? 0 })),
     payouts: payouts ?? [],
-    config: Object.fromEntries((cfg ?? []).map((c) => [c.key, c.value])),
+    // Kenop teks memakai `value_text`; kenop angka memakai `value` (pola app_config yang ada).
+    config: Object.fromEntries((cfg ?? []).map((c) => [c.key, c.value_text ?? c.value])),
   });
 }
 

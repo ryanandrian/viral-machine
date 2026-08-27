@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { vault } from "@/lib/youtube";   // pemanggil internal FE→mesin yang sudah ada
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendMail } from "@/lib/email/smtp";
 import { renderConfirmEmail, type Lang } from "@/lib/email/templates";
@@ -82,6 +83,12 @@ export async function POST(req: NextRequest) {
         admin_uid: uid, action: "partner.attach_failed",
         detail: { code: pc.code, tenant_id: uid, error: String(e) },
       }).then(() => {}, () => {});
+      // [27-Agu] BERISIK, bukan hanya jejak audit. Cacat pintu Google baru ketahuan dari KOMPLEN
+      // AGEN justru karena satu-satunya catatan kegagalan masuk ke admin_audit yang nol pembaca.
+      // Jalur email diberi alarm yang sama supaya kelas itu tak bisa senyap di pintu mana pun.
+      await vault("/api/partner/op", {
+        op: "atribusi_gagal", code: pc.code, tenant_id: uid, jalur: "email", error: String(e),
+      }).catch(() => {});
     }
   }
   const next = encodeURIComponent("/auth?view=verified");

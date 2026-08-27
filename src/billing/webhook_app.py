@@ -184,6 +184,16 @@ try:
             if op == "reseller_breakdown":
                 return partner.reseller_monthly_breakdown(sb, b["agent_id"], b["period_month"],
                                                           include_bank=bool(b.get("include_bank")))
+            if op == "atribusi_gagal":
+                # [27-Agu] Atribusi agen GAGAL ditulis saat tenant mendaftar → alarm admin.
+                # KENAPA ADA: cacat pintu Google (atribusi tak pernah lahir untuk 100% pendaftar)
+                # baru ketahuan dari KOMPLEN AGEN — sebab kegagalannya cuma masuk jejak audit yang
+                # nol pembaca. Uang agen tak boleh bergantung pada siapa yang komplen lebih dulu.
+                # Menempel pada jalur yang sudah ada (endpoint ini + notify_admin), nol pintu baru.
+                return partner.alarm_atribusi_gagal(sb, str(b.get("code") or ""),
+                                                    str(b.get("tenant_id") or ""),
+                                                    str(b.get("error") or ""),
+                                                    str(b.get("jalur") or ""))
             return JSONResponse({"error": f"op tak dikenal: {op}"}, status_code=400)
         except (ValueError, KeyError) as e:
             return JSONResponse({"error": str(e)}, status_code=400)

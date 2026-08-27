@@ -1262,6 +1262,59 @@ jawaban Google apa adanya. Gerbang `0208` langsung menahan penyalaan ulang (`bel
 `Abyss ID` — channel AKTIF yang memakainya — kini menyebut alasannya di layar tenant: nama model +
 nama penyedia, bukan label kosong.
 
+## §9c PINTU KEEMPAT — **JATAH TOKEN**: dua arah gagal, dua-duanya dijawab VENDOR *(dibuka 2026-08-27)*
+
+Tiga pintu sebelumnya menangani galat yang vendor **namai** (kunci ditolak, kredit habis, model
+pensiun). Pintu keempat menangani kelas yang tak punya nama vendor sama sekali: **jatah token yang
+salah ukur.** Ia punya DUA arah, dan mesin sebelumnya hanya mengenal satu.
+
+| Arah | Gejala | Sebelum 27-Agu | Sesudah |
+|---|---|---|---|
+| **kekecilan — jawaban** | `finish_reason=length`, isi ADA tapi terpotong | jaring "naikkan jatah" (18-Agu) ✅ | tak disentuh |
+| **kekecilan — BERPIKIR** | jatah habis untuk bernalar, **isi 0 huruf** | ❌ tak dikenali ⇒ produksi mati | waktu berpikir dikekang, lalu **dimemo** |
+| **kebesaran** | vendor menolak `Limit N, Requested M` | ❌ tak dikenali ⇒ produksi mati | jatah dihitung EKSAK dari angka vendor |
+
+### Kenapa gejala "berpikir" wajib dikenali dari DUA sisi
+
+Model bernalar yang kehabisan jatah dilaporkan dengan dua cara yang sangat berbeda:
+
+- **vendor mengembalikan jawaban**: `finish_reason=length` + `content` kosong + `reasoning_tokens > 0`
+- **vendor MENOLAK lebih dulu**: dalam mode JSON, Groq mengirim `400 json_validate_failed` /
+  `json_generate_failed` ber-`failed_generation: ''` — **tak ada objek jawaban untuk diperiksa.**
+
+Terukur 27-Agu, `openai/gpt-oss-120b`, prompt naskah sungguhan: berpikir **4.498 dari 4.500 token**,
+isi jawaban **0 huruf**; pada jatah 8.000 tetap 0 huruf. **Menaikkan jatah tidak menolong.**
+`reasoning_effort="low"` → berpikir 1.270 + jawaban 805 → **jawaban utuh**.
+
+⚠️ `failed_generation` yang **BERISI** = penyakit LAIN (model menulis JSON cacat). Sengaja **tidak**
+ikut ditangani di sini: mengekang waktu berpikir takkan menolongnya dan hanya menyamarkan sebabnya.
+
+### Kenapa tidak ada satu angka yang benar (terukur, bukan pendapat)
+
+Batas Groq bukan milik model melainkan milik **AKUN** — token per menit — dan vendor menghitung
+**pertanyaan + jatah jawaban bersama-sama**. Karena prompt membengkak saat mesin mencoba ulang
+(umpan balik durasi ikut disisipkan: ±3.100 → ±5.100 token), ruang jatah menyusut separuh di tengah
+jalan. Satu angka tetap **mustahil** benar untuk semua vendor, semua paket tenant, dan semua percobaan.
+
+⇒ Yang benar bukan ANGKA, tapi **HITUNGAN**, dan angkanya hanya vendor yang tahu. Dua langit-langit
+yang MENGIKAT: yang **model** nyatakan (`ai_models.default_params.max_output_tokens`) dan yang
+**vendor** sebut saat menolak — **yang terkecil menang**. Bila tak satu pun ada, ruang dibuka 2× dari
+yang diminta, dan vendor sendiri yang mengoreksi bila kelewatan.
+
+### Kontrak
+
+- Dikenali dari **GEJALA**, bukan dari nama model / daftar vendor ⇒ model bernalar yang **belum ada**
+  ikut tertangani tanpa suntingan kode, dan **nol kenop yang harus admin tetapkan.**
+- Setiap koreksi terjadi **SEKALI**; haram berputar antara "terpotong" dan "ditolak".
+- Kekangan dimemo per (vendor, model) **hanya sesudah terbukti menghasilkan jawaban**. Memo optimistis
+  = memaksakan parameter yang vendor tolak pada setiap panggilan berikutnya.
+- Pertanyaan yang sendirinya melebihi batas akun ⇒ **gagal jujur** kelas `QUOTA_EXHAUSTED` (mengulang
+  mustahil menolong) dengan tindakan NYATA: naikkan paket · preset lebih pendek · penyedia lain.
+- Penolakan karena kebesaran **tidak menghasilkan token** ⇒ nol biaya tenant untuk pembelajaran ini.
+
+Penjaga: `tests/test_jatah_token_model_bernalar.py` (16 uji · 14/14 sabotase merah).
+Rincian angka & bukti produksi: `QC_CONTENT_ARCHITECTURE.md` §2c.
+
 ## §10 PENJAGA ANTI-DRIFT (supaya dokumen ini TETAP SSOT)
 
 > **Tiga penjaga, dan batas masing-masing — ditulis supaya hijau tak pernah lagi dibaca sebagai
@@ -1338,6 +1391,23 @@ Bila salah satu bergeser tanpa yang lain, uji MERAH sebelum sempat menyesatkan s
   terpisah**. Sisa nyata yang belum dikerjakan & masih sah (semuanya TAK terlihat di layar, nol pintu
   baru): isian `tts_profiles` dibuang senyap · baris baru lahir hidup sebelum diuji · nol penjaga
   paritas form↔whitelist API. **Batch D** (penjaga §7 + dokumen) belum dikerjakan.
+- **2026-08-27** — **PINTU KEEMPAT (§9c): jatah token, dua arah gagal.** Pemicu: 10 kegagalan naskah
+  18–26 Agu di 4 channel, SEMUANYA Groq (Gemini/OpenAI nol). ⚠️ **Analisa pertama saya SALAH dan
+  dicatat, bukan dihapus**: saya menyimpulkan "jatah 2.000 kekecilan, 51% naskah melebihinya" —
+  yang saya ukur ternyata objek naskah TERSIMPAN (bercampur turunan mesin); jawaban LLM yang
+  sesungguhnya tengah **392**, terpanjang **670** token dari 184 naskah ⇒ **nol** yang melebihi 2.000.
+  **AKAR sesungguhnya:** `gpt-oss-120b` = model bernalar; ia memakai seluruh jatah untuk berpikir
+  (terukur **4.498 dari 4.500**, isi jawaban **0 huruf**; pada 8.000 tetap kosong). Yang menolong
+  bukan jatah lebih besar tapi **mengekang waktu berpikir** (`reasoning_effort=low` → berpikir 1.270
+  + jawaban 805 = jawaban UTUH). Terpasang: pengenalan gejala dari **dua sisi** (jawaban kosong ·
+  penolakan `json_*_failed` ber-`failed_generation` kosong), memo per (vendor,model) **hanya sesudah
+  terbukti**, penurunan jatah **dihitung eksak** dari `Limit N, Requested M` yang vendor sebut, dan
+  langit-langit model/vendor yang **mengikat** (terkecil menang). `JATAH_NASKAH_UTUH = 4500` (satu
+  tetapan, 3 titik) — bukan karena jawabannya panjang, tapi karena berpikir-dikekang + menjawab =
+  2.075 token, melewati 2.000. Bukti: **3/3 berhasil** di channel & niche yang gagal 23-Agu (sebelumnya
+  1/3) · Gemini 60s & 90s **2/2** tanpa terpengaruh · 16 uji baru · **14/14 sabotase merah**. Satu bug
+  yang saya buat di tengah jalan (pembukaan ruang menimpa batas katalog model) **ditangkap penjaga lama**
+  dan dibetulkan; helper yang jadi kode mati sesudahnya dihapus, bukan ditinggal jadi fosil.
 - **2026-08-21** — **§9b PINTU KEDUA TERSAMBUNG (Batch A: langkah 1·2·3·5 dari rencana owner).**
   Pemicu: owner melaporkan 2 kegagalan; penelusuran menemukan yang **tidak** dilaporkan — 4 channel
   (2 tenant BERBAYAR) mati 4 hari sejak 17-Agu 20:42 karena model naskahnya dimatikan di katalog

@@ -43,8 +43,22 @@ function prevMonth(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+// [27-Agu] Nilai awal komisi agen baru datang dari KENOP ADMIN (`partner_default_commission_*`,
+// SSOT §4 "nilai awal saat membuat agen baru"), bukan angka mati di layar (§3.2 nol-literal).
+// Sampai 27-Agu kedua kenop itu NOL PEMBACA — layar menjanjikan prefill yang tak pernah terjadi.
+// Angka di bawah tinggal jaring pengaman bila config tak terbaca (gagal-aman, bukan sumber utama).
 const EMPTY_FORM = { company_name: "", pic_name: "", pic_email: "", pic_phone: "", code: "",
   commission_type: "percent", commission_value: "20", tax_status: "badan_npwp", npwp: "", notes: "" };
+
+function formAwal(cfg: Record<string, unknown> | undefined) {
+  const tipe = String(cfg?.partner_default_commission_type ?? "").trim();
+  const nilai = String(cfg?.partner_default_commission_value ?? "").trim();
+  return {
+    ...EMPTY_FORM,
+    commission_type: tipe === "percent" || tipe === "flat_idr" ? tipe : EMPTY_FORM.commission_type,
+    commission_value: nilai && Number(nilai) > 0 ? nilai : EMPTY_FORM.commission_value,
+  };
+}
 
 export default function PartnersAdmin() {
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -89,7 +103,7 @@ export default function PartnersAdmin() {
     const j = await res.json().catch(() => ({}));
     setBusy(false);
     if (!res.ok) return setMsg(j.error || "gagal");
-    setShowForm(false); setEditId(null); setForm(EMPTY_FORM); void load();
+    setShowForm(false); setEditId(null); setForm(formAwal(cfg)); void load();
   }
   async function ops(body: Record<string, unknown>): Promise<Record<string, unknown> | null> {
     setBusy(true); setMsg(null);
@@ -156,7 +170,7 @@ export default function PartnersAdmin() {
           {/* Panduan operasi — buka dokumen HTML di tab baru (mandat owner: Help di admin, bukan file lepas) */}
           <a className="btn btn-outline" href="/panduan/program-agen.html" target="_blank" rel="noopener noreferrer" title="Panduan cara mengoperasikan Program Agen">
             <HelpCircle size={15} /> <Bi id="Panduan" en="Guide" /></a>
-          <button className="btn btn-default" onClick={() => { setEditId(null); setForm(EMPTY_FORM); setShowForm(true); }}>
+          <button className="btn btn-default" onClick={() => { setEditId(null); setForm(formAwal(cfg)); setShowForm(true); }}>
             <Plus size={15} /> <Bi id="Tambah agen" en="Add agent" /></button>
         </div>
       </div>

@@ -190,8 +190,30 @@ export default function AuthPage() {
       return setErr(j?.msg || (lang === "id" ? "Gagal mengirim ulang. Coba lagi." : "Failed to resend. Try again."));
     }
   }
+  // [B21 fix 27-Agu] TITIPAN KODE RUJUKAN untuk pintu OAuth.
+  //
+  // Cacat yang ditutup: pintu Google TIDAK pernah membawa kode agen. Terukur — 14 dari 14 tenant
+  // sejak program agen lahir (19-Jul) memakai Google, jadi satu-satunya jalur atribusi yang
+  // berfungsi (email+password) tak dipakai siapa pun. Layar sudah BERJANJI "✓ Kode valid —
+  // pendaftaran Anda tercatat lewat mitra kami", lalu janji itu dibuang. Agen AGEN01 komplen.
+  //
+  // Kenapa COOKIE, bukan menambah parameter ke `redirectTo`: alamat pulang OAuth divalidasi
+  // terhadap daftar-izin di Supabase. Menambah parameter di sana berisiko memecahkan SELURUH login
+  // Google bila daftar-izinnya tak mengizinkannya — memperbaiki atribusi tak boleh dibayar dengan
+  // mematikan pintu masuk. Cookie same-site kembali sendiri pada permintaan callback (mekanisme
+  // yang sama dipakai Supabase untuk PKCE-nya), jadi `redirectTo` TIDAK tersentuh.
+  //
+  // Umur 10 menit: cukup untuk satu putaran pilih-akun Google, dan lewat itu ia mati sendiri —
+  // titipan yang menetap = calon klaim belakangan (dilarang SSOT §1b).
+  function titipRef() {
+    const c = refCode.trim().toUpperCase();
+    if (!c) return;
+    document.cookie = `mv_ref=${encodeURIComponent(c)}; Max-Age=600; Path=/; SameSite=Lax`;
+  }
+
   async function doGoogle() {
     setErr(null);
+    titipRef();          // ← kode rujukan ikut melewati putaran OAuth (lihat catatan di atas)
     const after = `${origin()}/auth/callback?next=${encodeURIComponent("/dashboard")}`;
     // prompt=select_account → Google SELALU tampilkan pemilih akun (tak silent-SSO ke akun terakhir).
     const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: after, queryParams: { prompt: "select_account" } } });

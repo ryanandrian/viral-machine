@@ -404,3 +404,36 @@ def maybe_send_payout_reminder(sb) -> dict:
     except Exception as e:
         logger.warning(f"[Partner] pengingat pencairan gagal (non-fatal): {e}")
         return {"error": str(e)}
+
+
+# ── ALARM: atribusi agen gagal ditulis saat tenant mendaftar (27-Agu-2026) ────────────────────
+def alarm_atribusi_gagal(sb, code: str, tenant_id: str, error: str, jalur: str = "") -> dict:
+    """Kegagalan menulis atribusi agen → ALARM ADMIN, bukan hanya jejak audit.
+
+    KENAPA ADA. Cacat 27-Agu (pintu daftar Google tak pernah membawa kode rujukan ⇒ atribusi tak
+    pernah lahir untuk 100% pendaftar) **baru ketahuan dari KOMPLEN AGEN** — sebab satu-satunya
+    catatan kegagalan masuk ke `admin_audit`, yang nol pembaca. Uang agen tak boleh bergantung pada
+    siapa yang komplen lebih dulu.
+
+    Mandat owner: *"jangan pernah ada lagi masalah/komplen dari agen terkait hal ini."* Maka
+    kegagalannya wajib BERISIK di detik itu — masih bisa dibetulkan sebelum tenant membayar.
+
+    Fail-soft mutlak: ini pengawas, bukan jalur kerja. Kegagalannya HARAM mengganggu pendaftaran
+    tenant (pemanggil di FE sudah menelan galat; di sini pun tak melempar apa pun).
+    """
+    try:
+        from src.utils.telegram_notifier import TelegramNotifier
+        aman = TelegramNotifier.aman
+        TelegramNotifier().notify_admin(
+            f"⚠️ <b>ATRIBUSI AGEN GAGAL DICATAT</b>\n"
+            f"Tenant baru mendaftar membawa kode <code>{aman(code or '(kosong)')}</code>"
+            f"{f' lewat {aman(jalur)}' if jalur else ''}, tapi atribusinya TIDAK tertulis.\n"
+            f"Akibatnya: agen tak akan menerima komisi saat tenant ini membayar, dan ia hanya akan "
+            f"tahu dengan komplen.\n"
+            f"tenant: <code>{aman(tenant_id or '?')}</code>\nsebab: <code>{aman(error[:180])}</code>\n"
+            f"➡️ Betulkan sekarang, SEBELUM tenant membayar (atribusi terkunci sejak daftar — §1b).")
+        logger.warning(f"[Partner] ALARM atribusi gagal code={code} tenant={tenant_id}: {error[:200]}")
+        return {"alerted": True}
+    except Exception as e:                                       # noqa: BLE001
+        logger.warning(f"[Partner] alarm atribusi gagal (non-fatal): {e}")
+        return {"error": str(e)}

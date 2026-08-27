@@ -17,6 +17,39 @@ from src.intelligence.config import TenantConfig, get_niches
 from src.content import beats as _beats   # SATU SUMBER kosakata beat (0128)
 from src.config import ambang as _ambang
 
+# ══ JATAH TOKEN NASKAH-UTUH ═════════════════════════════════════════════════════════════════════
+# Dipakai HANYA oleh tiga panggilan yang menghasilkan/menyunting NASKAH UTUH dalam satu JSON:
+# penulis naskah · penyesuai panjang (`_refit_naskah`) · pembetul cacat mekanis. Panggilan lain
+# (satu beat, satu judul, daftar prompt gambar) memakai jatahnya sendiri dan TIDAK disentuh.
+#
+# ⚠️ KOREKSI ATAS ANALISA SAYA SENDIRI (27-Agu). Saya sempat menyimpulkan "51% naskah melebihi jatah
+# 2.000 token" dan hampir memperbaiki berdasarkan itu. ANGKA ITU SALAH: yang saya ukur adalah objek
+# naskah TERSIMPAN, yang isinya sudah dicampur turunan mesin (`full_script`, `visual_suggestions`,
+# `viral_analysis`, tabel durasi). Diukur ulang pada 184 naskah produksi, HANYA bagian yang LLM
+# benar-benar kembalikan:  tengah 392 · p95 571 · TERPANJANG 670 token · nol yang melebihi 2.000.
+# ⇒ Untuk JAWABAN-nya saja, 2.000 sejak awal berlebih. Jatah BUKAN sebab kegagalan naskah.
+#
+# KENAPA TETAP DINAIKKAN KE 4.500 — sebabnya BERPIKIR, bukan menjawab. Terukur 27-Agu pada
+# `openai/gpt-oss-120b` (Groq) dengan prompt naskah sungguhan: model bernalar memakai jatah untuk
+# berpikir di dalam, dan pada jatah 2.000 tak tersisa ruang untuk menulis jawabannya.
+#     tanpa kekangan          : berpikir 4.498 dari 4.500 → jawaban 0 huruf (juga kosong di 8.000)
+#     dengan kekangan "low"   : berpikir 1.270 + jawaban 805 = 2.075 token → jawaban UTUH
+# 2.075 sudah MELEWATI 2.000. Jadi jatah wajib menyediakan ruang untuk berpikir-yang-dikekang +
+# menjawab, bukan sekadar menjawab. 4.500 memberi cadangan >2x tanpa satu pun risiko baru:
+#     • ruang yang Groq izinkan di percobaan ke-1 = 8.000/menit − prompt ±3.100 = ±4.850 ⇒ 4.500
+#       LEWAT tanpa ditolak. Dengan 8.000, SETIAP panggilan Groq ditolak lebih dulu (413) lalu
+#       dikoreksi mesin: hasilnya benar, tapi memboroskan satu perjalanan bolak-balik tiap kali.
+#     • Gemini `gemini-3.5-flash-lite` & `gemini-flash-lite-latest` DIUJI menerima 8.000 ⇒ 4.500 aman.
+#
+# KENAPA BUKAN PER-PRESET, DAN BUKAN KENOP ADMIN: jatah token BUKAN alat pengejar durasi — yang
+# mengejar preset adalah anggaran kata di prompt + gerbang durasi + `_refit_naskah` (tak disentuh).
+# Dan bila angka ini pun keliru, MESIN & VENDOR yang mengoreksinya, bukan manusia:
+#   terlalu kecil krn berpikir → adapter mengekang waktu berpikir & mememonya
+#   terlalu kecil krn jawaban  → jaring "naikkan jatah" yang sudah ada
+#   terlalu besar              → vendor menyebut batasnya, adapter menghitung yang pas
+# ⇒ nol angka yang harus admin tetapkan, dan model baru tak menuntut satu pun suntingan di sini.
+JATAH_NASKAH_UTUH = 4500
+
 # Teknik perbaikan konkret per dimensi — dikirim ke LLM saat retry.
 # Harus actionable dan spesifik, bukan saran generik.
 DIMENSION_RETRY_GUIDANCE = {
@@ -530,7 +563,8 @@ def _refit_naskah(provider, model, script: dict, beats: list, resep: dict, vonis
         for _c in range(1, _ambang.angka("script_refit_parse_retry", 2) + 1):
             try:
                 raw = provider.complete(system="You are a professional video-script editor. Reply with JSON only.",
-                                        user=user, model=model, temperature=0.4, max_tokens=2000, as_json=True)
+                                        user=user, model=model, temperature=0.4,
+                                        max_tokens=JATAH_NASKAH_UTUH, as_json=True)
                 hasil = json.loads(ScriptEngine._clean_json(ScriptEngine.__new__(ScriptEngine), raw))
                 break
             except Exception as e:
@@ -1528,7 +1562,7 @@ class ScriptEngine:
                 ),
                 model=model,
                 temperature=1.0,
-                max_tokens=2000,
+                max_tokens=JATAH_NASKAH_UTUH,
                 as_json=True,
             )
             script = json.loads(self._clean_json(raw))
@@ -2248,8 +2282,8 @@ Write ONE text-to-video prompt (3-4 sentences, ENGLISH) for a single continuous 
                         "Reply with JSON only, exactly these keys: " + ", ".join(_isi)
                     )
                     _r = llm.complete(system="You are a professional video-script editor. Reply with JSON only.",
-                                      user=_up, model=script_model, temperature=0.2, max_tokens=2000,
-                                      as_json=True)
+                                      user=_up, model=script_model, temperature=0.2,
+                                      max_tokens=JATAH_NASKAH_UTUH, as_json=True)
                     _h = json.loads(ScriptEngine._clean_json(ScriptEngine.__new__(ScriptEngine), _r))
                     _baru = {b: (_h.get(b) or "").strip() for b in _isi}
                     if all(_baru.values()):

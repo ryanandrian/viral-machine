@@ -256,8 +256,27 @@ class TestC_Penyaring(unittest.TestCase):
         """Kesalahan di kode kami tak boleh menghentikan produksi tenant."""
         self.assertIsNone(patri.periksa_prompt(None))
 
-    def test_NOL_prompt_produksi_lama_diblokir(self):
-        """Angka yang menjaga janji: 0 dari seluruh prompt yang pernah diproduksi boleh diblokir."""
+    def test_NOL_prompt_produksi_diblokir_oleh_aturan_POLA(self):
+        """Janji yang dijaga: **nol produksi SAH yang MATI karena penjaga.**
+
+        ⚠️ MISTARNYA DIPERBAIKI 27-Agu (ketokan owner) — sebelumnya berbunyi *"nol dari seluruh
+        prompt produksi boleh diblokir"*. Mistar itu SALAH UKUR, dan terbukti begitu di lapangan:
+        25-Agu penulis AI menyisipkan satu kata Arab (`سلطان`) ke prompt vila mewah channel
+        BJ Yusroon. Penjaga menahannya — BENAR, itu memang huruf Arab — lalu jalur tulis-ulang yang
+        sudah ada (3 percobaan) mengarangnya kembali tanpa kata itu, dan **run 25-Agu 13:34
+        BERHASIL**. Nol tenant dirugikan. Tapi mistar lama menghitungnya sebagai pelanggaran, dan
+        karena baris itu DATA PRODUKSI TENANT (haram disentuh) sementara uji ini tak punya masa
+        kedaluwarsa, ia mengunci gerbang commit **selamanya, untuk topik apa pun**.
+
+        Yang dijaga sekarang memisahkan dua hal yang memang berbeda:
+          • aturan POLA (`_RX_SOSOK` · `_RX_ALLAH` · `_RX_TEKS`) — MENAFSIRKAN kalimat, jadi ia BISA
+            salah-tangkap. Rancangan daftar-kata dulu memblokir 8 prompt sah; itulah sebab uji ini
+            lahir. ⇒ **tetap wajib NOL.**
+          • deteksi HARFIAH huruf Arab (`_RX_ARAB`) — huruf Arab ADA atau TIDAK ADA di dalam teks;
+            mustahil salah-tangkap. Prompt seperti ini BOLEH ditahan, dan dijaga oleh uji
+            tetangganya (`test_prompt_berhuruf_arab_punya_jalur_pemulihan`) bahwa ia tidak mematikan
+            produksi.
+        """
         try:
             from dotenv import load_dotenv
             from supabase import create_client
@@ -266,16 +285,50 @@ class TestC_Penyaring(unittest.TestCase):
             rows = sb.table("content_inventory").select("metadata").limit(1000).execute().data
         except Exception as e:                                        # noqa: BLE001
             self.skipTest(f"DB tak terbaca ({type(e).__name__}) — pemeriksaan ini menuntut data nyata")
-        diblokir, total = [], 0
+        pola, harfiah, total = [], 0, 0
         for r in rows:
             for v in (((r.get("metadata") or {}).get("script") or {}).get("visual_suggestions") or []):
                 total += 1
-                h = patri.periksa_prompt(str(v))
-                if h and h != "kuatkan":
-                    diblokir.append(str(v)[:100])
+                teks = str(v)
+                h = patri.periksa_prompt(teks)
+                if not h or h == "kuatkan":
+                    continue
+                # Bukan dari teks pesannya (itu rapuh) — dari ADA/TIDAKNYA huruf Arab di teks.
+                if patri._RX_ARAB.search(teks):
+                    harfiah += 1
+                else:
+                    pola.append(f"{h} :: {teks[:90]}")
         self.assertGreater(total, 100, "data prompt produksi terlalu sedikit untuk menilai")
-        self.assertFalse(diblokir, f"{len(diblokir)} dari {total} prompt produksi SAH akan diblokir:\n  "
-                         + "\n  ".join(diblokir[:5]))
+        self.assertFalse(pola, f"{len(pola)} dari {total} prompt produksi SAH ditahan oleh aturan "
+                               f"POLA yang MENAFSIRKAN kalimat — inilah salah-tangkap yang uji ini "
+                               f"lahir untuk mencegah:\n  " + "\n  ".join(pola[:5]))
+
+    def test_prompt_berhuruf_arab_punya_jalur_pemulihan(self):
+        """Ditahan HARAM berarti produksi mati. Dua hal yang membuat pemulihan itu nyata, dijaga
+        di sini karena keduanya pernah hampir hilang: golongan galatnya tidak boleh masuk daftar
+        berhenti-cepat (kalau masuk, 2 percobaan tulis-ulang DILEWATI), dan loop tulis-ulangnya
+        harus ada."""
+        from src.exceptions import ErrorClass as _EC
+        from src.exceptions import FAST_FAIL as _FF
+        vonis = patri.periksa_prompt("A luxury villa evoking a sense of سلطان wealth")
+        self.assertTrue(vonis and vonis != "kuatkan", "huruf Arab tidak lagi ditahan — patri ke-3 mati")
+        self.assertNotIn(_EC.UNKNOWN, _FF,
+                         "golongan galat penjaga prompt masuk daftar berhenti-cepat ⇒ 2 percobaan "
+                         "tulis-ulang akan DILEWATI dan produksi mati di adegan itu")
+        src = _kode(os.path.join(AKAR, "src/providers/visual/ai_image.py"))
+        self.assertIn("for attempt in range(2, 4):", src,
+                      "loop tulis-ulang prompt hilang — prompt yang ditahan tak punya pemulihan lagi")
+        # Golongan dibaca dari BLOK PENJAGA ITU SENDIRI (ada 2 raise ber-pola sama di berkas ini —
+        # mencocokkan teks bebas akan mengunci yang salah), lalu diuji terhadap daftar berhenti-cepat
+        # yang SESUNGGUHNYA. Menambah golongan penjaga ke daftar itu = mematikan pemulihannya.
+        i = src.find("Prompt gambar ditahan penjaga MesinViral")
+        self.assertGreater(i, 0, "raise penjaga prompt tidak ditemukan")
+        blok = src[i:i + 500]
+        m = re.search(r"error_class=ErrorClass\.([A-Z_]+)", blok)
+        self.assertIsNotNone(m, f"raise penjaga prompt tanpa golongan galat:\n{blok[:300]}")
+        self.assertNotIn(_EC[m.group(1)], _FF,
+                         f"penjaga prompt digolongkan `{m.group(1)}` yang ada di daftar "
+                         f"berhenti-cepat ⇒ 2 percobaan tulis-ulang DILEWATI dan produksi mati")
 
 
 # ══ D. LARANGAN NARASI TENANT = PENGHENTI, BUKAN SARAN ═══════════════════════════════════════════

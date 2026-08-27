@@ -320,6 +320,71 @@ def _min_jatah_naik() -> int:
         return _MIN_JATAH_NAIK_CADANGAN
 
 
+# ── [27-Agu] PENOLAKAN "PERMINTAAN TERLALU BESAR" — VENDOR MENYEBUT BATASNYA SENDIRI ────────────
+# KENAPA ADA. Jatah token punya DUA arah gagal, dan sebelum ini mesin hanya mengenal satu:
+#   kekecilan → jawaban terpotong  (sudah ditangani di bawah, sejak 18-Agu)
+#   kebesaran → vendor MENOLAK     (tak dikenali sama sekali ⇒ produksi tenant mati)
+#
+# Terukur 27-Agu, kunci Test Lab, `openai/gpt-oss-120b` di Groq — pesan aslinya:
+#     413 — Request too large for model `openai/gpt-oss-120b` ... service tier `on_demand`
+#           on tokens per minute (TPM): Limit 8000, Requested 8121
+# Batasnya BUKAN milik model, melainkan milik AKUN (token per menit), dan vendor menghitung
+# PERTANYAAN + JATAH JAWABAN bersama-sama: 121 + 8000 = 8121, lewat 121 token ⇒ ditolak.
+#
+# KENAPA TIDAK DIPECAHKAN DENGAN SATU ANGKA TETAP (terukur 27-Agu, bukan pendapat):
+#   dibutuhkan naskah 90 dtk terpanjang  : 3.790 token
+#   diizinkan Groq saat mencoba ulang    : 2.860 token  (prompt membengkak jadi ±5.100 krn umpan balik)
+#   3.790 > 2.860 ⇒ angka tetap yang benar TIDAK ADA. Yang benar = HITUNGAN, dan angkanya
+#   hanya vendor yang tahu — batas TPM berbeda per akun tenant, per paket, dan berubah kapan saja.
+#
+# KENAPA MEMBACA PESAN VENDOR, BUKAN MENAKSIR PANJANG PROMPT SENDIRI: alat hitung token
+# (`tiktoken`) BUKAN dependensi resmi mesin ini, dan tiap vendor memakai pemenggal token berbeda —
+# taksiran kita akan salah. Pesan penolakan memberi angka EKSAK sebagaimana vendor menghitungnya,
+# tanpa satu pun panggilan tambahan. Penolakan 413 tidak menghasilkan token ⇒ NOL biaya tenant.
+_RX_BATAS_VENDOR = re.compile(r"\blimit\s+(\d+)\s*,\s*requested\s+(\d+)\b", re.I)
+
+# Cadangan kecil: batas TPM dihitung PER MENIT, jadi panggilan lain di menit yang sama ikut memakan
+# kuota. Tanpa cadangan, jatah "pas mentok" akan ditolak lagi begitu ada dua panggilan berdempet.
+_CADANGAN_TPM = 200
+
+
+# [27-Agu] GEJALA YANG SAMA, TAPI DILAPORKAN SEBAGAI PENOLAKAN — bukan sebagai jawaban terpotong.
+# Groq dalam mode JSON menolak dengan 400 SEBELUM satu pun jawaban dikembalikan, jadi gejala
+# "model bernalar menghabiskan jatah" tidak bisa dibaca dari objek jawaban (tak ada objeknya).
+# Yang tersisa sebagai bukti: kode `json_validate_failed`/`json_generate_failed` DENGAN
+# `failed_generation` KOSONG = vendor sendiri menyatakan tak ada apa pun yang dihasilkan.
+# Terukur 27-Agu — pesan aslinya:
+#   400 {'message': "Failed to validate JSON...", 'code': 'json_validate_failed', 'failed_generation': ''}
+# `failed_generation` yang BERISI = penyakit lain (model menulis JSON cacat) ⇒ sengaja TIDAK
+# ditangani di sini; mengekang waktu berpikir takkan menolongnya dan hanya menyamarkan sebabnya.
+_RX_NIHIL_DIHASILKAN = re.compile(
+    r"json_(?:validate|generate)_failed(?=.*failed_generation['\"]\s*:\s*(?:''|\"\"))", re.I | re.S)
+
+
+def _gejala_jatah_habis_untuk_berpikir(err: Exception) -> bool:
+    """`True` bila vendor menolak dgn menyatakan NOL keluaran dihasilkan (lihat catatan di atas)."""
+    try:
+        return bool(_RX_NIHIL_DIHASILKAN.search(str(err)))
+    except Exception:
+        return False
+
+
+def _batas_yang_vendor_sebut(err: Exception) -> tuple[int, int] | None:
+    """`(batas, diminta)` bila vendor menolak karena kebesaran DAN menyebut angkanya; else `None`.
+
+    Sengaja SEMPIT — hanya pola `Limit <n>, Requested <m>` dengan `m > n`. Salah tafsir di sini
+    menurunkan jatah tanpa sebab (naskah jadi terpotong), jadi yang RAGU wajib jatuh ke `None`.
+    """
+    try:
+        m = _RX_BATAS_VENDOR.search(str(err))
+        if not m:
+            return None
+        batas, diminta = int(m.group(1)), int(m.group(2))
+        return (batas, diminta) if 0 < batas < diminta else None
+    except Exception:
+        return None
+
+
 class OpenAIChatAdapter(_BaseAdapter):
     """Protokol OpenAI Chat Completions (kompatibel banyak vendor via base_url).
     JSON via response_format={'type':'json_object'}.
@@ -344,6 +409,10 @@ class OpenAIChatAdapter(_BaseAdapter):
     # Pola sama dgn _PARAM_ADAPTATIONS: belajar sekali, panggilan berikutnya langsung bersih.
     _JATAH_NAIK: dict = {}
 
+    # [27-Agu] Model bernalar yang terbukti menghabiskan jatah untuk BERPIKIR (jawaban kosong).
+    # Pola sama: belajar sekali dari gejalanya, panggilan berikutnya langsung dikekang.
+    _KEKANG_NALAR: dict = {}
+
     @staticmethod
     def _terpotong(resp) -> bool:
         """Vendor MENYATAKAN jawabannya terpotong. Fail-safe: bentuk tak dikenal → BUKAN terpotong
@@ -355,17 +424,32 @@ class OpenAIChatAdapter(_BaseAdapter):
         return alasan in ("length", "max_tokens")
 
     @staticmethod
-    def _batas_jatah(model: str) -> int:
-        """Batas atas jatah = DATA (`ai_models.default_params.max_output_tokens`) bila model
-        menyatakannya; else angka terukur. Fail-soft: gangguan katalog TIDAK memblokir produksi."""
+    def _token_berpikir(resp) -> int:
+        """Token yang dipakai model untuk BERPIKIR di dalam (bukan menjawab). 0 = tak dilaporkan.
+
+        Vendor melaporkannya di `usage.completion_tokens_details.reasoning_tokens` (protokol OpenAI).
+        Fail-soft: vendor yang tak melaporkannya tidak boleh mengubah perilaku apa pun.
+        """
         try:
-            row = (_catalog.get_models() or {}).get(model) or {}
-            nilai = (row.get("default_params") or {}).get("max_output_tokens")
-            if nilai and int(nilai) > 0:
-                return int(nilai)
+            d = getattr(getattr(resp, "usage", None), "completion_tokens_details", None)
+            return int(getattr(d, "reasoning_tokens", 0) or 0)
         except Exception:
-            pass
-        return _batas_jatah_global()
+            return 0
+
+    @staticmethod
+    def _batas_model_dinyatakan(model: str) -> int | None:
+        """Batas yang MODEL nyatakan sendiri (`ai_models.default_params.max_output_tokens`).
+
+        `None` = model tidak menyatakan apa pun — BUKAN sama dengan "batasnya angka cadangan".
+        Perbedaan itu penting: batas yang dinyatakan MENGIKAT (haram dilewati), sedangkan cadangan
+        global hanya titik awal yang boleh diperlebar lalu dikoreksi vendor.
+        """
+        try:
+            nilai = ((_catalog.get_models() or {}).get(model) or {}).get("default_params") or {}
+            n = nilai.get("max_output_tokens")
+            return int(n) if n and int(n) > 0 else None
+        except Exception:
+            return None
 
     @staticmethod
     def _parse_param_rejection(err: Exception):
@@ -424,6 +508,11 @@ class OpenAIChatAdapter(_BaseAdapter):
             if _memo_jatah and _memo_jatah > body.get("max_tokens", 0):
                 body["max_tokens"] = _memo_jatah
                 max_tokens = _memo_jatah
+        # Kekangan berpikir yang SUDAH terbukti perlu untuk (vendor, model) ini — langsung bersih,
+        # tanpa mengulang satu panggilan kosong lagi.
+        _memo_nalar = self._KEKANG_NALAR.get(memo_key)
+        if _memo_nalar:
+            body["reasoning_effort"] = _memo_nalar
         for old, new in (self._PARAM_ADAPTATIONS.get(memo_key) or {}).items():
             if old in body:
                 val = body.pop(old)
@@ -433,13 +522,66 @@ class OpenAIChatAdapter(_BaseAdapter):
         try:
             client = OpenAI(**kwargs)
             resp = None
+            # Langit-langit yang VENDOR sebutkan sendiri saat menolak kebesaran (None = belum tahu).
+            # Dipakai juga oleh jaring "jawaban terpotong" di bawah, supaya ia tak menaikkan jatah
+            # kembali ke angka yang baru saja ditolak — itu akan berputar antara dua kegagalan.
+            _langit_akun = None
+            _kekang_dipakai = False        # kekangan berpikir dipasang di tengah jalan?
             for _attempt in range(4):                      # 1 normal + maks 3 adaptasi (bounded)
                 try:
                     resp = client.chat.completions.create(**body)
                     break
                 except Exception as e:
                     rej = self._parse_param_rejection(e)
-                    if not rej or rej[0] not in body:      # bukan kelas ini / param tak ada → gagal jujur
+                    if not rej or rej[0] not in body:      # bukan kelas ini / param tak ada
+                        # ── [27-Agu] VENDOR MENOLAK: PERMINTAAN KEBESARAN ───────────────────────
+                        # Vendor menyebut batas & jumlah yang diminta. Dari dua angka itu panjang
+                        # pertanyaan terhitung EKSAK (sebagaimana vendor menghitungnya), jadi jatah
+                        # yang pas bisa dihitung — bukan ditebak, bukan ditetapkan admin.
+                        # ── [27-Agu] Vendor menolak & menyatakan NOL keluaran dihasilkan:
+                        # jatah habis untuk BERPIKIR. Kekang waktu berpikirnya, lalu ulangi SEKALI.
+                        if (_gejala_jatah_habis_untuk_berpikir(e)
+                                and "reasoning_effort" not in body):
+                            from loguru import logger
+                            logger.warning(
+                                f"[LLM] '{model}' ({memo_key[0]}): vendor menyatakan NOL keluaran "
+                                f"dihasilkan pada jatah {max_tokens} → diulang sekali dengan waktu "
+                                f"berpikir dikekang (reasoning_effort=low)")
+                            body["reasoning_effort"] = "low"
+                            _kekang_dipakai = True
+                            continue
+                        _kb = _batas_yang_vendor_sebut(e)
+                        if _kb:
+                            _batas_akun, _diminta_vendor = _kb
+                            _terkirim = next((body[_k] for _k in ("max_tokens", "max_completion_tokens")
+                                              if _k in body), max_tokens)
+                            _prompt_tok = max(_diminta_vendor - _terkirim, 0)
+                            _pas = _batas_akun - _prompt_tok - _CADANGAN_TPM
+                            if _pas > 0 and _langit_akun is None:
+                                _langit_akun = _pas
+                                from loguru import logger
+                                logger.warning(
+                                    f"[LLM] '{model}' ({memo_key[0]}): vendor MENOLAK jatah {_terkirim} "
+                                    f"(batas akun {_batas_akun}/menit, pertanyaan {_prompt_tok}) → "
+                                    f"diulang dengan {_pas} — angka dari vendor, bukan tebakan")
+                                for _k in ("max_tokens", "max_completion_tokens"):
+                                    if _k in body:
+                                        body[_k] = _pas
+                                max_tokens = _pas
+                                continue
+                            # Sudah diturunkan dan MASIH ditolak, atau pertanyaannya sendiri sudah
+                            # melebihi batas akun ⇒ menurunkan lagi tak menolong. Gagal JUJUR, dan
+                            # sebutkan tindakan yang benar-benar ada di tangan tenant.
+                            raise LLMError(
+                                f"Provider '{self.display_name}' menolak permintaan: batas akun "
+                                f"{_batas_akun} token/menit, pertanyaan {_prompt_tok} token.",
+                                error_class=ErrorClass.QUOTA_EXHAUSTED,
+                                human_message=(
+                                    f"Paket penyedia AI Anda ({self.display_name}) hanya mengizinkan "
+                                    f"{_batas_akun} token per menit — tidak cukup untuk menulis naskah "
+                                    f"sepanjang ini. Naikkan paket di penyedia tersebut, pilih preset "
+                                    f"durasi yang lebih pendek, atau pilih penyedia lain."),
+                                model=model) from e
                         raise
                     old, new = rej
                     from loguru import logger
@@ -471,6 +613,55 @@ class OpenAIChatAdapter(_BaseAdapter):
                     pass
 
             _catat(resp)
+            if _kekang_dipakai and (resp.choices[0].message.content or "").strip():
+                # Terbukti menolong ⇒ dimemo: panggilan berikutnya tak membayar percobaan kosong lagi.
+                self._KEKANG_NALAR[memo_key] = "low"
+
+            # ── [27-Agu] MODEL BERNALAR MENGHABISKAN JATAH UNTUK BERPIKIR ────────────────────────
+            # AKAR kegagalan 10 produksi 18–26 Agu (BISIK NUSANTARA · RETRO REWIND GARAGE ·
+            # JaydenSaverio · Bang Us-Dat) — terukur 27-Agu pada `openai/gpt-oss-120b` di Groq
+            # dengan prompt naskah SUNGGUHAN:
+            #     finish_reason=length · isi jawaban 0 huruf · reasoning_tokens 4.498 dari 4.500
+            # Model bernalar memakai SELURUH jatah untuk berpikir di dalam; jawabannya tak pernah
+            # dimulai. Vendor lalu menolak dengan `json_validate_failed` / `json_generate_failed`
+            # ber-`failed_generation: ''` — itulah pesan yang selama ini terlihat di layar tenant.
+            #
+            # MENAIKKAN JATAH TIDAK MENOLONG — diuji: 4.500 dan 8.000 dua-duanya menghasilkan
+            # jawaban KOSONG, ia hanya berpikir lebih lama. Yang menolong: MENGEKANG waktu berpikir.
+            #     reasoning_effort="low" → berpikir 1.270 · jawaban UTUH 2.869 huruf · finish=stop
+            #
+            # Dikenali dari GEJALA, bukan dari nama model atau daftar vendor: jawaban KOSONG +
+            # jatah habis + ada token berpikir. Model bernalar yang BELUM ADA hari ini ikut
+            # tertangani tanpa satu pun suntingan kode, dan nol kenop yang harus admin tetapkan.
+            # Sengaja TIDAK dibatasi `as_json`: jawaban kosong tak berguna dalam mode apa pun.
+            # Jawaban yang terpotong tapi ADA ISINYA sama sekali tidak tersentuh (mis. pemanggil
+            # judul/prompt gambar) — syarat "kosong" yang memisahkannya.
+            if (self._terpotong(resp)
+                    and (as_json or not (resp.choices[0].message.content or "").strip())
+                    and self._token_berpikir(resp) > 0
+                    and "reasoning_effort" not in body):
+                from loguru import logger
+                logger.warning(
+                    f"[LLM] '{model}' ({memo_key[0]}): jawaban KOSONG — "
+                    f"{self._token_berpikir(resp)} dari {max_tokens} token habis untuk BERPIKIR. "
+                    f"Diulang sekali dengan waktu berpikir dikekang (reasoning_effort=low).")
+                body["reasoning_effort"] = "low"
+                try:
+                    _r2 = client.chat.completions.create(**body)
+                    if (_r2.choices[0].message.content or "").strip():
+                        # Terbukti menolong ⇒ dimemo: panggilan berikutnya tak membayar percobaan
+                        # kosong lagi. Pola sama dgn `_PARAM_ADAPTATIONS`/`_JATAH_NAIK` yang sudah ada.
+                        self._KEKANG_NALAR[memo_key] = "low"
+                        resp = _r2
+                        _catat(resp)
+                    else:
+                        body.pop("reasoning_effort", None)
+                except Exception as _e3:
+                    # Vendor tak mengenal kekangan ini (atau menolak) ⇒ JANGAN dipaksakan dan jangan
+                    # dimemo. Kembalikan permintaan ke bentuk semula; galat jujur di bawah tetap jalan.
+                    body.pop("reasoning_effort", None)
+                    logger.warning(f"[LLM] '{model}' ({memo_key[0]}): kekangan berpikir tak diterima "
+                                   f"vendor — tak dimemo. Sebab: {str(_e3)[:120]}")
 
             # ── [18-Agu] JAWABAN TERPOTONG: naikkan jatahnya, JANGAN ulangi yang sama ────────────
             # Jatah token = SATU kantong untuk berpikir + menjawab. Model generasi baru memakainya
@@ -486,7 +677,19 @@ class OpenAIChatAdapter(_BaseAdapter):
             # Hanya untuk permintaan JSON: JSON separuh tak terpakai, sedangkan teks biasa yang
             # terpotong masih berguna (pemanggil judul/kalimat pendek) ⇒ perilakunya tak disentuh.
             if as_json and self._terpotong(resp):
-                _batas = self._batas_jatah(model)
+                # [27-Agu] LANGIT-LANGIT: angka yang VENDOR sebutkan saat menolak MENGALAHKAN angka
+                # mana pun di katalog/app_config — ia satu-satunya yang mengikat, dan ia milik AKUN
+                # tenant ini (batas token/menit), bukan milik modelnya. Selama vendor belum bicara,
+                # ruang naik dibuka 2x dari yang diminta; bila kelewatan, vendor sendiri yang
+                # mengoreksinya di bawah. ⇒ nol angka yang harus admin tetapkan, nol angka basi.
+                # Dua langit-langit yang MENGIKAT: yang model nyatakan sendiri di katalog, dan
+                # yang vendor sebut saat menolak. Yang terkecil menang. Bila TAK SATU PUN ada,
+                # barulah ruang dibuka (2x yang diminta) — dan bila itu kelewatan, vendor sendiri
+                # yang mengoreksinya lewat penolakan di atas.
+                _pengikat = [x for x in (_langit_akun, self._batas_model_dinyatakan(model))
+                             if x is not None]
+                _batas = (min(_pengikat) if _pengikat
+                          else max(_batas_jatah_global(), max_tokens * 2))
                 _naik = min(max(max_tokens * 2, _min_jatah_naik()), _batas)
                 if _naik > max_tokens:
                     from loguru import logger
@@ -498,8 +701,23 @@ class OpenAIChatAdapter(_BaseAdapter):
                     for _k in ("max_tokens", "max_completion_tokens"):
                         if _k in body:
                             body[_k] = _naik
-                    resp = client.chat.completions.create(**body)
-                    _catat(resp)
+                    try:
+                        resp = client.chat.completions.create(**body)
+                        _catat(resp)
+                    except Exception as _e2:
+                        # Kenaikan itu sendiri ditolak vendor karena kebesaran ⇒ TIDAK ADA ruang
+                        # lagi. Haram berputar antara "terpotong" dan "ditolak": simpan langit-langit
+                        # yang vendor sebut, batalkan kenaikan, dan laporkan jujur di bawah.
+                        _kb2 = _batas_yang_vendor_sebut(_e2)
+                        if not _kb2:
+                            raise
+                        self._JATAH_NAIK.pop((memo_key, _jatah_diminta), None)
+                        _langit_akun = _kb2[0] - max(_kb2[1] - _naik, 0) - _CADANGAN_TPM
+                        _naik = max_tokens
+                else:
+                    # Tak ada ruang naik sama sekali → pesan galat WAJIB menyebut jatah yang
+                    # SESUNGGUHNYA dipakai, bukan angka langit-langit yang tak pernah terkirim.
+                    _naik = max_tokens
                 if self._terpotong(resp):
                     # Sudah di jatah tertinggi dan MASIH terpotong ⇒ model ini memang tak sanggup
                     # menyelesaikan permintaan sebesar ini. Terukur 18-Agu: GPT-OSS 20B menghabiskan
@@ -508,9 +726,18 @@ class OpenAIChatAdapter(_BaseAdapter):
                     raise LLMError(
                         f"Provider '{self.display_name}' gagal: jawaban model '{model}' terpotong "
                         f"pada jatah {_naik} token (batas {_batas}).",
-                        human_message=(f"Model AI penulis naskah '{model}' tidak sanggup "
-                                       f"menyelesaikan permintaan ini — jawabannya selalu terpotong. "
-                                       f"Pilih model lain di setting channel."))
+                        # UNKNOWN = perilaku lama, dipertahankan persis; hanya kasus langit-langit
+                        # AKUN yang berpindah kelas, sebab di situ mengulang MUSTAHIL menolong.
+                        error_class=(ErrorClass.QUOTA_EXHAUSTED if _langit_akun is not None
+                                     else ErrorClass.UNKNOWN),
+                        human_message=(
+                            (f"Paket penyedia AI Anda ({self.display_name}) tidak menyisakan ruang "
+                             f"cukup untuk menulis naskah sepanjang ini. Naikkan paket di penyedia "
+                             f"tersebut, pilih preset durasi yang lebih pendek, atau pilih penyedia lain.")
+                            if _langit_akun is not None else
+                            (f"Model AI penulis naskah '{model}' tidak sanggup "
+                             f"menyelesaikan permintaan ini — jawabannya selalu terpotong. "
+                             f"Pilih model lain di setting channel.")))
             return (resp.choices[0].message.content or "").strip()
         except LLMError:
             raise
