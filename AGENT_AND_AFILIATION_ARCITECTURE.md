@@ -31,7 +31,8 @@
 
 ## §0 CARA LANJUT (resume pasca-compaction/sesi baru — baca INI dulu, jangan riset ulang)
 
-1. **POSISI TERKINI (2026-07-19 23:28):** ✅ **SEMUA TEKNIS LIVE PRODUKSI — F1–F4 + audit A–Z (§9b) + konfigurasi terpusat (§9c) + SELURUH §9a 19-Jul** (tenant-hantu tuntas DB+kode · anti-komisi-diri · Google login agen · pagar email-PIC · **MGM tenant⇄reseller SATU login + nav Portal Reseller**; commit `a124857`, FE 200 + BE health 200). Agen nyata pertama THETANGGA aktif (login via Google). **Sisa non-teknis owner:** F0 angka+konsultan · bukti klik-layar tenant-pertama-tertaut-reseller · agen pertama TERBAYAR (=DONE-BILA). *(Riwayat 17-Jul di bawah)*
+1. **⚠️ POSISI TERKINI (2026-08-27):** cacat **atribusi hilang di pintu Google** DITUTUP + pemulihan AGEN01 dijalankan → **baca §9e** sebelum menyentuh modul ini. Migr `0217` (pagar atribusi permanen) sudah diterapkan. ⏳ belum di-deploy saat baris ini ditulis. Klaim lama *"JANGAN audit ulang fase teknis — tuntas & teraudit"* **TERBUKTI SALAH** (audit §9b memeriksa pintu email saja) — jangan dipakai sebagai alasan tak memeriksa.
+2. **POSISI 19-Jul (riwayat):** ✅ **SEMUA TEKNIS LIVE PRODUKSI — F1–F4 + audit A–Z (§9b) + konfigurasi terpusat (§9c) + SELURUH §9a 19-Jul** (tenant-hantu tuntas DB+kode · anti-komisi-diri · Google login agen · pagar email-PIC · **MGM tenant⇄reseller SATU login + nav Portal Reseller**; commit `a124857`, FE 200 + BE health 200). Agen nyata pertama THETANGGA aktif (login via Google). **Sisa non-teknis owner:** F0 angka+konsultan · bukti klik-layar tenant-pertama-tertaut-reseller · agen pertama TERBAYAR (=DONE-BILA). *(Riwayat 17-Jul di bawah)*
    *(Riwayat)* F1+F2+F3+F4 + audit A–Z LIVE 2026-07-17 (`11f2788` 19:51). Verifikasi terakhir bersih (R1/C3/C4/C5/REG1/REG2; situs 200, /admin/app-config ter-guard). **SISA [B21] = murni NON-TEKNIS owner:** (a) F0 — angka komisi default + validasi konsultan pajak (§6b) & hukum (Lampiran A); (b) bukti klik-layar (rekrut agen uji e2e); (c) agen nyata pertama TERBAYAR = DONE-BILA tutup item. **JANGAN bangun/audit ulang fase teknis — tuntas & teraudit.**
    *(Riwayat)* ✅ **F1 + F2 + F3 LIVE DI PRODUKSI** (F3 deployed 2026-07-17: BE OK 14:47 + FE OK 14:52 commit `e652357` — percobaan-1 FE FAIL karena `exceljs` belum ada di lingkungan build VPS [skrip deploy tak pernah `npm install`; dependency FE baru pertama sejak skrip lahir] → dipasang sesuai lockfile → percobaan-2 OK. Verifikasi produksi: /reseller/login 200+badge ✓ · /reseller anon→login ✓ · join publik hidup & kode ngawur ditolak ✓ · export Excel anon 401 ✓ · op BE tanpa secret 401 ✓ · regresi /agent ✓). **USULAN menunggu ketok:** skrip deploy_fe.sh diberi langkah `npm ci` otomatis (anti-terjegal dependency baru). Berikutnya: bukti klik→layar owner (rekrut agen nyata) → **F4 pelengkap** (rencana rinci → ketok) + sisa F0 (angka default & validasi konsultan, owner).
    *(Riwayat)* ✅ **F1 LIVE DI PRODUKSI 2026-07-17 10:36** (izin owner "deploy BE + FE untuk batch F1 ini"; skrip resmi BE OK 10:34 + FE OK 10:36, commit `8705997`, situs 200). **Verifikasi produksi 4 titik:** `/api/partner/check` hidup ✓ · kolom kode ID+EN tampil di HTML live /auth ✓ · `/admin/partners` anon dilempar login (307) ✓ · endpoint uang internal tanpa secret = 401 ✓. Sisa F1 (kecil): bukti mata-kepala owner di layar admin + pembayaran Midtrans nyata pertama dari tenant beratribusi = bukti hidup pamungkas. **Berikutnya: F2 portal agen (susun rencana rinci → ketok owner).**
@@ -63,6 +64,7 @@ MesinViral ──kontrak + bagi hasil──▶ AGEN (perusahaan mitra)
 ### 1b. Atribusi (aturan tegas — kata owner)
 - Calon tenant **datang membawa kode unik** (diisi di form daftar, atau otomatis via tautan `?ref=KODE`) = bawaan agen/reseller pemilik kode itu, **terkunci permanen sejak daftar**.
 - **Tanpa kode = bukan bawaan siapa pun. Titik.** Tidak ada cookie-tracking, tidak ada klaim belakangan, tidak ada rebutan.
+  - **⚠️ PENGECUALIAN TUNGGAL, BERTANGGAL 27-Agu-2026 (ketok owner) — bukan pelunakan aturan.** Bila atribusi hilang karena **KEGAGALAN SISI KAMI** (bukan karena tenant tak membawa kode), owner boleh memerintahkan pemulihannya. Kasus yang memicu: pintu daftar **Google** tak pernah membawa kode rujukan (cacat 100% karya Claude — lihat §9e), sehingga pelanggan bawaan AGEN01 tak tercatat dan sistem **tak punya jejaknya justru karena cacat itu**. Owner: *"sudah jelas agen01 komplen, buat apa minta kepastian?"* ⇒ pemulihan berdiri di atas **kesaksian agen**, dan wajib tercatat di sini. Aturan anti-rebutan tetap penuh untuk kasus "tenant tak membawa kode".
 - Kode reseller otomatis ter-atribusi juga ke agen induknya.
 - Marketing kit = **HANYA tautan & kode unik** — landing page tetap marketing site yang sudah ada; kami TIDAK membuat materi iklan (itu investasi agen).
 
@@ -138,7 +140,7 @@ MesinViral ──kontrak + bagi hasil──▶ AGEN (perusahaan mitra)
 | `agents` | id · nama perusahaan · kontak (nama/email/telepon) · `status` (active/suspended) · **`commission_type`** (`flat_idr`\|`percent`) · **`commission_value`** · rekening tujuan (bank, no. rek, atas-nama — terenkripsi) · `join_code` (kode pendaftaran reseller khusus agen ini) · created_at | Nilai komisi per-agen = kesepakatan; HANYA admin yang menulis |
 | ~~`agent_users`~~ **DIBATALKAN (ketok owner F2 2026-07-17):** login agen = **`agents.user_id`** (SATU login per agen) | user auth ber-`app_metadata.role='agent'` (pola super-admin; tak bisa dipalsukan) tertaut kolom `agents.user_id` | Multi-staf per agen = kebutuhan masa depan (buat tabel baru saat nyata dibutuhkan, ber-ketok). User agen BUKAN tenant; email agen ≠ email tenant (§5g.3) ditegakkan saat undangan |
 | `resellers` | id · agent_id · user_id (login reseller) · nama · kode unik · `status` (`pending`/`active`/`suspended`) · **`commission_type`/`commission_value`** (diatur agen) · bank+rekening (terenkripsi) · created_at | Lahir dari pendaftaran-mandiri via `join_code` agen; aktif hanya setelah agen setujui (§2.4). **`user_id` boleh = login TENANT existing (MGM §9a.5, 19-Jul): approve menautkan, penanda `reseller_linked` di app_metadata** |
-| `tenant_attribution` | tenant_id (UNIQUE — kunci anti-rebutan) · agent_id · reseller_id (nullable — bawaan langsung agen) · kode yang dipakai · locked_at | **Ditulis SEKALI saat signup, tidak pernah di-update** (§1b) |
+| `tenant_attribution` | tenant_id (UNIQUE — kunci anti-rebutan) · agent_id · reseller_id (nullable — bawaan langsung agen) · kode yang dipakai · locked_at | **Ditulis SEKALI saat signup, tidak pernah di-update** (§1b). **DITEGAKKAN MESIN sejak 27-Agu (migr `0217`, trigger `trg_atribusi_permanen`): UPDATE & DELETE DITOLAK DB.** Sampai 27-Agu aturan ini hanya bersandar disiplin kode — kunci utama mencegah baris kedua, tapi UPDATE bebas; dan sejak penulisnya **DUA** (signup email + penerima OAuth) satu kekeliruan bisa memindahkan pelanggan antar-agen tanpa jejak. INSERT tetap bebas (jalur normal). Jalur buka: nonaktifkan trigger lewat akses DB langsung — sengaja tak bisa dari aplikasi |
 | `commission_ledger` | id · payment_ref (order Midtrans) · tenant_id · agent_id · reseller_id? · `gross_idr` (rupiah settlement) · `months_paid` (utk aturan §2.1) · snapshot rate agen (type+value) · `agent_amount_idr` · snapshot rate reseller (type+value) · `reseller_amount_idr` (informasi utk agen — bukan kewajiban kami) · `status` (`accrued`→`approved`→`paid` \| `reversed`) · `payout_id?` · created_at | **Append-only** (§3.4). Reversal = baris minus baru yang menunjuk baris asal |
 | `agent_payouts` | id · agent_id · periode (bulan) · total tagihan · pengurang-refund (§2.3) · total dibayar · `status` (`draft`→`approved`→`paid`) · bukti transfer (catatan/ref) · approved_by · paid_at | 1 baris per agen per bulan; gerbang owner (§1d) |
 | Config (`app_config`/`pricing_config`, ber-label admin) | `partner_payout_day` (tanggal pencairan bulanan) · `partner_min_payout_idr` (ambang minimum) · `partner_default_commission_*` (nilai awal saat membuat agen baru) · saklar program on/off | Semua bisa diubah owner tanpa sentuh kode (§3.2) |
@@ -153,6 +155,11 @@ MesinViral ──kontrak + bagi hasil──▶ AGEN (perusahaan mitra)
 1. Calon tenant membuka form daftar (marketing site yang ada) — kolom baru **"Kode agen/reseller (opsional)"**; tautan `mesinviral.com/?ref=KODE` mengisi kolom itu otomatis.
 2. Saat submit: kode divalidasi (ada & `active`?) → tulis `tenant_attribution` (terkunci). Kode tak dikenal = **ditolak jelas di titik input** (§3.1 anti-human-error), bukan diterima-diam-diam.
 3. Tanpa kode → tidak ada baris atribusi → selamanya bukan bawaan siapa pun (§1b).
+4. **⚠️ DUA PINTU, KEDUANYA WAJIB (ditambahkan 27-Agu — inilah yang dulu terlewat).** Halaman daftar punya **email+password** DAN **Google**. Sampai 27-Agu hanya pintu email yang menulis atribusi; pintu Google membuang kodenya tanpa jejak — padahal **14 dari 14** tenant sejak program ini lahir memakai Google, jadi satu-satunya jalur yang berfungsi adalah jalur yang tak dipakai siapa pun. Layar bahkan sudah berjanji *"✓ Kode valid — pendaftaran Anda tercatat lewat mitra kami"*.
+   **Cara pintu OAuth membawanya:** kode dititipkan sebagai cookie umur 10 menit sebelum berpindah ke Google, lalu dibaca halaman penerima (`/auth/callback`). **Sengaja BUKAN parameter tambahan pada alamat pulang** — alamat pulang OAuth divalidasi daftar-izin Supabase, dan memperbaiki atribusi tak boleh dibayar dengan risiko mematikan seluruh login Google.
+   **Pagar §1b di pintu OAuth:** halaman penerima berjalan setiap kali orang MASUK, bukan hanya saat mendaftar ⇒ atribusi hanya ditulis bila **akun baru lahir** (umur ≤ 120 detik; angka dari data nyata — akun baru berselisih 0 detik antara "dibuat" & "masuk terakhir", tenant lama bisa 17 hari). Tanpa pagar ini agen bisa mengirim tautannya ke tenant yang SUDAH ADA dan mengklaim komisinya.
+   **Keabsahan kode tidak dinilai ulang** di pintu OAuth — dipinjam dari pemeriksa yang sudah ada (`/api/partner/check`), supaya aturannya tetap hidup di satu tempat (§5g.2).
+5. **Kegagalan menulis atribusi = ALARM ADMIN** (kedua pintu, sejak 27-Agu). Sebelumnya hanya masuk `admin_audit` yang **nol pembaca** — itulah sebabnya cacat pintu Google baru ketahuan dari **komplen agen**, bukan dari mesin. Uang agen tak boleh bergantung pada siapa yang komplen lebih dulu.
 
 ### 5b. Lahirnya komisi (otomatis, per pembayaran valid)
 1. Tenant membayar → **webhook settlement Midtrans yang SUDAH ADA** (`src/billing/webhook_app.py` — anchor wajib grep ulang saat F1) diberi satu langkah tambahan: *tenant ini punya baris atribusi?* → hitung & tulis baris `commission_ledger` (`accrued`).
@@ -219,6 +226,54 @@ MesinViral ──kontrak + bagi hasil──▶ AGEN (perusahaan mitra)
 
 **Dukungan sistem (masuk lingkup F1):** rekap bruto komisi per-agen per-bulan = dasar bukti potong; kolom potongan-pajak di draft payout admin (nilai transfer = bruto − PPh); status pajak agen (badan/perorangan/NPWP/PKP) tercatat di profil agen.
 **Catatan:** (a) agen UMKM ber-Surat Keterangan PP 55/2022 bisa berhak potongan final 0,5% — ditangani per-kasus saat onboarding, minta suratnya; (b) angka-angka di atas = riset internet per 2026-07-17 (sumber DJP/Ortax/Klikpajak/DDTC) — peraturan pajak bisa berubah; validasi konsultan sebelum pencairan pertama adalah gerbang F0.
+
+---
+
+## §9e ATRIBUSI HILANG DI PINTU GOOGLE — cacat & penutupannya (27-Agu-2026)
+
+> **Dicatat supaya tak pernah terulang di pintu ketiga.** Semua di bawah ini 100% karya saya
+> (Claude): SSOT-nya saya tulis, kodenya saya bangun, dan yang melewatkannya juga saya.
+
+**Yang terjadi.** Agen AGEN01 (THETANGGA) komplen: `andarini.nadia` seharusnya tercatat sebagai
+pelanggan bawaannya. Diperiksa ke DB: `tenant_attribution` **0 baris** · ketiga kode rujukan
+**dipakai 0 kali** · `commission_ledger` **0 baris** — padahal program agen hidup sejak 19-Jul.
+
+**Akarnya.** §5a merancang atribusi lahir dari *"form daftar"* tanpa membedakan pintu. Halaman
+daftar punya **dua** pintu; saya lengkapi pintu email dan **tak pernah menanyakan pintu Google yang
+sudah ada lebih dulu** (Phase 9.1, jauh sebelum program agen). Terukur: **14 dari 14** tenant sejak
+19-Jul memakai Google ⇒ jalur atribusi satu-satunya yang berfungsi tak dipakai siapa pun.
+Ini **mata ke-5 lima-rantai (jalur saudara) yang dilewati** — akar kerja buruk yang sudah tercatat.
+
+**Kenapa tak ketahuan lebih awal.** Kegagalan atribusi hanya masuk `admin_audit` (nol pembaca), dan
+"audit A–Z" §9b yang lingkupnya menyebut *"integrasi (signup, …)"* memeriksa pintu **email** saja
+lalu menyatakan tuntas — termasuk menulis *"JANGAN audit ulang fase teknis"*. Klaim tuntas itu
+salah, dan saya yang menulisnya.
+
+**Yang ditutup (semua di jalur yang SUDAH ada — nol pintu/tabel/rute baru):**
+1. Pintu Google **menitipkan** kode rujukan (cookie 10 menit) → penerima menulis atribusi.
+2. **Pagar §1b:** hanya akun **baru lahir** (≤120 detik) — tenant lama tak bisa diklaim lewat tautan.
+3. **Pagar DB** (migr `0217`): atribusi tak bisa di-UPDATE / DELETE oleh penulis mana pun.
+4. Kegagalan atribusi **dialarmkan ke admin** di **kedua** pintu (memakai `/api/partner/op` +
+   `notify_admin` yang sudah ada).
+5. Kenop `partner_default_commission_*` (§4) yang ternyata **nol pembaca** disambungkan — API dulu
+   tak mengambilnya, dan hanya membaca kolom `value` padahal kenop teks tersimpan di `value_text`.
+6. **Pemulihan sekali jalan** (pengecualian §1b bertanggal): `andarini.nadia` ditautkan ke AGEN01 +
+   komisi pembayaran 26-Agu dilahirkan lewat otoritas yang ada (`record_settlement_commission`) —
+   **Rp 8.725** (25% × Rp 34.900). Agen otomatis dikabari Telegram. Alatnya:
+   `scripts/pulihkan_atribusi_agen01.py` (dijalankan KERING dulu).
+
+**Bukti:** 10 penjaga, **9 dibuktikan MERAH lebih dulu** · **10 sabotase, semuanya tertangkap** —
+dan sabotase itulah yang menemukan **4 penjaga palsu buatan saya sendiri**, termasuk satu yang tak
+menangkap **cacat aslinya** (pola substring; jendela menemukan DEFINISI fungsi alih-alih
+PEMANGGILANNYA). Keempatnya ditutup. Build FE lulus.
+
+**Batas jujur.** Penjaga pintu/penerima berbasis TEKS — ia menangkap pencabutan, bukan pelumpuhan
+isi fungsi sementara namanya dibiarkan (proyek belum punya penjalan uji layar). Karena itu pagar
+yang paling berbahaya bila gagal — atribusi bergeser — dipindah ke **DB** dan diuji BERTRANSAKSI.
+
+**Yang TIDAK diklaim.** Tidak bisa dibuktikan dari sistem bahwa `andarini.nadia` datang lewat
+tautan AGEN01 (jejaknya tak pernah ada — itu inti cacatnya). Pemulihannya berdiri di atas kesaksian
+agen + ketokan owner, tercatat di §1b.
 
 ---
 

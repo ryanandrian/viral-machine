@@ -302,6 +302,63 @@ per-niche **DAN** dibuktikan dengan render nyata.
 | Uji otomatis | **560 lulus** |
 | Audit wiring DB→BE→FE | 11 tabel · 65 kolom diperiksa satu per satu |
 
+### 🔴 JATAH TOKEN NASKAH KEKECILAN — RENCANA SIAP, MENUNGGU KETOK OWNER *(dicatat 27-Agu-2026)*
+
+**Pemicu:** channel `JaydenSaverio` (tenant **andarini.nadia**, pro/active, baru bayar 26-Agu) gagal
+produksi 3× dari 5 percobaan dalam 30 menit. Galat: `Groq — Failed to validate JSON` /
+`json_validate_failed`. Begitu tenant pindah ke Gemini, langsung sukses.
+
+**AKAR (terukur, 100% karya Claude):** permintaan naskah utuh dikirim dengan jatah **`max_tokens=2000`
+DITANAM DI KODE** (`script_engine._generate_one`), sementara naskah kita sendiri lebih besar dari itu.
+Diukur dengan penghitung token sungguhan (`tiktoken o200k_base`) pada **182 naskah produksi**:
+
+| preset | naskah | tengah | p95 | MAKS |
+|---|---|---|---|---|
+| 60s (5 segmen) | 144 | **1.964** | 2.262 | 3.567 |
+| 90s (7 segmen) | 38 | **2.657** | 3.700 | **3.790** |
+
+⇒ **51% naskah (93/182) MELEBIHI jatah 2.000.** Bukan kadang — mayoritas.
+
+**Kenapa tak terlihat berbulan-bulan:** vendor LONGGAR (Gemini/OpenAI) tetap mengirim potongannya →
+jaring "jawaban terpotong → naikkan jatah → ulangi" menyala → produksi berhasil **tapi memanggil
+vendor DUA KALI**. Vendor KETAT (Groq) memvalidasi JSON di sisinya dan **menolak 400 sebelum apa pun
+sampai ke kita** (`failed_generation: ''`) ⇒ jaring itu **tak pernah menyala** (ia dipicu
+`finish_reason=length`) ⇒ gagal total. Galatnya jatuh ke `UNKNOWN` (`json_validate_failed` tak
+terdaftar di `galat_registry` Groq) ⇒ diulang sampai `script_max_retry`=3 ⇒ kredit tenant terbakar.
+
+**Batas atas kenaikan juga mepet:** kenop `llm_jatah_token_batas_atas = 4000`, sementara naskah 90s
+sudah **3.790**. Naskah yang butuh lebih **gagal total dan tak tersimpan** ⇒ angka di tabel di atas
+punya bias-seleksi (yang terukur hanya yang berhasil).
+
+**RENCANA (satu perubahan, dua angka):**
+- jatah awal **2.000 → 6.000** · batas atas **4.000 → 8.000**
+- **NOL tambahan biaya**: `max_tokens` = BATAS, bukan pesanan; vendor menagih token yang dihasilkan.
+  Malah MENGHEMAT — panggilan kedua pada ~separuh produksi tak lagi perlu.
+- **TIDAK per-preset** (pertanyaan owner terjawab sendiri): jatah token **bukan** alat pengejar durasi
+  — yang mengejar preset adalah **prompt** ("about N words"), **gerbang durasi** (STEP 3.5), dan
+  **refit per-segmen** (`_refit_naskah`). Ketiganya **TIDAK DISENTUH**. Jatah hanya atap; satu angka
+  longgar cukup, preset baru ikut benar sendiri.
+
+**Aman terhadap batas model:** Groq `gpt-oss-20b` max output = **65.536** (halaman resmi Groq,
+cek 27-Agu) ⇒ 6.000/8.000 jauh di bawah batas.
+
+**KEJUJURAN yang wajib ikut (owner menegur asumsi liar):** klaim awal saya bahwa jatah = "sabuk
+pengaman anti-kecelakaan" **TIDAK BERBUKTI**. Diperiksa **3.311 panggilan / 516 produksi**: token
+keluar per panggilan tengah **479**, p95 **1.290**, TERBESAR **2.930**, dan **NOL kali** melewati
+4.000. Tak pernah ada lonjakan. Alasan yang sah untuk tetap memasang atap hanya satu: tanpa jatah,
+atapnya jadi batas model (65.536) = **±17× kebutuhan wajar**, jadi atap membatasi kerugian bila
+terjadi hal yang belum pernah terjadi — bukan karena bahaya yang sudah terbukti.
+
+**BUKTI SEBELUM DISEBUT SELESAI:** uji dibuktikan MERAH dulu · **satu produksi nyata** di channel uji
+dengan model Groq yang tadi gagal (bila berhasil ⇒ sebab terbukti; bila tidak ⇒ lapor apa adanya).
+
+**Sisa terkait, BUKAN bagian rencana ini (jangan digabung):** `json_validate_failed` belum punya
+golongan di `galat_registry` (kelas mana = keputusan owner, sebab menentukan apakah channel direm) ·
+9 angka `max_tokens` lain masih ditanam di kode (owner: *"tidak masalah hardcode selama tidak pernah
+menjadi masalah"*) · `ai_models.default_params.max_output_tokens` kosong di **20/20** model aktif.
+
+---
+
 ### MASIH TERBUKA (jujur — jangan diklaim tuntas)
 
 1. **Belum di-deploy.** Migrasi **0187 (ratio 1)** dan **0188 (40 kenop)** SENGAJA belum diterapkan:
