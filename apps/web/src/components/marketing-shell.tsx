@@ -79,6 +79,13 @@ export function MarketingShell({ children }: { children: React.ReactNode }) {
             {NAV_LINKS.map((l) => (
               <a key={l.id} href={l.href} className={isActive(l.href) ? "active" : ""}><Bi id={l.id} en={l.en} /></a>
             ))}
+            {/* Jalan masuk tenant terdaftar di HP. Di <=880px `.mk-actions` menyembunyikan semua
+                tombol non-primer (Masuk = btn-ghost) dan menu ini dulu hanya memuat tautan halaman
+                ⇒ dari HP tenant terdaftar TAK PUNYA jalan masuk; satu-satunya tombol tersisa
+                "Mulai Gratis" menyeretnya ke layar DAFTAR (owner terjebak persis begitu 02-Sep dan
+                tak sengaja membuat tenant baru). Disembunyikan di desktop — di sana tombol Masuk
+                sudah ada di `.mk-actions`, menampilkannya lagi = dobel. */}
+            <a href="/auth?view=login" className="mk-login-m"><Bi id="Masuk" en="Sign in" /></a>
           </nav>
           <div className="mk-actions">
             <div className="segmented">

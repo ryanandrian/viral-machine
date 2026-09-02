@@ -27,12 +27,17 @@
 .mk-links a:hover, .mk-links a.active { color: var(--text-primary); background: var(--surface-2); }
 .mk-actions { display: flex; align-items: center; gap: 0.625rem; }
 .mk-burger { display: none; }
+/* Masuk versi menu-HP: hanya untuk lebar HP (lihat @880px). Di desktop tombol Masuk sudah
+   ada di .mk-actions ⇒ di sini disembunyikan supaya tidak muncul dobel. */
+.mk-login-m { display: none; }
 
 @media (max-width: 880px) {
   .mk-links { display: none; position: absolute; top: 100%; left: 0; right: 0; flex-direction: column; align-items: stretch; background: var(--bg-elevated); border-bottom: 1px solid var(--border); padding: 0.75rem; gap: 0.25rem; }
   .mk-links.open { display: flex; }
   .mk-actions .btn:not(.btn-default), .mk-actions .segmented, .mk-actions #theme-btn { display: none; }
   .mk-burger { display: inline-flex; }
+  .mk-links .mk-login-m { display: block; border-top: 1px solid var(--border-subtle);
+    margin-top: 0.25rem; padding-top: 0.75rem; font-weight: 600; color: var(--text-primary); }
 }
 
 /* ---------- Footer ---------- */
