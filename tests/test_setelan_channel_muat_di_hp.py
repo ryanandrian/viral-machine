@@ -75,53 +75,74 @@ class TestKartuSetelanTakLagiLebarTetap(unittest.TestCase):
 
 
 class TestSaatMenumpukPratinjauTetapJujur(unittest.TestCase):
+    """PERUBAHAN KEBENARAN 02-Sep (ketokan owner): dulu lebar pratinjau DIKUNCI 220px saat
+    menumpuk, karena ukuran huruf dihitung `font_size * PRV_W/1080` di JavaScript — melebarkan
+    kanvas membuat pratinjau bohong. Owner minta pratinjau HP **selebar ruang yang ada**, tinggi
+    mengikuti rasio. Penguncian itu digantikan yang lebih benar: kanvas jadi WADAH PENGUKUR
+    (`container-type: inline-size`) dan seluruh ukuran ditulis relatif `100cqw/1080` ⇒ sebanding
+    hasil render pada lebar BERAPA PUN, jadi tak ada lagi yang perlu dikunci."""
+
     def setUp(self):
         self.css = _isi(CSS)
+        self.layar = _tanpa_komentar(_isi(LAYAR))
 
     def test_ada_media_query_yang_menumpuk_kartu_setelan(self):
         self.assertIn(".cd-prv2", self.css, "kelas .cd-prv2 belum ada di CSS halaman ini.")
         mq = [m for m in re.findall(r"@media[^{]+\{[^@]*?\}\s*\}", self.css, flags=re.S)
               if "cd-prv2" in m]
         self.assertTrue(mq, ".cd-prv2 tidak punya media query — tak akan menumpuk di HP.")
-        gabung = "\n".join(mq)
         self.assertRegex(
-            gabung.replace(" ", ""), r"grid-template-columns:1fr",
+            "\n".join(mq).replace(" ", ""), r"grid-template-columns:1fr",
             "media query .cd-prv2 tidak menumpuk jadi satu kolom.",
         )
 
-    def test_lebar_pratinjau_dikunci_saat_menumpuk(self):
-        """Skala huruf pratinjau dihitung terhadap 220px (PRV_W). Melebarkannya = pratinjau bohong."""
-        mq = [m for m in re.findall(r"@media[^{]+\{[^@]*?\}\s*\}", self.css, flags=re.S)
-              if "cd-prv2" in m]
-        gabung = "\n".join(mq).replace(" ", "")
+    def test_pratinjau_hp_tidak_lagi_dikunci_sempit(self):
+        """Permintaan owner: di HP pratinjau selebar ruang, tinggi ikut rasio."""
+        mq = "\n".join(m for m in re.findall(r"@media[^{]+\{[^@]*?\}\s*\}", self.css, flags=re.S)
+                       if "cd-prv2" in m).replace(" ", "")
+        self.assertNotRegex(
+            mq, r"\.cd-prv2>\.cd-prv\{[^}]*max-width",
+            "pratinjau HP masih dikunci lebarnya — owner meminta selebar ruang yang ada.",
+        )
+
+    def test_kanvas_pratinjau_adalah_wadah_pengukur(self):
+        css = self.css.replace(" ", "")
         self.assertRegex(
-            gabung, r"max-width:220px",
-            "saat menumpuk, lebar pratinjau tidak dikunci 220px — skala huruf jadi menyesatkan.",
+            css, r"\.cd-prv-canvas\{[^}]*container-type:inline-size",
+            "kanvas pratinjau bukan wadah pengukur — ukuran di dalamnya tak bisa proporsional.",
         )
-
-
-class TestLebarPratinjauTakBisaBerpisahDiamDiam(unittest.TestCase):
-    """Angka 220 hidup di DUA tempat: `PRV_W` (page.tsx, dipakai menghitung skala huruf) dan
-    lebar kolom + max-width (CSS). Bila salah satu diubah sendirian, pratinjau tetap tampil
-    rapi tapi ukurannya BOHONG — tak ada yang menjerit. Mesin yang menjaga, bukan ingatan."""
-
-    def test_prv_w_di_layar_sama_dengan_lebar_di_css(self):
-        layar = _tanpa_komentar(_isi(LAYAR))
-        m = re.search(r"const PRV_W\s*=\s*(\d+)", layar)
-        self.assertIsNotNone(m, "PRV_W tak ditemukan di layar")
-        prv = m.group(1)
-
-        css = _isi(CSS).replace(" ", "")
-        self.assertIn(
-            f".cd-prv2{{display:grid;grid-template-columns:{prv}px1fr", css.replace("\n", ""),
-            f"lebar kolom pratinjau di CSS tak lagi {prv}px — skala huruf pratinjau jadi bohong.",
-        )
-        mq = [m2 for m2 in re.findall(r"@media[^{]+\{[^@]*?\}\s*\}", _isi(CSS), flags=re.S)
-              if "cd-prv2" in m2]
         self.assertRegex(
-            "\n".join(mq).replace(" ", ""), rf"max-width:{prv}px",
-            f"kunci lebar saat menumpuk tak lagi {prv}px — tak sinkron dengan PRV_W.",
+            css, r"\.cd-prv-canvas\{[^}]*aspect-ratio:9/16",
+            "kanvas pratinjau kehilangan rasio 9:16 — tinggi tak lagi mengikuti lebar.",
         )
+
+    def test_nol_ukuran_yang_dihitung_dari_lebar_tetap(self):
+        """`PRV_W/1080` di JavaScript = ukuran dipaku ke satu lebar; begitu kanvas melebar di HP,
+        pratinjau langsung bohong. Semua harus lewat cqw."""
+        sisa = re.findall(r"PRV_W\s*/\s*1080", self.layar)
+        self.assertEqual(
+            sisa, [],
+            f"masih ada {len(sisa)} perhitungan berbasis lebar tetap (PRV_W/1080) — "
+            "pratinjau akan bohong saat melebar di HP.",
+        )
+
+    def test_garis_tepi_ikut_diskalakan_agar_tak_blur(self):
+        """AKAR BLUR (terukur): huruf & offset bayangan diskalakan, `outline` dipakai MENTAH —
+        halo 4px mengelilingi huruf 11,8px di kanvas 220px (4,9x terlalu tebal)."""
+        for baris in re.findall(r"textShadow:[^\n]+", self.layar):
+            with self.subTest(baris=baris[:60]):
+                self.assertNotRegex(
+                    baris, r"[a-zA-Z]*[Nn]um\(\"outline\"[^)]*\)\}px",
+                    "garis tepi dipakai mentah (px) tanpa diskalakan ke lebar kanvas → teks blur.",
+                )
+                self.assertNotRegex(
+                    baris, r"\d+px",
+                    "masih ada ukuran px TETAP di bayangan — tak ikut mengecil bersama kanvas.",
+                )
+                self.assertRegex(
+                    baris, r"cq\([^)]*[Nn]um\(\"outline\"",
+                    "garis tepi tidak melewati penskala kanvas (cq) — sumber blur.",
+                )
 
 
 if __name__ == "__main__":

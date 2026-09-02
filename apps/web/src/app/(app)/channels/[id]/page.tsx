@@ -51,7 +51,10 @@ const poolOf = (c: ChannelRow | null): string[] => {
 // Default caption_style — match BE DEFAULT_CAPTION_STYLE (video_renderer). Partial-override OK.
 // Lebar kanvas pratinjau caption (px). Dipakai untuk menskalakan ukuran huruf & margin agar
 // pratinjau = hasil video 1080px. Ubah di SATU tempat ini bila lebar kartunya berubah.
-const PRV_W = 220;
+// Ukuran di dalam kanvas pratinjau ditulis relatif LEBAR KANVAS, bukan angka px tetap: mesin
+// render memakai kanvas 1080px, jadi v px di sana = v/1080 bagian lebar. Dengan `cqw` pratinjau
+// tetap sebanding hasil video pada lebar BERAPA PUN — syarat agar ia boleh melebar penuh di HP.
+const cq = (v: number) => `calc(${v} * 100cqw / 1080)`;
 // Gaya judul pembuka bawaan — nilai SAMA dengan DEFAULT kolom channels.hook_title_style (migrasi 0177)
 // dan DEFAULT di mesin render. Tiga tempat wajib seangka; uji keselarasan menjaganya.
 const HOOK_DEFAULT = { enabled: true, font_name: "Anton", font_size: 58, font_color: "#FFD700",
@@ -1265,14 +1268,14 @@ export default function ChannelDetailPage() {
                 ass_scale seperti caption (dibuktikan render: rumus yang salah meleset ~40%).
                 Jangkar ATAS: baris pertama di position_y_pct, teks tumbuh ke bawah. */}
             <div className="cd-prv">
-              <div style={{ aspectRatio: "9/16", borderRadius: "var(--r-lg)", overflow: "hidden", position: "relative", background: "linear-gradient(170deg,#0c2233,#05101a)", border: "1px solid var(--border)" }}>
+              <div className="cd-prv-canvas">
                 <div style={{ position: "absolute", inset: 0, background: "radial-gradient(120% 70% at 50% 25%,transparent,rgba(0,0,0,.55))" }} />
                 {(hook.enabled ?? true) ? (
-                  <div style={{ position: "absolute", left: 40 * PRV_W / 1080, right: 40 * PRV_W / 1080,
+                  <div style={{ position: "absolute", left: cq(40), right: cq(40),
                     top: `${hookNum("position_y_pct", 15)}%`, textAlign: "center", lineHeight: 1.15,
                     fontFamily: `"${hookStr("font_name", "Anton")}",Geist,sans-serif`, fontWeight: 800,
-                    fontSize: hookNum("font_size", 58) * PRV_W / 1080, color: hookStr("font_color", "#FFD700"),
-                    textShadow: `0 0 ${hookNum("outline", 4)}px ${hookStr("border_color", "#000000")}, ${hookNum("shadow", 3) * PRV_W / 1080}px ${hookNum("shadow", 3) * PRV_W / 1080}px 2px rgba(0,0,0,.85)` }}>
+                    fontSize: cq(hookNum("font_size", 58)), color: hookStr("font_color", "#FFD700"),
+                    textShadow: `0 0 ${cq(hookNum("outline", 4))} ${hookStr("border_color", "#000000")}, ${cq(hookNum("shadow", 3))} ${cq(hookNum("shadow", 3))} ${cq(2)} rgba(0,0,0,.85)` }}>
                     <Bi id="Misteri Lubang Hitam yang Belum Terpecahkan" en="The Black Hole Mystery No One Solved" />
                   </div>
                 ) : (
@@ -1318,21 +1321,21 @@ export default function ChannelDetailPage() {
               `@font-face{font-family:"${f.name}";src:url("${f.file_url}") format("truetype");font-display:swap}`).join("")}</style>
             {/* Preview 9:16 LIVE — pakai nilai caption_style sebenarnya */}
             <div className="cd-prv">
-              <div style={{ aspectRatio: "9/16", borderRadius: "var(--r-lg)", overflow: "hidden", position: "relative", background: "linear-gradient(170deg,#0c2233,#05101a)", border: "1px solid var(--border)" }}>
+              <div className="cd-prv-canvas">
                 <div style={{ position: "absolute", inset: 0, background: "radial-gradient(120% 70% at 50% 25%,transparent,rgba(0,0,0,.55))" }} />
                 {/* Pratinjau HARUS setara hasil video. Empat hal yang dulu membuatnya mustahil cocok:
                     (1) hurufnya selalu Geist — font pilihan tenant tak pernah dimuat; kini dimuat dari
                     katalog `fonts` (@font-face di bawah). (2) skalanya 0,18 asal-asalan; kini
-                    PRV_W/1080 dikali ass_scale, karena mesin render mengecilkan huruf sesuai metrik
-                    font (lihat migrasi 0175). (3) jangkarnya di tengah, mesin render menjangkar di
+                    skala kanvas (100cqw/1080) dikali ass_scale, karena mesin render mengecilkan
+                    huruf sesuai metrik font (lihat migrasi 0175). (3) jangkarnya di tengah, mesin render menjangkar di
                     BAWAH → translateY(-100%). (4) marginnya 10px di kanvas 220px (=4,5%), padahal
                     mesin render 10px di 1080px (=0,9%). */}
-                <div style={{ position: "absolute", left: 10 * PRV_W / 1080, right: 10 * PRV_W / 1080,
+                <div style={{ position: "absolute", left: cq(10), right: cq(10),
                   top: `${capNum("position_y_pct", 83)}%`, transform: "translateY(-100%)", textAlign: "center", lineHeight: 1.12,
                   fontFamily: `"${capStr("font_name", "Anton")}",Geist,sans-serif`, fontWeight: (cap.bold ?? true) ? 800 : 500, fontStyle: (cap.italic ?? false) ? "italic" : "normal",
-                  fontSize: capNum("font_size", 68) * (fontOpts.find((f) => f.name === capStr("font_name", "Anton"))?.ass_scale ?? 0.577) * PRV_W / 1080,
+                  fontSize: cq(capNum("font_size", 68) * (fontOpts.find((f) => f.name === capStr("font_name", "Anton"))?.ass_scale ?? 0.577)),
                   color: capStr("inactive_word_color", "#FFFFFF"),
-                  textShadow: `0 0 ${capNum("outline", 4)}px ${capStr("outline_color", "#000000")}, ${capNum("shadow", 2) * PRV_W / 1080}px ${capNum("shadow", 2) * PRV_W / 1080}px 2px rgba(0,0,0,.85)` }}>
+                  textShadow: `0 0 ${cq(capNum("outline", 4))} ${capStr("outline_color", "#000000")}, ${cq(capNum("shadow", 2))} ${cq(capNum("shadow", 2))} ${cq(2)} rgba(0,0,0,.85)` }}>
                   Suara aneh di <span style={{ color: capStr("active_word_color", "#FFD700") }}>kedalaman</span>
                 </div>
               </div>

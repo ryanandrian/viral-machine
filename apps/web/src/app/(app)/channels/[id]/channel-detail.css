@@ -52,9 +52,20 @@
    BOHONG. Angka 220 di sini terikat PRV_W di page.tsx, dijaga uji (bukan ingatan manusia). */
 .cd-prv2 { display: grid; grid-template-columns: 220px 1fr; gap: 1.5rem; align-items: start; }
 .cd-prv2 > .cd-prv { position: sticky; top: 72px; }
+/* Kanvas pratinjau = WADAH PENGUKUR. Seluruh ukuran di dalamnya (huruf, margin, garis tepi,
+   bayangan) ditulis relatif `100cqw/1080` — kanvas mesin render 1080px, jadi v px di sana =
+   v/1080 bagian lebar. Hasilnya pratinjau sebanding video pada lebar BERAPA PUN, sehingga di HP
+   ia boleh melebar penuh tanpa berbohong. Dulu diskalakan di JS dgn lebar TETAP (PRV_W/1080)
+   dan `outline` malah tak ikut diskalakan: halo 4px mengelilingi huruf 11,8px di kanvas 220px
+   (4,9x terlalu tebal) — itulah sumber teks tampak BLUR. */
+.cd-prv-canvas { aspect-ratio: 9/16; container-type: inline-size; position: relative;
+  overflow: hidden; border-radius: var(--r-lg); border: 1px solid var(--border);
+  background: linear-gradient(170deg,#0c2233,#05101a); }
 @media (max-width:640px){
   .cd-prv2 { grid-template-columns: 1fr; gap: 1rem; }
-  .cd-prv2 > .cd-prv { position: static; max-width: 220px; margin: 0 auto; }
+  /* HP: pratinjau selebar ruang yang ada, tinggi mengikuti rasio 9:16 (ketokan owner 02-Sep).
+     Aman karena isinya kini proporsional terhadap lebar kanvas, bukan angka px tetap. */
+  .cd-prv2 > .cd-prv { position: static; }
 }
 
 @media (max-width:1000px){ .cd-grid2,.cd-grid2b{ grid-template-columns:1fr;} }
