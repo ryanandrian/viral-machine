@@ -186,5 +186,35 @@ class TestPratinjauDesktopTerbacaDanSetaraMesin(unittest.TestCase):
         )
 
 
+class TestSkalaPratinjauPersisBukanKiraKira(unittest.TestCase):
+    """Pertanyaan owner 02-Sep: "kalau tenant memperbesar/memperkecil huruf, rasionya valid ya?"
+
+    Diukur dengan peramban sungguhan pada rentang penuh slider (36→120) di dua lebar kanvas:
+    rasio `huruf_pratinjau / lebar_kanvas` meleset TETAP **0,67%** dari `ukuran_huruf / 1080`.
+    Sebabnya `100cqw` mengukur lebar KONTEN (di dalam garis tepi), sedangkan kanvas memakai
+    `border: 1px` — video 1080px tidak punya garis tepi, jadi acuannya berkurang 2px.
+
+    Perbaikannya garis tepi digambar sebagai bayangan-dalam (`box-shadow: inset`) yang TIDAK
+    memakan ukuran kotak ⇒ acuan kembali penuh dan skalanya persis. Dikunci di sini supaya tak
+    ada yang mengembalikannya ke `border` dan diam-diam menggeser skala lagi.
+    """
+
+    def test_kanvas_tak_memakai_border_yang_memakan_lebar_acuan(self):
+        css = _isi(CSS)
+        m = re.search(r"\.cd-prv-canvas\s*\{([^}]*)\}", css)
+        self.assertIsNotNone(m, "aturan .cd-prv-canvas tak ditemukan")
+        blok = m.group(1)
+        self.assertNotRegex(
+            blok, r"(^|;)\s*border\s*:",
+            "kanvas memakai `border` — memakan lebar acuan 100cqw, skala pratinjau meleset "
+            "dari hasil video.",
+        )
+        self.assertRegex(
+            blok.replace(" ", ""), r"box-shadow:inset0001px",
+            "garis tepi kanvas tidak digambar sebagai bayangan-dalam — "
+            "harus tak memakan ukuran kotak.",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
