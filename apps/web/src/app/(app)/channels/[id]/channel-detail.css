@@ -44,4 +44,17 @@
 .cd-sched-row { display: grid; grid-template-columns: 70px 1fr auto; align-items: center; gap: 1rem; padding: 0.75rem 0; border-bottom: 1px solid var(--border-subtle); }
 .cd-sched-row:last-child { border-bottom: none; }
 
+/* Kartu setelan ber-pratinjau (Judul pembuka & Caption): pratinjau 9:16 + kolom kontrol.
+   Dulu grid lebar-TETAP ditulis SEBARIS (220px 1fr) → kebal media query; di HP ±400px kolom
+   kontrol tersisa ±92px sehingga slider/pemilih warna TERPOTONG (laporan owner 02-Sep).
+   Saat menumpuk lebar pratinjau DIKUNCI 220px: ukuran huruf pratinjau dihitung terhadap
+   PRV_W=220 (font_size * PRV_W/1080) agar setara hasil render — melebarkannya = pratinjau
+   BOHONG. Angka 220 di sini terikat PRV_W di page.tsx, dijaga uji (bukan ingatan manusia). */
+.cd-prv2 { display: grid; grid-template-columns: 220px 1fr; gap: 1.5rem; align-items: start; }
+.cd-prv2 > .cd-prv { position: sticky; top: 72px; }
+@media (max-width:640px){
+  .cd-prv2 { grid-template-columns: 1fr; gap: 1rem; }
+  .cd-prv2 > .cd-prv { position: static; max-width: 220px; margin: 0 auto; }
+}
+
 @media (max-width:1000px){ .cd-grid2,.cd-grid2b{ grid-template-columns:1fr;} }

@@ -1260,11 +1260,11 @@ export default function ChannelDetailPage() {
         <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 760 }}>
           <h3 className="card-title" style={{ marginBottom: "0.35rem", display: "flex", alignItems: "center", gap: "0.5rem" }}><Bi id="Judul pembuka (hook)" en="Opening title (hook)" />{tanda(dirty.hook)}</h3>
           <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}><Bi id="Teks judul yang muncul di detik-detik awal video. Kata-katanya ditulis AI dari topik; di sini Anda atur tampilannya." en="Title shown in the opening seconds. The AI writes the words; here you style it." /></p>
-          <div style={{ display: "grid", gridTemplateColumns: `${PRV_W}px 1fr`, gap: "1.5rem", alignItems: "start" }}>
+          <div className="cd-prv2">
             {/* Pratinjau: judul digambar FFmpeg drawtext yang memakai ukuran em LANGSUNG — tanpa
                 ass_scale seperti caption (dibuktikan render: rumus yang salah meleset ~40%).
                 Jangkar ATAS: baris pertama di position_y_pct, teks tumbuh ke bawah. */}
-            <div style={{ position: "sticky", top: 72 }}>
+            <div className="cd-prv">
               <div style={{ aspectRatio: "9/16", borderRadius: "var(--r-lg)", overflow: "hidden", position: "relative", background: "linear-gradient(170deg,#0c2233,#05101a)", border: "1px solid var(--border)" }}>
                 <div style={{ position: "absolute", inset: 0, background: "radial-gradient(120% 70% at 50% 25%,transparent,rgba(0,0,0,.55))" }} />
                 {(hook.enabled ?? true) ? (
@@ -1311,13 +1311,13 @@ export default function ChannelDetailPage() {
         <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 760 }}>
           <h3 className="card-title" style={{ marginBottom: "0.35rem", display: "flex", alignItems: "center", gap: "0.5rem" }}><Bi id="Caption (subtitle video)" en="Caption (video subtitles)" />{tanda(dirty.cap)}</h3>
           <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}><Bi id="Tampilan teks subtitle yang muncul di dalam video (brand channel ini)." en="On-screen subtitle styling shown inside the video (this channel's brand)." /></p>
-          <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: "1.5rem", alignItems: "start" }}>
+          <div className="cd-prv2">
             {/* Muat file font yang SAMA dengan yang dipakai mesin render (dari katalog `fonts`).
                 Tanpa ini pratinjau selalu memakai Geist, apa pun pilihan tenant. */}
             <style>{fontOpts.filter((f) => f.file_url).map((f) =>
               `@font-face{font-family:"${f.name}";src:url("${f.file_url}") format("truetype");font-display:swap}`).join("")}</style>
             {/* Preview 9:16 LIVE — pakai nilai caption_style sebenarnya */}
-            <div style={{ position: "sticky", top: 72 }}>
+            <div className="cd-prv">
               <div style={{ aspectRatio: "9/16", borderRadius: "var(--r-lg)", overflow: "hidden", position: "relative", background: "linear-gradient(170deg,#0c2233,#05101a)", border: "1px solid var(--border)" }}>
                 <div style={{ position: "absolute", inset: 0, background: "radial-gradient(120% 70% at 50% 25%,transparent,rgba(0,0,0,.55))" }} />
                 {/* Pratinjau HARUS setara hasil video. Empat hal yang dulu membuatnya mustahil cocok:
