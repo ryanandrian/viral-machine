@@ -55,6 +55,22 @@ const poolOf = (c: ChannelRow | null): string[] => {
 // render memakai kanvas 1080px, jadi v px di sana = v/1080 bagian lebar. Dengan `cqw` pratinjau
 // tetap sebanding hasil video pada lebar BERAPA PUN — syarat agar ia boleh melebar penuh di HP.
 const cq = (v: number) => `calc(${v} * 100cqw / 1080)`;
+
+// Pecah baris judul pembuka PERSIS seperti mesin (`video_renderer._add_hook_title`): kata
+// ditambahkan sampai panjang baris melewati `max_chars_per_line`, lalu pindah baris. Tanpa ini
+// slider "Maks. huruf per baris" tersimpan ke mesin tapi layar DIAM — tenant menggesernya dan
+// mengira kenopnya rusak (teguran owner 02-Sep; kenop lahir 27-Jul `6020bbe` dan tak pernah
+// dipasang ke pratinjau).
+function pecahBarisHook(teks: string, maks: number): string {
+  const baris: string[] = [];
+  let cur = "";
+  for (const kata of teks.split(/\s+/)) {
+    const calon = cur ? `${cur} ${kata}` : kata;
+    if (cur && calon.length > maks) { baris.push(cur); cur = kata; } else { cur = calon; }
+  }
+  if (cur) baris.push(cur);
+  return baris.join("\n");
+}
 // Gaya judul pembuka bawaan — nilai SAMA dengan DEFAULT kolom channels.hook_title_style (migrasi 0177)
 // dan DEFAULT di mesin render. Tiga tempat wajib seangka; uji keselarasan menjaganya.
 const HOOK_DEFAULT = { enabled: true, font_name: "Anton", font_size: 58, font_color: "#FFD700",
@@ -1272,11 +1288,12 @@ export default function ChannelDetailPage() {
                 <div style={{ position: "absolute", inset: 0, background: "radial-gradient(120% 70% at 50% 25%,transparent,rgba(0,0,0,.55))" }} />
                 {(hook.enabled ?? true) ? (
                   <div style={{ position: "absolute", left: cq(40), right: cq(40),
-                    top: `${hookNum("position_y_pct", 15)}%`, textAlign: "center", lineHeight: 1.15,
+                    top: `${hookNum("position_y_pct", 15)}%`, textAlign: "center", lineHeight: 1.15, whiteSpace: "pre-line",
                     fontFamily: `"${hookStr("font_name", "Anton")}",Geist,sans-serif`,
                     fontSize: cq(hookNum("font_size", 58)), color: hookStr("font_color", "#FFD700"),
                     textShadow: `0 0 ${cq(hookNum("outline", 4))} ${hookStr("border_color", "#000000")}, ${cq(hookNum("shadow", 3))} ${cq(hookNum("shadow", 3))} ${cq(2)} rgba(0,0,0,.85)` }}>
-                    <Bi id="Misteri Lubang Hitam yang Belum Terpecahkan" en="The Black Hole Mystery No One Solved" />
+                    <Bi id={pecahBarisHook("Misteri Lubang Hitam yang Belum Terpecahkan", hookNum("max_chars_per_line", 25))}
+                          en={pecahBarisHook("The Black Hole Mystery No One Solved", hookNum("max_chars_per_line", 25))} />
                   </div>
                 ) : (
                   <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
@@ -1336,7 +1353,20 @@ export default function ChannelDetailPage() {
                   fontSize: cq(capNum("font_size", 68) * (fontOpts.find((f) => f.name === capStr("font_name", "Anton"))?.ass_scale ?? 0.577)),
                   color: capStr("inactive_word_color", "#FFFFFF"),
                   textShadow: `0 0 ${cq(capNum("outline", 4))} ${capStr("outline_color", "#000000")}, ${cq(capNum("shadow", 2))} ${cq(capNum("shadow", 2))} ${cq(2)} rgba(0,0,0,.85)` }}>
-                  Suara aneh di <span style={{ color: capStr("active_word_color", "#FFD700") }}>kedalaman</span>
+                  {/* Dikelompokkan seperti mesin: `max_words_per_line` kata per baris
+                      (`video_renderer._build_ass`). Kata TERAKHIR = kata yang sedang diucapkan. */}
+                  {(() => {
+                    const kata = ["Suara", "aneh", "di", "kedalaman"];
+                    const n = Math.max(1, capNum("max_words_per_line", 3));
+                    const capBaris: string[][] = [];
+                    for (let i = 0; i < kata.length; i += n) capBaris.push(kata.slice(i, i + n));
+                    return capBaris.map((baris, bi) => (
+                      <div key={bi}>{baris.map((k, ki) => {
+                        const aktif = bi === capBaris.length - 1 && ki === baris.length - 1;
+                        return <span key={ki} style={aktif ? { color: capStr("active_word_color", "#FFD700") } : undefined}>{k}{ki < baris.length - 1 ? " " : ""}</span>;
+                      })}</div>
+                    ));
+                  })()}
                 </div>
               </div>
               <div className="muted" style={{ fontSize: "var(--text-xs)", textAlign: "center", marginTop: ".5rem" }}>Preview · 9:16</div>
