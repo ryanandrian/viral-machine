@@ -50,7 +50,10 @@
    Saat menumpuk lebar pratinjau DIKUNCI 220px: ukuran huruf pratinjau dihitung terhadap
    PRV_W=220 (font_size * PRV_W/1080) agar setara hasil render — melebarkannya = pratinjau
    BOHONG. Angka 220 di sini terikat PRV_W di page.tsx, dijaga uji (bukan ingatan manusia). */
-.cd-prv2 { display: grid; grid-template-columns: 220px 1fr; gap: 1.5rem; align-items: start; }
+/* 300px, bukan 220px: pada 220px huruf preset 58 jatuh ke 11,8px dan LEBUR di layar 1x
+   (dibuktikan render berjenjang 220/280/320/380). 300px → 16,1px, dan kartu 860px membuatnya
+   muat tanpa memecah baris pilihan huruf. */
+.cd-prv2 { display: grid; grid-template-columns: 300px 1fr; gap: 1.5rem; align-items: start; }
 .cd-prv2 > .cd-prv { position: sticky; top: 72px; }
 /* Kanvas pratinjau = WADAH PENGUKUR. Seluruh ukuran di dalamnya (huruf, margin, garis tepi,
    bayangan) ditulis relatif `100cqw/1080` — kanvas mesin render 1080px, jadi v px di sana =

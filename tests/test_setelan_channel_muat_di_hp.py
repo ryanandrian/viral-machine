@@ -145,5 +145,46 @@ class TestSaatMenumpukPratinjauTetapJujur(unittest.TestCase):
                 )
 
 
+class TestPratinjauDesktopTerbacaDanSetaraMesin(unittest.TestCase):
+    """Owner 02-Sep: "di HP tajam, tapi di desktop tetap blur." Dibuktikan dengan render 1x
+    (bukan 2x yang menyamarkan): pada kanvas 220px huruf preset 58 jatuh ke **11,8px** dan
+    memang lebur. DUA sebab, keduanya ditutup di sini.
+
+    (1) TEBAL SINTETIS. Pratinjau judul memaksa `fontWeight: 800`, padahal font display seperti
+        Anton hanya punya SATU ketebalan ⇒ peramban menebalkan sintetis dan huruf saling menempel.
+        Mesin video TIDAK melakukannya — kenop bold/italic memang sudah DIBUANG dari judul pembuka
+        (`video_renderer` DEFAULT: "drawtext tak punya kenop itu"). Jadi ini sekaligus cacat
+        KESETARAAN: pratinjau menebalkan huruf yang di video tidak ditebalkan.
+
+    (2) KANVAS TERLALU KECIL. Terbukti lewat render berjenjang: 220px→11,8px lebur ·
+        300px→16,1px terbaca · 320px→17,2px tajam. Kartu dilebarkan agar kanvas 300px muat
+        TANPA memecah baris pilihan huruf (dibuktikan render kartu utuh).
+    """
+
+    def setUp(self):
+        self.layar = _tanpa_komentar(_isi(LAYAR))
+        self.css = _isi(CSS)
+
+    def test_judul_pembuka_tak_menebalkan_huruf_yang_video_tak_tebalkan(self):
+        i = self.layar.find("hookStr(\"font_name\"")
+        self.assertNotEqual(i, -1, "gaya huruf pratinjau judul tak ditemukan")
+        blok = self.layar[i - 200 : i + 400]
+        self.assertNotRegex(
+            blok, r"fontWeight:\s*[6-9]\d\d",
+            "pratinjau judul memaksa tebal sintetis — huruf lebur DAN tak setara video "
+            "(mesin drawtext tak punya kenop tebal).",
+        )
+
+    def test_kanvas_desktop_cukup_lebar_untuk_terbaca(self):
+        m = re.search(r"\.cd-prv2\s*\{[^}]*grid-template-columns:\s*(\d+)px", self.css)
+        self.assertIsNotNone(m, "lebar kolom pratinjau desktop tak ditemukan di .cd-prv2")
+        lebar = int(m.group(1))
+        self.assertGreaterEqual(
+            lebar, 300,
+            f"kanvas pratinjau desktop {lebar}px → huruf preset 58 hanya "
+            f"{58*lebar/1080:.1f}px; di bawah ~16px teks lebur pada layar 1x.",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

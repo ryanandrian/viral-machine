@@ -1260,7 +1260,7 @@ export default function ChannelDetailPage() {
         {/* CARD: Judul Pembuka — kelas & pola SAMA dengan kartu Caption (fld-row/slider/switch/
             radio-pill/save-bar). Gaya ini kini per-channel (channels.hook_title_style, migrasi 0177);
             sebelumnya hanya ada di database tenant dan tak bisa disentuh dari layar mana pun. */}
-        <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 760 }}>
+        <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 860 }}>
           <h3 className="card-title" style={{ marginBottom: "0.35rem", display: "flex", alignItems: "center", gap: "0.5rem" }}><Bi id="Judul pembuka (hook)" en="Opening title (hook)" />{tanda(dirty.hook)}</h3>
           <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}><Bi id="Tulisan judul yang muncul di detik-detik awal video. Kata-katanya ditulis AI dari topik; di sini Anda atur tampilannya — bukan ada-tidaknya kalimat pembuka." en="On-screen title shown in the opening seconds. The AI writes the words; here you style it — not whether the spoken opening exists." /></p>
           <div className="cd-prv2">
@@ -1273,7 +1273,7 @@ export default function ChannelDetailPage() {
                 {(hook.enabled ?? true) ? (
                   <div style={{ position: "absolute", left: cq(40), right: cq(40),
                     top: `${hookNum("position_y_pct", 15)}%`, textAlign: "center", lineHeight: 1.15,
-                    fontFamily: `"${hookStr("font_name", "Anton")}",Geist,sans-serif`, fontWeight: 800,
+                    fontFamily: `"${hookStr("font_name", "Anton")}",Geist,sans-serif`,
                     fontSize: cq(hookNum("font_size", 58)), color: hookStr("font_color", "#FFD700"),
                     textShadow: `0 0 ${cq(hookNum("outline", 4))} ${hookStr("border_color", "#000000")}, ${cq(hookNum("shadow", 3))} ${cq(hookNum("shadow", 3))} ${cq(2)} rgba(0,0,0,.85)` }}>
                     <Bi id="Misteri Lubang Hitam yang Belum Terpecahkan" en="The Black Hole Mystery No One Solved" />
@@ -1311,7 +1311,7 @@ export default function ChannelDetailPage() {
             pesan: hookMsg ? <span style={{ color: hookMsg.startsWith("Gagal") ? "var(--danger,#ef4444)" : "var(--success)" }}>{hookMsg}</span> : <Bi id="Disimpan ke channel (judul pembuka)" en="Saves to channel (opening title)" /> })}
         </div>
 
-        <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 760 }}>
+        <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 860 }}>
           <h3 className="card-title" style={{ marginBottom: "0.35rem", display: "flex", alignItems: "center", gap: "0.5rem" }}><Bi id="Caption (subtitle video)" en="Caption (video subtitles)" />{tanda(dirty.cap)}</h3>
           <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}><Bi id="Tampilan teks subtitle yang muncul di dalam video (brand channel ini)." en="On-screen subtitle styling shown inside the video (this channel's brand)." /></p>
           <div className="cd-prv2">
