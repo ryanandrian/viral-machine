@@ -75,12 +75,16 @@ function StBadge({ s }: { s: string }) {
   if (s === "trial_expired") return <span className="badge badge-warning"><span className="dot" />Trial lapse</span>;
   if (s === "grace") return <span className="badge badge-warning"><span className="dot" />Grace</span>;
   if (s === "suspended") return <span className="badge badge-error"><span className="dot" />Suspended</span>;
+  // Akun terhapus: cangkang yang SENGAJA disimpan (LIFECYCLE §4.2 — atribusi agen, klaim channel,
+  // bukti bayar). Dulu jatuh ke fallback & mencetak kata mentah "deleted".
+  if (s === "deleted") return <span className="badge badge-default"><span className="dot" /><Bi id="Terhapus" en="Deleted" /></span>;
   return <span className="badge badge-default">{s}</span>;
 }
 
 const FILTERS: [string, string, string][] = [
   ["all", "Semua", "All"], ["active", "Active", "Active"], ["trial", "Trial", "Trial"],
   ["trial_expired", "Leads", "Leads"], ["suspended", "Suspended", "Suspended"],
+  ["deleted", "Terhapus", "Deleted"],
 ];
 
 export default function AdminTenantsPage() {
@@ -172,7 +176,8 @@ export default function AdminTenantsPage() {
         || c.yt_channel_id.toLowerCase().includes(q) || h.toLowerCase().includes(q);
   }), [claims, rows, cFilter, cq, tenantOf]);
 
-  const view = rows.filter((t) => (filter === "all" || t.status === filter)
+  const hidup = rows.filter((t) => t.status !== "deleted");
+  const view = rows.filter((t) => (filter === "all" ? t.status !== "deleted" : t.status === filter)
     && (!q.trim() || `${t.handle} ${t.email} ${t.tenant_id}`.toLowerCase().includes(q.trim().toLowerCase())));
   const cur = rows.find((t) => t.tenant_id === sel) ?? null;
 
@@ -249,7 +254,7 @@ export default function AdminTenantsPage() {
 
       <div className="segmented" style={{ marginBottom: "1.25rem" }}>
         <button aria-selected={tab === "tenants"} onClick={() => setTab("tenants")}>
-          <Bi id="Tenant" en="Tenants" /> <span style={{ opacity: 0.6 }}>{rows.length}</span>
+          <Bi id="Tenant" en="Tenants" /> <span style={{ opacity: 0.6 }}>{hidup.length}</span>
         </button>
         <button aria-selected={tab === "claims"} onClick={() => setTab("claims")}>
           <Bi id="Klaim Channel" en="Channel Claims" /> <span style={{ opacity: 0.6 }}>{claims.length}</span>

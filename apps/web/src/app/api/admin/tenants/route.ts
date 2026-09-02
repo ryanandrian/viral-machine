@@ -76,7 +76,7 @@ export async function GET() {
   });
 
   const kpi = {
-    total: rows.length,
+    total: rows.filter((r) => r.status !== "deleted").length,   // cangkang akun terhapus bukan tenant
     mrr_idr: rows.reduce((s, r) => s + r.mrr_idr, 0),
     trials: rows.filter((r) => r.status === "trial").length,
     trial_expired: rows.filter((r) => r.status === "trial_expired").length,
