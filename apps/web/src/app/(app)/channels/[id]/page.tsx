@@ -29,7 +29,7 @@ function Bi({ id, en }: { id: string; en: string }) {
 type ChannelRow = {
   id: string; channel_name: string | null; platform_channel_id: string | null; youtube_account_id: string | null; subscriber_count: number | null;
   niche: string | null; niche_pool: string[] | null; niche_mode: string | null; content_language: string | null;
-  is_active: boolean | null; publish_privacy: string | null; duration_preset: number | null; publish_slots: string[] | null;
+  is_active: boolean | null; publish_privacy: string | null; ai_disclosure: boolean | null; duration_preset: number | null; publish_slots: string[] | null;
   production_paused: boolean | null; production_paused_reason: string | null;
   production_paused_class: string | null; production_paused_at: string | null;
   llm_model: string | null; llm_library: string | null; visual_mode: string | null;
@@ -84,7 +84,7 @@ const tagsFrom = (nh: Record<string, string[]> | null | undefined): Record<strin
 // Nilai form yang SEHARUSNYA tampil untuk satu baris channel — SATU sumber kebenaran, dipakai load()
 // (mengisi layar) DAN penghitung "belum disimpan" tiap kartu. Satu tempat = mustahil keduanya melenceng.
 const formFrom = (c: ChannelRow | null) => ({
-  name: c?.channel_name ?? "", clang: c?.content_language ?? "id-ID", privacy: c?.publish_privacy ?? "private",
+  name: c?.channel_name ?? "", clang: c?.content_language ?? "id-ID", privacy: c?.publish_privacy ?? "private", aiDisc: c?.ai_disclosure ?? true,
   targetYt: c?.platform_channel_id ?? "", ytAccountId: c?.youtube_account_id ?? "", pool: poolOf(c),
   dpreset: c?.duration_preset ?? null,
   llmProv: c?.llm_library ?? "", llmModel: c?.llm_model ?? "", llmAcct: c?.llm_account_id ?? "",
@@ -157,6 +157,7 @@ export default function ChannelDetailPage() {
   const [name, setName] = useState("");
   const [clang, setClang] = useState("id-ID");
   const [privacy, setPrivacy] = useState("private");
+  const [aiDisc, setAiDisc] = useState(true);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -591,7 +592,7 @@ export default function ChannelDetailPage() {
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     const { data } = await supabase.from("channels")
-      .select("id,channel_name,platform_channel_id,youtube_account_id,subscriber_count,niche,niche_pool,niche_mode,content_language,is_active,publish_privacy,duration_preset,publish_slots,production_paused,production_paused_reason,production_paused_class,production_paused_at,llm_model,llm_library,visual_mode,llm_account_id,tts_account_id,visual_account_id,tts_provider,tts_model,voice_key,image_quality,music_enabled,music_volume,music_default_mood,script_min_viral_score,script_max_retry,caption_style,hook_title_style,niche_hashtags,cta_mode,brand_name,brand_cta_text,brand_logo,logo_position,logo_size,logo_opacity,landing_link,link_position")
+      .select("id,channel_name,platform_channel_id,youtube_account_id,subscriber_count,niche,niche_pool,niche_mode,content_language,is_active,publish_privacy,ai_disclosure,duration_preset,publish_slots,production_paused,production_paused_reason,production_paused_class,production_paused_at,llm_model,llm_library,visual_mode,llm_account_id,tts_account_id,visual_account_id,tts_provider,tts_model,voice_key,image_quality,music_enabled,music_volume,music_default_mood,script_min_viral_score,script_max_retry,caption_style,hook_title_style,niche_hashtags,cta_mode,brand_name,brand_cta_text,brand_logo,logo_position,logo_size,logo_opacity,landing_link,link_position")
       .eq("id", id).maybeSingle();
     const c = data as ChannelRow | null;
     setCh(c);
@@ -603,7 +604,7 @@ export default function ChannelDetailPage() {
       const before = formFrom(chRef.current), after = formFrom(c);
       const put = <T,>(set: Dispatch<SetStateAction<T>>, b: T, a: T) => set((cur) => (same(cur, b) ? a : cur));
       put(setName, before.name, after.name); put(setClang, before.clang, after.clang);
-      put(setPrivacy, before.privacy, after.privacy); put(setPool, before.pool, after.pool);
+      put(setPrivacy, before.privacy, after.privacy); put(setAiDisc, before.aiDisc, after.aiDisc); put(setPool, before.pool, after.pool);
       put(setTargetYt, before.targetYt, after.targetYt); put(setYtAccountId, before.ytAccountId, after.ytAccountId);
       put(setDpreset, before.dpreset, after.dpreset);
       put(setLlmProv, before.llmProv, after.llmProv); put(setLlmModel, before.llmModel, after.llmModel);
@@ -764,7 +765,7 @@ export default function ChannelDetailPage() {
       setNicheMsg("Niche tersimpan");
     }
     const { error } = await supabase.from("channels").update({
-      channel_name: name.trim() || null, content_language: clang, publish_privacy: privacy,
+      channel_name: name.trim() || null, content_language: clang, publish_privacy: privacy, ai_disclosure: aiDisc,
       youtube_account_id: ytAccountId || null, platform_channel_id: targetYt.trim() || null,
     }).eq("id", id);
     setBusy(false);
@@ -779,7 +780,7 @@ export default function ChannelDetailPage() {
   const f0 = formFrom(ch);
   const chg = (...pasangan: [unknown, unknown][]) => pasangan.some(([kini, tersimpan]) => !sameForm(kini, tersimpan));
   const dirty = {
-    ident: chg([name, f0.name], [clang, f0.clang], [privacy, f0.privacy], [targetYt, f0.targetYt], [ytAccountId, f0.ytAccountId], [pool, f0.pool]),
+    ident: chg([name, f0.name], [clang, f0.clang], [privacy, f0.privacy], [aiDisc, f0.aiDisc], [targetYt, f0.targetYt], [ytAccountId, f0.ytAccountId], [pool, f0.pool]),
     preset: chg([dpreset, f0.dpreset]),
     llm: chg([llmProv, f0.llmProv], [llmModel, f0.llmModel], [llmAcct, f0.llmAcct]),
     tts: chg([ttsProv, f0.ttsProv], [ttsModel, f0.ttsModel], [voiceKey, f0.voiceKey], [ttsAcct, f0.ttsAcct]),
@@ -822,7 +823,7 @@ export default function ChannelDetailPage() {
   }, [saved, nicheMsg, presetMsg, brandMsg, hookMsg, br2Msg, opsMsg, hashMsg, aiMsg]);
   // Batalkan perubahan = kembalikan isian kartu ke nilai tersimpan + bersihkan pesan kartu itu.
   const undo = {
-    ident: () => { setName(f0.name); setClang(f0.clang); setPrivacy(f0.privacy); setTargetYt(f0.targetYt); setYtAccountId(f0.ytAccountId); setPool(f0.pool); setErr(null); setNicheMsg(null); setSaved(false); },
+    ident: () => { setName(f0.name); setClang(f0.clang); setPrivacy(f0.privacy); setAiDisc(f0.aiDisc); setTargetYt(f0.targetYt); setYtAccountId(f0.ytAccountId); setPool(f0.pool); setErr(null); setNicheMsg(null); setSaved(false); },
     preset: () => { setDpreset(f0.dpreset); setPresetMsg(null); },
     llm: () => { setLlmProv(f0.llmProv); setLlmModel(f0.llmModel); setLlmAcct(f0.llmAcct); setAiMsg(null); },
     tts: () => { setTtsProv(f0.ttsProv); setTtsModel(f0.ttsModel); setVoiceKey(f0.voiceKey); setTtsAcct(f0.ttsAcct); setAiMsg(null); },
@@ -1081,6 +1082,16 @@ export default function ChannelDetailPage() {
               <select className="input" value={privacy} onChange={(e) => setPrivacy(e.target.value)} style={{ width: "fit-content" }}>
                 {PRIVACY.map(([v, idT]) => <option key={v} value={v}>{idT}</option>)}
               </select>
+            </div>
+            {/* Penanda AI ke YouTube (`channels.ai_disclosure` → `containsSyntheticMedia`, aktif sejak
+                14-Jun `d83149e`). Kolomnya ADA sejak lahir tapi tak pernah dipasang ke layar, jadi tak
+                seorang pun bisa mengaturnya (temuan 02-Sep). Bawaan MENYALA: mematikannya pada channel
+                berkonten realistis justru risiko sanksi — kalimat di bawah menyebutkannya apa adanya. */}
+            <div className="fld-row" style={{ borderBottom: "none", padding: 0 }}>
+              <div className="k"><Bi id="Beri tahu YouTube video dibuat dengan AI" en="Tell YouTube the video was made with AI" />
+                <div className="sub"><Bi id="Wajib bila visualnya tampak nyata. Menurut YouTube, memberi tahu TIDAK mengurangi jangkauan maupun monetisasi — sebaliknya, tidak memberi tahu padahal wajib bisa berujung sanksi sampai dikeluarkan dari program monetisasi." en="Required when the visuals look realistic. Per YouTube, disclosing does NOT reduce reach or monetization — failing to disclose when required can lead to penalties, up to removal from the Partner Program." /></div>
+              </div>
+              <label className="switch"><input type="checkbox" checked={aiDisc} onChange={(e) => setAiDisc(e.target.checked)} /><span className="track" /><span className="thumb" /></label>
             </div>
             <div style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
               <label className="label"><Bi id="Channel YouTube tujuan" en="Target YouTube channel" /></label>
