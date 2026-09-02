@@ -1259,7 +1259,7 @@ export default function ChannelDetailPage() {
             sebelumnya hanya ada di database tenant dan tak bisa disentuh dari layar mana pun. */}
         <div className="card card-pad" style={{ marginTop: "1rem", maxWidth: 760 }}>
           <h3 className="card-title" style={{ marginBottom: "0.35rem", display: "flex", alignItems: "center", gap: "0.5rem" }}><Bi id="Judul pembuka (hook)" en="Opening title (hook)" />{tanda(dirty.hook)}</h3>
-          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}><Bi id="Teks judul yang muncul di detik-detik awal video. Kata-katanya ditulis AI dari topik; di sini Anda atur tampilannya." en="Title shown in the opening seconds. The AI writes the words; here you style it." /></p>
+          <p className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: "1rem" }}><Bi id="Tulisan judul yang muncul di detik-detik awal video. Kata-katanya ditulis AI dari topik; di sini Anda atur tampilannya — bukan ada-tidaknya kalimat pembuka." en="On-screen title shown in the opening seconds. The AI writes the words; here you style it — not whether the spoken opening exists." /></p>
           <div className="cd-prv2">
             {/* Pratinjau: judul digambar FFmpeg drawtext yang memakai ukuran em LANGSUNG — tanpa
                 ass_scale seperti caption (dibuktikan render: rumus yang salah meleset ~40%).
@@ -1277,14 +1277,14 @@ export default function ChannelDetailPage() {
                   </div>
                 ) : (
                   <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
-                    <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Judul pembuka dimatikan" en="Opening title is off" /></span>
+                    <span className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Tulisan judul dimatikan — kalimat pembuka tetap diucapkan" en="Title text off — the spoken opening remains" /></span>
                   </div>
                 )}
               </div>
               <div className="muted" style={{ fontSize: "0.625rem", marginTop: "0.4rem", textAlign: "center" }}><Bi id="Contoh judul — teks asli ditulis AI" en="Sample title — real text written by AI" /></div>
             </div>
             <div>
-              <div className="fld-row"><div className="k"><Bi id="Tampilkan judul" en="Show title" /><div className="sub"><Bi id="matikan = video langsung mulai" en="off = video starts straight away" /></div></div>
+              <div className="fld-row"><div className="k"><Bi id="Tampilkan judul" en="Show title" /><div className="sub"><Bi id="matikan = tulisan judulnya hilang; kalimat pembuka tetap diucapkan &amp; muncul di subtitle" en="off = the on-screen title is hidden; the spoken opening still plays and appears in subtitles" /></div></div>
                 <label className="switch"><input type="checkbox" checked={Boolean(hook.enabled ?? true)} onChange={(e) => setHook({ ...hook, enabled: e.target.checked })} /><span className="track" /><span className="thumb" /></label></div>
               <div className="fld-row"><div className="k"><Bi id="Jenis huruf" en="Font" /></div>
                 <div className="radio-row">{fontOpts.map((f) => <span key={f.name} className={`radio-pill${hookStr("font_name", "Anton") === f.name ? " sel" : ""}`} style={{ fontFamily: `"${f.name}",Geist,sans-serif` }} onClick={() => setHook({ ...hook, font_name: f.name })}>{f.name}</span>)}</div></div>
