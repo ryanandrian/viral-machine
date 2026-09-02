@@ -131,7 +131,7 @@ export default function AuthPage() {
   }
   async function doLogin() {
     setErr(null); setBusy(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password: pw });
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password: pw });
     if (error) { setBusy(false); return setErr(error.message); }
     // Honor ?next (dari middleware redirect) bila path valid; else onboarded-check.
     const nextParam = new URLSearchParams(window.location.search).get("next");
@@ -248,12 +248,12 @@ export default function AuthPage() {
               <p className="lead"><Bi id={`Coba gratis ${trialDays} hari, tanpa kartu kredit.`} en={`Try free for ${trialDays} days, no credit card.`} /></p>
               <button className="oauth-btn" onClick={doGoogle}><GoogleLogo /><Bi id="Daftar dengan Google" en="Sign up with Google" /></button>
               <div className="divider"><Bi id="atau pakai email" en="or use email" /></div>
-              <div className="form-stack">
-                <div><label className="label">Email</label><input className="input" type="email" placeholder="riko@channel.id" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+              <form className="form-stack" onSubmit={(e) => { e.preventDefault(); if (!busy) doSignup(); }}>
+                <div><label className="label">Email</label><input className="input" type="email" inputMode="email" autoComplete="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="riko@channel.id" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
                 <div><label className="label">Password</label>
-                  <PwInput id="pw1" placeholder="Min. 8 karakter" value={pw} onChange={(e) => setPw(e.target.value)} />
+                  <PwInput autoComplete="new-password" id="pw1" placeholder="Min. 8 karakter" value={pw} onChange={(e) => setPw(e.target.value)} />
                 </div>
-                <div><label className="label"><Bi id="Konfirmasi password" en="Confirm password" /></label><PwInput id="pw2" value={pw2} onChange={(e) => setPw2(e.target.value)} /></div>
+                <div><label className="label"><Bi id="Konfirmasi password" en="Confirm password" /></label><PwInput autoComplete="new-password" id="pw2" value={pw2} onChange={(e) => setPw2(e.target.value)} /></div>
                 <div>{/* [B21] atribusi agen — opsional, validasi langsung di titik input */}
                   <label className="label"><Bi id="Kode agen/reseller (opsional)" en="Partner code (optional)" /></label>
                   <input className="input" value={refCode} placeholder="MIS. MAJU2026" style={{ textTransform: "uppercase" }}
@@ -263,9 +263,9 @@ export default function AuthPage() {
                   {refStatus === "bad" && <div style={{ fontSize: "var(--text-xs)", color: "var(--danger, #dc2626)", marginTop: "0.25rem" }}><Bi id="✗ Kode tidak dikenal. Kosongkan bila tidak punya." en="✗ Code not recognized. Leave empty if you don't have one." /></div>}
                 </div>
                 <label className="terms"><input type="checkbox" defaultChecked /><Bi id="Saya setuju dengan Ketentuan Layanan dan Kebijakan Privasi MesinViral." en="I agree to MesinViral's Terms of Service and Privacy Policy." /></label>
-                <button className="btn btn-default btn-lg" style={{ width: "100%" }} onClick={doSignup} disabled={busy}>{busy ? "…" : <Bi id="Buat Akun" en="Create account" />}</button>
+                <button className="btn btn-default btn-lg" style={{ width: "100%" }} type="submit" disabled={busy}>{busy ? "…" : <Bi id="Buat Akun" en="Create account" />}</button>
                 <ErrBox />
-              </div>
+              </form>
               <div className="auth-foot"><Bi id="Sudah punya akun?" en="Already have an account?" /> <a className="link" onClick={() => go("login")}><Bi id="Masuk" en="Sign in" /></a></div>
             </div>
           )}
@@ -277,15 +277,15 @@ export default function AuthPage() {
               <p className="lead"><Bi id="Masuk untuk lanjut ke dashboard Anda." en="Sign in to continue to your dashboard." /></p>
               <button className="oauth-btn" onClick={doGoogle}><GoogleLogo /><Bi id="Masuk dengan Google" en="Sign in with Google" /></button>
               <div className="divider"><Bi id="atau pakai email" en="or use email" /></div>
-              <div className="form-stack">
-                <div><label className="label">Email</label><input className="input" type="email" placeholder="riko@channel.id" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+              <form className="form-stack" onSubmit={(e) => { e.preventDefault(); if (!busy) doLogin(); }}>
+                <div><label className="label">Email</label><input className="input" type="email" inputMode="email" autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="riko@channel.id" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
                 <div>
                   <div className="row-between" style={{ marginBottom: "0.4375rem" }}><label className="label" style={{ margin: 0 }}>Password</label><a className="link" style={{ fontSize: "var(--text-xs)" }} onClick={() => go("forgot")}><Bi id="Lupa password?" en="Forgot password?" /></a></div>
-                  <PwInput id="pw3" value={pw} onChange={(e) => setPw(e.target.value)} />
+                  <PwInput autoComplete="current-password" id="pw3" value={pw} onChange={(e) => setPw(e.target.value)} />
                 </div>
-                <button className="btn btn-default btn-lg" style={{ width: "100%" }} onClick={doLogin} disabled={busy}>{busy ? "…" : <Bi id="Masuk" en="Sign in" />}</button>
+                <button className="btn btn-default btn-lg" style={{ width: "100%" }} type="submit" disabled={busy}>{busy ? "…" : <Bi id="Masuk" en="Sign in" />}</button>
                 <ErrBox />
-              </div>
+              </form>
               <div className="auth-foot"><Bi id="Belum punya akun?" en="No account yet?" /> <a className="link" onClick={() => go("signup")}><Bi id="Daftar gratis" en="Sign up free" /></a></div>
             </div>
           )}
@@ -296,11 +296,11 @@ export default function AuthPage() {
               <div className="state-ico" style={{ background: "var(--brand-soft)", color: "var(--brand)" }}><Command size={26} /></div>
               <h1><Bi id="Reset password" en="Reset password" /></h1>
               <p className="lead"><Bi id="Masukkan email Anda, kami kirim link untuk reset password." en="Enter your email and we'll send a reset link." /></p>
-              <div className="form-stack">
-                <div><label className="label">Email</label><input className="input" type="email" placeholder="riko@channel.id" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
-                <button className="btn btn-default btn-lg" style={{ width: "100%" }} onClick={doForgot} disabled={busy}>{busy ? "…" : <Bi id="Kirim link reset" en="Send reset link" />}</button>
+              <form className="form-stack" onSubmit={(e) => { e.preventDefault(); if (!busy) doForgot(); }}>
+                <div><label className="label">Email</label><input className="input" type="email" inputMode="email" autoComplete="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="riko@channel.id" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+                <button className="btn btn-default btn-lg" style={{ width: "100%" }} type="submit" disabled={busy}>{busy ? "…" : <Bi id="Kirim link reset" en="Send reset link" />}</button>
                 <ErrBox />
-              </div>
+              </form>
               <div className="auth-foot"><a className="link" onClick={() => go("login")}><ArrowLeft size={14} style={{ verticalAlign: -2 }} /> <Bi id="Kembali ke masuk" en="Back to sign in" /></a></div>
             </div>
           )}
@@ -345,16 +345,16 @@ export default function AuthPage() {
               <div className="state-ico" style={{ background: "var(--brand-soft)", color: "var(--brand)" }}><Command size={26} /></div>
               <h1><Bi id="Buat password baru" en="Set a new password" /></h1>
               <p className="lead"><Bi id="Masukkan password baru untuk akun Anda." en="Enter a new password for your account." /></p>
-              <div className="form-stack">
+              <form className="form-stack" onSubmit={(e) => { e.preventDefault(); if (!busy) doReset(); }}>
                 <div><label className="label"><Bi id="Password baru" en="New password" /></label>
-                  <PwInput id="pwr1" placeholder="Min. 8 karakter" value={pw} onChange={(e) => setPw(e.target.value)} />
+                  <PwInput autoComplete="new-password" id="pwr1" placeholder="Min. 8 karakter" value={pw} onChange={(e) => setPw(e.target.value)} />
                 </div>
                 <div><label className="label"><Bi id="Konfirmasi password" en="Confirm password" /></label>
-                  <PwInput id="pwr2" value={pw2} onChange={(e) => setPw2(e.target.value)} />
+                  <PwInput autoComplete="new-password" id="pwr2" value={pw2} onChange={(e) => setPw2(e.target.value)} />
                 </div>
-                <button className="btn btn-default btn-lg" style={{ width: "100%" }} onClick={doReset} disabled={busy}>{busy ? "…" : <Bi id="Simpan password" en="Save password" />}</button>
+                <button className="btn btn-default btn-lg" style={{ width: "100%" }} type="submit" disabled={busy}>{busy ? "…" : <Bi id="Simpan password" en="Save password" />}</button>
                 <ErrBox />
-              </div>
+              </form>
               <div className="auth-foot"><a className="link" onClick={() => go("login")}><ArrowLeft size={14} style={{ verticalAlign: -2 }} /> <Bi id="Kembali ke masuk" en="Back to sign in" /></a></div>
             </div>
           )}
