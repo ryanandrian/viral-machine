@@ -106,7 +106,22 @@ def publish_due_for_channel(sb, channel_row: dict, now_utc: datetime | None = No
     if not item:
         logger.warning(f"[Publisher] Buffer KOSONG slot {slot_dt} ch={channel_id} — skip + Telegram")
         _ch_label = channel_row.get("channel_name") or channel_id   # [B11] sebut NAMA channel, bukan id mentah
-        _notify(tenant_id, f"⚠️ [{_ch_label}] Buffer kosong, slot {slot_dt:%H:%M} dilewati",
+        # [11-Sep] SEBAB, bukan cuma gejala. Selama 6 hari (6–11 Sep) owner menerima pesan ini
+        # berulang tiap jam tayang tanpa pernah tahu sebabnya, padahal sistem SUDAH tahu: channel
+        # kurang karakter suara. Keterangannya hanya ditulis ke log server (`logger.info` producer).
+        # Gerbang yang ditanya = `channel_readiness`, gerbang YANG SAMA dipakai mesin produksi —
+        # bukan pemeriksaan baru (aturan kelengkapan wajib tetap SATU sumber kebenaran).
+        # FAIL-SOFT MUTLAK: keterangan tambahan HARAM membuat alarm yang sudah jalan lenyap.
+        _sebab = ""
+        try:
+            from src.orchestrator.readiness import channel_readiness
+            _rd = channel_readiness(sb, channel_row)
+            if not _rd["ready"] and not _rd["check_failed"] and _rd["missing"]:
+                _sebab = (f" Sebabnya: channel belum lengkap — kurang {', '.join(_rd['missing'])}. "
+                          f"Lengkapi di Setelan channel; produksi jalan sendiri setelah itu.")
+        except Exception as e:
+            logger.warning(f"[Publisher] baca kelengkapan utk alarm gagal (non-fatal): {e}")
+        _notify(tenant_id, f"⚠️ [{_ch_label}] Buffer kosong, slot {slot_dt:%H:%M} dilewati.{_sebab}",
                 sb=sb, once_key=f"empty:{channel_id}:{slot_dt.isoformat()}")
         return "buffer_empty"
 

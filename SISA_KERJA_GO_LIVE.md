@@ -1477,16 +1477,19 @@ Rinciannya: `AGENT_AND_AFILIATION_ARCITECTURE.md` **§9e**.
   **TRACKER:**
   - ✅ **T0** Uji pengikat lahir & **dibuktikan MERAH** — `tests/test_channel_aktif_tak_bisa_dijatuhkan.py`
     (1 uji inti MERAH + 3 penjaga anti-regresi HIJAU: anti-sandera · nonaktif bebas · pintu aktivasi utuh).
-  - ⬜ **T1** Migrasi: perluas `trg_channels_activation_gate` → jaga pintu KEDUA. Tolak HANYA bila
+  - 🟡 **T1** Migrasi **DITULIS & TERBUKTI, BELUM DITERAPKAN** — `migrations/0218_channel_aktif_tak_bisa_dijatuhkan.sql`. Dibuktikan **DI DALAM TRANSAKSI ke DB live lalu ROLLBACK** (nol perubahan produksi), 4 skenario SEMUA sesuai: TENANT kosongkan karakter suara pada channel aktif+lengkap ⇒ **DITOLAK** *"Perubahan ini membuat channel belum lengkap sehingga produksi akan berhenti. Lengkapi dulu: karakter suara"* · TENANT ubah nama ⇒ DITERIMA · **MESIN cabut koneksi YouTube ⇒ DITERIMA** (RANJAU 2 aman) · MESIN pasang rem darurat ⇒ DITERIMA. ⏳ **Menunggu ketokan owner untuk DITERAPKAN ke DB** (mengubah produksi). Sampai diterapkan, `test_channel_aktif_TAK_BISA_dijatuhkan` **MERAH — itu benar & disengaja**, bukan regresi.
+  - ~~⬜ T1 rancangan~~ (rincian rancangan: perluas `trg_channels_activation_gate` → jaga pintu KEDUA. Tolak HANYA bila
     `NEW.is_active` ∧ `channel_missing(OLD)` kosong ∧ `channel_missing(NEW)` tak kosong. Didahului pagar murah
     (kolom relevan berubah). Pesan wajib menyebut kurangnya + konteks "perubahan" (bukan "tak bisa diaktifkan").
-  - ⬜ **T2** Alarm penerbit "Buffer kosong" menyertakan **sebab + langkah** dari `channel_readiness` yang sudah
+  - ✅ **T2** Alarm penerbit "Buffer kosong" menyertakan **sebab + langkah** dari `channel_readiness` yang sudah
     dipakai mesin (pola alarm koneksi-YouTube yang sudah benar). Fail-soft mutlak (RANJAU 4).
-  - ⬜ **T3** Checklist layar menampilkan label presisi yang SUDAH di tangan (`rd.missing`) untuk kasus
+  - ✅ **T3** Checklist layar menampilkan label presisi yang SUDAH di tangan (`rd.missing`) untuk kasus
     "belum dipilih" — nol perubahan DB, nol aturan baru.
-  - ⬜ **T4** Banner keadaan **"Belum lengkap"** menyebutkan: begitu dilengkapi produksi jalan sendiri, **tanpa**
+  - ✅ **T4** Banner keadaan **"Belum lengkap"** menyebutkan: begitu dilengkapi produksi jalan sendiri, **tanpa**
     perlu uji (kebingungan yang owner alami). Nol tombol baru.
-  - ⬜ **T5** Verifikasi: uji penuh SEKALI · lint sebelum=sesudah · buktikan di layar sungguhan · REALISASI ditutup.
+  - 🟡 **T5** Verifikasi **sebagian**: uji penuh **1523 hijau / 1 merah** (hanya T1 yg menunggu apply) · `tsc` bersih · lint **7 sebelum = 7 sesudah** · build lulus · **dibuktikan di permukaan**: string baru sampai ke bundel peramban, dan penyaring label pada keadaan NYATA owner (`missing=['karakter suara']`) menghasilkan 🔴 *Pengisi Suara (TTS)* → *"Belum dipilih/lengkap: karakter suara"*. **Sisa:** apply migrasi + deploy + REALISASI ditutup.
+  - ~~⬜ T5 rencana~~ (asli: uji penuh SEKALI · lint sebelum=sesudah · buktikan di layar sungguhan · REALISASI ditutup.
+  - **BUKTI UJI:** `test_sebab_channel_berhenti_sampai_ke_tenant.py` (6 uji) **5 MERAH dulu** · **5 sabotase**, satu di antaranya **menangkap uji palsu buatan saya sendiri** (jangkar hanya mencari nama helper ⇒ tetap hijau saat pemanggilannya dicabut; jangkar dikokohkan ke PEMANGGILAN + kata pencocok). `test_channel_aktif_tak_bisa_dijatuhkan.py` (5 uji + 1 skip) — 1 inti MERAH + 4 penjaga anti-regresi HIJAU (anti-sandera · nonaktif bebas · pintu aktivasi utuh · **MESIN bebas cabut koneksi YouTube**).
   - 🔒 **BATCH TERPISAH (jangan dicampur):** celah slot uji vs pengisi stok (uji kalah 2× di kejadian ini) —
     menyentuh rem anti-OOM `PRODUCER_MAX_RENDER=1`, risiko berbeda. Kerjakan SESUDAH B33 tuntas & ter-deploy.
 

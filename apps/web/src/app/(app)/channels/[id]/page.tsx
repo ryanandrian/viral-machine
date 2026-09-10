@@ -917,6 +917,15 @@ export default function ChannelDetailPage() {
               <strong style={{ fontSize: "var(--text-sm)" }}><Bi id={`Status: ${eff.label_id}`} en={`Status: ${eff.label_en}`} /></strong>
               {eff.reason && <div style={{ fontSize: "var(--text-sm)", color: "var(--text-secondary)", marginTop: "0.25rem" }}>{eff.reason}</div>}
               {eff.reco_id && <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.35rem" }}><Bi id={eff.reco_id} en={eff.reco_en!} /></div>}
+              {/* [11-Sep] Owner menyangka jeda WAJIB dibuka lewat uji — panel "Uji produksi" tetap
+                  terpampang di atas layar dan nol kalimat menjelaskan bedanya. Untuk "belum lengkap"
+                  produksi jalan SENDIRI begitu dilengkapi; hanya rem darurat yang menuntut uji. */}
+              {eff.key === "incomplete" && (
+                <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.35rem" }}>
+                  <Bi id="Begitu dilengkapi, produksi jalan sendiri — Anda tidak perlu menjalankan uji."
+                      en="Once completed, production resumes on its own — no test run needed." />
+                </div>
+              )}
               <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.625rem", flexWrap: "wrap" }}>
                 {eff.key === "incomplete" && <button className="btn btn-default btn-sm" onClick={() => setTab("settings")}><Settings size={14} /> <Bi id="Lengkapi konfigurasi" en="Complete config" /></button>}
                 {eff.key === "paused" && <button className="btn btn-default btn-sm" disabled={busy} onClick={() => pausePlay(true)}><Play size={14} /> <Bi id="Aktifkan" en="Activate" /></button>}
@@ -977,14 +986,27 @@ export default function ChannelDetailPage() {
                           en={`Your choice "${x.model}" is no longer in the catalogue — pick a replacement.`} />}
                 </div>);
               });
+              // [11-Sep] LABEL KURANG YANG SUDAH DI TANGAN. 16 label `channel_missing` diringkas
+              // jadi 7 baris di bawah ⇒ "karakter suara" kosong hanya tampil sebagai TITIK MERAH di
+              // "Pengisi Suara (TTS)". `alasanJsx` tak menolong: `channel_blockers` hanya terisi bila
+              // pilihan TERISI tapi tak sah — kasus "belum dipilih" nol alasan. Inilah sebab owner
+              // butuh 6 hari menemukan yang kurang. Nol data baru: hanya memunculkan `rd.missing`.
+              const kurangJsx = (kata: string) => {
+                if (!kata) return null;
+                const l = rd.missing.filter((m) => m.toLowerCase().includes(kata));
+                if (!l.length) return null;
+                return (<div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.15rem" }}>
+                  <Bi id={`Belum dipilih/lengkap: ${l.join(", ")}`} en={`Missing: ${l.join(", ")}`} />
+                </div>);
+              };
               const REQS = [
-                { id: "Niche", en: "Niche", bad: rd.missing.includes("niche"), kred: false, tab: "settings" as const, slot: "" },
-                { id: "Penulis Naskah (LLM)", en: "Script Writer (LLM)", bad: has("naskah"), kred: has("kunci naskah"), tab: "settings" as const, slot: "llm" },
-                { id: "Pengisi Suara (TTS)", en: "Voice (TTS)", bad: has("suara"), kred: has("kunci suara"), tab: "settings" as const, slot: "tts" },
-                { id: "Pembuat Visual", en: "Visual generator", bad: has("visual"), kred: has("kunci visual"), tab: "settings" as const, slot: "visual" },
-                { id: "Jadwal tayang", en: "Publish schedule", bad: has("jadwal"), kred: false, tab: "schedule" as const, slot: "" },
-                { id: "Koneksi YouTube + target", en: "YouTube connection + target", bad: has("youtube"), kred: false, tab: "settings" as const, slot: "" },
-                { id: "Telegram", en: "Telegram", bad: rd.missing.includes("Telegram"), kred: true, tab: "settings" as const, slot: "" },
+                { id: "Niche", en: "Niche", bad: rd.missing.includes("niche"), kred: false, tab: "settings" as const, slot: "", kata: "niche" },
+                { id: "Penulis Naskah (LLM)", en: "Script Writer (LLM)", bad: has("naskah"), kred: has("kunci naskah"), tab: "settings" as const, slot: "llm", kata: "naskah" },
+                { id: "Pengisi Suara (TTS)", en: "Voice (TTS)", bad: has("suara"), kred: has("kunci suara"), tab: "settings" as const, slot: "tts", kata: "suara" },
+                { id: "Pembuat Visual", en: "Visual generator", bad: has("visual"), kred: has("kunci visual"), tab: "settings" as const, slot: "visual", kata: "visual" },
+                { id: "Jadwal tayang", en: "Publish schedule", bad: has("jadwal"), kred: false, tab: "schedule" as const, slot: "", kata: "jadwal" },
+                { id: "Koneksi YouTube + target", en: "YouTube connection + target", bad: has("youtube"), kred: false, tab: "settings" as const, slot: "", kata: "youtube" },
+                { id: "Telegram", en: "Telegram", bad: rd.missing.includes("Telegram"), kred: true, tab: "settings" as const, slot: "", kata: "telegram" },
               ];
               return (
                 <>
@@ -995,6 +1017,7 @@ export default function ChannelDetailPage() {
                                : <Check size={14} style={{ color: "var(--success)", flexShrink: 0 }} />}
                         <span style={{ flex: 1, color: r.bad ? "var(--text-primary)" : "var(--text-secondary)" }}>
                           <Bi id={r.id} en={r.en} />
+                          {r.bad ? kurangJsx(r.kata) : null}
                           {r.bad && r.slot ? alasanJsx(r.slot) : null}
                         </span>
                         {r.bad && (r.kred
