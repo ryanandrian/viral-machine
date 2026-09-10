@@ -1428,6 +1428,72 @@ Rinciannya: `AGENT_AND_AFILIATION_ARCITECTURE.md` **§9e**.
 ---
 
 ### Changelog
+- **2026-09-11 — 🔒 [B33] CHANNEL AKTIF BISA DIJATUHKAN TAK-LENGKAP OLEH SATU PENYIMPANAN — SEDANG DIKERJAKAN (ketokan owner).**
+  **⚠️ TAHAN-COMPACTING: entri ini SUMBER KEBENARAN tunggal butir ini. Sesi baru — baca AKAR + RANJAU + TRACKER lalu lanjut dari ⬜ pertama. JANGAN deep-dive ulang, JANGAN susun rencana baru.**
+
+  **KEJADIAN (owner, 6–11 Sep):** channel `RAD The Explorer` diam **6 hari**, stok terkuras. Owner menerima alarm
+  Telegram *"Buffer kosong, slot HH:MM dilewati"* **berulang tiap jam tayang selama 5 hari** — tanpa pernah
+  menyebut sebabnya. 11 Sep dini hari owner membuka layar, menemukan pengisi suara belum dipilih, memilih &
+  menyimpan; **8 detik** kemudian producer langsung berproduksi (uji owner kalah slot 2×, baru jalan 13,4 mnt
+  kemudian lalu SUKSES). Owner sempat mengganti TTS ElevenLabs→OpenAI dan lupa memilih karakter suara.
+
+  **AKAR — SATU TITIK, bukan empat gejala.** Gerbang DB `channels_activation_gate` menjaga pintu
+  **"MENGAKTIFKAN"** (tak lengkap ⇒ ditolak + kurangnya disebut), tapi syaratnya
+  `NEW.is_active and (INSERT or not OLD.is_active)` ⇒ **channel yang SUDAH aktif tak pernah diperiksa lagi.**
+  Terukur: **4 channel separuh** di sistem (Misteri Samudra · Ayam Cajo Bakso Komik · dunia anak · komedi.kocak)
+  **semuanya NONAKTIF** — gerbang berhasil menolak mereka aktif; sementara channel AKTIF bisa jatuh separuh
+  kapan saja. Dari satu lubang itu 4 gejala mengalir: Simpan diterima → mesin melewati channel (hanya `logger.info`)
+  → alarm menyebut gejala bukan sebab → checklist layar merah tanpa keterangan.
+
+  **BUKTI EMPIRIS (bertransaksi ke DB live + ROLLBACK, nol data berubah):** (1) channel AKTIF+LENGKAP →
+  `voice_key=null` ⇒ **DITERIMA** (= lubang nyata) · (2) channel NONAKTIF+separuh → `is_active=true` ⇒ **DITOLAK**
+  *"Channel belum lengkap — tak bisa diaktifkan. Kurang: model naskah, kunci naskah, model suara, …"* (= gerbang
+  bekerja) · (3) channel NONAKTIF+separuh → ubah nama ⇒ **DITERIMA** (= tenant tak tersandera).
+
+  **PETA (sudah ditelusuri — jangan ulangi):** aturan kelengkapan = **`channel_missing(channels)` 16 label**
+  (niche · bahasa konten · penyedia/model/kunci ×3 slot · **karakter suara** · jenis+model+penyedia+kunci visual ·
+  jadwal posting · koneksi YouTube · Telegram) = **SUMBER KEBENARAN TUNGGAL**, dipakai FE (RPC `channel_readiness`)
+  DAN mesin (`readiness.py` → `channel_missing_by_id`). `channel_blockers` (0204) memberi alasan **hanya bila
+  pilihan TERISI tapi tak sah** ⇒ kasus **"belum dipilih" nol alasan** (itulah sebab checklist hanya titik merah).
+  3 trigger `channels`: `activation_gate` (setengah) · `rem_readonly` (**membuktikan trigger bisa membedakan
+  tenant vs mesin lewat `auth.uid()`**) · `catat_pengaktifan`. FE: `effectiveStatus` 5 keadaan; checklist meringkas
+  16 label → **7 baris** (label presisi SUDAH di tangan FE lewat `rd.missing`, hanya tak ditampilkan); tombol
+  **Aktifkan** ter-gate kelengkapan, tombol **Simpan** hanya ter-gate kecocokan akun (`coherentAcct`, lahir 20-Jul).
+
+  **RANJAU — HARAM dilanggar (lebih berbahaya dari bug aslinya):**
+  1. **ANTI-SANDERA:** channel yang SUDAH tak lengkap **WAJIB tetap bisa disimpan**. Channel bisa jatuh tak-lengkap
+     tanpa tenant menyentuhnya (model pilihannya dinonaktifkan admin di katalog). Pagar yang menolak SEMUA
+     penyimpanan saat tak lengkap = tenant mustahil memperbaiki channelnya sendiri.
+  2. **Channel NONAKTIF tetap bebas** disiapkan bertahap — di situ gerbang aktivasi sudah berjaga.
+  3. **BEBAN:** `channel_missing` ≈8 kueri; mesin meng-UPDATE `channels` sering (rem/stok/resumed_at). Pagar WAJIB
+     didahului pagar murah: jalan HANYA bila salah satu kolom relevan berubah.
+  4. **Alarm HARAM hilang:** menambahkan sebab ke alarm "Buffer kosong" wajib fail-soft — gerbang gagal dibaca ⇒
+     alarm tetap terkirim seperti sekarang.
+  5. **Jangan tambal 4 gejala terpisah** — itu 4 aturan yang pasti melenceng. Tutup lubangnya di sumber tunggal.
+  6. Cascade FK `channels_voice_key_fkey on delete set null` **secara teori** bisa terhalang pagar — diperiksa:
+     **nol jalur hapus** katalog dari layar admin (admin hanya `is_active=false`) ⇒ ranjau teoretis, **jangan**
+     di-over-engineer. Bila kelak ada jalur hapus katalog, tinjau ulang butir ini.
+
+  **TRACKER:**
+  - ✅ **T0** Uji pengikat lahir & **dibuktikan MERAH** — `tests/test_channel_aktif_tak_bisa_dijatuhkan.py`
+    (1 uji inti MERAH + 3 penjaga anti-regresi HIJAU: anti-sandera · nonaktif bebas · pintu aktivasi utuh).
+  - ⬜ **T1** Migrasi: perluas `trg_channels_activation_gate` → jaga pintu KEDUA. Tolak HANYA bila
+    `NEW.is_active` ∧ `channel_missing(OLD)` kosong ∧ `channel_missing(NEW)` tak kosong. Didahului pagar murah
+    (kolom relevan berubah). Pesan wajib menyebut kurangnya + konteks "perubahan" (bukan "tak bisa diaktifkan").
+  - ⬜ **T2** Alarm penerbit "Buffer kosong" menyertakan **sebab + langkah** dari `channel_readiness` yang sudah
+    dipakai mesin (pola alarm koneksi-YouTube yang sudah benar). Fail-soft mutlak (RANJAU 4).
+  - ⬜ **T3** Checklist layar menampilkan label presisi yang SUDAH di tangan (`rd.missing`) untuk kasus
+    "belum dipilih" — nol perubahan DB, nol aturan baru.
+  - ⬜ **T4** Banner keadaan **"Belum lengkap"** menyebutkan: begitu dilengkapi produksi jalan sendiri, **tanpa**
+    perlu uji (kebingungan yang owner alami). Nol tombol baru.
+  - ⬜ **T5** Verifikasi: uji penuh SEKALI · lint sebelum=sesudah · buktikan di layar sungguhan · REALISASI ditutup.
+  - 🔒 **BATCH TERPISAH (jangan dicampur):** celah slot uji vs pengisi stok (uji kalah 2× di kejadian ini) —
+    menyentuh rem anti-OOM `PRODUCER_MAX_RENDER=1`, risiko berbeda. Kerjakan SESUDAH B33 tuntas & ter-deploy.
+
+  **BATAS JUJUR:** kapan/mengapa karakter suara owner hilang **tak bisa dibuktikan** (nol audit-trail perubahan
+  `channels`); kesaksian owner (ganti ElevenLabs→OpenAI, lupa pilih suara) cocok dengan semua jejak lain.
+  **4 channel separuh TIDAK disentuh** — pagar hanya mencegah kejadian baru, dan T2 akan memberi tahu tenantnya.
+  ⏳ **DEPLOY: menunggu ketokan owner** (per batch).
 - **2026-09-02 (10) — 🤖 PENANDA "DIBUAT DENGAN AI" KE YOUTUBE: SAKLARNYA AKHIRNYA SAMPAI KE TENANT (ketokan owner).** Owner melapor setiap video berlabel AI di YouTube dan khawatir **merugikan monetisasi**. **Ditelusuri, nol asumsi:** label itu berasal dari kita — `youtube_publisher.py:229` mengirim `containsSyntheticMedia: true` tiap publish (masuk **14-Jun**, `d83149e`, *default ON*); judul & deskripsi TIDAK ditambahi teks apa pun (12 judul terakhir diperiksa, bersih) — labelnya YouTube yang menampilkan. Bernilai **True di 15/15 channel**, dan **tenant tak punya saklarnya di layar mana pun** (grep seluruh FE: hanya muncul sebagai baris skor di `compliance-view`). **Kekhawatiran monetisasi DIBANTAH sumber resmi** (YouTube Help, diperiksa 02-Sep-2026): mengungkap *"won't limit a video's audience or impact its eligibility to earn money"*; yang dihukum justru konsisten TIDAK mengungkap — label paksa, penghapusan konten, sampai **suspensi dari Partner Program**. Wajib hanya untuk konten **realistis yang bisa menyesatkan**; konten AI non-realistis tak wajib ⇒ menandai SEMUA video (perilaku kita) aman tapi lebih luas dari yang diwajibkan. **Ketokan owner: saklar per-channel, bawaan tetap MENYALA.** **Dikerjakan pada jalur yang ADA — nol kartu/tab/layar baru:** satu baris saklar ditempel di kartu **Pengaturan channel** (sebelah *Privasi publish*, sesama setelan penerbitan), memakai `fld-row`+`switch` yang sudah ada, dwibahasa, dengan kalimat yang menyebut risikonya apa adanya. **Rantai disambung UTUH di 9 titik** (tipe · nilai awal · state · **kolom ikut `select`** · penyegaran anti-timpa · simpan · penghitung belum-disimpan · pembatalan · layar) — satu mata putus = saklar yang MENIPU: layar berubah, mesin tetap menerima nilai lama. **Bukti:** 7 uji baru mengikat rantai penuh, **6 MERAH dulu** (1 hijau = mesin memang sudah benar, tak disentuh) · **4 sabotase merah** (kolom dicabut dari `select` · tak ikut disimpan · tak ikut penghitung · bawaan diubah jadi MATI) · izin ubah diverifikasi (trigger `0195` hanya memagari kolom rem darurat; nol GRANT kolom-spesifik) · `tsc` bersih · lint **7 sebelum = 7 sesudah** · build lulus · **1513 uji hijau**. **Nol perubahan mesin, nol migrasi, nol data tenant disentuh** — kolom `ai_disclosure` memang sudah ada sejak 14-Jun. **Batas jujur:** izin tulis diperiksa lewat trigger/GRANT, belum dicoba dengan sesi tenant nyata; dan "tidak memengaruhi monetisasi" adalah pernyataan KEBIJAKAN YouTube — apakah penonton enggan mengklik video berlabel AI adalah soal perilaku, bukan kebijakan, dan tak ada datanya. ✅ **TERPASANG 2026-09-02 17:53** (`6d22858`, `deploy_fe.sh` → `OK mv-web=active situs=200`). Dibuktikan pada bundel PRODUKSI: kueri kolom memuat `publish_privacy,ai_disclosure,duration_preset,…` (mata rantai paling mudah terlewat — tanpa ini saklar tampak menyala selamanya), label `"Beri tahu YouTube video dibuat dengan AI"` hadir, dan kalimat risikonya sampai ke peramban dalam **dua bahasa**.
 - **2026-09-02 (9) — 🎛️ DUA KENOP TERSIMPAN KE MESIN TAPI LAYAR DIAM — DITUTUP + PENJAGA MEKANIS (teguran owner).** Owner menegur: *"tenant menggeser slider, layar tidak bergerak — ini bug kerja terakhir, atau memang dari awal tidak serius?"* **Dijawab dengan riwayat, bukan pembelaan:** `git log -S` menunjukkan slider `max_chars_per_line` lahir **27-Jul (`6020bbe`)** bersama kartu Judul Pembuka, dan **NOL commit 02-Sep menyentuhnya** ⇒ **bukan regresi hari ini — kelalaian saya sejak awal**, dan hari ini pun saya hanya menguji yang saya ubah, bukan seluruh papan kenop. **Audit menyeluruh sesudah teguran menemukan BUKAN SATU melainkan DUA kenop mati** (yang kedua tak disebut siapa pun): Judul pembuka **9 kenop disimpan / 8 dibaca pratinjau** (`max_chars_per_line` menggantung) · Caption **11 / 10** (`max_words_per_line` menggantung). **Perbaikan MENIRU MESIN, bukan kira-kira:** judul dipecah dengan algoritma yang sama seperti `video_renderer._add_hook_title` (kata ditambah sampai panjang melewati batas huruf; batas lebar-nyata tetap ditangani pembungkusan kotak) · caption dikelompokkan **N kata per baris** seperti `_build_ass` (*"Grup kata ke baris fixed"*), kata terakhir tetap kata aktif berwarna. **PENJAGA MEKANIS (inti dari perbaikan ini):** `tests/test_setiap_kenop_menggerakkan_pratinjau.py` membandingkan **daftar kenop yang DISIMPAN** dengan **yang DIBACA pratinjau** dan merah begitu ada satu menggantung — sebab kenop yang lahir tanpa dipasang ke pratinjau **tidak menimbulkan galat apa pun**, layar tetap tampil rapi, dan tak ada yang menyadarinya kecuali tenant komplen. Mesin yang menjaga, bukan ingatan manusia. **Bukti:** 4 uji baru **MERAH dulu** · **2 sabotase merah** · **dibuktikan di layar** lewat render: judul 12/25/40 → **4/2/2 baris**, caption 1/2/4 kata → **4/2/1 baris** dengan kata aktif tetap benar · `tsc` bersih · lint **7 sebelum = 7 sesudah** · build lulus · **1506 uji hijau**. Nol DB tersentuh, nol perubahan mesin. ✅ **TERPASANG 2026-09-02 16:43** (`b30c8e5`, `deploy_fe.sh` → `OK mv-web=active situs=200`). Dibuktikan pada bundel PRODUKSI: `max_chars_per_line` **dan** `max_words_per_line` kini terbaca pratinjau, serta `pre-line` (pembungkusan baris dihormati) — ketiganya sampai ke peramban.
 - **2026-09-02 (8) — 📐 "KALAU TENANT UBAH UKURAN HURUF, RASIONYA VALID?" — DIUKUR: HAMPIR, LALU DIBUAT PERSIS.** Pertanyaan owner dijawab dengan **pengukuran peramban sungguhan**, bukan klaim: rentang penuh slider (36·58·90·120) × dua lebar kanvas (300px desktop · 360px HP), membandingkan `huruf_pratinjau / lebar_kanvas` terhadap `ukuran_huruf / 1080`. **Hasil awal: meleset TETAP 0,67%** di semua titik. **Sebab:** `100cqw` mengukur lebar **KONTEN** (di dalam garis tepi), sedangkan kanvas memakai `border: 1px` ⇒ acuan berkurang 2px, sementara kanvas video 1080px tak punya garis tepi. **Perbaikan:** garis tepi digambar sebagai **bayangan-dalam** (`box-shadow: inset 0 0 0 1px`) yang tak memakan ukuran kotak. **Diukur ulang: selisih terbesar 0,0002%** (sisa pembulatan sub-piksel peramban) ⇒ **persis setara video** pada seluruh rentang slider. **BATAS JUJUR yang ikut ditemukan — belum setara:** slider **"Maks. huruf per baris"** tersedia di layar dan dikirim ke mesin (`video_renderer.py:305` memotong baris pada batas itu), tetapi **pratinjau tidak menerapkannya** — teks contoh membungkus mengikuti lebar kanvas, jadi menggeser slider itu **tidak mengubah apa pun di pratinjau** dan titik potong barisnya bisa berbeda dari video. Ukuran · warna · posisi · garis tepi · bayangan = **persis**; **potongan baris = belum**. 🔒 Menunggu ketokan owner. **Bukti:** 1 uji baru **MERAH dulu** · `tsc` bersih · build lulus · **1502 uji hijau**. Nol DB tersentuh, nol perubahan mesin. ✅ **TERPASANG 2026-09-02 16:29** (`b95af7f`, `deploy_fe.sh` → `OK mv-web=active situs=200`). Dibuktikan pada BUILD PRODUKSI: `.cd-prv-canvas{aspect-ratio:9/16;…;box-shadow:inset 0 0 0 1px var(--border);…;container-type:inline-size}` (**bukan `border`** ⇒ acuan skala penuh) dan `.cd-prv2{grid-template-columns:300px 1fr}`.
