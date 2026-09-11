@@ -181,6 +181,13 @@ export default function ChannelDetailPage() {
   // vs "pilihan Anda sudah dipensiunkan penyedianya".
   type Alasan = { slot: string; code: string; model: string; provider: string; provider_name: string | null };
   const [rd, setRd] = useState<{ ready: boolean; missing: string[]; reasons?: Alasan[] } | null>(null);
+  // [11-Sep] Kabar PEMULIHAN. Owner memperbaiki channel yang mati 6 hari, menekan Simpan, dan
+  // yang layar katakan hanyalah "Tersimpan" — padahal pada detik itu channel berubah dari
+  // TERHENTI menjadi BERJALAN dan mesin mulai bekerja. Owner tak diberi tahu, lalu menebak:
+  // tombol uji masih terpampang ⇒ ia mengira wajib menguji ⇒ ujinya mengantre 12 menit.
+  // Layar SUDAH memegang jawabannya (`rd.ready`); ia hanya tak pernah mengatakannya.
+  const [pulihMsg, setPulihMsg] = useState(false);
+  const rdRef = useRef<{ ready: boolean } | null>(null);
   // F2-13b: data per-channel utk tab (channel_insights + production_runs + publish_slots)
   const [chCmp, setChCmp] = useState<Compliance | null>(null);
   const [chIns, setChIns] = useState<Insights | null>(null);
@@ -671,7 +678,18 @@ export default function ChannelDetailPage() {
     } catch { /* fail-soft */ }
     setSub((cfg as { subscription_status?: string } | null)?.subscription_status ?? null);
     { const w = (cfg as { viral_score_weights?: LearnedWeights } | null)?.viral_score_weights; setChLearned(w && w.weights ? w : null); }
-    try { const { data: rdd } = await supabase.rpc("channel_readiness", { p_channel_id: id }); if (rdd) setRd(rdd as { ready: boolean; missing: string[]; reasons?: Alasan[] }); } catch { /* non-fatal */ }
+    try {
+      const { data: rdd } = await supabase.rpc("channel_readiness", { p_channel_id: id });
+      if (rdd) {
+        const _baru = rdd as { ready: boolean; missing: string[]; reasons?: Alasan[] };
+        // Kelengkapan bisa berubah lewat BANYAK pintu (kartu Naskah · Suara · Visual · Pengaturan
+        // channel · jadwal · koneksi YouTube). `load()` dipanggil sesudah SEMUA jalur simpan, jadi
+        // satu pemeriksaan di sini mustahil melewatkan pintu mana pun — enam salinan di tiap tombol
+        // pasti melenceng. Nol kueri tambahan: `rd` memang sudah dimuat di sini.
+        if (rdRef.current?.ready === false && _baru.ready) setPulihMsg(true);
+        rdRef.current = { ready: _baru.ready };
+        setRd(_baru);
+      }; } catch { /* non-fatal */ }
     // F2-13b: insight per-channel (channel_insights by channel_id) + runs per-channel (production_runs).
     const { data: ci } = await supabase.from("channel_insights")
       .select("compliance,performance_grade,videos_analyzed,niche_weights,top_hooks,avoid_patterns,content_type_perf,top_topics,computed_at")
@@ -940,13 +958,35 @@ export default function ChannelDetailPage() {
 
       {/* Uji produksi channel (reuse TestNichePanel): konfirmasi + progres live + hasil sopan + tautan YT Studio.
           runLabel & pesan hasil adaptif konteks (halted=pulihkan / aktif=pratinjau). onComplete → segarkan banner. */}
+      {/* Kabar PEMULIHAN — ditaruh TEPAT DI ATAS panel uji, sebab di situlah mata tenant tertuju
+          dan di situlah salah-sangka lahir: owner melihat tombol uji lalu mengira wajib menguji.
+          Muncul HANYA saat keadaan berubah (tak-siap → siap); pesan yang muncul tiap muat halaman
+          akan diabaikan, dan pesan yang diabaikan sama saja dengan tak ada pesan. */}
+      {pulihMsg && (
+        <div className="card card-pad" style={{ marginBottom: "1rem", borderLeft: "3px solid var(--success)" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: "0.625rem" }}>
+            <Check size={18} style={{ color: "var(--success)", flexShrink: 0, marginTop: 2 }} />
+            <div style={{ flex: 1 }}>
+              <strong style={{ fontSize: "var(--text-sm)" }}><Bi id="Channel sudah lengkap — produksi berjalan lagi" en="Channel is complete — production resumed" /></strong>
+              <div style={{ fontSize: "var(--text-sm)", color: "var(--text-secondary)", marginTop: "0.25rem" }}>
+                <Bi id="Mesin akan memproduksi video untuk channel ini secara otomatis — Anda tidak perlu menjalankan uji. Uji hanya diperlukan bila Anda ingin memeriksa hasil setelan baru lebih dulu."
+                    en="The engine will produce videos for this channel automatically — no test run needed. Run a test only if you want to preview the new settings first." />
+              </div>
+              <button className="btn btn-ghost btn-sm" style={{ marginTop: "0.5rem" }} onClick={() => setPulihMsg(false)}>
+                <Bi id="Mengerti" en="Got it" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ marginBottom: "1rem" }}>
         <TestNichePanel
           getUrl={`/api/channels/${id}/test`}
           postUrl={`/api/channels/${id}/test`}
           title={<Bi id="Uji produksi channel" en="Channel production test" />}
           runLabel={eff.key === "halted" ? <Bi id="Jalankan uji & pulihkan" en="Run & recover" /> : <Bi id="Uji sekarang (privat)" en="Test now (private)" />}
-          confirmMessage={<Bi id="Tindakan ini memproduksi 1 video uji (privat di YouTube) untuk memeriksa konfigurasi channel Anda. Lanjutkan?" en="This produces 1 test video (private on YouTube) to check your channel configuration. Continue?" />}
+          confirmMessage={<Bi id="Tindakan ini memproduksi 1 video uji (privat di YouTube) untuk memeriksa konfigurasi channel Anda. Bila mesin sedang memproduksi video lain, uji Anda akan mengantre lebih dulu. Lanjutkan?" en="This produces 1 test video (private on YouTube) to check your channel configuration. If the engine is already producing another video, your test will queue behind it. Continue?" />}
           renderResult={channelTestResult}
           onComplete={() => load()}
           onGate={(g) => setUjiTerkunci(g?.allowed === false)}

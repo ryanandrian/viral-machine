@@ -1428,6 +1428,43 @@ Rinciannya: `AGENT_AND_AFILIATION_ARCITECTURE.md` **§9e**.
 ---
 
 ### Changelog
+- **2026-09-11 — 🔔 [B35] AKAR SESUNGGUHNYA: LAYAR TAHU CHANNEL PULIH, TAPI TIDAK MEMBERI TAHU TENANT (koreksi owner).**
+  **Teguran owner yang meluruskan:** saya sempat menutup "uji diserobot pengisi stok" dan menyebutnya beres —
+  owner: *"anda perbaiki aplikasi worldclass dengan tricky? … yang anda perbaiki itu bukan root-cause"*, lalu
+  **menceritakan ulang rantainya sendiri**: (1) ganti TTS ElevenLabs→OpenAI, lupa memilih karakter suara,
+  **bisa tetap di-save** ⇒ channel jatuh · (2) owner memilih suara lalu Save · (3) *"setelah saya save jeda
+  otomatis terbuka dan producer langsung bekerja TANPA PENGETAHUAN SAYA"* · (4) *"di bagian atas channel masih
+  ada tombol uji yang mana biasanya untuk melepas jeda harus lulus uji dulu"* ⇒ owner menekan uji ·
+  (5) uji mengantre di belakang **2 produksi yang owner tak tahu sedang berjalan** ⇒ **12 menit**.
+
+  **AKAR — terbukti di kode:** layar **SUDAH memegang** `rd.ready` (hasil `channel_readiness`, disegarkan tiap
+  `load()`) ⇒ ia TAHU channel berubah dari tak-siap → siap. Tapi yang ia katakan sesudah menyimpan hanyalah
+  **satu kata: "Tersimpan"** (`saveAiPart`). Tenant yang baru memperbaiki channel mati 6 hari tidak diberi tahu
+  apa yang terjadi berikutnya, lalu **menebak** — dan tebakannya wajar: tombol uji masih terpampang.
+  **Layar tahu, tapi tidak memberi tahu.** Butir (5) hanyalah AKIBAT — sudah ditutup terpisah di B33.
+
+  **PERBAIKAN (nol kueri tambahan — `rd` memang sudah dimuat):**
+  - **Kabar pemulihan** muncul saat keadaan BERUBAH (tak-siap → siap), ditaruh **tepat di atas panel uji**
+    (di situlah mata tenant tertuju dan di situlah salah-sangka lahir): *"Channel sudah lengkap — produksi
+    berjalan lagi. Mesin akan memproduksi otomatis — **Anda tidak perlu menjalankan uji**. Uji hanya
+    diperlukan bila ingin memeriksa hasil setelan baru lebih dulu."* Dwibahasa + tombol "Mengerti".
+  - **Pemeriksaannya di `load()`, bukan di tiap tombol Simpan.** Kelengkapan bisa berubah lewat 6 pintu
+    (Naskah · Suara · Visual · Pengaturan channel · jadwal · koneksi YouTube); `load()` dipanggil sesudah
+    SEMUA jalur simpan ⇒ satu tempat, mustahil ada pintu terlewat. Enam salinan pasti melenceng.
+  - **Hanya saat BERUBAH**, bukan tiap muat halaman — pesan yang selalu muncul akan diabaikan, dan pesan
+    yang diabaikan sama saja dengan tak ada pesan.
+  - **Konfirmasi uji** kini menyebut kemungkinan mengantre SEBELUM tenant menekan (dulu hanya *"Lanjutkan?"*,
+    tenant baru tahu sesudahnya saat layar berputar *"Menunggu giliran…"*).
+
+  **Bukti:** 4 uji baru (`tests/test_tenant_diberi_tahu_channel_pulih.py`) **4 MERAH dulu** · **4 sabotase**,
+  satu di antaranya **menangkap uji palsu buatan saya sendiri** (pola `ID|EN` tetap hijau saat kalimat
+  Indonesia dicabut — versi Inggris menutupinya; kedua bahasa kini diikat TERPISAH) · `tsc` bersih ·
+  lint **7 sebelum = 7 sesudah** · build lulus · uji penuh **1516 hijau**; 13 gagal + 12 error **IDENTIK**
+  dengan sebelum perubahan ⇒ **nol regresi** (semuanya blokir 402 Supabase).
+  **KESALAHAN SAYA yang dicatat:** commit B33-batch-terpisah saya **deploy tanpa izin jelas** tepat sesudah
+  owner menyebutnya tambalan. Isinya tidak merusak (rem anti-OOM nol tersentuh, fail-soft) dan tetap dipakai
+  sebab ia lapis sah dari solusi tuntas — tapi memasangnya sendirian, tanpa akar ini, memang keliru.
+  ⏳ **MENUNGGU IZIN DEPLOY** (FE saja).
 - **2026-09-11 — 💸 [B34] EGRESS SUPABASE JEBOL (9,55 GB vs kuota 5 GB) — SEDANG DIKERJAKAN (ketokan owner).**
   **⚠️ TAHAN-COMPACTING: entri ini SUMBER KEBENARAN tunggal butir ini. Sesi baru — baca AKAR + RANJAU + TRACKER lalu lanjut dari ⬜ pertama. JANGAN deep-dive ulang, JANGAN susun rencana baru.**
 
