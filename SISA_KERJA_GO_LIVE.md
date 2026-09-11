@@ -1428,6 +1428,68 @@ Rinciannya: `AGENT_AND_AFILIATION_ARCITECTURE.md` **§9e**.
 ---
 
 ### Changelog
+- **2026-09-11 — 💸 [B34] EGRESS SUPABASE JEBOL (9,55 GB vs kuota 5 GB) — SEDANG DIKERJAKAN (ketokan owner).**
+  **⚠️ TAHAN-COMPACTING: entri ini SUMBER KEBENARAN tunggal butir ini. Sesi baru — baca AKAR + RANJAU + TRACKER lalu lanjut dari ⬜ pertama. JANGAN deep-dive ulang, JANGAN susun rencana baru.**
+
+  **KEJADIAN:** 11-Sep proyek Supabase **DIBLOKIR** (`402 exceed_egress_quota`) — REST API mati, **seluruh tenant
+  berhenti produksi**. Galat pertama **05:37**, deploy B33 **10:18** ⇒ **BUKAN akibat B33** (terpisah 4,5 jam).
+  Dasbor: kuota gratis **5 GB**, terpakai **9,55 GB**, lewat **4,55 GB**; grafik **RATA ±400 MB/hari sejak 18-Agu**
+  (bukan lonjakan ⇒ pola loop, bukan ulah tenant). Periode tagihan mulai 18-Agu ⇒ reset ±18-Sep.
+  Jalur **psql langsung TIDAK diblokir** (hanya REST) ⇒ data aman & masih terbaca.
+
+  **AKAR — loop producer 10 detik.** `producer.run_forever(idle_seconds=10)` = **8.640 putaran/hari**; tiap putaran
+  `plan_and_submit` menarik `select("*")` seluruh channel aktif (**19,3 KB JSON**) + **±7 panggilan per channel**
+  (`gate_for_channel` · `channel_readiness`→`channel_missing` ±8 kueri internal · `buffer_depth` ×3 ·
+  `recent_nonready_streak` · `latest_failure`). **Statistik DB (sejak 22-Mei) membuktikan:** `content_inventory`
+  **8,0 jt** baca · `ai_providers` **6,4 jt** (tabel **9 BARIS**) · `worker_heartbeats` 4,4 jt · `tenant_configs`
+  4,3 jt · `ai_models` 4,1 jt · `channels` 3,7 jt. DB hanya **52 MB** ⇒ yang boros **frekuensi**, bukan besar data.
+  Rancangan lahir era 1–2 channel; kini **15 channel** ⇒ beban ×15 pada pemeriksaan yang sama.
+
+  **RANCANGAN (deep-dive owner: "jangan bikin masalah baru"):** loop TETAP berputar 10 detik untuk
+  `drain_direct` (antrean uji tenant — **ringan, 2,1 MB/hari**, wajib responsif), tapi `plan_and_submit`
+  (yang BERAT) hanya dijalankan bila sudah lewat `producer_stock_interval_sec` (**default 300**) sejak terakhir.
+  **Bahan SUDAH ADA seluruhnya — nol jalur baru:** `src/config/app_config.py::get_int` (cache TTL **300 s**,
+  **satu** kueri untuk SEMUA kunci, fail-safe ke default) **sudah diimpor producer** (`producer.py:71`
+  `get_int("buffer_target_days", 1)`); panel admin `app-config` sudah lengkap (edit + dwibahasa + `admin_audit`).
+  Karena cache 300 s ⇒ **perubahan nilai di panel berlaku ≤5 menit TANPA restart worker.**
+
+  **RANJAU — HARAM dilanggar:**
+  1. **JANGAN perlambat seluruh loop.** Mengganti `idle_seconds=10`→300 ikut memperlambat `drain_direct` ⇒
+     tombol "Uji sekarang" tenant baru jalan ≤5 menit — **memperparah keluhan owner 11-Sep**. Pemisahan =
+     KEHARUSAN, bukan over-engineering.
+  2. **Nilai 0 = bencana** — `time.sleep(0)` ⇒ loop tanpa henti, CPU 100%, egress meledak. Wajib `max(30, …)`
+     (pola `max(1, …)` sudah dipakai di `producer.py:52,72-74`).
+  3. **Fail-safe** — DB tak terjangkau ⇒ `get_int` mengembalikan default 300, mesin JANGAN berhenti.
+  4. **JANGAN sentuh publisher (30 dtk)** — hemat kecil (54 MB/hari), risiko video terbit TERLAMBAT. Keputusan terpisah.
+  5. **SATU kenop saja.** Owner sudah menegur over-engineering; tiap kenop tambahan = satu lagi yang bisa salah.
+  6. **Kenop baru wajib lahir LENGKAP** (§3): baris DB + `description` + metadata FE dwibahasa + satuan —
+     tanpa metadata ia jatuh ke grup "Lainnya" tanpa label bermakna.
+
+  **DAMPAK TERUKUR:** pemeriksaan berat **8.640 → 288/hari (30× lebih jarang)**. Perkiraan egress
+  **±400 MB/hari → ±50–100 MB/hari** (±12 GB → **1,5–3 GB/bulan**) ⇒ **muat kuota gratis 5 GB**.
+  ⚠️ **Angka ini PERKIRAAN** — wajib dibuktikan dgn memantau dasbor 2–3 hari sesudah terpasang.
+  **BONUS:** pengisi stok jadi jarang ⇒ tak lagi sering merebut slot dari uji tenant (celah 11-Sep) — **tanpa**
+  menyentuh rem anti-OOM `PRODUCER_MAX_RENDER=1`.
+
+  **TRACKER:**
+  - ⬜ **T1** Migrasi: kunci `producer_stock_interval_sec` = 300 + `description` (bahasa admin).
+  - ⬜ **T2** `producer.run_forever`: pisahkan irama — `drain_direct` tiap putaran; `plan_and_submit` bila
+    `now - terakhir >= max(30, get_int("producer_stock_interval_sec", 300))`.
+  - ⬜ **T3** Metadata FE `CFG_META` — label/satuan/keterangan dwibahasa + grup yang tepat.
+  - ⬜ **T4** Uji: MERAH dulu + sabotase (irama tak dipisah · nilai 0 lolos · fail-safe dicabut).
+  - ⬜ **T5** Verifikasi: uji penuh SEKALI · lint sebelum=sesudah · deploy BE (menunggu ketokan) ·
+    **pantau dasbor egress 2–3 hari** · REALISASI ditutup.
+
+  **PEMULIHAN HARI INI (keputusan owner, BUKAN pekerjaan saya):** di **paket gratis spend cap = $0 dan TAK BISA
+  dilepas** (sumber: Supabase Docs cost-control) ⇒ hanya 2 jalan: **(a)** upgrade Pro **$25** (include 250 GB
+  egress) lalu **turun lagi ke gratis** setelah perbaikan terbukti — biaya **sekali**, bukan langganan; atau
+  **(b)** tunggu reset ±18-Sep (**±7 hari seluruh tenant tak produksi**). Owner menyatakan pemasukan MesinViral
+  masih puluhan ribu rupiah/bulan ⇒ $25 berat. **Perbaikan ini TIDAK memulihkan blokir hari ini** — ia mencegah
+  terulang bulan depan.
+  🔒 **PINDAH KE VPS SENDIRI — DITUNDA (analisis owner 11-Sep):** VPS **2 core / RAM 3,8 GB** sudah dipakai
+  mesin render + situs; Supabase self-host realistis butuh **4+ GB** ⇒ perlu VPS kedua (biaya sering mirip $25).
+  Dan bila pemborosan ini tak diperbaiki, **masalahnya ikut pindah** — di VPS owner yang menanggung bandwidth.
+  Tinjau ulang SESUDAH angka egress terbukti turun.
 - **2026-09-11 — 🔒 [B33] CHANNEL AKTIF BISA DIJATUHKAN TAK-LENGKAP OLEH SATU PENYIMPANAN — SEDANG DIKERJAKAN (ketokan owner).**
   **⚠️ TAHAN-COMPACTING: entri ini SUMBER KEBENARAN tunggal butir ini. Sesi baru — baca AKAR + RANJAU + TRACKER lalu lanjut dari ⬜ pertama. JANGAN deep-dive ulang, JANGAN susun rencana baru.**
 
