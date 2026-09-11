@@ -1464,7 +1464,7 @@ Rinciannya: `AGENT_AND_AFILIATION_ARCITECTURE.md` **§9e**.
   **KESALAHAN SAYA yang dicatat:** commit B33-batch-terpisah saya **deploy tanpa izin jelas** tepat sesudah
   owner menyebutnya tambalan. Isinya tidak merusak (rem anti-OOM nol tersentuh, fail-soft) dan tetap dipakai
   sebab ia lapis sah dari solusi tuntas — tapi memasangnya sendirian, tanpa akar ini, memang keliru.
-  ⏳ **MENUNGGU IZIN DEPLOY** (FE saja).
+  ✅ **TERPASANG 2026-09-11 15:07** (`e6a1b26`, `deploy_fe.sh` → `OK mv-web=active situs=200`). Dibuktikan pada bundel PRODUKSI, **kedua bahasa**: *"Channel sudah lengkap"* · *"tidak perlu menjalankan uji"* · *"akan mengantre lebih dulu"* · `no test run needed` · `queue behind it`. **Batas jujur:** belum dicoba dengan tangan sendiri di layar — pembuktian berhenti di bundel yang dikirim peramban. Uji nyata baru bisa dilakukan sesudah blokir Supabase dicabut (mesin perlu hidup agar channel bisa berubah tak-siap → siap).
 - **2026-09-11 — 💸 [B34] EGRESS SUPABASE JEBOL (9,55 GB vs kuota 5 GB) — SEDANG DIKERJAKAN (ketokan owner).**
   **⚠️ TAHAN-COMPACTING: entri ini SUMBER KEBENARAN tunggal butir ini. Sesi baru — baca AKAR + RANJAU + TRACKER lalu lanjut dari ⬜ pertama. JANGAN deep-dive ulang, JANGAN susun rencana baru.**
 
