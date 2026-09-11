@@ -36,12 +36,16 @@ LAYAR = {
     "baru": "apps/web/src/app/(app)/channels/new/page.tsx",
     "studio": "apps/web/src/app/(app)/niche-studio/page.tsx",
     "jadwal": "apps/web/src/app/(app)/schedule/page.tsx",
+    # ditambahkan saat audit pra-deploy 11-Sep: 2 pesan di sini lolos dari pemindai pertama
+    # sebab teksnya diawali tanda kutip DI DALAM template (`"${nama}" belum bisa…`).
+    "daftar": "apps/web/src/app/(app)/channels/page.tsx",
 }
 # 13 pesan yang terukur satu-bahasa (11-Sep)
 SATU_BAHASA = [
     "Durasi tersimpan", "Belum bisa diaktifkan", "Server tak terjangkau", "Niche tersimpan",
     "Nama channel wajib", "Pilih minimal 1 niche", "Mode rotasi butuh minimal 2 niche",
     "Sesi tak valid", "Niche dibuat", "DNA tersimpan", "Jadwal disimpan", "slot (batas tier)",
+    "belum bisa diaktifkan", "Belum bisa diaktifkan",
 ]
 
 
@@ -87,14 +91,22 @@ class TestMemakaiJalurResmiBukanJalurBaru(unittest.TestCase):
 
 class TestTigaBelasPesanTakLagiSatuBahasa(unittest.TestCase):
     def test_tak_ada_lagi_pesan_indonesia_telanjang(self):
+        """PEMINDAI DIPERBAIKI SESUDAH SABOTASE (audit pra-deploy 11-Sep). Versi sebelumnya hanya
+        melihat teks yang PERSIS sesudah kurung buka `setX(`, sehingga teks di dalam percabangan
+        (`setErr(cocok ? "Belum bisa diaktifkan…" : e.message)`) LOLOS — sabotase tetap hijau.
+        Kini: setiap baris yang memanggil penyetel pesan diperiksa SELURUH teks kutipnya."""
+        PENYETEL = re.compile(r'\bset[A-Za-z0-9]*(?:Msg|Err|Toast)[A-Za-z0-9]*\(')
+        KUTIP = re.compile(r'`([^`]*)`|"([^"]*)"|\'([^\']*)\'')
         gagal = []
         for nama, rel in LAYAR.items():
-            src = _tanpa_komentar(_isi(rel))
-            for frasa in SATU_BAHASA:
-                # frasa boleh ada di penerjemah/kode, TAPI tak boleh lagi jadi isi setXxx(...)
-                for m in re.finditer(r'set\w*(?:Msg|Err|Toast)\w*\(\s*(?:\{[^}]*text:\s*)?[`"\']([^`"\']*)', src):
-                    if frasa in m.group(1):
-                        gagal.append(f"{nama}: {frasa}")
+            for baris in _tanpa_komentar(_isi(rel)).splitlines():
+                if not PENYETEL.search(baris):
+                    continue
+                for m in KUTIP.finditer(baris):
+                    isi = m.group(1) or m.group(2) or m.group(3) or ""
+                    for frasa in SATU_BAHASA:
+                        if frasa in isi:
+                            gagal.append(f"{nama}: {frasa}")
         self.assertEqual(
             sorted(set(gagal)), [],
             "pesan sesaat masih disimpan sebagai teks Indonesia telanjang (seharusnya KODE yang "

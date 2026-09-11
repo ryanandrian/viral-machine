@@ -111,6 +111,12 @@ const MSG_TEKS: Record<string, (v: string) => React.ReactNode> = {
   slots_full:          (v) => <Bi id={`Channel ini sudah ${v}/${v} slot (batas paket)`}
                                   en={`This channel is already at ${v}/${v} slots (plan limit)`} />,
   save_failed:         (v) => <Bi id={`Gagal: ${v}`} en={`Failed: ${v}`} />,
+  // Layar DAFTAR channel (ditemukan saat audit pra-deploy 11-Sep — pemindai pertama saya
+  // melewatkannya sebab teksnya diawali tanda kutip di dalam template).
+  activate_incomplete_named: (v) => <Bi id={`"${v}" belum bisa diaktifkan — lengkapi dulu (buka Kelola).`}
+                                        en={`"${v}" can't be activated yet — complete its setup first (open Manage).`} />,
+  activate_incomplete_creds: () => <Bi id="Belum bisa diaktifkan — lengkapi konfigurasi & kredensial dulu (buka Kelola)."
+                                       en="Can't activate yet — complete the configuration and credentials first (open Manage)." />,
   // Empat pesan ber-PETUNJUK yang dulu memakai pola "garis miring" (dua bahasa berjejer dalam satu
   // kalimat, sehingga tenant melihat keduanya sekaligus). Dipindah ke jalur resmi ini — pola itu
   // kini NOL di seluruh layar tenant.

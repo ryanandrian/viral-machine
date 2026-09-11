@@ -1469,7 +1469,20 @@ Rinciannya: `AGENT_AND_AFILIATION_ARCITECTURE.md` **§9e**.
   dikokohkan ⇒ dicari HANYA di dalam blok daftar, per-kode) · `tsc` bersih · lint **11 sebelum = 11 sesudah**
   (dibandingkan lewat worktree) · build lulus · uji penuh **1522 hijau**; 13 gagal + 12 error **IDENTIK**
   dengan sebelum perubahan ⇒ **nol regresi** (semuanya blokir 402 Supabase).
-  ⏳ **MENUNGGU IZIN DEPLOY** (FE saja).
+  **➕ AUDIT PRA-DEPLOY menemukan 2 pesan LAGI (total 17, bukan 15).** Owner memberi izin deploy *"jika
+  anda sudah yakin 100% valid tanpa cacat/fosil/ranjau"* ⇒ saya audit sendiri dulu, dan benar ada sisa:
+  `channels/page.tsx` (layar DAFTAR channel) memuat 2 pesan satu-bahasa yang **lolos dari pemindai pertama**
+  sebab teksnya diawali tanda kutip DI DALAM template (`"${nama}" belum bisa diaktifkan…`). Ditutup dengan
+  2 kode baru (`activate_incomplete_named` · `activate_incomplete_creds`) + render lewat penerjemah.
+  **PEMINDAI UJI IKUT DIPERBAIKI — sabotase membuktikannya palsu:** versi pertama hanya melihat teks yang
+  PERSIS sesudah `setX(`, sehingga teks di dalam PERCABANGAN (`setErr(cocok ? "Belum bisa…" : e.message)`)
+  lolos ⇒ sabotase tetap hijau. Kini setiap baris yang memanggil penyetel pesan diperiksa SELURUH teks
+  kutipnya; **dua sabotase** (teks polos · teks dalam percabangan) sama-sama merah.
+  **Audit penutup:** nol state ber-kode yang dirender polos di seluruh layar tenant ⇒ mustahil tenant
+  melihat kode mentah `MSG:xxx`. (`review/page.tsx` menyimpan JSX `<Bi>` — sudah dwibahasa, sah.)
+  ✅ **TERPASANG 2026-09-11** — lint **14 sebelum = 14 sesudah** (dibandingkan lewat `git worktree`,
+  berkas kerja nol tersentuh) · `tsc` bersih · build lulus · uji penuh **1522 hijau**, 13 gagal + 12 error
+  IDENTIK dengan sebelum perubahan ⇒ nol regresi.
 - **2026-09-11 — 🔔 [B35] AKAR SESUNGGUHNYA: LAYAR TAHU CHANNEL PULIH, TAPI TIDAK MEMBERI TAHU TENANT (koreksi owner).**
   **Teguran owner yang meluruskan:** saya sempat menutup "uji diserobot pengisi stok" dan menyebutnya beres —
   owner: *"anda perbaiki aplikasi worldclass dengan tricky? … yang anda perbaiki itu bukan root-cause"*, lalu

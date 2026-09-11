@@ -8,6 +8,7 @@ import { effectiveStatus, ChannelStatusBadge, type Eff } from "@/lib/channel-sta
 import ConfirmDialog from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import "./channels.css";
+import { PesanGalat, msg } from "@/components/gate-message";
 
 // D2 Channels List — Phase 9.2 VERTICAL SLICE (wired ke Supabase v2, anon + RLS).
 // Membuktikan pola stack untuk fan-out 28 layar: READ (RLS) + WRITE (toggle is_active,
@@ -201,14 +202,14 @@ export default function ChannelsPage() {
     // Gerbang: aktivasi HANYA bila kesiapan terbaca DAN ready → pesan RAMAH (bukan error DB mentah).
     if (next) {
       const rd = rdMap[c.id];
-      if (!rd || !rd.ready) { setErr(`"${c.channel_name || "Channel"}" belum bisa diaktifkan — lengkapi: ${rd?.missing?.join(", ") || "konfigurasi & kredensial"} (buka Kelola).`); return; }
+      if (!rd || !rd.ready) { setErr(msg("activate_incomplete_named", c.channel_name || "Channel")); return; }
     }
     setBusyId(c.id); setErr(null);
     setChannels((prev) => prev.map((x) => (x.id === c.id ? { ...x, is_active: next } : x))); // optimistic
     const { error } = await supabase.from("channels").update({ is_active: next }).eq("id", c.id);
     if (error) {
       setChannels((prev) => prev.map((x) => (x.id === c.id ? { ...x, is_active: !next } : x))); // revert
-      setErr(/channel|gate|missing|aktif/i.test(error.message) ? "Belum bisa diaktifkan — lengkapi konfigurasi & kredensial dulu (buka Kelola)." : error.message);
+      setErr(/channel|gate|missing|aktif/i.test(error.message) ? msg("activate_incomplete_creds") : error.message);
     }
     setBusyId(null);
   }
@@ -240,7 +241,7 @@ export default function ChannelsPage() {
         </div>
       )}
 
-      {err && <div style={{ color: "var(--danger, #ef4444)", fontSize: "var(--text-sm)", marginBottom: "1rem" }}>{err}</div>}
+      {err && <div style={{ color: "var(--danger, #ef4444)", fontSize: "var(--text-sm)", marginBottom: "1rem" }}><PesanGalat text={err} /></div>}
 
       <div className="ch-filters">
         <div className="segmented">{FILTERS.map(([k, id, en]) => <button key={k} aria-selected={f === k} onClick={() => setF(k)}><Bi id={id} en={en} /></button>)}</div>
