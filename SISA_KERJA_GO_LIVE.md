@@ -1472,12 +1472,12 @@ Rinciannya: `AGENT_AND_AFILIATION_ARCITECTURE.md` **§9e**.
   menyentuh rem anti-OOM `PRODUCER_MAX_RENDER=1`.
 
   **TRACKER:**
-  - ⬜ **T1** Migrasi: kunci `producer_stock_interval_sec` = 300 + `description` (bahasa admin).
-  - ⬜ **T2** `producer.run_forever`: pisahkan irama — `drain_direct` tiap putaran; `plan_and_submit` bila
+  - ✅ **T1** Migrasi `0219_jeda_pemeriksaan_stok_bisa_diatur.sql` **DITERAPKAN ke DB** — kunci `producer_stock_interval_sec`=**300**, ber-`description` bahasa admin (menyebut: makin kecil makin boros kuota · nilai <30 dianggap 30 · **tak** memengaruhi tombol "Uji sekarang" tenant). `on conflict do nothing` ⇒ idempoten, nol timpa nilai yang kelak diubah admin.
+  - ✅ **T2** `producer.run_forever` IRAMA DIPISAH: `drain_direct` tiap putaran (10 dtk); `plan_and_submit` bila `now − terakhir >= max(30, get_int("producer_stock_interval_sec", 300))`. ~~rancangan asli: — `drain_direct` tiap putaran; `plan_and_submit` bila
     `now - terakhir >= max(30, get_int("producer_stock_interval_sec", 300))`.
-  - ⬜ **T3** Metadata FE `CFG_META` — label/satuan/keterangan dwibahasa + grup yang tepat.
-  - ⬜ **T4** Uji: MERAH dulu + sabotase (irama tak dipisah · nilai 0 lolos · fail-safe dicabut).
-  - ⬜ **T5** Verifikasi: uji penuh SEKALI · lint sebelum=sesudah · deploy BE (menunggu ketokan) ·
+  - ✅ **T3** Metadata FE `CFG_META` lengkap: label + `desc` + `hint` **dwibahasa**, satuan `U_DETIK`, grup `G_ENGINE` (Performa Mesin Tren). `hint` menegaskan dua hal yang paling mudah disalahpahami: antrean uji tenant tak terpengaruh, dan nilai 0 akan melumpuhkan server.
+  - ✅ **T4** `tests/test_irama_producer_hemat_kuota.py` (7 uji) **6 MERAH dulu** (1 hijau = antrean uji memang sudah benar, tak disentuh) · **4 sabotase merah**: irama disatukan lagi · pagar nilai 0 dicabut · **antrean uji ikut diperlambat (RANJAU 1)** · label panel dicabut. **Satu uji palsu buatan sendiri tertangkap**: jangkar memakai `strip().startswith(...)` ⇒ tetap merah walau kode sudah benar, sebab `strip()` membuang indentasi yang justru jadi buktinya; jangkar dikokohkan ke **indentasi bersarang + syarat waktu**.
+  - 🟡 **T5** Verifikasi **sebagian**: `tsc` bersih · lint **2 sebelum = 2 sesudah** · uji B33+B34 **19 hijau**. ⚠️ **Uji penuh: 1505 hijau, 13 gagal + 12 error — SELURUHNYA karena blokir 402** (galat harfiah `exceed_egress_quota`; ke-9 berkas yang gagal semuanya membaca lewat REST). **Bukan regresi** — sebelum blokir suite ini 1523 hijau. Wajib diulang sesudah blokir dicabut. **Sisa:** deploy BE (menunggu ketokan) · ~~asli:
     **pantau dasbor egress 2–3 hari** · REALISASI ditutup.
 
   **PEMULIHAN HARI INI (keputusan owner, BUKAN pekerjaan saya):** di **paket gratis spend cap = $0 dan TAK BISA

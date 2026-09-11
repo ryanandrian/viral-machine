@@ -888,17 +888,40 @@ def plan_and_submit(sb, pool: ThreadPoolExecutor, sem: threading.Semaphore) -> i
 
 
 def run_forever(idle_seconds: int = 10) -> None:
-    """Loop persisten Producer (§12c). MAX_CONCURRENT_RENDER = core (semaphore = rem)."""
+    """Loop persisten Producer (§12c). MAX_CONCURRENT_RENDER = core (semaphore = rem).
+
+    DUA IRAMA, bukan satu (11-Sep: kuota egress Supabase JEBOL — 9,55 GB vs jatah 5 GB, proyek
+    diblokir, SELURUH tenant berhenti produksi):
+      • `drain_direct`    — TIAP putaran (10 dtk). Antrean tombol "Uji sekarang" milik tenant.
+        Ringan (2,1 MB/hari) dan WAJIB responsif.
+      • `plan_and_submit` — tiap `producer_stock_interval_sec` (kenop admin, bawaan 300 dtk).
+        Inilah yang berat: `select("*")` seluruh channel aktif (19,3 KB) + ±7 panggilan per channel
+        (gate · readiness/channel_missing ±8 kueri · buffer_depth ×3 · streak · latest_failure).
+        Dijalankan 8.640×/hari, padahal stok video hanya berubah beberapa kali sehari ⇒ 8,0 juta
+        baca `content_inventory` dan 6,4 juta baca `ai_providers` (tabel 9 BARIS).
+
+    HARAM menyatukannya lagi: memperlambat seluruh loop ikut memperlambat antrean uji tenant —
+    memperparah keluhan owner 11-Sep (uji kalah rebutan slot 2×, baru jalan 13,4 menit).
+    `get_int` = pembaca ber-cache (TTL 300 dtk, SATU kueri untuk semua kunci, fail-safe ke default)
+    yang SUDAH dipakai fungsi lain di berkas ini ⇒ nol jalur baca baru, nol beban tambahan.
+    """
     from supabase import create_client
+    from src.config.app_config import get_int
     sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
     MAX = max_concurrent_render()
     logger.info(f"[Producer] start | MAX_CONCURRENT_RENDER={MAX} (core) | target stok = sadar-jadwal (slot/hari × app_config.buffer_target_days; override channels.buffer_depth)")
     sem = threading.Semaphore(MAX)
+    stok_terakhir = 0.0
     with ThreadPoolExecutor(max_workers=MAX, thread_name_prefix="producer") as pool:
         while True:
             try:
                 drain_direct(sb, pool, sem)     # jalur prioritas (test/retry/admin) — semaphore SAMA
-                plan_and_submit(sb, pool, sem)  # stok-buffer dgn slot core sisa
+                # Batas bawah 30 dtk DIPAKSA: nilai 0 dari panel admin membuat `time.sleep(0)`
+                # berputar tanpa henti — CPU 100% dan egress justru MELEDAK.
+                jeda_stok = max(30, get_int("producer_stock_interval_sec", 300))
+                if (time.time() - stok_terakhir) >= jeda_stok:
+                    stok_terakhir = time.time()
+                    plan_and_submit(sb, pool, sem)  # stok-buffer dgn slot core sisa
             except Exception as e:
                 logger.error(f"[Producer] loop error: {e}")
             time.sleep(idle_seconds)
