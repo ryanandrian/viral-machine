@@ -137,6 +137,29 @@ def reap_stuck_direct_jobs(sb=None) -> dict:
             "error": "Uji melewati batas waktu (proses macet). Silakan coba lagi.",
             "completed_at": now.isoformat(),
         }).eq("id", r["id"]).execute()
+
+    # ── LUBANG KEDUA: job 'pending' yang TAK PERNAH dapat giliran ────────────────
+    # Penyapu di atas hanya mengenal job yang SUDAH mulai lalu macet. Job yang belum pernah
+    # mulai tak dikenal siapa pun ⇒ layar tenant berputar "Menunggu giliran…" TANPA AKHIR:
+    # tak pernah gagal, tak pernah jalan. Tenant menyimpulkan tombolnya rusak.
+    # Terbukti 10–11 Sep: uji owner menunggu 13,4 menit (kalah slot 2×) tanpa satu pun kabar.
+    #
+    # Batasnya SENGAJA jauh lebih longgar dari TTL 'producing' (30 mnt): mengantre itu WAJAR —
+    # satu produksi lain butuh 8–15 menit, dan beberapa channel bisa mengantre di depan. Batas
+    # ketat justru menggagalkan uji yang sah. Pesannya menyebut SEBAB (mesin sibuk), bukan
+    # menuduh tenant atau menyiratkan kerusakan.
+    cutoff_antre = now - timedelta(minutes=float(os.getenv("DIRECT_JOB_PENDING_TTL_MINUTES", "120")))
+    antre = sb.table("direct_jobs").select("id, created_at").eq("status", "pending").execute().data or []
+    basi = [r for r in antre if (_parse(r.get("created_at")) or now) < cutoff_antre]
+    for r in basi:
+        sb.table("direct_jobs").update({
+            "status": "failed",
+            "error": "Uji dibatalkan karena terlalu lama mengantre — mesin sedang sibuk memproduksi video lain. Silakan coba lagi.",
+            "completed_at": now.isoformat(),
+        }).eq("id", r["id"]).execute()
+    if basi:
+        logger.info(f"[janitor] reap_stuck_direct_jobs: {len(basi)} uji BASI di antrean → failed")
+    stuck = stuck + basi
     if stuck:
         logger.info(f"[janitor] reap_stuck_direct_jobs: {len(stuck)} job direct macet → failed")
     return {"direct_reaped": len(stuck)}

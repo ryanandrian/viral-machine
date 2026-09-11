@@ -1552,8 +1552,38 @@ Rinciannya: `AGENT_AND_AFILIATION_ARCITECTURE.md` **§9e**.
   - 🟡 **T5** Verifikasi **sebagian**: uji penuh **1523 hijau / 1 merah** (hanya T1 yg menunggu apply) · `tsc` bersih · lint **7 sebelum = 7 sesudah** · build lulus · **dibuktikan di permukaan**: string baru sampai ke bundel peramban, dan penyaring label pada keadaan NYATA owner (`missing=['karakter suara']`) menghasilkan 🔴 *Pengisi Suara (TTS)* → *"Belum dipilih/lengkap: karakter suara"*. **Sisa: NIHIL** — migrasi ter-apply 10:16, BE ter-deploy 10:18, FE 10:21, semua diverifikasi di produksi. Uji penuh B33 wajib diulang sesudah blokir Supabase dicabut (13 kegagalan saat ini murni 402).
   - ~~⬜ T5 rencana~~ (asli: uji penuh SEKALI · lint sebelum=sesudah · buktikan di layar sungguhan · REALISASI ditutup.
   - **BUKTI UJI:** `test_sebab_channel_berhenti_sampai_ke_tenant.py` (6 uji) **5 MERAH dulu** · **5 sabotase**, satu di antaranya **menangkap uji palsu buatan saya sendiri** (jangkar hanya mencari nama helper ⇒ tetap hijau saat pemanggilannya dicabut; jangkar dikokohkan ke PEMANGGILAN + kata pencocok). `test_channel_aktif_tak_bisa_dijatuhkan.py` (5 uji + 1 skip) — 1 inti MERAH + 4 penjaga anti-regresi HIJAU (anti-sandera · nonaktif bebas · pintu aktivasi utuh · **MESIN bebas cabut koneksi YouTube**).
-  - 🔒 **BATCH TERPISAH (jangan dicampur):** celah slot uji vs pengisi stok (uji kalah 2× di kejadian ini) —
-    menyentuh rem anti-OOM `PRODUCER_MAX_RENDER=1`, risiko berbeda. Kerjakan SESUDAH B33 tuntas & ter-deploy.
+  - ✅ **BATCH TERPISAH — DITUNTASKAN 11-Sep** (syaratnya terpenuhi: B33 ter-deploy 10:21, B34 13:33).
+    **Teguran owner yang memicunya:** saya sempat menyarankan menunda karena B34 *"kemungkinan sudah
+    mengecilkan masalah"* — owner: **"mengecilkan masalah bukan membereskan masalah, mesinviral adalah
+    worldclass application bukan produk amatiran"**. Benar: celah yang jarang terjadi lebih berbahaya, sebab
+    ketika terjadi tak ada yang menyangka. Owner juga menegur saya **menganalisis ulang dari nol padahal
+    rencana ini sudah terkunci** — analisisnya memang sampai ke akar yang SAMA, tapi membuang waktu owner.
+    **AKAR (dari `worker.log`, terukur):** 00:39:13 uji owner masuk antrean · 00:45:58,7 produksi stok #1
+    selesai · 00:45:59,8 Telegram terkirim ⇒ slot benar-benar bebas · ~00:46:0x **stok #2 mengambil slot** ·
+    00:52:39 uji owner baru jalan (menunggu **13,4 menit**, kalah **2×**). Sebabnya **JENDELA BALAPAN di
+    `plan_and_submit`**: `drain_direct` gagal `sem.acquire` di AWAL putaran (slot masih sibuk) ⇒ uji
+    dilewati; lalu pengumpulan defisit memutari 9 channel × ±7 kueri (butuh detik-an); di tengah itu slot
+    bebas, dan `sem.acquire()` mengambilnya berdasarkan keadaan **LAMA**. Urutan `drain_direct` sebelum
+    `plan_and_submit` TIDAK cukup — keadaan berubah di tengah putaran.
+    **DIBERESKAN, dan ternyata TANPA menyentuh rem anti-OOM** (dugaan awal di rencana ini keliru — justru
+    kabar baik): **(P1)** `plan_and_submit` menanyakan antrean uji **tepat sebelum** `sem.acquire` dan
+    **mengalah** (`return 0`) bila ada yang menunggu — fail-soft: pembacaan gagal ⇒ stok lanjut seperti
+    perilaku lama (berhenti total jauh lebih buruk). **(P2)** lubang kedua ditutup: penyapu hanya mengenal
+    job `producing` yang macet, **bukan** `pending` yang tak pernah dapat giliran ⇒ layar tenant berputar
+    *"Menunggu giliran…"* **tanpa akhir**, tak pernah gagal tak pernah jalan, tenant menyimpulkan tombolnya
+    rusak. Kini ber-TTL `DIRECT_JOB_PENDING_TTL_MINUTES` (**120 mnt**, sengaja jauh lebih longgar dari TTL
+    `producing` 30 mnt sebab mengantre itu WAJAR) dengan pesan yang menyebut **sebab**: *"mesin sedang sibuk
+    memproduksi video lain"*.
+    **BATAS JUJUR:** sisa celah **beberapa detik** — tenant menekan uji tepat saat stok mengambil slot tetap
+    menunggu satu siklus produksi. Menutupnya berarti **menghentikan produksi yang sedang jalan** = membuang
+    kredit AI tenant ⇒ **sengaja tidak dilakukan**. Juga: `drain_direct` **nol jejak log**, jadi rekonstruksi
+    di atas konsisten dengan seluruh bukti waktu tapi **bukan bukti langsung**.
+    **Bukti:** `tests/test_uji_tenant_tak_bisa_diserobot.py` (7 uji) **6 MERAH dulu** · **4 sabotase**, satu
+    di antaranya **menangkap uji palsu buatan saya sendiri** (jangkar `return|break` tetap hijau saat
+    `return 0` dicabut, sebab ia menangkap `break` milik loop `deficits`; dikokohkan ⇒ `return` wajib berada
+    **ANTARA** pemeriksaan antrean dan `sem.acquire`) · uji penuh **1512 hijau**; 13 gagal + 12 error
+    **IDENTIK** dengan sebelum perubahan ⇒ **nol regresi** (semuanya blokir 402).
+    ⏳ **MENUNGGU IZIN DEPLOY** (BE saja).
 
   **BATAS JUJUR:** kapan/mengapa karakter suara owner hilang **tak bisa dibuktikan** (nol audit-trail perubahan
   `channels`); kesaksian owner (ganti ElevenLabs→OpenAI, lupa pilih suara) cocok dengan semua jejak lain.

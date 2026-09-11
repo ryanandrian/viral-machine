@@ -871,6 +871,27 @@ def plan_and_submit(sb, pool: ThreadPoolExecutor, sem: threading.Semaphore) -> i
             deficits.append((target - stok, ch))
     deficits.sort(key=lambda x: -x[0])   # buffer paling tipis dulu (§12c prioritas)
 
+    # ── STOK MENGALAH PADA UJI TENANT YANG SUDAH MENUNGGU ────────────────────────
+    # Kejadian 10–11 Sep (jejak worker.log): 00:39:13 owner menekan "Uji sekarang" · 00:45:58
+    # produksi stok #1 SELESAI (slot bebas) · 00:46:06 produksi stok #2 MEREBUT slot · 00:52:39
+    # uji owner baru jalan — menunggu 13,4 menit, kalah 2×.
+    #
+    # Sebabnya JENDELA BALAPAN di fungsi ini: `drain_direct` gagal di AWAL putaran (slot masih
+    # sibuk), lalu pengumpulan defisit di atas memutari 9 channel × ±7 kueri — butuh detik-an.
+    # Di tengah itu slot bebas, dan `sem.acquire()` di bawah mengambilnya berdasarkan keadaan LAMA.
+    # Urutan `drain_direct` sebelum `plan_and_submit` TIDAK cukup: keadaan berubah di tengah putaran.
+    #
+    # Karena itu antrean uji ditanya ULANG tepat sebelum mengambil slot. FAIL-SOFT: bila pembacaan
+    # gagal, anggap nol antrean dan lanjutkan — produksi stok berhenti total jauh lebih buruk.
+    try:
+        _antre = (sb.table("direct_jobs").select("id", count="exact")
+                  .eq("status", "pending").limit(1).execute())
+        if (_antre.count or 0) > 0:
+            logger.info("[Producer] stok MENGALAH — ada uji tenant menunggu giliran")
+            return 0
+    except Exception as e:
+        logger.warning(f"[Producer] baca antrean uji gagal (non-fatal, stok lanjut): {e}")
+
     submitted = 0
     for _, ch in deficits:
         if not sem.acquire(blocking=False):
