@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Tv, Check, Lock, Video } from "lucide-react";
 import { HelpDot } from "@/components/help-dot";
 import { createClient } from "@/lib/supabase/client";
+import { PesanGalat, msg } from "@/components/gate-message";
 
 // Tambah channel (pasca-onboarding) — form fokus channel (bukan wizard akun). INSERT channels (client-RLS)
 // + guard kuota max_channels per tier. Pola sama onboarding increment 1.
@@ -68,12 +69,12 @@ export default function NewChannelPage() {
 
   async function create() {
     setErr(null);
-    if (!name.trim()) return setErr("Nama channel wajib.");
-    if (sel.length === 0) return setErr("Pilih minimal 1 niche.");
-    if (nicheMode === "random" && sel.length < 2) return setErr("Mode rotasi butuh minimal 2 niche.");
+    if (!name.trim()) return setErr(msg("name_required"));
+    if (sel.length === 0) return setErr(msg("niche_min_1"));
+    if (nicheMode === "random" && sel.length < 2) return setErr(msg("niche_min_2"));
     setBusy(true);
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setBusy(false); return setErr("Sesi tak valid."); }
+    if (!user) { setBusy(false); return setErr(msg("session_invalid")); }
     // Jam publish awal: app_config.default_publish_slots (0125, admin-editable — no-hardcode); fallback aman.
     let slots: string[] = ["13:00"];
     try {
@@ -155,7 +156,7 @@ export default function NewChannelPage() {
           )}
           <div><label className="label"><Bi id="Bahasa konten" en="Content language" /></label><select className="input" value={clang} onChange={(e) => setClang(e.target.value)}>{langs.map((l) => <option key={l.locale} value={l.locale}>{l.display_name}</option>)}</select></div>
           <div><label className="label">Privacy publish</label><div className="radio-row">{["private", "public"].map((p) => <span key={p} className={`radio-pill${privacy === p ? " sel" : ""}`} onClick={() => setPrivacy(p)}>{p}</span>)}</div><div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: ".25rem" }}><Bi id="Default private (trial-safe). Ganti ke public saat hasil cocok." en="Default private (trial-safe). Switch to public when satisfied." /></div></div>
-          {err && <div style={{ color: "var(--danger)", fontSize: "var(--text-sm)" }}>{err === "__dup_target__" ? <Bi id="Channel YouTube itu baru saja dipakai channel lain — pilih channel YouTube berbeda." en="That YouTube channel was just taken by another channel — pick a different one." /> : err}</div>}
+          {err && <div style={{ color: "var(--danger)", fontSize: "var(--text-sm)" }}>{err === "__dup_target__" ? <Bi id="Channel YouTube itu baru saja dipakai channel lain — pilih channel YouTube berbeda." en="That YouTube channel was just taken by another channel — pick a different one." /> : <PesanGalat text={err} />}</div>}
           <div className="muted" style={{ fontSize: "var(--text-xs)" }}><Bi id="Channel dibuat sebagai DRAFT (non-aktif). Di halaman berikutnya: lengkapi model AI + key (vault), voice, caption — ada checklist kesiapan; aktifkan saat lengkap." en="Created as a DRAFT (inactive). Next page: complete AI models + key (vault), voice, captions — a readiness checklist guides you; activate once complete." /></div>
           <div style={{ display: "flex", gap: ".5rem" }}>
             <button className="btn btn-default" disabled={busy} onClick={create}>{busy ? "Membuat…" : <Bi id="Buat channel" en="Create channel" />}</button>

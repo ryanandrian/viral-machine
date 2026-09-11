@@ -6,6 +6,7 @@ import { Plus, Sparkles, X, Clock, Calendar } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { PageHeader } from "@/components/page-header";
 import "./schedule.css";
+import { PesanGalat, msg } from "@/components/gate-message";
 
 // D7 Schedule — model terkunci §12c: jadwal = JAM PUBLISH per-channel di `channels.publish_slots`
 // (zona TENANT). Tulis via RPC set_channel_publish_slots (validasi jumlah ≤ tier max_videos_per_day).
@@ -58,8 +59,8 @@ export default function SchedulePage() {
     if (!add?.channel_id || !add.time) return;
     const ch = channels.find((c) => c.id === add.channel_id); if (!ch) return;
     const cur = ch.publish_slots ?? [];
-    if (cur.length >= cap) { setToast(`Channel ini sudah ${cap}/${cap} slot (batas tier)`); return; }
-    if (await saveSlots(add.channel_id, [...cur, add.time])) { setAdd(null); setToast("Jadwal disimpan"); }
+    if (cur.length >= cap) { setToast(msg("slots_full", cap)); return; }
+    if (await saveSlots(add.channel_id, [...cur, add.time])) { setAdd(null); setToast(msg("schedule_saved")); }
   }
   async function removeSlot(channel_id: string, time: string) {
     const ch = channels.find((c) => c.id === channel_id); if (!ch) return;
@@ -121,7 +122,7 @@ export default function SchedulePage() {
         </>
       )}
 
-      {toast && <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 70, background: "#1f2937", color: "#fff", padding: "0.625rem 1rem", borderRadius: 8, border: "1px solid rgba(255,255,255,0.12)", boxShadow: "0 6px 20px rgba(0,0,0,0.35)", fontSize: "var(--text-sm)" }}>{toast}</div>}
+      {toast && <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 70, background: "#1f2937", color: "#fff", padding: "0.625rem 1rem", borderRadius: 8, border: "1px solid rgba(255,255,255,0.12)", boxShadow: "0 6px 20px rgba(0,0,0,0.35)", fontSize: "var(--text-sm)" }}><PesanGalat text={toast} /></div>}
     </>
   );
 }

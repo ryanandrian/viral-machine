@@ -1428,6 +1428,48 @@ Rinciannya: `AGENT_AND_AFILIATION_ARCITECTURE.md` **§9e**.
 ---
 
 ### Changelog
+- **2026-09-11 — 🌐 [B36] 15 PESAN SESAAT KE TENANT MASIH SATU BAHASA — DITUTUP LEWAT JALUR YANG SUDAH ADA (pertanyaan owner).**
+  **Pemicu:** owner bertanya *"apakah hanya pesan ini yang belum dwibahasa, atau banyak lagi?"* Diukur: label &
+  tulisan TETAP di layar **bersih** (dijaga `test_dwibahasa_fe_tak_pincang`), tapi **pesan sesaat** —
+  toast/notice sesudah menekan tombol — bocor. Penjaga lama tak menjangkaunya: ia menghitung KESEIMBANGAN
+  `data-id`/`data-en`, sedangkan teks yang sama sekali TAK memakai mekanisme dwibahasa **tak terlihat** olehnya.
+  Terukur **15** (bukan 13 — 2 lagi di `slotMsg` baru ketahuan saat dikerjakan): setelan channel 7 ·
+  channel baru 4 · studio niche 2 · jadwal 2.
+
+  **KOREKSI RENCANA — teguran owner:** *"sudah ada jalur dwibahasa di sistem ini, mengapa anda punya rencana
+  buat alur baru lagi?"* Rencana pertama saya hendak menyalin pola **"garis miring"** (`"Tersimpan / saved"`,
+  4 tempat warisan) ke 13 pesan lain. Itu **bukan jalur resmi** — tenant melihat KEDUA bahasa berjejer
+  sekaligus — dan menyalinnya = memperbanyak jalur kedua. **Owner benar.**
+
+  **DIKERJAKAN LEWAT JALUR RESMI yang sudah ada:** pesan disimpan sebagai **KODE** teks biasa, diterjemahkan
+  SAAT DITAMPILKAN oleh `PesanGalat` (`components/gate-message.tsx`) → `<Bi id en/>` → CSS menyembunyikan
+  bahasa yang tak dipakai. Preseden: penolakan gerbang `GATE:…` (B24). **Keuntungan:** tipe state tetap
+  `string` ⇒ **nol perubahan tipe**, nol risiko pada logika yang sudah ada. **Bonus:** 4 pesan garis-miring
+  warisan ikut dipindah ⇒ pola itu kini **NOL** di seluruh layar tenant.
+
+  **TIGA RANJAU yang ditemukan saat mengerjakan — semuanya ikut dibereskan:**
+  1. **Tiga tempat MENGENDUS ISI pesan** untuk memilih warna (`.includes("tersimpan")` pada `nicheMsg` ·
+     `presetMsg` · `slotMsg`). Mengubah teks jadi kode tanpa ini ⇒ pesan sukses berubah **MERAH**. Diganti
+     helper `pesanSukses()` — sekaligus membuang endusan teks yang rapuh.
+  2. **Daftar putih auto-hilang** (`SINGKAT`) berisi TEKS: *"Niche tersimpan"*, *"Durasi tersimpan"*.
+     Tanpa diperbarui ke kode, konfirmasi sukses **tak pernah hilang** dari layar. Diperbaiki.
+  3. Tempat TAMPIL wajib dibungkus `PesanGalat` — kalau tidak tenant melihat kode mentah `MSG:xxx`.
+
+  **KESALAHAN SAYA yang dicatat (owner: *"tugas utama anda penyempurnaan, bukan merusak"*):** saat
+  membandingkan lint sebelum/sesudah, saya mencadangkan 4 berkas yang **semuanya bernama `page.tsx`** ⇒
+  nama bentrok ⇒ **keempatnya tertimpa isi `schedule/page.tsx`**. Ketahuan dari build gagal
+  (`Can't resolve './schedule.css'`). **Nol kerusakan permanen** — belum ter-commit, dipulihkan `git checkout`,
+  lalu dikerjakan ulang dan diverifikasi utuh (1584/169/141/128 baris, masing-masing 1 `export default`).
+  **Pelajaran yang mengikat:** perbandingan sebelum/sesudah kini lewat **`git worktree` terpisah** — berkas
+  kerja nol tersentuh. Jangan pernah lagi mencadangkan berkas ber-basename sama ke satu direktori.
+
+  **Bukti:** 6 uji baru (`tests/test_pesan_sesaat_dwibahasa.py`, 17 sub-uji) **4 MERAH dulu** · **4 sabotase**,
+  satu di antaranya **menangkap uji palsu buatan saya sendiri** (jangkar `p.find(f"{k}:")` menemukan kunci di
+  daftar `pesanSukses`, bukan di daftar terjemahan ⇒ tetap hijau saat satu terjemahan Inggris dicabut;
+  dikokohkan ⇒ dicari HANYA di dalam blok daftar, per-kode) · `tsc` bersih · lint **11 sebelum = 11 sesudah**
+  (dibandingkan lewat worktree) · build lulus · uji penuh **1522 hijau**; 13 gagal + 12 error **IDENTIK**
+  dengan sebelum perubahan ⇒ **nol regresi** (semuanya blokir 402 Supabase).
+  ⏳ **MENUNGGU IZIN DEPLOY** (FE saja).
 - **2026-09-11 — 🔔 [B35] AKAR SESUNGGUHNYA: LAYAR TAHU CHANNEL PULIH, TAPI TIDAK MEMBERI TAHU TENANT (koreksi owner).**
   **Teguran owner yang meluruskan:** saya sempat menutup "uji diserobot pengisi stok" dan menyebutnya beres —
   owner: *"anda perbaiki aplikasi worldclass dengan tricky? … yang anda perbaiki itu bukan root-cause"*, lalu

@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import { effectiveStatus, subIsProducing, TONE } from "@/lib/channel-status";
 import PresetTables from "@/components/preset-tables";
 import ConfirmDialog from "@/components/confirm-dialog";
+import { PesanGalat, msg, pesanSukses } from "@/components/gate-message";
 import { ComplianceView, type Compliance } from "@/components/compliance-view";
 import { InsightsView, type Insights, type LearnedWeights } from "@/components/insights-view";
 import { LearningCurveCard } from "@/components/learning-curve-card";
@@ -350,7 +351,7 @@ export default function ChannelDetailPage() {
     setAiMsg(null); setSavingAi(el);
     const { error } = await supabase.from("channels").update(patch).eq("id", id);
     setSavingAi("");
-    setAiMsg({ el, text: error ? `Gagal: ${error.message}` : "Tersimpan", ok: !error });
+    setAiMsg({ el, text: error ? msg("save_failed", error.message) : "Tersimpan", ok: !error });
     if (!error) load();
   }
   // [Fix 20-Jul, insiden MVT] PAKET SATU SLOT WAJIB SEPADAN: akun(kunci) harus milik vendor
@@ -392,9 +393,9 @@ export default function ChannelDetailPage() {
     // ditolak server (STEP 0) sebelum biaya; pesan memandu langkah berikutnya.
     const _presetMode = ch?.duration_preset != null ? presetModes[ch.duration_preset] : undefined;
     if (vModel?.component === "video" && _presetMode !== "ai_video")
-      setAiMsg({ el: "visual", ok: true, text: "Tersimpan — LANGKAH BERIKUT: ubah Durasi channel ke preset text-to-video (8s), lalu Simpan / saved — NEXT: set the channel Duration to the text-to-video preset (8s), then Save" });
+      setAiMsg({ el: "visual", ok: true, text: msg("saved_need_video_preset") });
     else if (vModel && vModel.component !== "video" && _presetMode === "ai_video")
-      setAiMsg({ el: "visual", ok: true, text: "Tersimpan — LANGKAH BERIKUT: ubah Durasi channel keluar dari preset text-to-video / saved — NEXT: change the channel Duration away from the text-to-video preset" });
+      setAiMsg({ el: "visual", ok: true, text: msg("saved_leave_video_preset") });
   };
   // Akun valid utk vendor penyedia terpilih (untuk pemilih akun; auto bila 1, pilih bila >1).
   const acctsFor = (provider: string) => {
@@ -453,10 +454,10 @@ export default function ChannelDetailPage() {
     const _savedVm = ch?.visual_mode ?? "";
     if (error) setPresetMsg(`Gagal: ${error.message}`);
     else if (_mode === "ai_video" && !_savedVm.startsWith("ai_video:"))
-      setPresetMsg("Durasi tersimpan — LANGKAH BERIKUT: pilih MODEL VIDEO di kartu Model AI (Visual), lalu Simpan (produksi menolak jalan sampai keduanya serasi) / saved — NEXT: pick a VIDEO model in the AI Models (Visual) card, then Save");
+      setPresetMsg(msg("duration_need_video_model"));
     else if (_mode !== "ai_video" && _savedVm.startsWith("ai_video:"))
-      setPresetMsg("Durasi tersimpan — LANGKAH BERIKUT: ganti model visual ke model GAMBAR di kartu Model AI (produksi menolak jalan sampai keduanya serasi) / saved — NEXT: switch the visual model to an IMAGE model in the AI Models card");
-    else setPresetMsg("Durasi tersimpan");
+      setPresetMsg(msg("duration_need_image_model"));
+    else setPresetMsg(msg("duration_saved"));
     if (!error) load();
   }
 
@@ -466,8 +467,8 @@ export default function ChannelDetailPage() {
     const sorted = Array.from(new Set(next.map((t) => t.trim()).filter(Boolean))).sort();
     const { error } = await supabase.rpc("set_channel_publish_slots", { p_channel_id: id, p_slots: sorted });
     setSavingSlot(false);
-    if (error) { setSlotMsg(`Gagal: ${error.message}`); return; }
-    setSlots(sorted); setSlotMsg("Jadwal tersimpan");
+    if (error) { setSlotMsg(msg("save_failed", error.message)); return; }
+    setSlots(sorted); setSlotMsg(msg("schedule_saved"));
   }
 
   // Hasil uji KHUSUS channel (renderResult TestNichePanel) — sopan (target tenant Indonesia), sebut model
@@ -578,7 +579,7 @@ export default function ChannelDetailPage() {
   async function pausePlay(toActive: boolean) {
     setErr(null); setBusy(true);
     // Gerbang: aktivasi HANYA bila readiness terbaca DAN ready. rd null (cek gagal) → JANGAN izinkan (default aman).
-    if (toActive && (!rd || !rd.ready)) { setBusy(false); setTab("settings"); return setTestMsg("Belum bisa diaktifkan — lengkapi konfigurasi dulu (lihat checklist)."); }
+    if (toActive && (!rd || !rd.ready)) { setBusy(false); setTab("settings"); return setTestMsg(msg("activate_incomplete")); }
     const { error } = await supabase.from("channels").update({ is_active: toActive }).eq("id", id);
     setBusy(false);
     if (error) return setErr(error.message);
@@ -762,7 +763,7 @@ export default function ChannelDetailPage() {
       const j = await r.json();
       if (r.ok && j.authorize_url) { window.location.href = j.authorize_url; return; }
       setYtConnBusy(false); setErr(j.error || "Gagal memulai koneksi.");
-    } catch { setYtConnBusy(false); setErr("Server tak terjangkau."); }
+    } catch { setYtConnBusy(false); setErr(msg("server_unreachable")); }
   }
 
   async function save() {
@@ -780,7 +781,7 @@ export default function ChannelDetailPage() {
         setNicheMsg(nErr.message.includes("entitlement") ? "Niche itu di luar paket Anda" : `Gagal: ${nErr.message}`);
         return;
       }
-      setNicheMsg("Niche tersimpan");
+      setNicheMsg(msg("niche_saved"));
     }
     const { error } = await supabase.from("channels").update({
       channel_name: name.trim() || null, content_language: clang, publish_privacy: privacy, ai_disclosure: aiDisc,
@@ -823,7 +824,9 @@ export default function ChannelDetailPage() {
   // Konfirmasi sukses hilang sendiri setelah 5 dtk. Pesan GAGAL & pesan ber-PETUNJUK ("LANGKAH BERIKUT")
   // sengaja MENETAP — daftar putih eksplisit, bukan tebak-tebakan kata, supaya tak ada pesan penting hilang.
   useEffect(() => {
-    const SINGKAT = new Set(["Tersimpan", "Niche tersimpan", "Durasi tersimpan"]);
+    // Dulu daftar TEKS; sejak pesan jadi KODE (11-Sep) ia wajib memuat kodenya — kalau tidak,
+    // konfirmasi sukses tak pernah hilang dari layar.
+    const SINGKAT = new Set(["Tersimpan", msg("niche_saved"), msg("duration_saved")]);
     const t: ReturnType<typeof setTimeout>[] = [];
     const bersihkan = <T,>(nilai: T | null, cocok: (v: T) => boolean, clear: () => void) => {
       if (nilai != null && cocok(nilai)) t.push(setTimeout(clear, 5000));
@@ -907,7 +910,7 @@ export default function ChannelDetailPage() {
               : <button className="btn btn-secondary" disabled={busy} onClick={() => pausePlay(true)}><Play size={15} /> <Bi id="Aktifkan" en="Activate" /></button>
           )}
         </div>
-        {testMsg && <div style={{ flexBasis: "100%", fontSize: "var(--text-xs)", color: "var(--text-secondary)", marginTop: ".5rem" }}>{testMsg}</div>}
+        {testMsg && <div style={{ flexBasis: "100%", fontSize: "var(--text-xs)", color: "var(--text-secondary)", marginTop: ".5rem" }}><PesanGalat text={testMsg} /></div>}
       </div>
 
       {/* [B25] Keadaan "dihentikan sistem" punya panelnya sendiri: menjawab APA yang terjadi, APAKAH
@@ -1124,7 +1127,7 @@ export default function ChannelDetailPage() {
             <input type="time" className="input" style={{ width: "fit-content" }} value={newSlot} onChange={(e) => setNewSlot(e.target.value)} />
             <button className="btn btn-secondary btn-sm" disabled={savingSlot || !newSlot} onClick={() => { if (newSlot) { saveSlots([...slots, newSlot]); setNewSlot(""); } }}><Plus size={14} /> <Bi id="Tambah slot" en="Add slot" /></button>
             {savingSlot && <Loader2 size={14} className="spin" />}
-            {slotMsg && <span style={{ fontSize: "var(--text-xs)", color: slotMsg.includes("tersimpan") ? "var(--success)" : "var(--danger,#ef4444)" }}>{slotMsg}</span>}
+            {slotMsg && <span style={{ fontSize: "var(--text-xs)", color: pesanSukses(slotMsg) ? "var(--success)" : "var(--danger,#ef4444)" }}><PesanGalat text={slotMsg} /></span>}
           </div>
         </div>
       )}
@@ -1238,9 +1241,9 @@ export default function ChannelDetailPage() {
                 <Bi id="Hanya niche yang tersedia untuk paket Anda + niche khusus milik Anda." en="Only niches available to your plan + your own custom niches." />
                 {" "}<Link href="/niches" className="link"><Bi id="Ajukan niche khusus →" en="Request custom niche →" /></Link>
               </div>
-              {nicheMsg && <div style={{ fontSize: "var(--text-sm)", marginTop: "0.4rem", color: nicheMsg.includes("tersimpan") ? "var(--success)" : "var(--danger,#ef4444)" }}>{nicheMsg}</div>}
+              {nicheMsg && <div style={{ fontSize: "var(--text-sm)", marginTop: "0.4rem", color: pesanSukses(nicheMsg) ? "var(--success)" : "var(--danger,#ef4444)" }}><PesanGalat text={nicheMsg} /></div>}
             </div>
-            {err && <div style={{ color: "var(--danger, #ef4444)", fontSize: "var(--text-sm)" }}>{err === "__dup_target__" ? <Bi id="Channel YouTube ini sudah dipakai channel lain — satu channel YouTube hanya untuk satu channel MesinViral." en="This YouTube channel is already used by another channel — one YouTube channel maps to one MesinViral channel." /> : err}</div>}
+            {err && <div style={{ color: "var(--danger, #ef4444)", fontSize: "var(--text-sm)" }}>{err === "__dup_target__" ? <Bi id="Channel YouTube ini sudah dipakai channel lain — satu channel YouTube hanya untuk satu channel MesinViral." en="This YouTube channel is already used by another channel — one YouTube channel maps to one MesinViral channel." /> : <PesanGalat text={err} />}</div>}
           </div>
           {saveBar({ ubah: dirty.ident, sibuk: busy, simpan: save, batal: undo.ident,
             pesan: saved ? <span style={{ color: "var(--success)" }}><Check size={13} style={{ verticalAlign: "-2px" }} /> <Bi id="Tersimpan" en="Saved" /></span> : null })}
@@ -1253,7 +1256,7 @@ export default function ChannelDetailPage() {
           </p>
           <PresetTables selectable selectedSeconds={dpreset} onSelect={setDpreset} />
           {saveBar({ ubah: dirty.preset, sibuk: savingPreset, simpan: savePreset, batal: undo.preset,
-            pesan: presetMsg ? <span style={{ color: presetMsg.includes("tersimpan") ? "var(--success)" : "var(--danger, #ef4444)" }}>{presetMsg}</span> : null })}
+            pesan: presetMsg ? <span style={{ color: pesanSukses(presetMsg) ? "var(--success)" : "var(--danger, #ef4444)" }}><PesanGalat text={presetMsg} /></span> : null })}
         </div>
 
         {/* Catatan kunci → Kredensial (pindah dari sini ke Page Credential, tenant-wide) */}
@@ -1274,7 +1277,7 @@ export default function ChannelDetailPage() {
           )}
           {acctPicker(llmProv, llmAcct, setLlmAcct)}
           {saveBar({ ubah: dirty.llm, sibuk: savingAi === "llm", simpan: saveLlm, batal: undo.llm,
-            pesan: aiMsg?.el === "llm" ? <span style={{ color: aiMsg.ok ? "var(--success)" : "var(--danger,#ef4444)" }}>{aiMsg.text}</span> : null })}
+            pesan: aiMsg?.el === "llm" ? <span style={{ color: aiMsg.ok ? "var(--success)" : "var(--danger,#ef4444)" }}><PesanGalat text={aiMsg.text} /></span> : null })}
         </div>
 
         {/* CARD: Pengisi Suara (TTS) */}
@@ -1305,7 +1308,7 @@ export default function ChannelDetailPage() {
           })()}
           {acctPicker(ttsProv, ttsAcct, setTtsAcct)}
           {saveBar({ ubah: dirty.tts, sibuk: savingAi === "tts", simpan: saveTts, batal: undo.tts,
-            pesan: aiMsg?.el === "tts" ? <span style={{ color: aiMsg.ok ? "var(--success)" : "var(--danger,#ef4444)" }}>{aiMsg.text}</span> : null })}
+            pesan: aiMsg?.el === "tts" ? <span style={{ color: aiMsg.ok ? "var(--success)" : "var(--danger,#ef4444)" }}><PesanGalat text={aiMsg.text} /></span> : null })}
         </div>
 
         {/* CARD: Pembuat Visual (Image/Video Generator) */}
@@ -1344,7 +1347,7 @@ export default function ChannelDetailPage() {
           })()}
           {acctPicker(visualProv, visualAcct, setVisualAcct)}
           {saveBar({ ubah: dirty.visual, sibuk: savingAi === "visual", simpan: saveVisual, batal: undo.visual,
-            pesan: aiMsg?.el === "visual" ? <span style={{ color: aiMsg.ok ? "var(--success)" : "var(--danger,#ef4444)" }}>{aiMsg.text}</span> : null })}
+            pesan: aiMsg?.el === "visual" ? <span style={{ color: aiMsg.ok ? "var(--success)" : "var(--danger,#ef4444)" }}><PesanGalat text={aiMsg.text} /></span> : null })}
         </div>
 
         {/* CARD: Judul Pembuka — kelas & pola SAMA dengan kartu Caption (fld-row/slider/switch/

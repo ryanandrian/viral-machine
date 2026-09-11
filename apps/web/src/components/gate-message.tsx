@@ -79,8 +79,77 @@ export function GateNotice({ code, style }: { code: string; style?: React.CSSPro
   );
 }
 
-/** Pesan apa pun (kode gerbang ATAU teks galat biasa) — satu titik pakai untuk komponen. */
+// ── PESAN SESAAT (toast/notice sesudah tenant menekan tombol) ─────────────────────────────────
+//
+// [11-Sep] Diukur atas pertanyaan owner: label & tulisan TETAP di layar sudah bersih (dijaga
+// `test_dwibahasa_fe_tak_pincang`), tapi **13 pesan sesaat** hanya berbahasa Indonesia. Penjaga lama
+// tak menjangkaunya: ia menghitung KESEIMBANGAN `data-id`/`data-en`, sedangkan teks yang sama sekali
+// tak memakai mekanisme dwibahasa tak terlihat olehnya.
+//
+// Rancangan pertama saya hendak menyalin pola "garis miring" (`"Tersimpan / saved"`, 4 tempat
+// warisan) ke 13 pesan lain. Owner menegur — dan benar: itu BUKAN jalur resmi (tenant melihat KEDUA
+// bahasa berjejer sekaligus), dan menyalinnya = memperbanyak jalur kedua.
+//
+// Jalur resminya SUDAH ADA di berkas ini: pesan disimpan sebagai **KODE** teks biasa, diterjemahkan
+// SAAT DITAMPILKAN (preseden `GATE:…`, B24). Karena kodenya tetap `string`, tipe state di layar nol
+// berubah ⇒ nol risiko pada logika yang sudah ada.
+//
+// Kode berparameter memakai `MSG:<nama>:<nilai>` — nilainya diteruskan apa adanya (mis. nama niche).
+const MSG_TEKS: Record<string, (v: string) => React.ReactNode> = {
+  duration_saved:      () => <Bi id="Durasi tersimpan" en="Duration saved" />,
+  niche_saved:         () => <Bi id="Niche tersimpan" en="Niche saved" />,
+  schedule_saved:      () => <Bi id="Jadwal disimpan" en="Schedule saved" />,
+  dna_saved:           () => <Bi id="DNA tersimpan" en="DNA saved" />,
+  activate_incomplete: () => <Bi id="Belum bisa diaktifkan — lengkapi konfigurasi dulu (lihat checklist)."
+                                  en="Can't activate yet — complete the configuration first (see the checklist)." />,
+  server_unreachable:  () => <Bi id="Server tak terjangkau." en="Server unreachable." />,
+  name_required:       () => <Bi id="Nama channel wajib." en="Channel name is required." />,
+  niche_min_1:         () => <Bi id="Pilih minimal 1 niche." en="Pick at least 1 niche." />,
+  niche_min_2:         () => <Bi id="Mode rotasi butuh minimal 2 niche." en="Rotation mode needs at least 2 niches." />,
+  session_invalid:     () => <Bi id="Sesi tak valid." en="Your session is invalid." />,
+  niche_created:       (v) => <Bi id={`Niche dibuat: ${v}`} en={`Niche created: ${v}`} />,
+  slots_full:          (v) => <Bi id={`Channel ini sudah ${v}/${v} slot (batas paket)`}
+                                  en={`This channel is already at ${v}/${v} slots (plan limit)`} />,
+  save_failed:         (v) => <Bi id={`Gagal: ${v}`} en={`Failed: ${v}`} />,
+  // Empat pesan ber-PETUNJUK yang dulu memakai pola "garis miring" (dua bahasa berjejer dalam satu
+  // kalimat, sehingga tenant melihat keduanya sekaligus). Dipindah ke jalur resmi ini — pola itu
+  // kini NOL di seluruh layar tenant.
+  saved_need_video_preset: () => <Bi id="Tersimpan — LANGKAH BERIKUT: ubah Durasi channel ke preset text-to-video (8s), lalu Simpan"
+                                     en="Saved — NEXT: set the channel Duration to the text-to-video preset (8s), then Save" />,
+  saved_leave_video_preset: () => <Bi id="Tersimpan — LANGKAH BERIKUT: ubah Durasi channel keluar dari preset text-to-video"
+                                      en="Saved — NEXT: change the channel Duration away from the text-to-video preset" />,
+  duration_need_video_model: () => <Bi id="Durasi tersimpan — LANGKAH BERIKUT: pilih MODEL VIDEO di kartu Model AI (Visual), lalu Simpan (produksi menolak jalan sampai keduanya serasi)"
+                                       en="Duration saved — NEXT: pick a VIDEO model in the AI Models (Visual) card, then Save (production won't run until both match)" />,
+  duration_need_image_model: () => <Bi id="Durasi tersimpan — LANGKAH BERIKUT: ganti model visual ke model GAMBAR di kartu Model AI (produksi menolak jalan sampai keduanya serasi)"
+                                       en="Duration saved — NEXT: switch the visual model to an IMAGE model in the AI Models card (production won't run until both match)" />,
+};
+
+/** Kode pesan sesaat → simpan di state apa adanya, terjemahkan saat tampil. */
+export function msg(nama: keyof typeof MSG_TEKS, nilai?: string | number): string {
+  return `MSG:${nama}` + (nilai === undefined ? "" : `:${nilai}`);
+}
+
+/** Pesan ini mengabarkan KEBERHASILAN? Dipakai layar untuk memilih warna — menggantikan endusan
+ *  kata di dalam teks (`.includes("tersimpan")`) yang rapuh dan langsung salah begitu teks jadi kode. */
+export function pesanSukses(text?: string | null): boolean {
+  return !!text && /^MSG:(duration_saved|niche_saved|schedule_saved|dna_saved|niche_created|saved_need_video_preset|saved_leave_video_preset|duration_need_video_model|duration_need_image_model)/.test(text);
+}
+
+function parseMsg(text?: string | null): React.ReactNode | null {
+  if (!text || !text.startsWith("MSG:")) return null;
+  const sisa = text.slice(4);
+  const potong = sisa.indexOf(":");
+  const nama = potong === -1 ? sisa : sisa.slice(0, potong);
+  const nilai = potong === -1 ? "" : sisa.slice(potong + 1);
+  const f = MSG_TEKS[nama];
+  return f ? f(nilai) : null;
+}
+
+/** Pesan apa pun (kode gerbang · kode pesan sesaat · teks galat biasa) — satu titik pakai. */
 export function PesanGalat({ text, style }: { text?: string | null; style?: React.CSSProperties }) {
   if (!text) return null;
-  return parseGate(text) ? <GateNotice code={text} style={style} /> : <span style={style}>{text}</span>;
+  if (parseGate(text)) return <GateNotice code={text} style={style} />;
+  const m = parseMsg(text);
+  // Teks tak dikenal (mis. galat mentah dari penyedia) lewat apa adanya — perilaku lama, fail-soft.
+  return <span style={style}>{m ?? text}</span>;
 }

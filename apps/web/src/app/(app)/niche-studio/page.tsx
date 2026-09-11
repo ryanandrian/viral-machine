@@ -5,6 +5,7 @@ import { Palette, Plus, X, Check } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import NicheDnaEditor, { type NicheRow } from "@/components/niche-dna-editor";
 import TestNichePanel from "@/components/test-niche-panel";
+import { PesanGalat, msg } from "@/components/gate-message";
 
 // F3-03 / F2-10 — Niche Studio (tenant Business+, GATED) — DIROMBAK 2026-07-04 (kesepakatan owner):
 // editor DNA per-field BERSAMA dgn admin (components/niche-dna-editor) — NOL JSON mentah, preset
@@ -43,7 +44,7 @@ export default function NicheStudioPage() {
     const r = await fetch("/api/niches/mine", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newN) });
     const j = await r.json().catch(() => ({}));
     setBusy(false);
-    if (r.ok) { setToast(`Niche dibuat: ${newN.niche_id}`); setNewN(null); await load(); if (j.row) { setSel(j.row as Niche); setActive(true); } }
+    if (r.ok) { setToast(msg("niche_created", newN.niche_id)); setNewN(null); await load(); if (j.row) { setSel(j.row as Niche); setActive(true); } }
     else setToast(j.error || "Gagal buat niche");
   }
 
@@ -53,7 +54,7 @@ export default function NicheStudioPage() {
     const r = await fetch("/api/niches/mine", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ niche_id: sel.niche_id, is_active: active, ...patch }) });
     const j = await r.json().catch(() => ({}));
     setBusy(false);
-    if (r.ok) { setToast("DNA tersimpan"); setSel(null); await load(); return { ok: true }; }
+    if (r.ok) { setToast(msg("dna_saved")); setSel(null); await load(); return { ok: true }; }
     setToast(j.error === "dna_invalid" ? "Ada isian tidak valid" : (j.error || "Gagal menyimpan"));
     return { ok: false, fields: j.fields };
   }
@@ -134,7 +135,7 @@ export default function NicheStudioPage() {
         </div>
       )}
 
-      {toast && <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 90, background: "#1f2937", color: "#fff", padding: "0.625rem 1rem", borderRadius: 8, border: "1px solid rgba(255,255,255,0.12)", boxShadow: "0 6px 20px rgba(0,0,0,0.35)", fontSize: "var(--text-sm)" }}>{toast}</div>}
+      {toast && <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 90, background: "#1f2937", color: "#fff", padding: "0.625rem 1rem", borderRadius: 8, border: "1px solid rgba(255,255,255,0.12)", boxShadow: "0 6px 20px rgba(0,0,0,0.35)", fontSize: "var(--text-sm)" }}><PesanGalat text={toast} /></div>}
     </>
   );
 }
