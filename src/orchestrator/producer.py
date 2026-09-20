@@ -182,7 +182,7 @@ def _record_production_run(channel_row: dict, result: dict, status: str,
 
 def _cost_fields(result: dict) -> dict:
     """B2 cost-tracking: {ai_usage, cost} utk run_metadata — konsumsi dari pipeline (cost_meter) +
-    konversi USD via katalog harga (ai_cost). Fail-soft: gagal hitung → usage tetap tercatat."""
+    konversi USD via katalog harga (ai_cost), termasuk label estimasi stale. Fail-soft: gagal hitung → usage tetap tercatat."""
     usage = result.get("ai_usage") or {}
     if not usage:
         return {}

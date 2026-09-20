@@ -245,6 +245,15 @@ def _to_pricing(e: dict, now: str, component: str | None = None) -> dict:
     return out
 
 
+def _same_pending_proposal(old: dict | None, new: dict) -> bool:
+    """Bandingkan usulan lintas sinkron tanpa menganggap timestamp sebagai perubahan harga."""
+    if not old:
+        return False
+    abaikan = {"reason", "synced_at"}
+    return {k: v for k, v in old.items() if k not in abaikan} == \
+        {k: v for k, v in new.items() if k not in abaikan}
+
+
 def _sanity_violation(old: dict | None, new: dict) -> str | None:
     """Perubahan drastis (> SANITY_FACTOR× naik/turun) pada field mana pun → alasan (str), aman → None."""
     if not old:
@@ -281,7 +290,7 @@ def _check_staleness(sb, rows: list) -> None:
 
     Dua jendela, dan bedanya disengaja:
       • otomatis  — mandek > `AI_PRICE_STALE_DAYS` (7) = pertanda sumbernya rusak
-      • terkunci  — belum diperiksa ulang > `AI_PRICE_LOCKED_STALE_DAYS` (90); harga yang diperiksa
+      • terkunci  — belum diperiksa ulang > `LOCKED_STALE_DAYS` (30); harga yang diperiksa
         manusia tak perlu ditengok tiap minggu. **Tanpa tanggal = BELUM PERNAH dipastikan**, jadi ikut
         dilaporkan — memperlakukannya "aman" akan membuatnya mustahil terdeteksi tua.
     """
@@ -291,6 +300,9 @@ def _check_staleness(sb, rows: list) -> None:
         batas_kunci = now - LOCKED_STALE_DAYS * 86400
         mandek, belum_diperiksa = [], []
         for m in rows:
+            # Model nonaktif tetap menyimpan harga untuk histori, tetapi tidak termasuk operasi aktif.
+            if m.get("is_active") is False:
+                continue
             p = m.get("pricing") or {}
             if not p:
                 continue
@@ -343,7 +355,7 @@ def sync_prices(sb=None, force: bool = False, only_model_key: str | None = None)
         if last and (_time.time() - last) < SYNC_INTERVAL_HOURS * 3600:
             return {"skipped": True}
 
-    rows = sb.table("ai_models").select("model_key, model_id, component, provider_key, pricing, pricing_locked, pricing_pending, default_params, cost_hint").execute().data or []
+    rows = sb.table("ai_models").select("model_key, model_id, component, provider_key, pricing, pricing_locked, pricing_pending, default_params, cost_hint, is_active").execute().data or []
     if only_model_key:
         rows = [r for r in rows if r.get("model_key") == only_model_key]
     # Prefix feed per-provider = DATA (ai_providers.price_feed_prefix, fallback provider_key).
@@ -365,13 +377,17 @@ def sync_prices(sb=None, force: bool = False, only_model_key: str | None = None)
 
     orm = None   # lazy: fallback OpenRouter di-fetch hanya bila dibutuhkan
     now = datetime.now(timezone.utc).isoformat()
-    updated, held, missing = 0, [], []
+    updated, auto_applied, held, missing = 0, 0, [], []
     kunci_cache: dict = {}      # kunci platform per penyedia (ambil sekali)
     _vendor_terakhir = [0.0]    # penanda waktu panggilan API penyedia terakhir (untuk jeda)
     formula_baru: dict = {}     # model_key → formula yang ditetapkan sumber resmi penyedia
 
     belum_teruji, satuan_asing = [], []
     for m in rows:
+        # Harga model nonaktif tidak boleh ikut sinkron, pending, fallback, atau alarm operasi.
+        # Harga lama tetap dipertahankan untuk histori dan akan diperiksa saat reaktivasi.
+        if m.get("is_active") is False:
+            continue
         if m.get("pricing_locked"):
             continue
         # ── [C, 24-Agu] HARGA HANYA UNTUK MODEL YANG TERBUKTI ADA ─────────────────────────────
@@ -465,7 +481,19 @@ def sync_prices(sb=None, force: bool = False, only_model_key: str | None = None)
         # SANITY-GUARD: perubahan drastis → tahan di pricing_pending (admin putuskan), JANGAN terapkan.
         reason = _sanity_violation(m.get("pricing"), pricing)
         if reason:
-            sb.table("ai_models").update({"pricing_pending": {**pricing, "reason": reason}}).eq("model_key", m["model_key"]).execute()
+            proposal = {**pricing, "reason": reason}
+            # Satu usulan yang sama dari sumber yang sama pada dua sinkron berturut-turut
+            # dianggap konfirmasi mesin. Admin tidak menjadi operator rutin, tetapi lonjakan
+            # yang berubah-ubah tetap ditahan.
+            if _same_pending_proposal(m.get("pricing_pending"), pricing):
+                patch = {"pricing": pricing, "pricing_pending": None}
+                if m["model_key"] in formula_baru:
+                    patch["pricing_model"] = formula_baru[m["model_key"]]
+                sb.table("ai_models").update(patch).eq("model_key", m["model_key"]).execute()
+                updated += 1
+                auto_applied += 1
+                continue
+            sb.table("ai_models").update({"pricing_pending": proposal}).eq("model_key", m["model_key"]).execute()
             held.append(f"{m['model_key']} ({reason})")
             continue
         patch = {"pricing": pricing, "pricing_pending": None}
@@ -501,7 +529,7 @@ def sync_prices(sb=None, force: bool = False, only_model_key: str | None = None)
                 f"{len(missing)} tanpa-sumber, {len(belum_teruji)} belum-lulus-uji")
 
     _check_staleness(sb, rows)
-    return {"updated": updated, "held": held, "missing": missing,
+    return {"updated": updated, "auto_applied": auto_applied, "held": held, "missing": missing,
             "belum_teruji": belum_teruji, "satuan_asing": satuan_asing}
 
 

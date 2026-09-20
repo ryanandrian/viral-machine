@@ -492,6 +492,8 @@ dukung (`biaya_dilaporkan`, `selisih_akun`, `gambar_megapiksel`, `video_token`, 
 aktif. Penjaga `G10` (6 uji) — termasuk **uji pembeda yang MERAH bila penghitung dikembalikan ke
 perilaku pra-F2**; 5 sabotase, semuanya tertangkap.
 
+**ATURAN OPERASIONAL HARGA (20-Sep-2026).** Model `is_active=false` dikeluarkan dari sinkron dan alarm stale; harga lamanya dipertahankan hanya untuk histori dan diperiksa lagi saat reaktivasi melalui uji nyata + probe. Model aktif boleh memakai harga terakhir sebagai estimasi bila formula lengkap; biaya tersimpan diberi label stale bila umurnya melewati 7 hari, bukan dihentikan atau diubah menjadi nol. `pricing_pending` tetap menjadi usulan yang akan divalidasi ulang mesin; admin tidak menjadi operator rutin.
+
 **CATATAN PELAKSANAAN F3 (23-Agu).** URL sumber harga jadi **kenop admin** (`app_config.ai_price_feed_url`
 + `ai_price_fallback_url`, migr `0211`), dibaca **saat sinkron** (bukan saat impor) ⇒ berlaku tanpa
 deploy; kosong → jatuh ke env lalu bawaan (sinkron tak pernah mati total). Tampil di layar

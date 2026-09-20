@@ -72,7 +72,7 @@ export default function DashboardPage() {
   const [noChannel, setNoChannel] = useState(false);
   const [loading, setLoading] = useState(true);
   // B2 BYOK cost-tracking: total biaya AI 30 hari (Σ run_metadata.cost.usd × kurs app_config) — REAL.
-  const [aiCost, setAiCost] = useState<{ idr: number; usd: number; videos: number; rate: number; kurang: boolean } | null>(null);
+  const [aiCost, setAiCost] = useState<{ idr: number; usd: number; videos: number; rate: number; kurang: boolean; stale: boolean } | null>(null);
 
   const load = useCallback(async () => {
     const since30 = new Date(Date.now() - 30 * 864e5).toISOString();
@@ -119,7 +119,7 @@ export default function DashboardPage() {
       .filter((x) => x.eff.key === "incomplete" || x.eff.key === "halted"));
     // Biaya AI 30 hari: hanya run yg PUNYA cost (produksi pasca-fitur); label jujur di kartu.
     // Paginasi (urutan stabil created_at+run_id; cap 8 hal = 8k run/30hr, cukup 10ch×24vid; audit 2026-07-11).
-    type CostRow = { run_metadata?: { cost?: { usd?: number; unpriced?: string[] } } };
+    type CostRow = { run_metadata?: { cost?: { usd?: number; unpriced?: string[]; status?: string } } };
     let allCost = (costRows as CostRow[] | null) ?? [];
     for (let cp = 1; allCost.length === cp * 1000 && cp < 8; cp++) {
       const { data: more } = await supabase.from("production_runs").select("run_metadata").gte("created_at", since30)
@@ -130,15 +130,16 @@ export default function DashboardPage() {
     // Kurs = nilai bisnis, HANYA dari app_config (angka cadangan di kode dibuang 23-Agu:
     // dua layar bisa berbeda kurs). Belum terbaca → tampilkan USD, bukan Rp palsu.
     const rate = Number((rateRow as { value?: number } | null)?.value) || 0;
-    let usd = 0, nCost = 0, adaKurang = false;
+    let usd = 0, nCost = 0, adaKurang = false, adaStale = false;
     allCost.forEach((row) => {
       const u = row.run_metadata?.cost?.usd;
       if (typeof u === "number" && u > 0) { usd += u; nCost += 1; }
       // [2026-08-22] Kartu ini dulu MENJUMLAHKAN angka yang tak lengkap tanpa satu penanda pun —
       // tempat paling menyesatkan di seluruh aplikasi untuk urusan biaya (diam-diam kurang).
       if (row.run_metadata?.cost?.unpriced?.length) adaKurang = true;
+      if (row.run_metadata?.cost?.status === "estimated_stale") adaStale = true;
     });
-    setAiCost(nCost > 0 ? { idr: usd * rate, usd, videos: nCost, rate, kurang: adaKurang } : null);
+    setAiCost(nCost > 0 ? { idr: usd * rate, usd, videos: nCost, rate, kurang: adaKurang, stale: adaStale } : null);
     setLoading(false);
   }, [supabase]);
 
@@ -298,8 +299,8 @@ export default function DashboardPage() {
             {aiCost ? (<>
               <div style={{ fontSize: "var(--text-2xl)", fontWeight: 700, marginTop: "0.5rem" }}>{aiCost.rate > 0 ? `Rp ${Math.round(aiCost.idr).toLocaleString("id-ID")}` : `$${aiCost.usd.toFixed(2)}`}</div>
               <p className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.25rem" }}>
-                <Bi id={`${aiCost.videos} produksi · rata-rata ${aiCost.rate > 0 ? `Rp ${Math.round(aiCost.idr / aiCost.videos).toLocaleString("id-ID")}` : `$${(aiCost.usd / aiCost.videos).toFixed(4)}`}/video — dibayar ke provider via kunci AI-mu (bukan ke kami); ${aiCost.kurang ? "perkiraan minimum: sebagian komponen belum bisa dirinci karena penyedianya menagih dengan satuan yang belum bisa kami hitung — angka sebenarnya bisa lebih tinggi" : "perkiraan dari tarif resmi provider"} ${aiCost.rate > 0 ? ` (kurs ${aiCost.rate.toLocaleString("id-ID")})` : " — kurs belum tersedia, angka dalam USD"}.`}
-                    en={`${aiCost.videos} productions · avg Rp ${Math.round(aiCost.idr / aiCost.videos).toLocaleString("id-ID")}/video — paid to providers via your own keys; ${aiCost.kurang ? "minimum estimate: some components cannot be itemised because their provider bills in a unit we cannot compute yet — the real figure may be higher" : "estimated from official provider prices"}.`} />
+                <Bi id={`${aiCost.videos} produksi · rata-rata ${aiCost.rate > 0 ? `Rp ${Math.round(aiCost.idr / aiCost.videos).toLocaleString("id-ID")}` : `$${(aiCost.usd / aiCost.videos).toFixed(4)}`}/video — dibayar ke provider via kunci AI-mu (bukan ke kami); ${aiCost.kurang ? "perkiraan minimum: sebagian komponen belum bisa dirinci karena penyedianya menagih dengan satuan yang belum bisa kami hitung — angka sebenarnya bisa lebih tinggi" : aiCost.stale ? "perkiraan memakai tarif provider terakhir yang diketahui dan mungkin sudah berubah" : "perkiraan dari tarif resmi provider"} ${aiCost.rate > 0 ? ` (kurs ${aiCost.rate.toLocaleString("id-ID")})` : " — kurs belum tersedia, angka dalam USD"}.`}
+                    en={`${aiCost.videos} productions · avg Rp ${Math.round(aiCost.idr / aiCost.videos).toLocaleString("id-ID")}/video — paid to providers via your own keys; ${aiCost.kurang ? "minimum estimate: some components cannot be itemised because their provider bills in a unit we cannot compute yet — the real figure may be higher" : aiCost.stale ? "estimate uses the last known provider price; it may be outdated" : "estimated from official provider prices"}.`} />
               </p>
             </>) : (
               <p className="muted" style={{ fontSize: "var(--text-xs)", marginTop: "0.75rem" }}><Bi id="Belum ada data — biaya nyata per video tercatat otomatis mulai produksi berikutnya." en="No data yet — real per-video cost is recorded automatically from the next production." /></p>

@@ -111,6 +111,19 @@ class TestHargaOtomatis(unittest.TestCase):
             "Baris agregator tanpa sumber sah WAJIB dilaporkan tanpa-sumber, supaya muncul di "
             "laporan harian & ditandai di panel — bukan didiamkan.")
 
+    def test_usulan_ekstrem_yang_sama_dua_kali_diterapkan_otomatis(self):
+        """Admin tidak perlu mengonfirmasi ulang proposal yang sama dari sumber yang sama."""
+        model = {"model_key": "gpt-4o-mini", "model_id": "gpt-4o-mini", "component": "llm",
+                 "provider_key": "openai", "is_active": True,
+                 "pricing": {"in_per_1m": 0.01, "out_per_1m": 0.01}, "pricing_locked": False,
+                 "pricing_pending": {"in_per_1m": 0.15, "out_per_1m": 0.6,
+                                     "source": "openrouter", "synced_at": "2026-09-19T00:00:00Z",
+                                     "reason": "in_per_1m: 0.01 → 0.15 (15.0×)"},
+                 "cost_hint": {"audit": "LULUS uji manual admin 2026-08-23 10:00"}}
+        _, ditulis = _jalankan([model])
+        self.assertEqual(ditulis["gpt-4o-mini"]["pricing"]["in_per_1m"], 0.15)
+        self.assertIsNone(ditulis["gpt-4o-mini"].get("pricing_pending"))
+
     def test_model_berpenanda_polos_tidak_berubah_perilakunya(self):
         """REGRESI: seluruh model lama memakai penanda polos — jangan sampai ikut bergeser."""
         _, ditulis = _jalankan([
@@ -133,6 +146,16 @@ class TestHargaOtomatis(unittest.TestCase):
         self.assertEqual(ringkas["missing"], ["kling-2.5-turbo-pro"])
         self.assertNotIn("kling-2.5-turbo-pro", ditulis,
                          "Model tanpa sumber harga TIDAK boleh disentuh — harga manualnya hilang.")
+
+    def test_model_nonaktif_dikeluarkan_dari_sinkron_harga(self):
+        """Harga historis model nonaktif dipertahankan, tetapi tidak dicari atau ditulis ulang."""
+        _, ditulis = _jalankan([
+            {"model_key": "model-nonaktif", "model_id": "model-nonaktif", "component": "llm",
+             "provider_key": "openai", "is_active": False,
+             "pricing": {"in_per_1m": 99.0}, "pricing_locked": False,
+             "cost_hint": {"audit": "LULUS uji vendor"}},
+        ])
+        self.assertNotIn("model-nonaktif", ditulis)
 
     def test_harga_yang_dikunci_admin_tetap_tak_tersentuh(self):
         """REGRESI pengaman lama: kunci admin menang atas sinkron otomatis."""

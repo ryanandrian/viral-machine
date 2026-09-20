@@ -191,7 +191,7 @@ class TestHargaTerkunciTakBolehDilupakan(unittest.TestCase):
         return (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=hari)).isoformat()
 
     def test_harga_terkunci_yang_lama_tak_diperiksa_dilaporkan(self):
-        pesan = self._jalankan([{"model_key": "m-kunci-tua", "pricing_locked": True,
+        pesan = self._jalankan([{"model_key": "m-kunci-tua", "is_active": True, "pricing_locked": True,
                                  "pricing": {"per_1m_chars": 100, "synced_at": self._umur(200)}}])
         self.assertTrue(pesan, "harga terkunci berumur 200 hari tak dilaporkan — ia takkan pernah "
                                "ditengok lagi, padahal vendor bisa mengubah tarifnya kapan saja")
@@ -199,20 +199,26 @@ class TestHargaTerkunciTakBolehDilupakan(unittest.TestCase):
 
     def test_harga_terkunci_TANPA_tanggal_dilaporkan(self):
         """Tanpa tanggal = belum pernah dipastikan. Memperlakukannya 'aman' = pengecualian permanen."""
-        pesan = self._jalankan([{"model_key": "m-tanpa-tanggal", "pricing_locked": True,
+        pesan = self._jalankan([{"model_key": "m-tanpa-tanggal", "is_active": True, "pricing_locked": True,
                                  "pricing": {"per_second_usd": 0.1}}])
         self.assertTrue(pesan, "harga terkunci tanpa tanggal tak dilaporkan — mustahil terdeteksi tua")
         self.assertIn("m-tanpa-tanggal", pesan[0])
 
+    def test_model_nonaktif_tidak_dilaporkan_stale(self):
+        pesan = self._jalankan([{"model_key": "m-nonaktif", "is_active": False,
+                                 "pricing_locked": False,
+                                 "pricing": {"in_per_1m": 1.0, "synced_at": self._umur(200)}}])
+        self.assertFalse(pesan, f"model nonaktif ikut alarm stale operasi: {pesan}")
+
     def test_harga_terkunci_yang_baru_diperiksa_TIDAK_dilaporkan(self):
         """Alarm palsu pada baris yang baru diperiksa = alarm yang diabaikan."""
-        pesan = self._jalankan([{"model_key": "m-baru", "pricing_locked": True,
+        pesan = self._jalankan([{"model_key": "m-baru", "is_active": True, "pricing_locked": True,
                                  "pricing": {"per_1m_chars": 100, "synced_at": self._umur(10)}}])
         self.assertFalse(pesan, f"alarm palsu pada harga yang baru diperiksa: {pesan}")
 
     def test_baris_otomatis_tetap_dijaga_jendela_pendek(self):
         """Nol regresi: sumber otomatis yang mandek > 7 hari tetap berbunyi seperti sebelumnya."""
-        pesan = self._jalankan([{"model_key": "m-otomatis", "pricing_locked": False,
+        pesan = self._jalankan([{"model_key": "m-otomatis", "is_active": True, "pricing_locked": False,
                                  "pricing": {"in_per_1m": 1.0, "synced_at": self._umur(30)}}])
         self.assertTrue(pesan, "baris otomatis yang mandek tak lagi dilaporkan — regresi")
         self.assertIn("m-otomatis", pesan[0])
@@ -221,9 +227,9 @@ class TestHargaTerkunciTakBolehDilupakan(unittest.TestCase):
         """Sumber otomatis MANDEK (periksa sumbernya) ≠ harga ketikan tangan yang lama tak
         diperiksa ulang (buka halaman resmi vendor). Satu kalimat untuk dua tindakan = alarm tumpul."""
         pesan = self._jalankan([
-            {"model_key": "m-otomatis", "pricing_locked": False,
+            {"model_key": "m-otomatis", "is_active": True, "pricing_locked": False,
              "pricing": {"in_per_1m": 1.0, "synced_at": self._umur(30)}},
-            {"model_key": "m-kunci-tua", "pricing_locked": True,
+            {"model_key": "m-kunci-tua", "is_active": True, "pricing_locked": True,
              "pricing": {"per_1m_chars": 100, "synced_at": self._umur(200)}}])
         self.assertTrue(pesan)
         t = pesan[0]

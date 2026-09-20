@@ -90,3 +90,17 @@ def test_per_permintaan_tanpa_jumlah_panggilan_dihitung_nol_bukan_meledak(monkey
     hasil = ac.compute_cost_usd({"llm": {"m": {"tokens_in": 100}}})
     assert hasil["breakdown"]["llm"] == 0.0
     assert hasil["unpriced"] == []
+
+
+def test_harga_lama_diberi_status_estimasi_stale(monkeypatch):
+    _pakai_harga(monkeypatch, {"m": {"in_per_1m": 1.0, "out_per_1m": 2.0,
+                                  "synced_at": "2020-01-01T00:00:00+00:00"}})
+    hasil = ac.compute_cost_usd({"llm": {"m": {"tokens_in": 1_000_000, "tokens_out": 0}}})
+    assert hasil["status"] == "estimated_stale"
+    assert hasil["price_age_days"] is not None
+
+
+def test_harga_tanpa_formula_tetap_unpriced(monkeypatch):
+    _pakai_harga(monkeypatch, {"m": {"in_per_1m": 1.0}}, {"m": None})
+    hasil = ac.compute_cost_usd({"llm": {"m": {"tokens_in": 1_000_000}}})
+    assert hasil["status"] == "unpriced"

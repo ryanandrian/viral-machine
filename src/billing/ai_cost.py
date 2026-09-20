@@ -12,6 +12,7 @@ Kejujuran: angka = "konsumsi terukur × harga katalog per synced_at" — BUKAN m
 """
 
 import os
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from loguru import logger
 
@@ -367,6 +368,20 @@ def _formula_map(sb=None) -> dict:
     return _peta_baris(rows, "pricing_model")
 
 
+def _earliest_price_timestamp(current: str | None, candidate: object) -> str | None:
+    """Simpan timestamp harga tertua yang benar-benar dipakai pada run."""
+    if not candidate:
+        return current
+    if not current:
+        return str(candidate)
+    try:
+        cur = datetime.fromisoformat(str(current).replace("Z", "+00:00"))
+        new = datetime.fromisoformat(str(candidate).replace("Z", "+00:00"))
+        return str(candidate) if new < cur else current
+    except (TypeError, ValueError):
+        return current
+
+
 def compute_cost_usd(ai_usage: dict, sb=None) -> dict | None:
     """Hitung biaya USD dari ringkasan cost_meter — SATU putaran atas DAFTAR SATUAN, nol cabang
     per-kasus. Return {usd, breakdown, unpriced, priced_at}; None bila usage kosong.
@@ -415,7 +430,7 @@ def compute_cost_usd(ai_usage: dict, sb=None) -> dict | None:
 
         # Formula GRATIS: vendor tak menagih (mis. Edge). Biaya 0 dan BUKAN "tak terhitung".
         if formula == "gratis":
-            synced = synced or (harga or {}).get("synced_at")
+            synced = _earliest_price_timestamp(synced, (harga or {}).get("synced_at"))
             continue
 
         # [F5] VENDOR MENYEBUT BIAYANYA SENDIRI → dipakai apa adanya, mesin tidak menghitung apa pun.
@@ -429,7 +444,7 @@ def compute_cost_usd(ai_usage: dict, sb=None) -> dict | None:
                 unpriced.append(model)      # vendor tak menyebut → JUJUR, haram ditaksir dari token
                 continue
             br[KERANJANG_BIAYA["biaya_vendor"]] += float(usd)
-            synced = synced or (harga or {}).get("synced_at")
+            synced = _earliest_price_timestamp(synced, (harga or {}).get("synced_at"))
             continue
 
         # Formula yang penghitung belum dukung → JUJUR dilaporkan, bukan dihitung dengan cara lain.
@@ -461,16 +476,30 @@ def compute_cost_usd(ai_usage: dict, sb=None) -> dict | None:
             jenis_skema = next(s.jenis for s in SATUAN_HARGA
                                if s.skema == skema and s.keranjang in pemakaian)
             br[jenis_skema] += nilai
-            synced = synced or harga.get("synced_at")
+            synced = _earliest_price_timestamp(synced, harga.get("synced_at"))
             tertagih = True
             break            # ← satu model satu tagihan
         if not tertagih:
             unpriced.append(model)
 
     total = br["llm"] + br["image"] + br["tts"] + br["video"]
+    unpriced = sorted(set(unpriced))
+    age_days = None
+    if synced:
+        try:
+            stamp = datetime.fromisoformat(str(synced).replace("Z", "+00:00"))
+            if stamp.tzinfo is None:
+                stamp = stamp.replace(tzinfo=timezone.utc)
+            age_days = max(0.0, (datetime.now(timezone.utc) - stamp).total_seconds() / 86400)
+        except (TypeError, ValueError):
+            age_days = None
+    stale_days = float(os.getenv("AI_PRICE_STALE_DAYS", "7"))
+    status = "unpriced" if unpriced else ("estimated_stale" if age_days is not None and age_days > stale_days else "calculated")
     return {
         "usd": round(total, 6),
         "breakdown": {k: round(v, 6) for k, v in br.items()},
-        "unpriced": sorted(set(unpriced)),
+        "unpriced": unpriced,
         "priced_at": synced,
+        "price_age_days": round(age_days, 2) if age_days is not None else None,
+        "status": status,
     }
