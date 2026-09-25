@@ -606,10 +606,16 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
             self.last_error_class = last_error.error_class
             self.last_human_error = last_error.human_message
             self.last_error = (last_error.human_message or str(last_error))
+            # [24-Sep] Identitas model & asal putusan: adapter SUDAH membawanya di LLMError,
+            # tapi sampai di sini berhenti → pipeline tak punya model untuk dicatat, sehingga
+            # `production_runs.failed_model` NULL (terukur run 728–732). Dibuang berarti
+            # bukti-silang antar-tenant hanya berlaku untuk jalur yang beruntung.
+            self.last_failed_model = getattr(last_error, "model", "") or ""
         else:
             self.last_error_class = _ECls.UNKNOWN
             self.last_human_error = None
             self.last_error = str(last_error)
+            self.last_failed_model = ""
         return []
 
     def _apply_signal_factor(self, topic: dict, signals: dict) -> dict:
@@ -690,6 +696,7 @@ IMPORTANT: Return ONLY the JSON array. No explanation, no markdown, no extra tex
         # LLM provider tenant (config-driven, BYOK) — model task 'utility' untuk
         # seleksi/analisis topik. Provider memegang API key + SDK client.
         self.last_error = ""   # reset per-run (dibaca pipeline saat topik kosong)
+        self.last_failed_model = ""
         # [ERROR-MGMT 2026-07-20] reset propagasi terstruktur per-run (pola last_* tts_engine)
         from src.exceptions import ErrorClass as _ECls
         self.last_error_class = _ECls.UNKNOWN

@@ -221,19 +221,20 @@ kegagalan yang 100% milik kita. Owner: *"pesan errornya tidak jelas hanya kode s
 | `tests/test_error_429_generik.py` | — | 429 level-transport (bukan kalimat vendor) → RATE_LIMIT |
 | `tests/test_youtube_auth_invalid.py` | — | `invalid_grant`→AUTH_INVALID; RefreshError lain tetap transien |
 | `tests/test_suara_terpotong.py` · `test_suara_naskah_panjang.py` | — | kegagalan suara → TRANSIENT |
-| **`tests/test_ssot_error_mgmt.py`** | 20 | **penjaga anti-drift: dokumen ini vs kode** (§10) — sejak 14-Agu termasuk **kolom "Sikap" §1 vs perilaku mesin**, **struktur tabel utuh**, dan **angka bukti §7 tak basi** |
-| **`tests/test_pemulihan_channel.py`** | 35 | **[B25] rem menyimpan sebabnya · Telegram bedakan pulih-sendiri · anti-drift `SELF_HEALING` lintas 3 tempat · setiap kegagalan dihitung (§8k)** |
-| **`tests/test_rem_tak_boleh_lumpuh.py`** | 5 | **§8k — PERILAKU, bukan angka perantara:** berapa kali produksi di-submit · berapa kabar ke tenant · apakah mesin berhenti sendiri |
-| **`tests/test_parameter_kita_tak_ditimpakan_tenant.py`** | 10 | **§8k butir 4 — dua arah:** parameter tak-didukung tak pernah dikirim (vendor baru otomatis aman) · galat parameter mengaku MILIK KITA lintas-vendor · **dan tidak salah-alamat ke arah sebaliknya** |
-| `tests/test_migrasi_selaras_db.py` | 6 | kolom & **trigger** yang migrasi janjikan benar-benar hidup di DB (§8k butir 2/3, migr 0198) |
-| **`tests/test_naskah_fal_jalur_hidup.py`** | 8 | **jalur naskah fal (16-Agu):** alamat tak boleh datang dari transport VISUAL & tak boleh menunjuk endpoint yang DIPENSIUNKAN vendor · pemakaian tercatat (tabel harga butuh angka untuk dikalikan) · balasan **HTTP 200 yang berisi `error`** digolongkan lewat penilai yang SATU itu (saldo habis ⇒ rem 1-kegagalan, bukan 3 produksi terbuang) · **generik: SETIAP adapter naskah wajib mencatat biaya**, jadi vendor berikutnya tertangkap merah bila lupa |
-| **`tests/test_galat_menyebut_model_yang_harus_diganti.py`** | 11 | **identitas ikut ke kalimat tenant (17-Agu, keluhan BISIK NUSANTARA):** golongan `MODEL_UNAVAILABLE` menyebut **slot + nama model + penyedia** — anjuran "pilih model lain" mustahil dikerjakan tenant ber-3-slot AI tanpa itu, padahal vendor SUDAH menyebutkannya · generik untuk vendor/model yang belum ada · penampung tak terisi tak bocor ke mata tenant · tanda tangan 1-argumen tetap sah · 3 golongan lain & UNKNOWN tak bergeser · **setiap adapter naskah wajib meneruskan identitas** |
-| **`tests/test_jawaban_terpotong_tak_diulang_sia_sia.py`** | 9 | **jawaban terpotong (18-Agu):** jatah token = SATU kantong untuk berpikir + menjawab; model generasi baru memakainya untuk berpikir ⇒ jawaban terpotong ⇒ JSON gugur ⇒ pemanggil mengulang IDENTIK 3× (tenant ditagih 3× tanpa peluang berhasil). Dijaga: jatah DINAIKKAN bukan diulang sama · naik SEKALI lalu pulih · batas atas dihormati (Groq menolak 8000) · model yang memang tak sanggup **gagal jujur + tenant diberi tahu ganti model** · **pelajaran tak menular ke tugas lain** (kunci memo memuat jatah-diminta) · memo tak pernah MENURUNKAN jatah · teks biasa & panggilan sehat tak tersentuh |
-| **`tests/test_peta_tak_menyebut_bug_tanpa_bukti.py`** | 3 | **klaim "rusak" wajib berbukti uji (19-Agu):** setiap butir di daftar "Yang rusak" pada `PETA_MESINVIRAL.md` WAJIB menunjuk berkas `tests/…` yang ADA — kerusakan = ada yang bisa dibuat MERAH; tanpa uji itu PENDAPAT, tempatnya di daftar improvement. Juga menjaga judul bagiannya (jalan termudah mengakali) + keberadaan §4b/§4c. **Lahir dari pelanggaran Claude sendiri, dalam sesi yang sama, di dokumen yang dibuat untuk mencegahnya** — dibuktikan MERAH dengan menyabotase peta (menyelipkan butir pendapat ke daftar rusak) |
-| **`tests/test_katalog_suara_tak_menipu.py`** | 4 | **katalog suara tak boleh menjanjikan yang mati (18-Agu):** suara AKTIF hanya pada mesin yang MENYALA — layar channel menyaring suara menurut mesin, jadi mesin mati ⇒ suara tak pernah terlihat siapa pun (kelas ini terjadi DUA HARI BERTURUT: 12 suara fal 16-Agu · 4 suara Gemini 18-Agu) · mesin menyala wajib punya model TTS yang bisa dipanggil **dan** karakter suara (Groq: 2 suara HANTU, nol model) · setiap suara yang ditawarkan wajib punya contoh audio yang bisa DIDENGAR tenant sebelum memilih |
-| **`tests/test_harga_otomatis_model_fal.py`** | 4 | **tabel harga (16-Agu):** model berpenanda `vendor/model` ikut terisi sumber otomatis (dulu SELALU meleset ⇒ harga mandek selamanya) · model berpenanda polos tak berubah · model tanpa sumber dilaporkan jujur, harganya TIDAK dikosongkan · kunci admin tetap menang |
-| **`tests/test_penurunan_mutu_tak_senyap.py`** | 6 | **§8f — penurunan mutu tak boleh senyap:** sebab frame pembuka IKUT tersimpan ke `run_metadata` di KEDUA jalur produksi · pesan penyedia tak dipotong · run sehat tak dikotori |
-| **`tests/test_mesin_tak_mati_mendadak.py`** | 12 | **§8L — mesin tak boleh MATI MENDADAK:** skema SDK dipanaskan di alur utama (SELURUH model, bukan yang teratas) · mengurai balasan tak lagi membangun skema · urutan dibaca dari **pohon sintaks** · **reproduksi crash dua arah** |
+| **`tests/test_ssot_error_mgmt.py`** | — | **penjaga anti-drift: dokumen ini vs kode** (§10) — sejak 14-Agu termasuk **kolom "Sikap" §1 vs perilaku mesin**, **struktur tabel utuh**, dan **angka bukti §7 tak basi** |
+| **`tests/test_pemulihan_channel.py`** | — | **[B25] rem menyimpan sebabnya · Telegram bedakan pulih-sendiri · anti-drift `SELF_HEALING` lintas 3 tempat · setiap kegagalan dihitung (§8k)** |
+| **`tests/test_rem_tak_boleh_lumpuh.py`** | — | **§8k — PERILAKU, bukan angka perantara:** berapa kali produksi di-submit · berapa kabar ke tenant · apakah mesin berhenti sendiri |
+| **`tests/test_parameter_kita_tak_ditimpakan_tenant.py`** | — | **§8k butir 4 — dua arah:** parameter tak-didukung tak pernah dikirim (vendor baru otomatis aman) · galat parameter mengaku MILIK KITA lintas-vendor · **dan tidak salah-alamat ke arah sebaliknya** |
+| `tests/test_migrasi_selaras_db.py` | — | kolom & **trigger** yang migrasi janjikan benar-benar hidup di DB (§8k butir 2/3, migr 0198) |
+| **`tests/test_naskah_fal_jalur_hidup.py`** | — | **jalur naskah fal (16-Agu):** alamat tak boleh datang dari transport VISUAL & tak boleh menunjuk endpoint yang DIPENSIUNKAN vendor · pemakaian tercatat (tabel harga butuh angka untuk dikalikan) · balasan **HTTP 200 yang berisi `error`** digolongkan lewat penilai yang SATU itu (saldo habis ⇒ rem 1-kegagalan, bukan 3 produksi terbuang) · **generik: SETIAP adapter naskah wajib mencatat biaya**, jadi vendor berikutnya tertangkap merah bila lupa |
+| **`tests/test_galat_menyebut_model_yang_harus_diganti.py`** | — | **identitas ikut ke kalimat tenant (17-Agu, keluhan BISIK NUSANTARA):** golongan `MODEL_UNAVAILABLE` menyebut **slot + nama model + penyedia** — anjuran "pilih model lain" mustahil dikerjakan tenant ber-3-slot AI tanpa itu, padahal vendor SUDAH menyebutkannya · generik untuk vendor/model yang belum ada · penampung tak terisi tak bocor ke mata tenant · tanda tangan 1-argumen tetap sah · 3 golongan lain & UNKNOWN tak bergeser · **setiap adapter naskah wajib meneruskan identitas** |
+| **`tests/test_jawaban_terpotong_tak_diulang_sia_sia.py`** | — | **jawaban terpotong (18-Agu):** jatah token = SATU kantong untuk berpikir + menjawab; model generasi baru memakainya untuk berpikir ⇒ jawaban terpotong ⇒ JSON gugur ⇒ pemanggil mengulang IDENTIK 3× (tenant ditagih 3× tanpa peluang berhasil). Dijaga: jatah DINAIKKAN bukan diulang sama · naik SEKALI lalu pulih · batas atas dihormati (Groq menolak 8000) · model yang memang tak sanggup **gagal jujur + tenant diberi tahu ganti model** · **pelajaran tak menular ke tugas lain** (kunci memo memuat jatah-diminta) · memo tak pernah MENURUNKAN jatah · teks biasa & panggilan sehat tak tersentuh |
+| **`tests/test_peta_tak_menyebut_bug_tanpa_bukti.py`** | — | **klaim "rusak" wajib berbukti uji (19-Agu):** setiap butir di daftar "Yang rusak" pada `PETA_MESINVIRAL.md` WAJIB menunjuk berkas `tests/…` yang ADA — kerusakan = ada yang bisa dibuat MERAH; tanpa uji itu PENDAPAT, tempatnya di daftar improvement. Juga menjaga judul bagiannya (jalan termudah mengakali) + keberadaan §4b/§4c. **Lahir dari pelanggaran Claude sendiri, dalam sesi yang sama, di dokumen yang dibuat untuk mencegahnya** — dibuktikan MERAH dengan menyabotase peta (menyelipkan butir pendapat ke daftar rusak) |
+| **`tests/test_katalog_suara_tak_menipu.py`** | — | **katalog suara tak boleh menjanjikan yang mati (18-Agu):** suara AKTIF hanya pada mesin yang MENYALA — layar channel menyaring suara menurut mesin, jadi mesin mati ⇒ suara tak pernah terlihat siapa pun (kelas ini terjadi DUA HARI BERTURUT: 12 suara fal 16-Agu · 4 suara Gemini 18-Agu) · mesin menyala wajib punya model TTS yang bisa dipanggil **dan** karakter suara (Groq: 2 suara HANTU, nol model) · setiap suara yang ditawarkan wajib punya contoh audio yang bisa DIDENGAR tenant sebelum memilih |
+| **`tests/test_503_gemini_bukan_tak_dikenal.py`** | 17 + 13 subtests | **insiden DB 24-Sep:** payload Gemini 503 high-demand → `TRANSIENT` (bukan `MODEL_UNAVAILABLE`), kelas sampai notifier, 4 run uji tidak mengisi streak produksi, dan `failed_model` tidak hilang di jalur direct. |
+| **`tests/test_harga_otomatis_model_fal.py`** | — | **tabel harga (16-Agu):** model berpenanda `vendor/model` ikut terisi sumber otomatis (dulu SELALU meleset ⇒ harga mandek selamanya) · model berpenanda polos tak berubah · model tanpa sumber dilaporkan jujur, harganya TIDAK dikosongkan · kunci admin tetap menang |
+| **`tests/test_penurunan_mutu_tak_senyap.py`** | — | **§8f — penurunan mutu tak boleh senyap:** sebab frame pembuka IKUT tersimpan ke `run_metadata` di KEDUA jalur produksi · pesan penyedia tak dipotong · run sehat tak dikotori |
+| **`tests/test_mesin_tak_mati_mendadak.py`** | — | **§8L — mesin tak boleh MATI MENDADAK:** skema SDK dipanaskan di alur utama (SELURUH model, bukan yang teratas) · mengurai balasan tak lagi membangun skema · urutan dibaca dari **pohon sintaks** · **reproduksi crash dua arah** |
 | **Total kelima berkas lama** | **39 lulus** | dijalankan 2026-08-03 |
 
 > ⚠️ **Angka di kolom tengah kini DIJAGA MESIN** (`TestAngkaBuktiUjiTidakBasi`): bila jumlah uji
@@ -1044,6 +1045,26 @@ mesin = keputusan produk (§0.6). Keduanya dijaga uji agar tidak "diperbaiki" ja
 **Bukti:** 6 uji baru di `tests/test_pemulihan_channel.py`, sampel VERBATIM worker.log
 (`invalid_grant: Token has been expired or revoked.` ×4 · `unauthorized_client: Unauthorized` ×2);
 merah dibuktikan lebih dulu (10 gagal tanpa perbaikan). Suite 634 → **639**.
+
+### §8n. ✅ 503 Gemini high-demand tidak lagi UNKNOWN + run uji netral terhadap rem (26-Sep-2026)
+
+**Bukti kejadian:** lima baris `production_runs` channel `40c054b4-1159-483a-955f-9e160a7de97d` pada
+24-Sep-2026 membawa pesan VERBATIM Gemini `Error code: 503` / `status: UNAVAILABLE` / `high demand`.
+Keempat baris direct memiliki `run_metadata.job_type=test`; satu baris adalah scheduled/buffer. Semua
+tersimpan `error_class=unknown`, sehingga panel/notifikasi tidak memiliki makna `SELF_HEALING`.
+
+**Kontrak arsitektur:**
+- HTTP 503 pada entri provider Gemini dipetakan `TRANSIENT` di registry. Ini **bukan**
+  `MODEL_UNAVAILABLE`: bukti hanya menyatakan high demand, bukan model dipensiunkan atau model ID salah.
+  Tenant karena itu tidak diarahkan mengganti model.
+- `error_class` dan `failed_model` mengalir adapter → selector → pipeline → setiap insert
+  `production_runs` (scheduled, direct-publish, direct-test).
+- Streak circuit-breaker hanya membaca run produksi (`scheduled/buffer`); run dengan metadata uji
+  (`test`, `test_nopub`, `admin_test`, `preview_image`, atau `test=true`) netral: tidak menambah dan
+  tidak memutus streak. Sukses produksi tetap memutus streak.
+
+**Penjaga:** `tests/test_503_gemini_bukan_tak_dikenal.py` (payload DB, aliran kelas/notifier, metadata
+run uji, dan identitas model; 17 uji + subtes). Tidak ada migrasi atau perubahan data historis.
 
 ## §9 KONTRAK TAMPILAN PER-KELAS (mengikat semua permukaan)
 

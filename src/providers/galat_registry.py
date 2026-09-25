@@ -140,6 +140,11 @@ PENYEDIA: dict[str, dict] = {
         "dibaca": "2026-08-11",
         "catatan": ("`resource_exhausted` menaungi jatah HARIAN dan batas PER-MENIT sekaligus; tanpa "
                     "kode spesifik dipilih yang boleh diulang supaya tak pernah salah-rem."),
+        "status": {
+            # Google mengembalikan 503 + status UNAVAILABLE tanpa kode vendor terpisah
+            # pada insiden 24-Sep; maknanya gangguan layanan sementara, bukan model mati.
+            503: ErrorClass.TRANSIENT,
+        },
         "kode": {
             "quota_exceeded":      ErrorClass.RATE_LIMIT,        # 429 · jatah harian → pulih besok
             "rate_limit_exceeded": ErrorClass.RATE_LIMIT,        # 429 · per-menit
@@ -384,6 +389,11 @@ def golongkan(penyedia: str, *, status: int | None = None, kode=None,
     if status is not None:
         if int(status) in _STATUS_MILIK_KITA:
             return Putusan(_AMAN, pesan, True, "status-http-milik-kita")
+        # Pemetaan status MILIK vendor dicoba SEBELUM jaring umum: dokumen vendor itulah
+        # sumber maknanya, dan jaring umum sengaja sempit ("yang RAGU tetap UNKNOWN").
+        _sp = (spek.get("status") or {}).get(int(status))
+        if _sp is not None:
+            return Putusan(_sp, pesan, False, "status-http-vendor")
         k = _STATUS_UMUM.get(int(status))
         if k is not None:
             return Putusan(k, pesan, False, "status-http-umum")

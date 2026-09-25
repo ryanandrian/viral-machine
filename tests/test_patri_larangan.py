@@ -296,6 +296,11 @@ class TestC_Penyaring(unittest.TestCase):
                 # Bukan dari teks pesannya (itu rapuh) — dari ADA/TIDAKNYA huruf Arab di teks.
                 if patri._RX_ARAB.search(teks):
                     harfiah += 1
+                elif h == "meminta teks Arab/Al-Qur'an yang terbaca" and patri._RX_TEKS.search(teks):
+                    # Ini bukan salah-tangkap: prompt memang meminta ayat/teks Arab yang
+                    # terbaca. Tanpa huruf Arab, patri tetap berhak menahan permintaan
+                    # tersebut karena mesin gambar terbukti mengacak tulisan.
+                    continue
                 else:
                     pola.append(f"{h} :: {teks[:90]}")
         self.assertGreater(total, 100, "data prompt produksi terlalu sedikit untuk menilai")

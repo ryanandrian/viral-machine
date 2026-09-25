@@ -391,31 +391,23 @@ class TestStrukturTabelDokumenUtuh(unittest.TestCase):
 
 
 class TestAngkaBuktiUjiTidakBasi(unittest.TestCase):
-    """⛔ Angka bukti yang basi = dokumen yang meyakinkan tapi salah.
+    """§7 hanya memuat kontrak arsitektur dan rujukan penjaga; jumlah uji adalah data dinamis.
 
-    §7 menulis jumlah uji per berkas. Angka itu tak pernah dijaga: tertulis 12 & 9 sementara nyatanya
-    35 & 14. Pembaca (termasuk sesi Claude berikutnya) memakainya untuk menilai seberapa terjaga
-    sebuah topik — dan menilai terlalu rendah sama menyesatkannya dengan terlalu tinggi.
+    Angka jumlah kasus uji tidak boleh menjadi isi SSOT: ia basi setiap kali sebuah uji ditambah.
+    Penjaga ini memastikan tabel §7 memang tidak kembali memuat kolom angka yang dapat membusuk.
     """
 
-    @staticmethod
-    def _jumlah_nyata(modul: str) -> int:
-        return unittest.TestLoader().loadTestsFromName(f"tests.{modul}").countTestCases()
-
-    def test_angka_di_tabel_bagian7_sama_dengan_jumlah_nyata(self):
-        salah = []
+    def test_tabel_bagian7_tidak_mengunci_jumlah_uji_dinamis(self):
         for b in _baris_tabel(_bagian("## §7", "## §8")).splitlines():
             kol = _kolom_tabel(b)
             if len(kol) < 2:
                 continue
             berkas = re.findall(r"tests/(test_[a-z0-9_]+)\.py", kol[0])
-            angka = re.fullmatch(r"\**(\d+)\**", kol[1].strip())
-            if len(berkas) != 1 or not angka:
-                continue                     # baris tanpa angka ("—") atau baris gabungan → dilewati
-            nyata = self._jumlah_nyata(berkas[0])
-            if int(angka.group(1)) != nyata:
-                salah.append(f"{berkas[0]}: dokumen {angka.group(1)}, nyata {nyata}")
-        self.assertFalse(salah, "angka bukti §7 sudah basi:\n  " + "\n  ".join(salah))
+            if len(berkas) == 1:
+                self.assertNotRegex(
+                    kol[1].strip(), r"^\**\d+\**$",
+                    f"SSOT mengunci jumlah uji dinamis untuk {berkas[0]}; "
+                    "arsitektur tidak boleh berisi angka yang membusuk")
 
 
 if __name__ == "__main__":

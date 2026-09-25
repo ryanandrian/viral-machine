@@ -203,7 +203,8 @@ class Pipeline:
                 # → production_runs.error_class terisi benar (dulu 'unknown' walau akar 401/404 jelas).
                 raise LLMError((f"No topics selected — {_why}" if _why else "No topics selected"), step="niche",
                                error_class=getattr(self.niche_selector, "last_error_class", ErrorClass.UNKNOWN),
-                               human_message=getattr(self.niche_selector, "last_human_error", None))
+                               human_message=getattr(self.niche_selector, "last_human_error", None),
+                               model=getattr(self.niche_selector, "last_failed_model", "") or "")
             result["steps"]["topic_selection"] = {
                 "status": "ok",
                 "topics": len(topics),

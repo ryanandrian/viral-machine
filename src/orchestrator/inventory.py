@@ -189,16 +189,25 @@ def recent_nonready_streak(channel_id: str, limit: int = 12, sejak: str | None =
     tenant menekan tombol. Itu jalan keluar yang benar untuk KEDUA mudarat sekaligus — tapi ia
     memilih angka & kebijakan baru, jadi bukan keputusan Claude.
     """
-    q = (_sb().table("production_runs").select("status,error_class")
+    q = (_sb().table("production_runs").select("status,error_class,run_metadata")
          .eq("channel_id", channel_id))
     if sejak:
         q = q.gt("created_at", sejak)
     res = q.order("created_at", desc=True).limit(limit).execute()
     streak = 0
     for row in (res.data or []):
+        # Uji tenant/admin mengukur jalur produksi, tetapi bukan produksi channel yang
+        # harus dilindungi remnya. Metadata sudah ditulis oleh tiap jalur direct; jangan
+        # menebak dari run_id atau topic.
+        md = row.get("run_metadata") or {}
+        job_type = md.get("job_type") if isinstance(md, dict) else None
+        if (md.get("test") is True if isinstance(md, dict) else False) or job_type in {
+            "test", "test_nopub", "admin_test", "preview_image",
+        }:
+            continue
         st = row["status"]
         if st in ("failed", "qc_failed"):
-            streak += 1           # SEMUA kelas dihitung — lihat larangan di docstring
+            streak += 1           # SEMUA kelas produksi dihitung — jangan kecualikan kelas error
         elif st == "success":
             break
     return streak
@@ -215,12 +224,21 @@ def latest_failure(channel_id: str, sejak: str | None = None) -> dict | None:
     sudah ditutup pemulihan, sementara hitungan streak sudah memaafkannya: dua pengambil keputusan
     membaca dunia yang berbeda.
     """
-    q = (_sb().table("production_runs").select("status,error_class,error_message")
+    q = (_sb().table("production_runs").select("status,error_class,error_message,run_metadata")
          .eq("channel_id", channel_id))
     if sejak:
         q = q.gt("created_at", sejak)
-    res = q.order("created_at", desc=True).limit(1).execute()
-    row = (res.data or [None])[0]
+    res = q.order("created_at", desc=True).limit(12).execute()
+    row = None
+    for cand in (res.data or []):
+        md = cand.get("run_metadata") or {}
+        job_type = md.get("job_type") if isinstance(md, dict) else None
+        if (md.get("test") is True if isinstance(md, dict) else False) or job_type in {
+            "test", "test_nopub", "admin_test", "preview_image",
+        }:
+            continue
+        row = cand
+        break
     if not row or row.get("status") not in ("failed", "qc_failed"):
         return None
     return {"error_class": row.get("error_class"), "error_message": row.get("error_message")}

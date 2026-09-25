@@ -595,6 +595,10 @@ def run_direct(sb, job: dict) -> None:
             "elapsed_seconds": result.get("elapsed_seconds"),
             "error_message": err,
             "error_class": result.get("error_class"),   # [ERROR-MGMT]
+            # Model yang DITOLAK vendor — kolom yang sama dengan jalur scheduled. Tanpa ini
+            # bukti-silang antar-tenant memuat lubang: jalur direct menulis baris tanpa model
+            # (terukur pada run 728–732, keempatnya job_type=test, `failed_model` NULL).
+            "failed_model": result.get("failed_model") or None,
             "run_metadata": {"direct": True, "job_type": job.get("job_type"), "video_title": _script.get("title", ""), **_cost_fields(result), **_mutu_fields(result)},
         }).execute()
     except Exception as e:
@@ -692,6 +696,7 @@ def _run_test_no_publish(sb, job: dict, ch: dict, run_id: str) -> None:
             "elapsed_seconds": result.get("elapsed_seconds"),
             "error_message": err,
             "error_class": result.get("error_class"),   # [ERROR-MGMT]
+            "failed_model": result.get("failed_model") or None,
             # video_s3 WAJIB di sini juga (drawer memutar video dari run_metadata — insiden 2026-07-04:
             # dulu hanya di inventory metadata → panel tak bisa putar video).
             "run_metadata": {"direct": True, "test": True, "job_type": job.get("job_type") or "admin_test", "inventory_id": inv_id,
